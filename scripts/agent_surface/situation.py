@@ -1,0 +1,977 @@
+#!/usr/bin/env python3
+"""One composed situation view for an agent operating this repo (READ-ONLY).
+
+An agent starting work here currently pays ~24k tokens across 7 calls to learn
+what is true, and ~4k tokens per tick to be told nothing changed. Both figures
+are measured -- see ``scripts/agent_surface/measure.py`` and
+``docs/agent-surface/DIAGNOSIS.md``. The cost is not that the information is
+missing; aragora has ~188 machine-readable state instruments. The cost is that
+nothing composes them, so the agent performs the join in its own context window
+and pays for every intermediate byte.
+
+This composes instead. The joining and the diffing happen *below the context
+boundary*: this tool may spend several thousand tokens of GitHub JSON
+internally, but the agent reads back only the answer. That distinction is the
+whole design -- an agent pays for what enters its context, not for what the
+tool does on its behalf.
+
+Six fields, fixed order, always present (the capsule contract):
+
+1. ANCHOR       identity and the exact revision every other field is true of
+2. OBJECTIVE    what is being worked on, and progress
+3. BELIEFS      derived facts, each with provenance, freshness, and confidence
+4. UNKNOWNS     open questions, each with the cheapest probe that would answer it
+5. FRONTIER     actions legal RIGHT NOW, with cost, risk, and reversibility
+6. OBLIGATIONS  effects in flight, what they are waiting on, how they verify
+
+Modes:
+
+  situation.py                 compact view, emits a cursor        (measured 709 tokens)
+  situation.py --no-fleet      git and GitHub only, no fleet probe (measured 552 tokens)
+  situation.py --since CURSOR  delta only; ~40 tokens when quiet   (measured  41 tokens)
+  situation.py --json          full structured payload
+
+Every belief carries its own ``source`` field, so provenance is already in the
+payload; there is no separate --explain mode.
+
+Anchoring rule: every belief is true as of ``anchor.head`` and ``anchor.main``.
+If either moved, the capsule is stale and says so rather than silently mixing
+revisions -- the failure mode documented across this repo's runbooks, where a
+settlement signal from an old head is read as authority for a new one.
+
+Authority rule: this view SUMMARIZES lower-authority sources; it never upgrades
+them. A belief sourced from a stale cache is reported as stale, never promoted
+to fact. Where this tool cannot establish something it says so in UNKNOWNS
+rather than defaulting to a reassuring value. Absence of evidence is never
+rendered as evidence of absence.
+
+Inputs: ``git`` (local, cheap), two ``gh`` calls, and -- unless ``--no-fleet``
+-- one ``scripts/loop_control_status.py`` subprocess (~15s, ~3,100 tokens of
+JSON reduced to about 40 on the way out). With ``--pr N`` it also runs
+``scripts/settle_status.py``, supplying the ``--repo`` slug that tool requires
+and cannot infer for itself. Writes nothing at all; the cursor is returned to
+the caller to hold, not cached on disk.
+
+Exit codes: 0 -- capsule produced. 1 -- could not establish an anchor (the one
+condition under which no useful capsule exists).
+
+Safety model: read-only against the repo and GitHub. Never mutates, never
+merges, never posts. Stdlib only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import shutil
+import subprocess
+import sys
+import time
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+GH_TIMEOUT = 90
+
+# A failed probe reports its diagnostics on the same channel a slug arrives on,
+# and gh errors routinely embed a URL or a path, so "contains a slash" cannot
+# distinguish an answer from a failure.
+REPO_SLUG_RE = re.compile(r"\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\Z")
+
+CURSOR_SCOPE = "reported beliefs and both anchor revisions; PR counts, not PR identities"
+
+# scripts/merge_executor.py treats all of these as a failed run. Counting only
+# "failure" here would report a quiet 0 while main was timing out.
+FAILURE_LIKE_CONCLUSIONS = frozenset(
+    {"failure", "error", "cancelled", "timed_out", "startup_failure", "action_required"}
+)
+
+
+# --------------------------------------------------------------------------
+# probes
+# --------------------------------------------------------------------------
+
+
+def sh(cmd: list[str], timeout: int = 30, *, cwd: Path | None = None) -> tuple[int, str]:
+    """Run a probe. A failed probe is data (it becomes an UNKNOWN), not a crash.
+
+    On success only stdout is the answer. Some probes answer legitimately with
+    nothing (``git status --porcelain`` on a clean tree), and falling through to
+    stderr would hand back an unrelated warning as if the probe had reported it.
+    """
+    try:
+        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+        out = p.stdout if p.returncode == 0 else (p.stdout or p.stderr)
+        return p.returncode, out.strip()
+    except FileNotFoundError:
+        # subprocess raises this for a missing cwd as well as a missing binary,
+        # and blaming the tool would send the caller down the wrong path.
+        if cwd is not None and not Path(cwd).is_dir():
+            return 127, f"working directory does not exist: {cwd}"
+        return 127, f"{cmd[0]} not installed"
+    except subprocess.TimeoutExpired:
+        return 124, f"timeout after {timeout}s"
+    except Exception as exc:  # noqa: BLE001 - a broken probe must not kill the capsule
+        return 1, str(exc)
+
+
+@dataclass
+class Belief:
+    """A derived fact that knows where it came from and when it stops being true."""
+
+    key: str
+    value: Any
+    source: str
+    freshness: str  # "live" | "cached:<age>" | "stale:<age>" | "unknown"
+    confidence: str  # "observed" | "derived" | "assumed"
+    note: str = ""
+
+
+@dataclass
+class Unknown:
+    question: str
+    why_it_matters: str
+    cheapest_probe: str
+    est_tokens: int
+
+
+@dataclass
+class Action:
+    label: str
+    command: str
+    cost: str  # "cheap" | "moderate" | "expensive"
+    risk: str  # "none" | "low" | "high"
+    reversible: bool
+    prerequisite: str = ""
+
+
+@dataclass
+class Capsule:
+    anchor: dict[str, Any] = field(default_factory=dict)
+    objective: dict[str, Any] = field(default_factory=dict)
+    beliefs: list[Belief] = field(default_factory=list)
+    unknowns: list[Unknown] = field(default_factory=list)
+    frontier: list[Action] = field(default_factory=list)
+    obligations: list[dict[str, Any]] = field(default_factory=list)
+    degraded: list[str] = field(default_factory=list)
+
+    def cursor(self) -> str:
+        """Digest of the volatile part only.
+
+        Deliberately excludes ``generated_at`` -- otherwise every tick would
+        report a change and the delta path would be worthless.
+
+        Scope, which callers must not over-read: this digests what the capsule
+        REPORTS -- both anchor revisions, the rendered beliefs (aggregate PR
+        counts, not PR identities), unknowns, frontier, obligations, and any
+        per-PR beliefs added by ``--pr N``. Two different open-PR sets with the
+        same counts therefore share a cursor. Digesting PR identities was
+        measured instead: in a repo whose queue turns over continuously it
+        reported a change on most ticks and cost 999 tokens against a 200-token
+        budget, which destroys the delta path it exists to serve. Track a
+        specific PR with ``--pr N``, whose state IS in this digest.
+        """
+        material = {
+            "anchor": {k: v for k, v in self.anchor.items() if k != "generated_at"},
+            "objective": self.objective,
+            "beliefs": [asdict(b) for b in self.beliefs],
+            "unknowns": [asdict(u) for u in self.unknowns],
+            "frontier": [asdict(a) for a in self.frontier],
+            "obligations": self.obligations,
+            "degraded": [_stable_note(note) for note in self.degraded],
+        }
+        blob = json.dumps(material, sort_keys=True, default=str)
+        return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+# --------------------------------------------------------------------------
+# composition
+# --------------------------------------------------------------------------
+
+
+def build_anchor(cap: Capsule, repo_root: Path | None = None) -> bool:
+    code, branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
+    if code != 0:
+        cap.degraded.append("not a git repository; no anchor possible")
+        return False
+    head_code, head = sh(["git", "rev-parse", "--short=12", "HEAD"], cwd=repo_root)
+    main_code, main_sha = sh(["git", "rev-parse", "--short=12", "origin/main"], cwd=repo_root)
+    slug_code, slug = sh(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+        cwd=repo_root,
+    )
+    slug_resolved = slug_code == 0 and REPO_SLUG_RE.match(slug) is not None
+
+    cap.anchor = {
+        "repo": slug if slug_resolved else "unknown",
+        "branch": branch,
+        "head": head if head_code == 0 else "unresolved",
+        "main": main_sha if main_code == 0 else "unresolved",
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    if head_code != 0:
+        cap.degraded.append("HEAD unresolved; every belief below is unanchored")
+    if main_code != 0:
+        cap.degraded.append("origin/main unresolved; ahead/behind beliefs withheld")
+    if not slug_resolved:
+        cap.degraded.append(
+            "repo slug unresolved; GitHub-scoped beliefs and slug-bearing commands withheld"
+        )
+    return True
+
+
+def add_local_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
+    code, porcelain = sh(["git", "status", "--porcelain"], cwd=repo_root)
+    if code == 0:
+        dirty = [ln for ln in porcelain.splitlines() if ln.strip()]
+        cap.beliefs.append(
+            Belief(
+                "working_tree",
+                "clean" if not dirty else f"{len(dirty)} uncommitted path(s)",
+                "git status --porcelain",
+                "live",
+                "observed",
+            )
+        )
+    else:
+        cap.degraded.append(f"git status failed: {porcelain[:120]}")
+        cap.unknowns.append(
+            Unknown(
+                "Is the working tree clean or does it contain uncommitted work?",
+                "A failed index probe cannot establish that edits are safe.",
+                "git status --porcelain",
+                100,
+            )
+        )
+
+    if cap.anchor.get("main") != "unresolved":
+        behind_code, behind = sh(["git", "rev-list", "--count", "HEAD..origin/main"], cwd=repo_root)
+        ahead_code, ahead = sh(["git", "rev-list", "--count", "origin/main..HEAD"], cwd=repo_root)
+        if behind_code == ahead_code == 0 and behind.isdigit() and ahead.isdigit():
+            cap.beliefs.append(
+                Belief(
+                    "branch_position",
+                    f"{ahead} ahead / {behind} behind origin/main",
+                    "git rev-list",
+                    "live",
+                    "observed",
+                    note="squash merges can make 'ahead' misleading; not merge proof",
+                )
+            )
+        else:
+            cap.degraded.append("git rev-list did not establish branch position")
+            cap.unknowns.append(
+                Unknown(
+                    "How far ahead or behind origin/main is this branch?",
+                    "Unobserved branch position must not be read as synchronized.",
+                    "git rev-list --left-right --count HEAD...origin/main",
+                    30,
+                )
+            )
+
+
+def _probe_rows(cap: Capsule, source: str, output: str) -> list[dict[str, Any]] | None:
+    """Keep an invalid probe distinct from a successfully observed empty list."""
+    try:
+        rows = json.loads(output)
+    except json.JSONDecodeError:
+        cap.degraded.append(f"{source} returned unparseable JSON")
+        return None
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        cap.degraded.append(f"{source} returned invalid row data")
+        return None
+    return rows
+
+
+def _probe_object(cap: Capsule, source: str, output: str) -> dict[str, Any] | None:
+    """Same guard for probes that answer with an object rather than rows.
+
+    A composed tool that changes shape must cost its own beliefs, not the whole
+    capsule: a traceback here would deny the caller the fields that did parse.
+    """
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError:
+        cap.degraded.append(f"{source} returned unparseable JSON")
+        return None
+    if not isinstance(data, dict):
+        cap.degraded.append(f"{source} returned {type(data).__name__}, expected an object")
+        return None
+    return data
+
+
+def _default_repo_root() -> Path:
+    """Resolve the checkout root, not the caller's directory.
+
+    The composed tools are invoked by repo-relative path, so defaulting to the
+    cwd makes every one of them degrade when the caller happens to be in a
+    subdirectory, while the git probes beside them still succeed.
+    """
+    code, out = sh(["git", "rev-parse", "--show-toplevel"])
+    return Path(out) if code == 0 and out else Path.cwd()
+
+
+def _is_count(value: Any) -> bool:
+    """True only for a real integer count; bools are not counts."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+_VOLATILE_HEX_RE = re.compile(r"\b[0-9a-fA-F]{7,}\b")
+_VOLATILE_NUM_RE = re.compile(r"\d+")
+
+
+def _stable_note(note: str) -> str:
+    """Drop the churning parts of a probe diagnostic, keeping its failure class.
+
+    Degraded notes carry raw probe stderr, so a rate-limit message with a
+    timestamp would otherwise re-key the cursor every tick exactly when GitHub
+    is flaky. Truncating at the colon would go too far the other way: it
+    collapses "rate limit" and "authentication failed" into one value, hiding a
+    change of failure -- and of the remediation it implies -- behind
+    ``changed: false``.
+    """
+    return _VOLATILE_NUM_RE.sub("#", _VOLATILE_HEX_RE.sub("#", note))
+
+
+def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str, Any]:
+    """One `gh pr list` and one `gh run list`.
+
+    Returns the raw PR rows for callers embedding this module; the CLI works
+    from the beliefs alone, and the cursor deliberately digests PR counts rather
+    than identities.
+    """
+    raw: dict[str, Any] = {"prs": []}
+
+    if not shutil.which("gh"):
+        cap.degraded.append("gh not installed; all GitHub beliefs withheld")
+        cap.unknowns.append(
+            Unknown(
+                "What is in flight on GitHub?",
+                "Cannot judge queue pressure or pick safe work without it.",
+                "install gh and re-run",
+                0,
+            )
+        )
+        return raw
+
+    code, out = sh(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--limit",
+            "100",
+            "--json",
+            "number,title,isDraft,updatedAt,headRefName,author",
+        ],
+        timeout=GH_TIMEOUT,
+        cwd=repo_root,
+    )
+    prs = None
+    if code == 0:
+        prs = _probe_rows(cap, "gh pr list", out)
+        if prs is not None and any(not isinstance(p.get("isDraft"), bool) for p in prs):
+            cap.degraded.append("gh pr list returned invalid draft states")
+            prs = None
+    else:
+        cap.degraded.append(f"gh pr list failed: {out[:120]}")
+    if prs is not None:
+        raw["prs"] = prs
+        drafts = sum(1 for p in prs if p.get("isDraft"))
+        cap.beliefs.append(
+            Belief(
+                "prs_open",
+                len(prs),
+                "gh pr list --limit 100",
+                "live",
+                "observed",
+                note="capped at 100; a full queue may be larger" if len(prs) >= 100 else "",
+            )
+        )
+        cap.beliefs.append(Belief("prs_ready", len(prs) - drafts, "gh pr list", "live", "derived"))
+        cap.beliefs.append(Belief("prs_draft", drafts, "gh pr list", "live", "derived"))
+        if len(prs) >= 100:
+            cap.unknowns.append(
+                Unknown(
+                    "Is the open-PR count actually 100, or is it capped?",
+                    "A cap read as a total understates queue pressure and has "
+                    "previously hidden hundreds of items.",
+                    "gh pr list --limit 500 --json number --jq length",
+                    30,
+                )
+            )
+    else:
+        cap.unknowns.append(
+            Unknown(
+                "What is in flight?",
+                "Queue pressure unknown.",
+                "gh pr list --limit 100 --json number",
+                40,
+            )
+        )
+
+    code, out = sh(
+        [
+            "gh",
+            "run",
+            "list",
+            "--branch",
+            "main",
+            "--limit",
+            "15",
+            "--json",
+            "conclusion,name,createdAt",
+        ],
+        timeout=GH_TIMEOUT,
+        cwd=repo_root,
+    )
+    runs = None
+    if code == 0:
+        runs = _probe_rows(cap, "gh run list", out)
+        if runs is not None and any(
+            "conclusion" not in r
+            or (r["conclusion"] is not None and not isinstance(r["conclusion"], str))
+            for r in runs
+        ):
+            cap.degraded.append("gh run list returned invalid conclusions")
+            runs = None
+    else:
+        cap.degraded.append(f"gh run list failed: {out[:120]}")
+    if runs is not None:
+        failures = [r for r in runs if r.get("conclusion") in FAILURE_LIKE_CONCLUSIONS]
+        skipped = sum(1 for r in runs if r.get("conclusion") == "skipped")
+        counted = sorted({str(r.get("conclusion")) for r in failures})
+        notes = [f"counted as failure-like: {', '.join(counted)}"] if counted else []
+        if skipped:
+            # Deliberately not "{skipped}/{len(runs)}": notes are digested into
+            # the cursor, and a rolling ratio over the last N runs re-keys it
+            # every time any scheduled run lands, even though the answer this
+            # belief gives -- the failure count -- has not moved.
+            notes.append(
+                "some of these runs are skipped -- skipped is correct "
+                "self-gating here, NOT a red main"
+            )
+        cap.beliefs.append(
+            Belief(
+                "main_recent_failures",
+                len(failures),
+                "gh run list --branch main --limit 15",
+                "live",
+                "derived",
+                note="; ".join(notes),
+            )
+        )
+        # Deliberately an UNKNOWN, not a belief: run conclusions are not the
+        # required-check set, and conflating them is a documented misread.
+        cap.unknowns.append(
+            Unknown(
+                "Is main actually green on its 5 REQUIRED checks?",
+                "Run conclusions are not branch protection. Reading skipped runs "
+                "as failure is a documented misread of this repo's telemetry.",
+                "gh api repos/{owner}/{repo}/branches/main/protection/"
+                "required_status_checks --jq .contexts",
+                60,
+            )
+        )
+    else:
+        cap.unknowns.append(
+            Unknown(
+                "What are the recent main workflow outcomes?",
+                "The workflow probe did not establish a failure count.",
+                "gh run list --branch main --limit 15 --json conclusion,name,createdAt",
+                200,
+            )
+        )
+
+    return raw
+
+
+def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
+    """Summarize scripts/loop_control_status.py without embedding it.
+
+    That tool emits ~3,100 tokens of JSON. The agent must read back about 40.
+    This is the composition rule in miniature: summarize downward, and never let
+    the summary claim more certainty than the thing it summarizes.
+    """
+    # Same interpreter, not whatever `python3` resolves to: this tool imports
+    # aragora packages that are only installed in the environment running us.
+    code, out = sh(
+        [sys.executable, "scripts/loop_control_status.py", "--json"], timeout=120, cwd=repo_root
+    )
+    if code != 0:
+        cap.degraded.append(f"loop_control_status unavailable: {out[:100]}")
+        cap.unknowns.append(
+            Unknown(
+                "Are the background loops safe to continue?",
+                "Dispatching work into a halted or blocked fleet wastes the run.",
+                "python3 scripts/loop_control_status.py --json",
+                3100,
+            )
+        )
+        return
+
+    data = _probe_object(cap, "loop_control_status", out)
+    if data is None:
+        return
+
+    summary = data.get("summary")
+    if not isinstance(summary, dict):
+        cap.degraded.append(
+            "loop_control_status returned no usable summary; fleet beliefs withheld"
+        )
+        return
+    by_state = summary.get("by_state")
+    # Coercing an unreadable shape to zero would render "0 running" and compute an
+    # uncaveated green verdict: a quiet lie in place of a loud unknown.
+    if not isinstance(by_state, dict) or not all(_is_count(v) for v in by_state.values()):
+        cap.degraded.append(
+            "loop_control_status returned an unreadable by_state; "
+            "loop shape and fleet verdict withheld"
+        )
+        cap.unknowns.append(
+            Unknown(
+                "Are the background loops safe to continue?",
+                "Dispatching work into a halted or blocked fleet wastes the run.",
+                "python3 scripts/loop_control_status.py --json",
+                3100,
+            )
+        )
+        return
+    records = data.get("records")
+    unknown_n = int(by_state.get("unknown", 0))
+    total = sum(int(v) for v in by_state.values()) or (
+        len(records) if isinstance(records, list) else 0
+    )
+    shape = " / ".join(f"{n} {s}" for s, n in sorted(by_state.items()))
+
+    cap.beliefs.append(
+        Belief(
+            "fleet_loops",
+            shape or "none reported",
+            "scripts/loop_control_status.py --json",
+            "live",
+            "derived",
+        )
+    )
+
+    # Do NOT restate a green verdict computed over loops that could not be read.
+    caveat = (
+        (
+            f"computed while {unknown_n}/{total} loops report state=unknown; "
+            "this verdict does not cover them"
+        )
+        if unknown_n
+        else ""
+    )
+    verdict = summary.get("fleet_safe_to_continue")
+    if isinstance(verdict, bool):
+        cap.beliefs.append(
+            Belief(
+                "fleet_safe_to_continue",
+                verdict,
+                "loop_control_status summary",
+                "live",
+                "derived",
+                note=caveat,
+            )
+        )
+    else:
+        cap.degraded.append(
+            "loop_control_status gave no usable fleet_safe_to_continue; fleet verdict withheld"
+        )
+
+    if summary.get("any_blocked"):
+        cap.beliefs.append(
+            Belief(
+                "fleet_blocked",
+                True,
+                "loop_control_status summary",
+                "live",
+                "observed",
+                note="at least one loop reports a blocker",
+            )
+        )
+
+    if unknown_n:
+        cap.unknowns.append(
+            Unknown(
+                f"Why do {unknown_n} of {total} background loops report state=unknown?",
+                "fleet_safe_to_continue is computed without them, so a green "
+                "fleet verdict is partial rather than complete.",
+                "python3 scripts/loop_control_status.py --json "
+                '| python3 -c "import json,sys; '
+                "print([r['loop_id'] for r in json.load(sys.stdin)['records'] "
+                "if r.get('state')=='unknown'])\"",
+                60,
+            )
+        )
+
+
+def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None:
+    """Compose settle_status.py for one PR, inferring --repo from the anchor.
+
+    settle_status.py requires --repo and cannot infer it; passing the wrong slug
+    yields a bare traceback. The anchor already knows the slug, so the capsule
+    supplies it.
+    """
+    slug = cap.anchor.get("repo", "")
+    if "/" not in slug:
+        cap.degraded.append(f"cannot resolve repo slug; settlement for PR {pr} withheld")
+        return
+
+    code, out = sh(
+        [sys.executable, "scripts/settle_status.py", "--repo", slug, "--pr", str(pr), "--json"],
+        timeout=120,
+        cwd=repo_root,
+    )
+    if code != 0:
+        cap.degraded.append(f"settle_status failed for PR {pr}")
+        cap.unknowns.append(
+            Unknown(
+                f"Where does PR {pr} stand in settlement?",
+                "Without it, merge-readiness is unknown and must not be assumed.",
+                f"python3 scripts/settle_status.py --repo {slug} --pr {pr}",
+                80,
+            )
+        )
+        return
+
+    s = _probe_object(cap, f"settle_status for PR {pr}", out)
+    if s is None:
+        return
+
+    head_sha = s.get("head_sha")
+    pr_head = head_sha if isinstance(head_sha, str) else ""
+    # A missing field is not a value: reporting None as a live belief would put
+    # "no tier" and "tier unknown" on the same footing.
+    for reported, key in (("tier", "tier"), ("signal_count", "signals")):
+        if reported in s:
+            cap.beliefs.append(
+                Belief(f"pr{pr}_{key}", s[reported], "settle_status.py", "live", "derived")
+            )
+        else:
+            cap.degraded.append(f"settle_status.py omitted {reported} for PR {pr}; belief withheld")
+
+    if "quorum_conclusion" in s:
+        cap.beliefs.append(
+            Belief(
+                f"pr{pr}_quorum",
+                s["quorum_conclusion"],
+                "settle_status.py",
+                "live",
+                "derived",
+                note=(
+                    f"true only at head {pr_head[:12]}; a new push invalidates it"
+                    if pr_head
+                    else "settle_status reported no head; this cannot be tied to a revision"
+                ),
+            )
+        )
+    else:
+        cap.degraded.append(
+            f"settle_status.py omitted quorum_conclusion for PR {pr}; belief withheld"
+        )
+
+    if "human_settlement_present" in s:
+        cap.beliefs.append(
+            Belief(
+                f"pr{pr}_human_settlement",
+                "present" if s["human_settlement_present"] else "absent",
+                "commit status aragora/human-settlement",
+                "live",
+                "observed",
+            )
+        )
+    else:
+        cap.degraded.append(
+            f"settle_status.py omitted human_settlement_present for PR {pr}; "
+            "settlement presence withheld"
+        )
+
+    nxt = s.get("next_action")
+    if nxt:
+        # Attributed, not adopted. Four instruments in this repo compute a
+        # next_action from overlapping sources and nothing arbitrates them, so
+        # the capsule must never launder one into "the" answer.
+        cap.obligations.append(
+            {
+                "kind": "advisory_next_action",
+                "detail": f"settle_status.py says for PR {pr}: {nxt}",
+                "verifies_by": (
+                    f"re-run python3 scripts/settle_status.py --repo {slug} "
+                    f"--pr {pr} at the same head"
+                ),
+            }
+        )
+
+
+def add_objective(cap: Capsule, repo_root: Path | None = None) -> None:
+    branch = cap.anchor.get("branch", "")
+    subject_code, subject = sh(["git", "log", "-1", "--pretty=%s"], cwd=repo_root)
+    cap.objective = {
+        "branch": branch,
+        "last_commit": subject[:100] if subject_code == 0 else "unresolved",
+        "inferred": (
+            "detached/main -- no branch-scoped objective"
+            if branch in {"main", "HEAD"}
+            else f"work on branch {branch}"
+        ),
+    }
+
+
+def add_frontier(cap: Capsule, pr: int | None = None) -> None:
+    """Actions legal RIGHT NOW, given what we established above."""
+    b = {x.key: x.value for x in cap.beliefs}
+    branch = cap.anchor.get("branch", "")
+    dirty = isinstance(b.get("working_tree"), str) and "uncommitted" in b["working_tree"]
+
+    # Hand over a command that runs as written. A frontier entry containing a
+    # placeholder the agent must resolve has pushed the join back onto it.
+    slug = cap.anchor.get("repo", "")
+    if "/" in slug:
+        target = str(pr) if pr is not None else "<N>"
+        cap.frontier.append(
+            Action(
+                "Inspect a specific PR's settlement",
+                f"python3 scripts/agent_surface/situation.py --pr {target}   "
+                f"# direct: scripts/settle_status.py --repo {slug} --pr {target}",
+                "cheap",
+                "none",
+                True,
+                prerequisite="" if pr is not None else "substitute the PR number you mean",
+            )
+        )
+    else:
+        cap.frontier.append(
+            Action(
+                "Inspect a specific PR's settlement",
+                "python3 scripts/settle_status.py --repo <slug> --pr <N>",
+                "cheap",
+                "none",
+                True,
+                prerequisite="repo slug unresolved here; settle_status.py "
+                "requires --repo and cannot infer it",
+            )
+        )
+    if "working_tree" not in b:
+        cap.frontier.append(
+            Action(
+                "Establish working-tree state before edits",
+                "git status --porcelain",
+                "cheap",
+                "none",
+                True,
+                prerequisite="working-tree probe failed; cleanliness is unknown",
+            )
+        )
+    elif dirty:
+        cap.frontier.append(
+            Action(
+                "Review uncommitted work before anything else",
+                "git status && git diff --stat",
+                "cheap",
+                "none",
+                True,
+            )
+        )
+    if branch in {"main", "HEAD"}:
+        cap.frontier.append(
+            Action(
+                "Create an isolated worktree (required before edits)",
+                "python3 scripts/codex_worktree_autopilot.py ensure "
+                "--agent claude --base main --force-new --print-path",
+                "moderate",
+                "low",
+                True,
+                prerequisite="CLAUDE.md forbids editing from the main checkout",
+            )
+        )
+    cap.frontier.append(
+        Action(
+            "Check whether a lane owner is alive before re-dispatching",
+            "python3 scripts/identify_lane_owner.py --pr <N>",
+            "moderate",
+            "low",
+            True,
+            prerequisite="fails closed if unpushed work may exist",
+        )
+    )
+
+    # Explicitly named as NOT on the frontier. A frontier that lists only what
+    # is allowed leaves the agent to infer prohibitions, which is where
+    # governance accidents happen.
+    cap.obligations.append(
+        {
+            "kind": "standing_prohibition",
+            "detail": "No merge, settle, or evidence-post action is on this "
+            "frontier. Tier 3/4 settlement requires a human status on "
+            "the exact head and is never agent-authorized.",
+            "verifies_by": "docs/AGENT_OPERATING_CONTRACT.md",
+        }
+    )
+
+
+def add_standing_unknowns(cap: Capsule) -> None:
+    open_prs = next((b.value for b in cap.beliefs if b.key == "prs_open"), None)
+    scope = f"{open_prs} open PRs" if open_prs is not None else "the open PRs"
+    cap.unknowns.append(
+        Unknown(
+            f"Which of the {scope}, if any, is mine to act on?",
+            "Ownership is the difference between progress and lane contamination.",
+            "python3 scripts/check_work_lease.py --json",
+            200,
+        )
+    )
+
+
+# --------------------------------------------------------------------------
+# rendering
+# --------------------------------------------------------------------------
+
+
+def render(cap: Capsule) -> str:
+    a = cap.anchor
+    L = [
+        f"ANCHOR   {a['repo']} @ {a['branch']} | head {a['head']} | main {a['main']}",
+        f"         as of {a['generated_at']} | cursor {cap.cursor()}",
+        "",
+        f"OBJECTIVE {cap.objective.get('inferred', 'unknown')}",
+        f"          last: {cap.objective.get('last_commit', '')}",
+        "",
+        "BELIEFS",
+    ]
+    for b in cap.beliefs:
+        line = f"  {b.key:<22} {str(b.value):<28} [{b.freshness}/{b.confidence}]"
+        L.append(line)
+        if b.note:
+            L.append(f"  {'':<22} ! {b.note}")
+
+    L += ["", "UNKNOWNS  (ranked; each shows the cheapest probe)"]
+    for i, u in enumerate(cap.unknowns, 1):
+        L.append(f"  {i}. {u.question}")
+        L.append(f"     why: {u.why_it_matters}")
+        L.append(f"     probe (~{u.est_tokens}tk): {u.cheapest_probe}")
+
+    L += ["", "FRONTIER  (legal now)"]
+    for act in cap.frontier:
+        rev = "reversible" if act.reversible else "IRREVERSIBLE"
+        L.append(f"  - {act.label}  [{act.cost}/{act.risk}/{rev}]")
+        L.append(f"    $ {act.command}")
+        if act.prerequisite:
+            L.append(f"    prereq: {act.prerequisite}")
+
+    L += ["", "OBLIGATIONS"]
+    for o in cap.obligations:
+        L.append(f"  - [{o['kind']}] {o['detail']}")
+
+    if cap.degraded:
+        L += ["", "DEGRADED  (this capsule is incomplete in these ways)"]
+        L += [f"  ! {d}" for d in cap.degraded]
+
+    return "\n".join(L)
+
+
+def build(repo_root: Path, pr: int | None = None, fleet: bool = True) -> Capsule:
+    repo_root = repo_root.resolve()
+    cap = Capsule()
+    if not build_anchor(cap, repo_root):
+        return cap
+    add_local_beliefs(cap, repo_root)
+    add_github_beliefs(cap, repo_root)
+    if fleet:
+        add_fleet_beliefs(cap, repo_root)
+    if pr is not None:
+        add_pr_beliefs(cap, pr, repo_root)
+    add_objective(cap, repo_root)
+    add_standing_unknowns(cap)
+    add_frontier(cap, pr)
+    return cap
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--since", metavar="CURSOR", help="emit a delta against this cursor")
+    ap.add_argument("--json", action="store_true", help="full structured payload")
+    ap.add_argument("--pr", type=int, help="also compose settlement state for this PR")
+    ap.add_argument(
+        "--no-fleet",
+        action="store_true",
+        help="skip loop_control_status (saves ~15s wall time, loses fleet beliefs)",
+    )
+    ap.add_argument("--repo-root", type=Path, default=None)
+    args = ap.parse_args()
+    # Resolved only when the caller left it unset, so an explicit root is never
+    # second-guessed by a probe run outside it.
+    repo_root = args.repo_root or _default_repo_root()
+
+    cap = build(repo_root, pr=args.pr, fleet=not args.no_fleet)
+    if not cap.anchor:
+        print("no anchor: not a git repository", file=sys.stderr)
+        return 1
+
+    cursor = cap.cursor()
+
+    if args.since:
+        if args.since == cursor:
+            # The whole point of the quiet path: ~30 tokens to say "nothing".
+            # "covers" is part of the answer, not decoration: without it a
+            # reader takes this for "nothing happened anywhere".
+            print(
+                json.dumps(
+                    {
+                        "changed": False,
+                        "cursor": cursor,
+                        "anchor": cap.anchor["head"],
+                        "covers": CURSOR_SCOPE,
+                    }
+                )
+            )
+            return 0
+        changed = {b.key: b.value for b in cap.beliefs}
+        print(
+            json.dumps(
+                {
+                    "changed": True,
+                    "cursor": cursor,
+                    "anchor": cap.anchor["head"],
+                    "covers": CURSOR_SCOPE,
+                    "beliefs": changed,
+                    "belief_details": [asdict(b) for b in cap.beliefs],
+                    "unknowns": [asdict(u) for u in cap.unknowns],
+                    "objective": cap.objective,
+                    "frontier": [asdict(a) for a in cap.frontier],
+                    "obligations": cap.obligations,
+                    "degraded": cap.degraded,
+                },
+                indent=None,
+            )
+        )
+        return 0
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "anchor": cap.anchor,
+                    "cursor": cursor,
+                    "objective": cap.objective,
+                    "beliefs": [vars(b) for b in cap.beliefs],
+                    "unknowns": [vars(u) for u in cap.unknowns],
+                    "frontier": [vars(f) for f in cap.frontier],
+                    "obligations": cap.obligations,
+                    "degraded": cap.degraded,
+                },
+                indent=2,
+                default=str,
+            )
+        )
+        return 0
+
+    print(render(cap))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
