@@ -74,7 +74,7 @@ pip install --upgrade aragora==2.11.0
 Run database migrations if any are pending:
 
 ```bash
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 ```
 
 ### v1.0.x -> v2.11.0 (Major Upgrade)
@@ -88,7 +88,7 @@ pip install --upgrade aragora==2.11.0
 
 **Step 2: Run database migrations**
 ```bash
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 ```
 
 **Step 3: Update API endpoints**
@@ -157,14 +157,14 @@ Upgrade to v1.0.0 first, then follow the v1 -> v2 path:
 ```bash
 # Step 1: Upgrade to v1.0.0
 pip install aragora==1.0.0
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 
 # Step 2: Verify v1 works
 pytest tests/ -v --timeout=60
 
 # Step 3: Upgrade to v2.11.0
 pip install aragora==2.11.0
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 ```
 
 See `deprecated/migrations/MIGRATION_0.8_to_1.0.md` for v0.8 -> v1.0 details.
@@ -185,7 +185,7 @@ export DATABASE_URL="postgresql://user:pass@host:5432/aragora"
 python -m aragora.persistence.migrations.postgres.memory_migrator
 
 # Run schema migrations
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 ```
 
 See [POSTGRESQL_MIGRATION.md](../status/POSTGRESQL_MIGRATION.md) for details including connection pooling and Supabase setup.
@@ -231,8 +231,8 @@ Check [BREAKING_CHANGES.md](../reference/BREAKING_CHANGES.md) for any changes be
 # Run the full test suite
 pytest tests/ -v
 
-# Run migration in dry-run mode
-python -m aragora.migrations.runner migrate --dry-run
+# List pending migrations before applying them (upgrade has no dry-run)
+python -m aragora.migrations status
 ```
 
 ### 5. Check API Version Headers
@@ -260,7 +260,7 @@ systemctl stop aragora  # or equivalent
 pip install aragora==2.4.0  # previous version
 
 # 3. Rollback migrations if needed
-python -m aragora.migrations.runner rollback --to <migration_id>
+python -m aragora.migrations downgrade --target <migration_id>
 
 # 4. Restart
 systemctl start aragora
@@ -303,13 +303,13 @@ The migration system uses advisory locking and checksum verification:
 
 ```bash
 # List applied migrations
-python -m aragora.migrations.runner status
+python -m aragora.migrations status
 
 # Rollback last migration
-python -m aragora.migrations.runner rollback
+python -m aragora.migrations downgrade
 
 # Rollback to specific migration
-python -m aragora.migrations.runner rollback --to v20260119000000
+python -m aragora.migrations downgrade --target v20260119000000
 ```
 
 Migration safety features:
@@ -431,16 +431,16 @@ Aragora uses a lightweight migration system with dual-tier execution (PostgreSQL
 
 ```bash
 # Check migration status
-python -m aragora.migrations.runner status
+python -m aragora.migrations status
 
 # Run pending migrations
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 
-# Dry run (preview without executing)
-python -m aragora.migrations.runner migrate --dry-run
+# Preview: list applied and pending migrations (upgrade has no dry-run)
+python -m aragora.migrations status
 
 # Rollback last migration
-python -m aragora.migrations.runner rollback
+python -m aragora.migrations downgrade
 ```
 
 ### Auto-Migration on Startup
