@@ -97,6 +97,13 @@ for the receipt-specific inputs/outputs, secret-dependent limits (receipts are
 unsigned; reviewer defaults need reachable provider keys), and a committed
 example receipt you can verify right now without running any CI.
 
+Want to check one of ours instead? [**Verify an Aragora decision receipt in 60
+seconds**](docs/receipts/VERIFY_IN_60_SECONDS.md) walks through four receipts
+from real merged PRs in this repository — a clean pass, an adjudicated dissent,
+and a blocked head with the later head that fixed it. Those four are published
+with a signature, verifiable against a key we publish, which is what the
+Action's own receipts lack until you give it a signing key.
+
 We run this gate on our own repository — every substantive merge is reviewed
 by a heterogeneous model quorum, dissent preserved, receipts written. The
 evidence, with reproducible queries and caught-bug case studies:
@@ -338,7 +345,7 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 <!-- metrics:begin readme-scale -->
 > Scale (canonical counts in [`docs/METRICS.md`](docs/METRICS.md), rounded):
 > **~4,300 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
-> functions across ~5,500 files · 3,205 API operations across 2,912 paths ·
+> functions across ~5,600 files · 3,205 API operations across 2,912 paths ·
 > 35+ allowlisted agent types across 12+ providers · 41 Knowledge Mound adapter specs
 > (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.10.0.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw

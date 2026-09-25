@@ -348,7 +348,7 @@ class TestMCPToolExecution:
         """Test get_debate returns error for non-existent debate."""
         storage_db = MagicMock()
         storage_db.get.return_value = None
-        with patch("aragora.server.storage.get_debates_db") as mock_db:
+        with patch("aragora.storage.debate_storage.get_debates_db") as mock_db:
             mock_db.return_value = storage_db
 
             result = await server._get_debate({"debate_id": "nonexistent"})

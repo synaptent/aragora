@@ -2006,7 +2006,7 @@ class MetaPlanner:
 
         # Signal 7: User feedback (NPS score from FeedbackStore)
         try:
-            from aragora.server.handlers.feedback import FeedbackStore
+            from aragora.server.handlers.sme.feedback import FeedbackStore
 
             fb_store = FeedbackStore()
             nps = fb_store.get_nps_summary(days=30)

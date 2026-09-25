@@ -167,11 +167,11 @@ def patch_backbone_create_helpers():
     with (
         patch("aragora.pipeline.executor.store_plan"),
         patch(
-            "aragora.server.decision_integrity_utils.ensure_decision_plan_backbone_run",
+            "aragora.pipeline.decision_integrity_utils.ensure_decision_plan_backbone_run",
             return_value="run-auto-1",
         ),
         patch(
-            "aragora.server.decision_integrity_utils.sync_decision_plan_backbone_receipt",
+            "aragora.pipeline.decision_integrity_utils.sync_decision_plan_backbone_receipt",
             return_value=True,
         ),
     ):
@@ -225,7 +225,7 @@ class TestAutoExecutePlan:
         with (
             patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(),
             ) as mock_execute,
         ):
@@ -260,7 +260,7 @@ class TestAutoExecutePlan:
             patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
             patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(return_value=(launch, mock_outcome)),
             ) as mock_execute,
             patch("aragora.pipeline.executor.get_plan", return_value=refreshed_plan),
@@ -309,11 +309,13 @@ class TestAutoExecutePlan:
                 "aragora.debate.execution_safety.evaluate_auto_execution_safety",
                 return_value=gate_decision,
             ) as gate_eval,
-            patch("aragora.server.metrics.track_execution_gate_decision") as track_gate_metrics,
+            patch(
+                "aragora.observability.server_metrics.track_execution_gate_decision"
+            ) as track_gate_metrics,
             patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
             patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(return_value=({"run_id": "run-auto-1"}, mock_outcome)),
             ),
         ):
@@ -359,7 +361,7 @@ class TestAutoExecutePlan:
             patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
             patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(side_effect=RuntimeError("Connection lost")),
             ),
         ):
@@ -552,7 +554,7 @@ class TestExecutionModePassthrough:
             patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
             patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(return_value=({"run_id": "run-auto-1"}, mock_outcome)),
             ) as mock_execute,
         ):
@@ -582,7 +584,7 @@ class TestExecutionModePassthrough:
         with (
             patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
             patch(
-                "aragora.server.decision_integrity_utils.ensure_decision_plan_backbone_run",
+                "aragora.pipeline.decision_integrity_utils.ensure_decision_plan_backbone_run",
                 return_value="run-auto-3",
             ) as mock_seed,
         ):

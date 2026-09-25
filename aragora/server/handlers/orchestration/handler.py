@@ -1042,7 +1042,7 @@ class OrchestrationHandler(SecureHandler):
 
         # BEST_FOR_DOMAIN - use routing handler if available
         try:
-            import aragora.server.handlers.routing as routing_module
+            import aragora.server.handlers.agents.routing as routing_module
 
             recommend_fn = getattr(routing_module, "recommend_agents", None)
             if recommend_fn is not None:
