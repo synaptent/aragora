@@ -209,14 +209,13 @@ class ConfigValidator:
 
         # Validate URL formats
         for var in cls.URL_VARS:
-            url_value = os.getenv(var)
+            url_value = _secret_value(var)
             if url_value:
-                if not (url_value.startswith("http://") or url_value.startswith("https://")):
-                    if var == "REDIS_URL":
-                        if not url_value.startswith("redis://"):
-                            errors.append(f"{var} must be a valid Redis URL (redis://...)")
-                    else:
-                        errors.append(f"{var} must be a valid URL (http:// or https://)")
+                if var == "REDIS_URL":
+                    if not url_value.startswith("redis://"):
+                        errors.append(f"{var} must be a valid Redis URL (redis://...)")
+                elif not (url_value.startswith("http://") or url_value.startswith("https://")):
+                    errors.append(f"{var} must be a valid URL (http:// or https://)")
 
         # Validate integer formats
         for var in cls.INTEGER_VARS:

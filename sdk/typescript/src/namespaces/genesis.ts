@@ -251,13 +251,6 @@ export class GenesisAPI {
   }
 
   /**
-   * Get the debate tree structure for fractal visualization.
-   */
-  async getDebateTree(debateId: string): Promise<DebateTree> {
-    return this.client.request('GET', `/api/v1/genesis/debates/${debateId}/tree`);
-  }
-
-  /**
    * Get descendants for a genesis entry.
    */
   async getGenesisDescendants(genesisId: string): Promise<Record<string, unknown>> {

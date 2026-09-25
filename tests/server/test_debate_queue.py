@@ -976,7 +976,7 @@ class TestDebateQueueWebhook:
 
         with (
             patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ),
             patch(
@@ -1006,7 +1006,7 @@ class TestDebateQueueWebhook:
         mock_pool = MagicMock()
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await queue.submit_batch(batch)

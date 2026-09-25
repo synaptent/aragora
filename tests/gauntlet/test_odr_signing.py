@@ -637,3 +637,45 @@ def test_round_trip_against_shipped_verifier() -> None:
     bad = verify(signed, public_key=other.public_key())
     bad_sig = next((c for c in bad.checks if c.name == "signature"), None)
     assert bad_sig is not None and bad_sig.status == "fail"
+
+
+def test_key_file_wins_over_mounted_custody_and_warns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    mounted = generate_signing_key()
+    mounted_dir = tmp_path / "mounted"
+    mounted_dir.mkdir()
+    mounted_path = mounted_dir / MOUNTED_SIGNING_KEY_FILENAME
+    mounted_path.write_text(_private_pem(mounted), encoding="utf-8")
+    mounted_path.chmod(0o600)
+    file_key = generate_signing_key()
+    key_file = tmp_path / "odr-file-key.pem"
+    key_file.write_text(_private_pem(file_key), encoding="utf-8")
+    key_file.chmod(0o600)
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(mounted_dir))
+    monkeypatch.setenv("ARAGORA_ODR_SIGNING_KEY_FILE", str(key_file))
+    monkeypatch.delenv("ARAGORA_USE_SECRETS_MANAGER", raising=False)
+
+    with caplog.at_level("WARNING", logger="aragora.gauntlet.odr_signing"):
+        loaded = load_signing_key_from_secrets()
+
+    assert compute_key_id(loaded.public_key()) == compute_key_id(file_key.public_key())
+    assert "Both ARAGORA_ODR_SIGNING_KEY_FILE and ARAGORA_SECRETS_DIR are set" in caplog.text
+
+
+def test_key_file_is_used_when_mounted_directory_lacks_a_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    file_key = generate_signing_key()
+    key_file = tmp_path / "odr-file-key.pem"
+    key_file.write_text(_private_pem(file_key), encoding="utf-8")
+    key_file.chmod(0o600)
+    empty_dir = tmp_path / "empty-mount"
+    empty_dir.mkdir()
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(empty_dir))
+    monkeypatch.setenv("ARAGORA_ODR_SIGNING_KEY_FILE", str(key_file))
+    monkeypatch.delenv("ARAGORA_USE_SECRETS_MANAGER", raising=False)
+
+    loaded = load_signing_key_from_secrets()
+
+    assert compute_key_id(loaded.public_key()) == compute_key_id(file_key.public_key())

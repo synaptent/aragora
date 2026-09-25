@@ -33,6 +33,9 @@ except ImportError:
 TWITTER_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 TWITTER_TWEET_URL = "https://api.twitter.com/2/tweets"
 TWITTER_USER_TWEETS_URL = "https://api.twitter.com/2/users/{user_id}/tweets"
+TWITTER_ME_URL = "https://api.twitter.com/2/users/me"
+TWITTER_BOOKMARKS_URL = "https://api.twitter.com/2/users/{user_id}/bookmarks"
+TWITTER_LIKED_URL = "https://api.twitter.com/2/users/{user_id}/liked_tweets"
 
 # Tweet URL template
 TWEET_URL_TEMPLATE = "https://twitter.com/i/status/{tweet_id}"
@@ -518,6 +521,125 @@ class TwitterConnector(BaseConnector):
             hashtag = f"#{hashtag}"
 
         return await self.search(hashtag, limit=limit)
+
+    # ------------------------------------------------------------------
+    # OAuth2 user-context reads (bookmarks / likes)
+    #
+    # These use a *user* token (scopes bookmark.read / like.read) from
+    # aragora.connectors.x_oauth, not the app-only bearer token. Entries are
+    # returned in the same shape as the Twitter data-export files so the
+    # ideacloud ingestors can reuse their export parsers verbatim.
+    # ------------------------------------------------------------------
+
+    async def _user_context_get(self, url: str, params: dict) -> dict | None:
+        """GET with a user-context token, refreshing once on 401."""
+        if not HTTPX_AVAILABLE:
+            logger.warning("httpx not available, cannot call X user-context API")
+            return None
+        from aragora.connectors.x_oauth import XOAuthTokenStore
+
+        store = XOAuthTokenStore()
+        tokens = await store.get_valid()
+        if tokens is None:
+            logger.warning("No X OAuth2 user tokens configured (run scripts/x_oauth_setup.py)")
+            return None
+
+        await self._rate_limit()
+        for attempt in range(2):
+            headers = {"Authorization": f"Bearer {tokens.access_token}"}
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.get(url, params=params, headers=headers)
+                if response.status_code == 401 and attempt == 0:
+                    # refresh_rejected re-reads under the cross-process lock,
+                    # so a concurrent refresher's rotated pair is reused
+                    # instead of burning a second rotation.
+                    tokens = await store.refresh_rejected(tokens)
+                    if tokens is None:
+                        return None
+                    continue
+                response.raise_for_status()
+                return response.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                # ValueError covers json.JSONDecodeError on a non-JSON 200 —
+                # must honor the (None, None) failure contract, not raise.
+                logger.warning("X user-context request failed: %s", exc)
+                return None
+        return None
+
+    async def get_authenticated_user_id(self) -> str | None:
+        """Resolve the token owner's numeric user id via GET /2/users/me."""
+        data = await self._user_context_get(TWITTER_ME_URL, {})
+        if data:
+            return (data.get("data") or {}).get("id")
+        return None
+
+    async def fetch_bookmarks_page(
+        self,
+        user_id: str,
+        pagination_token: str | None = None,
+        max_results: int = 100,
+    ) -> tuple[list[dict] | None, str | None]:
+        """Fetch one page of the user's bookmarks (newest-bookmarked first).
+
+        Returns ``(None, None)`` on a failed request — callers must treat that
+        differently from ``([], None)``, which means the feed is exhausted.
+        """
+        return await self._fetch_engagement_page(
+            TWITTER_BOOKMARKS_URL.format(user_id=user_id), pagination_token, max_results
+        )
+
+    async def fetch_liked_page(
+        self,
+        user_id: str,
+        pagination_token: str | None = None,
+        max_results: int = 100,
+    ) -> tuple[list[dict] | None, str | None]:
+        """Fetch one page of the user's liked tweets (newest-liked first).
+
+        Returns ``(None, None)`` on a failed request — callers must treat that
+        differently from ``([], None)``, which means the feed is exhausted.
+        """
+        return await self._fetch_engagement_page(
+            TWITTER_LIKED_URL.format(user_id=user_id), pagination_token, max_results
+        )
+
+    async def _fetch_engagement_page(
+        self,
+        url: str,
+        pagination_token: str | None,
+        max_results: int,
+    ) -> tuple[list[dict] | None, str | None]:
+        """Shared pager: (entries, next_token); (None, None) = request failed."""
+        params: dict[str, str | int] = {
+            "max_results": min(max(1, max_results), 100),
+            "tweet.fields": "created_at,author_id,public_metrics,lang",
+            "expansions": "author_id",
+            "user.fields": "username,name",
+        }
+        if pagination_token:
+            params["pagination_token"] = pagination_token
+
+        data = await self._user_context_get(url, params)
+        if data is None:
+            # Failed request (network/429/5xx/auth) — NOT feed exhaustion
+            return None, None
+
+        users = {u["id"]: u for u in (data.get("includes") or {}).get("users", [])}
+        entries: list[dict] = []
+        for tweet in data.get("data", []) or []:
+            author = users.get(tweet.get("author_id"), {})
+            entries.append(
+                {
+                    "tweetId": tweet.get("id"),
+                    "fullText": tweet.get("text", ""),
+                    "screenName": author.get("username", ""),
+                    "created_at": tweet.get("created_at"),
+                    "public_metrics": tweet.get("public_metrics", {}),
+                }
+            )
+        next_token = (data.get("meta") or {}).get("next_token")
+        return entries, next_token
 
     async def search_from_user(
         self,

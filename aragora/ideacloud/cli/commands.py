@@ -69,6 +69,18 @@ def add_ideacloud_commands(subparsers: Any) -> None:
         help="Source type",
     )
     load_p.add_argument("--file", help="Source file path (for twitter exports)")
+    load_p.add_argument(
+        "--api",
+        nargs="?",
+        const="api:",
+        default=None,
+        metavar="MAX_ITEMS",
+        help=(
+            "Fetch live from the X API v2 instead of a file (twitter sources; "
+            "needs OAuth2 user tokens from scripts/x_oauth_setup.py). "
+            "Optional value caps items fetched, e.g. --api 500"
+        ),
+    )
     load_p.add_argument("--text", help="Text content (for manual)")
     load_p.add_argument("--url", help="URL (for manual)")
     load_p.add_argument("--title", help="Title (for manual)")
@@ -214,18 +226,24 @@ def _cmd_load(cloud: Any, args: argparse.Namespace) -> int:
     """Handle 'ideacloud load'."""
     source = args.source
 
+    api_source = None
+    if getattr(args, "api", None) is not None:
+        api_source = args.api if str(args.api).startswith("api:") else f"api:{args.api}"
+
     if source == "twitter-bookmarks":
-        if not args.file:
-            print("--file required for twitter-bookmarks")
+        target = api_source or args.file
+        if not target:
+            print("--file or --api required for twitter-bookmarks")
             return 1
-        nodes = asyncio.run(cloud.ingest_twitter_bookmarks(args.file))
+        nodes = asyncio.run(cloud.ingest_twitter_bookmarks(target))
         print(f"Ingested {len(nodes)} bookmarks")
 
     elif source == "twitter-likes":
-        if not args.file:
-            print("--file required for twitter-likes")
+        target = api_source or args.file
+        if not target:
+            print("--file or --api required for twitter-likes")
             return 1
-        nodes = asyncio.run(cloud.ingest_twitter_likes(args.file))
+        nodes = asyncio.run(cloud.ingest_twitter_likes(target))
         print(f"Ingested {len(nodes)} likes")
 
     elif source == "manual":

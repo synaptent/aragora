@@ -101,84 +101,6 @@ class BackupsAPI:
         """
         return self._client.request("DELETE", f"/api/v1/backups/{backup_id}")
 
-    def restore(
-        self,
-        backup_id: str,
-        target_namespace: str | None = None,
-        data_types: _List[str] | None = None,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
-        """
-        Restore from a backup.
-
-        Args:
-            backup_id: Backup to restore from
-            target_namespace: Namespace to restore to
-            data_types: Specific data types to restore
-            dry_run: If True, simulate restore without making changes
-
-        Returns:
-            Restore operation status
-        """
-        data: dict[str, Any] = {"dry_run": dry_run}
-        if target_namespace:
-            data["target_namespace"] = target_namespace
-        if data_types:
-            data["data_types"] = data_types
-
-        return self._client.request("POST", f"/api/v1/backups/{backup_id}/restore", json=data)
-
-    def schedule(
-        self,
-        schedule: str,
-        backup_type: str = "incremental",
-        retention_days: int = 30,
-        enabled: bool = True,
-    ) -> dict[str, Any]:
-        """
-        Create a backup schedule.
-
-        Args:
-            schedule: Cron expression for schedule
-            backup_type: Type of scheduled backups
-            retention_days: Days to retain backups
-            enabled: Whether schedule is active
-
-        Returns:
-            Created schedule
-        """
-        return self._client.request(
-            "POST",
-            "/api/v1/backups/schedules",
-            json={
-                "schedule": schedule,
-                "backup_type": backup_type,
-                "retention_days": retention_days,
-                "enabled": enabled,
-            },
-        )
-
-    def list_schedules(self) -> dict[str, Any]:
-        """
-        List backup schedules.
-
-        Returns:
-            Backup schedules
-        """
-        return self._client.request("GET", "/api/v1/backups/schedules")
-
-    def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
-        """
-        Delete a backup schedule.
-
-        Args:
-            schedule_id: Schedule identifier
-
-        Returns:
-            Deletion confirmation
-        """
-        return self._client.request("DELETE", f"/api/v1/backups/schedules/{schedule_id}")
-
     def verify(self, backup_id: str) -> dict[str, Any]:
         """
         Verify backup integrity.
@@ -296,49 +218,6 @@ class AsyncBackupsAPI:
     async def delete(self, backup_id: str) -> dict[str, Any]:
         """Delete a backup."""
         return await self._client.request("DELETE", f"/api/v1/backups/{backup_id}")
-
-    async def restore(
-        self,
-        backup_id: str,
-        target_namespace: str | None = None,
-        data_types: _List[str] | None = None,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
-        """Restore from a backup."""
-        data: dict[str, Any] = {"dry_run": dry_run}
-        if target_namespace:
-            data["target_namespace"] = target_namespace
-        if data_types:
-            data["data_types"] = data_types
-
-        return await self._client.request("POST", f"/api/v1/backups/{backup_id}/restore", json=data)
-
-    async def schedule(
-        self,
-        schedule: str,
-        backup_type: str = "incremental",
-        retention_days: int = 30,
-        enabled: bool = True,
-    ) -> dict[str, Any]:
-        """Create a backup schedule."""
-        return await self._client.request(
-            "POST",
-            "/api/v1/backups/schedules",
-            json={
-                "schedule": schedule,
-                "backup_type": backup_type,
-                "retention_days": retention_days,
-                "enabled": enabled,
-            },
-        )
-
-    async def list_schedules(self) -> dict[str, Any]:
-        """List backup schedules."""
-        return await self._client.request("GET", "/api/v1/backups/schedules")
-
-    async def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
-        """Delete a backup schedule."""
-        return await self._client.request("DELETE", f"/api/v1/backups/schedules/{schedule_id}")
 
     async def verify(self, backup_id: str) -> dict[str, Any]:
         """Verify backup integrity."""

@@ -1796,7 +1796,7 @@ jobs:
           retention-days: 14
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -2393,6 +2393,13 @@ jobs:
           echo "Running migrations to head..."
           alembic upgrade head
           echo "✓ Migrations completed successfully"
+        env:
+          DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
+
+      - name: Run Aragora runtime migrations
+        run: |
+          python -m aragora.migrations upgrade --database-url "$DATABASE_URL"
+          python -m aragora.migrations status
         env:
           DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
 

@@ -399,6 +399,32 @@ class TestConfigValidator:
 
         assert any("SQLite is not supported" in error for error in result.errors)
 
+    def test_production_validates_mounted_redis_url(self, tmp_path):
+        from aragora.config.secrets import SecretManager, SecretsConfig
+        from aragora.server.config_validator import ConfigValidator
+
+        for name, value in {
+            "ARAGORA_API_TOKEN": "mounted-api-token-value",
+            "DATABASE_URL": "postgresql://mounted",
+            "REDIS_URL": "https://not-redis.example",
+            "ANTHROPIC_API_KEY": "mounted-anthropic-key",
+        }.items():
+            path = tmp_path / name
+            path.write_text(value, encoding="utf-8")
+            path.chmod(0o600)
+        manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path)))
+        with (
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(
+                os.environ,
+                {"ARAGORA_ENV": "production", "ARAGORA_INSTANCE_COUNT": "2"},
+                clear=True,
+            ),
+        ):
+            result = ConfigValidator.validate_all()
+
+        assert any("REDIS_URL must be a valid Redis URL" in error for error in result.errors)
+
     def test_production_reports_invalid_managed_custody(self):
         from aragora.server.config_validator import ConfigValidator
 

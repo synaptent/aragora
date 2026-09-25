@@ -469,7 +469,7 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_api_error(self, connector):
-        """Should handle API errors."""
+        """API errors from _api_request propagate out of _get_pages."""
         import httpx
 
         with patch.object(
@@ -479,15 +479,15 @@ class TestErrorHandling:
                 "Error", request=None, response=MagicMock(status_code=500)
             ),
         ):
-            # Get pages should handle errors gracefully
+            # _get_pages does not catch API errors: the HTTPStatusError
+            # propagates from the first iteration and no page is yielded.
             pages = []
-            try:
+            with pytest.raises(httpx.HTTPStatusError) as exc_info:
                 async for page in connector._get_pages("ENG"):
                     pages.append(page)
-            except Exception:
-                pass  # Expected to fail or return empty
 
-            assert isinstance(pages, list)
+            assert exc_info.value.response.status_code == 500
+            assert pages == []
 
 
 # =============================================================================
