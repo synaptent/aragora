@@ -169,6 +169,8 @@ def test_main_writes_receipt_and_github_outputs(tmp_path: Path):
     assert "receipt_verified=true" in gh
     assert "receipt_digest=" in gh
     assert "receipt_path=" in gh
+    assert "receipt_signed=false" in gh
+    assert "receipt_key_id=\n" in gh
 
 
 def test_main_rejects_multiline_github_output_value(tmp_path: Path, monkeypatch):
@@ -238,3 +240,29 @@ def test_file_signing_before_output(tmp_path, monkeypatch, capsys, mode):
         assert bool(doc["signatures"]) == (mode == "valid")
         key = odr_test_key().public_key() if mode == "valid" else None
         assert verify_odr_document(doc, public_key=key).ok
+        gh = gh_out.read_text()
+        assert ("receipt_signed=true" in gh) == (mode == "valid")
+        key_id = doc["signatures"][0]["key_id"] if mode == "valid" else ""
+        assert f"receipt_key_id={key_id}\n" in gh
+
+
+def test_action_hands_the_signing_key_only_to_the_emit_step():
+    """The receipt step runs third-party model CLIs, so the signing key must be
+    written to a private file and dropped from the environment before any of
+    them start; only the emit command receives the file path."""
+    import yaml
+
+    action = yaml.safe_load(Path("action.yml").read_text(encoding="utf-8"))
+    assert action["inputs"]["odr-signing-key"]["default"] == ""
+    assert {"receipt-signed", "receipt-key-id"} <= set(action["outputs"])
+    step = next(s for s in action["runs"]["steps"] if s.get("id") == "receipt")
+    assert step["env"]["ODR_SIGNING_KEY"] == "${{ inputs.odr-signing-key }}"
+    script = step["run"]
+    unset_at = script.index("unset ODR_SIGNING_KEY")
+    assert "umask 077" in script[:unset_at]
+    assert unset_at < script.index("collect_quorum_evidence.py")
+    emit_at = script.index("emit_pr_receipt.py")
+    assert 'ARAGORA_ODR_SIGNING_KEY_FILE="$ODR_KEY_FILE"' in script[unset_at:emit_at]
+    assert "ODR_SIGNING_KEY" not in script[unset_at + len("unset ODR_SIGNING_KEY") :].replace(
+        "ARAGORA_ODR_SIGNING_KEY_FILE", ""
+    )
