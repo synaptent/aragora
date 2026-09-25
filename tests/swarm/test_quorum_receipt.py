@@ -209,12 +209,15 @@ def test_bridge_metadata_records_pr_provenance():
 def test_example_merge_quorum_receipt_matches_emitter():
     # The committed example is the emitter<->verifier contract for PR-review
     # receipts (verified independently in aragora-verify). It must equal exactly
-    # what the bridge + odr_export emit today.
+    # what the bridge + odr_export emit today at its profile, v0.1 (explicit,
+    # since the library default is v0.2).
     import json
     from pathlib import Path
 
     example = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
-    expected = decision_receipt_to_odr(collect_outcome_to_decision_receipt(_outcome()))
+    expected = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_outcome()), odr_version="0.1"
+    )
     actual = json.loads(example.read_text(encoding="utf-8"))
     assert actual == expected, "example merge-quorum receipt is stale; regenerate it"
 
@@ -280,7 +283,7 @@ def test_v02_bridge_dict_retains_observations_and_provenance():
         {"kind": "timeout", "family": "openai", "detail": "reviewer exceeded collection deadline"},
     ]
     assert "adjudication" not in doc
-    assert "observations" not in decision_receipt_to_odr(receipt)["reasoning"]
+    assert "observations" not in decision_receipt_to_odr(receipt, odr_version="0.1")["reasoning"]
     jsonschema.validate(doc, load_odr_schema())
 
 
@@ -299,7 +302,7 @@ def test_v02_bridge_adjudication_and_rule_preserve_source():
     # never a presence marker, so no "status" key may be injected.
     assert "status" not in doc["adjudication"]
     assert {"kind", "verdict", "reason"} <= set(doc["adjudication"])
-    assert "adjudication" not in decision_receipt_to_odr(receipt)
+    assert "adjudication" not in decision_receipt_to_odr(receipt, odr_version="0.1")
     assert doc["attestation"]["mechanism"]["policy_version"] == raw["policy_version"]
     assert doc["attestation"]["mechanism"]["action_reason"] == raw["action_reason"]
     jsonschema.validate(doc, load_odr_schema())
