@@ -118,10 +118,22 @@ def batch_workers(monkeypatch, _reset_batch_store, clear_batch_jobs):
     workers: list[threading.Thread] = []
     start = ExplainabilityHandler._start_batch_processing
 
+    # Record threads at construction: a fast worker may already have exited by
+    # the time start() returns, so diffing threading.enumerate() can miss it.
+    # Only threads built by the calling thread count, so helper threads that
+    # the worker itself creates while the patch is active are not recorded.
     def tracked_start(self, job):
-        before = set(threading.enumerate())
-        start(self, job)
-        workers.extend(t for t in threading.enumerate() if t not in before)
+        caller = threading.current_thread()
+
+        class RecordingThread(threading.Thread):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                if threading.current_thread() is caller:
+                    workers.append(self)
+
+        with monkeypatch.context() as patch_threads:
+            patch_threads.setattr(threading, "Thread", RecordingThread)
+            start(self, job)
 
     monkeypatch.setattr(ExplainabilityHandler, "_start_batch_processing", tracked_start)
     # Keep workers off the process-global debates database in the shared data dir.
