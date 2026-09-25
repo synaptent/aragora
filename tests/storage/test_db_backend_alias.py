@@ -21,7 +21,7 @@ STORES = [
 
 
 class FakePostgreSQLBackend:
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, **kwargs: Any) -> None:
         self.database_url = database_url
 
     def execute_write(self, *args: Any, **kwargs: Any) -> int:
@@ -146,3 +146,95 @@ def test_password_reset_override_preserved(monkeypatch: pytest.MonkeyPatch, spel
 )
 def test_postgres_predicate(value: str | None, expected: bool) -> None:
     assert connection_factory.is_postgres_backend(value) is expected
+
+
+@pytest.fixture
+def fake_postgres_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aragora.gauntlet import storage as gauntlet_storage
+    from aragora.storage import receipt_store
+
+    for module in (receipt_store, gauntlet_storage):
+        monkeypatch.setattr(module, "PostgreSQLBackend", FakePostgreSQLBackend)
+        monkeypatch.setattr(module, "POSTGRESQL_AVAILABLE", True)
+
+
+@pytest.mark.parametrize("spelling", ["postgres", "postgresql", "POSTGRES", "PostgreSQL"])
+def test_gauntlet_storage_env_alias_selects_postgres(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_postgres_modules: None, spelling: str
+) -> None:
+    from aragora.gauntlet.storage import GauntletStorage
+
+    monkeypatch.setenv("ARAGORA_DB_BACKEND", spelling)
+    storage = GauntletStorage(db_path=str(tmp_path / "gauntlet.db"))
+    assert storage.backend_type == "postgresql"
+    assert isinstance(storage._backend, FakePostgreSQLBackend)
+    assert storage._backend.database_url == DSN
+    assert not (tmp_path / "gauntlet.db").exists()
+
+
+@pytest.mark.parametrize("spelling", ["postgres", "postgresql", "POSTGRES", "PostgreSQL"])
+def test_explicit_backend_alias_selects_postgres(
+    tmp_path: Path, fake_postgres_modules: None, spelling: str
+) -> None:
+    from aragora.gauntlet.storage import GauntletStorage
+    from aragora.storage.receipt_store import ReceiptStore
+
+    stores = [
+        ReceiptStore(db_path=tmp_path / "receipts.db", backend=spelling),
+        GauntletStorage(db_path=str(tmp_path / "gauntlet.db"), backend=spelling),
+    ]
+    for store in stores:
+        assert store.backend_type == "postgresql"
+        assert isinstance(store._backend, FakePostgreSQLBackend)
+        assert store._backend.database_url == DSN
+    assert not list(tmp_path.glob("*.db"))
+
+
+def test_explicit_sqlite_backend_unchanged(tmp_path: Path) -> None:
+    from aragora.gauntlet.storage import GauntletStorage
+    from aragora.storage.backends import SQLiteBackend
+    from aragora.storage.receipt_store import ReceiptStore
+
+    receipts = ReceiptStore(db_path=tmp_path / "receipts.db", backend="sqlite")
+    gauntlet = GauntletStorage(db_path=str(tmp_path / "gauntlet.db"), backend="sqlite")
+    try:
+        for store in (receipts, gauntlet):
+            assert store.backend_type == "sqlite"
+            assert isinstance(store._backend, SQLiteBackend)
+        assert (tmp_path / "receipts.db").exists()
+        assert (tmp_path / "gauntlet.db").exists()
+    finally:
+        receipts.close()
+        gauntlet.close()
+
+
+@pytest.fixture
+def settings_backend(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from aragora.config.settings import reset_settings
+    from aragora.storage import backends
+
+    monkeypatch.setattr(backends, "PostgreSQLBackend", FakePostgreSQLBackend)
+    reset_settings()
+    backends.reset_database_backend()
+    yield backends
+    backends.reset_database_backend()
+    reset_settings()
+
+
+@pytest.mark.parametrize("spelling", ["postgres", "postgresql"])
+def test_settings_database_backend_accepts_postgres_alias(
+    monkeypatch: pytest.MonkeyPatch, settings_backend: Any, spelling: str
+) -> None:
+    monkeypatch.setenv("ARAGORA_DB_BACKEND", spelling)
+    backend = settings_backend.get_database_backend()
+    assert isinstance(backend, FakePostgreSQLBackend)
+    assert backend.database_url == DSN
+
+
+def test_settings_database_backend_sqlite_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, settings_backend: Any
+) -> None:
+    monkeypatch.setenv("ARAGORA_DB_BACKEND", "sqlite")
+    backend = settings_backend.get_database_backend()
+    assert isinstance(backend, settings_backend.SQLiteBackend)
+    assert Path(backend.db_path).parent == tmp_path.resolve()

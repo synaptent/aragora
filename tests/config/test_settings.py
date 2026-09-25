@@ -272,11 +272,18 @@ class TestDatabaseSettings:
                 DatabaseSettings()
 
     def test_backend_validator_valid(self):
-        for backend in ("sqlite", "postgresql", "postgres", "supabase", "auto"):
+        for backend in ("sqlite", "postgresql", "supabase", "auto"):
             env = {**_clean_env(), "ARAGORA_DB_BACKEND": backend}
             with patch.dict(os.environ, env, clear=True):
                 s = DatabaseSettings()
             assert s.backend == backend
+
+    @pytest.mark.parametrize("spelling", ["postgres", "postgresql", "POSTGRES", "PostgreSQL"])
+    def test_backend_validator_normalises_postgres_alias(self, spelling):
+        env = {**_clean_env(), "ARAGORA_DB_BACKEND": spelling}
+        with patch.dict(os.environ, env, clear=True):
+            s = DatabaseSettings()
+        assert s.backend == "postgresql"
 
     def test_backend_validator_invalid(self):
         env = {**_clean_env(), "ARAGORA_DB_BACKEND": "mysql"}
@@ -290,20 +297,33 @@ class TestDatabaseSettings:
             s = DatabaseSettings()
         assert s.nomic_path == Path(".nomic")
 
-    def test_is_postgresql_property(self):
+    @pytest.mark.parametrize("spelling", ["postgres", "postgresql"])
+    def test_is_postgresql_property(self, spelling):
         env = {
             **_clean_env(),
-            "ARAGORA_DB_BACKEND": "postgresql",
+            "ARAGORA_DB_BACKEND": spelling,
             "DATABASE_URL": "postgresql://localhost/test",
         }
         with patch.dict(os.environ, env, clear=True):
             s = DatabaseSettings()
         assert s.is_postgresql is True
 
-    def test_is_postgresql_false_without_url(self):
-        env = {**_clean_env(), "ARAGORA_DB_BACKEND": "postgresql"}
+    @pytest.mark.parametrize("spelling", ["postgres", "postgresql"])
+    def test_is_postgresql_false_without_url(self, spelling):
+        env = {**_clean_env(), "ARAGORA_DB_BACKEND": spelling}
         with patch.dict(os.environ, env, clear=True):
             s = DatabaseSettings()
+        assert s.is_postgresql is False
+
+    def test_is_postgresql_false_for_sqlite_with_url(self):
+        env = {
+            **_clean_env(),
+            "ARAGORA_DB_BACKEND": "sqlite",
+            "DATABASE_URL": "postgresql://localhost/test",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            s = DatabaseSettings()
+        assert s.backend == "sqlite"
         assert s.is_postgresql is False
 
 
