@@ -7763,27 +7763,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/gauntlet/receipts/{receipt_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get decision receipt
-         * @deprecated
-         * @description Get a specific decision receipt by ID.
-         */
-        get: operations["getGauntletReceiptsByreceiptid"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/gauntlet/receipts/{receipt_id}/export": {
         parameters: {
             query?: never;
@@ -59807,6 +59786,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/receipts/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify an ODR document
+         * @description Verify an Open Decision Receipt document supplied in the request body. Stateless and public: nothing is persisted and the document does not have to originate from this deployment. Signatures are checked against this deployment's configured ODR signing key, so a document signed by another issuer conforms structurally but reports a failing signature check.
+         */
+        post: operations["verify_odr_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/receipts/{receipt_id}": {
         parameters: {
             query?: never;
@@ -59836,7 +59835,7 @@ export interface paths {
         };
         /**
          * Export receipt
-         * @description Export a receipt in the requested format.
+         * @description Export a receipt in the requested format. format=odr is public; every other format requires receipts:read.
          */
         get: operations["exportReceipt"];
         put?: never;
@@ -64653,19 +64652,6 @@ export interface operations {
             };
             /** @description Not found - The requested resource does not exist */
             404: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal server error - Unexpected error occurred */
-            500: {
                 headers: {
                     /** @description Unique request identifier for tracing and debugging */
                     "X-Request-ID"?: string;
@@ -78971,46 +78957,6 @@ export interface operations {
             };
             /** @description Bad request - Invalid input or malformed JSON */
             400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getGauntletReceiptsByreceiptid: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Unique identifier of the receipt */
-                receipt_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Decision receipt details */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DecisionReceipt"];
-                };
-            };
-            /** @description Not found - The requested resource does not exist */
-            404: {
                 headers: {
                     /** @description Unique request identifier for tracing and debugging */
                     "X-Request-ID"?: string;
@@ -183301,6 +183247,49 @@ export interface operations {
             };
         };
     };
+    verify_odr_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Verification verdict returned (verified true or false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Body is not a JSON object carrying odr_version */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body exceeds 262144 bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit exceeded (60 requests per minute per client) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getReceiptById: {
         parameters: {
             query?: never;
@@ -183377,7 +183366,12 @@ export interface operations {
     };
     exportReceipt: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Export format; odr returns the Open Decision Receipt. */
+                format?: string;
+                /** @description ODR profile version for format=odr: 0.1 or 0.2. */
+                odr_version?: string;
+            };
             header?: never;
             path: {
                 /** @description Unique identifier of the receipt */
@@ -183394,6 +183388,8 @@ export interface operations {
                     "X-Request-ID"?: string;
                     /** @description Server processing time in milliseconds */
                     "X-Response-Time"?: number;
+                    /** @description JCS content digest of the exported ODR document: 64 lowercase hex characters. Sent for format=odr. */
+                    "X-ODR-Digest"?: string;
                     [name: string]: unknown;
                 };
                 content: {
