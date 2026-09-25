@@ -1,0 +1,70 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-business-operations-holdout-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "biz-holdout-737-max-us-ungrounding-2020",
+      "domain": "business_operations",
+      "split": "holdout",
+      "title": "Stage US 737 MAX return-to-service operations for Q4 2020",
+      "decision_prompt": "A US airline operations team must decide whether to make 737 MAX return-to-service training, maintenance, and capacity preparation its primary fourth-quarter plan. Boeing's latest filing assumes regulatory approvals will enable deliveries to resume during Q4 2020, while emphasizing regulatory, customer, and pandemic uncertainty. Choose the action that best fits whether the FAA will rescind the US grounding order by 2020-12-31.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Stage a Q4 return-to-service plan\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "stage_q4_return_plan",
+      "options": [
+        {
+          "option_id": "defer_return_plan_to_2021",
+          "label": "Defer the return plan to 2021",
+          "description": "Keep alternate-fleet operations primary and defer material 737 MAX return-to-service preparation until 2021."
+        },
+        {
+          "option_id": "stage_q4_return_plan",
+          "label": "Stage a Q4 return-to-service plan",
+          "description": "Prioritize the training, maintenance, and capacity work needed to restore US 737 MAX operations during Q4 2020."
+        }
+      ],
+      "information_cutoff": "2020-10-29T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "boeing-2020-q3-max-delivery-assumption",
+          "title": "Boeing Form 10-Q for the quarter ended September 30, 2020",
+          "url": "https://www.sec.gov/Archives/edgar/data/12927/000001292720000076/ba-20200930.htm",
+          "published_at": "2020-10-28T00:00:00Z",
+          "content_sha256": "6ddd5438524acbda5b810dde2be19f7b1886c5662a074475b599842b9f5aa449"
+        }
+      ]
+    },
+    {
+      "case_id": "biz-holdout-777x-first-delivery-2023",
+      "domain": "business_operations",
+      "split": "holdout",
+      "title": "Plan 777X operations around a late-2023 first delivery",
+      "decision_prompt": "An aerospace program operations team must set its primary supplier, staffing, and customer-readiness plan after Boeing forecasts the first 777X delivery in late 2023 and discloses certification, design-change, market, and production risks. Choose the action that best fits whether the first 777X delivery will occur by 2023-12-31.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Maintain 2023 delivery readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "maintain_2023_delivery_readiness",
+      "options": [
+        {
+          "option_id": "maintain_2023_delivery_readiness",
+          "label": "Maintain 2023 delivery readiness",
+          "description": "Keep suppliers, staffing, and customer-readiness milestones aligned to a first 777X delivery by the end of 2023."
+        },
+        {
+          "option_id": "rebaseline_beyond_2023",
+          "label": "Rebaseline beyond 2023",
+          "description": "Move the primary operations plan beyond 2023 and reduce commitments that depend on a first delivery by that date."
+        }
+      ],
+      "information_cutoff": "2021-02-02T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "boeing-2020-10k-777x-late-2023",
+          "title": "Boeing Form 10-K for the year ended December 31, 2020",
+          "url": "https://www.sec.gov/Archives/edgar/data/12927/000001292721000011/ba-20201231.htm",
+          "published_at": "2021-02-01T00:00:00Z",
+          "content_sha256": "aecdb6b6d0b9d4e54d1d903c9f180b905c8f20b83553e1181b41bbe104d64911"
+        }
+      ]
+    }
+  ]
+}

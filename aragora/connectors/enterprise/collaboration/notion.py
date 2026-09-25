@@ -151,7 +151,7 @@ class NotionConnector(EnterpriseConnector):
         json_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make a request to Notion API."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         headers = await self._get_auth_header()
         headers["Content-Type"] = "application/json"

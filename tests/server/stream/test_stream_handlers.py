@@ -595,7 +595,7 @@ class TestMetricsHandler:
         with patch("aiohttp.web.Response") as mock_response:
             mock_response.return_value = MagicMock()
             # get_prometheus_metrics is imported inside the handler from aragora.server.prometheus
-            with patch("aragora.server.prometheus.get_prometheus_metrics") as mock_metrics:
+            with patch("aragora.observability.prometheus.get_prometheus_metrics") as mock_metrics:
                 mock_metrics.return_value = "# HELP test_metric Test\n"
                 await handler._handle_metrics(request)
 
@@ -613,7 +613,7 @@ class TestMetricsHandler:
         with patch("aiohttp.web.Response") as mock_response:
             mock_response.return_value = MagicMock()
             # Simulate ImportError when trying to import from aragora.server.prometheus
-            with patch.dict("sys.modules", {"aragora.server.prometheus": None}):
+            with patch.dict("sys.modules", {"aragora.observability.prometheus": None}):
                 await handler._handle_metrics(request)
 
             # Should not raise, returns text response
@@ -782,7 +782,7 @@ class TestAudienceClustersHandler:
     async def test_does_not_drain_suggestions_when_reading_clusters(self, request_factory):
         """GET audience clusters should not consume pending suggestions."""
         from aragora.server.stream.emitter import AudienceInbox
-        from aragora.server.stream.events import AudienceMessage
+        from aragora.events.types import AudienceMessage
 
         inbox = AudienceInbox()
         inbox.put(

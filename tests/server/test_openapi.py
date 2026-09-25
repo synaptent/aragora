@@ -241,6 +241,93 @@ class TestSDKReferencedEndpointRegistrations:
         assert "/api/quotas/request-increase" not in schema["paths"]
 
 
+class TestSdkMissingRuntimeTrueBackfill:
+    """Runtime-true pins for the served sdk_missing.py charter entries.
+
+    Census follow-up to the quotas enrichment: of the 21 remaining charter
+    operations, exactly three are reachable through _try_modular_handler
+    (route-index/can_handle match into a handler method that serves the
+    documented path). These pins bind their spec entries to the handler
+    truth so a spec edit that drifts from the served contract fails here
+    before verify_sdk_contracts or sdk-parity see it.
+    """
+
+    def test_matches_stats_get_documents_runtime_contract(self):
+        """GET /api/matches/stats documents the served public stats shape.
+
+        MatchesStatsHandler.handle serves the exact version-stripped path with
+        no auth check (a public ranking read like the leaderboard), returning
+        EloSystem.get_stats(): total_agents/avg_elo/max_elo/min_elo/
+        total_matches, all always present (missing aggregates default).
+        """
+        op = ALL_ENDPOINTS["/api/matches/stats"]["get"]
+        assert "security" not in op
+        assert "requestBody" not in op
+        schema = op["responses"]["200"]["content"]["application/json"]["schema"]
+        assert schema["type"] == "object"
+        assert set(schema["properties"]) == {
+            "total_agents",
+            "avg_elo",
+            "max_elo",
+            "min_elo",
+            "total_matches",
+        }
+        assert schema["properties"]["total_agents"]["type"] == "integer"
+        assert schema["properties"]["avg_elo"]["type"] == "number"
+        assert schema["properties"]["total_matches"]["type"] == "integer"
+
+    def test_reputation_history_get_documents_runtime_contract(self):
+        """GET /api/reputation/history documents the served snapshot timeline.
+
+        CritiqueHandler.handle sits behind require_permission("critiques:read"),
+        accepts agent/start_date/end_date filters plus a 1..1000-clamped limit,
+        and returns {history: [{timestamp, agent, reputation, event}], count}.
+        timestamp is AgentReputation.updated_at (str, default ""), never null.
+        """
+        op = ALL_ENDPOINTS["/api/reputation/history"]["get"]
+        assert op["security"] == [{"bearerAuth": []}]
+        params = {p["name"]: p for p in op["parameters"]}
+        assert set(params) == {"agent", "start_date", "end_date", "limit"}
+        assert all(p["in"] == "query" for p in params.values())
+        assert not any(p.get("required") for p in params.values())
+        assert params["limit"]["schema"]["type"] == "integer"
+        assert params["limit"]["schema"]["maximum"] == 1000
+        schema = op["responses"]["200"]["content"]["application/json"]["schema"]
+        assert schema["type"] == "object"
+        assert set(schema["properties"]) == {"history", "count"}
+        item = schema["properties"]["history"]["items"]
+        assert set(item["properties"]) == {"timestamp", "agent", "reputation", "event"}
+        assert item["properties"]["timestamp"]["type"] == "string"
+        assert schema["properties"]["count"]["type"] == "integer"
+
+    def test_reputation_domain_get_documents_runtime_contract(self):
+        """GET /api/reputation/domain documents the served domain filter.
+
+        CritiqueHandler.handle (require_permission("critiques:read")) 400s
+        without ?domain= and returns {domain, reputations: [...], count} with
+        the six per-agent reputation fields _get_reputation_by_domain emits.
+        """
+        op = ALL_ENDPOINTS["/api/reputation/domain"]["get"]
+        assert op["security"] == [{"bearerAuth": []}]
+        params = {p["name"]: p for p in op["parameters"]}
+        assert set(params) == {"domain", "limit"}
+        assert params["domain"]["required"] is True
+        assert params["domain"]["in"] == "query"
+        assert not params["limit"].get("required")
+        schema = op["responses"]["200"]["content"]["application/json"]["schema"]
+        assert set(schema["properties"]) == {"domain", "reputations", "count"}
+        item = schema["properties"]["reputations"]["items"]
+        assert set(item["properties"]) == {
+            "agent",
+            "score",
+            "vote_weight",
+            "proposal_acceptance_rate",
+            "critique_value",
+            "debates_participated",
+        }
+        assert item["properties"]["debates_participated"]["type"] == "integer"
+
+
 class TestGenerateOpenAPISchema:
     """Tests for schema generation function."""
 

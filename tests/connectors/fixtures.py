@@ -214,7 +214,7 @@ class MockHTTPSession:
 
         ctx = MagicMock()
         ctx.__aenter__ = AsyncMock(return_value=response)
-        ctx.__aexit__ = AsyncMock()
+        ctx.__aexit__ = AsyncMock(return_value=False)
         return ctx
 
     def get(self, url: str, **kwargs):
@@ -255,7 +255,7 @@ def mock_aiohttp_session(mock_http_session):
     with patch("aiohttp.ClientSession") as mock:
         ctx = MagicMock()
         ctx.__aenter__ = AsyncMock(return_value=mock_http_session)
-        ctx.__aexit__ = AsyncMock()
+        ctx.__aexit__ = AsyncMock(return_value=False)
         mock.return_value = ctx
         yield mock_http_session
 
@@ -266,7 +266,7 @@ def mock_httpx_client(mock_http_session):
     with patch("httpx.AsyncClient") as mock:
         ctx = MagicMock()
         ctx.__aenter__ = AsyncMock(return_value=mock_http_session)
-        ctx.__aexit__ = AsyncMock()
+        ctx.__aexit__ = AsyncMock(return_value=False)
         mock.return_value = ctx
         yield mock_http_session
 

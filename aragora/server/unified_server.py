@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from aragora.memory.consensus import ConsensusMemory, DissentRetriever
     from aragora.persistence.supabase import SupabaseClient
     from aragora.ranking.elo import EloSystem
-    from aragora.server.documents import DocumentStore
+    from aragora.documents.parsing import DocumentStore
     from aragora.server.stream.canvas_stream import CanvasStreamServer
     from aragora.storage import UserStore
 import logging
@@ -538,7 +538,7 @@ class UnifiedHandler(  # type: ignore[misc]
 
     def _serve_live_spectate_stream(self, query: dict[str, Any]) -> bool:
         """Write a live SSE response for the public spectate stream endpoint."""
-        from aragora.server.handlers.spectate_ws import (
+        from aragora.server.handlers.streaming.spectate_ws import (
             _can_view_live_debates,
             _get_optional_user_from_request,
             iter_live_spectate_sse_frames,
@@ -1508,6 +1508,14 @@ async def run_unified_server(
         raise
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.warning("[server] Config validation skipped: %s", e)
+
+    # Materialize the lazy auth singleton so a production boot without a token
+    # fails here with AuthenticationError instead of relying on whichever
+    # module-level auth_config import happens to fire first (a per-request
+    # failure if that import graph ever becomes lazy).
+    from aragora.server.auth import get_auth_config
+
+    get_auth_config()
 
     # Initialize storage from nomic directory (or default data dir in offline mode)
     storage = None
