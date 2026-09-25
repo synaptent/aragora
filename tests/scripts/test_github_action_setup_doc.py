@@ -23,7 +23,7 @@ NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")
 ROOT_ACTION_PATH = Path("action.yml")
 EXAMPLE_RECEIPT_PATH = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
 RECEIPT_WORKFLOW_EXAMPLE_PATH = Path("examples/github-action/receipt.yml")
-PINNED_ROOT_ACTION_REF = "synaptent/aragora@44ac78ad311785ecaa91b3fe56c7c7c613af92d9"
+PINNED_ROOT_ACTION_REF = "synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d"
 
 _BACKTICK_TABLE_FIELD_RE = re.compile(r"^\|\s*`([a-zA-Z0-9_-]+)`\s*\|", re.MULTILINE)
 
