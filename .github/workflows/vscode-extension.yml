@@ -1,0 +1,126 @@
+name: VS Code Extension
+
+on:
+  pull_request:
+    paths:
+      - 'ide/vscode-aragora/**'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/vscode-*.json'
+      - '.github/actions/setup-node-safe/**'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/workflows/vscode-extension.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ide/vscode-aragora/**'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/vscode-*.json'
+      - '.github/actions/setup-node-safe/**'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/workflows/vscode-extension.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-extension-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# engines.node is >=22.22.0 and ide/vscode-aragora/.npmrc sets engine-strict,
+# so `npm ci` refuses older Node releases.
+jobs:
+  checks:
+    name: Lint, typecheck and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ide/vscode-aragora
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: ./.github/actions/setup-node-safe
+        with:
+          node-version: "22.22.2"
+          cache: "npm"
+          cache-dependency-path: |
+            ide/vscode-aragora/package-lock.json
+            ide/vscode-aragora/webview-ui/package-lock.json
+      - name: Set up Python for the file-size ratchet
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+      - name: Install extension dependencies
+        run: npm ci
+      - name: Install webview dependencies
+        working-directory: ide/vscode-aragora/webview-ui
+        run: npm ci
+      - name: Lint extension
+        run: npm run lint
+      - name: Lint webview
+        working-directory: ide/vscode-aragora/webview-ui
+        run: npm run lint
+      - name: Prettier check (extension and webview)
+        run: npx prettier --check .
+      - name: Knip
+        run: npx knip
+      - name: File-size ratchet
+        working-directory: .
+        run: >-
+          python scripts/ci/check_file_sizes.py
+          --glob 'ide/vscode-aragora/src/**/*.ts'
+          --glob 'ide/vscode-aragora/webview-ui/src/**/*.{ts,tsx}'
+          --baseline scripts/baselines/vscode-file-sizes.json
+      - name: Compile
+        run: npm run compile
+      - name: Unit tests with coverage
+        run: npx jest --ci --coverage
+      - name: Upload Jest junit report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vscode-extension-junit
+          path: ide/vscode-aragora/junit.xml
+          if-no-files-found: warn
+
+  integration-package:
+    name: Integration tests and VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ide/vscode-aragora
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: ./.github/actions/setup-node-safe
+        with:
+          node-version: "22.22.2"
+          cache: "npm"
+          cache-dependency-path: |
+            ide/vscode-aragora/package-lock.json
+            ide/vscode-aragora/webview-ui/package-lock.json
+      - name: Install extension dependencies
+        run: npm ci
+      - name: Install webview dependencies
+        working-directory: ide/vscode-aragora/webview-ui
+        run: npm ci
+      - name: Build webview
+        working-directory: ide/vscode-aragora/webview-ui
+        run: npm run build
+      - name: Integration tests (VS Code 1.136.1 under xvfb)
+        run: xvfb-run -a npm run test:integration
+      - name: Package VSIX
+        run: npx vsce package --no-dependencies --out aragora-vscode.vsix
+      - name: Upload VSIX
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aragora-vscode-vsix
+          path: ide/vscode-aragora/aragora-vscode.vsix
+          if-no-files-found: error
