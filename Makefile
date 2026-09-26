@@ -623,27 +623,41 @@ readiness-heavy-docs:
 	$(READINESS_DONE)
 
 # --- vscode (ide/vscode-aragora + webview-ui) -------------------------------
-# The extension root has no ESLint config until M8 (`npm run lint` exits 2),
-# so M1 lints only webview-ui, whose config is green today.
+# Prettier runs once from the extension root; its scope includes webview-ui.
 readiness-lint-vscode:
 	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP vscode: npm not found"; exit 0; }; \
 	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
+	command -v python3 >/dev/null 2>&1 || { echo "SKIP vscode: python3 not found"; exit 0; }; \
+	command -v git >/dev/null 2>&1 || { echo "SKIP vscode: git not found"; exit 0; }; \
+	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
 	[ -d ide/vscode-aragora/webview-ui/node_modules ] || { echo "SKIP vscode: webview-ui node_modules missing (npm ci in ide/vscode-aragora/webview-ui)"; exit 0; }; \
-	cd ide/vscode-aragora/webview-ui && npx eslint src --ext ts,tsx && \
+	(cd ide/vscode-aragora && npm run lint && npm run format:check) && \
+	(cd ide/vscode-aragora/webview-ui && npm run lint) && \
+	python3 scripts/ci/check_tool_baseline.py --tool knip --cwd ide/vscode-aragora \
+		--baseline scripts/baselines/vscode-knip.json \
+		--report-json "$(READINESS_REPORT_DIR)/vscode-knip.report.json" \
+		-- npx knip --reporter json && \
+	python3 scripts/ci/check_file_sizes.py --glob 'ide/vscode-aragora/src/**/*.ts' \
+		--glob 'ide/vscode-aragora/webview-ui/src/**/*.{ts,tsx}' \
+		--baseline scripts/baselines/vscode-file-sizes.json && \
 	$(READINESS_DONE)
 
 readiness-typecheck-vscode:
 	@$(READINESS_T0); \
 	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
 	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
-	cd ide/vscode-aragora && npx tsc --noEmit -p . && \
+	[ -d ide/vscode-aragora/webview-ui/node_modules ] || { echo "SKIP vscode: webview-ui node_modules missing (npm ci in ide/vscode-aragora/webview-ui)"; exit 0; }; \
+	(cd ide/vscode-aragora && npx tsc --noEmit -p .) && \
+	(cd ide/vscode-aragora/webview-ui && npx tsc --noEmit -p .) && \
 	$(READINESS_DONE)
 
+# jest-junit writes ide/vscode-aragora/junit.xml (git-ignored).
 readiness-test-vscode:
 	@$(READINESS_T0); \
 	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
 	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
-	cd ide/vscode-aragora && npx jest --ci && \
+	cd ide/vscode-aragora && npx jest --ci --coverage --maxWorkers=4 && \
 	$(READINESS_DONE)
 
 # --- operator (aragora-operator, Go) ----------------------------------------
