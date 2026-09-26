@@ -209,12 +209,15 @@ def test_bridge_metadata_records_pr_provenance():
 def test_example_merge_quorum_receipt_matches_emitter():
     # The committed example is the emitter<->verifier contract for PR-review
     # receipts (verified independently in aragora-verify). It must equal exactly
-    # what the bridge + odr_export emit today.
+    # what the bridge + odr_export emit today at its profile, v0.1 (explicit,
+    # since the library default is v0.2).
     import json
     from pathlib import Path
 
     example = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
-    expected = decision_receipt_to_odr(collect_outcome_to_decision_receipt(_outcome()))
+    expected = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_outcome()), odr_version="0.1"
+    )
     actual = json.loads(example.read_text(encoding="utf-8"))
     assert actual == expected, "example merge-quorum receipt is stale; regenerate it"
 
@@ -233,7 +236,7 @@ def test_v02_bridge_findings_use_gate_reader():
     assert dissent["findings"][0]["text"] == "advisory from PASS"
     assert [f["blocking"] for f in dissent["findings"]] == [False, True]
     assert dissent["severity_max"] == "P1" and dissent["blocking"] is True
-    legacy = decision_receipt_to_odr(receipt, odr_version="0.1")
+    legacy = decision_receipt_to_odr(receipt)
     for key in ("present", "dissenting_agents", "views"):
         assert dissent[key] == legacy["quorum"]["dissent"][key]
     jsonschema.validate(doc, load_odr_schema())

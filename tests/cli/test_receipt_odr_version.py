@@ -1,4 +1,4 @@
-"""The receipt export CLI shares the PR script's profile-version policy."""
+"""The receipt export CLI shares the PR script's opt-in profile policy."""
 
 import argparse
 import json

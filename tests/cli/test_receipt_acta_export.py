@@ -188,19 +188,29 @@ def test_acta_requires_an_effective_v02_document(
     assert not (tmp_path / "x.odr.json").exists()
 
 
-@pytest.mark.parametrize("env", ["0.2", None])
-def test_acta_env_var_or_default_supplies_the_effective_version(
-    tmp_path, receipt, key_file, monkeypatch, env
-):
+def test_acta_env_var_supplies_the_effective_version(tmp_path, receipt, key_file, monkeypatch):
     monkeypatch.setenv(FILE_ENV, str(key_file))
-    if env is not None:
-        monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", env)
+    monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", "0.2")
     acta_path = tmp_path / "x.acta.json"
 
     _run(_export_argv(receipt, tmp_path, "--acta", str(acta_path)))
 
     assert json.loads((tmp_path / "x.odr.json").read_text())["odr_version"] == "0.2"
     assert json.loads(acta_path.read_text())["payload"]["chain_scope"] == "acta-02"
+
+
+def test_acta_accepts_the_default_version(tmp_path, receipt, key_file, monkeypatch):
+    # With neither the flag nor the environment variable, the default (0.2) applies.
+    monkeypatch.setenv(FILE_ENV, str(key_file))
+    acta_path = tmp_path / "x.acta.json"
+
+    _run(_export_argv(receipt, tmp_path, "--acta", str(acta_path)))
+
+    odr = json.loads((tmp_path / "x.odr.json").read_text())
+    public_key = odr_test_key().public_key()
+    assert odr["odr_version"] == "0.2"
+    assert verify_odr_document(odr, public_key=public_key).ok
+    assert verify_acta_projection(json.loads(acta_path.read_text()), public_key).ok
 
 
 def test_acta_requires_an_output_path(tmp_path, receipt, key_file, capsys, monkeypatch):

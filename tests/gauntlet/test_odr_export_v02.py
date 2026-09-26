@@ -11,7 +11,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "aragora-verify" / "src"))
 
 from aragora_verify import schema, verify  # noqa: E402
-from aragora.gauntlet.odr_export import ODR_DEFAULT_VERSION, decision_receipt_to_odr  # noqa: E402
+from aragora.gauntlet.odr_export import (  # noqa: E402
+    ODR_DEFAULT_VERSION,
+    ODR_PROFILE_URI,
+    ODR_VERSION,
+    decision_receipt_to_odr,
+)
 from aragora.gauntlet.odr_verify import verify_odr_document  # noqa: E402
 from aragora.gauntlet.receipt_models import DecisionReceipt  # noqa: E402
 from aragora.gauntlet.odr_signing import sign_odr_receipt  # noqa: E402
@@ -32,7 +37,20 @@ def receipt():
     )
 
 
-def test_requested_v01_keeps_the_v01_shape():
+def test_default_is_v02():
+    assert ODR_DEFAULT_VERSION == "0.2"
+    assert ODR_VERSION == "0.2"
+    assert ODR_PROFILE_URI == "https://aragora.ai/specs/open-decision-receipt/v0.2"
+    source = receipt()
+    source.settlement_metadata = {"repo": "o/r", "pr": 1}
+    doc = decision_receipt_to_odr(source)
+    assert doc == decision_receipt_to_odr(source, odr_version="0.2")
+    assert doc["profile"] == ODR_PROFILE_URI
+    assert doc["subject"]["repository"] == "o/r" and doc["subject"]["pr_number"] == 1
+    assert verify(doc).ok and verify_odr_document(doc).ok
+
+
+def test_requested_v01_matches_origin_shape():
     source = receipt()
     source.settlement_metadata = {"repo": "o/r", "pr": 1, "odr": {"adjudication": {}}}
     doc = decision_receipt_to_odr(source, odr_version="0.1")
@@ -46,16 +64,12 @@ def test_requested_v01_keeps_the_v01_shape():
     assert verify(doc).ok and verify_odr_document(doc).ok
 
 
-def test_default_is_v02_and_v01_changes_only_version_and_profile():
+def test_requested_v02_changes_only_version_and_profile():
     source = receipt()
-    default = decision_receipt_to_odr(source)
-    assert ODR_DEFAULT_VERSION == default["odr_version"] == "0.2"
-    assert default == decision_receipt_to_odr(source, odr_version="0.2")
-    requested = decision_receipt_to_odr(source, odr_version="0.1")
-    requested.update(
-        odr_version="0.2", profile="https://aragora.ai/specs/open-decision-receipt/v0.2"
-    )
-    assert requested == default
+    v01 = decision_receipt_to_odr(source, odr_version="0.1")
+    requested = decision_receipt_to_odr(source, odr_version="0.2")
+    v01.update(odr_version="0.2", profile="https://aragora.ai/specs/open-decision-receipt/v0.2")
+    assert requested == v01
 
 
 @pytest.mark.parametrize("version", ["0.3", "", None])

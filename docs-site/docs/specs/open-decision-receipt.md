@@ -448,16 +448,17 @@ a drift-guard test so it cannot silently fall out of sync with the emitter.
 
 ### 9.5 Path to v1.0 GA (current status)
 
-ODR v0.2 is a **staged rollout**, not one coordinated release. The schemas and
-both in-repo verifiers accepted v0.2 first, the emitter produced it only on
-request, and `aragora-verify` **0.2.0** was then published on PyPI. From
-release 2.11.0 the emitter **defaults to 0.2**; 0.1 stays emittable **on
-request** (`odr_version="0.1"` in the library, `--odr-version 0.1` on the
-CLIs, or `ARAGORA_ODR_PROFILE_VERSION=0.1`). Verify v0.2 documents with
-`aragora-verify>=0.2.0` or either in-repo verifier: published `aragora-verify`
-0.1.1 fails a v0.2 document at `schema_conformance` (`odr_version: must be
-'0.1'`). Every v0.1 document keeps verifying unchanged with every verifier
-throughout. This remains the **stability contract that v1.0 will honour**.
+ODR v0.2 was a **staged rollout**, not one coordinated release. The schemas and
+both in-repo verifiers accepted v0.2 first, and the emitter emitted 0.2 only on
+request until `aragora-verify` **0.2.0** was published on PyPI. As of release
+2.11.0 the emitter **defaults to 0.2**; 0.1 is still emitted **on request**
+(`odr_version="0.1"` in the library; `--odr-version 0.1` on the CLIs;
+`ARAGORA_ODR_PROFILE_VERSION=0.1`; `?odr_version=0.1` on the export endpoint).
+Published `aragora-verify` 0.1.1 fails a v0.2 document at `schema_conformance`
+(`odr_version: must be '0.1'`); verify v0.2 with `aragora-verify` 0.2.0 or later,
+or request 0.1 for a 0.1.x verifier. Every v0.1 document keeps verifying
+unchanged with every verifier. This remains the **stability contract that v1.0
+will honour**.
 
 ### 9.6 Changelog — what 0.2 adds
 
@@ -479,7 +480,7 @@ first.
   `attestation.mechanism` and the signer-committed `signatures[]` metadata of
   §6.
 
-Default output 0.2 (2.11.0): 0.2 was emitted only on request until `aragora-verify` 0.2.0 was published; from release 2.11.0 it is the default and 0.1 is emitted on request (§9.5).
+Rollout: 0.2 is the default as of release 2.11.0, now that `aragora-verify` 0.2.0 is published; 0.1 is emitted on request (`--odr-version 0.1`) (§9.5).
 
 ## 10. Reference emitter
 

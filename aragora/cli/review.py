@@ -896,6 +896,8 @@ def _write_review_odr(
         pr_url=pr_url,
         reviewer_agents=agents_used or None,
     )
+    # ARAGORA_ODR_PROFILE_VERSION selects the profile, as for `aragora receipt export`;
+    # unset means the library default (0.2). An invalid value raises ValueError.
     odr = decision_receipt_to_odr(receipt, odr_version=resolve_odr_version(None))
     if not demo:
         # Never sign fabricated demo findings; demo receipts stay explicitly unsigned.

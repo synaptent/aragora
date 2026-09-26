@@ -5,7 +5,7 @@ Produces the three artifacts checked in under ``docs/compliance/fixtures/`` and
 referenced by ``docs/compliance/ODR_VERIFICATION_WALKTHROUGH.md``:
 
 * ``sample_decision_receipt.json``      -- the native ``DecisionReceipt`` record
-* ``sample_decision_receipt.odr.json``  -- the vendor-neutral ODR v0.2 export,
+* ``sample_decision_receipt.odr.json``  -- the vendor-neutral ODR v0.1 export,
                                            carrying one Ed25519 detached signature
 * ``odr_sample_signing_public_key.pem`` -- the public key that verifies it
 
@@ -40,7 +40,6 @@ from aragora.gauntlet.odr_export import (  # noqa: E402
     odr_content_digest,
 )
 from aragora.gauntlet.odr_signing import (  # noqa: E402
-    DEFAULT_SIGNING_ISSUER,
     generate_signing_key,
     public_key_pem,
     sign_odr_receipt,
@@ -197,9 +196,10 @@ def export_receipt_to_odr(receipt: DecisionReceipt) -> dict:
     guarantee. The regression tests in
     ``tests/gauntlet/test_odr_walkthrough_fixture.py`` call this same function
     so the fixture is always compared against the generator's actual export
-    path.
+    path. The profile is pinned to v0.1 for the same reason: the checked-in
+    fixture is a v0.1 document, and the library default moved to v0.2 in 2.11.0.
     """
-    return decision_receipt_to_odr(receipt)
+    return decision_receipt_to_odr(receipt, odr_version="0.1")
 
 
 def main() -> int:
@@ -221,7 +221,7 @@ def main() -> int:
     # Sign with a fresh demonstration key. The private half exists only in this
     # process; solely the public key is written out.
     private_key = generate_signing_key()
-    signed_odr = sign_odr_receipt(odr, private_key, issuer=DEFAULT_SIGNING_ISSUER)
+    signed_odr = sign_odr_receipt(odr, private_key)
     pubkey = public_key_pem(private_key)
 
     # Self-check: never emit a fixture that does not verify.
