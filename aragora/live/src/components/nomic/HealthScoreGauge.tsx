@@ -30,8 +30,7 @@ export function HealthScoreGauge({ score, label = 'Health Score' }: HealthScoreG
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
-  const color =
-    clamped >= 0.7 ? '#39FF14' : clamped >= 0.4 ? '#FFD700' : '#DC143C';
+  const color = clamped >= 0.7 ? '#39FF14' : clamped >= 0.4 ? '#FFD700' : '#DC143C';
 
   return (
     <div className="flex flex-col items-center">

@@ -46,7 +46,9 @@ test.describe('Critical Path - Page Load Smoke Tests', () => {
     await expect(heading).toContainText(/what do you want/i);
 
     // Quick debate input should be present
-    const debateInput = page.locator('input[placeholder*="topic" i], input[placeholder*="debate" i]').first();
+    const debateInput = page
+      .locator('input[placeholder*="topic" i], input[placeholder*="debate" i]')
+      .first();
     await expect(debateInput).toBeVisible();
   });
 
@@ -62,22 +64,14 @@ test.describe('Critical Path - Page Load Smoke Tests', () => {
     await expect(page.locator('body')).toBeVisible();
 
     // Oracle page should have some interactive element (input, button, or form)
-    const interactiveEl = page.locator(
-      'input, textarea, button, [role="textbox"], form'
-    ).first();
+    const interactiveEl = page.locator('input, textarea, button, [role="textbox"], form').first();
     await expect(interactiveEl).toBeVisible({ timeout: 10_000 });
   });
 
   test('receipts page loads', async ({ page, aragoraPage }) => {
     // Mock receipts API so the page renders without a real backend
-    await mockApiResponse(page, '**/api/v2/receipts**', {
-      receipts: [],
-      total: 0,
-    });
-    await mockApiResponse(page, '**/api/gauntlet/results**', {
-      results: [],
-      total: 0,
-    });
+    await mockApiResponse(page, '**/api/v2/receipts**', { receipts: [], total: 0 });
+    await mockApiResponse(page, '**/api/gauntlet/results**', { results: [], total: 0 });
 
     await page.goto('/receipts');
     await aragoraPage.dismissAllOverlays();
@@ -86,7 +80,10 @@ test.describe('Critical Path - Page Load Smoke Tests', () => {
     expect(page.url()).toContain('/receipts');
 
     // Receipts page has a heading with "Decision Receipts"
-    const heading = page.locator('h1, h2').filter({ hasText: /decision receipts/i }).first();
+    const heading = page
+      .locator('h1, h2')
+      .filter({ hasText: /decision receipts/i })
+      .first();
     await expect(heading).toBeVisible({ timeout: 10_000 });
   });
 

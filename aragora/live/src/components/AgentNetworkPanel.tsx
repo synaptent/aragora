@@ -72,12 +72,7 @@ function NetworkGraph({
     const seenAgents = new Set<string>();
 
     // Center node (the selected agent)
-    nodeList.push({
-      id: network.agent,
-      x: centerX,
-      y: centerY,
-      type: 'center',
-    });
+    nodeList.push({ id: network.agent, x: centerX, y: centerY, type: 'center' });
     seenAgents.add(network.agent);
 
     // Collect all related agents with their types
@@ -131,33 +126,49 @@ function NetworkGraph({
 
   const getNodeColor = (type: NetworkNode['type']) => {
     switch (type) {
-      case 'center': return '#22d3ee'; // cyan
-      case 'rival': return '#ef4444'; // red
-      case 'ally': return '#22c55e'; // green
-      case 'influence': return '#3b82f6'; // blue
-      case 'influenced_by': return '#a855f7'; // purple
-      default: return '#71717a';
+      case 'center':
+        return '#22d3ee'; // cyan
+      case 'rival':
+        return '#ef4444'; // red
+      case 'ally':
+        return '#22c55e'; // green
+      case 'influence':
+        return '#3b82f6'; // blue
+      case 'influenced_by':
+        return '#a855f7'; // purple
+      default:
+        return '#71717a';
     }
   };
 
   const getEdgeColor = (type: NetworkEdge['type']) => {
     switch (type) {
-      case 'rival': return 'rgba(239, 68, 68, 0.5)';
-      case 'ally': return 'rgba(34, 197, 94, 0.5)';
-      case 'influence': return 'rgba(59, 130, 246, 0.5)';
-      case 'influenced_by': return 'rgba(168, 85, 247, 0.5)';
-      default: return 'rgba(113, 113, 122, 0.5)';
+      case 'rival':
+        return 'rgba(239, 68, 68, 0.5)';
+      case 'ally':
+        return 'rgba(34, 197, 94, 0.5)';
+      case 'influence':
+        return 'rgba(59, 130, 246, 0.5)';
+      case 'influenced_by':
+        return 'rgba(168, 85, 247, 0.5)';
+      default:
+        return 'rgba(113, 113, 122, 0.5)';
     }
   };
 
   const nodeById = useMemo(() => {
     const map: Record<string, NetworkNode> = {};
-    nodes.forEach((n) => { map[n.id] = n; });
+    nodes.forEach((n) => {
+      map[n.id] = n;
+    });
     return map;
   }, [nodes]);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-lg">
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-64 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-lg"
+    >
       {/* Edges */}
       {edges.map((edge, idx) => {
         const source = nodeById[edge.source];
@@ -214,13 +225,21 @@ function NetworkGraph({
       {/* Legend */}
       <g transform="translate(10, 10)">
         <circle cx="6" cy="6" r="4" fill="#ef4444" />
-        <text x="14" y="9" className="text-[8px] fill-zinc-500">Rival</text>
+        <text x="14" y="9" className="text-[8px] fill-zinc-500">
+          Rival
+        </text>
         <circle cx="6" cy="20" r="4" fill="#22c55e" />
-        <text x="14" y="23" className="text-[8px] fill-zinc-500">Ally</text>
+        <text x="14" y="23" className="text-[8px] fill-zinc-500">
+          Ally
+        </text>
         <circle cx="56" cy="6" r="4" fill="#3b82f6" />
-        <text x="64" y="9" className="text-[8px] fill-zinc-500">Influences</text>
+        <text x="64" y="9" className="text-[8px] fill-zinc-500">
+          Influences
+        </text>
         <circle cx="56" cy="20" r="4" fill="#a855f7" />
-        <text x="64" y="23" className="text-[8px] fill-zinc-500">Influenced By</text>
+        <text x="64" y="23" className="text-[8px] fill-zinc-500">
+          Influenced By
+        </text>
       </g>
     </svg>
   );
@@ -263,39 +282,42 @@ function AgentNetworkPanelComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally exclude agentInput to prevent re-fetching on selection
   }, [apiBase]);
 
-  const fetchNetwork = useCallback(async (agent: string) => {
-    if (!agent) return;
+  const fetchNetwork = useCallback(
+    async (agent: string) => {
+      if (!agent) return;
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-    try {
-      // Fetch network and moments in parallel
-      const [networkRes, momentsRes] = await Promise.all([
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agent)}/network`),
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agent)}/moments?limit=5`),
-      ]);
+      try {
+        // Fetch network and moments in parallel
+        const [networkRes, momentsRes] = await Promise.all([
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agent)}/network`),
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agent)}/moments?limit=5`),
+        ]);
 
-      if (!networkRes.ok) {
-        throw new Error(`Failed to fetch network: ${networkRes.statusText}`);
+        if (!networkRes.ok) {
+          throw new Error(`Failed to fetch network: ${networkRes.statusText}`);
+        }
+
+        const networkData = await networkRes.json();
+        setNetwork(networkData);
+
+        // Moments are optional - don't fail if not available
+        if (momentsRes.ok) {
+          const momentsData = await momentsRes.json();
+          setMoments(momentsData.moments || []);
+        } else {
+          setMoments([]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load network');
+      } finally {
+        setLoading(false);
       }
-
-      const networkData = await networkRes.json();
-      setNetwork(networkData);
-
-      // Moments are optional - don't fail if not available
-      if (momentsRes.ok) {
-        const momentsData = await momentsRes.json();
-        setMoments(momentsData.moments || []);
-      } else {
-        setMoments([]);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load network');
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     if (selectedAgent) {
@@ -314,12 +336,10 @@ function AgentNetworkPanelComponent({
     title: string,
     items: RelationshipEntry[],
     icon: string,
-    colorClass: string
+    colorClass: string,
   ) => {
     if (!items || items.length === 0) {
-      return (
-        <div className="text-zinc-500 text-sm">No {title.toLowerCase()} data</div>
-      );
+      return <div className="text-zinc-500 text-sm">No {title.toLowerCase()} data</div>;
     }
 
     return (
@@ -342,13 +362,9 @@ function AgentNetworkPanelComponent({
             >
               <span className="font-medium">{item.agent}</span>
               <div className="flex items-center gap-2 text-xs">
-                <span className="opacity-75">
-                  Score: {(item.score * 100).toFixed(0)}%
-                </span>
+                <span className="opacity-75">Score: {(item.score * 100).toFixed(0)}%</span>
                 {item.debate_count !== undefined && (
-                  <span className="opacity-50">
-                    ({item.debate_count} debates)
-                  </span>
+                  <span className="opacity-50">({item.debate_count} debates)</span>
                 )}
               </div>
             </button>
@@ -368,7 +384,12 @@ function AgentNetworkPanelComponent({
         aria-label={`Expand Agent Network panel${network ? ` for ${network.agent}` : ''}`}
         className="panel panel-compact cursor-pointer"
         onClick={() => setIsExpanded(true)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsExpanded(true); } }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsExpanded(true);
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <h3 className="panel-title-sm flex items-center gap-2">
@@ -477,10 +498,12 @@ function AgentNetworkPanelComponent({
                 <span className="text-white font-medium">{network.allies?.length || 0}</span> allies
               </div>
               <div className="text-zinc-500 dark:text-zinc-400">
-                <span className="text-white font-medium">{network.influences?.length || 0}</span> influenced
+                <span className="text-white font-medium">{network.influences?.length || 0}</span>{' '}
+                influenced
               </div>
               <div className="text-zinc-500 dark:text-zinc-400">
-                <span className="text-white font-medium">{network.influenced_by?.length || 0}</span> influencers
+                <span className="text-white font-medium">{network.influenced_by?.length || 0}</span>{' '}
+                influencers
               </div>
             </div>
           </div>
@@ -506,47 +529,47 @@ function AgentNetworkPanelComponent({
 
           {/* Relationship Sections (List View) */}
           {viewMode === 'list' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Rivals */}
-            <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-              {renderRelationshipList(
-                'Rivals',
-                network.rivals,
-                '⚔️',
-                'bg-red-900/20 border border-red-800/30 text-red-400'
-              )}
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Rivals */}
+              <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
+                {renderRelationshipList(
+                  'Rivals',
+                  network.rivals,
+                  '⚔️',
+                  'bg-red-900/20 border border-red-800/30 text-red-400',
+                )}
+              </div>
 
-            {/* Allies */}
-            <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-              {renderRelationshipList(
-                'Allies',
-                network.allies,
-                '🤝',
-                'bg-green-900/20 border border-green-800/30 text-green-400'
-              )}
-            </div>
+              {/* Allies */}
+              <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
+                {renderRelationshipList(
+                  'Allies',
+                  network.allies,
+                  '🤝',
+                  'bg-green-900/20 border border-green-800/30 text-green-400',
+                )}
+              </div>
 
-            {/* Influences */}
-            <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-              {renderRelationshipList(
-                'Influences',
-                network.influences,
-                '📤',
-                'bg-blue-900/20 border border-blue-800/30 text-blue-400'
-              )}
-            </div>
+              {/* Influences */}
+              <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
+                {renderRelationshipList(
+                  'Influences',
+                  network.influences,
+                  '📤',
+                  'bg-blue-900/20 border border-blue-800/30 text-blue-400',
+                )}
+              </div>
 
-            {/* Influenced By */}
-            <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-              {renderRelationshipList(
-                'Influenced By',
-                network.influenced_by,
-                '📥',
-                'bg-purple-900/20 border border-purple-800/30 text-purple-400'
-              )}
+              {/* Influenced By */}
+              <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
+                {renderRelationshipList(
+                  'Influenced By',
+                  network.influenced_by,
+                  '📥',
+                  'bg-purple-900/20 border border-purple-800/30 text-purple-400',
+                )}
+              </div>
             </div>
-          </div>
           )}
 
           {/* Significant Moments */}

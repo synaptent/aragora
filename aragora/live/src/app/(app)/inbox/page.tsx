@@ -7,7 +7,11 @@ import { useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { GmailConnectionCard } from '@/components/inbox/GmailConnectionCard';
 import { OutlookConnectionCard } from '@/components/inbox/OutlookConnectionCard';
-import { MultiAccountSelector, type EmailAccount, type AccountType } from '@/components/inbox/MultiAccountSelector';
+import {
+  MultiAccountSelector,
+  type EmailAccount,
+  type AccountType,
+} from '@/components/inbox/MultiAccountSelector';
 import { SyncProgressBar } from '@/components/inbox/SyncProgressBar';
 import { PriorityInboxList } from '@/components/inbox/PriorityInboxList';
 import { InboxQueryPanel } from '@/components/inbox/InboxQueryPanel';
@@ -86,12 +90,9 @@ export default function InboxPage() {
   const fetchStatus = useCallback(async () => {
     try {
       // Fetch Gmail status
-      const gmailResponse = await fetch(
-        `${backendConfig.api}/api/email/config?user_id=${userId}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
-      );
+      const gmailResponse = await fetch(`${backendConfig.api}/api/email/config?user_id=${userId}`, {
+        headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
+      });
       if (gmailResponse.ok) {
         const data = await gmailResponse.json();
         setGmailStatus({
@@ -112,9 +113,7 @@ export default function InboxPage() {
         // Fallback to legacy Gmail status endpoint
         const legacyResponse = await fetch(
           `${backendConfig.api}/api/gmail/status?user_id=${userId}`,
-          {
-            headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-          }
+          { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
         );
         if (legacyResponse.ok) {
           const data = await legacyResponse.json();
@@ -126,9 +125,7 @@ export default function InboxPage() {
       try {
         const outlookResponse = await fetch(
           `${backendConfig.api}/api/outlook/status?user_id=${userId}`,
-          {
-            headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-          }
+          { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
         );
         if (outlookResponse.ok) {
           const data = await outlookResponse.json();
@@ -146,12 +143,9 @@ export default function InboxPage() {
 
   const fetchSyncStatus = useCallback(async () => {
     try {
-      const response = await fetch(
-        `${backendConfig.api}/api/gmail/sync/status?user_id=${userId}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
-      );
+      const response = await fetch(`${backendConfig.api}/api/gmail/sync/status?user_id=${userId}`, {
+        headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
+      });
       if (response.ok) {
         const data = await response.json();
         setSyncStatus(data);
@@ -248,13 +242,16 @@ export default function InboxPage() {
     }
   }, [backendConfig.api, userId, tokens?.access_token]);
 
-  const handleAddAccount = useCallback((type: AccountType) => {
-    if (type === 'gmail') {
-      handleConnectGmail();
-    } else {
-      handleConnectOutlook();
-    }
-  }, [handleConnectGmail, handleConnectOutlook]);
+  const handleAddAccount = useCallback(
+    (type: AccountType) => {
+      if (type === 'gmail') {
+        handleConnectGmail();
+      } else {
+        handleConnectOutlook();
+      }
+    },
+    [handleConnectGmail, handleConnectOutlook],
+  );
 
   const handleDisconnectGmail = useCallback(async () => {
     try {
@@ -295,29 +292,32 @@ export default function InboxPage() {
     }
   }, [backendConfig.api, userId, tokens?.access_token, outlookStatus?.configured]);
 
-  const handleSync = useCallback(async (fullSync: boolean = false) => {
-    try {
-      const response = await fetch(`${backendConfig.api}/api/gmail/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          full_sync: fullSync,
-          max_messages: 500,
-          labels: ['INBOX'],
-        }),
-      });
+  const handleSync = useCallback(
+    async (fullSync: boolean = false) => {
+      try {
+        const response = await fetch(`${backendConfig.api}/api/gmail/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.access_token || ''}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            full_sync: fullSync,
+            max_messages: 500,
+            labels: ['INBOX'],
+          }),
+        });
 
-      if (response.ok) {
-        fetchSyncStatus();
+        if (response.ok) {
+          fetchSyncStatus();
+        }
+      } catch {
+        setError('Failed to start sync');
       }
-    } catch {
-      setError('Failed to start sync');
-    }
-  }, [backendConfig.api, userId, tokens?.access_token, fetchSyncStatus]);
+    },
+    [backendConfig.api, userId, tokens?.access_token, fetchSyncStatus],
+  );
 
   const handleAddVip = useCallback(async () => {
     if (!newVip.trim()) return;
@@ -328,17 +328,13 @@ export default function InboxPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${tokens?.access_token || ''}`,
         },
-        body: JSON.stringify({
-          user_id: userId,
-          sender_email: newVip.trim(),
-        }),
+        body: JSON.stringify({ user_id: userId, sender_email: newVip.trim() }),
       });
 
       if (response.ok) {
-        setPriConfig(prev => prev ? {
-          ...prev,
-          vip_senders: [...prev.vip_senders, newVip.trim()],
-        } : null);
+        setPriConfig((prev) =>
+          prev ? { ...prev, vip_senders: [...prev.vip_senders, newVip.trim()] } : null,
+        );
         setNewVip('');
       }
     } catch {
@@ -346,30 +342,31 @@ export default function InboxPage() {
     }
   }, [backendConfig.api, userId, tokens?.access_token, newVip]);
 
-  const handleRemoveVip = useCallback(async (senderEmail: string) => {
-    try {
-      const response = await fetch(`${backendConfig.api}/api/email/vip`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          sender_email: senderEmail,
-        }),
-      });
+  const handleRemoveVip = useCallback(
+    async (senderEmail: string) => {
+      try {
+        const response = await fetch(`${backendConfig.api}/api/email/vip`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.access_token || ''}`,
+          },
+          body: JSON.stringify({ user_id: userId, sender_email: senderEmail }),
+        });
 
-      if (response.ok) {
-        setPriConfig(prev => prev ? {
-          ...prev,
-          vip_senders: prev.vip_senders.filter(s => s !== senderEmail),
-        } : null);
+        if (response.ok) {
+          setPriConfig((prev) =>
+            prev
+              ? { ...prev, vip_senders: prev.vip_senders.filter((s) => s !== senderEmail) }
+              : null,
+          );
+        }
+      } catch {
+        setError('Failed to remove VIP sender');
       }
-    } catch {
-      setError('Failed to remove VIP sender');
-    }
-  }, [backendConfig.api, userId, tokens?.access_token]);
+    },
+    [backendConfig.api, userId, tokens?.access_token],
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -493,7 +490,9 @@ export default function InboxPage() {
         {/* Prioritization Config Panel */}
         {showConfig && priConfig && (
           <div className="mb-6 border border-[var(--accent)]/30 bg-surface/50 p-4 rounded">
-            <h3 className="text-[var(--accent)] font-theme-data text-sm mb-4">Prioritization Settings</h3>
+            <h3 className="text-[var(--accent)] font-theme-data text-sm mb-4">
+              Prioritization Settings
+            </h3>
 
             {/* VIP Senders */}
             <div className="mb-4">
@@ -522,10 +521,7 @@ export default function InboxPage() {
                     className="px-2 py-1 text-xs bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded text-[var(--accent)] flex items-center gap-2"
                   >
                     {sender}
-                    <button
-                      onClick={() => handleRemoveVip(sender)}
-                      className="hover:text-acid-red"
-                    >
+                    <button onClick={() => handleRemoveVip(sender)} className="hover:text-acid-red">
                       x
                     </button>
                   </span>
@@ -540,13 +536,17 @@ export default function InboxPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 border border-[var(--accent)]/20 rounded">
                 <span className="text-text-muted text-xs font-theme-data">Slack Context</span>
-                <div className={`text-sm font-theme-data mt-1 ${priConfig.enable_slack_context ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+                <div
+                  className={`text-sm font-theme-data mt-1 ${priConfig.enable_slack_context ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+                >
                   {priConfig.enable_slack_context ? 'Enabled' : 'Disabled'}
                 </div>
               </div>
               <div className="p-3 border border-[var(--accent)]/20 rounded">
                 <span className="text-text-muted text-xs font-theme-data">Calendar Context</span>
-                <div className={`text-sm font-theme-data mt-1 ${priConfig.enable_calendar_context ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+                <div
+                  className={`text-sm font-theme-data mt-1 ${priConfig.enable_calendar_context ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+                >
                   {priConfig.enable_calendar_context ? 'Enabled' : 'Disabled'}
                 </div>
               </div>
@@ -653,13 +653,11 @@ export default function InboxPage() {
         {!loading && !hasAnyConnection && (
           <div className="mt-8 text-center">
             <div className="text-6xl mb-4">📬</div>
-            <h2 className="text-xl font-theme-data text-accent mb-2">
-              Connect Your Email
-            </h2>
+            <h2 className="text-xl font-theme-data text-accent mb-2">Connect Your Email</h2>
             <p className="text-muted font-theme-data text-sm mb-6 max-w-md mx-auto">
-              Connect your Gmail or Outlook account to get AI-powered email prioritization
-              with our 3-tier scoring system. Critical emails float to the top,
-              newsletters and bulk mail sink to the bottom.
+              Connect your Gmail or Outlook account to get AI-powered email prioritization with our
+              3-tier scoring system. Critical emails float to the top, newsletters and bulk mail
+              sink to the bottom.
             </p>
             <div className="flex flex-wrap justify-center gap-4 mb-6 text-xs font-theme-data">
               <div className="px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-red-400">
@@ -686,7 +684,8 @@ export default function InboxPage() {
                   Login required to connect email
                 </p>
                 <p className="text-muted text-xs mb-4">
-                  You need to be logged in to connect your email accounts. This ensures your emails are securely linked to your account.
+                  You need to be logged in to connect your email accounts. This ensures your emails
+                  are securely linked to your account.
                 </p>
                 <Link
                   href="/auth/login"
@@ -706,7 +705,7 @@ export default function InboxPage() {
                   className="inline-flex items-center justify-center gap-3 px-6 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg hover:border-[#EA4335]/50 transition-colors"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#EA4335">
-                    <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                    <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
                   </svg>
                   <span className="font-theme-data text-sm">Connect Gmail</span>
                 </button>
@@ -715,7 +714,7 @@ export default function InboxPage() {
                   className="inline-flex items-center justify-center gap-3 px-6 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg hover:border-[#0078D4]/50 transition-colors"
                 >
                   <svg className="w-5 h-5 text-[#0078D4]" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.13V2.55q0-.44.3-.75.3-.3.7-.3h12.74q.41 0 .7.3.3.3.3.75V11q0 .41-.3.7-.29.3-.7.3H19.8v.8h3.4q.4 0 .7.3.3.3.3.7v.2h-5.6v-.1l-.2-.4V12zm-17.54-.5q0-.93-.26-1.64-.26-.72-.75-1.22-.48-.5-1.18-.76-.69-.27-1.57-.27-.9 0-1.61.26-.7.27-1.2.77-.5.51-.76 1.22-.27.71-.27 1.64 0 .92.27 1.63.26.72.76 1.23.5.51 1.2.78.72.27 1.61.27.88 0 1.57-.27.69-.27 1.18-.78.49-.51.75-1.23.26-.71.26-1.63zm17.14 5.5v-4H7.8v4h15.8z"/>
+                    <path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.13V2.55q0-.44.3-.75.3-.3.7-.3h12.74q.41 0 .7.3.3.3.3.75V11q0 .41-.3.7-.29.3-.7.3H19.8v.8h3.4q.4 0 .7.3.3.3.3.7v.2h-5.6v-.1l-.2-.4V12zm-17.54-.5q0-.93-.26-1.64-.26-.72-.75-1.22-.48-.5-1.18-.76-.69-.27-1.57-.27-.9 0-1.61.26-.7.27-1.2.77-.5.51-.76 1.22-.27.71-.27 1.64 0 .92.27 1.63.26.72.76 1.23.5.51 1.2.78.72.27 1.61.27.88 0 1.57-.27.69-.27 1.18-.78.49-.51.75-1.23.26-.71.26-1.63zm17.14 5.5v-4H7.8v4h15.8z" />
                   </svg>
                   <span className="font-theme-data text-sm">Connect Outlook</span>
                 </button>

@@ -31,9 +31,10 @@ test.describe('Production Auth Flow', () => {
     console.log(`Microsoft: ${await microsoftBtn.isVisible()}`);
 
     // At least one should be visible
-    const anyVisible = (await googleBtn.isVisible()) ||
-                       (await githubBtn.isVisible()) ||
-                       (await microsoftBtn.isVisible());
+    const anyVisible =
+      (await googleBtn.isVisible()) ||
+      (await githubBtn.isVisible()) ||
+      (await microsoftBtn.isVisible());
 
     expect(anyVisible).toBeTruthy();
 
@@ -50,7 +51,11 @@ test.describe('Production Auth Flow', () => {
     const results = await page.evaluate(async () => {
       const tests = [
         { name: 'Health', url: 'https://api.aragora.ai/api/health', method: 'GET' },
-        { name: 'OAuth Providers', url: 'https://api.aragora.ai/api/auth/oauth/providers', method: 'GET' },
+        {
+          name: 'OAuth Providers',
+          url: 'https://api.aragora.ai/api/auth/oauth/providers',
+          method: 'GET',
+        },
         { name: '/me (no auth)', url: 'https://api.aragora.ai/api/v1/auth/me', method: 'GET' },
       ];
 
@@ -77,13 +82,13 @@ test.describe('Production Auth Flow', () => {
     }
 
     // Health should return 200
-    expect(results.find(r => r.name === 'Health')?.status).toBe(200);
+    expect(results.find((r) => r.name === 'Health')?.status).toBe(200);
 
     // OAuth providers should return 200
-    expect(results.find(r => r.name === 'OAuth Providers')?.status).toBe(200);
+    expect(results.find((r) => r.name === 'OAuth Providers')?.status).toBe(200);
 
     // /me without auth should return 401, NOT 405
-    const meResult = results.find(r => r.name === '/me (no auth)');
+    const meResult = results.find((r) => r.name === '/me (no auth)');
     expect(meResult?.status).toBe(401);
   });
 
@@ -123,10 +128,7 @@ test.describe('Production Auth Flow', () => {
     page.on('response', (response) => {
       const url = response.url();
       if (url.includes('api.aragora.ai') || url.includes('/api/')) {
-        apiCalls.push({
-          url: url.replace(/https?:\/\/[^\/]+/, ''),
-          status: response.status(),
-        });
+        apiCalls.push({ url: url.replace(/https?:\/\/[^\/]+/, ''), status: response.status() });
       }
     });
 
@@ -134,7 +136,11 @@ test.describe('Production Auth Flow', () => {
     await page.waitForTimeout(3000); // Wait for React to hydrate
 
     // Look for input field
-    const input = page.locator('input[placeholder*="question"], textarea[placeholder*="question"], input[type="text"]').first();
+    const input = page
+      .locator(
+        'input[placeholder*="question"], textarea[placeholder*="question"], input[type="text"]',
+      )
+      .first();
 
     if (await input.isVisible()) {
       console.log('\n=== Question Input Found ===');
@@ -142,7 +148,9 @@ test.describe('Production Auth Flow', () => {
       await page.waitForTimeout(1000);
 
       // Look for submit button
-      const submitBtn = page.locator('button[type="submit"], button:has-text("Submit"), button:has-text("Ask")').first();
+      const submitBtn = page
+        .locator('button[type="submit"], button:has-text("Submit"), button:has-text("Ask")')
+        .first();
       if (await submitBtn.isVisible()) {
         console.log('Submit button found');
       }

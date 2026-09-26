@@ -44,7 +44,9 @@ export default function CommandCenterPage() {
                   <span className="text-xs font-theme-data text-[var(--accent)]">Live</span>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1 bg-surface/50 border border-[var(--acid-cyan)]/30 rounded-full">
-                  <span className="text-xs font-theme-data text-[var(--acid-cyan)]">3-Tier Scoring</span>
+                  <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                    3-Tier Scoring
+                  </span>
                 </div>
               </div>
             </div>

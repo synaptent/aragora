@@ -53,13 +53,14 @@ function PriorityBadge({ priority }: { priority: string }) {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === 'delivered' || status === 'success'
-    ? 'bg-[var(--acid-green)]'
-    : status === 'failed' || status === 'error'
-    ? 'bg-red-400'
-    : status === 'pending'
-    ? 'bg-yellow-400'
-    : 'bg-[var(--text-muted)]';
+  const color =
+    status === 'delivered' || status === 'success'
+      ? 'bg-[var(--acid-green)]'
+      : status === 'failed' || status === 'error'
+        ? 'bg-red-400'
+        : status === 'pending'
+          ? 'bg-yellow-400'
+          : 'bg-[var(--text-muted)]';
 
   return (
     <div className="flex items-center gap-1.5">
@@ -69,11 +70,15 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
-function BarChart({ data, colorFn }: {
+function BarChart({
+  data,
+  colorFn,
+}: {
   data: [string, number][];
   colorFn?: (key: string) => string;
 }) {
-  if (data.length === 0) return <p className="text-xs font-theme-data text-[var(--text-muted)]">No data</p>;
+  if (data.length === 0)
+    return <p className="text-xs font-theme-data text-[var(--text-muted)]">No data</p>;
 
   const maxValue = Math.max(...data.map(([, v]) => v));
 
@@ -81,7 +86,10 @@ function BarChart({ data, colorFn }: {
     <div className="space-y-2">
       {data.map(([label, count]) => (
         <div key={label} className="flex items-center gap-3">
-          <span className="text-[10px] font-theme-data text-[var(--text-muted)] w-28 truncate text-right" title={label}>
+          <span
+            className="text-[10px] font-theme-data text-[var(--text-muted)] w-28 truncate text-right"
+            title={label}
+          >
             {label}
           </span>
           <div className="flex-1 h-3 bg-[var(--bg)] rounded-full overflow-hidden">
@@ -90,7 +98,9 @@ function BarChart({ data, colorFn }: {
               style={{ width: `${maxValue > 0 ? (count / maxValue) * 100 : 0}%` }}
             />
           </div>
-          <span className="text-[10px] font-theme-data text-[var(--text)] w-10 text-right">{count}</span>
+          <span className="text-[10px] font-theme-data text-[var(--text)] w-10 text-right">
+            {count}
+          </span>
         </div>
       ))}
     </div>
@@ -117,18 +127,18 @@ export default function FeedbackHubPage() {
   const [historyLimit, setHistoryLimit] = useState(50);
 
   // Fetch routing stats
-  const { data: statsResponse, isLoading: statsLoading, error: statsError } =
-    useSWRFetch<{ data: RoutingStats }>(
-      '/api/v1/feedback-hub/stats',
-      { refreshInterval: 15000 },
-    );
+  const {
+    data: statsResponse,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useSWRFetch<{ data: RoutingStats }>('/api/v1/feedback-hub/stats', { refreshInterval: 15000 });
 
   // Fetch routing history
-  const { data: historyResponse, isLoading: historyLoading } =
-    useSWRFetch<{ data: HistoryEntry[] }>(
-      activeTab === 'history' ? `/api/v1/feedback-hub/history?limit=${historyLimit}` : null,
-      { refreshInterval: 30000 },
-    );
+  const { data: historyResponse, isLoading: historyLoading } = useSWRFetch<{
+    data: HistoryEntry[];
+  }>(activeTab === 'history' ? `/api/v1/feedback-hub/history?limit=${historyLimit}` : null, {
+    refreshInterval: 30000,
+  });
 
   const stats = statsResponse?.data;
   const history = historyResponse?.data ?? [];
@@ -162,12 +172,10 @@ export default function FeedbackHubPage() {
               <span className="text-[var(--text-muted)]">/</span>
               <span className="text-xs font-theme-data text-[var(--acid-green)]">Feedback Hub</span>
             </div>
-            <h1 className="text-xl font-theme-data text-[var(--acid-green)]">
-              {'>'} FEEDBACK HUB
-            </h1>
+            <h1 className="text-xl font-theme-data text-[var(--acid-green)]">{'>'} FEEDBACK HUB</h1>
             <p className="text-xs text-[var(--text-muted)] font-theme-data mt-1">
-              Unified feedback routing hub connecting all self-improvement loops.
-              Outcome feedback, calibration signals, and Nomic Loop goals flow through here.
+              Unified feedback routing hub connecting all self-improvement loops. Outcome feedback,
+              calibration signals, and Nomic Loop goals flow through here.
             </p>
           </div>
 
@@ -180,10 +188,10 @@ export default function FeedbackHubPage() {
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
-            {([
+            {[
               { key: 'overview' as const, label: 'OVERVIEW' },
               { key: 'history' as const, label: 'ROUTING HISTORY' },
-            ]).map(({ key, label }) => (
+            ].map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -206,37 +214,53 @@ export default function FeedbackHubPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                     <div className="text-2xl font-theme-data text-[var(--acid-green)]">
-                      {statsLoading ? '-' : stats?.total_routed ?? 0}
+                      {statsLoading ? '-' : (stats?.total_routed ?? 0)}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Total Routed</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Total Routed
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                    <div className={`text-2xl font-theme-data ${
-                      (stats?.success_rate ?? 0) >= 0.95
-                        ? 'text-[var(--acid-green)]'
-                        : (stats?.success_rate ?? 0) >= 0.8
-                        ? 'text-yellow-400'
-                        : 'text-red-400'
-                    }`}>
-                      {statsLoading ? '-' : stats?.success_rate != null
-                        ? `${(stats.success_rate * 100).toFixed(1)}%`
-                        : '--'}
+                    <div
+                      className={`text-2xl font-theme-data ${
+                        (stats?.success_rate ?? 0) >= 0.95
+                          ? 'text-[var(--acid-green)]'
+                          : (stats?.success_rate ?? 0) >= 0.8
+                            ? 'text-yellow-400'
+                            : 'text-red-400'
+                      }`}
+                    >
+                      {statsLoading
+                        ? '-'
+                        : stats?.success_rate != null
+                          ? `${(stats.success_rate * 100).toFixed(1)}%`
+                          : '--'}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Success Rate</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Success Rate
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                     <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
-                      {statsLoading ? '-' : stats?.avg_latency_ms != null
-                        ? `${Math.round(stats.avg_latency_ms)}ms`
-                        : '--'}
+                      {statsLoading
+                        ? '-'
+                        : stats?.avg_latency_ms != null
+                          ? `${Math.round(stats.avg_latency_ms)}ms`
+                          : '--'}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Avg Latency</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Avg Latency
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                    <div className={`text-2xl font-theme-data ${(stats?.error_count ?? 0) > 0 ? 'text-red-400' : 'text-[var(--acid-green)]'}`}>
-                      {statsLoading ? '-' : stats?.error_count ?? 0}
+                    <div
+                      className={`text-2xl font-theme-data ${(stats?.error_count ?? 0) > 0 ? 'text-red-400' : 'text-[var(--acid-green)]'}`}
+                    >
+                      {statsLoading ? '-' : (stats?.error_count ?? 0)}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Errors</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Errors
+                    </div>
                   </div>
                 </div>
 
@@ -244,37 +268,37 @@ export default function FeedbackHubPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* By Source */}
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-                    <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">By Source</h3>
+                    <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">
+                      By Source
+                    </h3>
                     {statsLoading ? (
                       <div className="h-32 flex items-center justify-center text-[var(--text-muted)] font-theme-data animate-pulse">
                         Loading...
                       </div>
                     ) : (
-                      <BarChart
-                        data={sourceEntries}
-                        colorFn={() => 'bg-[var(--acid-green)]/60'}
-                      />
+                      <BarChart data={sourceEntries} colorFn={() => 'bg-[var(--acid-green)]/60'} />
                     )}
                   </div>
 
                   {/* By Destination */}
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-                    <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">By Destination</h3>
+                    <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">
+                      By Destination
+                    </h3>
                     {statsLoading ? (
                       <div className="h-32 flex items-center justify-center text-[var(--text-muted)] font-theme-data animate-pulse">
                         Loading...
                       </div>
                     ) : (
-                      <BarChart
-                        data={destEntries}
-                        colorFn={() => 'bg-[var(--acid-cyan)]/60'}
-                      />
+                      <BarChart data={destEntries} colorFn={() => 'bg-[var(--acid-cyan)]/60'} />
                     )}
                   </div>
 
                   {/* By Priority */}
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-                    <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">By Priority</h3>
+                    <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">
+                      By Priority
+                    </h3>
                     {statsLoading ? (
                       <div className="h-32 flex items-center justify-center text-[var(--text-muted)] font-theme-data animate-pulse">
                         Loading...
@@ -283,10 +307,13 @@ export default function FeedbackHubPage() {
                       <BarChart
                         data={priorityEntries}
                         colorFn={(key) =>
-                          key === 'critical' ? 'bg-red-400/60' :
-                          key === 'high' ? 'bg-yellow-400/60' :
-                          key === 'medium' ? 'bg-[var(--acid-cyan)]/60' :
-                          'bg-[var(--text-muted)]/40'
+                          key === 'critical'
+                            ? 'bg-red-400/60'
+                            : key === 'high'
+                              ? 'bg-yellow-400/60'
+                              : key === 'medium'
+                                ? 'bg-[var(--acid-cyan)]/60'
+                                : 'bg-[var(--text-muted)]/40'
                         }
                       />
                     )}
@@ -331,13 +358,19 @@ export default function FeedbackHubPage() {
                       <tbody>
                         {historyLoading ? (
                           <tr>
-                            <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse">
+                            <td
+                              colSpan={7}
+                              className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse"
+                            >
                               Loading routing history...
                             </td>
                           </tr>
                         ) : history.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data">
+                            <td
+                              colSpan={7}
+                              className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data"
+                            >
                               No routing history available. Run debates with feedback loops enabled.
                             </td>
                           </tr>
@@ -351,10 +384,14 @@ export default function FeedbackHubPage() {
                                 {formatTimestamp(entry.timestamp)}
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-xs font-theme-data text-[var(--acid-cyan)]">{entry.source}</span>
+                                <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                                  {entry.source}
+                                </span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-xs font-theme-data text-purple-400">{entry.destination}</span>
+                                <span className="text-xs font-theme-data text-purple-400">
+                                  {entry.destination}
+                                </span>
                               </td>
                               <td className="px-4 py-3">
                                 <PriorityBadge priority={entry.priority} />
@@ -407,9 +444,7 @@ export default function FeedbackHubPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // FEEDBACK HUB
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // FEEDBACK HUB</p>
         </footer>
       </main>
     </>

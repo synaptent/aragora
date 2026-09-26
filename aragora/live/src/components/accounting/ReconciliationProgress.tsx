@@ -58,15 +58,15 @@ export function ReconciliationProgress() {
           {
             period: 'January 2025',
             bankBalance: 45672.89,
-            bookBalance: 45680.50,
+            bookBalance: 45680.5,
             difference: -7.61,
             matchRate: 97.2,
             status: 'issues',
           },
           {
             period: 'December 2024',
-            bankBalance: 52340.00,
-            bookBalance: 52340.00,
+            bankBalance: 52340.0,
+            bookBalance: 52340.0,
             difference: 0,
             matchRate: 100,
             status: 'reconciled',
@@ -177,21 +177,15 @@ export function ReconciliationProgress() {
             <div className="text-xs text-[var(--text-muted)]">Matched</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-theme-data text-yellow-400">
-              {status.unmatchedBank}
-            </div>
+            <div className="text-2xl font-theme-data text-yellow-400">{status.unmatchedBank}</div>
             <div className="text-xs text-[var(--text-muted)]">Bank Only</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-theme-data text-yellow-400">
-              {status.unmatchedBook}
-            </div>
+            <div className="text-2xl font-theme-data text-yellow-400">{status.unmatchedBook}</div>
             <div className="text-xs text-[var(--text-muted)]">Book Only</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-theme-data text-red-400">
-              {status.discrepancies}
-            </div>
+            <div className="text-2xl font-theme-data text-red-400">{status.discrepancies}</div>
             <div className="text-xs text-[var(--text-muted)]">Discrepancies</div>
           </div>
         </div>
@@ -199,7 +193,7 @@ export function ReconciliationProgress() {
 
       {/* Period Summaries */}
       <div className="divide-y divide-[var(--border)]">
-        {summaries.map(summary => (
+        {summaries.map((summary) => (
           <div key={summary.period} className="p-4 flex items-center justify-between">
             <div>
               <div className="text-sm font-theme-data">{summary.period}</div>
@@ -210,18 +204,27 @@ export function ReconciliationProgress() {
             <div className="flex items-center gap-6">
               <div className="text-right">
                 <div className="text-xs text-[var(--text-muted)]">Bank</div>
-                <div className="text-sm font-theme-data">${summary.bankBalance.toLocaleString()}</div>
+                <div className="text-sm font-theme-data">
+                  ${summary.bankBalance.toLocaleString()}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-[var(--text-muted)]">Book</div>
-                <div className="text-sm font-theme-data">${summary.bookBalance.toLocaleString()}</div>
+                <div className="text-sm font-theme-data">
+                  ${summary.bookBalance.toLocaleString()}
+                </div>
               </div>
               <div className="text-right min-w-[80px]">
                 <div className="text-xs text-[var(--text-muted)]">Difference</div>
-                <div className={`text-sm font-theme-data ${
-                  summary.difference === 0 ? 'text-green-400' :
-                  Math.abs(summary.difference) < 10 ? 'text-yellow-400' : 'text-red-400'
-                }`}>
+                <div
+                  className={`text-sm font-theme-data ${
+                    summary.difference === 0
+                      ? 'text-green-400'
+                      : Math.abs(summary.difference) < 10
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }`}
+                >
                   {summary.difference >= 0 ? '+' : ''}${summary.difference.toFixed(2)}
                 </div>
               </div>
@@ -253,7 +256,9 @@ export function ReconciliationProgress() {
           <div className="flex items-center gap-3">
             <span className="text-xl">🤖</span>
             <div className="flex-1">
-              <div className="text-sm font-theme-data text-[var(--acid-green)]">AI Resolution Available</div>
+              <div className="text-sm font-theme-data text-[var(--acid-green)]">
+                AI Resolution Available
+              </div>
               <p className="text-xs text-[var(--text-muted)]">
                 {status.discrepancies} discrepancies can be analyzed by multi-agent debate
               </p>

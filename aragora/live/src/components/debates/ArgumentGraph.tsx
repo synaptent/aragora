@@ -11,7 +11,8 @@ import { logger } from '@/utils/logger';
 interface GraphNode {
   id: string;
   agent: string;
-  node_type: 'proposal' | 'critique' | 'evidence' | 'concession' | 'rebuttal' | 'vote' | 'consensus';
+  node_type:
+    'proposal' | 'critique' | 'evidence' | 'concession' | 'rebuttal' | 'vote' | 'consensus';
   summary: string;
   round_num: number;
   timestamp?: number;
@@ -65,11 +66,16 @@ interface LayoutNode {
   data: GraphNode;
 }
 
-function layoutGraph(nodes: GraphNode[], edges: GraphEdge[], width: number, height: number): LayoutNode[] {
+function layoutGraph(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  width: number,
+  height: number,
+): LayoutNode[] {
   const layout: LayoutNode[] = nodes.map((n, i) => ({
     id: n.id,
-    x: width / 2 + (Math.cos((i / nodes.length) * Math.PI * 2) * width * 0.35),
-    y: height / 2 + (Math.sin((i / nodes.length) * Math.PI * 2) * height * 0.35),
+    x: width / 2 + Math.cos((i / nodes.length) * Math.PI * 2) * width * 0.35,
+    y: height / 2 + Math.sin((i / nodes.length) * Math.PI * 2) * height * 0.35,
     vx: 0,
     vy: 0,
     data: n,
@@ -155,7 +161,7 @@ export function ArgumentGraph({ debateId }: { debateId: string }) {
       try {
         setLoading(true);
         const res = await fetch(
-          `${API_BASE_URL}/api/v1/debates/${debateId}/argument-graph?format=json`
+          `${API_BASE_URL}/api/v1/debates/${debateId}/argument-graph?format=json`,
         );
         if (!res.ok) {
           if (res.status === 503) {
@@ -294,7 +300,7 @@ export function ArgumentGraph({ debateId }: { debateId: string }) {
               ? graph.edges.some(
                   (e) =>
                     (e.source_id === activeId && e.target_id === node.id) ||
-                    (e.target_id === activeId && e.source_id === node.id)
+                    (e.target_id === activeId && e.source_id === node.id),
                 )
               : false;
             const dimmed = activeId && !isActive && !isConnected;
@@ -348,7 +354,10 @@ export function ArgumentGraph({ debateId }: { debateId: string }) {
       <div className="flex flex-wrap gap-4 px-1">
         <div className="flex flex-wrap gap-2">
           {Object.entries(NODE_COLORS).map(([type, color]) => (
-            <span key={type} className="flex items-center gap-1 text-[10px] font-theme-data text-[var(--text-muted)]">
+            <span
+              key={type}
+              className="flex items-center gap-1 text-[10px] font-theme-data text-[var(--text-muted)]"
+            >
               <span
                 className="inline-block w-2.5 h-2.5 rounded-full border"
                 style={{ borderColor: color, backgroundColor: `${color}33` }}
@@ -359,7 +368,10 @@ export function ArgumentGraph({ debateId }: { debateId: string }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {Object.entries(EDGE_COLORS).map(([rel, color]) => (
-            <span key={rel} className="flex items-center gap-1 text-[10px] font-theme-data text-[var(--text-muted)]">
+            <span
+              key={rel}
+              className="flex items-center gap-1 text-[10px] font-theme-data text-[var(--text-muted)]"
+            >
               <span className="inline-block w-3 h-0.5" style={{ backgroundColor: color }} />
               {rel}
             </span>

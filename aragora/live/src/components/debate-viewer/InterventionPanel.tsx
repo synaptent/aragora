@@ -30,7 +30,15 @@ type InterventionStatus = 'applied' | 'pending' | 'failed';
 
 interface InterventionRecord {
   id: string;
-  type: 'argument' | 'follow_up' | 'nudge' | 'challenge' | 'weight_change' | 'threshold_change' | 'pause' | 'resume';
+  type:
+    | 'argument'
+    | 'follow_up'
+    | 'nudge'
+    | 'challenge'
+    | 'weight_change'
+    | 'threshold_change'
+    | 'pause'
+    | 'resume';
   content: string;
   timestamp: number;
   status: InterventionStatus;
@@ -128,7 +136,7 @@ export function InterventionPanel({
   const [injecting, setInjecting] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
   const [agentWeights, setAgentWeights] = useState<AgentWeight[]>(
-    agents.map((agent) => ({ agent, weight: 1.0 }))
+    agents.map((agent) => ({ agent, weight: 1.0 })),
   );
   const [previousWeights, setPreviousWeights] = useState<AgentWeight[] | null>(null);
   const [showWeightComparison, setShowWeightComparison] = useState(false);
@@ -148,7 +156,7 @@ export function InterventionPanel({
     const timers = toasts.map((t) =>
       setTimeout(() => {
         setToasts((prev) => prev.filter((toast) => toast.id !== t.id));
-      }, 4000)
+      }, 4000),
     );
     return () => timers.forEach(clearTimeout);
   }, [toasts]);
@@ -166,21 +174,18 @@ export function InterventionPanel({
     setToasts((prev) => [...prev, { id: generateId(), message, type }]);
   }, []);
 
-  const addToHistory = useCallback((
-    type: InterventionRecord['type'],
-    content: string,
-    status: InterventionStatus = 'applied'
-  ) => {
-    setHistory((prev) => [
-      ...prev,
-      { id: generateId(), type, content, timestamp: Date.now(), status },
-    ]);
-  }, []);
+  const addToHistory = useCallback(
+    (type: InterventionRecord['type'], content: string, status: InterventionStatus = 'applied') => {
+      setHistory((prev) => [
+        ...prev,
+        { id: generateId(), type, content, timestamp: Date.now(), status },
+      ]);
+    },
+    [],
+  );
 
   const updateHistoryStatus = useCallback((id: string, status: InterventionStatus) => {
-    setHistory((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status } : r))
-    );
+    setHistory((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
   }, []);
 
   // Handle pause/resume
@@ -200,13 +205,10 @@ export function InterventionPanel({
       },
     ]);
     try {
-      const response = await fetch(
-        `${debatePath}/${action}`,
-        {
-          method: 'POST',
-          headers: requestHeaders(false),
-        }
-      );
+      const response = await fetch(`${debatePath}/${action}`, {
+        method: 'POST',
+        headers: requestHeaders(false),
+      });
 
       if (response.ok) {
         if (isPaused) {
@@ -238,20 +240,20 @@ export function InterventionPanel({
     const recordId = generateId();
     setHistory((prev) => [
       ...prev,
-      { id: recordId, type: 'argument', content: injection, timestamp: Date.now(), status: 'pending' },
+      {
+        id: recordId,
+        type: 'argument',
+        content: injection,
+        timestamp: Date.now(),
+        status: 'pending',
+      },
     ]);
     try {
-      const response = await fetch(
-        `${debatePath}/inject-evidence`,
-        {
-          method: 'POST',
-          headers: requestHeaders(),
-          body: JSON.stringify({
-            evidence: injection,
-            source: 'user',
-          }),
-        }
-      );
+      const response = await fetch(`${debatePath}/inject-evidence`, {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify({ evidence: injection, source: 'user' }),
+      });
 
       if (response.ok) {
         onInject?.(injection);
@@ -279,19 +281,20 @@ export function InterventionPanel({
     const recordId = generateId();
     setHistory((prev) => [
       ...prev,
-      { id: recordId, type: 'follow_up', content: followUpQuestion, timestamp: Date.now(), status: 'pending' },
+      {
+        id: recordId,
+        type: 'follow_up',
+        content: followUpQuestion,
+        timestamp: Date.now(),
+        status: 'pending',
+      },
     ]);
     try {
-      const response = await fetch(
-        `${debatePath}/nudge`,
-        {
-          method: 'POST',
-          headers: requestHeaders(),
-          body: JSON.stringify({
-            message: followUpQuestion,
-          }),
-        }
-      );
+      const response = await fetch(`${debatePath}/nudge`, {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify({ message: followUpQuestion }),
+      });
 
       if (response.ok) {
         onInject?.(followUpQuestion);
@@ -318,17 +321,20 @@ export function InterventionPanel({
     const recordId = generateId();
     setHistory((prev) => [
       ...prev,
-      { id: recordId, type: 'nudge', content: nudgeDirection, timestamp: Date.now(), status: 'pending' },
+      {
+        id: recordId,
+        type: 'nudge',
+        content: nudgeDirection,
+        timestamp: Date.now(),
+        status: 'pending',
+      },
     ]);
     try {
-      const response = await fetch(
-        `${debatePath}/nudge`,
-        {
-          method: 'POST',
-          headers: requestHeaders(),
-          body: JSON.stringify({ message: nudgeDirection }),
-        }
-      );
+      const response = await fetch(`${debatePath}/nudge`, {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify({ message: nudgeDirection }),
+      });
       if (response.ok) {
         onInject?.(nudgeDirection);
         updateHistoryStatus(recordId, 'applied');
@@ -354,17 +360,20 @@ export function InterventionPanel({
     const recordId = generateId();
     setHistory((prev) => [
       ...prev,
-      { id: recordId, type: 'challenge', content: challengeClaim, timestamp: Date.now(), status: 'pending' },
+      {
+        id: recordId,
+        type: 'challenge',
+        content: challengeClaim,
+        timestamp: Date.now(),
+        status: 'pending',
+      },
     ]);
     try {
-      const response = await fetch(
-        `${debatePath}/challenge`,
-        {
-          method: 'POST',
-          headers: requestHeaders(),
-          body: JSON.stringify({ challenge: challengeClaim }),
-        }
-      );
+      const response = await fetch(`${debatePath}/challenge`, {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify({ challenge: challengeClaim }),
+      });
       if (response.ok) {
         onInject?.(challengeClaim);
         updateHistoryStatus(recordId, 'applied');
@@ -403,14 +412,11 @@ export function InterventionPanel({
       }, 3000);
 
       try {
-        const response = await fetch(
-          `${debatePath}/intervention/weights`,
-          {
-            method: 'POST',
-            headers: requestHeaders(),
-            body: JSON.stringify({ agent, weight }),
-          }
-        );
+        const response = await fetch(`${debatePath}/intervention/weights`, {
+          method: 'POST',
+          headers: requestHeaders(),
+          body: JSON.stringify({ agent, weight }),
+        });
         if (response.ok) {
           onWeightChange?.(agent, weight);
           addToHistory('weight_change', `${agent}: ${weight.toFixed(1)}x`);
@@ -425,7 +431,7 @@ export function InterventionPanel({
         addToHistory('weight_change', `${agent}: ${weight.toFixed(1)}x (failed)`, 'failed');
       }
     },
-    [debatePath, onWeightChange, addToHistory, showToast]
+    [debatePath, onWeightChange, addToHistory, showToast],
   );
 
   // Handle threshold change
@@ -435,19 +441,16 @@ export function InterventionPanel({
       setConsensusThreshold(threshold);
 
       try {
-        const response = await fetch(
-          `${debatePath}/intervention/threshold`,
-          {
-            method: 'POST',
-            headers: requestHeaders(),
-            body: JSON.stringify({ threshold }),
-          }
-        );
+        const response = await fetch(`${debatePath}/intervention/threshold`, {
+          method: 'POST',
+          headers: requestHeaders(),
+          body: JSON.stringify({ threshold }),
+        });
         if (response.ok) {
           onThresholdChange?.(threshold);
           addToHistory(
             'threshold_change',
-            `${Math.round(oldThreshold * 100)}% -> ${Math.round(threshold * 100)}%`
+            `${Math.round(oldThreshold * 100)}% -> ${Math.round(threshold * 100)}%`,
           );
           showToast(`Consensus threshold set to ${Math.round(threshold * 100)}%`, 'info');
         } else {
@@ -458,7 +461,7 @@ export function InterventionPanel({
         showToast('Failed to update consensus threshold -- check connection', 'error');
       }
     },
-    [debatePath, onThresholdChange, addToHistory, showToast, consensusThreshold]
+    [debatePath, onThresholdChange, addToHistory, showToast, consensusThreshold],
   );
 
   if (!isActive) {
@@ -480,7 +483,12 @@ export function InterventionPanel({
     <div className="bg-[var(--surface)] border border-[var(--acid-green)]/30 relative">
       {/* Toast notifications */}
       {toasts.length > 0 && (
-        <div className="absolute top-2 right-2 z-20 flex flex-col gap-1.5 max-w-xs" role="region" aria-label="Intervention notifications" aria-live="polite">
+        <div
+          className="absolute top-2 right-2 z-20 flex flex-col gap-1.5 max-w-xs"
+          role="region"
+          aria-label="Intervention notifications"
+          aria-live="polite"
+        >
           {toasts.map((t) => (
             <div
               key={t.id}
@@ -488,8 +496,8 @@ export function InterventionPanel({
                 t.type === 'success'
                   ? 'bg-green-500/15 border-green-500/40 text-green-400'
                   : t.type === 'error'
-                  ? 'bg-red-500/15 border-red-500/40 text-red-400'
-                  : 'bg-[var(--acid-cyan)]/15 border-[var(--acid-cyan)]/40 text-[var(--acid-cyan)]'
+                    ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                    : 'bg-[var(--acid-cyan)]/15 border-[var(--acid-cyan)]/40 text-[var(--acid-cyan)]'
               }`}
             >
               <span className="mr-1.5">
@@ -597,7 +605,7 @@ export function InterventionPanel({
                 disabled={!followUpQuestion.trim() || injecting}
                 className="mt-2 w-full px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                 ADD FOLLOW-UP
+                ADD FOLLOW-UP
               </button>
             </div>
           </div>
@@ -682,25 +690,17 @@ export function InterventionPanel({
                 QUICK ACTIONS
               </label>
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  className="px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors"
-                >
-                   Skip Round
+                <button className="px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors">
+                  Skip Round
                 </button>
-                <button
-                  className="px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors"
-                >
-                   Add Round
+                <button className="px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors">
+                  Add Round
                 </button>
-                <button
-                  className="px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors"
-                >
-                   Force Vote
+                <button className="px-3 py-2 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors">
+                  Force Vote
                 </button>
-                <button
-                  className="px-3 py-2 text-xs font-theme-data bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors"
-                >
-                   End Debate
+                <button className="px-3 py-2 text-xs font-theme-data bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors">
+                  End Debate
                 </button>
               </div>
             </div>
@@ -789,28 +789,32 @@ export function InterventionPanel({
           </button>
           {showHistory && (
             <div className="px-3 pb-2 space-y-1.5 max-h-[200px] overflow-y-auto">
-              {history.slice().reverse().map((record) => {
-                const statusStyle = STATUS_STYLES[record.status];
-                return (
-                  <div
-                    key={record.id}
-                    className={`flex items-start gap-2 text-[10px] font-theme-data p-1.5 border ${statusStyle.bg} ${statusStyle.border}`}
-                  >
-                    <span className="text-[var(--acid-cyan)] shrink-0">
-                      {new Date(record.timestamp).toLocaleTimeString()}
-                    </span>
-                    <span className="text-[var(--acid-yellow)] shrink-0 uppercase">
-                      [{TYPE_LABELS[record.type] || record.type}]
-                    </span>
-                    <span className="text-[var(--text-muted)] flex-1 truncate">
-                      {record.content.slice(0, 80)}{record.content.length > 80 ? '...' : ''}
-                    </span>
-                    <span className={`shrink-0 uppercase ${statusStyle.text}`}>
-                      {record.status}
-                    </span>
-                  </div>
-                );
-              })}
+              {history
+                .slice()
+                .reverse()
+                .map((record) => {
+                  const statusStyle = STATUS_STYLES[record.status];
+                  return (
+                    <div
+                      key={record.id}
+                      className={`flex items-start gap-2 text-[10px] font-theme-data p-1.5 border ${statusStyle.bg} ${statusStyle.border}`}
+                    >
+                      <span className="text-[var(--acid-cyan)] shrink-0">
+                        {new Date(record.timestamp).toLocaleTimeString()}
+                      </span>
+                      <span className="text-[var(--acid-yellow)] shrink-0 uppercase">
+                        [{TYPE_LABELS[record.type] || record.type}]
+                      </span>
+                      <span className="text-[var(--text-muted)] flex-1 truncate">
+                        {record.content.slice(0, 80)}
+                        {record.content.length > 80 ? '...' : ''}
+                      </span>
+                      <span className={`shrink-0 uppercase ${statusStyle.text}`}>
+                        {record.status}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
@@ -827,7 +831,10 @@ export function InterventionPanel({
 /** Horizontal bar chart showing per-agent weight distribution with colored segments. */
 function WeightBar({ weights, totalWeight }: { weights: AgentWeight[]; totalWeight: number }) {
   return (
-    <div className="flex h-4 rounded-sm overflow-hidden border border-[var(--border)]" data-testid="weight-bar">
+    <div
+      className="flex h-4 rounded-sm overflow-hidden border border-[var(--border)]"
+      data-testid="weight-bar"
+    >
       {weights.map(({ agent, weight }, index) => {
         const pct = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
         const color = getBarColor(agent);

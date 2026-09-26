@@ -10,7 +10,7 @@ import type { DebateNode, SimulationNode, SimulationLink, NodePosition, Branch }
  */
 export function calculateNodeDepths(
   nodes: Record<string, DebateNode>,
-  rootId: string | null
+  rootId: string | null,
 ): Map<string, number> {
   const depths = new Map<string, number>();
   if (!rootId || !nodes[rootId]) return depths;
@@ -44,8 +44,12 @@ export function createForceSimulation(
   nodes: Record<string, DebateNode>,
   rootId: string | null,
   width: number,
-  height: number
-): { nodes: SimulationNode[]; links: SimulationLink[]; simulation: d3Force.Simulation<SimulationNode, SimulationLink> } {
+  height: number,
+): {
+  nodes: SimulationNode[];
+  links: SimulationLink[];
+  simulation: d3Force.Simulation<SimulationNode, SimulationLink>;
+} {
   const depths = calculateNodeDepths(nodes, rootId);
   const maxDepth = Math.max(...Array.from(depths.values()), 0);
   const levelHeight = height / (maxDepth + 2);
@@ -64,27 +68,24 @@ export function createForceSimulation(
   Object.values(nodes).forEach((node) => {
     node.parent_ids.forEach((parentId) => {
       if (nodes[parentId]) {
-        simLinks.push({
-          source: parentId,
-          target: node.id,
-          branchId: node.branch_id || 'main',
-        });
+        simLinks.push({ source: parentId, target: node.id, branchId: node.branch_id || 'main' });
       }
     });
   });
 
   // Create D3 force simulation
-  const simulation = d3Force.forceSimulation<SimulationNode, SimulationLink>(simNodes)
-    .force('link', d3Force.forceLink<SimulationNode, SimulationLink>(simLinks)
-      .id((d) => d.id)
-      .distance(100)
-      .strength(0.8))
-    .force('charge', d3Force.forceManyBody<SimulationNode>()
-      .strength(-300)
-      .distanceMax(400))
-    .force('collide', d3Force.forceCollide<SimulationNode>()
-      .radius(50)
-      .strength(0.7))
+  const simulation = d3Force
+    .forceSimulation<SimulationNode, SimulationLink>(simNodes)
+    .force(
+      'link',
+      d3Force
+        .forceLink<SimulationNode, SimulationLink>(simLinks)
+        .id((d) => d.id)
+        .distance(100)
+        .strength(0.8),
+    )
+    .force('charge', d3Force.forceManyBody<SimulationNode>().strength(-300).distanceMax(400))
+    .force('collide', d3Force.forceCollide<SimulationNode>().radius(50).strength(0.7))
     .force('x', d3Force.forceX<SimulationNode>(width / 2).strength(0.05))
     .force('y', d3Force.forceY<SimulationNode>((d) => d.depth * levelHeight + 60).strength(0.3))
     .alphaDecay(0.02)
@@ -103,7 +104,7 @@ export function createForceSimulation(
 export function calculateLayout(
   nodes: Record<string, DebateNode>,
   rootId: string | null,
-  _branches: Record<string, Branch>
+  _branches: Record<string, Branch>,
 ): NodePosition[] {
   if (!rootId || !nodes[rootId]) return [];
 

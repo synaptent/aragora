@@ -22,7 +22,9 @@ DEPENDENCY_POLICY = {
     "build-system.requires": frozenset({"hatchling"}),
     "project.dependencies": frozenset({"cryptography"}),
     "project.optional-dependencies.schema": frozenset({"jsonschema"}),
-    "project.optional-dependencies.dev": frozenset({"pytest"}),
+    "project.optional-dependencies.dev": frozenset(
+        {"pytest", "pytest-cov", "pytest-randomly", "pytest-timeout", "pytest-xdist"}
+    ),
 }
 
 

@@ -57,44 +57,49 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (tab: TabType) => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (tab === 'graph') {
-        // Fetch debate graph stats if we have a loopId
-        if (!loopId) {
-          setGraphStats(null);
-          setLoading(false);
-          return;
-        }
-        const response = await fetch(`${apiBase}/api/debate/${encodeURIComponent(loopId)}/graph/stats`);
-        if (response.ok) {
-          const data = await response.json();
-          setGraphStats(data);
+  const fetchData = useCallback(
+    async (tab: TabType) => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (tab === 'graph') {
+          // Fetch debate graph stats if we have a loopId
+          if (!loopId) {
+            setGraphStats(null);
+            setLoading(false);
+            return;
+          }
+          const response = await fetch(
+            `${apiBase}/api/debate/${encodeURIComponent(loopId)}/graph/stats`,
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setGraphStats(data);
+          } else {
+            setGraphStats(null);
+          }
         } else {
-          setGraphStats(null);
-        }
-      } else {
-        const endpoint = tab === 'roles' ? 'role-rotation' : tab;
-        const response = await fetch(`${apiBase}/api/analytics/${endpoint}?limit=10`);
-        if (!response.ok) throw new Error(`Failed to fetch ${tab}`);
-        const data = await response.json();
+          const endpoint = tab === 'roles' ? 'role-rotation' : tab;
+          const response = await fetch(`${apiBase}/api/analytics/${endpoint}?limit=10`);
+          if (!response.ok) throw new Error(`Failed to fetch ${tab}`);
+          const data = await response.json();
 
-        if (tab === 'disagreements') {
-          setDisagreements(data.disagreements || []);
-        } else if (tab === 'roles') {
-          setRoleRotations(data.summary || []);
-        } else if (tab === 'early-stops') {
-          setEarlyStops(data.early_stops || []);
+          if (tab === 'disagreements') {
+            setDisagreements(data.disagreements || []);
+          } else if (tab === 'roles') {
+            setRoleRotations(data.summary || []);
+          } else if (tab === 'early-stops') {
+            setEarlyStops(data.early_stops || []);
+          }
         }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch analytics');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch analytics');
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, loopId]);
+    },
+    [apiBase, loopId],
+  );
 
   useEffect(() => {
     if (expanded) {
@@ -104,10 +109,9 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
 
   // Refresh on relevant events (match_recorded, leaderboard_update, debate_end)
   const latestRelevantEvent = useMemo(() => {
-    const relevant = events.filter(e =>
-      e.type === 'match_recorded' ||
-      e.type === 'leaderboard_update' ||
-      e.type === 'debate_end'
+    const relevant = events.filter(
+      (e) =>
+        e.type === 'match_recorded' || e.type === 'leaderboard_update' || e.type === 'debate_end',
     );
     return relevant[relevant.length - 1];
   }, [events]);
@@ -127,10 +131,7 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
   return (
     <div className="panel" style={{ padding: 0 }}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="panel-collapsible-header w-full"
-      >
+      <button onClick={() => setExpanded(!expanded)} className="panel-collapsible-header w-full">
         <div className="flex items-center gap-2">
           <span className="text-[var(--accent)] font-theme-data text-sm">[ANALYTICS]</span>
           <span className="text-text-muted text-xs">Debate patterns & insights</span>
@@ -166,8 +167,8 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
             <div className="text-warning text-xs text-center py-4">{error}</div>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {activeTab === 'disagreements' && (
-                disagreements.length === 0 ? (
+              {activeTab === 'disagreements' &&
+                (disagreements.length === 0 ? (
                   <div className="text-text-muted text-xs text-center py-4">
                     No disagreements recorded yet
                   </div>
@@ -190,11 +191,10 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
                       </div>
                     </div>
                   ))
-                )
-              )}
+                ))}
 
-              {activeTab === 'roles' && (
-                roleRotations.length === 0 ? (
+              {activeTab === 'roles' &&
+                (roleRotations.length === 0 ? (
                   <div className="text-text-muted text-xs text-center py-4">
                     No role data available
                   </div>
@@ -212,16 +212,13 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
                           </span>
                         ))}
                       </div>
-                      <div className="text-text-muted/50 mt-1">
-                        {r.total_debates} debates total
-                      </div>
+                      <div className="text-text-muted/50 mt-1">{r.total_debates} debates total</div>
                     </div>
                   ))
-                )
-              )}
+                ))}
 
-              {activeTab === 'early-stops' && (
-                earlyStops.length === 0 ? (
+              {activeTab === 'early-stops' &&
+                (earlyStops.length === 0 ? (
                   <div className="text-text-muted text-xs text-center py-4">
                     No early terminations recorded
                   </div>
@@ -235,20 +232,22 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
                         <span className="text-[var(--accent)] font-theme-data truncate max-w-[60%]">
                           {e.topic || e.debate_id}
                         </span>
-                        <span className={e.consensus_early ? 'text-[var(--accent)]' : 'text-warning'}>
+                        <span
+                          className={e.consensus_early ? 'text-[var(--accent)]' : 'text-warning'}
+                        >
                           {e.consensus_early ? 'consensus' : e.reason}
                         </span>
                       </div>
                       <div className="text-text-muted mt-1">
-                        Rounds: {e.rounds_completed}/{e.rounds_planned} | {formatTimestamp(e.timestamp)}
+                        Rounds: {e.rounds_completed}/{e.rounds_planned} |{' '}
+                        {formatTimestamp(e.timestamp)}
                       </div>
                     </div>
                   ))
-                )
-              )}
+                ))}
 
-              {activeTab === 'graph' && (
-                !loopId ? (
+              {activeTab === 'graph' &&
+                (!loopId ? (
                   <div className="text-text-muted text-xs text-center py-4">
                     No debate selected for graph analysis
                   </div>
@@ -261,19 +260,27 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
                     <div className="grid grid-cols-2 gap-2">
                       <div className="border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 p-2 text-xs">
                         <div className="text-text-muted">Nodes</div>
-                        <div className="text-[var(--acid-cyan)] text-lg font-theme-data">{graphStats.node_count}</div>
+                        <div className="text-[var(--acid-cyan)] text-lg font-theme-data">
+                          {graphStats.node_count}
+                        </div>
                       </div>
                       <div className="border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 p-2 text-xs">
                         <div className="text-text-muted">Edges</div>
-                        <div className="text-[var(--acid-cyan)] text-lg font-theme-data">{graphStats.edge_count}</div>
+                        <div className="text-[var(--acid-cyan)] text-lg font-theme-data">
+                          {graphStats.edge_count}
+                        </div>
                       </div>
                       <div className="border border-purple-500/30 bg-purple-500/5 p-2 text-xs">
                         <div className="text-text-muted">Max Depth</div>
-                        <div className="text-purple-400 text-lg font-theme-data">{graphStats.max_depth}</div>
+                        <div className="text-purple-400 text-lg font-theme-data">
+                          {graphStats.max_depth}
+                        </div>
                       </div>
                       <div className="border border-purple-500/30 bg-purple-500/5 p-2 text-xs">
                         <div className="text-text-muted">Avg Branching</div>
-                        <div className="text-purple-400 text-lg font-theme-data">{graphStats.avg_branching.toFixed(2)}</div>
+                        <div className="text-purple-400 text-lg font-theme-data">
+                          {graphStats.avg_branching.toFixed(2)}
+                        </div>
                       </div>
                     </div>
                     <div className="border border-[var(--accent)]/30 bg-surface p-2 text-xs">
@@ -291,12 +298,16 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
                       </div>
                     </div>
                     <div className="flex gap-2 text-xs text-text-muted">
-                      <span>Claims: <span className="text-[var(--accent)]">{graphStats.claim_count}</span></span>
-                      <span>Rebuttals: <span className="text-warning">{graphStats.rebuttal_count}</span></span>
+                      <span>
+                        Claims:{' '}
+                        <span className="text-[var(--accent)]">{graphStats.claim_count}</span>
+                      </span>
+                      <span>
+                        Rebuttals: <span className="text-warning">{graphStats.rebuttal_count}</span>
+                      </span>
                     </div>
                   </div>
-                )
-              )}
+                ))}
             </div>
           )}
 

@@ -65,10 +65,11 @@ export function DocumentUpload({
 
   // Build accepted extensions based on enableAudioVideo prop
   const allExtensions = useMemo(
-    () => enableAudioVideo
-      ? [...DOC_EXTENSIONS, ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS]
-      : DOC_EXTENSIONS,
-    [enableAudioVideo]
+    () =>
+      enableAudioVideo
+        ? [...DOC_EXTENSIONS, ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS]
+        : DOC_EXTENSIONS,
+    [enableAudioVideo],
   );
 
   // Determine file type from extension
@@ -82,7 +83,7 @@ export function DocumentUpload({
   // Poll for transcription status
   useEffect(() => {
     const pendingJobs = mediaFiles.filter(
-      (m) => m.status === 'pending' || m.status === 'processing'
+      (m) => m.status === 'pending' || m.status === 'processing',
     );
 
     if (pendingJobs.length === 0) return;
@@ -112,7 +113,7 @@ export function DocumentUpload({
                       language: data.language,
                       error: data.error,
                     }
-                  : m
+                  : m,
               );
               onTranscriptionsChange?.(updated);
               return updated;
@@ -129,144 +130,160 @@ export function DocumentUpload({
   }, [mediaFiles, apiBase, onTranscriptionsChange]);
 
   // Upload document file
-  const uploadDocument = useCallback(async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
+  const uploadDocument = useCallback(
+    async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
 
-    const headers: HeadersInit = {};
-    if (tokens?.access_token) {
-      headers['Authorization'] = `Bearer ${tokens.access_token}`;
-    }
+      const headers: HeadersInit = {};
+      if (tokens?.access_token) {
+        headers['Authorization'] = `Bearer ${tokens.access_token}`;
+      }
 
-    const response = await fetch(`${apiBase}/api/documents/upload`, {
-      method: 'POST',
-      body: formData,
-      headers,
-    });
+      const response = await fetch(`${apiBase}/api/documents/upload`, {
+        method: 'POST',
+        body: formData,
+        headers,
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Upload failed');
-    }
+      if (!response.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
 
-    const newDoc: UploadedDocument = {
-      id: data.document.id,
-      filename: data.document.filename,
-      word_count: data.document.word_count,
-      page_count: data.document.page_count,
-      preview: data.document.preview,
-    };
+      const newDoc: UploadedDocument = {
+        id: data.document.id,
+        filename: data.document.filename,
+        word_count: data.document.word_count,
+        page_count: data.document.page_count,
+        preview: data.document.preview,
+      };
 
-    setDocuments((prev) => {
-      const updated = [...prev, newDoc];
-      onDocumentsChange?.(updated.map((d) => d.id));
-      return updated;
-    });
-  }, [apiBase, onDocumentsChange, tokens?.access_token]);
+      setDocuments((prev) => {
+        const updated = [...prev, newDoc];
+        onDocumentsChange?.(updated.map((d) => d.id));
+        return updated;
+      });
+    },
+    [apiBase, onDocumentsChange, tokens?.access_token],
+  );
 
   // Upload media file for transcription
-  const uploadMedia = useCallback(async (file: File, fileType: 'audio' | 'video') => {
-    const formData = new FormData();
-    formData.append('file', file);
+  const uploadMedia = useCallback(
+    async (file: File, fileType: 'audio' | 'video') => {
+      const formData = new FormData();
+      formData.append('file', file);
 
-    const headers: HeadersInit = {};
-    if (tokens?.access_token) {
-      headers['Authorization'] = `Bearer ${tokens.access_token}`;
-    }
+      const headers: HeadersInit = {};
+      if (tokens?.access_token) {
+        headers['Authorization'] = `Bearer ${tokens.access_token}`;
+      }
 
-    const response = await fetch(`${apiBase}/api/transcription/upload`, {
-      method: 'POST',
-      body: formData,
-      headers,
-    });
+      const response = await fetch(`${apiBase}/api/transcription/upload`, {
+        method: 'POST',
+        body: formData,
+        headers,
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Transcription upload failed');
-    }
+      if (!response.ok) {
+        throw new Error(data.error || 'Transcription upload failed');
+      }
 
-    const newMedia: UploadedMedia = {
-      id: data.job_id,
-      job_id: data.job_id,
-      filename: file.name,
-      file_type: fileType,
-      status: 'pending',
-    };
+      const newMedia: UploadedMedia = {
+        id: data.job_id,
+        job_id: data.job_id,
+        filename: file.name,
+        file_type: fileType,
+        status: 'pending',
+      };
 
-    setMediaFiles((prev) => {
-      const updated = [...prev, newMedia];
-      onTranscriptionsChange?.(updated);
-      return updated;
-    });
-  }, [apiBase, onTranscriptionsChange, tokens?.access_token]);
+      setMediaFiles((prev) => {
+        const updated = [...prev, newMedia];
+        onTranscriptionsChange?.(updated);
+        return updated;
+      });
+    },
+    [apiBase, onTranscriptionsChange, tokens?.access_token],
+  );
 
   // Main upload handler
-  const uploadFile = useCallback(async (file: File) => {
-    setStatus('uploading');
-    setError(null);
+  const uploadFile = useCallback(
+    async (file: File) => {
+      setStatus('uploading');
+      setError(null);
 
-    try {
-      const fileType = getFileType(file.name);
+      try {
+        const fileType = getFileType(file.name);
 
-      if (fileType === 'document') {
-        await uploadDocument(file);
-      } else {
-        await uploadMedia(file, fileType);
+        if (fileType === 'document') {
+          await uploadDocument(file);
+        } else {
+          await uploadMedia(file, fileType);
+        }
+
+        setStatus('success');
+        setTimeout(() => setStatus('idle'), 2000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Upload failed');
+        setStatus('error');
+      }
+    },
+    [uploadDocument, uploadMedia],
+  );
+
+  const handleFileSelect = useCallback(
+    (files: FileList | null) => {
+      if (!files || files.length === 0) return;
+
+      const file = files[0];
+
+      // Validate file extension
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!allExtensions.includes(ext)) {
+        setError(`Unsupported file type: ${ext}. Supported: ${allExtensions.join(', ')}`);
+        setStatus('error');
+        return;
       }
 
-      setStatus('success');
-      setTimeout(() => setStatus('idle'), 2000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
-      setStatus('error');
-    }
-  }, [uploadDocument, uploadMedia]);
+      // Determine file category and max size
+      const fileType = getFileType(file.name);
+      const maxSizeMB = fileType === 'document' ? MAX_DOC_SIZE_MB : MAX_MEDIA_SIZE_MB;
+      const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
-  const handleFileSelect = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
+      // Validate MIME type matches extension (security check) - only for documents
+      if (fileType === 'document') {
+        const expectedMimes = Object.entries(DOC_TYPES)
+          .filter(
+            ([, extension]) => extension === ext || (ext === '.markdown' && extension === '.md'),
+          )
+          .map(([mime]) => mime);
 
-    const file = files[0];
-
-    // Validate file extension
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (!allExtensions.includes(ext)) {
-      setError(`Unsupported file type: ${ext}. Supported: ${allExtensions.join(', ')}`);
-      setStatus('error');
-      return;
-    }
-
-    // Determine file category and max size
-    const fileType = getFileType(file.name);
-    const maxSizeMB = fileType === 'document' ? MAX_DOC_SIZE_MB : MAX_MEDIA_SIZE_MB;
-    const maxSizeBytes = maxSizeMB * 1024 * 1024;
-
-    // Validate MIME type matches extension (security check) - only for documents
-    if (fileType === 'document') {
-      const expectedMimes = Object.entries(DOC_TYPES)
-        .filter(([, extension]) => extension === ext || (ext === '.markdown' && extension === '.md'))
-        .map(([mime]) => mime);
-
-      if (expectedMimes.length > 0 && file.type && !expectedMimes.includes(file.type)) {
-        // Allow empty MIME type (some browsers don't set it)
-        if (file.type !== '') {
-          setError(`File MIME type (${file.type}) doesn't match extension (${ext}). Possible file spoofing.`);
-          setStatus('error');
-          return;
+        if (expectedMimes.length > 0 && file.type && !expectedMimes.includes(file.type)) {
+          // Allow empty MIME type (some browsers don't set it)
+          if (file.type !== '') {
+            setError(
+              `File MIME type (${file.type}) doesn't match extension (${ext}). Possible file spoofing.`,
+            );
+            setStatus('error');
+            return;
+          }
         }
       }
-    }
 
-    // Validate file size
-    if (file.size > maxSizeBytes) {
-      setError(`File too large. Maximum size is ${maxSizeMB}MB for ${fileType} files.`);
-      setStatus('error');
-      return;
-    }
+      // Validate file size
+      if (file.size > maxSizeBytes) {
+        setError(`File too large. Maximum size is ${maxSizeMB}MB for ${fileType} files.`);
+        setStatus('error');
+        return;
+      }
 
-    uploadFile(file);
-  }, [uploadFile, allExtensions]);
+      uploadFile(file);
+    },
+    [uploadFile, allExtensions],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -278,11 +295,14 @@ export function DocumentUpload({
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFileSelect(e.dataTransfer.files);
-  }, [handleFileSelect]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      handleFileSelect(e.dataTransfer.files);
+    },
+    [handleFileSelect],
+  );
 
   const removeDocument = (docId: string) => {
     setDocuments((prev) => {
@@ -328,28 +348,46 @@ export function DocumentUpload({
   const getStatusBadge = (status: UploadedMedia['status']) => {
     switch (status) {
       case 'pending':
-        return <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">Queued</span>;
+        return (
+          <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">Queued</span>
+        );
       case 'processing':
-        return <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded flex items-center gap-1">
-          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          Transcribing
-        </span>;
+        return (
+          <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded flex items-center gap-1">
+            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            Transcribing
+          </span>
+        );
       case 'completed':
         return <span className="text-xs bg-success/20 text-success px-2 py-0.5 rounded">Done</span>;
       case 'failed':
-        return <span className="text-xs bg-[var(--crimson)]/20 text-[var(--crimson)] px-2 py-0.5 rounded">Failed</span>;
+        return (
+          <span className="text-xs bg-[var(--crimson)]/20 text-[var(--crimson)] px-2 py-0.5 rounded">
+            Failed
+          </span>
+        );
     }
   };
 
   return (
     <div className="panel" style={{ padding: 0 }}>
       <div className="p-4 border-b border-border">
-        <h3 className="panel-title-sm">
-          Documents
-        </h3>
+        <h3 className="panel-title-sm">Documents</h3>
       </div>
 
       <div className="p-4 space-y-4">
@@ -371,9 +409,10 @@ export function DocumentUpload({
           className={`
             border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all
             focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface
-            ${isDragging
-              ? 'border-accent bg-accent/10'
-              : 'border-border hover:border-accent/50 hover:bg-surface'
+            ${
+              isDragging
+                ? 'border-accent bg-accent/10'
+                : 'border-border hover:border-accent/50 hover:bg-surface'
             }
             ${status === 'uploading' ? 'opacity-50 pointer-events-none' : ''}
           `}
@@ -413,9 +452,7 @@ export function DocumentUpload({
           ) : (
             <>
               <div className="text-2xl mb-2">{enableAudioVideo ? '📎🎵🎬' : '📎'}</div>
-              <div className="text-sm text-text-muted">
-                Drop files here or click to upload
-              </div>
+              <div className="text-sm text-text-muted">Drop files here or click to upload</div>
               <div className="text-xs text-text-muted mt-1">
                 {enableAudioVideo
                   ? 'PDF, DOCX, TXT, MD (10MB) | MP3, WAV, M4A, MP4, MOV (25MB)'
@@ -480,11 +517,7 @@ export function DocumentUpload({
                     stroke="currentColor"
                     className="w-4 h-4"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
@@ -521,9 +554,7 @@ export function DocumentUpload({
                     </div>
                   )}
                   {media.status === 'failed' && media.error && (
-                    <div className="text-xs text-[var(--crimson)] mt-1">
-                      Error: {media.error}
-                    </div>
+                    <div className="text-xs text-[var(--crimson)] mt-1">Error: {media.error}</div>
                   )}
                 </div>
                 <button
@@ -543,11 +574,7 @@ export function DocumentUpload({
                     stroke="currentColor"
                     className="w-4 h-4"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>

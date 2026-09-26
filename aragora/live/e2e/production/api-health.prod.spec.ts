@@ -14,18 +14,14 @@ const API_BASE = PRODUCTION_DOMAINS.api;
 test.describe('API Health - api.aragora.ai', () => {
   test.describe('Health Endpoints', () => {
     test('GET /api/health should return 200', async ({ page }) => {
-      const response = await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      const response = await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       expect(response).not.toBeNull();
       expect(response!.status()).toBe(200);
     });
 
     test('GET /api/health should return healthy status', async ({ page }) => {
-      await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       const body = await page.locator('body').textContent();
       expect(body).toBeTruthy();
@@ -70,9 +66,7 @@ test.describe('API Health - api.aragora.ai', () => {
 
   test.describe('Public Endpoints', () => {
     test('GET /api/agents should return agents list', async ({ page }) => {
-      const response = await page.goto(`${API_BASE}/api/agents`, {
-        waitUntil: 'domcontentloaded',
-      });
+      const response = await page.goto(`${API_BASE}/api/agents`, { waitUntil: 'domcontentloaded' });
 
       expect(response).not.toBeNull();
       const status = response!.status();
@@ -84,7 +78,9 @@ test.describe('API Health - api.aragora.ai', () => {
         const body = await page.locator('body').textContent();
         try {
           const json = JSON.parse(body || '[]');
-          console.log(`Agents endpoint returned ${Array.isArray(json) ? json.length : 'object'} items`);
+          console.log(
+            `Agents endpoint returned ${Array.isArray(json) ? json.length : 'object'} items`,
+          );
         } catch {
           // Not JSON is OK
         }
@@ -106,7 +102,9 @@ test.describe('API Health - api.aragora.ai', () => {
         const body = await page.locator('body').textContent();
         try {
           const json = JSON.parse(body || '[]');
-          console.log(`Debates endpoint returned ${Array.isArray(json) ? json.length : 'object'} items`);
+          console.log(
+            `Debates endpoint returned ${Array.isArray(json) ? json.length : 'object'} items`,
+          );
         } catch {
           // Not JSON is OK
         }
@@ -116,9 +114,7 @@ test.describe('API Health - api.aragora.ai', () => {
 
   test.describe('Response Headers', () => {
     test('should have security headers', async ({ page }) => {
-      const response = await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      const response = await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       expect(response).not.toBeNull();
       const headers = response!.headers();
@@ -145,9 +141,7 @@ test.describe('API Health - api.aragora.ai', () => {
     });
 
     test('should have CORS headers for API', async ({ page }) => {
-      const response = await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      const response = await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       expect(response).not.toBeNull();
       const headers = response!.headers();
@@ -168,9 +162,7 @@ test.describe('API Health - api.aragora.ai', () => {
     });
 
     test('should have JSON content type', async ({ page }) => {
-      const response = await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      const response = await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       expect(response).not.toBeNull();
       const contentType = response!.headers()['content-type'];
@@ -184,9 +176,7 @@ test.describe('API Health - api.aragora.ai', () => {
     test('health endpoint should respond quickly', async ({ page }) => {
       const startTime = Date.now();
 
-      await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       const responseTime = Date.now() - startTime;
       console.log(`Health endpoint response time: ${responseTime}ms`);
@@ -197,9 +187,7 @@ test.describe('API Health - api.aragora.ai', () => {
     test('agents endpoint should respond within 5 seconds', async ({ page }) => {
       const startTime = Date.now();
 
-      await page.goto(`${API_BASE}/api/agents`, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(`${API_BASE}/api/agents`, { waitUntil: 'domcontentloaded' });
 
       const responseTime = Date.now() - startTime;
       console.log(`Agents endpoint response time: ${responseTime}ms`);
@@ -254,9 +242,7 @@ test.describe('API Health - api.aragora.ai', () => {
   test.describe('WebSocket Endpoint', () => {
     test('WebSocket endpoint should be accessible', async ({ page }) => {
       // Try to access WebSocket info endpoint if exists
-      const response = await page.goto(`${API_BASE}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      const response = await page.goto(`${API_BASE}/api/health`, { waitUntil: 'domcontentloaded' });
 
       expect(response).not.toBeNull();
 

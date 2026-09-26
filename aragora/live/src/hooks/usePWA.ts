@@ -26,8 +26,9 @@ export function usePWA(): UsePWAReturn {
   useEffect(() => {
     // Check if already installed
     if (typeof window !== 'undefined') {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-        || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
       setIsInstalled(isStandalone);
 
       // Initial offline state
@@ -39,13 +40,15 @@ export function usePWA(): UsePWAReturn {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-
           logger.debug('[PWA] Service worker registered:', registration.scope);
 
           // Check for updates periodically
-          setInterval(() => {
-            registration.update();
-          }, 60 * 60 * 1000); // Every hour
+          setInterval(
+            () => {
+              registration.update();
+            },
+            60 * 60 * 1000,
+          ); // Every hour
         })
         .catch((error) => {
           logger.error('[PWA] Service worker registration failed:', error);
@@ -100,10 +103,5 @@ export function usePWA(): UsePWAReturn {
     return false;
   }, [installPrompt]);
 
-  return {
-    isInstallable: installPrompt !== null,
-    isInstalled,
-    isOffline,
-    promptInstall,
-  };
+  return { isInstallable: installPrompt !== null, isInstalled, isOffline, promptInstall };
 }

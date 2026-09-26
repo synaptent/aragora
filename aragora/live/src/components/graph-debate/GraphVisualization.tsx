@@ -43,12 +43,11 @@ export function GraphVisualization({
 
     const width = 800;
     const height = 600;
-    const { nodes: simNodes, links: simLinks, simulation } = createForceSimulation(
-      graph.nodes,
-      graph.root_id,
-      width,
-      height
-    );
+    const {
+      nodes: simNodes,
+      links: simLinks,
+      simulation,
+    } = createForceSimulation(graph.nodes, graph.root_id, width, height);
 
     nodesRef.current = simNodes;
     linksRef.current = simLinks;
@@ -61,7 +60,7 @@ export function GraphVisualization({
           x: simNode.x || 400,
           y: simNode.y || 60,
           node: simNode.node,
-        }))
+        })),
       );
     };
 
@@ -99,11 +98,7 @@ export function GraphVisualization({
     toPos.node.parent_ids.forEach((parentId) => {
       const fromPos = positions.find((p) => p.node.id === parentId);
       if (fromPos) {
-        edges.push({
-          from: fromPos,
-          to: toPos,
-          branchId: toPos.node.branch_id || 'main',
-        });
+        edges.push({ from: fromPos, to: toPos, branchId: toPos.node.branch_id || 'main' });
       }
     });
   });
@@ -139,10 +134,7 @@ export function GraphVisualization({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      });
+      setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
   };
 
@@ -331,10 +323,7 @@ export function GraphVisualization({
           return (
             <g
               key={pos.node.id}
-              style={{
-                opacity: nodeInBranch ? 1 : 0.3,
-                cursor: isDragging ? 'grabbing' : 'grab',
-              }}
+              style={{ opacity: nodeInBranch ? 1 : 0.3, cursor: isDragging ? 'grabbing' : 'grab' }}
               className="transition-opacity duration-200"
               onMouseDown={(e) => handleNodeDragStart(pos.node.id, e)}
             >

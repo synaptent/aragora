@@ -352,42 +352,49 @@ def decision_receipt_to_odr(
     }
     if odr_version == "0.2":
         metadata = receipt.settlement_metadata or {}
-        for source, target in (
-            ("repo", "repository"),
-            ("pr", "pr_number"),
-            ("head_sha", "head_sha"),
-            ("base_sha", "base_sha"),
-        ):
-            if source not in metadata:
-                continue
-            value = metadata[source]
-            if source == "pr":
-                if isinstance(value, str) and value.isascii() and value.isdigit():
-                    value = int(value)
-                valid = isinstance(value, int) and not isinstance(value, bool)
-            else:
-                valid = isinstance(value, str) and bool(value)
-            if valid:
-                doc["subject"][target] = value
-            else:
-                logger.warning("Omitting invalid settlement_metadata key %s", source)
+        _apply_settlement_subject(doc["subject"], metadata)
         content = metadata.get("odr")
-        content = deepcopy(content) if isinstance(content, dict) else {}
-        if doc["quorum"].get("status") == "present":
-            for key in ("verdicts", "rule"):
-                if key in content:
-                    doc["quorum"][key] = content[key]
-            dissent = content.get("dissent", {})
-            for key in ("findings", "severity_max", "blocking"):
-                if key in dissent:
-                    doc["quorum"]["dissent"][key] = dissent[key]
-        if content.get("observations") and doc["reasoning"]["status"] == "present":
-            doc["reasoning"]["observations"] = content["observations"]
-        if "adjudication" in content:
-            doc["adjudication"] = content["adjudication"]
-        if "mechanism" in content and "mechanism" not in doc["attestation"]:
-            doc["attestation"]["mechanism"] = content["mechanism"]
+        _apply_settlement_odr(doc, deepcopy(content) if isinstance(content, dict) else {})
     return doc
+
+
+def _apply_settlement_subject(subject: dict[str, Any], metadata: dict[str, Any]) -> None:
+    for source, target in (
+        ("repo", "repository"),
+        ("pr", "pr_number"),
+        ("head_sha", "head_sha"),
+        ("base_sha", "base_sha"),
+    ):
+        if source not in metadata:
+            continue
+        value = metadata[source]
+        if source == "pr":
+            if isinstance(value, str) and value.isascii() and value.isdigit():
+                value = int(value)
+            valid = isinstance(value, int) and not isinstance(value, bool)
+        else:
+            valid = isinstance(value, str) and bool(value)
+        if valid:
+            subject[target] = value
+        else:
+            logger.warning("Omitting invalid settlement_metadata key %s", source)
+
+
+def _apply_settlement_odr(doc: dict[str, Any], content: dict[str, Any]) -> None:
+    if doc["quorum"].get("status") == "present":
+        for key in ("verdicts", "rule"):
+            if key in content:
+                doc["quorum"][key] = content[key]
+        dissent = content.get("dissent", {})
+        for key in ("findings", "severity_max", "blocking"):
+            if key in dissent:
+                doc["quorum"]["dissent"][key] = dissent[key]
+    if content.get("observations") and doc["reasoning"]["status"] == "present":
+        doc["reasoning"]["observations"] = content["observations"]
+    if "adjudication" in content:
+        doc["adjudication"] = content["adjudication"]
+    if "mechanism" in content and "mechanism" not in doc["attestation"]:
+        doc["attestation"]["mechanism"] = content["mechanism"]
 
 
 def sign_odr_if_configured(

@@ -1,6 +1,11 @@
 'use client';
 
-import { GOAL_NODE_CONFIGS, type GoalNodeData, type GoalNodeType, type GoalPriority } from './types';
+import {
+  GOAL_NODE_CONFIGS,
+  type GoalNodeData,
+  type GoalNodeType,
+  type GoalPriority,
+} from './types';
 
 interface GoalPropertyEditorProps {
   data: GoalNodeData | null;
@@ -9,13 +14,25 @@ interface GoalPropertyEditorProps {
   onDelete?: () => void;
 }
 
-const goalTypeOptions: GoalNodeType[] = ['goal', 'principle', 'strategy', 'milestone', 'metric', 'risk'];
+const goalTypeOptions: GoalNodeType[] = [
+  'goal',
+  'principle',
+  'strategy',
+  'milestone',
+  'metric',
+  'risk',
+];
 const priorityOptions: GoalPriority[] = ['critical', 'high', 'medium', 'low'];
 
 /**
  * Right sidebar for editing selected goal node properties.
  */
-export function GoalPropertyEditor({ data, onChange, onAdvance, onDelete }: GoalPropertyEditorProps) {
+export function GoalPropertyEditor({
+  data,
+  onChange,
+  onAdvance,
+  onDelete,
+}: GoalPropertyEditorProps) {
   if (!data) {
     return (
       <div className="w-64 border-l border-[var(--border)] bg-[var(--surface)] p-4">
@@ -120,7 +137,12 @@ export function GoalPropertyEditor({ data, onChange, onAdvance, onDelete }: Goal
           type="text"
           value={(data.tags || []).join(', ')}
           onChange={(e) =>
-            onChange({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })
+            onChange({
+              tags: e.target.value
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean),
+            })
           }
           placeholder="tag1, tag2, ..."
           className="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-2 py-1 text-sm text-text"

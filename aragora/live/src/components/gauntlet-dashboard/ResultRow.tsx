@@ -33,14 +33,10 @@ export function ResultRow({ result, onClick, isSelected, onExport, onCompare }: 
               {result.gauntlet_id.slice(-12)}
             </span>
           </div>
-          <p className="text-sm font-theme-data text-text truncate">
-            {result.input_summary}
-          </p>
+          <p className="text-sm font-theme-data text-text truncate">{result.input_summary}</p>
           <div className="flex items-center gap-4 mt-2 text-xs font-theme-data text-text-muted">
             <span>{new Date(result.created_at).toLocaleString()}</span>
-            {result.duration_seconds && (
-              <span>{result.duration_seconds}s</span>
-            )}
+            {result.duration_seconds && <span>{result.duration_seconds}s</span>}
           </div>
         </div>
 
@@ -61,19 +57,28 @@ export function ResultRow({ result, onClick, isSelected, onExport, onCompare }: 
           {showActions && (
             <div className="flex gap-1">
               <button
-                onClick={(e) => { e.stopPropagation(); onExport('html'); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExport('html');
+                }}
                 className="px-2 py-1 text-xs font-theme-data bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 rounded transition-colors"
               >
                 HTML
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); onExport('md'); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExport('md');
+                }}
                 className="px-2 py-1 text-xs font-theme-data bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/20 rounded transition-colors"
               >
                 MD
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); onCompare(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCompare();
+                }}
                 className="px-2 py-1 text-xs font-theme-data bg-accent/10 text-accent hover:bg-accent/20 rounded transition-colors"
               >
                 CMP

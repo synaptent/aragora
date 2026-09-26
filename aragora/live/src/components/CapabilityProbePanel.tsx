@@ -20,12 +20,7 @@ interface ProbeReport {
   target_agent: string;
   probes_configured: number;
   by_type: Record<string, ProbeResult[]>;
-  summary?: {
-    total: number;
-    passed: number;
-    failed: number;
-    pass_rate: number;
-  };
+  summary?: { total: number; passed: number; failed: number; pass_rate: number };
 }
 
 interface CapabilityProbePanelProps {
@@ -72,12 +67,7 @@ const PROBE_TYPES = [
     description: 'Test multi-step reasoning',
     icon: '🧠',
   },
-  {
-    value: 'edge_case',
-    label: 'Edge Cases',
-    description: 'Test boundary handling',
-    icon: '⚠️',
-  },
+  { value: 'edge_case', label: 'Edge Cases', description: 'Test boundary handling', icon: '⚠️' },
 ];
 
 function CapabilityProbePanelComponent({
@@ -87,7 +77,10 @@ function CapabilityProbePanelComponent({
   const [isExpanded, setIsExpanded] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<string[]>([]);
   const [selectedAgent, setSelectedAgent] = useState('');
-  const [selectedProbes, setSelectedProbes] = useState<string[]>(['contradiction', 'hallucination']);
+  const [selectedProbes, setSelectedProbes] = useState<string[]>([
+    'contradiction',
+    'hallucination',
+  ]);
   const [probesPerType, setProbesPerType] = useState(3);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +111,7 @@ function CapabilityProbePanelComponent({
 
   const toggleProbeType = (type: string) => {
     setSelectedProbes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     );
   };
 
@@ -141,7 +134,7 @@ function CapabilityProbePanelComponent({
             probes_per_type: probesPerType,
           }),
         },
-        { maxRetries: 2, baseDelayMs: 2000 } // Longer delay for heavy operations
+        { maxRetries: 2, baseDelayMs: 2000 }, // Longer delay for heavy operations
       );
 
       if (!response.ok) {
@@ -185,9 +178,14 @@ function CapabilityProbePanelComponent({
         <div className="flex items-center justify-between">
           <h3 className="panel-title-sm flex items-center gap-2">
             <span className="text-accent">{'>'}</span>
-            CAPABILITY_PROBES {report ? `[${report.summary?.pass_rate ? Math.round(report.summary.pass_rate * 100) : 0}% pass]` : ''}
+            CAPABILITY_PROBES{' '}
+            {report
+              ? `[${report.summary?.pass_rate ? Math.round(report.summary.pass_rate * 100) : 0}% pass]`
+              : ''}
           </h3>
-          <span className="panel-toggle" aria-hidden="true">[EXPAND]</span>
+          <span className="panel-toggle" aria-hidden="true">
+            [EXPAND]
+          </span>
         </div>
       </div>
     );
@@ -212,7 +210,9 @@ function CapabilityProbePanelComponent({
       <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 mb-4">
         {/* Agent Selection */}
         <div className="mb-4">
-          <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">Target Agent</label>
+          <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">
+            Target Agent
+          </label>
           <select
             value={selectedAgent}
             onChange={(e) => setSelectedAgent(e.target.value)}
@@ -293,28 +293,20 @@ function CapabilityProbePanelComponent({
             <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
               <div className="grid grid-cols-4 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-white">
-                    {report.summary.total}
-                  </div>
+                  <div className="text-2xl font-bold text-white">{report.summary.total}</div>
                   <div className="text-xs text-zinc-500">Total Probes</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-green-400">
-                    {report.summary.passed}
-                  </div>
+                  <div className="text-2xl font-bold text-green-400">{report.summary.passed}</div>
                   <div className="text-xs text-zinc-500">Passed</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-red-400">
-                    {report.summary.failed}
-                  </div>
+                  <div className="text-2xl font-bold text-red-400">{report.summary.failed}</div>
                   <div className="text-xs text-zinc-500">Failed</div>
                 </div>
                 <div>
                   <div
-                    className={`text-2xl font-bold ${getPassRateColor(
-                      report.summary.pass_rate
-                    )}`}
+                    className={`text-2xl font-bold ${getPassRateColor(report.summary.pass_rate)}`}
                   >
                     {(report.summary.pass_rate * 100).toFixed(0)}%
                   </div>
@@ -362,7 +354,9 @@ function CapabilityProbePanelComponent({
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span>{result.passed ? '✓' : '✗'} {result.description}</span>
+                            <span>
+                              {result.passed ? '✓' : '✗'} {result.description}
+                            </span>
                             {result.severity && (
                               <span className="text-xs opacity-70 uppercase">
                                 {result.severity}
@@ -396,5 +390,8 @@ function CapabilityProbePanelComponent({
 }
 
 // Wrap with error boundary for graceful error handling
-export const CapabilityProbePanel = withErrorBoundary(CapabilityProbePanelComponent, 'Capability Probe');
+export const CapabilityProbePanel = withErrorBoundary(
+  CapabilityProbePanelComponent,
+  'Capability Probe',
+);
 export default CapabilityProbePanel;

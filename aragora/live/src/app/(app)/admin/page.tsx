@@ -176,54 +176,107 @@ export default function AdminOverviewPage() {
         if (activityRes.ok) {
           const activityData = await activityRes.json();
           // Transform backend activity format to frontend format
-          const activities = (activityData.activities || activityData.data?.activities || []).map((a: { id: string; type: string; title?: string; description?: string; timestamp: string }) => ({
-            id: a.id,
-            type: a.type === 'email_received' ? 'user_signup' :
-                  a.type === 'action_completed' ? 'debate_completed' :
-                  a.type === 'meeting_scheduled' ? 'org_created' :
-                  a.type as 'user_signup' | 'debate_completed' | 'org_created' | 'payment_received' | 'api_error',
-            description: a.title || a.description || '',
-            timestamp: a.timestamp,
-          }));
+          const activities = (activityData.activities || activityData.data?.activities || []).map(
+            (a: {
+              id: string;
+              type: string;
+              title?: string;
+              description?: string;
+              timestamp: string;
+            }) => ({
+              id: a.id,
+              type:
+                a.type === 'email_received'
+                  ? 'user_signup'
+                  : a.type === 'action_completed'
+                    ? 'debate_completed'
+                    : a.type === 'meeting_scheduled'
+                      ? 'org_created'
+                      : (a.type as
+                          | 'user_signup'
+                          | 'debate_completed'
+                          | 'org_created'
+                          | 'payment_received'
+                          | 'api_error'),
+              description: a.title || a.description || '',
+              timestamp: a.timestamp,
+            }),
+          );
           setRecentActivity(activities);
         }
       } catch {
         // Activity endpoint may not exist, use mock data
         setRecentActivity([
-          { id: '1', type: 'user_signup', description: 'New user registered', timestamp: new Date().toISOString(), user_email: 'user@example.com' },
-          { id: '2', type: 'debate_completed', description: 'Debate completed with consensus', timestamp: new Date(Date.now() - 3600000).toISOString() },
-          { id: '3', type: 'org_created', description: 'New organization created', timestamp: new Date(Date.now() - 7200000).toISOString(), org_name: 'Acme Corp' },
-          { id: '4', type: 'payment_received', description: 'Payment received for Pro plan', timestamp: new Date(Date.now() - 10800000).toISOString() },
+          {
+            id: '1',
+            type: 'user_signup',
+            description: 'New user registered',
+            timestamp: new Date().toISOString(),
+            user_email: 'user@example.com',
+          },
+          {
+            id: '2',
+            type: 'debate_completed',
+            description: 'Debate completed with consensus',
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+          },
+          {
+            id: '3',
+            type: 'org_created',
+            description: 'New organization created',
+            timestamp: new Date(Date.now() - 7200000).toISOString(),
+            org_name: 'Acme Corp',
+          },
+          {
+            id: '4',
+            type: 'payment_received',
+            description: 'Payment received for Pro plan',
+            timestamp: new Date(Date.now() - 10800000).toISOString(),
+          },
         ]);
       }
 
       // Fetch chart data from analytics endpoints
       try {
         // Fetch debate trends
-        const debatesRes = await fetch(`${backendConfig.api}/api/analytics/debates/trends?time_range=30d`);
+        const debatesRes = await fetch(
+          `${backendConfig.api}/api/analytics/debates/trends?time_range=30d`,
+        );
         if (debatesRes.ok) {
           const debatesData = await debatesRes.json();
           const dataPoints = debatesData.data_points || debatesData.data?.data_points || [];
           if (dataPoints.length > 0) {
-            setDebateChartData(dataPoints.map((d: { period: string; total: number }) => ({
-              label: new Date(d.period).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              value: d.total,
-              date: d.period,
-            })));
+            setDebateChartData(
+              dataPoints.map((d: { period: string; total: number }) => ({
+                label: new Date(d.period).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }),
+                value: d.total,
+                date: d.period,
+              })),
+            );
           }
         }
 
         // Fetch usage/token data for API calls chart
-        const usageRes = await fetch(`${backendConfig.api}/api/analytics/usage/tokens?time_range=30d`);
+        const usageRes = await fetch(
+          `${backendConfig.api}/api/analytics/usage/tokens?time_range=30d`,
+        );
         if (usageRes.ok) {
           const usageData = await usageRes.json();
           const usagePoints = usageData.data_points || usageData.data?.data_points || [];
           if (usagePoints.length > 0) {
-            setApiCallsChartData(usagePoints.map((d: { period: string; tokens: number; requests?: number }) => ({
-              label: new Date(d.period).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              value: d.requests || d.tokens || 0,
-              date: d.period,
-            })));
+            setApiCallsChartData(
+              usagePoints.map((d: { period: string; tokens: number; requests?: number }) => ({
+                label: new Date(d.period).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }),
+                value: d.requests || d.tokens || 0,
+                date: d.period,
+              })),
+            );
           }
         }
       } catch {
@@ -233,16 +286,20 @@ export default function AdminOverviewPage() {
           date.setDate(date.getDate() - (29 - i));
           return date;
         });
-        setDebateChartData(mockDates.map(d => ({
-          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          value: Math.floor(Math.random() * 100) + 20,
-          date: d.toISOString(),
-        })));
-        setApiCallsChartData(mockDates.map(d => ({
-          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          value: Math.floor(Math.random() * 5000) + 1000,
-          date: d.toISOString(),
-        })));
+        setDebateChartData(
+          mockDates.map((d) => ({
+            label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            value: Math.floor(Math.random() * 100) + 20,
+            date: d.toISOString(),
+          })),
+        );
+        setApiCallsChartData(
+          mockDates.map((d) => ({
+            label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            value: Math.floor(Math.random() * 5000) + 1000,
+            date: d.toISOString(),
+          })),
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch admin data');
@@ -259,7 +316,12 @@ export default function AdminOverviewPage() {
 
   const quickActions = [
     { label: 'Invite User', href: '/admin/users?action=invite', icon: '+', color: 'acid-green' },
-    { label: 'Create Organization', href: '/admin/organizations?action=create', icon: '#', color: 'acid-cyan' },
+    {
+      label: 'Create Organization',
+      href: '/admin/organizations?action=create',
+      icon: '#',
+      color: 'acid-cyan',
+    },
     { label: 'View Audit Logs', href: '/admin/audit', icon: '!', color: 'acid-yellow' },
     { label: 'Check Billing', href: '/admin/billing', icon: '$', color: 'acid-magenta' },
   ];
@@ -273,7 +335,7 @@ export default function AdminOverviewPage() {
   const websocketConnections =
     health?.components?.websocket?.connections ?? health?.websocket_connections ?? null;
   const databaseStatus = normalizeHealthStatus(
-    health?.components?.database?.status ?? health?.database_status
+    health?.components?.database?.status ?? health?.database_status,
   );
 
   return (
@@ -304,7 +366,9 @@ export default function AdminOverviewPage() {
             href={action.href}
             className={`card p-4 flex items-center gap-3 hover:border-${action.color}/60 transition-colors group`}
           >
-            <span className={`text-2xl font-theme-data text-${action.color} group-hover:scale-110 transition-transform`}>
+            <span
+              className={`text-2xl font-theme-data text-${action.color} group-hover:scale-110 transition-transform`}
+            >
               {action.icon}
             </span>
             <span className="font-theme-data text-sm text-text group-hover:text-white transition-colors">
@@ -330,15 +394,21 @@ export default function AdminOverviewPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted mb-1">Total Users</div>
-          <div className="font-theme-data text-2xl text-[var(--accent)]">{stats?.total_users || '-'}</div>
+          <div className="font-theme-data text-2xl text-[var(--accent)]">
+            {stats?.total_users || '-'}
+          </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted mb-1">Organizations</div>
-          <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">{stats?.total_organizations || '-'}</div>
+          <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">
+            {stats?.total_organizations || '-'}
+          </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted mb-1">Active (24h)</div>
-          <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">{stats?.users_active_24h || '-'}</div>
+          <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">
+            {stats?.users_active_24h || '-'}
+          </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted mb-1">New Users (7d)</div>
@@ -346,11 +416,15 @@ export default function AdminOverviewPage() {
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted mb-1">Debates (Month)</div>
-          <div className="font-theme-data text-2xl text-[var(--acid-magenta)]">{stats?.total_debates_this_month || '-'}</div>
+          <div className="font-theme-data text-2xl text-[var(--acid-magenta)]">
+            {stats?.total_debates_this_month || '-'}
+          </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted mb-1">API Calls (Today)</div>
-          <div className="font-theme-data text-2xl text-text">{stats?.total_api_calls_today?.toLocaleString() || '-'}</div>
+          <div className="font-theme-data text-2xl text-text">
+            {stats?.total_api_calls_today?.toLocaleString() || '-'}
+          </div>
         </div>
       </div>
 
@@ -366,7 +440,9 @@ export default function AdminOverviewPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="font-theme-data text-sm text-text-muted">Uptime</span>
-                <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{formatUptime(health.uptime_seconds)}</span>
+                <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                  {formatUptime(health.uptime_seconds)}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-theme-data text-sm text-text-muted">Version</span>
@@ -374,7 +450,9 @@ export default function AdminOverviewPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-theme-data text-sm text-text-muted">Agents</span>
-                <span className="font-theme-data text-sm text-[var(--accent)]">{agentAvailability}</span>
+                <span className="font-theme-data text-sm text-[var(--accent)]">
+                  {agentAvailability}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-theme-data text-sm text-text-muted">WebSocket</span>
@@ -433,7 +511,10 @@ export default function AdminOverviewPage() {
           ) : (
             <div className="space-y-3">
               {recentActivity.slice(0, 6).map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 pb-3 border-b border-[var(--accent)]/10 last:border-0">
+                <div
+                  key={activity.id}
+                  className="flex items-start gap-3 pb-3 border-b border-[var(--accent)]/10 last:border-0"
+                >
                   <span className={`font-theme-data text-lg ${getActivityColor(activity.type)}`}>
                     {getActivityIcon(activity.type)}
                   </span>

@@ -22,10 +22,26 @@ interface ProofTreeVisualizationProps {
 }
 
 const NODE_COLORS: Record<string, { border: string; bg: string; text: string }> = {
-  claim: { border: 'border-[var(--acid-cyan)]', bg: 'bg-[var(--acid-cyan)]/10', text: 'text-[var(--acid-cyan)]' },
-  translation: { border: 'border-acid-yellow', bg: 'bg-acid-yellow/10', text: 'text-[var(--acid-yellow)]' },
-  verification: { border: 'border-[var(--accent)]', bg: 'bg-[var(--accent)]/10', text: 'text-[var(--accent)]' },
-  proof_step: { border: 'border-acid-magenta', bg: 'bg-acid-magenta/10', text: 'text-[var(--acid-magenta)]' },
+  claim: {
+    border: 'border-[var(--acid-cyan)]',
+    bg: 'bg-[var(--acid-cyan)]/10',
+    text: 'text-[var(--acid-cyan)]',
+  },
+  translation: {
+    border: 'border-acid-yellow',
+    bg: 'bg-acid-yellow/10',
+    text: 'text-[var(--acid-yellow)]',
+  },
+  verification: {
+    border: 'border-[var(--accent)]',
+    bg: 'bg-[var(--accent)]/10',
+    text: 'text-[var(--accent)]',
+  },
+  proof_step: {
+    border: 'border-acid-magenta',
+    bg: 'bg-acid-magenta/10',
+    text: 'text-[var(--acid-magenta)]',
+  },
 };
 
 const NODE_ICONS: Record<string, string> = {
@@ -56,9 +72,7 @@ function TreeNode({
   return (
     <div className="relative">
       {/* Connector line */}
-      {level > 0 && (
-        <div className="absolute -left-4 top-0 h-full w-px bg-[var(--accent)]/20" />
-      )}
+      {level > 0 && <div className="absolute -left-4 top-0 h-full w-px bg-[var(--accent)]/20" />}
 
       {/* Node */}
       <div
@@ -79,9 +93,7 @@ function TreeNode({
             {node.type.replace('_', ' ')}
           </span>
           {node.step_number && (
-            <span className="text-xs text-text-muted font-theme-data">
-              #{node.step_number}
-            </span>
+            <span className="text-xs text-text-muted font-theme-data">#{node.step_number}</span>
           )}
           {node.is_verified !== undefined && (
             <span
@@ -95,26 +107,20 @@ function TreeNode({
             </span>
           )}
           {hasChildren && (
-            <span className="ml-auto text-text-muted text-xs">
-              {expanded ? '[-]' : '[+]'}
-            </span>
+            <span className="ml-auto text-text-muted text-xs">{expanded ? '[-]' : '[+]'}</span>
           )}
         </div>
 
         {/* Node content */}
         <div className="font-theme-data text-sm text-text whitespace-pre-wrap break-all">
-          {node.content.length > 200
-            ? `${node.content.slice(0, 200)}...`
-            : node.content}
+          {node.content.length > 200 ? `${node.content.slice(0, 200)}...` : node.content}
         </div>
 
         {/* Metadata */}
         <div className="flex gap-3 mt-2 text-xs text-text-muted font-theme-data">
           {node.language && <span>Lang: {node.language}</span>}
           {node.proof_hash && (
-            <span title={node.proof_hash}>
-              Hash: {node.proof_hash.slice(0, 8)}...
-            </span>
+            <span title={node.proof_hash}>Hash: {node.proof_hash.slice(0, 8)}...</span>
           )}
         </div>
       </div>
@@ -229,12 +235,7 @@ export function ProofTreeVisualization({
       {/* Tree visualization */}
       <div className="bg-surface/50 border border-border rounded-lg p-4 overflow-x-auto">
         {rootNode ? (
-          <TreeNode
-            node={rootNode}
-            nodes={nodes}
-            level={0}
-            onNodeClick={handleNodeClick}
-          />
+          <TreeNode node={rootNode} nodes={nodes} level={0} onNodeClick={handleNodeClick} />
         ) : (
           <div className="text-text-muted font-theme-data text-sm">
             No root node found in proof tree

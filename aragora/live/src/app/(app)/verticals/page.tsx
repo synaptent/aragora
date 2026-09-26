@@ -98,26 +98,29 @@ export default function VerticalsPage() {
     }
   }, [backendUrl]);
 
-  const fetchVerticalDetail = useCallback(async (verticalId: string) => {
-    try {
-      const [toolsRes, complianceRes] = await Promise.all([
-        fetch(`${backendUrl}/api/verticals/${verticalId}/tools`),
-        fetch(`${backendUrl}/api/verticals/${verticalId}/compliance`),
-      ]);
+  const fetchVerticalDetail = useCallback(
+    async (verticalId: string) => {
+      try {
+        const [toolsRes, complianceRes] = await Promise.all([
+          fetch(`${backendUrl}/api/verticals/${verticalId}/tools`),
+          fetch(`${backendUrl}/api/verticals/${verticalId}/compliance`),
+        ]);
 
-      if (toolsRes.ok) {
-        const toolsData = await toolsRes.json();
-        setVerticalTools(toolsData.tools || []);
-      }
+        if (toolsRes.ok) {
+          const toolsData = await toolsRes.json();
+          setVerticalTools(toolsData.tools || []);
+        }
 
-      if (complianceRes.ok) {
-        const complianceData = await complianceRes.json();
-        setVerticalCompliance(complianceData.frameworks || []);
+        if (complianceRes.ok) {
+          const complianceData = await complianceRes.json();
+          setVerticalCompliance(complianceData.frameworks || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch vertical detail:', err);
       }
-    } catch (err) {
-      logger.error('Failed to fetch vertical detail:', err);
-    }
-  }, [backendUrl]);
+    },
+    [backendUrl],
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -149,7 +152,7 @@ export default function VerticalsPage() {
 
     try {
       const response = await fetch(
-        `${backendUrl}/api/verticals/suggest?task=${encodeURIComponent(suggestTask)}`
+        `${backendUrl}/api/verticals/suggest?task=${encodeURIComponent(suggestTask)}`,
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
@@ -164,7 +167,7 @@ export default function VerticalsPage() {
   const handleCreateAgent = async () => {
     if (!selectedVertical) return;
 
-    setAgentCreation(prev => ({ ...prev, loading: true, error: null }));
+    setAgentCreation((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const response = await fetch(`${backendUrl}/api/verticals/${selectedVertical.id}/agent`, {
@@ -177,13 +180,13 @@ export default function VerticalsPage() {
         throw new Error(data.error || `HTTP ${response.status}`);
       }
       const data = await response.json();
-      setAgentCreation(prev => ({
+      setAgentCreation((prev) => ({
         ...prev,
         loading: false,
         result: { agent_id: data.agent_id, name: data.agent_name || selectedVertical.name },
       }));
     } catch (err) {
-      setAgentCreation(prev => ({
+      setAgentCreation((prev) => ({
         ...prev,
         loading: false,
         error: err instanceof Error ? err.message : 'Agent creation failed',
@@ -194,29 +197,26 @@ export default function VerticalsPage() {
   const handleCreateDebate = async () => {
     if (!selectedVertical || !debateCreation.question.trim()) return;
 
-    setDebateCreation(prev => ({ ...prev, loading: true, error: null }));
+    setDebateCreation((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const response = await fetch(`${backendUrl}/api/verticals/${selectedVertical.id}/debate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: debateCreation.question,
-          rounds: 3,
-        }),
+        body: JSON.stringify({ question: debateCreation.question, rounds: 3 }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || `HTTP ${response.status}`);
       }
       const data = await response.json();
-      setDebateCreation(prev => ({
+      setDebateCreation((prev) => ({
         ...prev,
         loading: false,
         result: { debate_id: data.debate_id },
       }));
     } catch (err) {
-      setDebateCreation(prev => ({
+      setDebateCreation((prev) => ({
         ...prev,
         loading: false,
         error: err instanceof Error ? err.message : 'Debate creation failed',
@@ -238,7 +238,9 @@ export default function VerticalsPage() {
 
   const renderBrowseTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Domain Specialists</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Domain Specialists
+      </h2>
 
       {verticals.length === 0 ? (
         <p className="text-text-muted">No verticals configured</p>
@@ -268,9 +270,7 @@ export default function VerticalsPage() {
                 <span>{vertical.agents.length} agents</span>
                 <span>{vertical.tools.length} tools</span>
               </div>
-              {!vertical.enabled && (
-                <div className="mt-2 text-xs text-yellow-400">Disabled</div>
-              )}
+              {!vertical.enabled && <div className="mt-2 text-xs text-yellow-400">Disabled</div>}
             </button>
           ))}
         </div>
@@ -280,7 +280,9 @@ export default function VerticalsPage() {
 
   const renderSuggestTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Find Best Vertical</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Find Best Vertical
+      </h2>
 
       <div className="p-4 bg-surface border border-border rounded-lg">
         <label className="block text-xs font-theme-data text-text-muted uppercase mb-2">
@@ -308,9 +310,11 @@ export default function VerticalsPage() {
 
       {suggestions.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase">Recommendations</h3>
+          <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase">
+            Recommendations
+          </h3>
           {suggestions.map((suggestion, idx) => {
-            const vertical = verticals.find(v => v.id === suggestion.vertical_id);
+            const vertical = verticals.find((v) => v.id === suggestion.vertical_id);
             return (
               <div
                 key={idx}
@@ -348,8 +352,12 @@ export default function VerticalsPage() {
           <div className="flex items-center gap-3">
             <span className="text-3xl">{selectedVertical.icon || '🔧'}</span>
             <div>
-              <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">{selectedVertical.name}</h2>
-              <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${getCategoryColor(selectedVertical.category)}`}>
+              <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
+                {selectedVertical.name}
+              </h2>
+              <span
+                className={`px-2 py-0.5 text-xs font-theme-data rounded border ${getCategoryColor(selectedVertical.category)}`}
+              >
                 {selectedVertical.category}
               </span>
             </div>
@@ -369,7 +377,9 @@ export default function VerticalsPage() {
 
         {/* Specialist Agents */}
         <div className="p-4 bg-surface border border-border rounded-lg">
-          <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Specialist Agents</h3>
+          <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+            Specialist Agents
+          </h3>
           <div className="flex flex-wrap gap-2">
             {selectedVertical.agents.map((agent, i) => (
               <Link
@@ -386,7 +396,9 @@ export default function VerticalsPage() {
         {/* Tools */}
         {verticalTools.length > 0 && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Available Tools</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Available Tools
+            </h3>
             <div className="space-y-2">
               {verticalTools.map((tool, i) => (
                 <div key={i} className="p-2 bg-bg rounded">
@@ -410,7 +422,9 @@ export default function VerticalsPage() {
         {/* Compliance Frameworks */}
         {verticalCompliance.length > 0 && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Compliance Frameworks</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Compliance Frameworks
+            </h3>
             <div className="space-y-3">
               {verticalCompliance.map((framework, i) => (
                 <div key={i} className="p-3 bg-bg rounded">
@@ -419,7 +433,10 @@ export default function VerticalsPage() {
                   {framework.requirements && framework.requirements.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {framework.requirements.slice(0, 5).map((req, j) => (
-                        <span key={j} className="px-1 py-0.5 text-xs font-theme-data bg-yellow-500/10 text-yellow-400 rounded">
+                        <span
+                          key={j}
+                          className="px-1 py-0.5 text-xs font-theme-data bg-yellow-500/10 text-yellow-400 rounded"
+                        >
                           {req}
                         </span>
                       ))}
@@ -438,9 +455,12 @@ export default function VerticalsPage() {
 
         {/* Create Specialist Agent */}
         <div className="p-4 bg-surface border border-[var(--acid-cyan)]/30 rounded-lg">
-          <h3 className="text-sm font-theme-data font-bold text-[var(--acid-cyan)] uppercase mb-3">Create Specialist Agent</h3>
+          <h3 className="text-sm font-theme-data font-bold text-[var(--acid-cyan)] uppercase mb-3">
+            Create Specialist Agent
+          </h3>
           <p className="text-sm text-text-muted mb-4">
-            Instantiate a new specialist agent configured for {selectedVertical.name.toLowerCase()} tasks.
+            Instantiate a new specialist agent configured for {selectedVertical.name.toLowerCase()}{' '}
+            tasks.
           </p>
 
           {agentCreation.result ? (
@@ -476,9 +496,12 @@ export default function VerticalsPage() {
 
         {/* Start Debate */}
         <div className="p-4 bg-surface border border-[var(--accent)]/30 rounded-lg">
-          <h3 className="text-sm font-theme-data font-bold text-[var(--accent)] uppercase mb-3">Start Specialist Debate</h3>
+          <h3 className="text-sm font-theme-data font-bold text-[var(--accent)] uppercase mb-3">
+            Start Specialist Debate
+          </h3>
           <p className="text-sm text-text-muted mb-4">
-            Launch a debate using agents specialized for {selectedVertical.name.toLowerCase()} tasks.
+            Launch a debate using agents specialized for {selectedVertical.name.toLowerCase()}{' '}
+            tasks.
           </p>
 
           {debateCreation.result ? (
@@ -506,7 +529,9 @@ export default function VerticalsPage() {
               </label>
               <textarea
                 value={debateCreation.question}
-                onChange={(e) => setDebateCreation(prev => ({ ...prev, question: e.target.value }))}
+                onChange={(e) =>
+                  setDebateCreation((prev) => ({ ...prev, question: e.target.value }))
+                }
                 placeholder={`e.g., What are the key ${selectedVertical.category} considerations for...`}
                 rows={3}
                 className="w-full px-3 py-2 bg-bg border border-border rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]/50 resize-none"
@@ -557,7 +582,9 @@ export default function VerticalsPage() {
 
         {/* Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">Domain Verticals</h1>
+          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">
+            Domain Verticals
+          </h1>
           <p className="text-text-muted font-theme-data text-sm">
             Specialized agents and tools for domain-specific debates
           </p>
@@ -566,17 +593,17 @@ export default function VerticalsPage() {
         {/* Error */}
         {error && (
           <div className="mb-6">
-            <ErrorWithRetry
-              error={error}
-              onRetry={loadData}
-            />
+            <ErrorWithRetry error={error} onRetry={loadData} />
           </div>
         )}
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-border pb-2">
           <button
-            onClick={() => { setActiveTab('browse'); setSelectedVertical(null); }}
+            onClick={() => {
+              setActiveTab('browse');
+              setSelectedVertical(null);
+            }}
             className={`px-4 py-2 font-theme-data text-sm rounded-t transition-colors ${
               activeTab === 'browse'
                 ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-b-2 border-[var(--accent)]'

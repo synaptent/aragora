@@ -33,11 +33,15 @@ export interface AccountTabProps {
 }
 
 export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProps) {
-  const [logoutAllStatus, setLogoutAllStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [logoutAllStatus, setLogoutAllStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    'idle',
+  );
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [linkedProviders, setLinkedProviders] = useState<LinkedProvider[]>([]);
   const [oauthLoading, setOauthLoading] = useState(true);
-  const [oauthLinkStatus, setOauthLinkStatus] = useState<Record<string, 'idle' | 'linking' | 'unlinking' | 'error'>>({});
+  const [oauthLinkStatus, setOauthLinkStatus] = useState<
+    Record<string, 'idle' | 'linking' | 'unlinking' | 'error'>
+  >({});
 
   // Fetch OAuth providers and user's linked accounts
   useEffect(() => {
@@ -75,73 +79,79 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
   }, [isAuthenticated, backendApi]);
 
   // Handle OAuth link
-  const handleOAuthLink = useCallback(async (providerId: string) => {
-    setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'linking' }));
-    try {
-      const response = await fetch(`${backendApi}/api/auth/oauth/link`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: providerId,
-          redirect_url: `${window.location.origin}/settings?linked=${providerId}`,
-        }),
-      });
+  const handleOAuthLink = useCallback(
+    async (providerId: string) => {
+      setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'linking' }));
+      try {
+        const response = await fetch(`${backendApi}/api/auth/oauth/link`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: providerId,
+            redirect_url: `${window.location.origin}/settings?linked=${providerId}`,
+          }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.auth_url) {
-          window.location.href = data.auth_url;
+        if (response.ok) {
+          const data = await response.json();
+          if (data.auth_url) {
+            window.location.href = data.auth_url;
+          }
+        } else {
+          setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'error' }));
+          setTimeout(() => setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'idle' })), 3000);
         }
-      } else {
-        setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'error' }));
-        setTimeout(() => setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'idle' })), 3000);
+      } catch (error) {
+        logger.error('OAuth link error:', error);
+        setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'error' }));
+        setTimeout(() => setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'idle' })), 3000);
       }
-    } catch (error) {
-      logger.error('OAuth link error:', error);
-      setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'error' }));
-      setTimeout(() => setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'idle' })), 3000);
-    }
-  }, [backendApi]);
+    },
+    [backendApi],
+  );
 
   // Handle OAuth unlink
-  const handleOAuthUnlink = useCallback(async (providerId: string) => {
-    const confirmed = window.confirm(
-      `Unlink your ${providerId} account? You can still sign in with email/password.`
-    );
-    if (!confirmed) return;
+  const handleOAuthUnlink = useCallback(
+    async (providerId: string) => {
+      const confirmed = window.confirm(
+        `Unlink your ${providerId} account? You can still sign in with email/password.`,
+      );
+      if (!confirmed) return;
 
-    setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'unlinking' }));
-    try {
-      const response = await fetch(`${backendApi}/api/auth/oauth/unlink`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId }),
-      });
+      setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'unlinking' }));
+      try {
+        const response = await fetch(`${backendApi}/api/auth/oauth/unlink`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: providerId }),
+        });
 
-      if (response.ok) {
-        setLinkedProviders(prev => prev.filter(p => p.provider !== providerId));
-        setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'idle' }));
-      } else {
-        const data = await response.json().catch(() => ({}));
-        alert(data.error || 'Failed to unlink account');
-        setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'error' }));
-        setTimeout(() => setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'idle' })), 3000);
+        if (response.ok) {
+          setLinkedProviders((prev) => prev.filter((p) => p.provider !== providerId));
+          setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'idle' }));
+        } else {
+          const data = await response.json().catch(() => ({}));
+          alert(data.error || 'Failed to unlink account');
+          setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'error' }));
+          setTimeout(() => setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'idle' })), 3000);
+        }
+      } catch (error) {
+        logger.error('OAuth unlink error:', error);
+        setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'error' }));
+        setTimeout(() => setOauthLinkStatus((prev) => ({ ...prev, [providerId]: 'idle' })), 3000);
       }
-    } catch (error) {
-      logger.error('OAuth unlink error:', error);
-      setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'error' }));
-      setTimeout(() => setOauthLinkStatus(prev => ({ ...prev, [providerId]: 'idle' })), 3000);
-    }
-  }, [backendApi]);
+    },
+    [backendApi],
+  );
 
   // Logout from all devices
   const handleLogoutAllDevices = useCallback(async () => {
     if (logoutAllStatus === 'loading') return;
 
     const confirmed = window.confirm(
-      'This will log you out from all devices and sessions. You will need to sign in again. Continue?'
+      'This will log you out from all devices and sessions. You will need to sign in again. Continue?',
     );
     if (!confirmed) return;
 
@@ -173,7 +183,12 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="card p-6 text-center" role="tabpanel" id="panel-account" aria-labelledby="tab-account">
+      <div
+        className="card p-6 text-center"
+        role="tabpanel"
+        id="panel-account"
+        aria-labelledby="tab-account"
+      >
         <h3 className="font-theme-data text-[var(--accent)] mb-4">Not Signed In</h3>
         <p className="font-theme-data text-sm text-text-muted mb-4">
           Sign in to manage your account settings and access personalized features.
@@ -226,13 +241,11 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
             <div className="h-12 bg-surface rounded" />
           </div>
         ) : oauthProviders.length === 0 ? (
-          <p className="font-theme-data text-xs text-text-muted">
-            No OAuth providers configured.
-          </p>
+          <p className="font-theme-data text-xs text-text-muted">No OAuth providers configured.</p>
         ) : (
           <div className="space-y-3">
             {oauthProviders.map((provider) => {
-              const linked = linkedProviders.find(p => p.provider === provider.id);
+              const linked = linkedProviders.find((p) => p.provider === provider.id);
               const status = oauthLinkStatus[provider.id] || 'idle';
 
               return (
@@ -275,9 +288,7 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
                           Connected {linked.email ? `as ${linked.email}` : ''}
                         </div>
                       ) : (
-                        <div className="font-theme-data text-xs text-text-muted">
-                          Not connected
-                        </div>
+                        <div className="font-theme-data text-xs text-text-muted">Not connected</div>
                       )}
                     </div>
                   </div>
@@ -290,11 +301,15 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
                         status === 'unlinking'
                           ? 'text-text-muted cursor-wait'
                           : status === 'error'
-                          ? 'text-acid-red'
-                          : 'text-acid-red/70 hover:text-acid-red hover:bg-acid-red/10'
+                            ? 'text-acid-red'
+                            : 'text-acid-red/70 hover:text-acid-red hover:bg-acid-red/10'
                       }`}
                     >
-                      {status === 'unlinking' ? 'Unlinking...' : status === 'error' ? 'Error' : 'Unlink'}
+                      {status === 'unlinking'
+                        ? 'Unlinking...'
+                        : status === 'error'
+                          ? 'Error'
+                          : 'Unlink'}
                     </button>
                   ) : (
                     <button
@@ -304,8 +319,8 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
                         status === 'linking'
                           ? 'text-text-muted cursor-wait'
                           : status === 'error'
-                          ? 'text-acid-red'
-                          : 'text-[var(--acid-cyan)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10'
+                            ? 'text-acid-red'
+                            : 'text-[var(--acid-cyan)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10'
                       }`}
                     >
                       {status === 'linking' ? 'Linking...' : status === 'error' ? 'Error' : 'Link'}
@@ -334,17 +349,17 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
               logoutAllStatus === 'success'
                 ? 'border-[var(--accent)]/40 text-[var(--accent)] bg-[var(--accent)]/10'
                 : logoutAllStatus === 'error'
-                ? 'border-acid-red/40 text-acid-red bg-acid-red/10'
-                : 'border-acid-yellow/40 text-[var(--acid-yellow)] hover:bg-acid-yellow/10'
+                  ? 'border-acid-red/40 text-acid-red bg-acid-red/10'
+                  : 'border-acid-yellow/40 text-[var(--acid-yellow)] hover:bg-acid-yellow/10'
             } disabled:opacity-50`}
           >
             {logoutAllStatus === 'loading'
               ? 'Logging out...'
               : logoutAllStatus === 'success'
-              ? 'Logged out! Redirecting...'
-              : logoutAllStatus === 'error'
-              ? 'Failed - try again'
-              : 'Logout All Devices (Including Current)'}
+                ? 'Logged out! Redirecting...'
+                : logoutAllStatus === 'error'
+                  ? 'Failed - try again'
+                  : 'Logout All Devices (Including Current)'}
           </button>
           <p className="font-theme-data text-xs text-text-muted mt-2">
             Invalidates all sessions including your current one. You will be signed out everywhere.
@@ -358,14 +373,10 @@ export function AccountTab({ user, isAuthenticated, backendApi }: AccountTabProp
           These actions are irreversible. Please proceed with caution.
         </p>
         <div className="space-y-3">
-          <button
-            className="w-full px-4 py-2 border border-acid-yellow/40 text-[var(--acid-yellow)] font-theme-data text-sm rounded hover:bg-acid-yellow/10 transition-colors text-left"
-          >
+          <button className="w-full px-4 py-2 border border-acid-yellow/40 text-[var(--acid-yellow)] font-theme-data text-sm rounded hover:bg-acid-yellow/10 transition-colors text-left">
             Export All Data
           </button>
-          <button
-            className="w-full px-4 py-2 border border-acid-red/40 text-acid-red font-theme-data text-sm rounded hover:bg-acid-red/10 transition-colors text-left"
-          >
+          <button className="w-full px-4 py-2 border border-acid-red/40 text-acid-red font-theme-data text-sm rounded hover:bg-acid-red/10 transition-colors text-left">
             Delete Account
           </button>
         </div>

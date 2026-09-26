@@ -12,7 +12,11 @@ import {
 // Score Bar Component
 // ============================================================================
 
-function ScoreBar({ score, maxScore = 1, color = 'bg-[var(--accent)]' }: {
+function ScoreBar({
+  score,
+  maxScore = 1,
+  color = 'bg-[var(--accent)]',
+}: {
   score: number;
   maxScore?: number;
   color?: string;
@@ -26,9 +30,7 @@ function ScoreBar({ score, maxScore = 1, color = 'bg-[var(--accent)]' }: {
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <span className="text-xs font-theme-data text-text-muted w-8 text-right">
-        {percentage}%
-      </span>
+      <span className="text-xs font-theme-data text-text-muted w-8 text-right">{percentage}%</span>
     </div>
   );
 }
@@ -101,7 +103,9 @@ function TeamPreview({
   return (
     <div className="p-4 bg-surface border border-[var(--accent)]/30">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-theme-data text-[var(--accent)] uppercase">RECOMMENDED TEAM</span>
+        <span className="text-xs font-theme-data text-[var(--accent)] uppercase">
+          RECOMMENDED TEAM
+        </span>
         {onSelect && (
           <button
             onClick={() => onSelect(agents)}
@@ -120,9 +124,7 @@ function TeamPreview({
             className="px-3 py-1.5 bg-bg border border-[var(--accent)]/40 text-sm font-theme-data text-[var(--accent)]"
           >
             {agent}
-            {roles[agent] && (
-              <span className="ml-2 text-xs text-text-muted">({roles[agent]})</span>
-            )}
+            {roles[agent] && <span className="ml-2 text-xs text-text-muted">({roles[agent]})</span>}
           </div>
         ))}
       </div>
@@ -317,7 +319,12 @@ function BestTeamsPanel({
                 ))}
               </div>
               <div className="flex items-center gap-4 text-xs font-theme-data text-text-muted">
-                <span>Win Rate: <span className="text-[var(--acid-cyan)]">{Math.round(team.win_rate * 100)}%</span></span>
+                <span>
+                  Win Rate:{' '}
+                  <span className="text-[var(--acid-cyan)]">
+                    {Math.round(team.win_rate * 100)}%
+                  </span>
+                </span>
                 <span>Debates: {team.debates}</span>
               </div>
             </div>
@@ -357,9 +364,12 @@ export function AgentRecommender({ onTeamSelect }: AgentRecommenderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  const handleAnalyze = useCallback(async (task: string) => {
-    await routing.autoRoute(task);
-  }, [routing]);
+  const handleAnalyze = useCallback(
+    async (task: string) => {
+      await routing.autoRoute(task);
+    },
+    [routing],
+  );
 
   const handleDomainChange = useCallback((domain: string) => {
     setSelectedDomain(domain);
@@ -375,7 +385,11 @@ export function AgentRecommender({ onTeamSelect }: AgentRecommenderProps) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[var(--accent)]/10" role="tablist" aria-label="Agent recommender views">
+      <div
+        className="flex border-b border-[var(--accent)]/10"
+        role="tablist"
+        aria-label="Agent recommender views"
+      >
         {(['analyze', 'leaderboard', 'teams'] as const).map((tab) => (
           <button
             key={tab}
@@ -407,26 +421,32 @@ export function AgentRecommender({ onTeamSelect }: AgentRecommenderProps) {
       {/* Content */}
       <div className="p-4">
         {activeTab === 'analyze' && (
-          <div id="tabpanel-analyze" role="tabpanel" aria-labelledby="tab-analyze" className="space-y-4">
-            <TopicAnalyzer
-              onAnalyze={handleAnalyze}
-              loading={routing.autoRouteLoading}
-            />
+          <div
+            id="tabpanel-analyze"
+            role="tabpanel"
+            aria-labelledby="tab-analyze"
+            className="space-y-4"
+          >
+            <TopicAnalyzer onAnalyze={handleAnalyze} loading={routing.autoRouteLoading} />
 
             {routing.autoRouteResult && (
               <>
                 {/* Detected Domains */}
                 <div className="p-3 bg-bg/50 border border-[var(--accent)]/20">
-                  <div className="text-xs font-theme-data text-text-muted mb-2">DETECTED DOMAIN</div>
+                  <div className="text-xs font-theme-data text-text-muted mb-2">
+                    DETECTED DOMAIN
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {Object.entries(routing.autoRouteResult.detected_domain).map(([domain, score]) => (
-                      <span
-                        key={domain}
-                        className="px-2 py-1 text-xs font-theme-data bg-surface border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)]"
-                      >
-                        {domain}: {Math.round((score as number) * 100)}%
-                      </span>
-                    ))}
+                    {Object.entries(routing.autoRouteResult.detected_domain).map(
+                      ([domain, score]) => (
+                        <span
+                          key={domain}
+                          className="px-2 py-1 text-xs font-theme-data bg-surface border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)]"
+                        >
+                          {domain}: {Math.round((score as number) * 100)}%
+                        </span>
+                      ),
+                    )}
                   </div>
                 </div>
 
@@ -444,7 +464,9 @@ export function AgentRecommender({ onTeamSelect }: AgentRecommenderProps) {
 
             {routing.recommendations.length > 0 && (
               <div>
-                <div className="text-xs font-theme-data text-text-muted mb-2">INDIVIDUAL RECOMMENDATIONS</div>
+                <div className="text-xs font-theme-data text-text-muted mb-2">
+                  INDIVIDUAL RECOMMENDATIONS
+                </div>
                 <RecommendationsList recommendations={routing.recommendations} />
               </div>
             )}

@@ -15,12 +15,7 @@ export class AragoraError extends Error {
   readonly status: number;
   readonly details?: Record<string, unknown>;
 
-  constructor(
-    message: string,
-    code: string,
-    status: number,
-    details?: Record<string, unknown>
-  ) {
+  constructor(message: string, code: string, status: number, details?: Record<string, unknown>) {
     super(message);
     this.name = 'AragoraError';
     this.code = code;
@@ -71,10 +66,7 @@ export class HttpClient {
     this._baseUrl = config.baseUrl.replace(/\/$/, '');
     this._apiKey = config.apiKey;
     this.timeout = config.timeout ?? 30000;
-    this.defaultHeaders = {
-      'Content-Type': 'application/json',
-      ...config.headers,
-    };
+    this.defaultHeaders = { 'Content-Type': 'application/json', ...config.headers };
 
     if (this._apiKey) {
       this.defaultHeaders['Authorization'] = `Bearer ${this._apiKey}`;
@@ -85,22 +77,16 @@ export class HttpClient {
     method: string,
     path: string,
     data?: unknown,
-    options?: RequestOptions
+    options?: RequestOptions,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      options?.timeout ?? this.timeout
-    );
+    const timeoutId = setTimeout(() => controller.abort(), options?.timeout ?? this.timeout);
 
     try {
       const response = await fetch(url, {
         method,
-        headers: {
-          ...this.defaultHeaders,
-          ...options?.headers,
-        },
+        headers: { ...this.defaultHeaders, ...options?.headers },
         body: data ? JSON.stringify(data) : undefined,
         signal: options?.signal ?? controller.signal,
       });
@@ -113,7 +99,7 @@ export class HttpClient {
           errorData.error || `HTTP ${response.status}`,
           errorData.code || 'HTTP_ERROR',
           response.status,
-          errorData
+          errorData,
         );
       }
 

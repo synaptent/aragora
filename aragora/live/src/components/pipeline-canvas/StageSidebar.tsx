@@ -6,7 +6,8 @@ import type { PipelineStageType } from './types';
 
 // Lazy-load the stranded feature panels so they don't bloat the canvas bundle
 const MemoryExplorerPanel = dynamic(
-  () => import('@/components/MemoryExplorerPanel').then((m) => ({ default: m.MemoryExplorerPanel })),
+  () =>
+    import('@/components/MemoryExplorerPanel').then((m) => ({ default: m.MemoryExplorerPanel })),
   { ssr: false, loading: () => <PanelLoading label="Memory Explorer" /> },
 );
 
@@ -16,7 +17,10 @@ const EvaluationPanel = dynamic(
 );
 
 const PluginMarketplacePanel = dynamic(
-  () => import('@/components/PluginMarketplacePanel').then((m) => ({ default: m.PluginMarketplacePanel })),
+  () =>
+    import('@/components/PluginMarketplacePanel').then((m) => ({
+      default: m.PluginMarketplacePanel,
+    })),
   { ssr: false, loading: () => <PanelLoading label="Templates" /> },
 );
 
@@ -26,7 +30,10 @@ const GauntletRunner = dynamic(
 );
 
 const MetaPlannerView = dynamic(
-  () => import('@/components/self-improve/MetaPlannerView').then((m) => ({ default: m.MetaPlannerView })),
+  () =>
+    import('@/components/self-improve/MetaPlannerView').then((m) => ({
+      default: m.MetaPlannerView,
+    })),
   { ssr: false, loading: () => <PanelLoading label="MetaPlanner" /> },
 );
 
@@ -38,16 +45,17 @@ const LearningFeed = dynamic(
 function PanelLoading({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center h-32">
-      <span className="text-xs font-theme-data text-text-muted animate-pulse">Loading {label}...</span>
+      <span className="text-xs font-theme-data text-text-muted animate-pulse">
+        Loading {label}...
+      </span>
     </div>
   );
 }
 
-const STAGE_PANEL_CONFIG: Record<PipelineStageType, {
-  title: string;
-  subtitle: string;
-  color: string;
-}> = {
+const STAGE_PANEL_CONFIG: Record<
+  PipelineStageType,
+  { title: string; subtitle: string; color: string }
+> = {
   ideas: {
     title: 'Memory Explorer',
     subtitle: 'Browse past debates and knowledge to seed ideas',
@@ -103,7 +111,13 @@ export function StageSidebar({ stage, isOpen, onClose }: StageSidebarProps) {
           className="w-full h-full flex items-center justify-center text-text-muted hover:text-text"
           title="Expand sidebar"
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
@@ -123,7 +137,13 @@ export function StageSidebar({ stage, isOpen, onClose }: StageSidebarProps) {
                 className="text-text-muted hover:text-text text-sm p-1"
                 title="Collapse"
               >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <svg
+                  className="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
@@ -146,7 +166,9 @@ export function StageSidebar({ stage, isOpen, onClose }: StageSidebarProps) {
               <>
                 <GauntletRunner />
                 <div className="mt-4 border-t border-border pt-3">
-                  <h4 className="text-xs font-theme-data text-text-muted uppercase mb-2">Learning Feed</h4>
+                  <h4 className="text-xs font-theme-data text-text-muted uppercase mb-2">
+                    Learning Feed
+                  </h4>
                   <LearningFeed />
                 </div>
               </>

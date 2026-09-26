@@ -3,7 +3,12 @@
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { BackendSelector, BACKENDS, buildHealthCheckUrl, useBackend } from '../src/components/BackendSelector';
+import {
+  BackendSelector,
+  BACKENDS,
+  buildHealthCheckUrl,
+  useBackend,
+} from '../src/components/BackendSelector';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -70,7 +75,9 @@ describe('BackendSelector', () => {
 
     it('builds an absolute health URL without adding a trailing slash route', () => {
       expect(buildHealthCheckUrl('http://127.0.0.1:8086')).toBe('http://127.0.0.1:8086/api/health');
-      expect(buildHealthCheckUrl('http://127.0.0.1:8086/')).toBe('http://127.0.0.1:8086/api/health');
+      expect(buildHealthCheckUrl('http://127.0.0.1:8086/')).toBe(
+        'http://127.0.0.1:8086/api/health',
+      );
     });
   });
 
@@ -205,11 +212,14 @@ describe('BackendSelector', () => {
 
       // The 'L' indicator appears when connected via localhost
       // This may take time due to the health check order (tunnel first, then localhost)
-      await waitFor(() => {
-        // Look for the local indicator or the DEV button being enabled
-        const devButton = screen.getByText('DEV').closest('button');
-        expect(devButton).not.toBeDisabled();
-      }, { timeout: 5000 });
+      await waitFor(
+        () => {
+          // Look for the local indicator or the DEV button being enabled
+          const devButton = screen.getByText('DEV').closest('button');
+          expect(devButton).not.toBeDisabled();
+        },
+        { timeout: 5000 },
+      );
     });
   });
 

@@ -18,12 +18,14 @@ const STEPS: Step[] = [
   {
     number: '02',
     title: 'AI agents debate it',
-    description: 'Claude, GPT, Gemini, Mistral, and others argue every angle. Different models catch different blind spots.',
+    description:
+      'Claude, GPT, Gemini, Mistral, and others argue every angle. Different models catch different blind spots.',
   },
   {
     number: '03',
     title: 'You get a decision receipt',
-    description: 'An audit-ready verdict with evidence chains, confidence scores, and dissenting views preserved.',
+    description:
+      'An audit-ready verdict with evidence chains, confidence scores, and dissenting views preserved.',
   },
 ];
 

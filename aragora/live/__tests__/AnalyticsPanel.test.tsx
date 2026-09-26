@@ -105,10 +105,7 @@ function setupSuccessfulFetch() {
       });
     }
     if (url.includes('/api/debate/') && url.includes('/graph/stats')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockGraphStats),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockGraphStats) });
     }
     return Promise.resolve({ ok: false });
   });
@@ -148,7 +145,7 @@ describe('AnalyticsPanel', () => {
         expect(screen.getByText('[-]')).toBeInTheDocument();
       });
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/analytics/disagreements')
+        expect.stringContaining('/api/analytics/disagreements'),
       );
     });
 
@@ -196,7 +193,7 @@ describe('AnalyticsPanel', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/analytics/role-rotation')
+          expect.stringContaining('/api/analytics/role-rotation'),
         );
       });
     });
@@ -214,7 +211,7 @@ describe('AnalyticsPanel', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/analytics/early-stops')
+          expect.stringContaining('/api/analytics/early-stops'),
         );
       });
     });
@@ -258,10 +255,7 @@ describe('AnalyticsPanel', () => {
     });
 
     it('shows empty state when no disagreements', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ disagreements: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ disagreements: [] }) });
       render(<AnalyticsPanel apiBase="http://localhost:8080" />);
 
       fireEvent.click(screen.getByText('[ANALYTICS]'));
@@ -332,10 +326,7 @@ describe('AnalyticsPanel', () => {
           });
         }
         if (url.includes('/api/analytics/role-rotation')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ summary: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ summary: [] }) });
         }
         return Promise.resolve({ ok: false });
       });
@@ -415,10 +406,7 @@ describe('AnalyticsPanel', () => {
           });
         }
         if (url.includes('/api/analytics/early-stops')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ early_stops: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ early_stops: [] }) });
         }
         return Promise.resolve({ ok: false });
       });
@@ -467,7 +455,7 @@ describe('AnalyticsPanel', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/debate/debate-123/graph/stats')
+          expect.stringContaining('/api/debate/debate-123/graph/stats'),
         );
       });
     });
@@ -567,9 +555,7 @@ describe('AnalyticsPanel', () => {
 
   describe('Error Handling', () => {
     it('shows error message on fetch failure', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-      });
+      mockFetch.mockResolvedValue({ ok: false });
       render(<AnalyticsPanel apiBase="http://localhost:8080" />);
 
       fireEvent.click(screen.getByText('[ANALYTICS]'));
@@ -626,14 +612,14 @@ describe('AnalyticsPanel', () => {
       });
 
       const initialCalls = mockFetch.mock.calls.filter((call: string[]) =>
-        call[0].includes('/api/analytics/')
+        call[0].includes('/api/analytics/'),
       ).length;
 
       fireEvent.click(screen.getByText('[REFRESH]'));
 
       await waitFor(() => {
         const afterCalls = mockFetch.mock.calls.filter((call: string[]) =>
-          call[0].includes('/api/analytics/')
+          call[0].includes('/api/analytics/'),
         ).length;
         expect(afterCalls).toBeGreaterThan(initialCalls);
       });

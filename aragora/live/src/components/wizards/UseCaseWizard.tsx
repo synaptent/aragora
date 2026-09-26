@@ -168,7 +168,7 @@ export function UseCaseWizard({
   // Wizard state
   const [step, setStep] = useState<'select' | 'configure' | 'review' | 'running'>('select');
   const [selectedTemplate, setSelectedTemplate] = useState<UseCaseTemplate | null>(
-    templateId ? USE_CASE_TEMPLATES.find(t => t.id === templateId) || null : null
+    templateId ? USE_CASE_TEMPLATES.find((t) => t.id === templateId) || null : null,
   );
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +176,7 @@ export function UseCaseWizard({
 
   // Form field updates
   const updateField = useCallback((key: string, value: unknown) => {
-    setFormData(prev => ({ ...prev, [key]: value }));
+    setFormData((prev) => ({ ...prev, [key]: value }));
   }, []);
 
   // Select template and advance
@@ -215,10 +215,7 @@ export function UseCaseWizard({
         body: JSON.stringify({
           ...selectedTemplate.defaults,
           ...formData,
-          metadata: {
-            template: selectedTemplate.id,
-            wizard: true,
-          },
+          metadata: { template: selectedTemplate.id, wizard: true },
         }),
       });
 
@@ -283,22 +280,25 @@ export function UseCaseWizard({
               className={`
                 w-6 h-6 rounded-full flex items-center justify-center
                 font-theme-data text-xs
-                ${step === s
-                  ? 'bg-[var(--accent)] text-bg'
-                  : ['select', 'configure', 'review'].indexOf(step) > i
-                    ? 'bg-[var(--accent)]/30 text-[var(--accent)]'
-                    : 'bg-surface border border-[var(--accent)]/30 text-text-muted'
+                ${
+                  step === s
+                    ? 'bg-[var(--accent)] text-bg'
+                    : ['select', 'configure', 'review'].indexOf(step) > i
+                      ? 'bg-[var(--accent)]/30 text-[var(--accent)]'
+                      : 'bg-surface border border-[var(--accent)]/30 text-text-muted'
                 }
               `}
             >
               {i + 1}
             </div>
             {i < 2 && (
-              <div className={`w-8 h-0.5 ${
-                ['select', 'configure', 'review'].indexOf(step) > i
-                  ? 'bg-[var(--accent)]/50'
-                  : 'bg-[var(--accent)]/20'
-              }`} />
+              <div
+                className={`w-8 h-0.5 ${
+                  ['select', 'configure', 'review'].indexOf(step) > i
+                    ? 'bg-[var(--accent)]/50'
+                    : 'bg-[var(--accent)]/20'
+                }`}
+              />
             )}
           </div>
         ))}
@@ -315,10 +315,7 @@ export function UseCaseWizard({
 
         {/* Step: Select template */}
         {step === 'select' && (
-          <TemplateSelector
-            templates={USE_CASE_TEMPLATES}
-            onSelect={handleSelectTemplate}
-          />
+          <TemplateSelector templates={USE_CASE_TEMPLATES} onSelect={handleSelectTemplate} />
         )}
 
         {/* Step: Configure */}
@@ -333,10 +330,7 @@ export function UseCaseWizard({
 
         {/* Step: Review */}
         {step === 'review' && selectedTemplate && (
-          <ReviewStep
-            template={selectedTemplate}
-            formData={formData}
-          />
+          <ReviewStep template={selectedTemplate} formData={formData} />
         )}
 
         {/* Step: Running */}
@@ -380,9 +374,10 @@ export function UseCaseWizard({
                 disabled={isSubmitting}
                 className={`
                   px-4 py-1.5 font-theme-data text-sm transition-colors
-                  ${isSubmitting
-                    ? 'bg-[var(--accent)]/20 text-[var(--accent)]/50 cursor-wait'
-                    : 'bg-[var(--accent)] text-bg hover:bg-[var(--accent)]/90'
+                  ${
+                    isSubmitting
+                      ? 'bg-[var(--accent)]/20 text-[var(--accent)]/50 cursor-wait'
+                      : 'bg-[var(--accent)] text-bg hover:bg-[var(--accent)]/90'
                   }
                 `}
               >
@@ -407,11 +402,14 @@ function TemplateSelector({
   onSelect: (template: UseCaseTemplate) => void;
 }) {
   // Group templates by category
-  const grouped = templates.reduce((acc, t) => {
-    if (!acc[t.category]) acc[t.category] = [];
-    acc[t.category].push(t);
-    return acc;
-  }, {} as Record<string, UseCaseTemplate[]>);
+  const grouped = templates.reduce(
+    (acc, t) => {
+      if (!acc[t.category]) acc[t.category] = [];
+      acc[t.category].push(t);
+      return acc;
+    },
+    {} as Record<string, UseCaseTemplate[]>,
+  );
 
   const categoryLabels: Record<string, string> = {
     security: 'Security',
@@ -429,7 +427,7 @@ function TemplateSelector({
             {categoryLabels[category]}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {categoryTemplates.map(template => (
+            {categoryTemplates.map((template) => (
               <button
                 key={template.id}
                 onClick={() => onSelect(template)}
@@ -476,7 +474,7 @@ function ConfigureStep({
         </label>
         <textarea
           value={(formData.question as string) || ''}
-          onChange={e => updateField('question', e.target.value)}
+          onChange={(e) => updateField('question', e.target.value)}
           placeholder={`What would you like to ${template.category === 'security' ? 'review' : 'analyze'}?`}
           className="
             w-full px-3 py-2 bg-bg border border-[var(--accent)]/30
@@ -490,14 +488,12 @@ function ConfigureStep({
 
       {/* Agent selection - simplified in simple mode */}
       <div>
-        <label className="block text-sm font-theme-data text-text-muted mb-1">
-          AI Agents
-        </label>
+        <label className="block text-sm font-theme-data text-text-muted mb-1">AI Agents</label>
         {isAdvanced ? (
           <input
             type="text"
             value={(formData.agents as string) || ''}
-            onChange={e => updateField('agents', e.target.value)}
+            onChange={(e) => updateField('agents', e.target.value)}
             placeholder="claude-opus,gpt-4o,gemini-pro"
             className="
               w-full px-3 py-2 bg-bg border border-[var(--accent)]/30
@@ -510,9 +506,7 @@ function ConfigureStep({
             <span className="text-[var(--accent)] font-theme-data">
               {template.suggestedAgents.length} agents selected
             </span>
-            <span className="text-text-muted ml-2">
-              (recommended for this use case)
-            </span>
+            <span className="text-text-muted ml-2">(recommended for this use case)</span>
           </div>
         )}
       </div>
@@ -528,7 +522,7 @@ function ConfigureStep({
             min={1}
             max={10}
             value={(formData.rounds as number) || template.rounds}
-            onChange={e => updateField('rounds', parseInt(e.target.value, 10))}
+            onChange={(e) => updateField('rounds', parseInt(e.target.value, 10))}
             className="
               w-24 px-3 py-2 bg-bg border border-[var(--accent)]/30
               text-text font-theme-data text-sm
@@ -541,9 +535,8 @@ function ConfigureStep({
       {/* File upload hint */}
       <div className="p-3 bg-surface border border-[var(--accent)]/10 rounded">
         <p className="text-xs text-text-muted">
-          <span className="text-[var(--acid-cyan)]">[TIP]</span>{' '}
-          You can also upload files for analysis from the Documents page or drag-and-drop
-          after starting.
+          <span className="text-[var(--acid-cyan)]">[TIP]</span> You can also upload files for
+          analysis from the Documents page or drag-and-drop after starting.
         </p>
       </div>
     </div>
@@ -605,7 +598,7 @@ export function UseCaseQuickSelect({
 
   return (
     <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 ${className}`}>
-      {quickTemplates.map(template => (
+      {quickTemplates.map((template) => (
         <button
           key={template.id}
           onClick={() => onSelect(template.id)}
@@ -615,12 +608,8 @@ export function UseCaseQuickSelect({
             transition-colors text-center
           "
         >
-          <div className="text-[var(--accent)] font-theme-data text-2xl mb-1">
-            {template.icon}
-          </div>
-          <div className="text-xs font-theme-data text-text">
-            {template.name}
-          </div>
+          <div className="text-[var(--accent)] font-theme-data text-2xl mb-1">{template.icon}</div>
+          <div className="text-xs font-theme-data text-text">{template.name}</div>
         </button>
       ))}
     </div>

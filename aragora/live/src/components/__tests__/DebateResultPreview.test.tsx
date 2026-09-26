@@ -61,14 +61,8 @@ describe('DebateResultPreview', () => {
     const share = jest.fn().mockResolvedValue(undefined);
     const writeText = jest.fn().mockResolvedValue(undefined);
 
-    Object.defineProperty(navigator, 'share', {
-      configurable: true,
-      value: share,
-    });
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText },
-    });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
 
     render(<DebateResultPreview result={baseResult} onShare={onShare} />);
 

@@ -94,7 +94,7 @@ export function WorkflowBuilder({
         openConfigPanel(nodeId);
       }
     },
-    [addNode, openConfigPanel]
+    [addNode, openConfigPanel],
   );
 
   // Handle execute
@@ -116,7 +116,7 @@ export function WorkflowBuilder({
         setShowTemplates(false);
       }
     },
-    [createFromTemplate]
+    [createFromTemplate],
   );
 
   if (isLoading) {
@@ -166,10 +166,7 @@ export function WorkflowBuilder({
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-theme-data text-text">Configure Step</h3>
-                <button
-                  onClick={closeConfigPanel}
-                  className="text-text-muted hover:text-text"
-                >
+                <button onClick={closeConfigPanel} className="text-text-muted hover:text-text">
                   ✕
                 </button>
               </div>
@@ -182,9 +179,9 @@ export function WorkflowBuilder({
                     type="text"
                     value={selectedNode.name}
                     onChange={(e) => {
-                      useWorkflowBuilderStore.getState().updateNode(selectedNode.id, {
-                        name: e.target.value,
-                      });
+                      useWorkflowBuilderStore
+                        .getState()
+                        .updateNode(selectedNode.id, { name: e.target.value });
                     }}
                     className="w-full px-3 py-2 text-sm bg-bg border border-border rounded focus:border-[var(--accent)] focus:outline-none"
                   />
@@ -205,9 +202,7 @@ export function WorkflowBuilder({
                     onChange={(e) => {
                       try {
                         const config = JSON.parse(e.target.value);
-                        useWorkflowBuilderStore.getState().updateNode(selectedNode.id, {
-                          config,
-                        });
+                        useWorkflowBuilderStore.getState().updateNode(selectedNode.id, { config });
                       } catch {
                         // Invalid JSON, ignore
                       }
@@ -272,15 +267,11 @@ export function WorkflowBuilder({
                       onClick={() => handleSelectTemplate(template.id)}
                       className="p-4 text-left border border-border rounded-lg hover:border-[var(--accent)] transition-colors"
                     >
-                      <div className="text-sm font-theme-data text-text mb-1">
-                        {template.name}
-                      </div>
+                      <div className="text-sm font-theme-data text-text mb-1">{template.name}</div>
                       <div className="text-xs text-text-muted line-clamp-2">
                         {template.description}
                       </div>
-                      <div className="mt-2 text-xs text-[var(--accent)]">
-                        {template.category}
-                      </div>
+                      <div className="mt-2 text-xs text-[var(--accent)]">{template.category}</div>
                     </button>
                   ))}
                 </div>

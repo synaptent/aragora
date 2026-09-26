@@ -27,12 +27,7 @@ test.describe('Link Checker - aragora.ai', () => {
 
       anchors.forEach((a) => {
         const href = a.getAttribute('href');
-        if (
-          href &&
-          (href.startsWith('/') ||
-            href.startsWith(domain) ||
-            href.startsWith('#'))
-        ) {
+        if (href && (href.startsWith('/') || href.startsWith(domain) || href.startsWith('#'))) {
           // Skip anchor-only links
           if (href !== '#' && !href.startsWith('#')) {
             internalLinks.push({
@@ -64,11 +59,7 @@ test.describe('Link Checker - aragora.ai', () => {
 
         const status = response?.status() || 0;
         if (status >= 400) {
-          brokenLinks.push({
-            url: link.href,
-            text: link.text,
-            status,
-          });
+          brokenLinks.push({ url: link.href, text: link.text, status });
         }
       } catch (error) {
         brokenLinks.push({
@@ -83,9 +74,7 @@ test.describe('Link Checker - aragora.ai', () => {
     if (brokenLinks.length > 0) {
       console.log('\n=== Broken Links on aragora.ai ===');
       brokenLinks.forEach((link) => {
-        console.log(
-          `  [${link.status || 'ERR'}] ${link.url} (${link.text || 'no text'})`
-        );
+        console.log(`  [${link.status || 'ERR'}] ${link.url} (${link.text || 'no text'})`);
         if (link.error) {
           console.log(`    Error: ${link.error}`);
         }
@@ -95,10 +84,7 @@ test.describe('Link Checker - aragora.ai', () => {
     expect(brokenLinks.filter((l) => l.status === 404)).toHaveLength(0);
   });
 
-  test('should have no broken internal links on about page', async ({
-    page,
-    productionPage,
-  }) => {
+  test('should have no broken internal links on about page', async ({ page, productionPage }) => {
     await productionPage.goto(`${PRODUCTION_DOMAINS.landing}/about`);
     await productionPage.waitForHydration();
 
@@ -124,10 +110,7 @@ test.describe('Link Checker - aragora.ai', () => {
       await page.waitForTimeout(500);
 
       try {
-        const response = await page.goto(link, {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
-        });
+        const response = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
         if (response && response.status() >= 400) {
           brokenLinks.push(`${link} (${response.status()})`);
@@ -159,9 +142,7 @@ test.describe('Link Checker - live.aragora.ai', () => {
         const href = a.getAttribute('href');
         if (href && (href.startsWith('/') || href.startsWith(domain))) {
           if (href !== '#') {
-            internalLinks.push(
-              href.startsWith('/') ? `${domain}${href}` : href
-            );
+            internalLinks.push(href.startsWith('/') ? `${domain}${href}` : href);
           }
         }
       });
@@ -177,10 +158,7 @@ test.describe('Link Checker - live.aragora.ai', () => {
       await page.waitForTimeout(500);
 
       try {
-        const response = await page.goto(link, {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
-        });
+        const response = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
         const status = response?.status() || 0;
         if (status >= 400) {
@@ -219,10 +197,7 @@ test.describe('External Link Verification', () => {
       anchors.forEach((a) => {
         const href = a.getAttribute('href');
         if (href && !href.includes('aragora.ai')) {
-          links.push({
-            href,
-            text: (a.textContent || '').trim().substring(0, 30),
-          });
+          links.push({ href, text: (a.textContent || '').trim().substring(0, 30) });
         }
       });
 
@@ -267,10 +242,7 @@ test.describe('External Link Verification', () => {
 });
 
 test.describe('Image Source Verification', () => {
-  test('all images should have valid sources on aragora.ai', async ({
-    page,
-    productionPage,
-  }) => {
+  test('all images should have valid sources on aragora.ai', async ({ page, productionPage }) => {
     await productionPage.goto(PRODUCTION_DOMAINS.landing);
     await productionPage.waitForHydration();
 
@@ -329,7 +301,9 @@ test.describe('Image Source Verification', () => {
 
     const images = await page.evaluate(() => {
       const imgs = document.querySelectorAll('img[src]');
-      return Array.from(imgs).map((img) => img.getAttribute('src')).filter(Boolean);
+      return Array.from(imgs)
+        .map((img) => img.getAttribute('src'))
+        .filter(Boolean);
     });
 
     console.log(`Found ${images.length} images on dashboard`);
@@ -373,10 +347,7 @@ test.describe('Navigation Link Consistency', () => {
 
       const links = nav.querySelectorAll('a[href]');
       return Array.from(links)
-        .map((a) => ({
-          href: a.getAttribute('href'),
-          text: a.textContent?.trim(),
-        }))
+        .map((a) => ({ href: a.getAttribute('href'), text: a.textContent?.trim() }))
         .filter((l) => l.href && l.href !== '#');
     });
 
@@ -396,10 +367,7 @@ test.describe('Navigation Link Consistency', () => {
       await page.waitForTimeout(500);
 
       try {
-        const response = await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
-        });
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
         const status = response?.status() || 0;
         console.log(`  [${status}] ${link.text} -> ${url}`);
@@ -424,10 +392,7 @@ test.describe('Footer Links', () => {
 
       const links = footer.querySelectorAll('a[href]');
       return Array.from(links)
-        .map((a) => ({
-          href: a.getAttribute('href'),
-          text: a.textContent?.trim(),
-        }))
+        .map((a) => ({ href: a.getAttribute('href'), text: a.textContent?.trim() }))
         .filter((l) => l.href && l.href !== '#');
     });
 
@@ -451,10 +416,7 @@ test.describe('Footer Links', () => {
       await page.waitForTimeout(300);
 
       try {
-        const response = await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 10000,
-        });
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
 
         const status = response?.status() || 0;
         if (status >= 400) {

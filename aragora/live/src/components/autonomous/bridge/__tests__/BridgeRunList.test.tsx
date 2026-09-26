@@ -7,9 +7,7 @@ import { BridgeRunList } from '../BridgeRunList';
 
 jest.mock('@/hooks/useAgentBridgeRuns');
 
-const mockUseAgentBridgeRuns = useAgentBridgeRuns as jest.MockedFunction<
-  typeof useAgentBridgeRuns
->;
+const mockUseAgentBridgeRuns = useAgentBridgeRuns as jest.MockedFunction<typeof useAgentBridgeRuns>;
 
 function buildRunSummary(overrides: Partial<AgentBridgeRunSummary> = {}): AgentBridgeRunSummary {
   return {

@@ -10,7 +10,7 @@ import { NodeContextPanel } from '@/components/command/NodeContextPanel';
 import { AutoFlowOrchestrator } from '@/components/command/AutoFlowOrchestrator';
 
 const UnifiedDAGCanvas = dynamic(
-  () => import('@/components/unified-dag/UnifiedDAGCanvas').then(m => m.UnifiedDAGCanvas),
+  () => import('@/components/unified-dag/UnifiedDAGCanvas').then((m) => m.UnifiedDAGCanvas),
   { ssr: false, loading: () => <CanvasLoading /> },
 );
 
@@ -59,10 +59,7 @@ function CommandPageContent() {
         <div className="flex-1 flex flex-col relative">
           {!cc.graphId ? (
             <div className="flex-1 flex items-center justify-center p-8">
-              <BrainDumpInput
-                onSubmit={cc.submitBrainDump}
-                loading={cc.autoFlowPhase !== null}
-              />
+              <BrainDumpInput onSubmit={cc.submitBrainDump} loading={cc.autoFlowPhase !== null} />
             </div>
           ) : (
             <div className="flex-1 relative">
@@ -98,7 +95,7 @@ function CommandPageContent() {
       <LiveActivityFeed
         events={cc.events}
         onEventClick={(id) => {
-          const event = cc.events.find(e => e.id === id);
+          const event = cc.events.find((e) => e.id === id);
           if (event?.nodeId) cc.setSelectedNodeId(event.nodeId);
         }}
       />

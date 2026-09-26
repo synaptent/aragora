@@ -13,17 +13,10 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { GenesisExplorer } from '../src/components/GenesisExplorer';
 
 // Mock the useAragoraClient hook
-jest.mock('../src/hooks/useAragoraClient', () => ({
-  useAragoraClient: () => mockClient,
-}));
+jest.mock('../src/hooks/useAragoraClient', () => ({ useAragoraClient: () => mockClient }));
 
 const mockClient = {
-  genesis: {
-    stats: jest.fn(),
-    topGenomes: jest.fn(),
-    population: jest.fn(),
-    lineage: jest.fn(),
-  },
+  genesis: { stats: jest.fn(), topGenomes: jest.fn(), population: jest.fn(), lineage: jest.fn() },
 };
 
 const mockStats = {
@@ -38,41 +31,16 @@ const mockStats = {
 
 const mockTopGenomes = {
   genomes: [
-    {
-      genome_id: 'genome-001-abcd',
-      generation: 5,
-      fitness: 0.95,
-      debates_count: 28,
-    },
-    {
-      genome_id: 'genome-002-efgh',
-      generation: 4,
-      fitness: 0.89,
-      debates_count: 22,
-    },
-    {
-      genome_id: 'genome-003-ijkl',
-      generation: 5,
-      fitness: 0.85,
-      debates_count: 19,
-    },
+    { genome_id: 'genome-001-abcd', generation: 5, fitness: 0.95, debates_count: 28 },
+    { genome_id: 'genome-002-efgh', generation: 4, fitness: 0.89, debates_count: 22 },
+    { genome_id: 'genome-003-ijkl', generation: 5, fitness: 0.85, debates_count: 19 },
   ],
 };
 
 const mockPopulation = {
   population: [
-    {
-      genome_id: 'pop-001-xxxx',
-      generation: 6,
-      fitness: 0.78,
-      debates_count: 12,
-    },
-    {
-      genome_id: 'pop-002-yyyy',
-      generation: 6,
-      fitness: 0.72,
-      debates_count: 8,
-    },
+    { genome_id: 'pop-001-xxxx', generation: 6, fitness: 0.78, debates_count: 12 },
+    { genome_id: 'pop-002-yyyy', generation: 6, fitness: 0.72, debates_count: 8 },
   ],
   generation: 6,
 };
@@ -85,9 +53,7 @@ const mockLineage = {
       { genome_id: 'ancestor-001', generation: 4 },
       { genome_id: 'ancestor-002', generation: 3 },
     ],
-    descendants: [
-      { genome_id: 'descendant-001', generation: 6, fitness: 0.82 },
-    ],
+    descendants: [{ genome_id: 'descendant-001', generation: 6, fitness: 0.82 }],
   },
 };
 

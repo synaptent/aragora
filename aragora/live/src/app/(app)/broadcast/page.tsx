@@ -110,24 +110,26 @@ export default function BroadcastPage() {
       if (res.ok) {
         const data = await res.json();
         // Map podcast episode format to our Episode interface
-        const mappedEpisodes = (data.episodes || []).map((ep: {
-          debate_id: string;
-          task?: string;
-          agents?: string[];
-          audio_url?: string;
-          duration_seconds?: number;
-          file_size_bytes?: number;
-          generated_at?: string;
-        }) => ({
-          id: ep.debate_id,
-          title: ep.task || ep.debate_id,
-          debate_id: ep.debate_id,
-          duration_seconds: ep.duration_seconds || 0,
-          file_size_bytes: ep.file_size_bytes || 0,
-          format: 'mp3',
-          created_at: ep.generated_at || new Date().toISOString(),
-          agents: ep.agents || [],
-        }));
+        const mappedEpisodes = (data.episodes || []).map(
+          (ep: {
+            debate_id: string;
+            task?: string;
+            agents?: string[];
+            audio_url?: string;
+            duration_seconds?: number;
+            file_size_bytes?: number;
+            generated_at?: string;
+          }) => ({
+            id: ep.debate_id,
+            title: ep.task || ep.debate_id,
+            debate_id: ep.debate_id,
+            duration_seconds: ep.duration_seconds || 0,
+            file_size_bytes: ep.file_size_bytes || 0,
+            format: 'mp3',
+            created_at: ep.generated_at || new Date().toISOString(),
+            agents: ep.agents || [],
+          }),
+        );
         setEpisodes(mappedEpisodes);
         setError(null);
       } else if (res.status === 503) {
@@ -157,7 +159,13 @@ export default function BroadcastPage() {
   const handleGenerateEpisode = async () => {
     if (!generator.selectedDebate) return;
 
-    setGenerator((prev) => ({ ...prev, generating: true, progress: 'Starting generation...', error: null, result: null }));
+    setGenerator((prev) => ({
+      ...prev,
+      generating: true,
+      progress: 'Starting generation...',
+      error: null,
+      result: null,
+    }));
 
     try {
       const params = new URLSearchParams();
@@ -168,9 +176,10 @@ export default function BroadcastPage() {
 
       setGenerator((prev) => ({ ...prev, progress: 'Generating audio...' }));
 
-      const res = await fetch(`${backendUrl}/api/debates/${generator.selectedDebate.id}/broadcast/full?${params}`, {
-        method: 'POST',
-      });
+      const res = await fetch(
+        `${backendUrl}/api/debates/${generator.selectedDebate.id}/broadcast/full?${params}`,
+        { method: 'POST' },
+      );
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -269,8 +278,8 @@ export default function BroadcastPage() {
               {'>'} BROADCAST CENTER
             </h1>
             <p className="text-sm font-theme-data text-text-muted">
-              Generate and manage podcast episodes from debate transcripts.
-              Stream or download audio for any completed debate.
+              Generate and manage podcast episodes from debate transcripts. Stream or download audio
+              for any completed debate.
             </p>
           </div>
 
@@ -293,7 +302,10 @@ export default function BroadcastPage() {
                 </div>
                 {status.tts_backends.length > 0 && (
                   <div className="text-text-muted">
-                    TTS: <span className="text-[var(--acid-cyan)]">{status.tts_backends.join(', ')}</span>
+                    TTS:{' '}
+                    <span className="text-[var(--acid-cyan)]">
+                      {status.tts_backends.join(', ')}
+                    </span>
                   </div>
                 )}
                 <a
@@ -311,7 +323,9 @@ export default function BroadcastPage() {
           {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 border border-warning/30 bg-warning/10">
-              <p className="text-xs font-theme-data text-warning">{'>'} {error}</p>
+              <p className="text-xs font-theme-data text-warning">
+                {'>'} {error}
+              </p>
             </div>
           )}
 
@@ -329,7 +343,9 @@ export default function BroadcastPage() {
                 {loading ? (
                   <div className="p-8 text-center">
                     <div className="w-6 h-6 border-2 border-[var(--accent)]/40 border-t-acid-green rounded-full animate-spin mx-auto" />
-                    <p className="mt-2 text-xs font-theme-data text-text-muted">Loading episodes...</p>
+                    <p className="mt-2 text-xs font-theme-data text-text-muted">
+                      Loading episodes...
+                    </p>
                   </div>
                 ) : episodes.length === 0 ? (
                   <div className="p-8 text-center">
@@ -369,9 +385,7 @@ export default function BroadcastPage() {
                               </div>
                             )}
                           </div>
-                          <div className="text-xs font-theme-data text-[var(--accent)]">
-                            ▶
-                          </div>
+                          <div className="text-xs font-theme-data text-[var(--accent)]">▶</div>
                         </div>
                       </button>
                     ))}
@@ -425,7 +439,9 @@ export default function BroadcastPage() {
 
                     {selectedEpisode.agents && selectedEpisode.agents.length > 0 && (
                       <div className="pt-2 border-t border-[var(--accent)]/20">
-                        <div className="text-xs font-theme-data text-text-muted mb-1">PARTICIPANTS</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          PARTICIPANTS
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {selectedEpisode.agents.map((agent) => (
                             <span
@@ -511,7 +527,8 @@ export default function BroadcastPage() {
                       <option value="">-- Choose a completed debate --</option>
                       {debates.map((debate) => (
                         <option key={debate.id} value={debate.id}>
-                          {debate.task?.slice(0, 50) || debate.id} ({new Date(debate.created_at).toLocaleDateString()})
+                          {debate.task?.slice(0, 50) || debate.id} (
+                          {new Date(debate.created_at).toLocaleDateString()})
                         </option>
                       ))}
                     </select>
@@ -525,7 +542,9 @@ export default function BroadcastPage() {
                     <input
                       type="text"
                       value={generator.customTitle}
-                      onChange={(e) => setGenerator((prev) => ({ ...prev, customTitle: e.target.value }))}
+                      onChange={(e) =>
+                        setGenerator((prev) => ({ ...prev, customTitle: e.target.value }))
+                      }
                       disabled={generator.generating}
                       placeholder="Leave blank to auto-generate"
                       className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-sm font-theme-data text-text focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
@@ -539,7 +558,9 @@ export default function BroadcastPage() {
                     </label>
                     <textarea
                       value={generator.customDescription}
-                      onChange={(e) => setGenerator((prev) => ({ ...prev, customDescription: e.target.value }))}
+                      onChange={(e) =>
+                        setGenerator((prev) => ({ ...prev, customDescription: e.target.value }))
+                      }
                       disabled={generator.generating}
                       placeholder="Episode description for podcast feed"
                       rows={2}
@@ -553,7 +574,9 @@ export default function BroadcastPage() {
                       <input
                         type="checkbox"
                         checked={generator.generateVideo}
-                        onChange={(e) => setGenerator((prev) => ({ ...prev, generateVideo: e.target.checked }))}
+                        onChange={(e) =>
+                          setGenerator((prev) => ({ ...prev, generateVideo: e.target.checked }))
+                        }
                         disabled={generator.generating}
                         className="accent-acid-green"
                       />
@@ -564,7 +587,10 @@ export default function BroadcastPage() {
                   {/* TTS Info */}
                   {status?.tts_backends && status.tts_backends.length > 0 && (
                     <div className="text-xs font-theme-data text-text-muted">
-                      Available TTS: <span className="text-[var(--acid-cyan)]">{status.tts_backends.join(', ')}</span>
+                      Available TTS:{' '}
+                      <span className="text-[var(--acid-cyan)]">
+                        {status.tts_backends.join(', ')}
+                      </span>
                     </div>
                   )}
 
@@ -573,20 +599,26 @@ export default function BroadcastPage() {
                     <div className="p-3 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-[var(--acid-cyan)]/40 border-t-acid-cyan rounded-full animate-spin" />
-                        <span className="text-xs font-theme-data text-[var(--acid-cyan)]">{generator.progress}</span>
+                        <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                          {generator.progress}
+                        </span>
                       </div>
                     </div>
                   )}
 
                   {generator.error && (
                     <div className="p-3 border border-warning/30 bg-warning/5">
-                      <p className="text-xs font-theme-data text-warning">{'>'} {generator.error}</p>
+                      <p className="text-xs font-theme-data text-warning">
+                        {'>'} {generator.error}
+                      </p>
                     </div>
                   )}
 
                   {generator.result && (
                     <div className="p-3 border border-[var(--accent)]/30 bg-[var(--accent)]/5 space-y-2">
-                      <p className="text-xs font-theme-data text-[var(--accent)]">{'>'} Episode generated successfully!</p>
+                      <p className="text-xs font-theme-data text-[var(--accent)]">
+                        {'>'} Episode generated successfully!
+                      </p>
                       {generator.result.audio_url && (
                         <a
                           href={`${backendUrl}${generator.result.audio_url}`}
@@ -643,23 +675,33 @@ export default function BroadcastPage() {
                 <div>
                   <div className="text-[var(--accent)] mb-1">WHAT IS BROADCAST?</div>
                   <p>
-                    Broadcast converts debate transcripts into podcast-style audio using text-to-speech.
-                    Each participant gets a unique voice, making debates easy to consume on the go.
+                    Broadcast converts debate transcripts into podcast-style audio using
+                    text-to-speech. Each participant gets a unique voice, making debates easy to
+                    consume on the go.
                   </p>
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">TTS BACKENDS</div>
                   <ul className="list-disc list-inside space-y-1">
-                    <li><span className="text-[var(--acid-cyan)]">edge-tts</span> - Microsoft Edge TTS (free, high quality)</li>
-                    <li><span className="text-[var(--acid-cyan)]">elevenlabs</span> - ElevenLabs API (premium voices)</li>
-                    <li><span className="text-[var(--acid-cyan)]">pyttsx3</span> - Local TTS (offline, lower quality)</li>
+                    <li>
+                      <span className="text-[var(--acid-cyan)]">edge-tts</span> - Microsoft Edge TTS
+                      (free, high quality)
+                    </li>
+                    <li>
+                      <span className="text-[var(--acid-cyan)]">elevenlabs</span> - ElevenLabs API
+                      (premium voices)
+                    </li>
+                    <li>
+                      <span className="text-[var(--acid-cyan)]">pyttsx3</span> - Local TTS (offline,
+                      lower quality)
+                    </li>
                   </ul>
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">GENERATING EPISODES</div>
                   <p>
-                    Navigate to any completed debate and click the Broadcast button to generate audio.
-                    Episodes are automatically added to the RSS feed for podcast apps.
+                    Navigate to any completed debate and click the Broadcast button to generate
+                    audio. Episodes are automatically added to the RSS feed for podcast apps.
                   </p>
                 </div>
                 <div>

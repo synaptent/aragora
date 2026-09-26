@@ -14,21 +14,16 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 test.describe('Accessibility - aragora.ai', () => {
   for (const pageInfo of LANDING_PAGES) {
-    test(`${pageInfo.name} should meet WCAG 2.1 AA standards`, async ({
-      page,
-      productionPage,
-    }) => {
+    test(`${pageInfo.name} should meet WCAG 2.1 AA standards`, async ({ page, productionPage }) => {
       const url = `${PRODUCTION_DOMAINS.landing}${pageInfo.path}`;
       await productionPage.goto(url);
       await productionPage.waitForHydration();
 
-      const results = await new AxeBuilder({ page })
-        .withTags(WCAG_TAGS)
-        .analyze();
+      const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
 
       // Filter to critical and serious violations
       const criticalViolations = results.violations.filter(
-        (v) => v.impact === 'critical' || v.impact === 'serious'
+        (v) => v.impact === 'critical' || v.impact === 'serious',
       );
 
       // Log violations for debugging
@@ -58,7 +53,7 @@ test.describe('Accessibility - aragora.ai', () => {
 
       expect(
         criticalViolations,
-        `Found ${criticalViolations.length} critical/serious accessibility violations`
+        `Found ${criticalViolations.length} critical/serious accessibility violations`,
       ).toHaveLength(0);
     });
   }
@@ -66,10 +61,7 @@ test.describe('Accessibility - aragora.ai', () => {
 
 test.describe('Accessibility - live.aragora.ai', () => {
   for (const pageInfo of DASHBOARD_PAGES) {
-    test(`${pageInfo.name} should meet WCAG 2.1 AA standards`, async ({
-      page,
-      productionPage,
-    }) => {
+    test(`${pageInfo.name} should meet WCAG 2.1 AA standards`, async ({ page, productionPage }) => {
       const url = `${PRODUCTION_DOMAINS.dashboard}${pageInfo.path}`;
       await productionPage.goto(url);
       await productionPage.waitForHydration();
@@ -82,9 +74,7 @@ test.describe('Accessibility - live.aragora.ai', () => {
         .analyze();
 
       // Only fail on critical violations
-      const criticalViolations = results.violations.filter(
-        (v) => v.impact === 'critical'
-      );
+      const criticalViolations = results.violations.filter((v) => v.impact === 'critical');
 
       if (criticalViolations.length > 0) {
         console.log(`\n=== Critical accessibility violations on ${pageInfo.name} ===`);
@@ -97,7 +87,7 @@ test.describe('Accessibility - live.aragora.ai', () => {
 
       expect(
         criticalViolations,
-        `Found ${criticalViolations.length} critical accessibility violations`
+        `Found ${criticalViolations.length} critical accessibility violations`,
       ).toHaveLength(0);
     });
   }
@@ -114,10 +104,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
     // First focusable element should receive focus
     const focusedElement = await page.evaluate(() => {
       const el = document.activeElement;
-      return {
-        tagName: el?.tagName,
-        hasVisibleFocus: el !== document.body,
-      };
+      return { tagName: el?.tagName, hasVisibleFocus: el !== document.body };
     });
 
     expect(focusedElement.hasVisibleFocus).toBe(true);
@@ -144,10 +131,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
     const focusedElement = await page.evaluate(() => {
       const el = document.activeElement;
-      return {
-        tagName: el?.tagName,
-        hasVisibleFocus: el !== document.body,
-      };
+      return { tagName: el?.tagName, hasVisibleFocus: el !== document.body };
     });
 
     expect(focusedElement.hasVisibleFocus).toBe(true);
@@ -178,13 +162,9 @@ test.describe('Accessibility - Color Contrast', () => {
     await productionPage.goto(PRODUCTION_DOMAINS.landing);
     await productionPage.waitForHydration();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2aa'])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).analyze();
 
-    const contrastViolations = results.violations.filter(
-      (v) => v.id === 'color-contrast'
-    );
+    const contrastViolations = results.violations.filter((v) => v.id === 'color-contrast');
 
     if (contrastViolations.length > 0) {
       console.log('\n=== Color Contrast Violations ===');
@@ -208,20 +188,18 @@ test.describe('Accessibility - Color Contrast', () => {
     await productionPage.waitForHydration();
     await productionPage.dismissBootAnimation();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2aa'])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).analyze();
 
-    const contrastViolations = results.violations.filter(
-      (v) => v.id === 'color-contrast'
-    );
+    const contrastViolations = results.violations.filter((v) => v.id === 'color-contrast');
 
     if (contrastViolations.length > 0) {
-      console.log(`Dashboard has ${contrastViolations[0].nodes.length} contrast issues (informational)`);
+      console.log(
+        `Dashboard has ${contrastViolations[0].nodes.length} contrast issues (informational)`,
+      );
     }
 
     // Allow up to 20 contrast issues for CRT-themed styling
-    const totalNodes = contrastViolations.flatMap(v => v.nodes).length;
+    const totalNodes = contrastViolations.flatMap((v) => v.nodes).length;
     expect(totalNodes, `Found ${totalNodes} contrast issues`).toBeLessThanOrEqual(20);
   });
 });
@@ -233,9 +211,7 @@ test.describe('Accessibility - Images', () => {
 
     const results = await new AxeBuilder({ page }).analyze();
 
-    const imageViolations = results.violations.filter(
-      (v) => v.id === 'image-alt'
-    );
+    const imageViolations = results.violations.filter((v) => v.id === 'image-alt');
 
     if (imageViolations.length > 0) {
       console.log('\n=== Images without alt text ===');
@@ -257,9 +233,7 @@ test.describe('Accessibility - Forms', () => {
 
     const results = await new AxeBuilder({ page }).analyze();
 
-    const labelViolations = results.violations.filter(
-      (v) => v.id.includes('label')
-    );
+    const labelViolations = results.violations.filter((v) => v.id.includes('label'));
 
     if (labelViolations.length > 0) {
       console.log('\n=== Form Label Issues ===');
@@ -301,19 +275,14 @@ test.describe('Accessibility - Headings', () => {
     expect(headings.h1Count).toBeLessThanOrEqual(1);
   });
 
-  test('live.aragora.ai should have proper heading hierarchy', async ({
-    page,
-    productionPage,
-  }) => {
+  test('live.aragora.ai should have proper heading hierarchy', async ({ page, productionPage }) => {
     await productionPage.goto(PRODUCTION_DOMAINS.dashboard);
     await productionPage.waitForHydration();
     await productionPage.dismissBootAnimation();
 
     const headings = await page.evaluate(() => {
       const h1s = document.querySelectorAll('h1');
-      return {
-        h1Count: h1s.length,
-      };
+      return { h1Count: h1s.length };
     });
 
     expect(headings.h1Count).toBeLessThanOrEqual(1);
@@ -325,12 +294,10 @@ test.describe('Accessibility - ARIA', () => {
     await productionPage.goto(PRODUCTION_DOMAINS.landing);
     await productionPage.waitForHydration();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['cat.aria'])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(['cat.aria']).analyze();
 
     const ariaViolations = results.violations.filter(
-      (v) => v.impact === 'critical' || v.impact === 'serious'
+      (v) => v.impact === 'critical' || v.impact === 'serious',
     );
 
     if (ariaViolations.length > 0) {
@@ -343,18 +310,14 @@ test.describe('Accessibility - ARIA', () => {
     expect(ariaViolations).toHaveLength(0);
   });
 
-  test('interactive elements should have accessible names', async ({
-    page,
-    productionPage,
-  }) => {
+  test('interactive elements should have accessible names', async ({ page, productionPage }) => {
     await productionPage.goto(PRODUCTION_DOMAINS.landing);
     await productionPage.waitForHydration();
 
     const results = await new AxeBuilder({ page }).analyze();
 
     const nameViolations = results.violations.filter(
-      (v) =>
-        v.id === 'button-name' || v.id === 'link-name' || v.id === 'input-button-name'
+      (v) => v.id === 'button-name' || v.id === 'link-name' || v.id === 'input-button-name',
     );
 
     if (nameViolations.length > 0) {
@@ -395,12 +358,10 @@ test.describe('Accessibility - Mobile', () => {
     await productionPage.goto(PRODUCTION_DOMAINS.landing);
     await productionPage.waitForHydration();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(WCAG_TAGS)
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
 
     const criticalViolations = results.violations.filter(
-      (v) => v.impact === 'critical' || v.impact === 'serious'
+      (v) => v.impact === 'critical' || v.impact === 'serious',
     );
 
     if (criticalViolations.length > 0) {
@@ -429,9 +390,7 @@ test.describe('Accessibility - Mobile', () => {
         if (rect.width < 44 || rect.height < 44) {
           if (rect.width > 0 && rect.height > 0) {
             // Only count visible elements
-            small.push(
-              `${el.tagName} (${Math.round(rect.width)}x${Math.round(rect.height)})`
-            );
+            small.push(`${el.tagName} (${Math.round(rect.width)}x${Math.round(rect.height)})`);
           }
         }
       });

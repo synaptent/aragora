@@ -113,7 +113,7 @@ export function LiveDebateStream({
   // Merge streaming messages with completed messages for display
   const activeStreams = useMemo(() => {
     return Array.from(streamingMessages.values()).filter(
-      (s) => !s.isComplete && s.content.length > 0
+      (s) => !s.isComplete && s.content.length > 0,
     );
   }, [streamingMessages]);
 
@@ -130,11 +130,10 @@ export function LiveDebateStream({
         <div className="flex items-center gap-3">
           <StatusDot status={status} />
           <div>
-            <div className="text-xs font-theme-data text-[var(--acid-green)]">
-              LIVE DEBATE
-            </div>
+            <div className="text-xs font-theme-data text-[var(--acid-green)]">LIVE DEBATE</div>
             <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
-              {status === 'streaming' && `Round ${currentRound} | ${messages.length} msgs | ${formatElapsed(elapsedSeconds)}`}
+              {status === 'streaming' &&
+                `Round ${currentRound} | ${messages.length} msgs | ${formatElapsed(elapsedSeconds)}`}
               {status === 'connecting' && `Connecting... ${formatElapsed(elapsedSeconds)}`}
               {status === 'polling' && `Polling for updates | ${formatElapsed(elapsedSeconds)}`}
               {status === 'complete' && `Debate complete | ${formatElapsed(elapsedSeconds)}`}
@@ -164,8 +163,16 @@ export function LiveDebateStream({
 
           {/* Connection quality indicator */}
           {connectionQuality && (
-            <span className="text-[10px] font-theme-data text-[var(--text-muted)]" title={`Latency: ${connectionQuality.avgLatencyMs}ms`}>
-              {connectionQuality.avgLatencyMs < 100 ? 'LOW' : connectionQuality.avgLatencyMs < 500 ? 'MED' : 'HIGH'} LAT
+            <span
+              className="text-[10px] font-theme-data text-[var(--text-muted)]"
+              title={`Latency: ${connectionQuality.avgLatencyMs}ms`}
+            >
+              {connectionQuality.avgLatencyMs < 100
+                ? 'LOW'
+                : connectionQuality.avgLatencyMs < 500
+                  ? 'MED'
+                  : 'HIGH'}{' '}
+              LAT
             </span>
           )}
 
@@ -178,7 +185,9 @@ export function LiveDebateStream({
       {/* Task banner */}
       {task && (
         <div className="px-4 py-2 bg-[var(--bg)] border-b border-[var(--border)]">
-          <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">QUESTION</div>
+          <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+            QUESTION
+          </div>
           <div className="text-sm font-theme-data text-[var(--text)]">{task}</div>
         </div>
       )}
@@ -190,7 +199,9 @@ export function LiveDebateStream({
             <div>
               <div className="text-xs font-theme-data text-red-400">{error}</div>
               {errorDetails && (
-                <div className="text-[10px] font-theme-data text-red-400/70 mt-0.5">{errorDetails}</div>
+                <div className="text-[10px] font-theme-data text-red-400/70 mt-0.5">
+                  {errorDetails}
+                </div>
               )}
               {reconnectAttempt > 0 && reconnectAttempt < 15 && (
                 <div className="text-[10px] font-theme-data text-red-400/50 mt-1">
@@ -199,7 +210,8 @@ export function LiveDebateStream({
               )}
               {reconnectAttempt >= 15 && (
                 <div className="text-[10px] font-theme-data text-[var(--acid-yellow)] mt-1">
-                  Auto-reconnect exhausted. Click RETRY or the debate may still be running server-side.
+                  Auto-reconnect exhausted. Click RETRY or the debate may still be running
+                  server-side.
                 </div>
               )}
             </div>
@@ -217,7 +229,8 @@ export function LiveDebateStream({
       {isPolling && !error && (
         <div className="px-4 py-2 bg-[var(--acid-yellow)]/10 border-b border-[var(--acid-yellow)]/30">
           <div className="text-[10px] font-theme-data text-[var(--acid-yellow)]">
-            Live connection unavailable &mdash; polling for updates every 3s. Messages may appear in batches.
+            Live connection unavailable &mdash; polling for updates every 3s. Messages may appear in
+            batches.
           </div>
         </div>
       )}
@@ -320,7 +333,9 @@ function StatusDot({ status }: { status: DebateConnectionStatus }) {
           : 'bg-red-400 shadow-[0_0_6px_#f87171]';
 
   return (
-    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${colorClass} ${status === 'streaming' ? 'animate-pulse' : ''}`} />
+    <span
+      className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${colorClass} ${status === 'streaming' ? 'animate-pulse' : ''}`}
+    />
   );
 }
 
@@ -329,7 +344,9 @@ function MessageBubble({ message }: { message: TranscriptMessage }) {
   const isCritic = message.role === 'critic';
 
   return (
-    <div className={`border border-[var(--border)] p-3 ${isCritic ? 'ml-4 border-l-2 border-l-[var(--acid-yellow)]' : ''}`}>
+    <div
+      className={`border border-[var(--border)] p-3 ${isCritic ? 'ml-4 border-l-2 border-l-[var(--acid-yellow)]' : ''}`}
+    >
       <div className="flex items-center gap-2 mb-1.5">
         <span className={`px-1.5 py-0.5 text-[10px] font-theme-data ${colors.bg} ${colors.text}`}>
           {message.agent.split('-')[0].toUpperCase()}

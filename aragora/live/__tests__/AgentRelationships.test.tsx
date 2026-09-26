@@ -19,12 +19,7 @@ global.fetch = mockFetch;
 
 // Mock logger to prevent console noise
 jest.mock('../src/utils/logger', () => ({
-  logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-  },
+  logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
 // Mock agentColors utility
@@ -195,16 +190,19 @@ describe('AgentRelationships', () => {
         if (url.includes('/rivals')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              rivals: [{
-                agent_a: 'claude-3-opus',
-                agent_b: 'gpt-4o',
-                rivalry_score: 0.5,
-                alliance_score: 0.1,
-                relationship: 'rival',
-                debate_count: 1,
-              }],
-            }),
+            json: () =>
+              Promise.resolve({
+                rivals: [
+                  {
+                    agent_a: 'claude-3-opus',
+                    agent_b: 'gpt-4o',
+                    rivalry_score: 0.5,
+                    alliance_score: 0.1,
+                    relationship: 'rival',
+                    debate_count: 1,
+                  },
+                ],
+              }),
           });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ allies: [] }) });
@@ -224,9 +222,7 @@ describe('AgentRelationships', () => {
     });
 
     it('renders compact badges when compact prop is true', async () => {
-      const { container } = render(
-        <AgentRelationships agentName="claude-3-opus" compact />
-      );
+      const { container } = render(<AgentRelationships agentName="claude-3-opus" compact />);
 
       await waitFor(() => {
         // Should use inline flex layout with gaps
@@ -272,10 +268,10 @@ describe('AgentRelationships', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/agent/claude-3-opus/rivals')
+          expect.stringContaining('/api/agent/claude-3-opus/rivals'),
         );
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/agent/claude-3-opus/allies')
+          expect.stringContaining('/api/agent/claude-3-opus/allies'),
         );
       });
     });
@@ -286,16 +282,19 @@ describe('AgentRelationships', () => {
         if (url.includes('/rivals')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              rivals: [{
-                agent_a: 'claude-3-opus',
-                agent_b: 'opponent-agent',
-                rivalry_score: 0.5,
-                alliance_score: 0.1,
-                relationship: 'rival',
-                debate_count: 5,
-              }],
-            }),
+            json: () =>
+              Promise.resolve({
+                rivals: [
+                  {
+                    agent_a: 'claude-3-opus',
+                    agent_b: 'opponent-agent',
+                    rivalry_score: 0.5,
+                    alliance_score: 0.1,
+                    relationship: 'rival',
+                    debate_count: 5,
+                  },
+                ],
+              }),
           });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ allies: [] }) });
@@ -314,15 +313,12 @@ describe('AgentRelationships', () => {
       setupSuccessfulFetch();
 
       render(
-        <AgentRelationships
-          agentName="claude-3-opus"
-          apiBase="https://custom-api.example.com"
-        />
+        <AgentRelationships agentName="claude-3-opus" apiBase="https://custom-api.example.com" />,
       );
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('https://custom-api.example.com/api/agent/')
+          expect.stringContaining('https://custom-api.example.com/api/agent/'),
         );
       });
     });

@@ -10,12 +10,10 @@ interface UsageTrendProps {
   loading?: boolean;
 }
 
-const METRIC_CONFIG: Record<Metric, {
-  label: string;
-  color: string;
-  barColor: string;
-  format: (v: number) => string;
-}> = {
+const METRIC_CONFIG: Record<
+  Metric,
+  { label: string; color: string; barColor: string; format: (v: number) => string }
+> = {
   debates: {
     label: 'DEBATES',
     color: 'text-green-400',
@@ -57,10 +55,7 @@ export function UsageTrend({ data, loading = false }: UsageTrendProps) {
 
   const { maxValue, values } = useMemo(() => {
     if (!data || data.length === 0) return { maxValue: 1, values: [] };
-    const vals = data.map((point) => ({
-      date: point.date,
-      value: point[metric],
-    }));
+    const vals = data.map((point) => ({ date: point.date, value: point[metric] }));
     const max = Math.max(...vals.map((v) => v.value), 1);
     return { maxValue: max, values: vals };
   }, [data, metric]);
@@ -124,7 +119,9 @@ export function UsageTrend({ data, loading = false }: UsageTrendProps) {
           <div className="flex items-center gap-4 mb-3 text-xs font-theme-data">
             <div>
               <span className="text-[var(--text-muted)]">Current: </span>
-              <span className={config.color}>{config.format(values[values.length - 1]?.value ?? 0)}</span>
+              <span className={config.color}>
+                {config.format(values[values.length - 1]?.value ?? 0)}
+              </span>
             </div>
             <div>
               <span className="text-[var(--text-muted)]">Peak: </span>
@@ -143,11 +140,7 @@ export function UsageTrend({ data, loading = false }: UsageTrendProps) {
             {values.map((point, i) => {
               const heightPercent = (point.value / maxValue) * 100;
               return (
-                <div
-                  key={i}
-                  className="flex-1 group relative"
-                  style={{ height: '100%' }}
-                >
+                <div key={i} className="flex-1 group relative" style={{ height: '100%' }}>
                   <div
                     className={`absolute bottom-0 left-0 right-0 ${config.barColor} opacity-70 hover:opacity-100 transition-opacity rounded-t`}
                     style={{ height: `${Math.max(heightPercent, 2)}%` }}

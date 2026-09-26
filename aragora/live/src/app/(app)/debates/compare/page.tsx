@@ -7,10 +7,7 @@ import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { useBackend } from '@/components/BackendSelector';
 import { getAgentColors } from '@/utils/agentColors';
 import { logger } from '@/utils/logger';
-import {
-  normalizeDecisionPackage,
-  type DecisionPackage,
-} from '../[id]/normalizeDecisionPackage';
+import { normalizeDecisionPackage, type DecisionPackage } from '../[id]/normalizeDecisionPackage';
 
 function formatConfidence(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -88,10 +85,7 @@ function buildMetricRows(left: DecisionPackage, right: DecisionPackage): MetricR
       label: 'Consensus',
       left: left.consensus_reached ? 'Yes' : 'No',
       right: right.consensus_reached ? 'Yes' : 'No',
-      delta:
-        left.consensus_reached === right.consensus_reached
-          ? 'Aligned'
-          : 'Different',
+      delta: left.consensus_reached === right.consensus_reached ? 'Aligned' : 'Different',
     },
     {
       label: 'Confidence',
@@ -134,13 +128,7 @@ interface DebatePackageCardProps {
   pkg: DecisionPackage;
 }
 
-function DebatePackageCard({
-  accent,
-  accentBorder,
-  debateId,
-  label,
-  pkg,
-}: DebatePackageCardProps) {
+function DebatePackageCard({ accent, accentBorder, debateId, label, pkg }: DebatePackageCardProps) {
   return (
     <section className={`border ${accentBorder} bg-[var(--surface)] p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -198,7 +186,9 @@ function DebatePackageCard({
       </div>
 
       <div className="mb-5">
-        <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">AGENT CONFIGURATION</div>
+        <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+          AGENT CONFIGURATION
+        </div>
         <div className="flex flex-wrap gap-2">
           {pkg.agents.length > 0 ? (
             pkg.agents.map((agent) => {
@@ -229,7 +219,9 @@ function DebatePackageCard({
 
       {pkg.explanation && (
         <div className="mb-5">
-          <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">RATIONALE SNAPSHOT</div>
+          <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+            RATIONALE SNAPSHOT
+          </div>
           <div className="border border-[var(--border)] bg-[var(--bg)] p-4 text-sm whitespace-pre-wrap">
             {pkg.explanation}
           </div>
@@ -356,12 +348,9 @@ export default function DebateComparePage() {
     trimId(rightInput).length > 0 &&
     trimId(leftInput) !== trimId(rightInput);
 
-  const agentDiff =
-    leftPkg && rightPkg ? getAgentDiff(leftPkg.agents, rightPkg.agents) : null;
-  const comparisonRows =
-    leftPkg && rightPkg ? buildMetricRows(leftPkg, rightPkg) : [];
-  const outcomeShift =
-    leftPkg && rightPkg ? didOutcomeShift(leftPkg, rightPkg) : false;
+  const agentDiff = leftPkg && rightPkg ? getAgentDiff(leftPkg.agents, rightPkg.agents) : null;
+  const comparisonRows = leftPkg && rightPkg ? buildMetricRows(leftPkg, rightPkg) : [];
+  const outcomeShift = leftPkg && rightPkg ? didOutcomeShift(leftPkg, rightPkg) : false;
 
   return (
     <>
@@ -385,8 +374,8 @@ export default function DebateComparePage() {
                   {'>'} DEBATE RESULT COMPARISON
                 </h1>
                 <p className="text-sm font-theme-data text-[var(--text-muted)] max-w-3xl">
-                  Load two completed debate runs side by side to see how agent
-                  rosters, confidence, and final outcomes changed.
+                  Load two completed debate runs side by side to see how agent rosters, confidence,
+                  and final outcomes changed.
                 </p>
               </div>
               <Link
@@ -445,11 +434,14 @@ export default function DebateComparePage() {
               </button>
             </form>
 
-            {!readyToCompare && leftInput && rightInput && trimId(leftInput) === trimId(rightInput) && (
-              <div className="mt-3 text-xs font-theme-data text-[var(--warning)]">
-                Select two different debate IDs to compare.
-              </div>
-            )}
+            {!readyToCompare &&
+              leftInput &&
+              rightInput &&
+              trimId(leftInput) === trimId(rightInput) && (
+                <div className="mt-3 text-xs font-theme-data text-[var(--warning)]">
+                  Select two different debate IDs to compare.
+                </div>
+              )}
           </div>
 
           {loading && (
@@ -525,7 +517,9 @@ export default function DebateComparePage() {
 
               <div className="grid gap-4 lg:grid-cols-3">
                 <div className="border border-[var(--border)] bg-[var(--surface)] p-4">
-                  <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">SHARED AGENTS</div>
+                  <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+                    SHARED AGENTS
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {agentDiff.shared.length > 0 ? (
                       agentDiff.shared.map((agent) => (
@@ -544,7 +538,9 @@ export default function DebateComparePage() {
                   </div>
                 </div>
                 <div className="border border-[var(--border)] bg-[var(--surface)] p-4">
-                  <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">LEFT ONLY</div>
+                  <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+                    LEFT ONLY
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {agentDiff.leftOnly.length > 0 ? (
                       agentDiff.leftOnly.map((agent) => (
@@ -556,14 +552,14 @@ export default function DebateComparePage() {
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs font-theme-data text-[var(--text-muted)]">
-                        None
-                      </span>
+                      <span className="text-xs font-theme-data text-[var(--text-muted)]">None</span>
                     )}
                   </div>
                 </div>
                 <div className="border border-[var(--border)] bg-[var(--surface)] p-4">
-                  <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">RIGHT ONLY</div>
+                  <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+                    RIGHT ONLY
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {agentDiff.rightOnly.length > 0 ? (
                       agentDiff.rightOnly.map((agent) => (
@@ -575,9 +571,7 @@ export default function DebateComparePage() {
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs font-theme-data text-[var(--text-muted)]">
-                        None
-                      </span>
+                      <span className="text-xs font-theme-data text-[var(--text-muted)]">None</span>
                     )}
                   </div>
                 </div>

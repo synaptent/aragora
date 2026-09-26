@@ -23,7 +23,8 @@ const VERDICT_STYLES: Record<string, string> = {
   PASS: 'text-[var(--acid-green)] border-[var(--acid-green)]/30 bg-[var(--acid-green)]/10',
   FAIL: 'text-red-400 border-red-400/30 bg-red-400/10',
   WARN: 'text-[var(--acid-yellow)] border-[var(--acid-yellow)]/30 bg-[var(--acid-yellow)]/10',
-  CONDITIONAL: 'text-[var(--acid-yellow)] border-[var(--acid-yellow)]/30 bg-[var(--acid-yellow)]/10',
+  CONDITIONAL:
+    'text-[var(--acid-yellow)] border-[var(--acid-yellow)]/30 bg-[var(--acid-yellow)]/10',
 };
 
 function normalizeVerdict(verdict: string): 'PASS' | 'FAIL' | 'WARN' | 'CONDITIONAL' {
@@ -51,7 +52,7 @@ export function RecentReceipts({ limit = 5 }: RecentReceiptsProps) {
   const fetchReceipts = useCallback(async () => {
     try {
       const data = await apiFetch<{ receipts: ReceiptSummary[] }>(
-        `/api/v2/receipts?limit=${limit}`
+        `/api/v2/receipts?limit=${limit}`,
       );
       setReceipts(data.receipts || []);
     } catch (err) {
@@ -69,8 +70,12 @@ export function RecentReceipts({ limit = 5 }: RecentReceiptsProps) {
     return (
       <div className="border border-[var(--border)] p-4">
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-[var(--acid-green)] font-theme-data text-sm font-bold">RECENT RECEIPTS</span>
-          <span className="text-[var(--text-muted)] font-theme-data text-xs animate-pulse">loading...</span>
+          <span className="text-[var(--acid-green)] font-theme-data text-sm font-bold">
+            RECENT RECEIPTS
+          </span>
+          <span className="text-[var(--text-muted)] font-theme-data text-xs animate-pulse">
+            loading...
+          </span>
         </div>
       </div>
     );
@@ -80,13 +85,20 @@ export function RecentReceipts({ limit = 5 }: RecentReceiptsProps) {
     return (
       <div className="border border-[var(--border)] p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[var(--acid-green)] font-theme-data text-sm font-bold">DECISION RECEIPTS</span>
-          <Link href="/receipts" className="text-[var(--acid-cyan)] font-theme-data text-xs hover:text-[var(--acid-green)]">
+          <span className="text-[var(--acid-green)] font-theme-data text-sm font-bold">
+            DECISION RECEIPTS
+          </span>
+          <Link
+            href="/receipts"
+            className="text-[var(--acid-cyan)] font-theme-data text-xs hover:text-[var(--acid-green)]"
+          >
             [VIEW ALL]
           </Link>
         </div>
         <p className="text-[var(--text-muted)] font-theme-data text-xs">
-          {error ? 'Could not load receipts.' : 'No decision receipts yet. Run a debate to generate your first receipt.'}
+          {error
+            ? 'Could not load receipts.'
+            : 'No decision receipts yet. Run a debate to generate your first receipt.'}
         </p>
       </div>
     );
@@ -95,8 +107,13 @@ export function RecentReceipts({ limit = 5 }: RecentReceiptsProps) {
   return (
     <div className="border border-[var(--border)] p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[var(--acid-green)] font-theme-data text-sm font-bold">DECISION RECEIPTS</span>
-        <Link href="/receipts" className="text-[var(--acid-cyan)] font-theme-data text-xs hover:text-[var(--acid-green)]">
+        <span className="text-[var(--acid-green)] font-theme-data text-sm font-bold">
+          DECISION RECEIPTS
+        </span>
+        <Link
+          href="/receipts"
+          className="text-[var(--acid-cyan)] font-theme-data text-xs hover:text-[var(--acid-green)]"
+        >
           [VIEW ALL]
         </Link>
       </div>
@@ -110,7 +127,9 @@ export function RecentReceipts({ limit = 5 }: RecentReceiptsProps) {
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
-                <span className={`px-1.5 py-0.5 text-[10px] font-theme-data font-bold border ${VERDICT_STYLES[normalizeVerdict(receipt.verdict)] || VERDICT_STYLES.WARN}`}>
+                <span
+                  className={`px-1.5 py-0.5 text-[10px] font-theme-data font-bold border ${VERDICT_STYLES[normalizeVerdict(receipt.verdict)] || VERDICT_STYLES.WARN}`}
+                >
                   {normalizeVerdict(receipt.verdict)}
                 </span>
                 <span className="text-xs font-theme-data text-[var(--text)] truncate">
@@ -127,7 +146,9 @@ export function RecentReceipts({ limit = 5 }: RecentReceiptsProps) {
                   {receipt.timestamp ? new Date(receipt.timestamp).toLocaleDateString() : 'Unknown'}
                 </span>
                 <DebateThisButton
-                  question={receipt.input_summary || `Re-examine receipt ${receipt.receipt_id.slice(0, 8)}`}
+                  question={
+                    receipt.input_summary || `Re-examine receipt ${receipt.receipt_id.slice(0, 8)}`
+                  }
                   source="receipt"
                   variant="icon"
                 />

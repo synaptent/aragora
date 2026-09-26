@@ -27,12 +27,7 @@ describe('AragoraError', () => {
   });
 
   it('should create error with all properties', () => {
-    const error = new AragoraError(
-      'Test error',
-      'TEST_CODE',
-      400,
-      { detail: 'extra info' }
-    );
+    const error = new AragoraError('Test error', 'TEST_CODE', 400, { detail: 'extra info' });
 
     expect(error.message).toBe('Test error');
     expect(error.code).toBe('TEST_CODE');
@@ -44,35 +39,33 @@ describe('AragoraError', () => {
   it('should return user-friendly message for TIMEOUT', () => {
     const error = new AragoraError('Timeout', 'TIMEOUT', 408);
     expect(error.toUserMessage()).toBe(
-      'Request timed out. Please try again or check your network connection.'
+      'Request timed out. Please try again or check your network connection.',
     );
   });
 
   it('should return user-friendly message for NETWORK_ERROR', () => {
     const error = new AragoraError('Network failed', 'NETWORK_ERROR', 0);
     expect(error.toUserMessage()).toBe(
-      'Network error. Please check your internet connection and try again.'
+      'Network error. Please check your internet connection and try again.',
     );
   });
 
   it('should return user-friendly message for RATE_LIMITED', () => {
     const error = new AragoraError('Rate limited', 'RATE_LIMITED', 429);
     expect(error.toUserMessage()).toBe(
-      'Too many requests. Please wait a moment before trying again.'
+      'Too many requests. Please wait a moment before trying again.',
     );
   });
 
   it('should return user-friendly message for UNAUTHORIZED', () => {
     const error = new AragoraError('Unauthorized', 'UNAUTHORIZED', 401);
-    expect(error.toUserMessage()).toBe(
-      'Authentication failed. Please sign in again.'
-    );
+    expect(error.toUserMessage()).toBe('Authentication failed. Please sign in again.');
   });
 
   it('should return user-friendly message for FORBIDDEN', () => {
     const error = new AragoraError('Forbidden', 'FORBIDDEN', 403);
     expect(error.toUserMessage()).toBe(
-      'Access denied. You do not have permission to perform this action.'
+      'Access denied. You do not have permission to perform this action.',
     );
   });
 
@@ -117,10 +110,7 @@ describe('AragoraClient', () => {
     });
 
     it('should strip trailing slash from baseUrl', async () => {
-      const client = new AragoraClient({
-        baseUrl: 'https://api.test.com/',
-        apiKey: 'token',
-      });
+      const client = new AragoraClient({ baseUrl: 'https://api.test.com/', apiKey: 'token' });
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -129,10 +119,7 @@ describe('AragoraClient', () => {
 
       await client.health();
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.test.com/api/health',
-        expect.any(Object)
-      );
+      expect(mockFetch).toHaveBeenCalledWith('https://api.test.com/api/health', expect.any(Object));
     });
   });
 
@@ -152,10 +139,7 @@ describe('AragoraClient', () => {
         timestamp: '2024-01-15T10:00:00Z',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(healthResponse),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(healthResponse) });
 
       const result = await client.health();
 
@@ -168,7 +152,7 @@ describe('AragoraClient', () => {
             'Content-Type': 'application/json',
             Authorization: 'Bearer test-token-123',
           }),
-        })
+        }),
       );
     });
   });
@@ -179,47 +163,34 @@ describe('DebatesAPI', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   describe('list', () => {
     it('should list debates without options', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ debates: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
       const result = await client.debates.list();
 
       expect(result).toEqual({ debates: [] });
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/debates',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
     it('should list debates with pagination options', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
-            debates: [{ id: '1' }, { id: '2' }],
-          }),
+        json: () => Promise.resolve({ debates: [{ id: '1' }, { id: '2' }] }),
       });
 
-      const result = await client.debates.list({
-        limit: 10,
-        offset: 20,
-        status: 'completed',
-      });
+      const result = await client.debates.list({ limit: 10, offset: 20, status: 'completed' });
 
       expect(result.debates).toHaveLength(2);
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/debates?limit=10&offset=20&status=completed',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -234,17 +205,14 @@ describe('DebatesAPI', () => {
         rounds: [],
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(debateData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(debateData) });
 
       const result = await client.debates.get('test-123');
 
       expect(result).toEqual(debateData);
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/debates/test-123',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -253,15 +221,10 @@ describe('DebatesAPI', () => {
     it('should create debate with minimal options', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
-            debate_id: 'new-debate-123',
-          }),
+        json: () => Promise.resolve({ debate_id: 'new-debate-123' }),
       });
 
-      const result = await client.debates.create({
-        task: 'Discuss AI safety',
-      });
+      const result = await client.debates.create({ task: 'Discuss AI safety' });
 
       expect(result.debate_id).toBe('new-debate-123');
       expect(mockFetch).toHaveBeenCalledWith(
@@ -269,17 +232,14 @@ describe('DebatesAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ task: 'Discuss AI safety' }),
-        })
+        }),
       );
     });
 
     it('should create debate with all options', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
-            debate_id: 'new-debate-456',
-          }),
+        json: () => Promise.resolve({ debate_id: 'new-debate-456' }),
       });
 
       await client.debates.create({
@@ -296,7 +256,7 @@ describe('DebatesAPI', () => {
             agents: ['claude', 'gpt-4', 'gemini'],
             max_rounds: 5,
           }),
-        })
+        }),
       );
     });
   });
@@ -307,10 +267,7 @@ describe('MFAAPI', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   describe('setup', () => {
@@ -321,17 +278,14 @@ describe('MFAAPI', () => {
         message: 'MFA setup initiated',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(setupResponse),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(setupResponse) });
 
       const result = await client.mfa.setup();
 
       expect(result).toEqual(setupResponse);
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/auth/mfa/setup',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -344,20 +298,14 @@ describe('MFAAPI', () => {
         warning: 'Store these backup codes securely',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(enableResponse),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(enableResponse) });
 
       const result = await client.mfa.enable('123456');
 
       expect(result).toEqual(enableResponse);
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/auth/mfa/enable',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ code: '123456' }),
-        })
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ code: '123456' }) }),
       );
     });
   });
@@ -375,10 +323,7 @@ describe('MFAAPI', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(verifyResponse),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(verifyResponse) });
 
       const result = await client.mfa.verify('pending-token-abc', '654321');
 
@@ -386,11 +331,8 @@ describe('MFAAPI', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/auth/mfa/verify',
         expect.objectContaining({
-          body: JSON.stringify({
-            pending_token: 'pending-token-abc',
-            code: '654321',
-          }),
-        })
+          body: JSON.stringify({ pending_token: 'pending-token-abc', code: '654321' }),
+        }),
       );
     });
   });
@@ -406,9 +348,7 @@ describe('MFAAPI', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/auth/mfa/disable',
-        expect.objectContaining({
-          body: JSON.stringify({ code: '123456' }),
-        })
+        expect.objectContaining({ body: JSON.stringify({ code: '123456' }) }),
       );
     });
 
@@ -422,9 +362,7 @@ describe('MFAAPI', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/auth/mfa/disable',
-        expect.objectContaining({
-          body: JSON.stringify({ password: 'user-password' }),
-        })
+        expect.objectContaining({ body: JSON.stringify({ password: 'user-password' }) }),
       );
     });
   });
@@ -437,19 +375,14 @@ describe('MFAAPI', () => {
         warning: 'Previous codes invalidated',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(response),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(response) });
 
       const result = await client.mfa.regenerateBackupCodes('123456');
 
       expect(result).toEqual(response);
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/auth/mfa/backup-codes',
-        expect.objectContaining({
-          body: JSON.stringify({ code: '123456' }),
-        })
+        expect.objectContaining({ body: JSON.stringify({ code: '123456' }) }),
       );
     });
   });
@@ -460,10 +393,7 @@ describe('BillingAPI', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   describe('usage', () => {
@@ -482,17 +412,14 @@ describe('BillingAPI', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(usageData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(usageData) });
 
       const result = await client.billing.usage();
 
       expect(result).toEqual(usageData);
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/billing/usage',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -519,10 +446,7 @@ describe('BillingAPI', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(subscriptionData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(subscriptionData) });
 
       const result = await client.billing.subscription();
 
@@ -570,10 +494,7 @@ describe('BillingAPI', () => {
         ],
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(plansData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(plansData) });
 
       const result = await client.billing.plans();
 
@@ -585,30 +506,24 @@ describe('BillingAPI', () => {
 
   describe('invoices', () => {
     it('should get invoices with default limit', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ invoices: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ invoices: [] }) });
 
       await client.billing.invoices();
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/billing/invoices?limit=10',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
     it('should get invoices with custom limit', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ invoices: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ invoices: [] }) });
 
       await client.billing.invoices(25);
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/billing/invoices?limit=25',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -631,10 +546,7 @@ describe('BillingAPI', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(forecastData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(forecastData) });
 
       const result = await client.billing.forecast();
 
@@ -649,17 +561,14 @@ describe('BillingAPI', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            checkout: {
-              id: 'cs_123',
-              url: 'https://checkout.stripe.com/pay/cs_123',
-            },
+            checkout: { id: 'cs_123', url: 'https://checkout.stripe.com/pay/cs_123' },
           }),
       });
 
       const result = await client.billing.createCheckout(
         'pro',
         'https://app.aragora.ai/success',
-        'https://app.aragora.ai/cancel'
+        'https://app.aragora.ai/cancel',
       );
 
       expect(result.checkout.url).toContain('stripe.com');
@@ -671,7 +580,7 @@ describe('BillingAPI', () => {
             success_url: 'https://app.aragora.ai/success',
             cancel_url: 'https://app.aragora.ai/cancel',
           }),
-        })
+        }),
       );
     });
   });
@@ -681,9 +590,7 @@ describe('BillingAPI', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
-          Promise.resolve({
-            portal: { url: 'https://billing.stripe.com/portal/ps_123' },
-          }),
+          Promise.resolve({ portal: { url: 'https://billing.stripe.com/portal/ps_123' } }),
       });
 
       const result = await client.billing.createPortal('https://app.aragora.ai/billing');
@@ -714,10 +621,7 @@ describe('BillingAPI', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
-          Promise.resolve({
-            message: 'Subscription resumed',
-            subscription: { status: 'active' },
-          }),
+          Promise.resolve({ message: 'Subscription resumed', subscription: { status: 'active' } }),
       });
 
       const result = await client.billing.resumeSubscription();
@@ -732,21 +636,14 @@ describe('HTTP Error Handling', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   it('should throw AragoraError on 401', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 401,
-      json: () =>
-        Promise.resolve({
-          error: 'Unauthorized',
-          code: 'UNAUTHORIZED',
-        }),
+      json: () => Promise.resolve({ error: 'Unauthorized', code: 'UNAUTHORIZED' }),
     });
 
     try {
@@ -763,11 +660,7 @@ describe('HTTP Error Handling', () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 403,
-      json: () =>
-        Promise.resolve({
-          error: 'Forbidden',
-          code: 'FORBIDDEN',
-        }),
+      json: () => Promise.resolve({ error: 'Forbidden', code: 'FORBIDDEN' }),
     });
 
     try {
@@ -783,11 +676,7 @@ describe('HTTP Error Handling', () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 404,
-      json: () =>
-        Promise.resolve({
-          error: 'Debate not found',
-          code: 'NOT_FOUND',
-        }),
+      json: () => Promise.resolve({ error: 'Debate not found', code: 'NOT_FOUND' }),
     });
 
     try {
@@ -803,11 +692,7 @@ describe('HTTP Error Handling', () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 429,
-      json: () =>
-        Promise.resolve({
-          error: 'Rate limit exceeded',
-          code: 'RATE_LIMITED',
-        }),
+      json: () => Promise.resolve({ error: 'Rate limit exceeded', code: 'RATE_LIMITED' }),
     });
 
     try {
@@ -912,10 +797,7 @@ describe('AgentsAPI', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   it('should list agents', async () => {
@@ -926,18 +808,12 @@ describe('AgentsAPI', () => {
       ],
     };
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(agentsData),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(agentsData) });
 
     const result = await client.agents.list();
 
     expect(result.agents).toHaveLength(2);
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.test.com/api/agents',
-      expect.any(Object)
-    );
+    expect(mockFetch).toHaveBeenCalledWith('https://api.test.com/api/agents', expect.any(Object));
   });
 
   it('should get agent by ID', async () => {
@@ -963,10 +839,7 @@ describe('LeaderboardAPI', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   it('should get leaderboard without limit', async () => {
@@ -986,21 +859,18 @@ describe('LeaderboardAPI', () => {
     expect(result.entries).toHaveLength(2);
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.test.com/api/leaderboard',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('should get leaderboard with limit', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ entries: [] }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ entries: [] }) });
 
     await client.leaderboard.get({ limit: 5 });
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.test.com/api/leaderboard?limit=5',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 });
@@ -1010,41 +880,31 @@ describe('AnalyticsAPI', () => {
 
   beforeEach(() => {
     mockFetch.mockClear();
-    client = new AragoraClient({
-      baseUrl: 'https://api.test.com',
-      apiKey: 'test-token',
-    });
+    client = new AragoraClient({ baseUrl: 'https://api.test.com', apiKey: 'test-token' });
   });
 
   it('should get analytics overview with default days', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () =>
-        Promise.resolve({
-          total_debates: 100,
-          consensus_rate: 0.75,
-        }),
+      json: () => Promise.resolve({ total_debates: 100, consensus_rate: 0.75 }),
     });
 
     await client.analytics.overview();
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.test.com/api/analytics?days=30',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('should get analytics overview with custom days', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
     await client.analytics.overview(7);
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.test.com/api/analytics?days=7',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 

@@ -3,13 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { HistoryPanel } from '../HistoryPanel';
 
 // Mock the hooks
-jest.mock('@/hooks/useSupabaseHistory', () => ({
-  useSupabaseHistory: jest.fn(),
-}));
+jest.mock('@/hooks/useSupabaseHistory', () => ({ useSupabaseHistory: jest.fn() }));
 
-jest.mock('@/hooks/useLocalHistory', () => ({
-  useLocalHistory: jest.fn(),
-}));
+jest.mock('@/hooks/useLocalHistory', () => ({ useLocalHistory: jest.fn() }));
 
 import { useSupabaseHistory } from '@/hooks/useSupabaseHistory';
 import { useLocalHistory } from '@/hooks/useLocalHistory';
@@ -54,10 +50,7 @@ describe('HistoryPanel', () => {
     });
 
     it('renders loading state when loading', () => {
-      mockUseLocalHistory.mockReturnValue({
-        ...mockLocalHistory,
-        isLoading: true,
-      });
+      mockUseLocalHistory.mockReturnValue({ ...mockLocalHistory, isLoading: true });
 
       render(<HistoryPanel />);
       // Loading indicator should be present (spinner in header)
@@ -84,7 +77,12 @@ describe('HistoryPanel', () => {
           { id: '2', cycle_number: 2, phase: 'design', success: false },
         ],
         events: [
-          { id: '1', timestamp: new Date().toISOString(), event_type: 'agent_message', agent: 'claude' },
+          {
+            id: '1',
+            timestamp: new Date().toISOString(),
+            event_type: 'agent_message',
+            agent: 'claude',
+          },
         ],
         debates: [],
       });

@@ -23,37 +23,23 @@ jest.mock('../src/components/MatrixRain', () => ({
   CRTVignette: () => null,
 }));
 
-jest.mock('../src/components/ThemeToggle', () => ({
-  ThemeToggle: () => <button>Theme</button>,
-}));
+jest.mock('../src/components/ThemeToggle', () => ({ ThemeToggle: () => <button>Theme</button> }));
 
 jest.mock('../src/components/UserParticipation', () => ({
   UserParticipation: () => <div>User Participation</div>,
 }));
 
-jest.mock('../src/components/CitationsPanel', () => ({
-  CitationsPanel: () => null,
-}));
+jest.mock('../src/components/CitationsPanel', () => ({ CitationsPanel: () => null }));
 
-jest.mock('../src/components/MoodTrackerPanel', () => ({
-  MoodTrackerPanel: () => null,
-}));
+jest.mock('../src/components/MoodTrackerPanel', () => ({ MoodTrackerPanel: () => null }));
 
-jest.mock('../src/components/UncertaintyPanel', () => ({
-  UncertaintyPanel: () => null,
-}));
+jest.mock('../src/components/UncertaintyPanel', () => ({ UncertaintyPanel: () => null }));
 
-jest.mock('../src/components/TokenStreamViewer', () => ({
-  TokenStreamViewer: () => null,
-}));
+jest.mock('../src/components/TokenStreamViewer', () => ({ TokenStreamViewer: () => null }));
 
-jest.mock('../src/hooks/useDebateWebSocket', () => ({
-  useDebateWebSocket: jest.fn(),
-}));
+jest.mock('../src/hooks/useDebateWebSocket', () => ({ useDebateWebSocket: jest.fn() }));
 
-jest.mock('../src/utils/supabase', () => ({
-  fetchDebateById: jest.fn(),
-}));
+jest.mock('../src/utils/supabase', () => ({ fetchDebateById: jest.fn() }));
 
 const baseLiveState = {
   status: 'connecting',
@@ -88,9 +74,7 @@ describe('DebateViewer live debates', () => {
       status: 'streaming',
       task: 'Discuss the best approach for feature X',
       agents: ['claude-3-opus', 'gemini-2.0-flash'],
-      messages: [
-        { agent: 'claude-3-opus', content: 'Test message', timestamp: 1700000000 },
-      ],
+      messages: [{ agent: 'claude-3-opus', content: 'Test message', timestamp: 1700000000 }],
     });
 
     renderWithProviders(<DebateViewer debateId="adhoc_live-123" wsUrl="ws://localhost:3001" />);
@@ -113,7 +97,9 @@ describe('DebateViewer archived debates', () => {
   it('shows error when debate not found', async () => {
     (fetchDebateById as jest.Mock).mockResolvedValue(null);
 
-    renderWithProviders(<DebateViewer debateId="archived-debate-123" wsUrl="ws://localhost:3001" />);
+    renderWithProviders(
+      <DebateViewer debateId="archived-debate-123" wsUrl="ws://localhost:3001" />,
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/debate not found/i)).toBeInTheDocument();
@@ -129,8 +115,20 @@ describe('DebateViewer archived debates', () => {
       task: 'Should we adopt X?',
       agents: ['claude-3-opus', 'gpt-4o'],
       transcript: [
-        { agent: 'claude-3-opus', content: 'Yes, adopt X', role: 'proposer', round: 1, timestamp: 1700000000 },
-        { agent: 'gpt-4o', content: 'No, avoid X', role: 'critic', round: 1, timestamp: 1700000001 },
+        {
+          agent: 'claude-3-opus',
+          content: 'Yes, adopt X',
+          role: 'proposer',
+          round: 1,
+          timestamp: 1700000000,
+        },
+        {
+          agent: 'gpt-4o',
+          content: 'No, avoid X',
+          role: 'critic',
+          round: 1,
+          timestamp: 1700000001,
+        },
       ],
       consensus_reached: true,
       confidence: 0.82,

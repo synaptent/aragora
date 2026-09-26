@@ -44,13 +44,13 @@ export function ContradictionsTab() {
   const { data, mutate, isLoading } = useSWR<ContradictionsResponse>(
     `${API_BASE_URL}/api/v1/knowledge/mound/contradictions`,
     fetcher,
-    { refreshInterval: 60000 }
+    { refreshInterval: 60000 },
   );
 
   const { data: statsData } = useSWR<ContradictionStats>(
     `${API_BASE_URL}/api/v1/knowledge/mound/contradictions/stats`,
     fetcher,
-    { refreshInterval: 60000 }
+    { refreshInterval: 60000 },
   );
 
   const contradictions = data?.contradictions ?? [];
@@ -72,20 +72,17 @@ export function ContradictionsTab() {
     async (id: string, resolution: 'keep_a' | 'keep_b' | 'dismiss') => {
       setResolving(id);
       try {
-        await fetch(
-          `${API_BASE_URL}/api/v1/knowledge/mound/contradictions/${id}/resolve`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ resolution }),
-          }
-        );
+        await fetch(`${API_BASE_URL}/api/v1/knowledge/mound/contradictions/${id}/resolve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolution }),
+        });
         await mutate();
       } finally {
         setResolving(null);
       }
     },
-    [mutate]
+    [mutate],
   );
 
   if (isLoading && contradictions.length === 0) {
@@ -130,9 +127,7 @@ export function ContradictionsTab() {
             className={`p-4 rounded-lg border ${severityColors[c.severity] || 'border-border'}`}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-theme-data uppercase tracking-wider">
-                {c.severity}
-              </span>
+              <span className="text-xs font-theme-data uppercase tracking-wider">{c.severity}</span>
               <span className="text-xs text-text-muted">
                 {new Date(c.detected_at).toLocaleDateString()}
               </span>
@@ -176,9 +171,7 @@ export function ContradictionsTab() {
             )}
 
             {c.status !== 'unresolved' && (
-              <span className="text-xs text-text-muted italic">
-                {c.status}
-              </span>
+              <span className="text-xs text-text-muted italic">{c.status}</span>
             )}
           </div>
         ))}
@@ -186,9 +179,7 @@ export function ContradictionsTab() {
 
       {contradictions.length === 0 && !isLoading && (
         <div className="text-center py-8">
-          <div className="text-text-muted text-sm mb-2">
-            No contradictions detected
-          </div>
+          <div className="text-text-muted text-sm mb-2">No contradictions detected</div>
           <button
             onClick={handleScan}
             disabled={scanning}

@@ -16,9 +16,7 @@ describe('retry utilities', () => {
     });
 
     it('retries on failure and succeeds with short delays', async () => {
-      const fn = jest.fn()
-        .mockRejectedValueOnce(new Error('fail 1'))
-        .mockResolvedValue('success');
+      const fn = jest.fn().mockRejectedValueOnce(new Error('fail 1')).mockResolvedValue('success');
 
       const result = await retry(fn, { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 1 });
 
@@ -29,9 +27,9 @@ describe('retry utilities', () => {
     it('throws after max retries', async () => {
       const fn = jest.fn().mockRejectedValue(new Error('always fails'));
 
-      await expect(
-        retry(fn, { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 1 })
-      ).rejects.toThrow('always fails');
+      await expect(retry(fn, { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 1 })).rejects.toThrow(
+        'always fails',
+      );
 
       expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
     }, 10000);
@@ -62,9 +60,7 @@ describe('retry utilities', () => {
     it('converts non-Error throws to Error', async () => {
       const fn = jest.fn().mockRejectedValue('string error');
 
-      await expect(
-        retry(fn, { maxRetries: 0 })
-      ).rejects.toThrow('string error');
+      await expect(retry(fn, { maxRetries: 0 })).rejects.toThrow('string error');
     });
   });
 
@@ -102,11 +98,11 @@ describe('retry utilities', () => {
         .mockResolvedValueOnce({ ok: false, status: 503 })
         .mockResolvedValue({ ok: true, status: 200 });
 
-      const result = await fetchWithRetry(
-        'https://api.example.com',
-        undefined,
-        { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 1 }
-      );
+      const result = await fetchWithRetry('https://api.example.com', undefined, {
+        maxRetries: 3,
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+      });
 
       expect(result.status).toBe(200);
       expect(mockFetch).toHaveBeenCalledTimes(3);
@@ -137,11 +133,11 @@ describe('retry utilities', () => {
         .mockRejectedValueOnce(new TypeError('Failed to fetch'))
         .mockResolvedValue({ ok: true, status: 200 });
 
-      const result = await fetchWithRetry(
-        'https://api.example.com',
-        undefined,
-        { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 }
-      );
+      const result = await fetchWithRetry('https://api.example.com', undefined, {
+        maxRetries: 1,
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+      });
 
       expect(result.status).toBe(200);
       expect(mockFetch).toHaveBeenCalledTimes(2);

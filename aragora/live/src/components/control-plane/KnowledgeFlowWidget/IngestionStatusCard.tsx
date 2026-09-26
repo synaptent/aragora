@@ -98,7 +98,7 @@ export function IngestionStatusCard({
     const totalDocs = connectors.reduce((sum, c) => sum + c.docs_indexed, 0);
     const totalFailed = connectors.reduce((sum, c) => sum + c.docs_failed, 0);
     const activeConnectors = connectors.filter(
-      (c) => c.status === 'ingesting' || c.status === 'processing'
+      (c) => c.status === 'ingesting' || c.status === 'processing',
     ).length;
     const errorConnectors = connectors.filter((c) => c.status === 'error').length;
 
@@ -163,9 +163,7 @@ export function IngestionStatusCard({
       {/* Connector List */}
       <div className="space-y-2">
         {connectors.length === 0 ? (
-          <div className="text-center py-4 text-text-muted text-sm">
-            No connectors configured
-          </div>
+          <div className="text-center py-4 text-text-muted text-sm">No connectors configured</div>
         ) : (
           connectors.map((connector) => (
             <div
@@ -182,7 +180,7 @@ export function IngestionStatusCard({
                 </div>
                 <span
                   className={`px-2 py-0.5 rounded text-xs font-theme-data ${getStatusBadgeClass(
-                    connector.status
+                    connector.status,
                   )}`}
                 >
                   {connector.status.toUpperCase()}
@@ -206,7 +204,8 @@ export function IngestionStatusCard({
                     />
                   </div>
                   <div className="text-xs text-text-muted mt-1">
-                    {formatNumber(connector.docs_indexed)} / {formatNumber(connector.docs_total)} docs
+                    {formatNumber(connector.docs_indexed)} / {formatNumber(connector.docs_total)}{' '}
+                    docs
                   </div>
                 </div>
               )}
@@ -216,14 +215,10 @@ export function IngestionStatusCard({
                 <span>
                   {formatNumber(connector.docs_indexed)} docs indexed
                   {connector.docs_failed > 0 && (
-                    <span className="text-red-400 ml-1">
-                      ({connector.docs_failed} failed)
-                    </span>
+                    <span className="text-red-400 ml-1">({connector.docs_failed} failed)</span>
                   )}
                 </span>
-                {connector.last_ingestion && (
-                  <span>{formatTime(connector.last_ingestion)}</span>
-                )}
+                {connector.last_ingestion && <span>{formatTime(connector.last_ingestion)}</span>}
               </div>
 
               {/* Error message */}

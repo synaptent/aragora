@@ -42,43 +42,46 @@ export default function VoicePage() {
     setState('idle');
   }, []);
 
-  const startDebate = useCallback(async (topic: string) => {
-    if (!topic.trim()) return;
+  const startDebate = useCallback(
+    async (topic: string) => {
+      if (!topic.trim()) return;
 
-    setState('starting');
-    setError(null);
+      setState('starting');
+      setError(null);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/debate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: topic,
-          agents: DEFAULT_AGENTS,
-          rounds: 3,
-          metadata: { source: 'voice', platform: 'mobile' },
-        }),
-      });
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/debate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: topic,
+            agents: DEFAULT_AGENTS,
+            rounds: 3,
+            metadata: { source: 'voice', platform: 'mobile' },
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (data.success && data.debate_id) {
-        // Save to recent topics
-        const newRecent = [topic, ...recentTopics.filter(t => t !== topic)].slice(0, 5);
-        setRecentTopics(newRecent);
-        localStorage.setItem('aragora-recent-voice-topics', JSON.stringify(newRecent));
+        if (data.success && data.debate_id) {
+          // Save to recent topics
+          const newRecent = [topic, ...recentTopics.filter((t) => t !== topic)].slice(0, 5);
+          setRecentTopics(newRecent);
+          localStorage.setItem('aragora-recent-voice-topics', JSON.stringify(newRecent));
 
-        // Navigate to debate
-        router.push(`/debate/${data.debate_id}`);
-      } else {
-        setError(data.error || 'Failed to start debate');
+          // Navigate to debate
+          router.push(`/debate/${data.debate_id}`);
+        } else {
+          setError(data.error || 'Failed to start debate');
+          setState('confirming');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to start debate');
         setState('confirming');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start debate');
-      setState('confirming');
-    }
-  }, [recentTopics, router]);
+    },
+    [recentTopics, router],
+  );
 
   const editTopic = useCallback(() => {
     setState('idle');
@@ -97,10 +100,7 @@ export default function VoicePage() {
           <Link href="/" className="text-[var(--accent)] font-theme-data font-bold">
             ARAGORA
           </Link>
-          <Link
-            href="/arena"
-            className="text-xs font-theme-data text-text-muted hover:text-text"
-          >
+          <Link href="/arena" className="text-xs font-theme-data text-text-muted hover:text-text">
             [TYPE INSTEAD]
           </Link>
         </div>
@@ -143,12 +143,8 @@ export default function VoicePage() {
         {state === 'idle' && (
           <div className="text-center space-y-8">
             <div>
-              <h1 className="text-2xl font-theme-data font-bold text-text mb-2">
-                Voice Debate
-              </h1>
-              <p className="text-text-muted text-sm">
-                Tap the microphone and speak your topic
-              </p>
+              <h1 className="text-2xl font-theme-data font-bold text-text mb-2">Voice Debate</h1>
+              <p className="text-text-muted text-sm">Tap the microphone and speak your topic</p>
             </div>
 
             <VoiceInput
@@ -217,9 +213,7 @@ export default function VoicePage() {
               <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
                 Listening...
               </h2>
-              <p className="text-text-muted text-sm mt-2">
-                Speak your debate topic
-              </p>
+              <p className="text-text-muted text-sm mt-2">Speak your debate topic</p>
             </div>
 
             <VoiceInput
@@ -237,9 +231,7 @@ export default function VoicePage() {
         {state === 'processing' && (
           <div className="text-center space-y-6">
             <div className="w-16 h-16 mx-auto border-4 border-[var(--accent)]/30 border-t-acid-green rounded-full animate-spin" />
-            <h2 className="text-xl font-theme-data font-bold text-text">
-              Transcribing...
-            </h2>
+            <h2 className="text-xl font-theme-data font-bold text-text">Transcribing...</h2>
           </div>
         )}
 
@@ -247,9 +239,7 @@ export default function VoicePage() {
         {state === 'confirming' && transcript && (
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
-              <h2 className="text-lg font-theme-data text-text-muted mb-4">
-                Your topic:
-              </h2>
+              <h2 className="text-lg font-theme-data text-text-muted mb-4">Your topic:</h2>
               <div className="p-4 bg-surface border border-[var(--accent)]/30 rounded-lg">
                 <p className="text-lg text-text">{transcript}</p>
               </div>
@@ -293,9 +283,7 @@ export default function VoicePage() {
               <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
                 Starting Debate...
               </h2>
-              <p className="text-text-muted text-sm mt-2">
-                Assembling AI agents
-              </p>
+              <p className="text-text-muted text-sm mt-2">Assembling AI agents</p>
             </div>
           </div>
         )}

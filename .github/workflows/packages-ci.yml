@@ -1,0 +1,100 @@
+name: Python Packages
+
+on:
+  pull_request:
+    paths:
+      - 'aragora-debate/**'
+      - 'aragora-verify/**'
+      - 'Makefile'
+      - 'pyproject.toml'
+      - '.npmrc'
+      - '.jscpd.json'
+      - 'scripts/ci/check_tool_baseline.py'
+      - 'scripts/ci/tool_baseline_parsers.py'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/debate-*.json'
+      - 'scripts/baselines/verify-*.json'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/actions/setup-node-safe/**'
+      - '.github/workflows/packages-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'aragora-debate/**'
+      - 'aragora-verify/**'
+      - 'Makefile'
+      - 'pyproject.toml'
+      - '.npmrc'
+      - '.jscpd.json'
+      - 'scripts/ci/check_tool_baseline.py'
+      - 'scripts/ci/tool_baseline_parsers.py'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/debate-*.json'
+      - 'scripts/baselines/verify-*.json'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/actions/setup-node-safe/**'
+      - '.github/workflows/packages-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  packages:
+    name: Package ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: debate
+            extras: dev
+          - app: verify
+            extras: dev,schema
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+      - name: Set up Node for jscpd
+        uses: ./.github/actions/setup-node-safe
+        with:
+          node-version: "25.9.0"
+      - name: Install package and tools
+        run: >-
+          python -m pip install -e "./aragora-${{ matrix.app }}[${{ matrix.extras }}]"
+          'ruff==0.14.14' 'mypy==2.1.0' 'vulture==2.16' 'deptry==0.25.1'
+          'pytest-asyncio>=0.23'
+      - name: Ruff and ratchets
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-lint-${{ matrix.app }} 2>&1 | tee "lint-${{ matrix.app }}.log"
+          ! grep -q '^SKIP ' "lint-${{ matrix.app }}.log"
+      - name: Strict mypy
+        working-directory: aragora-${{ matrix.app }}
+        run: |
+          mypy --version
+          mypy --strict src
+      - name: Tests with coverage
+        working-directory: aragora-${{ matrix.app }}
+        run: |
+          fail_under=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["coverage"]["report"]["fail_under"])')
+          pytest tests -q -p randomly --randomly-seed=1234 -n 4 --timeout=120 \
+            --cov=aragora_${{ matrix.app }} --cov-config=pyproject.toml \
+            --cov-fail-under="$fail_under" --durations=10 --junitxml=junit.xml
+      - name: Upload timed test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.app }}
+          path: aragora-${{ matrix.app }}/junit.xml
+          if-no-files-found: warn

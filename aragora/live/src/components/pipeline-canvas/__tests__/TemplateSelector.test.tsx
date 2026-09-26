@@ -4,19 +4,15 @@ import { TemplateSelector } from '../TemplateSelector';
 jest.mock('@/components/BackendSelector', () => ({
   useBackend: () => ({
     backend: 'production',
-    config: {
-      api: 'https://backend.test',
-      ws: 'wss://backend.test/ws',
-    },
+    config: { api: 'https://backend.test', ws: 'wss://backend.test/ws' },
   }),
 }));
 
 describe('TemplateSelector', () => {
   it('loads templates from the selected backend', async () => {
-    const mockFetch = jest.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({ templates: [] }),
-    } as Response);
+    const mockFetch = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue({ ok: true, json: async () => ({ templates: [] }) } as Response);
 
     render(<TemplateSelector onSelectTemplate={jest.fn()} onStartBlank={jest.fn()} />);
 

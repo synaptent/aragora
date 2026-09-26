@@ -8,9 +8,9 @@ interface PressureGaugeProps {
 }
 
 function pressureColor(p: number): string {
-  if (p < 0.5) return '#39ff14';   // green
-  if (p < 0.75) return '#ffff00';  // yellow
-  return '#dc143c';                 // red/crimson
+  if (p < 0.5) return '#39ff14'; // green
+  if (p < 0.75) return '#ffff00'; // yellow
+  return '#dc143c'; // red/crimson
 }
 
 function pressureLabel(p: number): string {
@@ -20,7 +20,12 @@ function pressureLabel(p: number): string {
   return 'CRITICAL';
 }
 
-export function PressureGauge({ pressure, byTier, recommendation, loading = false }: PressureGaugeProps) {
+export function PressureGauge({
+  pressure,
+  byTier,
+  recommendation,
+  loading = false,
+}: PressureGaugeProps) {
   if (loading) {
     return (
       <div className="card p-4">

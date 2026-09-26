@@ -25,7 +25,8 @@ const USE_CASES: UseCase[] = [
     id: 'compliance',
     title: 'COMPLIANCE & AUDITING',
     subtitle: 'For Auditors & Compliance Officers',
-    description: 'Stress-test decisions with full audit trails. Every debate produces verifiable receipts for regulatory review.',
+    description:
+      'Stress-test decisions with full audit trails. Every debate produces verifiable receipts for regulatory review.',
     icon: '[]',
     color: 'text-[var(--acid-cyan)]',
     borderColor: 'border-[var(--acid-cyan)]/30',
@@ -41,7 +42,8 @@ const USE_CASES: UseCase[] = [
     id: 'security',
     title: 'SECURITY TESTING',
     subtitle: 'For Security Engineers & Pentesters',
-    description: 'Red-team AI responses before deployment. Find failure modes and adversarial vulnerabilities.',
+    description:
+      'Red-team AI responses before deployment. Find failure modes and adversarial vulnerabilities.',
     icon: '{}',
     color: 'text-warning',
     borderColor: 'border-warning/30',
@@ -57,7 +59,8 @@ const USE_CASES: UseCase[] = [
     id: 'research',
     title: 'RESEARCH & ANALYSIS',
     subtitle: 'For Researchers & Analysts',
-    description: 'Multi-model consensus on complex questions. Extract insights from diverse AI perspectives.',
+    description:
+      'Multi-model consensus on complex questions. Extract insights from diverse AI perspectives.',
     icon: '<>',
     color: 'text-[var(--accent)]',
     borderColor: 'border-[var(--accent)]/30',
@@ -73,7 +76,8 @@ const USE_CASES: UseCase[] = [
     id: 'development',
     title: 'DEV & INTEGRATION',
     subtitle: 'For Developers & Integrators',
-    description: 'API-first workflows and extensible plugins. Build on aragora with full programmatic access.',
+    description:
+      'API-first workflows and extensible plugins. Build on aragora with full programmatic access.',
     icon: '//',
     color: 'text-acid-purple',
     borderColor: 'border-acid-purple/30',
@@ -102,10 +106,7 @@ function UseCaseCard({ useCase, isExpanded, onToggle }: UseCaseCardProps) {
       `}
     >
       {/* Card Header */}
-      <button
-        onClick={onToggle}
-        className="w-full p-4 text-left group"
-      >
+      <button onClick={onToggle} className="w-full p-4 text-left group">
         <div className="flex items-start gap-3">
           {/* Icon */}
           <div className={`font-theme-data text-lg ${useCase.color} opacity-60`}>
@@ -126,7 +127,9 @@ function UseCaseCard({ useCase, isExpanded, onToggle }: UseCaseCardProps) {
           </div>
 
           {/* Expand indicator */}
-          <span className={`text-[10px] font-theme-data ${useCase.color} opacity-50 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+          <span
+            className={`text-[10px] font-theme-data ${useCase.color} opacity-50 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+          >
             {'>'}
           </span>
         </div>
@@ -147,7 +150,9 @@ function UseCaseCard({ useCase, isExpanded, onToggle }: UseCaseCardProps) {
               className="flex items-center justify-between p-2 hover:bg-surface/50 transition-colors group/link rounded"
             >
               <div>
-                <span className={`font-theme-data text-[10px] ${useCase.color} group-hover/link:text-[var(--accent)] transition-colors`}>
+                <span
+                  className={`font-theme-data text-[10px] ${useCase.color} group-hover/link:text-[var(--accent)] transition-colors`}
+                >
                   {feature.name}
                 </span>
                 <p className="text-[9px] font-theme-data text-text-muted/40 mt-0.5">

@@ -36,14 +36,11 @@ export default function PlaygroundPage() {
   const [completedDebateId, setCompletedDebateId] = useState('');
   const [completedShareUrl, setCompletedShareUrl] = useState('');
 
-  const handleDebateComplete = useCallback(
-    (info: { debateId: string; shareUrl: string }) => {
-      setCompletedDebateId(info.debateId);
-      setCompletedShareUrl(info.shareUrl);
-      setDebateComplete(true);
-    },
-    [],
-  );
+  const handleDebateComplete = useCallback((info: { debateId: string; shareUrl: string }) => {
+    setCompletedDebateId(info.debateId);
+    setCompletedShareUrl(info.shareUrl);
+    setDebateComplete(true);
+  }, []);
 
   const handleResponse = useCallback((res: ResponseState) => {
     setResponse(res);

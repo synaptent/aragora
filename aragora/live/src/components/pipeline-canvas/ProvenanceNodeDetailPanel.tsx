@@ -59,7 +59,7 @@ function getNodeTypeInfo(
   stage: PipelineStageType,
   nodeData: Record<string, unknown>,
 ): { label: string; icon: string } | null {
-  const subtype = (
+  const subtype =
     stage === 'ideas'
       ? getMirroredNodeField<string>(nodeData, 'ideaType', 'idea_type')
       : stage === 'principles'
@@ -68,8 +68,7 @@ function getNodeTypeInfo(
           ? getMirroredNodeField<string>(nodeData, 'goalType', 'goal_type')
           : stage === 'actions'
             ? getMirroredNodeField<string>(nodeData, 'stepType', 'step_type')
-            : getMirroredNodeField<string>(nodeData, 'orchType', 'orch_type')
-  );
+            : getMirroredNodeField<string>(nodeData, 'orchType', 'orch_type');
   if (!subtype) return null;
 
   const config = PIPELINE_NODE_TYPE_CONFIGS[stage]?.[subtype];
@@ -124,10 +123,7 @@ function computeConnections(
 }
 
 /** Compute full ancestry depth by walking the chain backwards. */
-function computeAncestryDepth(
-  nodeId: string,
-  provenance: ProvenanceLink[],
-): number {
+function computeAncestryDepth(nodeId: string, provenance: ProvenanceLink[]): number {
   const visited = new Set<string>();
   let depth = 0;
 
@@ -154,9 +150,7 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
   return (
     <label className="block text-xs text-text-muted mb-2 uppercase font-bold font-theme-data">
       {title}
-      {count !== undefined && (
-        <span className="ml-1 text-text opacity-60">({count})</span>
-      )}
+      {count !== undefined && <span className="ml-1 text-text opacity-60">({count})</span>}
     </label>
   );
 }
@@ -192,17 +186,13 @@ function ConnectionCard({
           className="w-2 h-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: config.primary }}
         />
-        <span className={`text-xs font-theme-data truncate ${colors.text}`}>
-          {label}
-        </span>
+        <span className={`text-xs font-theme-data truncate ${colors.text}`}>{label}</span>
         <span className="text-xs text-text-muted font-theme-data ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
           Go
         </span>
       </div>
       <div className="flex items-center gap-2 text-xs text-text-muted font-theme-data">
-        <span className={`px-1 py-0.5 rounded ${colors.bg} ${colors.text}`}>
-          {stage}
-        </span>
+        <span className={`px-1 py-0.5 rounded ${colors.bg} ${colors.text}`}>{stage}</span>
         {method && <span>{method}</span>}
         {hash && <span>#{hash.slice(0, 8)}</span>}
       </div>
@@ -251,10 +241,7 @@ export const ProvenanceNodeDetailPanel = memo(function ProvenanceNodeDetailPanel
 
   // Find relevant transition (the one that brought this node's stage into existence)
   const relevantTransition = useMemo(
-    () =>
-      transitions.find(
-        (t) => t.to_stage === stage || t.from_stage === stage,
-      ),
+    () => transitions.find((t) => t.to_stage === stage || t.from_stage === stage),
     [transitions, stage],
   );
 
@@ -272,8 +259,7 @@ export const ProvenanceNodeDetailPanel = memo(function ProvenanceNodeDetailPanel
   const status = (nodeData?.status as string) ?? '';
 
   // Confidence from node data
-  const confidence =
-    typeof nodeData?.confidence === 'number' ? nodeData.confidence : null;
+  const confidence = typeof nodeData?.confidence === 'number' ? nodeData.confidence : null;
 
   // Assigned agent/assignee
   const agent =
@@ -322,9 +308,7 @@ export const ProvenanceNodeDetailPanel = memo(function ProvenanceNodeDetailPanel
       exported_at: new Date().toISOString(),
     };
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: 'application/json',
-    });
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -378,14 +362,10 @@ export const ProvenanceNodeDetailPanel = memo(function ProvenanceNodeDetailPanel
                   {stageConfig.label}
                 </span>
                 {typeInfo && (
-                  <span className="text-xs text-text-muted font-theme-data">
-                    {typeInfo.label}
-                  </span>
+                  <span className="text-xs text-text-muted font-theme-data">{typeInfo.label}</span>
                 )}
                 {status && (
-                  <span className="text-xs text-text-muted font-theme-data">
-                    {status}
-                  </span>
+                  <span className="text-xs text-text-muted font-theme-data">{status}</span>
                 )}
               </div>
             </div>
@@ -537,9 +517,7 @@ export const ProvenanceNodeDetailPanel = memo(function ProvenanceNodeDetailPanel
           <div className="p-3 bg-bg rounded border border-border space-y-2">
             {contentHash ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted font-theme-data">
-                  SHA-256:
-                </span>
+                <span className="text-xs text-text-muted font-theme-data">SHA-256:</span>
                 <span
                   className="text-xs text-emerald-400 font-theme-data truncate flex-1"
                   title={contentHash}
@@ -555,13 +533,10 @@ export const ProvenanceNodeDetailPanel = memo(function ProvenanceNodeDetailPanel
                 </button>
               </div>
             ) : (
-              <p className="text-xs text-text-muted font-theme-data">
-                No content hash available
-              </p>
+              <p className="text-xs text-text-muted font-theme-data">No content hash available</p>
             )}
             <div className="text-xs text-text-muted font-theme-data">
-              Node ID:{' '}
-              <span className="text-text break-all">{nodeId}</span>
+              Node ID: <span className="text-text break-all">{nodeId}</span>
             </div>
           </div>
         </div>

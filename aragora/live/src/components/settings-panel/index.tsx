@@ -8,7 +8,12 @@ import { useBackend } from '@/components/BackendSelector';
 import { logger } from '@/utils/logger';
 
 import type { ApiKey, FeatureConfig, UserPreferences, SettingsTab } from './types';
-import { DEFAULT_FEATURE_CONFIG, DEFAULT_PREFERENCES, getStoredPreferences, storePreferences } from './types';
+import {
+  DEFAULT_FEATURE_CONFIG,
+  DEFAULT_PREFERENCES,
+  getStoredPreferences,
+  storePreferences,
+} from './types';
 import { FeaturesTab } from './FeaturesTab';
 import { DebateTab } from './DebateTab';
 import { AppearanceTab } from './AppearanceTab';
@@ -61,7 +66,9 @@ export function SettingsPanel() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('features');
   const [featureConfig, setFeatureConfig] = useState<FeatureConfig>(DEFAULT_FEATURE_CONFIG);
   const [featureLoading, setFeatureLoading] = useState(true);
-  const [featureSaveStatus, setFeatureSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [featureSaveStatus, setFeatureSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
+  );
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
@@ -73,7 +80,7 @@ export function SettingsPanel() {
   useEffect(() => {
     const stored = getStoredPreferences();
 
-    setPreferences(prev => ({
+    setPreferences((prev) => ({
       ...prev,
       ...stored,
       theme: themePreference, // Use theme from context
@@ -96,7 +103,7 @@ export function SettingsPanel() {
         if (response.ok) {
           const data = await response.json();
           if (data.preferences) {
-            setFeatureConfig(prev => ({ ...prev, ...data.preferences }));
+            setFeatureConfig((prev) => ({ ...prev, ...data.preferences }));
           }
         }
       } catch (error) {
@@ -108,57 +115,60 @@ export function SettingsPanel() {
     fetchFeatureConfig();
   }, [backendConfig.api]);
 
-  const updateFeatureConfig = useCallback(async (key: keyof FeatureConfig, value: boolean | string | number) => {
-    const newConfig = { ...featureConfig, [key]: value };
-    setFeatureConfig(newConfig);
+  const updateFeatureConfig = useCallback(
+    async (key: keyof FeatureConfig, value: boolean | string | number) => {
+      const newConfig = { ...featureConfig, [key]: value };
+      setFeatureConfig(newConfig);
 
-    setFeatureSaveStatus('saving');
-    try {
-      const response = await fetch(`${backendConfig.api}/api/features/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [key]: value }),
-      });
+      setFeatureSaveStatus('saving');
+      try {
+        const response = await fetch(`${backendConfig.api}/api/features/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [key]: value }),
+        });
 
-      if (response.ok) {
-        setFeatureSaveStatus('saved');
-        setTimeout(() => setFeatureSaveStatus('idle'), 1500);
-      } else {
+        if (response.ok) {
+          setFeatureSaveStatus('saved');
+          setTimeout(() => setFeatureSaveStatus('idle'), 1500);
+        } else {
+          setFeatureSaveStatus('error');
+          setTimeout(() => setFeatureSaveStatus('idle'), 2000);
+        }
+      } catch {
         setFeatureSaveStatus('error');
         setTimeout(() => setFeatureSaveStatus('idle'), 2000);
       }
-    } catch {
-      setFeatureSaveStatus('error');
-      setTimeout(() => setFeatureSaveStatus('idle'), 2000);
-    }
-  }, [featureConfig, backendConfig.api]);
+    },
+    [featureConfig, backendConfig.api],
+  );
 
-  const updateThemePreference = useCallback((theme: 'dark' | 'light' | 'system') => {
-    // Update context (handles localStorage, DOM, and everything)
-    setTheme(theme);
-    // Update local preferences state for UI sync
-    setPreferences(prev => ({ ...prev, theme }));
-    // Persist to preferences storage
-    storePreferences({ theme });
-  }, [setTheme]);
+  const updateThemePreference = useCallback(
+    (theme: 'dark' | 'light' | 'system') => {
+      // Update context (handles localStorage, DOM, and everything)
+      setTheme(theme);
+      // Update local preferences state for UI sync
+      setPreferences((prev) => ({ ...prev, theme }));
+      // Persist to preferences storage
+      storePreferences({ theme });
+    },
+    [setTheme],
+  );
 
-  const updateNotification = useCallback((key: keyof UserPreferences['notifications'], value: boolean) => {
-    setPreferences(prev => {
-      const newPrefs = {
-        ...prev,
-        notifications: { ...prev.notifications, [key]: value },
-      };
-      storePreferences({ notifications: newPrefs.notifications });
-      return newPrefs;
-    });
-  }, []);
+  const updateNotification = useCallback(
+    (key: keyof UserPreferences['notifications'], value: boolean) => {
+      setPreferences((prev) => {
+        const newPrefs = { ...prev, notifications: { ...prev.notifications, [key]: value } };
+        storePreferences({ notifications: newPrefs.notifications });
+        return newPrefs;
+      });
+    },
+    [],
+  );
 
   const updateDisplay = useCallback((key: keyof UserPreferences['display'], value: boolean) => {
-    setPreferences(prev => {
-      const newPrefs = {
-        ...prev,
-        display: { ...prev.display, [key]: value },
-      };
+    setPreferences((prev) => {
+      const newPrefs = { ...prev, display: { ...prev.display, [key]: value } };
       storePreferences({ display: newPrefs.display });
       return newPrefs;
     });
@@ -168,7 +178,7 @@ export function SettingsPanel() {
     if (!isAuthenticated) {
       setApiKeyLoading(false);
       setApiKeyError(null);
-      setPreferences(prev => ({ ...prev, api_keys: [] }));
+      setPreferences((prev) => ({ ...prev, api_keys: [] }));
       return;
     }
 
@@ -178,11 +188,11 @@ export function SettingsPanel() {
     try {
       const data = await authFetch<ApiKeyListResponse>(`${backendConfig.api}/api/v1/api-keys`);
       const apiKeys = (data?.keys ?? []).map(mapBackendApiKey);
-      setPreferences(prev => ({ ...prev, api_keys: apiKeys }));
+      setPreferences((prev) => ({ ...prev, api_keys: apiKeys }));
     } catch (error) {
       logger.warn('Failed to load API keys for settings:', error);
       setApiKeyError(error instanceof Error ? error.message : 'Failed to load API keys');
-      setPreferences(prev => ({ ...prev, api_keys: [] }));
+      setPreferences((prev) => ({ ...prev, api_keys: [] }));
     } finally {
       setApiKeyLoading(false);
     }
@@ -214,25 +224,28 @@ export function SettingsPanel() {
     }
   }, [authFetch, backendConfig.api, fetchApiKeys]);
 
-  const revokeApiKey = useCallback(async (prefix: string): Promise<void> => {
-    if (!window.confirm('Are you sure you want to revoke this API key? This cannot be undone.')) {
-      return;
-    }
+  const revokeApiKey = useCallback(
+    async (prefix: string): Promise<void> => {
+      if (!window.confirm('Are you sure you want to revoke this API key? This cannot be undone.')) {
+        return;
+      }
 
-    setApiKeyError(null);
+      setApiKeyError(null);
 
-    try {
-      await authFetch<Record<string, unknown>>(
-        `${backendConfig.api}/api/v1/api-keys/${encodeURIComponent(prefix)}`,
-        { method: 'DELETE' }
-      );
-      await fetchApiKeys();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to revoke API key';
-      setApiKeyError(message);
-      throw error instanceof Error ? error : new Error(message);
-    }
-  }, [authFetch, backendConfig.api, fetchApiKeys]);
+      try {
+        await authFetch<Record<string, unknown>>(
+          `${backendConfig.api}/api/v1/api-keys/${encodeURIComponent(prefix)}`,
+          { method: 'DELETE' },
+        );
+        await fetchApiKeys();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to revoke API key';
+        setApiKeyError(message);
+        throw error instanceof Error ? error : new Error(message);
+      }
+    },
+    [authFetch, backendConfig.api, fetchApiKeys],
+  );
 
   const saveIntegrations = useCallback(() => {
     setSaveStatus('saving');
@@ -242,7 +255,7 @@ export function SettingsPanel() {
       discord_webhook: discordWebhook || null,
     };
 
-    setPreferences(prev => ({ ...prev, integrations }));
+    setPreferences((prev) => ({ ...prev, integrations }));
     storePreferences({ integrations });
 
     setTimeout(() => {
@@ -281,13 +294,20 @@ export function SettingsPanel() {
             </button>
           ))}
           {featureSaveStatus !== 'idle' && (
-            <span className={`ml-2 text-xs font-theme-data self-center ${
-              featureSaveStatus === 'saving' ? 'text-[var(--acid-cyan)]' :
-              featureSaveStatus === 'saved' ? 'text-[var(--accent)]' :
-              'text-acid-red'
-            }`}>
-              {featureSaveStatus === 'saving' ? '...' :
-               featureSaveStatus === 'saved' ? '\u2713' : '\u2717'}
+            <span
+              className={`ml-2 text-xs font-theme-data self-center ${
+                featureSaveStatus === 'saving'
+                  ? 'text-[var(--acid-cyan)]'
+                  : featureSaveStatus === 'saved'
+                    ? 'text-[var(--accent)]'
+                    : 'text-acid-red'
+              }`}
+            >
+              {featureSaveStatus === 'saving'
+                ? '...'
+                : featureSaveStatus === 'saved'
+                  ? '\u2713'
+                  : '\u2717'}
             </span>
           )}
         </div>
@@ -303,10 +323,7 @@ export function SettingsPanel() {
       )}
 
       {activeTab === 'debate' && (
-        <DebateTab
-          featureConfig={featureConfig}
-          updateFeatureConfig={updateFeatureConfig}
-        />
+        <DebateTab featureConfig={featureConfig} updateFeatureConfig={updateFeatureConfig} />
       )}
 
       {activeTab === 'appearance' && (
@@ -318,10 +335,7 @@ export function SettingsPanel() {
       )}
 
       {activeTab === 'notifications' && (
-        <NotificationsTab
-          preferences={preferences}
-          updateNotification={updateNotification}
-        />
+        <NotificationsTab preferences={preferences} updateNotification={updateNotification} />
       )}
 
       {activeTab === 'api' && (
@@ -349,11 +363,7 @@ export function SettingsPanel() {
       )}
 
       {activeTab === 'account' && (
-        <AccountTab
-          user={user}
-          isAuthenticated={isAuthenticated}
-          backendApi={backendConfig.api}
-        />
+        <AccountTab user={user} isAuthenticated={isAuthenticated} backendApi={backendConfig.api} />
       )}
     </div>
   );

@@ -56,20 +56,11 @@ export interface Violation {
 }
 
 export interface PolicyStats {
-  policies: {
-    total: number;
-    enabled: number;
-    disabled: number;
-  };
+  policies: { total: number; enabled: number; disabled: number };
   violations: {
     total: number;
     open: number;
-    by_severity: {
-      critical: number;
-      high: number;
-      medium: number;
-      low: number;
-    };
+    by_severity: { critical: number; high: number; medium: number; low: number };
   };
   risk_score: number;
 }
@@ -155,7 +146,7 @@ export interface UsePoliciesReturn extends UsePoliciesState {
   updateViolationStatus: (
     id: string,
     status: Violation['status'],
-    notes?: string
+    notes?: string,
   ) => Promise<Violation | null>;
 
   // Compliance check
@@ -167,13 +158,8 @@ export interface UsePoliciesReturn extends UsePoliciesState {
       store_violations?: boolean;
       workspace_id?: string;
       source?: string;
-    }
-  ) => Promise<{
-    compliant: boolean;
-    score: number;
-    issue_count: number;
-    result: unknown;
-  } | null>;
+    },
+  ) => Promise<{ compliant: boolean; score: number; issue_count: number; result: unknown } | null>;
 }
 
 /**
@@ -216,71 +202,69 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
   // Load methods
   // =========================================================================
 
-  const loadPolicies = useCallback(async (filters?: PoliciesFilters) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
+  const loadPolicies = useCallback(
+    async (filters?: PoliciesFilters) => {
+      setState((s) => ({ ...s, loading: true, error: null }));
 
-    try {
-      const params = new URLSearchParams();
-      const f = filters || policyFilters || {};
-      if (f.workspace_id) params.set('workspace_id', f.workspace_id);
-      if (f.vertical_id) params.set('vertical_id', f.vertical_id);
-      if (f.framework_id) params.set('framework_id', f.framework_id);
-      if (f.enabled_only) params.set('enabled_only', 'true');
+      try {
+        const params = new URLSearchParams();
+        const f = filters || policyFilters || {};
+        if (f.workspace_id) params.set('workspace_id', f.workspace_id);
+        if (f.vertical_id) params.set('vertical_id', f.vertical_id);
+        if (f.framework_id) params.set('framework_id', f.framework_id);
+        if (f.enabled_only) params.set('enabled_only', 'true');
 
-      const query = params.toString();
-      const url = `${API_BASE}/api/policies${query ? `?${query}` : ''}`;
+        const query = params.toString();
+        const url = `${API_BASE}/api/policies${query ? `?${query}` : ''}`;
 
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const data = await response.json();
-      setState((s) => ({
-        ...s,
-        policies: data.policies || [],
-        loading: false,
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        loading: false,
-        error: e instanceof Error ? e.message : 'Failed to load policies',
-      }));
-    }
-  }, [policyFilters]);
+        const data = await response.json();
+        setState((s) => ({ ...s, policies: data.policies || [], loading: false }));
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: e instanceof Error ? e.message : 'Failed to load policies',
+        }));
+      }
+    },
+    [policyFilters],
+  );
 
-  const loadViolations = useCallback(async (filters?: ViolationsFilters) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
+  const loadViolations = useCallback(
+    async (filters?: ViolationsFilters) => {
+      setState((s) => ({ ...s, loading: true, error: null }));
 
-    try {
-      const params = new URLSearchParams();
-      const f = filters || violationFilters || {};
-      if (f.workspace_id) params.set('workspace_id', f.workspace_id);
-      if (f.vertical_id) params.set('vertical_id', f.vertical_id);
-      if (f.framework_id) params.set('framework_id', f.framework_id);
-      if (f.policy_id) params.set('policy_id', f.policy_id);
-      if (f.status) params.set('status', f.status);
-      if (f.severity) params.set('severity', f.severity);
+      try {
+        const params = new URLSearchParams();
+        const f = filters || violationFilters || {};
+        if (f.workspace_id) params.set('workspace_id', f.workspace_id);
+        if (f.vertical_id) params.set('vertical_id', f.vertical_id);
+        if (f.framework_id) params.set('framework_id', f.framework_id);
+        if (f.policy_id) params.set('policy_id', f.policy_id);
+        if (f.status) params.set('status', f.status);
+        if (f.severity) params.set('severity', f.severity);
 
-      const query = params.toString();
-      const url = `${API_BASE}/api/compliance/violations${query ? `?${query}` : ''}`;
+        const query = params.toString();
+        const url = `${API_BASE}/api/compliance/violations${query ? `?${query}` : ''}`;
 
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const data = await response.json();
-      setState((s) => ({
-        ...s,
-        violations: data.violations || [],
-        loading: false,
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        loading: false,
-        error: e instanceof Error ? e.message : 'Failed to load violations',
-      }));
-    }
-  }, [violationFilters]);
+        const data = await response.json();
+        setState((s) => ({ ...s, violations: data.violations || [], loading: false }));
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: e instanceof Error ? e.message : 'Failed to load violations',
+        }));
+      }
+    },
+    [violationFilters],
+  );
 
   const loadStats = useCallback(async (workspaceId?: string) => {
     try {
@@ -324,10 +308,7 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
       const policy = result.policy as Policy;
 
       // Update local state
-      setState((s) => ({
-        ...s,
-        policies: [...s.policies, policy],
-      }));
+      setState((s) => ({ ...s, policies: [...s.policies, policy] }));
 
       return policy;
     } catch (e) {
@@ -339,46 +320,41 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
     }
   }, []);
 
-  const updatePolicy = useCallback(async (
-    id: string,
-    data: UpdatePolicyData
-  ): Promise<Policy | null> => {
-    try {
-      const response = await fetch(`${API_BASE}/api/policies/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+  const updatePolicy = useCallback(
+    async (id: string, data: UpdatePolicyData): Promise<Policy | null> => {
+      try {
+        const response = await fetch(`${API_BASE}/api/policies/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        const policy = result.policy as Policy;
+
+        // Update local state
+        setState((s) => ({ ...s, policies: s.policies.map((p) => (p.id === id ? policy : p)) }));
+
+        return policy;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to update policy',
+        }));
+        return null;
       }
-
-      const result = await response.json();
-      const policy = result.policy as Policy;
-
-      // Update local state
-      setState((s) => ({
-        ...s,
-        policies: s.policies.map((p) => (p.id === id ? policy : p)),
-      }));
-
-      return policy;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to update policy',
-      }));
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   const deletePolicy = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE}/api/policies/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(`${API_BASE}/api/policies/${id}`, { method: 'DELETE' });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -386,10 +362,7 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
       }
 
       // Update local state
-      setState((s) => ({
-        ...s,
-        policies: s.policies.filter((p) => p.id !== id),
-      }));
+      setState((s) => ({ ...s, policies: s.policies.filter((p) => p.id !== id) }));
 
       return true;
     } catch (e) {
@@ -401,10 +374,7 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
     }
   }, []);
 
-  const togglePolicy = useCallback(async (
-    id: string,
-    enabled?: boolean
-  ): Promise<boolean> => {
+  const togglePolicy = useCallback(async (id: string, enabled?: boolean): Promise<boolean> => {
     try {
       const response = await fetch(`${API_BASE}/api/policies/${id}/toggle`, {
         method: 'POST',
@@ -422,9 +392,7 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
       // Update local state
       setState((s) => ({
         ...s,
-        policies: s.policies.map((p) =>
-          p.id === id ? { ...p, enabled: result.enabled } : p
-        ),
+        policies: s.policies.map((p) => (p.id === id ? { ...p, enabled: result.enabled } : p)),
       }));
 
       return true;
@@ -441,84 +409,86 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
   // Violation management
   // =========================================================================
 
-  const updateViolationStatus = useCallback(async (
-    id: string,
-    status: Violation['status'],
-    notes?: string
-  ): Promise<Violation | null> => {
-    try {
-      const response = await fetch(`${API_BASE}/api/compliance/violations/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, resolution_notes: notes }),
-      });
+  const updateViolationStatus = useCallback(
+    async (id: string, status: Violation['status'], notes?: string): Promise<Violation | null> => {
+      try {
+        const response = await fetch(`${API_BASE}/api/compliance/violations/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, resolution_notes: notes }),
+        });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        const violation = result.violation as Violation;
+
+        // Update local state
+        setState((s) => ({
+          ...s,
+          violations: s.violations.map((v) => (v.id === id ? violation : v)),
+        }));
+
+        return violation;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to update violation',
+        }));
+        return null;
       }
-
-      const result = await response.json();
-      const violation = result.violation as Violation;
-
-      // Update local state
-      setState((s) => ({
-        ...s,
-        violations: s.violations.map((v) => (v.id === id ? violation : v)),
-      }));
-
-      return violation;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to update violation',
-      }));
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // =========================================================================
   // Compliance check
   // =========================================================================
 
-  const checkCompliance = useCallback(async (
-    content: string,
-    options?: {
-      frameworks?: string[];
-      min_severity?: string;
-      store_violations?: boolean;
-      workspace_id?: string;
-      source?: string;
-    }
-  ) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/compliance/check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, ...options }),
-      });
+  const checkCompliance = useCallback(
+    async (
+      content: string,
+      options?: {
+        frameworks?: string[];
+        min_severity?: string;
+        store_violations?: boolean;
+        workspace_id?: string;
+        source?: string;
+      },
+    ) => {
+      try {
+        const response = await fetch(`${API_BASE}/api/compliance/check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, ...options }),
+        });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        // Refresh violations if storing
+        if (options?.store_violations) {
+          loadViolations();
+        }
+
+        return result;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to check compliance',
+        }));
+        return null;
       }
-
-      const result = await response.json();
-
-      // Refresh violations if storing
-      if (options?.store_violations) {
-        loadViolations();
-      }
-
-      return result;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to check compliance',
-      }));
-      return null;
-    }
-  }, [loadViolations]);
+    },
+    [loadViolations],
+  );
 
   // =========================================================================
   // Auto-load
@@ -536,12 +506,12 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
 
   const openViolations = useMemo(
     () => state.violations.filter((v) => v.status === 'open' || v.status === 'investigating'),
-    [state.violations]
+    [state.violations],
   );
 
   const criticalViolations = useMemo(
     () => openViolations.filter((v) => v.severity === 'critical'),
-    [openViolations]
+    [openViolations],
   );
 
   const riskScore = useMemo(() => {
@@ -553,7 +523,7 @@ export function usePolicies(options: UsePoliciesOptions = {}): UsePoliciesReturn
       openViolations.reduce((acc, v) => {
         const weights = { critical: 25, high: 10, medium: 5, low: 2 };
         return acc + (weights[v.severity] || 0);
-      }, 0)
+      }, 0),
     );
   }, [state.stats, openViolations]);
 

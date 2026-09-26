@@ -95,10 +95,7 @@ describe('settingsStore', () => {
 
     it('updateNotifications merges multiple updates', () => {
       act(() => {
-        useSettingsStore.getState().updateNotifications({
-          debateComplete: false,
-          mentions: false,
-        });
+        useSettingsStore.getState().updateNotifications({ debateComplete: false, mentions: false });
       });
 
       const notifications = useSettingsStore.getState().preferences.notifications;
@@ -146,13 +143,13 @@ describe('settingsStore', () => {
 
     it('updateIntegrations sets webhook URLs', () => {
       act(() => {
-        useSettingsStore.getState().updateIntegrations({
-          slackWebhook: 'https://hooks.slack.com/services/xxx',
-        });
+        useSettingsStore
+          .getState()
+          .updateIntegrations({ slackWebhook: 'https://hooks.slack.com/services/xxx' });
       });
 
       expect(useSettingsStore.getState().preferences.integrations.slackWebhook).toBe(
-        'https://hooks.slack.com/services/xxx'
+        'https://hooks.slack.com/services/xxx',
       );
     });
 
@@ -162,7 +159,7 @@ describe('settingsStore', () => {
       });
 
       expect(
-        useSettingsStore.getState().preferences.integrations.slackNotifications.debateComplete
+        useSettingsStore.getState().preferences.integrations.slackNotifications.debateComplete,
       ).toBe(true);
     });
 
@@ -189,16 +186,18 @@ describe('settingsStore', () => {
 
     it('setFeatureConfig replaces all features', () => {
       act(() => {
-        useSettingsStore.getState().setFeatureConfig({
-          calibration: true,
-          trickster: true,
-          rhetorical: true,
-          streaming: false,
-          audience: false,
-          citations: false,
-          memory: false,
-          evidenceCollection: false,
-        });
+        useSettingsStore
+          .getState()
+          .setFeatureConfig({
+            calibration: true,
+            trickster: true,
+            rhetorical: true,
+            streaming: false,
+            audience: false,
+            citations: false,
+            memory: false,
+            evidenceCollection: false,
+          });
       });
 
       const features = useSettingsStore.getState().featureConfig;
@@ -284,9 +283,7 @@ describe('settingsStore', () => {
 
     it('setBackendConfig updates partial config', () => {
       act(() => {
-        useSettingsStore.getState().setBackendConfig({
-          apiUrl: 'https://api.aragora.io',
-        });
+        useSettingsStore.getState().setBackendConfig({ apiUrl: 'https://api.aragora.io' });
       });
 
       const backend = useSettingsStore.getState().backend;
@@ -296,9 +293,7 @@ describe('settingsStore', () => {
 
     it('setBackendConfig can update default agents', () => {
       act(() => {
-        useSettingsStore.getState().setBackendConfig({
-          defaultAgents: ['claude-3', 'gpt-4'],
-        });
+        useSettingsStore.getState().setBackendConfig({ defaultAgents: ['claude-3', 'gpt-4'] });
       });
 
       expect(useSettingsStore.getState().backend.defaultAgents).toEqual(['claude-3', 'gpt-4']);

@@ -129,7 +129,7 @@ export function KnowledgeExplorer({
       setExpandedFactId(expandedFactId === fact.id ? null : fact.id);
       onFactClick?.(fact);
     },
-    [expandedFactId, onFactClick]
+    [expandedFactId, onFactClick],
   );
 
   const getConfidenceColor = (confidence: number) => {
@@ -199,9 +199,7 @@ export function KnowledgeExplorer({
         {activeTab === 'facts' && (
           <div className="space-y-2">
             {filteredFacts.length === 0 ? (
-              <p className="text-sm text-text-muted text-center py-8">
-                No facts found
-              </p>
+              <p className="text-sm text-text-muted text-center py-8">No facts found</p>
             ) : (
               filteredFacts.map((fact) => (
                 <div
@@ -222,7 +220,9 @@ export function KnowledgeExplorer({
                         <span className="text-xs font-theme-data px-1.5 py-0.5 bg-surface border border-border rounded">
                           {fact.factType}
                         </span>
-                        <span className={`text-xs font-theme-data ${getConfidenceColor(fact.confidence)}`}>
+                        <span
+                          className={`text-xs font-theme-data ${getConfidenceColor(fact.confidence)}`}
+                        >
                           {Math.round(fact.confidence * 100)}% confidence
                         </span>
                       </div>
@@ -277,9 +277,7 @@ export function KnowledgeExplorer({
         {activeTab === 'patterns' && (
           <div className="space-y-2">
             {filteredPatterns.length === 0 ? (
-              <p className="text-sm text-text-muted text-center py-8">
-                No patterns found
-              </p>
+              <p className="text-sm text-text-muted text-center py-8">No patterns found</p>
             ) : (
               filteredPatterns.map((pattern) => (
                 <div
@@ -308,9 +306,7 @@ export function KnowledgeExplorer({
         {activeTab === 'culture' && (
           <div className="text-center py-8">
             <span className="text-4xl">🐜</span>
-            <h4 className="font-theme-data font-bold text-text mt-4">
-              Organizational Culture
-            </h4>
+            <h4 className="font-theme-data font-bold text-text mt-4">Organizational Culture</h4>
             <p className="text-sm text-text-muted mt-2">
               Stigmergic signals and reasoning patterns accumulated from debates
             </p>

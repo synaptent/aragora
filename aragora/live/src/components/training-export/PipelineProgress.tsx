@@ -18,8 +18,8 @@ function PipelineProgressComponent({ status }: PipelineProgressProps) {
         <span className="text-xs text-slate-400">
           {status.recordsProcessed > 0 && (
             <>
-              {status.recordsProcessed.toLocaleString()} /{' '}
-              {status.totalRecords.toLocaleString()} records
+              {status.recordsProcessed.toLocaleString()} / {status.totalRecords.toLocaleString()}{' '}
+              records
             </>
           )}
         </span>
@@ -50,11 +50,7 @@ function PipelineProgressComponent({ status }: PipelineProgressProps) {
         >
           Transform
         </span>
-        <span
-          className={
-            ['exporting', 'complete'].includes(status.stage) ? 'text-green-400' : ''
-          }
-        >
+        <span className={['exporting', 'complete'].includes(status.stage) ? 'text-green-400' : ''}>
           Export
         </span>
       </div>

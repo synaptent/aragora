@@ -66,60 +66,63 @@ export function useOnboarding() {
     if (initRef.current) return;
     initRef.current = true;
 
-    const { data } = await apiFetchSafe<BackendFlowResponse>(
-      '/api/v1/onboarding/flow',
-      { method: 'POST', body: JSON.stringify({ use_case: useCase || 'general' }) }
-    );
+    const { data } = await apiFetchSafe<BackendFlowResponse>('/api/v1/onboarding/flow', {
+      method: 'POST',
+      body: JSON.stringify({ use_case: useCase || 'general' }),
+    });
     if (data?.id) {
       setFlowId(data.id);
     }
   }, []);
 
   // ── Fetch templates from backend ──────────────────────────────────────
-  const fetchTemplates = useCallback(async (useCase?: string) => {
-    setIsLoadingTemplates(true);
-    try {
-      const params = useCase ? `?use_case=${encodeURIComponent(useCase)}` : '';
-      const result = await apiGet<{ templates: BackendTemplate[] } | BackendTemplate[]>(
-        `/api/v1/onboarding/templates${params}`
-      );
+  const fetchTemplates = useCallback(
+    async (useCase?: string) => {
+      setIsLoadingTemplates(true);
+      try {
+        const params = useCase ? `?use_case=${encodeURIComponent(useCase)}` : '';
+        const result = await apiGet<{ templates: BackendTemplate[] } | BackendTemplate[]>(
+          `/api/v1/onboarding/templates${params}`,
+        );
 
-      const raw = Array.isArray(result) ? result : result.templates ?? [];
-      const mapped: SelectedTemplate[] = raw.map((t) => ({
-        id: t.id,
-        name: t.name,
-        description: t.description,
-        agentsCount: t.agents_count,
-        rounds: t.rounds,
-        estimatedDurationMinutes: t.estimated_minutes,
-      }));
+        const raw = Array.isArray(result) ? result : (result.templates ?? []);
+        const mapped: SelectedTemplate[] = raw.map((t) => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          agentsCount: t.agents_count,
+          rounds: t.rounds,
+          estimatedDurationMinutes: t.estimated_minutes,
+        }));
 
-      setTemplates(mapped);
-      store.setAvailableTemplates(mapped);
-      return mapped;
-    } catch {
-      // Backend unavailable — return empty (frontend can show fallback)
-      return [];
-    } finally {
-      setIsLoadingTemplates(false);
-    }
-  }, [store]);
+        setTemplates(mapped);
+        store.setAvailableTemplates(mapped);
+        return mapped;
+      } catch {
+        // Backend unavailable — return empty (frontend can show fallback)
+        return [];
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    },
+    [store],
+  );
 
   // ── Sync step progression to backend ──────────────────────────────────
-  const syncStep = useCallback(async (nextStep: OnboardingStep) => {
-    if (!flowId) return;
-    setIsSyncing(true);
-    try {
-      await apiPut('/api/v1/onboarding/flow/step', {
-        flow_id: flowId,
-        next_step: nextStep,
-      });
-    } catch {
-      // Sync failure is non-blocking — local state is source of truth
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [flowId]);
+  const syncStep = useCallback(
+    async (nextStep: OnboardingStep) => {
+      if (!flowId) return;
+      setIsSyncing(true);
+      try {
+        await apiPut('/api/v1/onboarding/flow/step', { flow_id: flowId, next_step: nextStep });
+      } catch {
+        // Sync failure is non-blocking — local state is source of truth
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [flowId],
+  );
 
   // ── Wrapped nextStep that also syncs ──────────────────────────────────
   const nextStep = useCallback(() => {
@@ -130,42 +133,39 @@ export function useOnboarding() {
   }, [store, syncStep]);
 
   // ── Launch first debate via backend ───────────────────────────────────
-  const launchFirstDebate = useCallback(async (
-    templateId: string,
-    customPrompt?: string
-  ) => {
-    store.setDebateStatus('creating');
+  const launchFirstDebate = useCallback(
+    async (templateId: string, customPrompt?: string) => {
+      store.setDebateStatus('creating');
 
-    try {
-      const body: Record<string, string> = { template_id: templateId };
-      if (flowId) body.flow_id = flowId;
-      if (customPrompt) body.custom_prompt = customPrompt;
+      try {
+        const body: Record<string, string> = { template_id: templateId };
+        if (flowId) body.flow_id = flowId;
+        if (customPrompt) body.custom_prompt = customPrompt;
 
-      const result = await apiPost<FirstDebateResponse>(
-        '/api/v1/onboarding/first-debate',
-        body
-      );
+        const result = await apiPost<FirstDebateResponse>('/api/v1/onboarding/first-debate', body);
 
-      if (result.debate_id) {
-        store.setFirstDebateId(result.debate_id);
-        if (result.receipt_id) {
-          store.setFirstReceiptId(result.receipt_id);
+        if (result.debate_id) {
+          store.setFirstDebateId(result.debate_id);
+          if (result.receipt_id) {
+            store.setFirstReceiptId(result.receipt_id);
+          }
+          store.setDebateStatus('completed');
+          store.updateProgress({ firstDebateStarted: true, firstDebateCompleted: true });
+          store.updateChecklist({ firstDebateRun: true });
+          return result;
+        } else {
+          store.setDebateStatus('error');
+          store.setDebateError('No debate ID returned');
+          return null;
         }
-        store.setDebateStatus('completed');
-        store.updateProgress({ firstDebateStarted: true, firstDebateCompleted: true });
-        store.updateChecklist({ firstDebateRun: true });
-        return result;
-      } else {
+      } catch (err) {
         store.setDebateStatus('error');
-        store.setDebateError('No debate ID returned');
+        store.setDebateError(err instanceof Error ? err.message : 'Failed to launch debate');
         return null;
       }
-    } catch (err) {
-      store.setDebateStatus('error');
-      store.setDebateError(err instanceof Error ? err.message : 'Failed to launch debate');
-      return null;
-    }
-  }, [flowId, store]);
+    },
+    [flowId, store],
+  );
 
   // ── Auto-fetch templates on mount ─────────────────────────────────────
   useEffect(() => {

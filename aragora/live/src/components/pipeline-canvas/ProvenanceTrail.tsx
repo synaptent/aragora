@@ -198,7 +198,8 @@ export const ProvenanceTrail = memo(function ProvenanceTrail({
             return (
               <>
                 <span>
-                  hash: <span className="text-emerald-400">#{selected.contentHash.slice(0, 8)}</span>
+                  hash:{' '}
+                  <span className="text-emerald-400">#{selected.contentHash.slice(0, 8)}</span>
                 </span>
                 {selected.method && (
                   <span>

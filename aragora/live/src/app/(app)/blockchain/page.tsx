@@ -23,7 +23,9 @@ function HealthBadge({ status }: { status: string }) {
     unavailable: 'text-red-400 bg-red-500/20 border-red-500/30',
   };
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.unavailable}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.unavailable}`}
+    >
       {status.toUpperCase()}
     </span>
   );
@@ -38,9 +40,7 @@ function ValidationBadge({ response }: { response: number }) {
   };
   const info = labels[response] || labels[0];
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${info.color}`}>
-      {info.text}
-    </span>
+    <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${info.color}`}>{info.text}</span>
   );
 }
 
@@ -181,7 +181,12 @@ export default function BlockchainPage() {
   const limit = 50;
 
   const { data: config, error: configError } = useBlockchainConfig();
-  const { data: agents, isLoading: agentsLoading, error: agentsError, mutate } = useBlockchainAgents(skip, limit);
+  const {
+    data: agents,
+    isLoading: agentsLoading,
+    error: agentsError,
+    mutate,
+  } = useBlockchainAgents(skip, limit);
   const { data: health } = useBlockchainHealth();
 
   const error = configError?.message || agentsError?.message;
@@ -229,7 +234,12 @@ export default function BlockchainPage() {
         {/* Error */}
         {error && (
           <div className="mb-6">
-            <ErrorWithRetry error={error} onRetry={() => { mutate(); }} />
+            <ErrorWithRetry
+              error={error}
+              onRetry={() => {
+                mutate();
+              }}
+            />
           </div>
         )}
 
@@ -237,7 +247,9 @@ export default function BlockchainPage() {
         {config && (
           <div className="mb-6 p-4 bg-surface border border-border rounded-lg">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-theme-data text-text-muted uppercase">Chain Configuration</h2>
+              <h2 className="text-xs font-theme-data text-text-muted uppercase">
+                Chain Configuration
+              </h2>
               <HealthBadge status={config.health?.status || 'unavailable'} />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -247,7 +259,9 @@ export default function BlockchainPage() {
               </div>
               <div>
                 <div className="text-xs text-text-muted">Connected</div>
-                <div className={`font-theme-data ${config.is_connected ? 'text-[var(--accent)]' : 'text-red-400'}`}>
+                <div
+                  className={`font-theme-data ${config.is_connected ? 'text-[var(--accent)]' : 'text-red-400'}`}
+                >
                   {config.is_connected ? 'Yes' : 'No'}
                 </div>
               </div>
@@ -307,9 +321,11 @@ export default function BlockchainPage() {
             <div className="text-xs font-theme-data text-text-muted">Chain ID</div>
           </div>
           <div className="p-4 bg-surface border border-border rounded-lg text-center">
-            <div className={`text-2xl font-theme-data font-bold ${
-              health?.connector?.healthy ? 'text-[var(--accent)]' : 'text-red-400'
-            }`}>
+            <div
+              className={`text-2xl font-theme-data font-bold ${
+                health?.connector?.healthy ? 'text-[var(--accent)]' : 'text-red-400'
+              }`}
+            >
               {health?.connector?.available ? (health.connector.healthy ? 'OK' : 'ERR') : '—'}
             </div>
             <div className="text-xs font-theme-data text-text-muted">Connector</div>
@@ -332,7 +348,9 @@ export default function BlockchainPage() {
         {/* Agent Registry List */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">Agent Registry</h2>
+            <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
+              Agent Registry
+            </h2>
             {agents && agents.total > limit && (
               <div className="flex items-center gap-2">
                 <button
@@ -358,16 +376,18 @@ export default function BlockchainPage() {
 
           {agentsLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading agents...</div>
+              <div className="text-[var(--accent)] font-theme-data animate-pulse">
+                Loading agents...
+              </div>
             </div>
           ) : agents && agents.agents.length > 0 ? (
             <div className="space-y-2">
               {agents.agents.map((agent: OnChainAgent) => (
                 <button
                   key={agent.token_id}
-                  onClick={() => setSelectedAgent(
-                    selectedAgent === agent.token_id ? null : agent.token_id
-                  )}
+                  onClick={() =>
+                    setSelectedAgent(selectedAgent === agent.token_id ? null : agent.token_id)
+                  }
                   className={`w-full p-4 bg-surface border rounded-lg text-left transition-all ${
                     selectedAgent === agent.token_id
                       ? 'border-[var(--accent)]/50'

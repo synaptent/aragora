@@ -75,7 +75,8 @@ describe('LiveDemoSection', () => {
           timestamp: '2026-03-28T20:00:01Z',
           data: {
             task: 'Should we split checkout into its own service?',
-            details: 'Checkout should move first because it changes weekly and already has a clear API edge.',
+            details:
+              'Checkout should move first because it changes weekly and already has a clear API edge.',
           },
           debate_id: 'debate-1',
           pipeline_id: null,
@@ -86,7 +87,8 @@ describe('LiveDemoSection', () => {
           event_type: 'critique',
           timestamp: '2026-03-28T20:00:05Z',
           data: {
-            details: 'That still leaves deployment risk centralized unless the owning team can ship independently.',
+            details:
+              'That still leaves deployment risk centralized unless the owning team can ship independently.',
             metric: 0.74,
           },
           debate_id: 'debate-1',
@@ -98,7 +100,8 @@ describe('LiveDemoSection', () => {
           event_type: 'consensus',
           timestamp: '2026-03-28T20:00:09Z',
           data: {
-            details: 'Consensus reached: split checkout first, then reassess after two release cycles.',
+            details:
+              'Consensus reached: split checkout first, then reassess after two release cycles.',
             metric: 0.81,
           },
           debate_id: 'debate-1',
@@ -116,9 +119,7 @@ describe('LiveDemoSection', () => {
     expect(screen.getByText('9 recent events in the last 2 minutes.')).toBeInTheDocument();
     expect(screen.getByText('Last activity 34s ago')).toBeInTheDocument();
     expect(screen.getByText('Live public debate')).toBeInTheDocument();
-    expect(
-      screen.getByText('Should we split checkout into its own service?'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Should we split checkout into its own service?')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Checkout should move first because it changes weekly and already has a clear API edge.',

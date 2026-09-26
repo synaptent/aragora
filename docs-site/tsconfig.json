@@ -1,0 +1,14 @@
+{
+  "extends": "@docusaurus/tsconfig/tsconfig.json",
+  "compilerOptions": { "strict": true, "types": ["node", "@docusaurus/module-type-aliases"] },
+  "include": [
+    "src/**/*",
+    "docusaurus.config.js",
+    "sidebars.js",
+    "scripts/**/*.js",
+    "scripts/**/*.mjs",
+    "tests/**/*",
+    "vitest.config.ts"
+  ],
+  "exclude": ["node_modules", "build", ".docusaurus"]
+}

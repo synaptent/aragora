@@ -35,12 +35,16 @@ export interface SpectatorEvent {
   round: number | null;
 }
 
-export type SpectateConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+export type SpectateConnectionStatus =
+  'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
 // Event styles for UI - maps to EVENT_STYLES in events.py
 // Uses theme-aware Tailwind color classes (see tailwind.config.js) so colors
 // adapt to warm/dark/professional themes via CSS variables.
-export const EVENT_STYLES: Record<SpectatorEventType, { icon: string; color: string; label: string }> = {
+export const EVENT_STYLES: Record<
+  SpectatorEventType,
+  { icon: string; color: string; label: string }
+> = {
   debate_start: { icon: '🎬', color: 'text-purple', label: 'DEBATE START' },
   debate_end: { icon: '🏁', color: 'text-purple', label: 'DEBATE END' },
   round_start: { icon: '⏱️', color: 'text-acid-cyan', label: 'ROUND START' },
@@ -137,19 +141,11 @@ export const useSpectateStore = create<SpectateState & SpectateActions>()(
 
       // Connection actions
       connect: (debateId: string) => {
-        set({
-          debateId,
-          connectionStatus: 'connecting',
-          error: null,
-          events: [],
-          currentRound: 0,
-        });
+        set({ debateId, connectionStatus: 'connecting', error: null, events: [], currentRound: 0 });
       },
 
       disconnect: () => {
-        set({
-          connectionStatus: 'disconnected',
-        });
+        set({ connectionStatus: 'disconnected' });
       },
 
       setConnectionStatus: (status: SpectateConnectionStatus) => {
@@ -175,11 +171,7 @@ export const useSpectateStore = create<SpectateState & SpectateActions>()(
             agents = [...agents, event.agent];
           }
 
-          return {
-            events: [...state.events, event],
-            currentRound,
-            agents,
-          };
+          return { events: [...state.events, event], currentRound, agents };
         });
       },
 
@@ -218,8 +210,8 @@ export const useSpectateStore = create<SpectateState & SpectateActions>()(
         set(initialState);
       },
     })),
-    { name: 'spectate-store' }
-  )
+    { name: 'spectate-store' },
+  ),
 );
 
 // ============================================================================

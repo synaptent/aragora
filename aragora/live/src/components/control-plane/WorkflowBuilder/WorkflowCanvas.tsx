@@ -9,10 +9,7 @@ interface SVGElementWithZoom extends SVGSVGElement {
 import * as d3Selection from 'd3-selection';
 import * as d3Zoom from 'd3-zoom';
 import * as d3Drag from 'd3-drag';
-import {
-  useWorkflowBuilderStore,
-  type StepType,
-} from '@/store/workflowBuilderStore';
+import { useWorkflowBuilderStore, type StepType } from '@/store/workflowBuilderStore';
 
 export interface WorkflowCanvasProps {
   /** Width of the canvas */
@@ -27,16 +24,16 @@ export interface WorkflowCanvasProps {
 
 // Node styling
 const stepTypeColors: Record<StepType, string> = {
-  agent: '#39ff14',      // acid-green
-  debate: '#60a5fa',     // blue
+  agent: '#39ff14', // acid-green
+  debate: '#60a5fa', // blue
   quick_debate: '#f472b6', // pink
-  parallel: '#a855f7',   // purple
+  parallel: '#a855f7', // purple
   conditional: '#fbbf24', // yellow
-  loop: '#f97316',       // orange
+  loop: '#f97316', // orange
   human_checkpoint: '#ec4899', // pink
   memory_read: '#00ffff', // cyan
   memory_write: '#00ffff', // cyan
-  task: '#6b7280',       // gray
+  task: '#6b7280', // gray
 };
 
 const stepTypeIcons: Record<StepType, string> = {
@@ -83,12 +80,15 @@ export function WorkflowCanvas({
 
   const { zoom, panX, panY, selectedNodeIds, selectedEdgeIds } = canvas;
   const steps = useMemo(() => currentWorkflow?.steps || [], [currentWorkflow?.steps]);
-  const transitions = useMemo(() => currentWorkflow?.transitions || [], [currentWorkflow?.transitions]);
+  const transitions = useMemo(
+    () => currentWorkflow?.transitions || [],
+    [currentWorkflow?.transitions],
+  );
 
   // Snap position to grid
   const snapToGrid = useCallback(
     (pos: number) => Math.round(pos / gridSize) * gridSize,
-    [gridSize]
+    [gridSize],
   );
 
   // Initialize D3 visualization
@@ -182,7 +182,6 @@ export function WorkflowCanvas({
     if (svgRef.current) {
       svgRef.current.__zoom = zoomBehavior;
     }
-
   }, [width, height, gridSize, showGrid, setZoom, setPan, clearSelection]);
 
   // Update nodes and edges
@@ -377,7 +376,6 @@ export function WorkflowCanvas({
 
       nodeGroup.call(drag);
     });
-
   }, [
     steps,
     transitions,
@@ -409,7 +407,7 @@ export function WorkflowCanvas({
 
       addNode(type, { x, y });
     },
-    [addNode, snapToGrid, zoom, panX, panY]
+    [addNode, snapToGrid, zoom, panX, panY],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -438,7 +436,14 @@ export function WorkflowCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeIds, selectedEdgeIds, configPanel.isOpen, deleteNode, deleteEdge, clearSelection]);
+  }, [
+    selectedNodeIds,
+    selectedEdgeIds,
+    configPanel.isOpen,
+    deleteNode,
+    deleteEdge,
+    clearSelection,
+  ]);
 
   return (
     <div
@@ -493,9 +498,7 @@ export function WorkflowCanvas({
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center">
             <div className="text-6xl mb-4 opacity-50">📝</div>
-            <p className="text-text-muted">
-              Drag nodes from the palette to start building
-            </p>
+            <p className="text-text-muted">Drag nodes from the palette to start building</p>
           </div>
         </div>
       )}

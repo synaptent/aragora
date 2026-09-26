@@ -14,7 +14,12 @@ export function DebateTab({ featureConfig, updateFeatureConfig }: DebateTabProps
         <h3 className="font-theme-data text-[var(--accent)] mb-4">Default Debate Settings</h3>
         <div className="space-y-4">
           <div>
-            <label htmlFor="default-mode-select" className="font-theme-data text-sm text-text block mb-2">Default Mode</label>
+            <label
+              htmlFor="default-mode-select"
+              className="font-theme-data text-sm text-text block mb-2"
+            >
+              Default Mode
+            </label>
             <select
               id="default-mode-select"
               value={featureConfig.default_mode}
@@ -28,7 +33,12 @@ export function DebateTab({ featureConfig, updateFeatureConfig }: DebateTabProps
           </div>
 
           <div>
-            <label htmlFor="default-rounds-input" className="font-theme-data text-sm text-text block mb-2">Default Rounds</label>
+            <label
+              htmlFor="default-rounds-input"
+              className="font-theme-data text-sm text-text block mb-2"
+            >
+              Default Rounds
+            </label>
             <input
               id="default-rounds-input"
               type="number"
@@ -41,7 +51,12 @@ export function DebateTab({ featureConfig, updateFeatureConfig }: DebateTabProps
           </div>
 
           <div>
-            <label htmlFor="default-agents-input" className="font-theme-data text-sm text-text block mb-2">Default Agents</label>
+            <label
+              htmlFor="default-agents-input"
+              className="font-theme-data text-sm text-text block mb-2"
+            >
+              Default Agents
+            </label>
             <input
               id="default-agents-input"
               type="text"
@@ -50,7 +65,9 @@ export function DebateTab({ featureConfig, updateFeatureConfig }: DebateTabProps
               placeholder="claude,gemini,gpt4,grok"
               className="w-full bg-surface border border-[var(--accent)]/30 rounded px-3 py-2 font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
             />
-            <p className="font-theme-data text-xs text-text-muted mt-1">Comma-separated list of agents</p>
+            <p className="font-theme-data text-xs text-text-muted mt-1">
+              Comma-separated list of agents
+            </p>
           </div>
         </div>
       </div>
@@ -59,8 +76,12 @@ export function DebateTab({ featureConfig, updateFeatureConfig }: DebateTabProps
         <h3 className="font-theme-data text-[var(--accent)] mb-4">Alert Thresholds</h3>
         <div className="space-y-4">
           <div>
-            <label htmlFor="consensus-threshold-range" className="font-theme-data text-sm text-text block mb-2">
-              Consensus Alert Threshold: {(featureConfig.consensus_alert_threshold * 100).toFixed(0)}%
+            <label
+              htmlFor="consensus-threshold-range"
+              className="font-theme-data text-sm text-text block mb-2"
+            >
+              Consensus Alert Threshold:{' '}
+              {(featureConfig.consensus_alert_threshold * 100).toFixed(0)}%
             </label>
             <input
               id="consensus-threshold-range"
@@ -69,7 +90,9 @@ export function DebateTab({ featureConfig, updateFeatureConfig }: DebateTabProps
               max={1.0}
               step={0.05}
               value={featureConfig.consensus_alert_threshold}
-              onChange={(e) => updateFeatureConfig('consensus_alert_threshold', parseFloat(e.target.value))}
+              onChange={(e) =>
+                updateFeatureConfig('consensus_alert_threshold', parseFloat(e.target.value))
+              }
               className="w-full accent-acid-green"
               aria-label={`Consensus alert threshold: ${(featureConfig.consensus_alert_threshold * 100).toFixed(0)}%`}
             />

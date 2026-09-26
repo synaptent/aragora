@@ -5,8 +5,18 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
-    <a href={href} {...props}>{children}</a>
+  return ({
+    children,
+    href,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   );
 });
 
@@ -49,10 +59,7 @@ jest.mock('../src/components/templates/TemplateMarketplace', () => ({
 
 // Mock RightSidebarContext
 jest.mock('../src/context/RightSidebarContext', () => ({
-  useRightSidebar: () => ({
-    setContext: jest.fn(),
-    clearContext: jest.fn(),
-  }),
+  useRightSidebar: () => ({ setContext: jest.fn(), clearContext: jest.fn() }),
 }));
 
 // Mock useDashboardEvents
@@ -296,7 +303,11 @@ describe('DashboardPage', () => {
 
     it('shows OFFLINE when health check fails', async () => {
       swrResponses['debates'] = { data: { debates: [] }, error: null, isLoading: false };
-      swrResponses['health'] = { data: null, error: new Error('Connection refused'), isLoading: false };
+      swrResponses['health'] = {
+        data: null,
+        error: new Error('Connection refused'),
+        isLoading: false,
+      };
 
       await act(async () => {
         render(<DashboardPage />);

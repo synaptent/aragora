@@ -189,9 +189,11 @@ export function MFASettings({ user, onMFAStatusChange }: MFASettingsProps) {
             Add an extra layer of security to your account using an authenticator app.
           </p>
         </div>
-        <div className={`px-2 py-1 rounded text-xs font-theme-data ${
-          mfaEnabled ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'bg-surface text-text-muted'
-        }`}>
+        <div
+          className={`px-2 py-1 rounded text-xs font-theme-data ${
+            mfaEnabled ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'bg-surface text-text-muted'
+          }`}
+        >
           {mfaEnabled ? 'ENABLED' : 'DISABLED'}
         </div>
       </div>
@@ -225,13 +227,15 @@ export function MFASettings({ user, onMFAStatusChange }: MFASettingsProps) {
               {showRegenerate && (
                 <div className="p-4 bg-surface rounded border border-[var(--acid-cyan)]/30 space-y-3">
                   <p className="font-theme-data text-xs text-text-muted">
-                    Enter your current 2FA code to generate new backup codes.
-                    Old backup codes will be invalidated.
+                    Enter your current 2FA code to generate new backup codes. Old backup codes will
+                    be invalidated.
                   </p>
                   <input
                     type="text"
                     value={regenerateCode}
-                    onChange={(e) => setRegenerateCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) =>
+                      setRegenerateCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
                     placeholder="6-digit code"
                     className="w-full bg-bg border border-[var(--accent)]/30 rounded px-3 py-2 font-theme-data text-sm text-center tracking-widest focus:outline-none focus:border-[var(--accent)]"
                     maxLength={6}
@@ -262,7 +266,8 @@ export function MFASettings({ user, onMFAStatusChange }: MFASettingsProps) {
         <div className="space-y-4 p-4 bg-surface rounded border border-[var(--accent)]/30">
           <h5 className="font-theme-data text-sm text-[var(--accent)]">Step 1: Scan QR Code</h5>
           <p className="font-theme-data text-xs text-text-muted">
-            Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)
+            Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password,
+            etc.)
           </p>
 
           {provisioningUri && (
@@ -333,10 +338,12 @@ export function MFASettings({ user, onMFAStatusChange }: MFASettingsProps) {
           <div className="flex items-start gap-2">
             <span className="text-[var(--acid-yellow)]">!</span>
             <div>
-              <h5 className="font-theme-data text-sm text-[var(--acid-yellow)]">Save Your Backup Codes</h5>
+              <h5 className="font-theme-data text-sm text-[var(--acid-yellow)]">
+                Save Your Backup Codes
+              </h5>
               <p className="font-theme-data text-xs text-text-muted mt-1">
-                These codes can be used to access your account if you lose your authenticator.
-                Each code can only be used once. Store them securely.
+                These codes can be used to access your account if you lose your authenticator. Each
+                code can only be used once. Store them securely.
               </p>
             </div>
           </div>
@@ -388,7 +395,9 @@ export function MFASettings({ user, onMFAStatusChange }: MFASettingsProps) {
       {/* Disable step */}
       {step === 'disable' && (
         <div className="space-y-4 p-4 bg-surface rounded border border-acid-red/30">
-          <h5 className="font-theme-data text-sm text-acid-red">Disable Two-Factor Authentication</h5>
+          <h5 className="font-theme-data text-sm text-acid-red">
+            Disable Two-Factor Authentication
+          </h5>
           <p className="font-theme-data text-xs text-text-muted">
             Enter your current 2FA code OR your account password to disable 2FA.
           </p>

@@ -1,9 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useOracleWebSocket } from '@/hooks/useOracleWebSocket';
 
-jest.mock('@/config', () => ({
-  WS_URL: 'wss://test.com/ws',
-}));
+jest.mock('@/config', () => ({ WS_URL: 'wss://test.com/ws' }));
 
 const mockAudio = {
   appendChunk: jest.fn(),
@@ -15,9 +13,7 @@ const mockAudio = {
   isPaused: jest.fn(() => false),
 };
 
-jest.mock('../../hooks/useStreamingAudio', () => ({
-  useStreamingAudio: () => mockAudio,
-}));
+jest.mock('../../hooks/useStreamingAudio', () => ({ useStreamingAudio: () => mockAudio }));
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
@@ -108,7 +104,9 @@ describe('useOracleWebSocket metrics', () => {
 
     expect(result.current.timeToFirstTokenMs).not.toBeNull();
     expect(result.current.streamDurationMs).not.toBeNull();
-    expect(result.current.streamDurationMs).toBeGreaterThanOrEqual(result.current.timeToFirstTokenMs || 0);
+    expect(result.current.streamDurationMs).toBeGreaterThanOrEqual(
+      result.current.timeToFirstTokenMs || 0,
+    );
   });
 
   it('resets previous latency metrics on a new ask', () => {

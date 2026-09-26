@@ -1,0 +1,5 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["docusaurus.config.js", "sidebars.js", "scripts/*.{js,mjs}", "vitest.config.ts"],
+  "project": ["src/**/*.{js,jsx,ts,tsx}", "scripts/**/*.{js,mjs}", "tests/**/*.ts"]
+}

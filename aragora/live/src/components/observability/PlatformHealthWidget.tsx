@@ -17,11 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 
 interface PlatformHealthData {
   status: 'healthy' | 'degraded' | 'not_configured' | 'healthy_with_warnings';
-  summary: {
-    total_components: number;
-    healthy: number;
-    active: number;
-  };
+  summary: { total_components: number; healthy: number; active: number };
   components: {
     rate_limiters?: {
       healthy: boolean;
@@ -67,7 +63,9 @@ function CircuitBadge({ state }: CircuitBadgeProps) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-[10px] font-theme-data rounded border ${stateColors[state] || stateColors.not_configured}`}>
+    <span
+      className={`px-2 py-0.5 text-[10px] font-theme-data rounded border ${stateColors[state] || stateColors.not_configured}`}
+    >
       {state.toUpperCase()}
     </span>
   );
@@ -162,7 +160,9 @@ export function PlatformHealthWidget() {
   if (error) {
     return (
       <div className="border border-[var(--crimson)]/30 bg-[var(--crimson)]/5 rounded-lg p-4">
-        <div className="text-[var(--crimson)] font-theme-data text-sm mb-1">Platform Health Error</div>
+        <div className="text-[var(--crimson)] font-theme-data text-sm mb-1">
+          Platform Health Error
+        </div>
         <div className="text-text-muted text-xs">{error}</div>
         <button
           onClick={() => refetch()}
@@ -203,11 +203,7 @@ export function PlatformHealthWidget() {
 
       {/* Summary Row (always visible) */}
       <div className="px-3 pb-3 grid grid-cols-4 gap-3 border-t border-border pt-3">
-        <StatBox
-          label="Healthy"
-          value={data.summary.healthy}
-          color="green"
-        />
+        <StatBox label="Healthy" value={data.summary.healthy} color="green" />
         <StatBox
           label="DLQ Pending"
           value={dlq?.pending_count ?? '-'}
@@ -218,11 +214,7 @@ export function PlatformHealthWidget() {
           value={dlq?.failed_count ?? '-'}
           color={dlq?.failed_count && dlq.failed_count > 0 ? 'red' : 'cyan'}
         />
-        <StatBox
-          label="Response"
-          value={`${data.response_time_ms}ms`}
-          color="cyan"
-        />
+        <StatBox label="Response" value={`${data.response_time_ms}ms`} color="cyan" />
       </div>
 
       {/* Expanded Details */}
@@ -270,7 +262,9 @@ export function PlatformHealthWidget() {
                     className="text-center p-2 bg-background rounded border border-border"
                   >
                     <div className="text-[10px] text-text-muted capitalize">{platform}</div>
-                    <div className="text-sm font-theme-data text-[var(--acid-cyan)]">{config.rpm}</div>
+                    <div className="text-sm font-theme-data text-[var(--acid-cyan)]">
+                      {config.rpm}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -284,15 +278,21 @@ export function PlatformHealthWidget() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-2 bg-background rounded border border-border text-center">
                   <div className="text-[10px] text-text-muted">Pending</div>
-                  <div className="text-lg font-theme-data text-[var(--acid-yellow)]">{dlq.pending_count ?? 0}</div>
+                  <div className="text-lg font-theme-data text-[var(--acid-yellow)]">
+                    {dlq.pending_count ?? 0}
+                  </div>
                 </div>
                 <div className="p-2 bg-background rounded border border-border text-center">
                   <div className="text-[10px] text-text-muted">Processed</div>
-                  <div className="text-lg font-theme-data text-[var(--accent)]">{dlq.processed_count ?? 0}</div>
+                  <div className="text-lg font-theme-data text-[var(--accent)]">
+                    {dlq.processed_count ?? 0}
+                  </div>
                 </div>
                 <div className="p-2 bg-background rounded border border-border text-center">
                   <div className="text-[10px] text-text-muted">Failed</div>
-                  <div className="text-lg font-theme-data text-[var(--crimson)]">{dlq.failed_count ?? 0}</div>
+                  <div className="text-lg font-theme-data text-[var(--crimson)]">
+                    {dlq.failed_count ?? 0}
+                  </div>
                 </div>
               </div>
             </div>

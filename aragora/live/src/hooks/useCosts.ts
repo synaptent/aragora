@@ -162,20 +162,14 @@ export type TimeRange = '24h' | '7d' | '30d' | '90d';
  */
 export function useCostSummary(
   timeRange: TimeRange = '30d',
-  options?: UseSWRFetchOptions<{ data: CostSummary }>
+  options?: UseSWRFetchOptions<{ data: CostSummary }>,
 ) {
-  const result = useSWRFetch<{ data: CostSummary }>(
-    `/api/v1/costs?range=${timeRange}`,
-    {
-      refreshInterval: 60000, // Refresh every minute
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: CostSummary }>(`/api/v1/costs?range=${timeRange}`, {
+    refreshInterval: 60000, // Refresh every minute
+    ...options,
+  });
 
-  return {
-    ...result,
-    summary: result.data?.data ?? null,
-  };
+  return { ...result, summary: result.data?.data ?? null };
 }
 
 /**
@@ -185,20 +179,14 @@ export function useCostSummary(
  */
 export function useCostsBreakdown(
   timeRange: TimeRange = '30d',
-  options?: UseSWRFetchOptions<{ data: CostBreakdown }>
+  options?: UseSWRFetchOptions<{ data: CostBreakdown }>,
 ) {
   const result = useSWRFetch<{ data: CostBreakdown }>(
     `/api/v1/costs/breakdown?range=${timeRange}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    breakdown: result.data?.data ?? null,
-  };
+  return { ...result, breakdown: result.data?.data ?? null };
 }
 
 /**
@@ -206,58 +194,43 @@ export function useCostsBreakdown(
  */
 export function useCostTimeline(
   timeRange: TimeRange = '30d',
-  options?: UseSWRFetchOptions<{ data: CostTimeline }>
+  options?: UseSWRFetchOptions<{ data: CostTimeline }>,
 ) {
-  const result = useSWRFetch<{ data: CostTimeline }>(
-    `/api/v1/costs/timeline?range=${timeRange}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: CostTimeline }>(`/api/v1/costs/timeline?range=${timeRange}`, {
+    refreshInterval: 60000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    timeline: result.data?.data ?? null,
-  };
+  return { ...result, timeline: result.data?.data ?? null };
 }
 
 /**
  * Hook for fetching budget alerts
  */
 export function useCostAlerts(options?: UseSWRFetchOptions<{ data: { alerts: CostAlert[] } }>) {
-  const result = useSWRFetch<{ data: { alerts: CostAlert[] } }>(
-    '/api/v1/costs/alerts',
-    {
-      refreshInterval: 30000, // Check alerts more frequently
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: { alerts: CostAlert[] } }>('/api/v1/costs/alerts', {
+    refreshInterval: 30000, // Check alerts more frequently
+    ...options,
+  });
 
-  return {
-    ...result,
-    alerts: result.data?.data?.alerts ?? [],
-  };
+  return { ...result, alerts: result.data?.data?.alerts ?? [] };
 }
 
 /**
  * Hook for fetching optimization recommendations
  */
 export function useCostRecommendations(
-  options?: UseSWRFetchOptions<{ data: { recommendations: CostRecommendation[] } }>
+  options?: UseSWRFetchOptions<{ data: { recommendations: CostRecommendation[] } }>,
 ) {
   const result = useSWRFetch<{ data: { recommendations: CostRecommendation[] } }>(
     '/api/v1/costs/recommendations',
     {
       refreshInterval: 300000, // Refresh every 5 minutes
       ...options,
-    }
+    },
   );
 
-  return {
-    ...result,
-    recommendations: result.data?.data?.recommendations ?? [],
-  };
+  return { ...result, recommendations: result.data?.data?.recommendations ?? [] };
 }
 
 /**
@@ -265,38 +238,26 @@ export function useCostRecommendations(
  */
 export function useCostEfficiency(
   timeRange: TimeRange = '30d',
-  options?: UseSWRFetchOptions<{ data: EfficiencyMetrics }>
+  options?: UseSWRFetchOptions<{ data: EfficiencyMetrics }>,
 ) {
   const result = useSWRFetch<{ data: EfficiencyMetrics }>(
     `/api/v1/costs/efficiency?range=${timeRange}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    efficiency: result.data?.data ?? null,
-  };
+  return { ...result, efficiency: result.data?.data ?? null };
 }
 
 /**
  * Hook for fetching cost forecast
  */
 export function useCostForecast(options?: UseSWRFetchOptions<{ data: CostForecast }>) {
-  const result = useSWRFetch<{ data: CostForecast }>(
-    '/api/v1/costs/forecast',
-    {
-      refreshInterval: 300000, // Refresh every 5 minutes
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: CostForecast }>('/api/v1/costs/forecast', {
+    refreshInterval: 300000, // Refresh every 5 minutes
+    ...options,
+  });
 
-  return {
-    ...result,
-    forecast: result.data?.data ?? null,
-  };
+  return { ...result, forecast: result.data?.data ?? null };
 }
 
 // ============================================================================
@@ -308,60 +269,42 @@ export function useCostForecast(options?: UseSWRFetchOptions<{ data: CostForecas
  */
 export function useSpendTrend(
   period: TimeRange = '30d',
-  options?: UseSWRFetchOptions<{ data: SpendTrend }>
+  options?: UseSWRFetchOptions<{ data: SpendTrend }>,
 ) {
   const result = useSWRFetch<{ data: SpendTrend }>(
     `/api/v1/costs/analytics/trend?period=${period}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    trend: result.data?.data ?? null,
-  };
+  return { ...result, trend: result.data?.data ?? null };
 }
 
 /**
  * Hook for fetching per-agent cost breakdown
  */
 export function useAgentCostBreakdown(
-  options?: UseSWRFetchOptions<{ data: AgentCostBreakdownData }>
+  options?: UseSWRFetchOptions<{ data: AgentCostBreakdownData }>,
 ) {
-  const result = useSWRFetch<{ data: AgentCostBreakdownData }>(
-    '/api/v1/costs/analytics/by-agent',
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: AgentCostBreakdownData }>('/api/v1/costs/analytics/by-agent', {
+    refreshInterval: 60000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    agentBreakdown: result.data?.data ?? null,
-  };
+  return { ...result, agentBreakdown: result.data?.data ?? null };
 }
 
 /**
  * Hook for fetching per-model cost breakdown
  */
 export function useModelCostBreakdown(
-  options?: UseSWRFetchOptions<{ data: ModelCostBreakdownData }>
+  options?: UseSWRFetchOptions<{ data: ModelCostBreakdownData }>,
 ) {
-  const result = useSWRFetch<{ data: ModelCostBreakdownData }>(
-    '/api/v1/costs/analytics/by-model',
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: ModelCostBreakdownData }>('/api/v1/costs/analytics/by-model', {
+    refreshInterval: 60000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    modelBreakdown: result.data?.data ?? null,
-  };
+  return { ...result, modelBreakdown: result.data?.data ?? null };
 }
 
 /**
@@ -369,50 +312,53 @@ export function useModelCostBreakdown(
  */
 export function useDebateCostBreakdown(
   limit: number = 20,
-  options?: UseSWRFetchOptions<{ data: DebateCostBreakdownData }>
+  options?: UseSWRFetchOptions<{ data: DebateCostBreakdownData }>,
 ) {
   const result = useSWRFetch<{ data: DebateCostBreakdownData }>(
     `/api/v1/costs/analytics/by-debate?limit=${limit}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    debateBreakdown: result.data?.data ?? null,
-  };
+  return { ...result, debateBreakdown: result.data?.data ?? null };
 }
 
 /**
  * Hook for fetching budget utilization metrics
  */
-export function useBudgetUtilization(
-  options?: UseSWRFetchOptions<{ data: BudgetUtilization }>
-) {
+export function useBudgetUtilization(options?: UseSWRFetchOptions<{ data: BudgetUtilization }>) {
   const result = useSWRFetch<{ data: BudgetUtilization }>(
     '/api/v1/costs/analytics/budget-utilization',
     {
       refreshInterval: 30000, // Check frequently
       ...options,
-    }
+    },
   );
 
-  return {
-    ...result,
-    utilization: result.data?.data ?? null,
-  };
+  return { ...result, utilization: result.data?.data ?? null };
 }
 
 /**
  * Unified hook for all cost data with combined loading/error state
  */
 export function useCosts(timeRange: TimeRange = '30d') {
-  const { summary, isLoading: summaryLoading, error: summaryError, mutate: mutateSummary } = useCostSummary(timeRange);
-  const { breakdown, isLoading: breakdownLoading, error: breakdownError } = useCostsBreakdown(timeRange);
+  const {
+    summary,
+    isLoading: summaryLoading,
+    error: summaryError,
+    mutate: mutateSummary,
+  } = useCostSummary(timeRange);
+  const {
+    breakdown,
+    isLoading: breakdownLoading,
+    error: breakdownError,
+  } = useCostsBreakdown(timeRange);
   const { timeline, isLoading: timelineLoading, error: timelineError } = useCostTimeline(timeRange);
-  const { alerts, isLoading: alertsLoading, error: alertsError, mutate: mutateAlerts } = useCostAlerts();
+  const {
+    alerts,
+    isLoading: alertsLoading,
+    error: alertsError,
+    mutate: mutateAlerts,
+  } = useCostAlerts();
 
   const api = useApi();
 
@@ -429,22 +375,25 @@ export function useCosts(timeRange: TimeRange = '30d') {
       tokensUsed: summary.tokens_in + summary.tokens_out,
       apiCalls: summary.api_calls,
       lastUpdated: new Date().toISOString(),
-      costByProvider: breakdown?.by_provider?.map(item => ({
-        name: item.name,
-        cost: item.cost,
-        percentage: item.percentage,
-      })) ?? [],
-      costByFeature: breakdown?.by_feature?.map(item => ({
-        name: item.name,
-        cost: item.cost,
-        percentage: item.percentage,
-      })) ?? [],
-      dailyCosts: timeline?.data_points?.map(point => ({
-        date: point.date,
-        cost: point.cost,
-        tokens: point.tokens,
-      })) ?? [],
-      alerts: alerts.map(alert => ({
+      costByProvider:
+        breakdown?.by_provider?.map((item) => ({
+          name: item.name,
+          cost: item.cost,
+          percentage: item.percentage,
+        })) ?? [],
+      costByFeature:
+        breakdown?.by_feature?.map((item) => ({
+          name: item.name,
+          cost: item.cost,
+          percentage: item.percentage,
+        })) ?? [],
+      dailyCosts:
+        timeline?.data_points?.map((point) => ({
+          date: point.date,
+          cost: point.cost,
+          tokens: point.tokens,
+        })) ?? [],
+      alerts: alerts.map((alert) => ({
         id: alert.id,
         type: alert.type,
         message: alert.message,
@@ -455,30 +404,42 @@ export function useCosts(timeRange: TimeRange = '30d') {
   }, [summary, breakdown, timeline, alerts]);
 
   // Set budget
-  const setBudget = useCallback(async (budget: Budget) => {
-    await api.post('/api/v1/costs/budget', budget);
-    // Invalidate and refetch
-    invalidateCache('/api/v1/costs');
-    mutateSummary();
-  }, [api, mutateSummary]);
+  const setBudget = useCallback(
+    async (budget: Budget) => {
+      await api.post('/api/v1/costs/budget', budget);
+      // Invalidate and refetch
+      invalidateCache('/api/v1/costs');
+      mutateSummary();
+    },
+    [api, mutateSummary],
+  );
 
   // Dismiss alert
-  const dismissAlert = useCallback(async (alertId: string) => {
-    await api.post(`/api/v1/costs/alerts/${alertId}/dismiss`);
-    mutateAlerts();
-  }, [api, mutateAlerts]);
+  const dismissAlert = useCallback(
+    async (alertId: string) => {
+      await api.post(`/api/v1/costs/alerts/${alertId}/dismiss`);
+      mutateAlerts();
+    },
+    [api, mutateAlerts],
+  );
 
   // Apply recommendation
-  const applyRecommendation = useCallback(async (recommendationId: string) => {
-    await api.post(`/api/v1/costs/recommendations/${recommendationId}/apply`);
-    invalidateCache('/api/v1/costs/recommendations');
-  }, [api]);
+  const applyRecommendation = useCallback(
+    async (recommendationId: string) => {
+      await api.post(`/api/v1/costs/recommendations/${recommendationId}/apply`);
+      invalidateCache('/api/v1/costs/recommendations');
+    },
+    [api],
+  );
 
   // Dismiss recommendation
-  const dismissRecommendation = useCallback(async (recommendationId: string) => {
-    await api.post(`/api/v1/costs/recommendations/${recommendationId}/dismiss`);
-    invalidateCache('/api/v1/costs/recommendations');
-  }, [api]);
+  const dismissRecommendation = useCallback(
+    async (recommendationId: string) => {
+      await api.post(`/api/v1/costs/recommendations/${recommendationId}/dismiss`);
+      invalidateCache('/api/v1/costs/recommendations');
+    },
+    [api],
+  );
 
   // Refresh all cost data
   const refresh = useCallback(() => {

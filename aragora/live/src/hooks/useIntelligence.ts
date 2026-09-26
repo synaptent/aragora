@@ -20,12 +20,7 @@ interface NodeExplanation {
 
 interface NodePrecedent {
   nodeId: string;
-  matches: {
-    title: string;
-    similarity: number;
-    outcome: string;
-    source: string;
-  }[];
+  matches: { title: string; similarity: number; outcome: string; source: string }[];
 }
 
 interface IntelligenceOverlays {
@@ -102,10 +97,7 @@ export function useIntelligence(pipelineId: string | null): UseIntelligenceRetur
       if (data.precedents) {
         const precMap: Record<string, NodePrecedent> = {};
         for (const p of data.precedents) {
-          precMap[p.node_id] = {
-            nodeId: p.node_id,
-            matches: p.matches || [],
-          };
+          precMap[p.node_id] = { nodeId: p.node_id, matches: p.matches || [] };
         }
         setPrecedents(precMap);
       }

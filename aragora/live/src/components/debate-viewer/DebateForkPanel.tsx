@@ -125,10 +125,7 @@ export function DebateForkPanel({
       const response = await fetch(`${apiUrl}/api/debates/${debateId}/followup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          crux_id: selectedCrux || undefined,
-          task: customTask || undefined,
-        }),
+        body: JSON.stringify({ crux_id: selectedCrux || undefined, task: customTask || undefined }),
       });
 
       const data = await response.json();

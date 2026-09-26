@@ -5,10 +5,7 @@ import { useToastContext } from '@/context/ToastContext';
 import { API_BASE_URL } from '@/config';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { logger } from '@/utils/logger';
-import {
-  useConnectorWebSocket,
-  type ConnectorSyncState,
-} from '@/hooks/useConnectorWebSocket';
+import { useConnectorWebSocket, type ConnectorSyncState } from '@/hooks/useConnectorWebSocket';
 import {
   type Connector,
   type ConnectorDetails,
@@ -64,7 +61,8 @@ function ConnectorCard({
         <div className="flex items-center gap-2">
           {isRunning && (
             <span className="px-2 py-1 text-xs bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/50 rounded font-theme-data animate-pulse">
-              SYNCING {connector.sync_progress ? `${Math.round(connector.sync_progress * 100)}%` : ''}
+              SYNCING{' '}
+              {connector.sync_progress ? `${Math.round(connector.sync_progress * 100)}%` : ''}
             </span>
           )}
           {connector.status === 'error' && (
@@ -103,24 +101,22 @@ function ConnectorCard({
           </div>
           <div>
             <span className="text-text-muted">Status:</span>
-            <span className={`ml-2 ${schedule.enabled ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+            <span
+              className={`ml-2 ${schedule.enabled ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+            >
               {schedule.enabled ? 'ENABLED' : 'DISABLED'}
             </span>
           </div>
           {connector.last_run && (
             <div>
               <span className="text-text-muted">Last Run:</span>
-              <span className="ml-2 text-text">
-                {formatRelativeTime(connector.last_run)}
-              </span>
+              <span className="ml-2 text-text">{formatRelativeTime(connector.last_run)}</span>
             </div>
           )}
           {connector.items_synced !== undefined && (
             <div>
               <span className="text-text-muted">Items:</span>
-              <span className="ml-2 text-text">
-                {connector.items_synced.toLocaleString()}
-              </span>
+              <span className="ml-2 text-text">{connector.items_synced.toLocaleString()}</span>
             </div>
           )}
         </div>
@@ -251,9 +247,7 @@ function EditConnectorModal({
                 placeholder="0 * * * *"
                 className="w-full px-3 py-2 bg-bg border border-border rounded text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
               />
-              <p className="text-xs text-text-muted mt-1">
-                Example: 0 */6 * * * (every 6 hours)
-              </p>
+              <p className="text-xs text-text-muted mt-1">Example: 0 */6 * * * (every 6 hours)</p>
             </div>
           ) : (
             <div className="mb-4">
@@ -268,9 +262,7 @@ function EditConnectorModal({
                 max={1440}
                 className="w-full px-3 py-2 bg-bg border border-border rounded text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
               />
-              <p className="text-xs text-text-muted mt-1">
-                Sync every {intervalMinutes} minutes
-              </p>
+              <p className="text-xs text-text-muted mt-1">Sync every {intervalMinutes} minutes</p>
             </div>
           )}
 
@@ -283,9 +275,7 @@ function EditConnectorModal({
                 onChange={(e) => setEnabled(e.target.checked)}
                 className="w-4 h-4 accent-acid-green"
               />
-              <span className="text-sm font-theme-data text-text">
-                Enable automatic sync
-              </span>
+              <span className="text-sm font-theme-data text-text">Enable automatic sync</span>
             </label>
           </div>
 
@@ -321,32 +311,33 @@ function AddConnectorModal({
   const [type, setType] = useState('github');
   const [config, setConfig] = useState<Record<string, string>>({});
 
-  const configFields: Record<string, { label: string; placeholder: string; required?: boolean }[]> = {
-    github: [
-      { label: 'owner', placeholder: 'Organization/User', required: true },
-      { label: 'repo', placeholder: 'Repository name', required: true },
-      { label: 'token', placeholder: 'GitHub token (optional)' },
-    ],
-    s3: [
-      { label: 'bucket', placeholder: 'Bucket name', required: true },
-      { label: 'prefix', placeholder: 'Path prefix (optional)' },
-      { label: 'region', placeholder: 'AWS region' },
-    ],
-    postgres: [
-      { label: 'host', placeholder: 'Database host', required: true },
-      { label: 'database', placeholder: 'Database name', required: true },
-      { label: 'schema', placeholder: 'Schema (default: public)' },
-    ],
-    mongodb: [
-      { label: 'connection_string', placeholder: 'MongoDB URI', required: true },
-      { label: 'database', placeholder: 'Database name', required: true },
-    ],
-    fhir: [
-      { label: 'base_url', placeholder: 'FHIR server URL', required: true },
-      { label: 'organization_id', placeholder: 'Organization ID', required: true },
-      { label: 'client_id', placeholder: 'OAuth client ID' },
-    ],
-  };
+  const configFields: Record<string, { label: string; placeholder: string; required?: boolean }[]> =
+    {
+      github: [
+        { label: 'owner', placeholder: 'Organization/User', required: true },
+        { label: 'repo', placeholder: 'Repository name', required: true },
+        { label: 'token', placeholder: 'GitHub token (optional)' },
+      ],
+      s3: [
+        { label: 'bucket', placeholder: 'Bucket name', required: true },
+        { label: 'prefix', placeholder: 'Path prefix (optional)' },
+        { label: 'region', placeholder: 'AWS region' },
+      ],
+      postgres: [
+        { label: 'host', placeholder: 'Database host', required: true },
+        { label: 'database', placeholder: 'Database name', required: true },
+        { label: 'schema', placeholder: 'Schema (default: public)' },
+      ],
+      mongodb: [
+        { label: 'connection_string', placeholder: 'MongoDB URI', required: true },
+        { label: 'database', placeholder: 'Database name', required: true },
+      ],
+      fhir: [
+        { label: 'base_url', placeholder: 'FHIR server URL', required: true },
+        { label: 'organization_id', placeholder: 'Organization ID', required: true },
+        { label: 'client_id', placeholder: 'OAuth client ID' },
+      ],
+    };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -405,9 +396,7 @@ function AddConnectorModal({
                 <input
                   type="text"
                   value={config[field.label] || ''}
-                  onChange={(e) =>
-                    setConfig({ ...config, [field.label]: e.target.value })
-                  }
+                  onChange={(e) => setConfig({ ...config, [field.label]: e.target.value })}
                   placeholder={field.placeholder}
                   required={field.required}
                   className="w-full px-3 py-2 bg-bg border border-border rounded text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
@@ -501,9 +490,13 @@ function ConnectorDetailsModal({
                 {details.name || details.id.split(':').pop()}
               </h2>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted font-theme-data uppercase">{connectorType}</span>
+                <span className="text-xs text-text-muted font-theme-data uppercase">
+                  {connectorType}
+                </span>
                 {details.category && (
-                  <span className={`text-xs px-2 py-0.5 rounded font-theme-data ${CONNECTOR_CATEGORIES[details.category]?.color || 'bg-gray-500/20 text-gray-400'}`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded font-theme-data ${CONNECTOR_CATEGORIES[details.category]?.color || 'bg-gray-500/20 text-gray-400'}`}
+                  >
                     {details.category}
                   </span>
                 )}
@@ -542,12 +535,17 @@ function ConnectorDetailsModal({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <div className="text-xs text-text-muted font-theme-data">Status</div>
-                    <div className={`font-theme-data font-bold ${
-                      details.status === 'connected' || details.status === 'configured' ? 'text-[var(--accent)]' :
-                      details.status === 'error' ? 'text-red-400' :
-                      details.status === 'syncing' ? 'text-yellow-400' :
-                      'text-text-muted'
-                    }`}>
+                    <div
+                      className={`font-theme-data font-bold ${
+                        details.status === 'connected' || details.status === 'configured'
+                          ? 'text-[var(--accent)]'
+                          : details.status === 'error'
+                            ? 'text-red-400'
+                            : details.status === 'syncing'
+                              ? 'text-yellow-400'
+                              : 'text-text-muted'
+                      }`}
+                    >
                       {details.status?.toUpperCase() || 'UNKNOWN'}
                     </div>
                   </div>
@@ -565,9 +563,11 @@ function ConnectorDetailsModal({
                   </div>
                   <div>
                     <div className="text-xs text-text-muted font-theme-data">Failures</div>
-                    <div className={`font-theme-data font-bold ${
-                      details.consecutive_failures > 0 ? 'text-red-400' : 'text-[var(--accent)]'
-                    }`}>
+                    <div
+                      className={`font-theme-data font-bold ${
+                        details.consecutive_failures > 0 ? 'text-red-400' : 'text-[var(--accent)]'
+                      }`}
+                    >
                       {details.consecutive_failures}
                     </div>
                   </div>
@@ -597,14 +597,18 @@ function ConnectorDetailsModal({
                   </div>
                   <div>
                     <span className="text-text-muted">Enabled:</span>
-                    <span className={`ml-2 ${schedule.enabled ? 'text-[var(--accent)]' : 'text-red-400'}`}>
+                    <span
+                      className={`ml-2 ${schedule.enabled ? 'text-[var(--accent)]' : 'text-red-400'}`}
+                    >
                       {schedule.enabled ? 'YES' : 'NO'}
                     </span>
                   </div>
                   <div>
                     <span className="text-text-muted">Next Run:</span>
                     <span className="ml-2 text-text">
-                      {details.next_run ? new Date(details.next_run).toLocaleString() : 'Not scheduled'}
+                      {details.next_run
+                        ? new Date(details.next_run).toLocaleString()
+                        : 'Not scheduled'}
                     </span>
                   </div>
                 </div>
@@ -641,12 +645,17 @@ function ConnectorDetailsModal({
                     className="p-3 bg-bg rounded-lg border border-border"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-xs font-theme-data px-2 py-0.5 rounded ${
-                        sync.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                        sync.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                        sync.status === 'running' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
+                      <span
+                        className={`text-xs font-theme-data px-2 py-0.5 rounded ${
+                          sync.status === 'completed'
+                            ? 'bg-green-500/20 text-green-400'
+                            : sync.status === 'failed'
+                              ? 'bg-red-500/20 text-red-400'
+                              : sync.status === 'running'
+                                ? 'bg-yellow-500/20 text-yellow-400'
+                                : 'bg-gray-500/20 text-gray-400'
+                        }`}
+                      >
                         {sync.status.toUpperCase()}
                       </span>
                       <span className="text-xs text-text-muted font-theme-data">
@@ -656,7 +665,9 @@ function ConnectorDetailsModal({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-theme-data">
                       <div>
                         <span className="text-text-muted">Items:</span>
-                        <span className="ml-1 text-text">{sync.items_synced || sync.items_processed || 0}</span>
+                        <span className="ml-1 text-text">
+                          {sync.items_synced || sync.items_processed || 0}
+                        </span>
                       </div>
                       <div>
                         <span className="text-text-muted">Failed:</span>
@@ -706,13 +717,17 @@ function ConnectorDetailsModal({
                   {details.created_at && (
                     <div>
                       <span className="text-text-muted">Created:</span>
-                      <span className="ml-2 text-text">{new Date(details.created_at).toLocaleString()}</span>
+                      <span className="ml-2 text-text">
+                        {new Date(details.created_at).toLocaleString()}
+                      </span>
                     </div>
                   )}
                   {details.updated_at && (
                     <div>
                       <span className="text-text-muted">Updated:</span>
-                      <span className="ml-2 text-text">{new Date(details.updated_at).toLocaleString()}</span>
+                      <span className="ml-2 text-text">
+                        {new Date(details.updated_at).toLocaleString()}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -745,14 +760,17 @@ export default function ConnectorsPage() {
   } = useConnectorWebSocket({
     enabled: true,
     autoReconnect: true,
-    onSyncUpdate: useCallback((sync: ConnectorSyncState) => {
-      if (sync.status === 'completed' || sync.status === 'failed') {
-        showToast(
-          `Sync ${sync.connector_name}: ${sync.status}`,
-          sync.status === 'completed' ? 'success' : 'error',
-        );
-      }
-    }, [showToast]),
+    onSyncUpdate: useCallback(
+      (sync: ConnectorSyncState) => {
+        if (sync.status === 'completed' || sync.status === 'failed') {
+          showToast(
+            `Sync ${sync.connector_name}: ${sync.status}`,
+            sync.status === 'completed' ? 'success' : 'error',
+          );
+        }
+      },
+      [showToast],
+    ),
   });
 
   // Merge WebSocket sync progress into connector list for real-time updates
@@ -828,14 +846,11 @@ export default function ConnectorsPage() {
     try {
       setSyncingConnectors((prev) => new Set(prev).add(connectorId));
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/connectors/${connectorId}/sync`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ full_sync: false }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/connectors/${connectorId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_sync: false }),
+      });
 
       if (!response.ok) throw new Error('Failed to trigger sync');
 
@@ -856,10 +871,9 @@ export default function ConnectorsPage() {
     if (!confirm('Are you sure you want to delete this connector?')) return;
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/connectors/${connectorId}`,
-        { method: 'DELETE' }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/connectors/${connectorId}`, {
+        method: 'DELETE',
+      });
 
       if (!response.ok) throw new Error('Failed to delete connector');
 
@@ -872,17 +886,14 @@ export default function ConnectorsPage() {
 
   const handleUpdateConnector = async (
     connectorId: string,
-    updates: { schedule: Connector['schedule'] }
+    updates: { schedule: Connector['schedule'] },
   ) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/connectors/${connectorId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/connectors/${connectorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
 
       if (!response.ok) throw new Error('Failed to update connector');
 
@@ -896,10 +907,9 @@ export default function ConnectorsPage() {
 
   const handleCancelSync = async (syncId: string) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/connectors/sync/${syncId}/cancel`,
-        { method: 'POST' }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/connectors/sync/${syncId}/cancel`, {
+        method: 'POST',
+      });
 
       if (!response.ok) throw new Error('Failed to cancel sync');
 
@@ -919,9 +929,7 @@ export default function ConnectorsPage() {
             <h1 className="text-3xl font-theme-data font-bold text-text mb-2">
               Enterprise Connectors
             </h1>
-            <p className="text-text-muted">
-              Connect and sync data from external sources
-            </p>
+            <p className="text-text-muted">Connect and sync data from external sources</p>
             {wsConnected && (
               <div className="flex items-center gap-2 mt-1">
                 <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
@@ -968,17 +976,13 @@ export default function ConnectorsPage() {
                 <div className="text-2xl font-theme-data font-bold text-text">
                   {stats.completed_syncs}
                 </div>
-                <div className="text-xs text-text-muted font-theme-data uppercase">
-                  Completed
-                </div>
+                <div className="text-xs text-text-muted font-theme-data uppercase">Completed</div>
               </div>
               <div className="p-4 bg-surface border border-border rounded-lg">
                 <div className="text-2xl font-theme-data font-bold text-red-400">
                   {stats.failed_syncs}
                 </div>
-                <div className="text-xs text-text-muted font-theme-data uppercase">
-                  Failed
-                </div>
+                <div className="text-xs text-text-muted font-theme-data uppercase">Failed</div>
               </div>
               <div className="p-4 bg-surface border border-border rounded-lg">
                 <div className="text-2xl font-theme-data font-bold text-text">
@@ -998,9 +1002,7 @@ export default function ConnectorsPage() {
         {/* Connectors Grid */}
         <PanelErrorBoundary panelName="Connectors Grid">
           <div className="lg:col-span-2">
-            <h2 className="text-lg font-theme-data font-bold text-text mb-4">
-              Active Connectors
-            </h2>
+            <h2 className="text-lg font-theme-data font-bold text-text mb-4">Active Connectors</h2>
 
             {loading && (
               <div className="flex items-center justify-center py-12">
@@ -1034,7 +1036,9 @@ export default function ConnectorsPage() {
                   key={connector.job_id || connector.id}
                   connector={connector}
                   onSync={() => handleSync(connector.id)}
-                  onCancelSync={() => connector.current_run_id && handleCancelSync(connector.current_run_id)}
+                  onCancelSync={() =>
+                    connector.current_run_id && handleCancelSync(connector.current_run_id)
+                  }
                   onEdit={() => setEditingConnector(connector)}
                   onDelete={() => handleDelete(connector.id)}
                   onViewDetails={() => setViewingConnectorId(connector.id)}
@@ -1047,98 +1051,103 @@ export default function ConnectorsPage() {
 
         {/* Live Sync Activity (WebSocket) */}
         <PanelErrorBoundary panelName="Sync Activity">
-        <div className="space-y-6">
-          {/* Rate Limit Warnings */}
-          {rateLimitWarnings.length > 0 && (
-            <div>
-              <h3 className="text-sm font-theme-data font-bold text-red-400 mb-2">Rate Limit Warnings</h3>
-              <div className="space-y-2">
-                {rateLimitWarnings.map((w, i) => (
-                  <div key={`${w.connector_id}-${i}`} className="p-2 bg-red-500/10 border border-red-500/30 rounded text-xs font-theme-data text-red-400">
-                    {w.message}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Recent Document Ingestion */}
-          {recentDocuments.length > 0 && (
-            <div>
-              <h3 className="text-sm font-theme-data font-bold text-text mb-2">
-                Recent Documents ({recentDocuments.length})
-              </h3>
-              <div className="bg-surface border border-border rounded-lg overflow-hidden max-h-[200px] overflow-y-auto">
-                <div className="divide-y divide-border">
-                  {recentDocuments.slice(0, 10).map((doc, i) => (
-                    <div key={`${doc.document_id}-${i}`} className="px-3 py-2 flex items-center justify-between text-xs font-theme-data">
-                      <span className="truncate text-text">{doc.document_name}</span>
-                      <span className={doc.status === 'success' ? 'text-green-400' : doc.status === 'failed' ? 'text-red-400' : 'text-text-muted'}>
-                        {doc.status.toUpperCase()}
-                      </span>
+          <div className="space-y-6">
+            {/* Rate Limit Warnings */}
+            {rateLimitWarnings.length > 0 && (
+              <div>
+                <h3 className="text-sm font-theme-data font-bold text-red-400 mb-2">
+                  Rate Limit Warnings
+                </h3>
+                <div className="space-y-2">
+                  {rateLimitWarnings.map((w, i) => (
+                    <div
+                      key={`${w.connector_id}-${i}`}
+                      className="p-2 bg-red-500/10 border border-red-500/30 rounded text-xs font-theme-data text-red-400"
+                    >
+                      {w.message}
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Sync History */}
-          <h2 className="text-lg font-theme-data font-bold text-text mb-4">
-            Recent Syncs
-          </h2>
-
-          <div className="bg-surface border border-border rounded-lg overflow-hidden">
-            {history.length === 0 ? (
-              <div className="p-4 text-center text-text-muted text-sm">
-                No sync history yet
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {history.map((entry) => (
-                  <div key={entry.run_id} className="p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-theme-data text-text truncate">
-                        {entry.job_id?.split(':').pop() || entry.run_id}
-                      </span>
-                      <span
-                        className={`text-xs font-theme-data px-2 py-0.5 rounded ${
-                          entry.status === 'completed'
-                            ? 'bg-green-500/20 text-green-400'
-                            : entry.status === 'failed'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-yellow-500/20 text-yellow-400'
-                        }`}
+            {/* Recent Document Ingestion */}
+            {recentDocuments.length > 0 && (
+              <div>
+                <h3 className="text-sm font-theme-data font-bold text-text mb-2">
+                  Recent Documents ({recentDocuments.length})
+                </h3>
+                <div className="bg-surface border border-border rounded-lg overflow-hidden max-h-[200px] overflow-y-auto">
+                  <div className="divide-y divide-border">
+                    {recentDocuments.slice(0, 10).map((doc, i) => (
+                      <div
+                        key={`${doc.document_id}-${i}`}
+                        className="px-3 py-2 flex items-center justify-between text-xs font-theme-data"
                       >
-                        {entry.status.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-text-muted font-theme-data">
-                      <span>
-                        {new Date(entry.started_at).toLocaleTimeString()}
-                      </span>
-                      <span>{entry.items_synced} items</span>
-                    </div>
-                    {entry.error && (
-                      <div className="mt-1 text-xs text-red-400 truncate">
-                        {entry.error}
+                        <span className="truncate text-text">{doc.document_name}</span>
+                        <span
+                          className={
+                            doc.status === 'success'
+                              ? 'text-green-400'
+                              : doc.status === 'failed'
+                                ? 'text-red-400'
+                                : 'text-text-muted'
+                          }
+                        >
+                          {doc.status.toUpperCase()}
+                        </span>
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             )}
+
+            {/* Sync History */}
+            <h2 className="text-lg font-theme-data font-bold text-text mb-4">Recent Syncs</h2>
+
+            <div className="bg-surface border border-border rounded-lg overflow-hidden">
+              {history.length === 0 ? (
+                <div className="p-4 text-center text-text-muted text-sm">No sync history yet</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {history.map((entry) => (
+                    <div key={entry.run_id} className="p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-theme-data text-text truncate">
+                          {entry.job_id?.split(':').pop() || entry.run_id}
+                        </span>
+                        <span
+                          className={`text-xs font-theme-data px-2 py-0.5 rounded ${
+                            entry.status === 'completed'
+                              ? 'bg-green-500/20 text-green-400'
+                              : entry.status === 'failed'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                          }`}
+                        >
+                          {entry.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-text-muted font-theme-data">
+                        <span>{new Date(entry.started_at).toLocaleTimeString()}</span>
+                        <span>{entry.items_synced} items</span>
+                      </div>
+                      {entry.error && (
+                        <div className="mt-1 text-xs text-red-400 truncate">{entry.error}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         </PanelErrorBoundary>
       </div>
 
       {/* Add Connector Modal */}
       {showAddModal && (
-        <AddConnectorModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddConnector}
-        />
+        <AddConnectorModal onClose={() => setShowAddModal(false)} onAdd={handleAddConnector} />
       )}
 
       {/* Edit Connector Modal */}

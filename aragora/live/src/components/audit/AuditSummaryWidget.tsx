@@ -17,12 +17,7 @@ interface AuditSummary {
   running_sessions: number;
   critical_findings: number;
   high_findings: number;
-  recent_session?: {
-    id: string;
-    name: string;
-    status: string;
-    findings_count: number;
-  };
+  recent_session?: { id: string; name: string; status: string; findings_count: number };
 }
 
 interface AuditSummaryWidgetProps {
@@ -55,7 +50,8 @@ export function AuditSummaryWidget({
         // Compute summary from sessions
         const computedSummary: AuditSummary = {
           total_sessions: sessions.length,
-          running_sessions: sessions.filter((s: { status: string }) => s.status === 'running').length,
+          running_sessions: sessions.filter((s: { status: string }) => s.status === 'running')
+            .length,
           critical_findings: 0,
           high_findings: 0,
         };
@@ -69,7 +65,7 @@ export function AuditSummaryWidget({
         if (sessions.length > 0) {
           const sorted = [...sessions].sort(
             (a: { created_at: string }, b: { created_at: string }) =>
-              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
           );
           const recent = sorted[0];
           computedSummary.recent_session = {
@@ -137,9 +133,7 @@ export function AuditSummaryWidget({
               </span>
             )}
             {summary.critical_findings > 0 && (
-              <span className="text-[var(--acid-red)]">
-                {summary.critical_findings} crit
-              </span>
+              <span className="text-[var(--acid-red)]">{summary.critical_findings} crit</span>
             )}
           </>
         )}
@@ -183,13 +177,17 @@ export function AuditSummaryWidget({
           <div className="text-xs text-[var(--text-muted)]">Running</div>
         </div>
         <div className="text-center">
-          <div className={`text-xl font-theme-data font-bold ${summary.critical_findings > 0 ? 'text-[var(--acid-red)]' : 'text-[var(--text)]'}`}>
+          <div
+            className={`text-xl font-theme-data font-bold ${summary.critical_findings > 0 ? 'text-[var(--acid-red)]' : 'text-[var(--text)]'}`}
+          >
             {summary.critical_findings}
           </div>
           <div className="text-xs text-[var(--text-muted)]">Critical</div>
         </div>
         <div className="text-center">
-          <div className={`text-xl font-theme-data font-bold ${summary.high_findings > 0 ? 'text-orange-400' : 'text-[var(--text)]'}`}>
+          <div
+            className={`text-xl font-theme-data font-bold ${summary.high_findings > 0 ? 'text-orange-400' : 'text-[var(--text)]'}`}
+          >
             {summary.high_findings}
           </div>
           <div className="text-xs text-[var(--text-muted)]">High</div>
@@ -213,8 +211,8 @@ export function AuditSummaryWidget({
                   summary.recent_session.status === 'running'
                     ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] animate-pulse'
                     : summary.recent_session.status === 'completed'
-                    ? 'bg-[var(--acid-green)]/20 text-[var(--acid-green)]'
-                    : 'bg-[var(--text-muted)]/20 text-[var(--text-muted)]'
+                      ? 'bg-[var(--acid-green)]/20 text-[var(--acid-green)]'
+                      : 'bg-[var(--text-muted)]/20 text-[var(--text-muted)]'
                 }`}
               >
                 {summary.recent_session.status}

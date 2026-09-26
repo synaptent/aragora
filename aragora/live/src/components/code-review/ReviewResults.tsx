@@ -9,9 +9,21 @@ interface ReviewResultsProps {
 }
 
 const VERDICT_CONFIG = {
-  approve: { icon: '✅', label: 'APPROVE', color: 'text-green-400 bg-green-500/10 border-green-500/30' },
-  comment: { icon: '💬', label: 'COMMENT', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' },
-  request_changes: { icon: '❌', label: 'REQUEST CHANGES', color: 'text-red-400 bg-red-500/10 border-red-500/30' },
+  approve: {
+    icon: '✅',
+    label: 'APPROVE',
+    color: 'text-green-400 bg-green-500/10 border-green-500/30',
+  },
+  comment: {
+    icon: '💬',
+    label: 'COMMENT',
+    color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+  },
+  request_changes: {
+    icon: '❌',
+    label: 'REQUEST CHANGES',
+    color: 'text-red-400 bg-red-500/10 border-red-500/30',
+  },
 };
 
 const SEVERITY_STYLES = {
@@ -22,12 +34,7 @@ const SEVERITY_STYLES = {
   info: 'text-gray-400 bg-gray-500/10 border-gray-500/30',
 };
 
-const CATEGORY_ICONS = {
-  security: '🔒',
-  performance: '⚡',
-  quality: '✨',
-  architecture: '🏗️',
-};
+const CATEGORY_ICONS = { security: '🔒', performance: '⚡', quality: '✨', architecture: '🏗️' };
 
 export function ReviewResults({ result, onNewReview }: ReviewResultsProps) {
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
@@ -36,10 +43,13 @@ export function ReviewResults({ result, onNewReview }: ReviewResultsProps) {
   const verdictConfig = VERDICT_CONFIG[result.verdict];
 
   // Count findings by severity
-  const severityCounts = result.findings.reduce((acc, f) => {
-    acc[f.severity] = (acc[f.severity] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const severityCounts = result.findings.reduce(
+    (acc, f) => {
+      acc[f.severity] = (acc[f.severity] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   return (
     <div className="space-y-6">
@@ -65,7 +75,7 @@ export function ReviewResults({ result, onNewReview }: ReviewResultsProps) {
 
       {/* Severity Summary */}
       <div className="flex gap-3">
-        {['critical', 'high', 'medium', 'low', 'info'].map(severity => {
+        {['critical', 'high', 'medium', 'low', 'info'].map((severity) => {
           const count = severityCounts[severity] || 0;
           if (count === 0) return null;
           return (
@@ -83,7 +93,7 @@ export function ReviewResults({ result, onNewReview }: ReviewResultsProps) {
       {/* Tabs */}
       <div className="border-b border-[var(--border)]">
         <div className="flex gap-4">
-          {(['summary', 'findings', 'debate'] as const).map(tab => (
+          {(['summary', 'findings', 'debate'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -112,18 +122,16 @@ export function ReviewResults({ result, onNewReview }: ReviewResultsProps) {
       {activeTab === 'findings' && (
         <div className="space-y-3 max-h-[500px] overflow-y-auto">
           {result.findings.length === 0 ? (
-            <div className="p-4 text-center text-[var(--text-muted)]">
-              No findings to display
-            </div>
+            <div className="p-4 text-center text-[var(--text-muted)]">No findings to display</div>
           ) : (
-            result.findings.map(finding => (
+            result.findings.map((finding) => (
               <FindingCard
                 key={finding.id}
                 finding={finding}
                 isExpanded={expandedFinding === finding.id}
-                onToggle={() => setExpandedFinding(
-                  expandedFinding === finding.id ? null : finding.id
-                )}
+                onToggle={() =>
+                  setExpandedFinding(expandedFinding === finding.id ? null : finding.id)
+                }
               />
             ))
           )}
@@ -132,23 +140,32 @@ export function ReviewResults({ result, onNewReview }: ReviewResultsProps) {
 
       {activeTab === 'debate' && (
         <div className="space-y-4 max-h-[500px] overflow-y-auto">
-          {result.debateRounds.map(round => (
-            <div key={round.round} className="p-4 bg-[var(--surface)] border border-[var(--border)] rounded">
+          {result.debateRounds.map((round) => (
+            <div
+              key={round.round}
+              className="p-4 bg-[var(--surface)] border border-[var(--border)] rounded"
+            >
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-theme-data text-[var(--acid-cyan)]">Round {round.round}</span>
+                <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                  Round {round.round}
+                </span>
                 <span className="text-xs text-[var(--text-muted)]">{round.topic}</span>
               </div>
               <div className="space-y-2">
                 {round.messages.map((msg, i) => (
                   <div key={i} className="p-2 bg-[var(--bg)] rounded">
-                    <span className="text-xs font-theme-data text-[var(--acid-green)]">{msg.agent}:</span>
+                    <span className="text-xs font-theme-data text-[var(--acid-green)]">
+                      {msg.agent}:
+                    </span>
                     <p className="text-sm text-[var(--text)] mt-1">{msg.content}</p>
                   </div>
                 ))}
               </div>
               {round.consensus && (
                 <div className="mt-3 p-2 bg-[var(--acid-green)]/10 border border-[var(--acid-green)]/30 rounded">
-                  <span className="text-xs font-theme-data text-[var(--acid-green)]">Consensus:</span>
+                  <span className="text-xs font-theme-data text-[var(--acid-green)]">
+                    Consensus:
+                  </span>
                   <p className="text-sm text-[var(--text)] mt-1">{round.consensus}</p>
                 </div>
               )}
@@ -197,10 +214,7 @@ function FindingCard({ finding, isExpanded, onToggle }: FindingCardProps) {
 
   return (
     <div className={`border rounded ${severityStyle}`}>
-      <button
-        onClick={onToggle}
-        className="w-full p-4 text-left flex items-start gap-3"
-      >
+      <button onClick={onToggle} className="w-full p-4 text-left flex items-start gap-3">
         <span className="text-xl flex-shrink-0">{categoryIcon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -210,7 +224,8 @@ function FindingCard({ finding, isExpanded, onToggle }: FindingCardProps) {
           <h4 className="font-theme-data text-sm">{finding.title}</h4>
           {finding.file && (
             <p className="text-xs text-[var(--text-muted)] mt-1">
-              {finding.file}{finding.line ? `:${finding.line}` : ''}
+              {finding.file}
+              {finding.line ? `:${finding.line}` : ''}
             </p>
           )}
         </div>

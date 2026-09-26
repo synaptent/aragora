@@ -10,8 +10,7 @@ interface WsEvent {
 }
 
 export function WebSocketViewer() {
-  const wsUrl =
-    process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8765';
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8765';
   const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState<WsEvent[]>([]);
   const [filter, setFilter] = useState('');
@@ -106,9 +105,7 @@ export function WebSocketViewer() {
         >
           {connected ? 'DISCONNECT' : 'CONNECT'}
         </button>
-        <div
-          className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`}
-        />
+        <div className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
         <code className="text-xs font-theme-data text-[var(--text-muted)] truncate flex-1">
           {wsUrl}
         </code>
@@ -159,9 +156,7 @@ export function WebSocketViewer() {
             </button>
             {expanded.has(evt.id) && (
               <pre className="px-4 pb-2 text-[10px] text-[var(--text-muted)] whitespace-pre-wrap max-h-40 overflow-y-auto">
-                {typeof evt.data === 'string'
-                  ? evt.data
-                  : JSON.stringify(evt.data, null, 2)}
+                {typeof evt.data === 'string' ? evt.data : JSON.stringify(evt.data, null, 2)}
               </pre>
             )}
           </div>

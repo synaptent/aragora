@@ -30,16 +30,8 @@ interface IntrospectionData {
     outcome: string;
     timestamp: string;
   }[];
-  calibration?: {
-    confidence: number;
-    accuracy: number;
-    calibration_error: number;
-  };
-  persona?: {
-    display_name: string;
-    description: string;
-    traits: string[];
-  };
+  calibration?: { confidence: number; accuracy: number; calibration_error: number };
+  persona?: { display_name: string; description: string; traits: string[] };
 }
 
 interface LeaderboardEntry {
@@ -86,17 +78,20 @@ export default function IntrospectionPage() {
     }
   }, [backendUrl]);
 
-  const fetchIntrospection = useCallback(async (agentName: string) => {
-    try {
-      const response = await fetch(`${backendUrl}/api/introspection/agents/${agentName}`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      setIntrospection(data);
-    } catch (err) {
-      logger.error('Failed to fetch introspection:', err);
-      throw err;
-    }
-  }, [backendUrl]);
+  const fetchIntrospection = useCallback(
+    async (agentName: string) => {
+      try {
+        const response = await fetch(`${backendUrl}/api/introspection/agents/${agentName}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        setIntrospection(data);
+      } catch (err) {
+        logger.error('Failed to fetch introspection:', err);
+        throw err;
+      }
+    },
+    [backendUrl],
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -133,7 +128,9 @@ export default function IntrospectionPage() {
 
   const renderAgentsList = () => (
     <div className="space-y-4">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Agent Registry</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Agent Registry
+      </h2>
       {agents.length === 0 ? (
         <p className="text-text-muted">No agents found</p>
       ) : (
@@ -149,7 +146,9 @@ export default function IntrospectionPage() {
                   {agent.name}
                 </span>
                 {agent.reputation_score !== undefined && (
-                  <span className={`font-theme-data text-sm ${getScoreColor(agent.reputation_score)}`}>
+                  <span
+                    className={`font-theme-data text-sm ${getScoreColor(agent.reputation_score)}`}
+                  >
                     {(agent.reputation_score * 100).toFixed(0)}%
                   </span>
                 )}
@@ -168,7 +167,9 @@ export default function IntrospectionPage() {
 
   const renderLeaderboard = () => (
     <div className="space-y-4">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Reputation Leaderboard</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Reputation Leaderboard
+      </h2>
       {leaderboard.length === 0 ? (
         <p className="text-text-muted">No leaderboard data</p>
       ) : (
@@ -190,7 +191,9 @@ export default function IntrospectionPage() {
                   onClick={() => handleAgentSelect(entry.agent_name)}
                 >
                   <td className="py-2 px-3">
-                    <span className={idx < 3 ? 'text-[var(--accent)] font-bold' : 'text-text-muted'}>
+                    <span
+                      className={idx < 3 ? 'text-[var(--accent)] font-bold' : 'text-text-muted'}
+                    >
                       #{entry.rank || idx + 1}
                     </span>
                   </td>
@@ -198,9 +201,7 @@ export default function IntrospectionPage() {
                   <td className={`py-2 px-3 text-right ${getScoreColor(entry.reputation_score)}`}>
                     {(entry.reputation_score * 100).toFixed(1)}%
                   </td>
-                  <td className="py-2 px-3 text-right text-text-muted">
-                    {entry.total_critiques}
-                  </td>
+                  <td className="py-2 px-3 text-right text-text-muted">{entry.total_critiques}</td>
                 </tr>
               ))}
             </tbody>
@@ -240,11 +241,15 @@ export default function IntrospectionPage() {
         {/* Reputation Card */}
         {introspection.reputation && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Reputation</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Reputation
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <div className="text-xs text-text-muted">Score</div>
-                <div className={`text-2xl font-theme-data font-bold ${getScoreColor(introspection.reputation.score)}`}>
+                <div
+                  className={`text-2xl font-theme-data font-bold ${getScoreColor(introspection.reputation.score)}`}
+                >
                   {(introspection.reputation.score * 100).toFixed(0)}%
                 </div>
               </div>
@@ -273,7 +278,9 @@ export default function IntrospectionPage() {
         {/* Calibration Card */}
         {introspection.calibration && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Calibration</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Calibration
+            </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <div className="text-xs text-text-muted">Confidence</div>
@@ -301,7 +308,9 @@ export default function IntrospectionPage() {
         <div className="grid md:grid-cols-2 gap-4">
           {introspection.strengths && introspection.strengths.length > 0 && (
             <div className="p-4 bg-surface border border-border rounded-lg">
-              <h3 className="text-sm font-theme-data font-bold text-[var(--accent)] uppercase mb-3">Strengths</h3>
+              <h3 className="text-sm font-theme-data font-bold text-[var(--accent)] uppercase mb-3">
+                Strengths
+              </h3>
               <ul className="space-y-1">
                 {introspection.strengths.map((s, i) => (
                   <li key={i} className="text-sm text-text font-theme-data flex items-start gap-2">
@@ -314,7 +323,9 @@ export default function IntrospectionPage() {
           )}
           {introspection.weaknesses && introspection.weaknesses.length > 0 && (
             <div className="p-4 bg-surface border border-border rounded-lg">
-              <h3 className="text-sm font-theme-data font-bold text-red-400 uppercase mb-3">Weaknesses</h3>
+              <h3 className="text-sm font-theme-data font-bold text-red-400 uppercase mb-3">
+                Weaknesses
+              </h3>
               <ul className="space-y-1">
                 {introspection.weaknesses.map((w, i) => (
                   <li key={i} className="text-sm text-text font-theme-data flex items-start gap-2">
@@ -330,7 +341,9 @@ export default function IntrospectionPage() {
         {/* Specializations */}
         {introspection.specializations && introspection.specializations.length > 0 && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Specializations</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Specializations
+            </h3>
             <div className="flex flex-wrap gap-2">
               {introspection.specializations.map((spec, i) => (
                 <span
@@ -347,7 +360,9 @@ export default function IntrospectionPage() {
         {/* Persona Traits */}
         {introspection.persona?.traits && introspection.persona.traits.length > 0 && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Persona Traits</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Persona Traits
+            </h3>
             <div className="flex flex-wrap gap-2">
               {introspection.persona.traits.map((trait, i) => (
                 <span
@@ -364,7 +379,9 @@ export default function IntrospectionPage() {
         {/* Recent Debates */}
         {introspection.recent_debates && introspection.recent_debates.length > 0 && (
           <div className="p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Recent Debates</h3>
+            <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+              Recent Debates
+            </h3>
             <div className="space-y-2">
               {introspection.recent_debates.slice(0, 5).map((debate, i) => (
                 <Link
@@ -373,11 +390,18 @@ export default function IntrospectionPage() {
                   className="block p-2 hover:bg-bg rounded transition-colors"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-theme-data text-text truncate max-w-md">{debate.task}</span>
-                    <span className={`text-xs font-theme-data ${
-                      debate.outcome === 'win' ? 'text-[var(--accent)]' :
-                      debate.outcome === 'loss' ? 'text-red-400' : 'text-text-muted'
-                    }`}>
+                    <span className="text-sm font-theme-data text-text truncate max-w-md">
+                      {debate.task}
+                    </span>
+                    <span
+                      className={`text-xs font-theme-data ${
+                        debate.outcome === 'win'
+                          ? 'text-[var(--accent)]'
+                          : debate.outcome === 'loss'
+                            ? 'text-red-400'
+                            : 'text-text-muted'
+                      }`}
+                    >
                       {debate.outcome}
                     </span>
                   </div>
@@ -401,7 +425,9 @@ export default function IntrospectionPage() {
       <div className="max-w-6xl mx-auto px-4 py-8 relative z-10">
         {/* Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">Agent Introspection</h1>
+          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">
+            Agent Introspection
+          </h1>
           <p className="text-text-muted font-theme-data text-sm">
             Explore agent self-awareness, reputation, and capabilities
           </p>
@@ -410,17 +436,18 @@ export default function IntrospectionPage() {
         {/* Error */}
         {error && (
           <div className="mb-6">
-            <ErrorWithRetry
-              error={error}
-              onRetry={loadData}
-            />
+            <ErrorWithRetry error={error} onRetry={loadData} />
           </div>
         )}
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-border pb-2">
           <button
-            onClick={() => { setActiveTab('agents'); setSelectedAgent(null); setIntrospection(null); }}
+            onClick={() => {
+              setActiveTab('agents');
+              setSelectedAgent(null);
+              setIntrospection(null);
+            }}
             className={`px-4 py-2 font-theme-data text-sm rounded-t transition-colors ${
               activeTab === 'agents'
                 ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-b-2 border-[var(--accent)]'

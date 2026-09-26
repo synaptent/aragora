@@ -17,11 +17,7 @@ import { UnifiedPipelineCanvas } from './UnifiedPipelineCanvas';
 import { FractalBreadcrumb } from './FractalBreadcrumb';
 import { FractalMiniMap } from './FractalMiniMap';
 import { useFractalNavigation } from '../../hooks/useFractalNavigation';
-import type {
-  PipelineStageType,
-  PipelineResultResponse,
-  ReactFlowData,
-} from './types';
+import type { PipelineStageType, PipelineResultResponse, ReactFlowData } from './types';
 
 interface FractalPipelineCanvasProps {
   /** Full pipeline result from the API. */
@@ -106,10 +102,7 @@ export const FractalPipelineCanvas = memo(function FractalPipelineCanvas({
     <div className="flex flex-col h-full">
       {/* Top bar: Breadcrumb */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-border">
-        <FractalBreadcrumb
-          breadcrumbs={nav.breadcrumbs}
-          onJumpTo={nav.jumpTo}
-        />
+        <FractalBreadcrumb breadcrumbs={nav.breadcrumbs} onJumpTo={nav.jumpTo} />
         {nav.canDrillUp && (
           <button
             onClick={nav.drillUp}

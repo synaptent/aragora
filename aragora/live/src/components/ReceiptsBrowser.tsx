@@ -17,12 +17,7 @@ interface Receipt {
   created_at: string;
   artifact_hash: string;
   findings_count: number;
-  findings_by_severity: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
+  findings_by_severity: { critical: number; high: number; medium: number; low: number };
   findings: Finding[];
   metadata?: Record<string, unknown>;
 }
@@ -37,7 +32,9 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; message: string } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; message: string } | null>(
+    null,
+  );
   const [verdictFilter, setVerdictFilter] = useState<string | null>(null);
 
   const fetchReceipts = useCallback(async () => {
@@ -49,7 +46,9 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
       if (runId) params.set('run_id', runId);
       if (verdictFilter) params.set('verdict', verdictFilter);
 
-      const data = await apiFetch<{ receipts: Receipt[] }>(`/api/gauntlet/receipts?${params.toString()}`);
+      const data = await apiFetch<{ receipts: Receipt[] }>(
+        `/api/gauntlet/receipts?${params.toString()}`,
+      );
       setReceipts(data.receipts || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch receipts');
@@ -67,12 +66,16 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
     setVerifyResult(null);
 
     try {
-      const result = await apiFetch<{ valid: boolean; message: string }>(`/api/gauntlet/receipts/${receiptId}/verify`, {
-        method: 'POST',
-      });
+      const result = await apiFetch<{ valid: boolean; message: string }>(
+        `/api/gauntlet/receipts/${receiptId}/verify`,
+        { method: 'POST' },
+      );
       setVerifyResult({ valid: result.valid, message: result.message });
     } catch (err) {
-      setVerifyResult({ valid: false, message: err instanceof Error ? err.message : 'Verification failed' });
+      setVerifyResult({
+        valid: false,
+        message: err instanceof Error ? err.message : 'Verification failed',
+      });
     } finally {
       setVerifyingId(null);
     }
@@ -80,13 +83,14 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
 
   const handleExport = async (receiptId: string, format: 'json' | 'html') => {
     try {
-      const data = await apiFetch<{ html?: string }>(`/api/gauntlet/receipts/${receiptId}/export?format=${format}`);
+      const data = await apiFetch<{ html?: string }>(
+        `/api/gauntlet/receipts/${receiptId}/export?format=${format}`,
+      );
 
       // Create blob and download
-      const blob = new Blob(
-        [format === 'json' ? JSON.stringify(data, null, 2) : data.html || ''],
-        { type: format === 'json' ? 'application/json' : 'text/html' }
-      );
+      const blob = new Blob([format === 'json' ? JSON.stringify(data, null, 2) : data.html || ''], {
+        type: format === 'json' ? 'application/json' : 'text/html',
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -156,12 +160,8 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-theme-data text-[var(--accent)] text-xl">
-          {'>'} DECISION RECEIPTS
-        </h2>
-        <div className="text-xs font-theme-data text-text-muted">
-          {receipts.length} receipts
-        </div>
+        <h2 className="font-theme-data text-[var(--accent)] text-xl">{'>'} DECISION RECEIPTS</h2>
+        <div className="text-xs font-theme-data text-text-muted">{receipts.length} receipts</div>
       </div>
 
       {/* Filters */}
@@ -192,7 +192,9 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className={`px-2 py-0.5 text-xs font-theme-data ${getVerdictColor(receipt.verdict)}`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs font-theme-data ${getVerdictColor(receipt.verdict)}`}
+                  >
                     {receipt.verdict}
                   </span>
                   <span className="font-theme-data text-sm text-text-muted">
@@ -208,9 +210,7 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
                     </span>
                   )}
                   {receipt.findings_by_severity.high > 0 && (
-                    <span className="text-red-400">
-                      {receipt.findings_by_severity.high} high
-                    </span>
+                    <span className="text-red-400">{receipt.findings_by_severity.high} high</span>
                   )}
                   {receipt.findings_by_severity.medium > 0 && (
                     <span className="text-yellow-400">
@@ -218,9 +218,7 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
                     </span>
                   )}
                   {receipt.findings_by_severity.low > 0 && (
-                    <span className="text-blue-400">
-                      {receipt.findings_by_severity.low} low
-                    </span>
+                    <span className="text-blue-400">{receipt.findings_by_severity.low} low</span>
                   )}
                   {receipt.findings_count === 0 && (
                     <span className="text-green-400">No findings</span>
@@ -249,7 +247,9 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
           <div className="max-w-3xl w-full border border-[var(--accent)]/50 bg-surface p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <span className={`px-2 py-0.5 text-xs font-theme-data ${getVerdictColor(selectedReceipt.verdict)}`}>
+                <span
+                  className={`px-2 py-0.5 text-xs font-theme-data ${getVerdictColor(selectedReceipt.verdict)}`}
+                >
                   {selectedReceipt.verdict}
                 </span>
                 <h2 className="text-lg font-theme-data text-[var(--accent)] mt-2">
@@ -269,7 +269,9 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
 
             {/* Artifact Hash */}
             <div className="p-4 bg-bg border border-[var(--accent)]/20 mb-6">
-              <div className="text-xs font-theme-data text-text-muted mb-1">ARTIFACT HASH (SHA-256)</div>
+              <div className="text-xs font-theme-data text-text-muted mb-1">
+                ARTIFACT HASH (SHA-256)
+              </div>
               <code className="font-theme-data text-xs text-[var(--acid-cyan)] break-all">
                 {selectedReceipt.artifact_hash}
               </code>
@@ -286,7 +288,9 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
                 {verifyingId === selectedReceipt.id ? '[VERIFYING...]' : '[VERIFY INTEGRITY]'}
               </button>
               {verifyResult && (
-                <div className={`mt-2 text-sm font-theme-data ${verifyResult.valid ? 'text-green-400' : 'text-red-400'}`}>
+                <div
+                  className={`mt-2 text-sm font-theme-data ${verifyResult.valid ? 'text-green-400' : 'text-red-400'}`}
+                >
                   {verifyResult.valid ? '✓' : '✗'} {verifyResult.message}
                 </div>
               )}
@@ -301,16 +305,22 @@ export function ReceiptsBrowser({ runId }: ReceiptsBrowserProps) {
                 {selectedReceipt.findings.map((finding) => (
                   <div key={finding.id} className="border border-[var(--accent)]/20 p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-theme-data ${getSeverityColor(finding.severity)}`}>
+                      <span
+                        className={`text-xs font-theme-data ${getSeverityColor(finding.severity)}`}
+                      >
                         [{finding.severity.toUpperCase()}]
                       </span>
-                      <span className="text-xs font-theme-data text-[var(--acid-cyan)]">{finding.category}</span>
+                      <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                        {finding.category}
+                      </span>
                     </div>
                     <p className="text-sm font-theme-data text-text">{finding.description}</p>
                   </div>
                 ))}
                 {selectedReceipt.findings.length === 0 && (
-                  <p className="text-sm font-theme-data text-text-muted">No findings in this receipt.</p>
+                  <p className="text-sm font-theme-data text-text-muted">
+                    No findings in this receipt.
+                  </p>
                 )}
               </div>
             </div>

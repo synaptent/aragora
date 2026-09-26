@@ -84,7 +84,7 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
         // Exponential backoff: 1s → 2s → 4s → 8s → 16s → 30s (max)
         const backoffMs = Math.min(
           INITIAL_BACKOFF_MS * Math.pow(2, reconnectAttemptsRef.current),
-          MAX_BACKOFF_MS
+          MAX_BACKOFF_MS,
         );
         reconnectAttemptsRef.current += 1;
 
@@ -114,7 +114,7 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
             // Find the loop to use for state (use ref to avoid stale closure)
             const currentLoopId = selectedLoopIdRef.current;
             const targetLoop = currentLoopId
-              ? loopData.loops?.find(l => l.loop_id === currentLoopId)
+              ? loopData.loops?.find((l) => l.loop_id === currentLoopId)
               : loopData.loops?.[0];
             if (targetLoop) {
               if (!currentLoopId) {
@@ -161,14 +161,14 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
           // Handle audience participation acknowledgments
           if (data.type === 'ack') {
             const msgType = data.data.msg_type as string;
-            ackCallbacksRef.current.forEach(cb => cb(msgType));
+            ackCallbacksRef.current.forEach((cb) => cb(msgType));
             return;
           }
 
           // Handle audience participation errors
           if (data.type === 'error') {
             const message = data.data.message as string;
-            errorCallbacksRef.current.forEach(cb => cb(message));
+            errorCallbacksRef.current.forEach((cb) => cb(message));
             return;
           }
 
@@ -199,7 +199,7 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
       // Exponential backoff for connection errors
       const backoffMs = Math.min(
         INITIAL_BACKOFF_MS * Math.pow(2, reconnectAttemptsRef.current),
-        MAX_BACKOFF_MS
+        MAX_BACKOFF_MS,
       );
       reconnectAttemptsRef.current += 1;
 
@@ -217,17 +217,10 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
         }));
         break;
       case 'phase_start':
-        setNomicState((prev) => ({
-          ...prev,
-          phase: event.data.phase as string,
-          stage: 'running',
-        }));
+        setNomicState((prev) => ({ ...prev, phase: event.data.phase as string, stage: 'running' }));
         break;
       case 'phase_end':
-        setNomicState((prev) => ({
-          ...prev,
-          stage: event.data.success ? 'complete' : 'failed',
-        }));
+        setNomicState((prev) => ({ ...prev, stage: event.data.success ? 'complete' : 'failed' }));
         break;
       case 'task_complete':
         setNomicState((prev) => ({
@@ -254,7 +247,7 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
 
   // Sync selectedLoopId when selected loop is removed (fixes race condition)
   useEffect(() => {
-    if (selectedLoopId && !activeLoops.find(l => l.loop_id === selectedLoopId)) {
+    if (selectedLoopId && !activeLoops.find((l) => l.loop_id === selectedLoopId)) {
       // Selected loop no longer exists, select first available or null
       const newId = activeLoops.length > 0 ? activeLoops[0].loop_id : null;
       setSelectedLoopId(newId);
@@ -317,34 +310,37 @@ export function useNomicStream(wsUrl: string = DEFAULT_WS_URL) {
   const onAck = useCallback((callback: (msgType: string) => void) => {
     ackCallbacksRef.current.push(callback);
     return () => {
-      ackCallbacksRef.current = ackCallbacksRef.current.filter(cb => cb !== callback);
+      ackCallbacksRef.current = ackCallbacksRef.current.filter((cb) => cb !== callback);
     };
   }, []);
 
   const onError = useCallback((callback: (message: string) => void) => {
     errorCallbacksRef.current.push(callback);
     return () => {
-      errorCallbacksRef.current = errorCallbacksRef.current.filter(cb => cb !== callback);
+      errorCallbacksRef.current = errorCallbacksRef.current.filter((cb) => cb !== callback);
     };
   }, []);
 
-  const forkReplay = useCallback(async (debateId: string, eventId: string, configOverrides: object = {}) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/replays/${debateId}/fork`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ event_id: eventId, config: configOverrides }),
-      });
-      if (!response.ok) {
-        throw new Error(`Fork failed: ${response.status}`);
+  const forkReplay = useCallback(
+    async (debateId: string, eventId: string, configOverrides: object = {}) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/replays/${debateId}/fork`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ event_id: eventId, config: configOverrides }),
+        });
+        if (!response.ok) {
+          throw new Error(`Fork failed: ${response.status}`);
+        }
+        const forkData = await response.json();
+        return forkData;
+      } catch (error) {
+        logger.error('Fork error:', error);
+        throw error;
       }
-      const forkData = await response.json();
-      return forkData;
-    } catch (error) {
-      logger.error('Fork error:', error);
-      throw error;
-    }
-  }, []);
+    },
+    [],
+  );
 
   return {
     events,
@@ -380,7 +376,7 @@ export async function fetchNomicState(apiUrl: string = API_BASE_URL): Promise<No
 // Fetch nomic log lines from REST API
 export async function fetchNomicLog(
   apiUrl: string = API_BASE_URL,
-  lines: number = 100
+  lines: number = 100,
 ): Promise<string[]> {
   const response = await fetch(`${apiUrl}/api/nomic/log?lines=${lines}`, {
     headers: getAuthHeaders(),

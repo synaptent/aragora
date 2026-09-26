@@ -109,12 +109,13 @@ export function handleDebateEndEvent(data: ParsedEventData, ctx: EventHandlerCon
   if (mode) {
     ctx.setDebateMode(mode);
   }
-  const settlement = normalizeSettlement(endData?.settlement) || normalizeSettlement(summary?.settlement);
+  const settlement =
+    normalizeSettlement(endData?.settlement) || normalizeSettlement(summary?.settlement);
   if (settlement) {
     ctx.setSettlementMetadata(settlement);
   }
 
-  ctx.setTask(prev => {
+  ctx.setTask((prev) => {
     // If we have a task from the event, use it
     if (taskFromEvent) return taskFromEvent;
     // If current task is the fallback, clear it
@@ -131,7 +132,8 @@ export function handleDebateEndEvent(data: ParsedEventData, ctx: EventHandlerCon
  */
 export function handleDebateErrorEvent(data: ParsedEventData, ctx: EventHandlerContext): void {
   const eventData = data.data;
-  const errorMsg = (eventData?.message as string) || (eventData?.error as string) || 'Debate failed to start';
+  const errorMsg =
+    (eventData?.message as string) || (eventData?.error as string) || 'Debate failed to start';
 
   ctx.setStatus('error');
   ctx.setError('Debate failed to start');

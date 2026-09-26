@@ -57,7 +57,7 @@ export function useAriaLive(options: UseAriaLiveOptions = {}) {
         }, clearAfter);
       }
     },
-    [clearAfter]
+    [clearAfter],
   );
 
   // Cleanup on unmount
@@ -73,12 +73,7 @@ export function useAriaLive(options: UseAriaLiveOptions = {}) {
   return {
     announce,
     LiveRegion: () => (
-      <div
-        role="status"
-        aria-live={politeness}
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div role="status" aria-live={politeness} aria-atomic="true" className="sr-only">
         {message}
       </div>
     ),
@@ -152,7 +147,7 @@ export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T
         return next;
       });
     },
-    [items, wrap, onSelect]
+    [items, wrap, onSelect],
   );
 
   // Type-ahead search
@@ -170,7 +165,7 @@ export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T
 
       // Find matching item
       const matchIndex = items.findIndex((item) =>
-        getLabel(item).toLowerCase().startsWith(newBuffer)
+        getLabel(item).toLowerCase().startsWith(newBuffer),
       );
 
       if (matchIndex !== -1) {
@@ -183,7 +178,7 @@ export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T
         setTypeBuffer('');
       }, 500);
     },
-    [items, typeAhead, typeBuffer, getLabel, onSelect]
+    [items, typeAhead, typeBuffer, getLabel, onSelect],
   );
 
   // Handle keyboard events
@@ -233,7 +228,7 @@ export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T
         handleTypeAhead(key);
       }
     },
-    [horizontal, navigate, items, selectedIndex, onSelect, onActivate, handleTypeAhead]
+    [horizontal, navigate, items, selectedIndex, onSelect, onActivate, handleTypeAhead],
   );
 
   // Attach keyboard listener to container
@@ -325,7 +320,7 @@ export function useRovingTabIndex(options: UseRovingTabIndexOptions) {
       itemRefs.current[clampedIndex]?.focus();
       onFocusChange?.(clampedIndex);
     },
-    [itemCount, wrap, onFocusChange]
+    [itemCount, wrap, onFocusChange],
   );
 
   const handleKeyDown = useCallback(
@@ -358,7 +353,7 @@ export function useRovingTabIndex(options: UseRovingTabIndexOptions) {
         focusItem(itemCount - 1);
       }
     },
-    [horizontal, focusedIndex, focusItem, itemCount]
+    [horizontal, focusedIndex, focusItem, itemCount],
   );
 
   return {
@@ -508,7 +503,7 @@ export function useSkipLink(options: UseSkipLinkOptions) {
         target.scrollIntoView();
       }
     },
-    [targetId]
+    [targetId],
   );
 
   return {

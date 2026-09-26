@@ -80,7 +80,10 @@ export function handleVoteEvent(data: ParsedEventData, ctx: EventHandlerContext)
 /**
  * Handle rhetorical_observation event
  */
-export function handleRhetoricalObservationEvent(data: ParsedEventData, ctx: EventHandlerContext): void {
+export function handleRhetoricalObservationEvent(
+  data: ParsedEventData,
+  ctx: EventHandlerContext,
+): void {
   const eventData = data.data;
   const event: StreamEvent = {
     type: 'rhetorical_observation',
@@ -137,7 +140,10 @@ export function handleAgentErrorEvent(data: ParsedEventData, ctx: EventHandlerCo
 /**
  * Handle quick_classification event
  */
-export function handleQuickClassificationEvent(data: ParsedEventData, ctx: EventHandlerContext): void {
+export function handleQuickClassificationEvent(
+  data: ParsedEventData,
+  ctx: EventHandlerContext,
+): void {
   const eventData = data.data;
 
   // Always log classification for debugging (visible in browser console)

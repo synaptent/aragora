@@ -11,18 +11,11 @@ export interface SharedItem {
   id: string;
   title: string;
   content: string;
-  sharedBy: {
-    id: string;
-    name: string;
-    type: 'user' | 'workspace';
-  };
+  sharedBy: { id: string; name: string; type: 'user' | 'workspace' };
   sharedAt: Date;
   expiresAt?: Date;
   permissions: string[];
-  sourceWorkspace: {
-    id: string;
-    name: string;
-  };
+  sourceWorkspace: { id: string; name: string };
 }
 
 export interface SharedWithMeTabProps {
@@ -84,7 +77,7 @@ export const SharedWithMeTab: React.FC<SharedWithMeTabProps> = ({
       if (isExpired(item.expiresAt)) return;
       onItemClick?.(item);
     },
-    [onItemClick]
+    [onItemClick],
   );
 
   if (error) {
@@ -117,11 +110,7 @@ export const SharedWithMeTab: React.FC<SharedWithMeTabProps> = ({
               onClick={() => setFilter(f)}
               className={`
                 px-2 py-1 text-xs font-medium rounded
-                ${
-                  filter === f
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }
+                ${filter === f ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}
               `}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -169,9 +158,7 @@ export const SharedWithMeTab: React.FC<SharedWithMeTabProps> = ({
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-medium text-gray-900 truncate">
-                          {item.title}
-                        </h4>
+                        <h4 className="text-sm font-medium text-gray-900 truncate">{item.title}</h4>
                         {expired && (
                           <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">
                             Expired
@@ -184,17 +171,13 @@ export const SharedWithMeTab: React.FC<SharedWithMeTabProps> = ({
                         )}
                       </div>
 
-                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                        {item.content}
-                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{item.content}</p>
 
                       <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
                         <span>
                           From: <strong>{item.sharedBy.name}</strong>
                         </span>
-                        <span>
-                          ({item.sourceWorkspace.name})
-                        </span>
+                        <span>({item.sourceWorkspace.name})</span>
                         <span>{formatDate(item.sharedAt)}</span>
                       </div>
 

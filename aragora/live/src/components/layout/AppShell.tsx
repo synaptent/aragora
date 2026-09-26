@@ -47,13 +47,8 @@ const QUICK_LINKS: QuickLink[] = [
 ];
 
 export function AppShell({ children }: AppShellProps) {
-  const {
-    leftSidebarOpen,
-    rightSidebarOpen,
-    isMobile,
-    leftSidebarWidth,
-    rightSidebarWidth,
-  } = useLayout();
+  const { leftSidebarOpen, rightSidebarOpen, isMobile, leftSidebarWidth, rightSidebarWidth } =
+    useLayout();
   const { isFeatureVisible } = useProgressiveMode();
 
   const visibleLinks = QUICK_LINKS.filter((link) => isFeatureVisible(link.minMode));
@@ -64,10 +59,11 @@ export function AppShell({ children }: AppShellProps) {
       <TopBar />
 
       {/* Main layout container */}
-      <div className="flex pt-12"> {/* pt-12 = 48px for top bar */}
+      <div className="flex pt-12">
+        {' '}
+        {/* pt-12 = 48px for top bar */}
         {/* Left Sidebar */}
         <LeftSidebar />
-
         {/* Main content area */}
         <main
           id="main-content"
@@ -119,12 +115,9 @@ export function AppShell({ children }: AppShellProps) {
             </div>
 
             {/* Page content */}
-            <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-              {children}
-            </div>
+            <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6 py-4">{children}</div>
           </div>
         </main>
-
         {/* Right Sidebar */}
         <RightSidebar />
       </div>

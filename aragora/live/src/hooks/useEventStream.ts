@@ -11,7 +11,8 @@ import { useState, useCallback, useRef, useMemo } from 'react';
 import { useWebSocketBase } from '@/hooks/useWebSocketBase';
 import { WS_URL } from '@/config';
 
-export type EventCategory = 'debate' | 'execution' | 'knowledge' | 'memory' | 'verification' | 'gauntlet' | 'system';
+export type EventCategory =
+  'debate' | 'execution' | 'knowledge' | 'memory' | 'verification' | 'gauntlet' | 'system';
 export type EventSeverity = 'info' | 'warning' | 'error' | 'success';
 
 export interface StreamEvent {
@@ -78,9 +79,16 @@ const EVENT_CATEGORY_MAP: Record<string, EventCategory> = {
 
 // Determine severity from event data
 function inferSeverity(type: string, data: Record<string, unknown>): EventSeverity {
-  if (type.includes('ERROR') || type.includes('FAILED') || type === 'pipeline_failed') return 'error';
+  if (type.includes('ERROR') || type.includes('FAILED') || type === 'pipeline_failed')
+    return 'error';
   if (type === 'HOLLOW_CONSENSUS' || type === 'GAUNTLET_FINDING') return 'warning';
-  if (type === 'CONSENSUS' || type === 'BELIEF_CONVERGED' || type.includes('COMPLETE') || type.includes('completed')) return 'success';
+  if (
+    type === 'CONSENSUS' ||
+    type === 'BELIEF_CONVERGED' ||
+    type.includes('COMPLETE') ||
+    type.includes('completed')
+  )
+    return 'success';
   if (data?.severity === 'critical' || data?.severity === 'high') return 'warning';
   return 'info';
 }
@@ -134,7 +142,7 @@ export function useEventStream(enabled: boolean = true) {
       data: raw,
     };
 
-    setEvents(prev => {
+    setEvents((prev) => {
       const updated = [...prev, event];
       return updated.length > MAX_EVENTS ? updated.slice(-MAX_EVENTS) : updated;
     });
@@ -153,7 +161,7 @@ export function useEventStream(enabled: boolean = true) {
   const clearEvents = useCallback(() => setEvents([]), []);
 
   const filteredEvents = useMemo(() => {
-    return events.filter(e => {
+    return events.filter((e) => {
       if (filters.nodeId && e.nodeId !== filters.nodeId) return false;
       if (filters.category && e.category !== filters.category) return false;
       if (filters.severity && e.severity !== filters.severity) return false;
@@ -161,13 +169,5 @@ export function useEventStream(enabled: boolean = true) {
     });
   }, [events, filters]);
 
-  return {
-    events,
-    filteredEvents,
-    status,
-    isConnected,
-    clearEvents,
-    filters,
-    setFilters,
-  };
+  return { events, filteredEvents, status, isConnected, clearEvents, filters, setFilters };
 }

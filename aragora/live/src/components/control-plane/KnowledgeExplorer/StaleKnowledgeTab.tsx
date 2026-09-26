@@ -92,7 +92,7 @@ export function StaleKnowledgeTab({
         setActionLoading(null);
       }
     },
-    [onRevalidate]
+    [onRevalidate],
   );
 
   // Handle bulk revalidation
@@ -131,9 +131,7 @@ export function StaleKnowledgeTab({
       <div className="text-center py-12">
         <span className="text-4xl">✅</span>
         <h4 className="font-theme-data font-bold text-text mt-4">All Knowledge Current</h4>
-        <p className="text-sm text-text-muted mt-2">
-          No stale knowledge nodes need revalidation
-        </p>
+        <p className="text-sm text-text-muted mt-2">No stale knowledge nodes need revalidation</p>
         {onRefresh && (
           <button
             onClick={onRefresh}
@@ -159,9 +157,7 @@ export function StaleKnowledgeTab({
               className="w-4 h-4 rounded border-border bg-bg accent-acid-green"
             />
             <span className="text-xs text-text-muted">
-              {selectedNodes.size > 0
-                ? `${selectedNodes.size} selected`
-                : 'Select all'}
+              {selectedNodes.size > 0 ? `${selectedNodes.size} selected` : 'Select all'}
             </span>
           </label>
 
@@ -232,9 +228,7 @@ export function StaleKnowledgeTab({
                       <span className="text-text-muted">
                         {Math.round(node.confidence * 100)}% confidence
                       </span>
-                      <span className={getStaleColor(node.daysStale)}>
-                        {node.daysStale}d stale
-                      </span>
+                      <span className={getStaleColor(node.daysStale)}>{node.daysStale}d stale</span>
                     </div>
                   </div>
 
@@ -282,10 +276,7 @@ export function StaleKnowledgeTab({
         <div className="flex items-center justify-between text-xs text-text-muted">
           <span>{nodes.length} stale nodes need attention</span>
           {onRefresh && (
-            <button
-              onClick={onRefresh}
-              className="text-[var(--accent)] hover:underline"
-            >
+            <button onClick={onRefresh} className="text-[var(--accent)] hover:underline">
               Refresh
             </button>
           )}

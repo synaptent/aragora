@@ -3,16 +3,13 @@ import SettlementsPage from '../page';
 import { apiFetch } from '@/lib/api';
 import { useSettlementOracleTelemetry } from '@/hooks/useObservabilityDashboard';
 
-jest.mock('@/lib/api', () => ({
-  apiFetch: jest.fn(),
-}));
-jest.mock('@/hooks/useObservabilityDashboard', () => ({
-  useSettlementOracleTelemetry: jest.fn(),
-}));
+jest.mock('@/lib/api', () => ({ apiFetch: jest.fn() }));
+jest.mock('@/hooks/useObservabilityDashboard', () => ({ useSettlementOracleTelemetry: jest.fn() }));
 
 const mockApiFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
-const mockUseSettlementOracleTelemetry =
-  useSettlementOracleTelemetry as jest.MockedFunction<typeof useSettlementOracleTelemetry>;
+const mockUseSettlementOracleTelemetry = useSettlementOracleTelemetry as jest.MockedFunction<
+  typeof useSettlementOracleTelemetry
+>;
 
 describe('SettlementsPage', () => {
   beforeEach(() => {

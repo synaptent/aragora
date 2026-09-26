@@ -9,7 +9,8 @@
 
 import { useState, useMemo, useCallback } from 'react';
 
-export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'retrying';
+export type JobStatus =
+  'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'retrying';
 
 export interface QueueJob {
   id: string;
@@ -168,7 +169,7 @@ export function QueueMonitoringPanel({
         setActionLoading(null);
       }
     },
-    [onRetryJob]
+    [onRetryJob],
   );
 
   const handleCancel = useCallback(
@@ -181,7 +182,7 @@ export function QueueMonitoringPanel({
         setActionLoading(null);
       }
     },
-    [onCancelJob]
+    [onCancelJob],
   );
 
   const formatDuration = (start: string, end?: string) => {
@@ -205,12 +206,8 @@ export function QueueMonitoringPanel({
       {/* Header */}
       <div className="px-4 py-3 border-b border-border bg-bg flex-shrink-0 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-theme-data font-bold text-[var(--accent)]">
-            QUEUE MONITOR
-          </h3>
-          <p className="text-xs text-text-muted mt-1">
-            Job queue status and worker management
-          </p>
+          <h3 className="text-sm font-theme-data font-bold text-[var(--accent)]">QUEUE MONITOR</h3>
+          <p className="text-xs text-text-muted mt-1">Job queue status and worker management</p>
         </div>
         {onRefresh && (
           <button
@@ -278,12 +275,11 @@ export function QueueMonitoringPanel({
           <div className="p-4 border-b border-border flex-shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xs font-theme-data text-text-muted">Filter:</span>
-              {(['all', 'pending', 'processing', 'failed', 'completed'] as const).map(
-                (status) => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={`
+              {(['all', 'pending', 'processing', 'failed', 'completed'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`
                       px-2 py-1 text-xs font-theme-data rounded
                       ${
                         statusFilter === status
@@ -291,11 +287,10 @@ export function QueueMonitoringPanel({
                           : 'bg-bg border border-border hover:border-text-muted'
                       }
                     `}
-                  >
-                    {status.toUpperCase()}
-                  </button>
-                )
-              )}
+                >
+                  {status.toUpperCase()}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -312,9 +307,7 @@ export function QueueMonitoringPanel({
                   <div key={job.id} className="bg-bg">
                     {/* Job Header */}
                     <button
-                      onClick={() =>
-                        setExpandedJobId(expandedJobId === job.id ? null : job.id)
-                      }
+                      onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-surface transition-colors"
                     >
                       {/* Status Indicator */}
@@ -481,8 +474,8 @@ export function QueueMonitoringPanel({
                         worker.idleMs < 1000
                           ? 'text-[var(--accent)]'
                           : worker.idleMs < 60000
-                          ? 'text-yellow-400'
-                          : 'text-text-muted'
+                            ? 'text-yellow-400'
+                            : 'text-text-muted'
                       }
                     `}
                   >

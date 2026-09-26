@@ -91,7 +91,9 @@
   font-family: var(--ifm-font-family-base);
   font-size: 0.875rem;
   border-radius: 6px;
-  transition: color 0.15s, background-color 0.15s;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
 }
 
 .menu__link--active {
@@ -188,7 +190,9 @@ article h3 {
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 12px;
   padding: 1.5rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .card:hover {

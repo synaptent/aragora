@@ -5,17 +5,23 @@ import dynamic from 'next/dynamic';
 import { useToastContext } from '@/context/ToastContext';
 import { logger } from '@/utils/logger';
 import { useWorkflowBuilder } from '@/hooks';
-import type { WorkflowNode, WorkflowEdge, WorkflowTemplate, WorkflowStepType, WorkflowNodeData } from '@/components/workflow-builder/types';
+import type {
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowTemplate,
+  WorkflowStepType,
+  WorkflowNodeData,
+} from '@/components/workflow-builder/types';
 
 // Dynamic import for WorkflowCanvas to avoid SSR issues with React Flow
 const WorkflowCanvas = dynamic(
   () => import('@/components/workflow-builder/WorkflowCanvas').then((m) => m.WorkflowCanvas),
-  { ssr: false, loading: () => <CanvasLoadingState /> }
+  { ssr: false, loading: () => <CanvasLoadingState /> },
 );
 
 const TemplateBrowser = dynamic(
   () => import('@/components/workflow-builder/TemplateBrowser').then((m) => m.TemplateBrowser),
-  { ssr: false }
+  { ssr: false },
 );
 
 function CanvasLoadingState() {
@@ -32,7 +38,10 @@ function CanvasLoadingState() {
 }
 
 // Convert template steps to React Flow nodes
-function templateToNodes(template: WorkflowTemplate): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+function templateToNodes(template: WorkflowTemplate): {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+} {
   const nodes: WorkflowNode[] = [];
   const edges: WorkflowEdge[] = [];
   const stepPositions: Record<string, { x: number; y: number }> = {};
@@ -135,7 +144,7 @@ export default function WorkflowBuilderPage() {
     executeWorkflow,
     isSaving: _isSaving,
   } = useWorkflowBuilder({
-    autoSave: false,  // Manual save via canvas button
+    autoSave: false, // Manual save via canvas button
     enableKeyboardShortcuts: true,
   });
 
@@ -148,7 +157,7 @@ export default function WorkflowBuilderPage() {
         showToast('Failed to save workflow', 'error');
       }
     },
-    [workflowName, showToast, createWorkflow]
+    [workflowName, showToast, createWorkflow],
   );
 
   const handleSelectTemplate = useCallback((template: WorkflowTemplate) => {
@@ -181,7 +190,7 @@ export default function WorkflowBuilderPage() {
         setIsExecuting(false);
       }
     },
-    [workflowName, showToast, createWorkflow, executeWorkflow]
+    [workflowName, showToast, createWorkflow, executeWorkflow],
   );
 
   return (
@@ -238,10 +247,7 @@ export default function WorkflowBuilderPage() {
 
       {/* Template Browser Modal */}
       {showTemplates && (
-        <TemplateBrowser
-          onSelect={handleSelectTemplate}
-          onClose={() => setShowTemplates(false)}
-        />
+        <TemplateBrowser onSelect={handleSelectTemplate} onClose={() => setShowTemplates(false)} />
       )}
     </div>
   );

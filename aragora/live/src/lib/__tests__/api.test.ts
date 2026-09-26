@@ -34,7 +34,7 @@ describe('API Utilities', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           'https://external.api.com/endpoint',
-          expect.any(Object)
+          expect.any(Object),
         );
       });
 
@@ -47,10 +47,7 @@ describe('API Utilities', () => {
 
         await apiFetch('/api/debates');
 
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/api/debates',
-          expect.any(Object)
-        );
+        expect(mockFetch).toHaveBeenCalledWith('/api/debates', expect.any(Object));
       });
 
       it('prepends base URL to other relative paths', async () => {
@@ -62,10 +59,7 @@ describe('API Utilities', () => {
 
         await apiFetch('/health');
 
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/health',
-          expect.any(Object)
-        );
+        expect(mockFetch).toHaveBeenCalledWith('/health', expect.any(Object));
       });
 
       it('adds leading slash to bare paths', async () => {
@@ -77,10 +71,7 @@ describe('API Utilities', () => {
 
         await apiFetch('debates');
 
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/debates',
-          expect.any(Object)
-        );
+        expect(mockFetch).toHaveBeenCalledWith('/debates', expect.any(Object));
       });
 
       it('uses custom baseUrl when provided', async () => {
@@ -94,7 +85,7 @@ describe('API Utilities', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           'https://custom.api.com/api/debates',
-          expect.any(Object)
+          expect.any(Object),
         );
       });
 
@@ -110,7 +101,7 @@ describe('API Utilities', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           'https://api.aragora.ai/api/debates',
-          expect.any(Object)
+          expect.any(Object),
         );
       });
     });
@@ -128,10 +119,8 @@ describe('API Utilities', () => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.any(String),
           expect.objectContaining({
-            headers: expect.objectContaining({
-              'Content-Type': 'application/json',
-            }),
-          })
+            headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+          }),
         );
       });
 
@@ -142,9 +131,7 @@ describe('API Utilities', () => {
           json: async () => ({}),
         });
 
-        await apiFetch('/api/test', {
-          headers: { Authorization: 'Bearer token123' },
-        });
+        await apiFetch('/api/test', { headers: { Authorization: 'Bearer token123' } });
 
         expect(mockFetch).toHaveBeenCalledWith(
           expect.any(String),
@@ -153,7 +140,7 @@ describe('API Utilities', () => {
               'Content-Type': 'application/json',
               Authorization: 'Bearer token123',
             }),
-          })
+          }),
         );
       });
     });
@@ -168,7 +155,7 @@ describe('API Utilities', () => {
         });
 
         await expect(apiFetch('/api/missing')).rejects.toThrow(
-          'API Error (404): Resource not found'
+          'API Error (404): Resource not found',
         );
       });
 
@@ -183,7 +170,7 @@ describe('API Utilities', () => {
         });
 
         await expect(apiFetch('/api/error')).rejects.toThrow(
-          'API Error (500): Internal Server Error'
+          'API Error (500): Internal Server Error',
         );
       });
 
@@ -220,10 +207,7 @@ describe('API Utilities', () => {
       });
 
       it('returns empty object for empty content-type', async () => {
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          headers: new Headers(),
-        });
+        mockFetch.mockResolvedValueOnce({ ok: true, headers: new Headers() });
 
         const result = await apiFetch('/api/empty');
 
@@ -291,7 +275,7 @@ describe('API Utilities', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ method: 'GET' })
+        expect.objectContaining({ method: 'GET' }),
       );
     });
 
@@ -309,7 +293,7 @@ describe('API Utilities', () => {
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({ 'X-Custom': 'value' }),
-        })
+        }),
       );
     });
   });
@@ -327,10 +311,7 @@ describe('API Utilities', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify(body),
-        })
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(body) }),
       );
     });
 
@@ -345,10 +326,7 @@ describe('API Utilities', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({
-          method: 'POST',
-          body: undefined,
-        })
+        expect.objectContaining({ method: 'POST', body: undefined }),
       );
     });
   });
@@ -366,10 +344,7 @@ describe('API Utilities', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify(body),
-        })
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify(body) }),
       );
     });
   });
@@ -386,7 +361,7 @@ describe('API Utilities', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });

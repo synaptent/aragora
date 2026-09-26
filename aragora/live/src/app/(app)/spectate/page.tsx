@@ -4,17 +4,10 @@ import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { ThemeEffects } from '@/components/ThemeEffects';
 import { useRightSidebar } from '@/context/RightSidebarContext';
-import {
-  useSpectate,
-  type SpectateEvent,
-  type SpectateStatus,
-} from '@/hooks/useSpectate';
+import { useSpectate, type SpectateEvent, type SpectateStatus } from '@/hooks/useSpectate';
 
 type BridgeState =
-  | SpectateStatus['bridge_state']
-  | 'checking'
-  | 'status_unavailable'
-  | 'unreachable';
+  SpectateStatus['bridge_state'] | 'checking' | 'status_unavailable' | 'unreachable';
 
 function EventTypeIcon({ eventType }: { eventType: string }) {
   const icons: Record<string, string> = {
@@ -192,13 +185,8 @@ export default function SpectatePage() {
     status: spectateStatus,
   } = useSpectate(undefined, undefined, { pollInterval: 3000 });
 
-  const bridgeState = getBridgeState(
-    spectateLoaded,
-    spectateConnected,
-    spectateStatus,
-  );
-  const activityWindowSeconds =
-    spectateStatus?.recent_activity_window_seconds ?? 120;
+  const bridgeState = getBridgeState(spectateLoaded, spectateConnected, spectateStatus);
+  const activityWindowSeconds = spectateStatus?.recent_activity_window_seconds ?? 120;
 
   const recentBridgeEvents = useMemo(
     () => spectateEvents.filter((event) => isRecentEvent(event, activityWindowSeconds)),
@@ -374,9 +362,7 @@ export default function SpectatePage() {
                 <h2 className="text-sm font-theme-data text-[var(--acid-cyan)] uppercase tracking-wider mb-2">
                   Bridge Readiness
                 </h2>
-                <p className="text-sm text-[var(--text)] mb-2">
-                  {getReadinessTitle(bridgeState)}
-                </p>
+                <p className="text-sm text-[var(--text)] mb-2">{getReadinessTitle(bridgeState)}</p>
                 <p className="text-xs text-[var(--text-muted)] max-w-3xl">
                   {getReadinessBody(
                     bridgeState,
@@ -388,11 +374,15 @@ export default function SpectatePage() {
               <div className="grid grid-cols-2 gap-3 text-xs font-theme-data min-w-[240px]">
                 <div className="card-theme px-3 py-2">
                   <div className="text-[var(--text-muted)] mb-1">Bridge State</div>
-                  <div className="text-[var(--accent)] break-words">{getBridgeLabel(bridgeState)}</div>
+                  <div className="text-[var(--accent)] break-words">
+                    {getBridgeLabel(bridgeState)}
+                  </div>
                 </div>
                 <div className="card-theme px-3 py-2">
                   <div className="text-[var(--text-muted)] mb-1">Last Event</div>
-                  <div className="text-[var(--acid-cyan)]">{formatRelativeAge(spectateStatus?.last_event_at)}</div>
+                  <div className="text-[var(--acid-cyan)]">
+                    {formatRelativeAge(spectateStatus?.last_event_at)}
+                  </div>
                 </div>
                 <div className="card-theme px-3 py-2">
                   <div className="text-[var(--text-muted)] mb-1">Recent Events</div>
@@ -410,9 +400,7 @@ export default function SpectatePage() {
           {!spectateLoaded && (
             <div className="card-theme p-8 text-center mb-6">
               <div className="w-8 h-8 border-2 border-[var(--accent)]/30 border-t-[var(--accent)] rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-[var(--text-muted)] text-sm">
-                Checking live bridge readiness...
-              </p>
+              <p className="text-[var(--text-muted)] text-sm">Checking live bridge readiness...</p>
             </div>
           )}
 
@@ -432,7 +420,9 @@ export default function SpectatePage() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">Debate ID</div>
+                        <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+                          Debate ID
+                        </div>
                         <h3 className="text-sm font-theme-data text-[var(--text)] break-all group-hover:text-[var(--accent)] transition-colors">
                           {debate.debate_id}
                         </h3>
@@ -476,14 +466,17 @@ export default function SpectatePage() {
           {spectateLoaded &&
             bridgeState === 'activity_unattributed' &&
             discoverableDebates.length === 0 && (
-              <div className="border border-[var(--acid-yellow)]/30 bg-[var(--acid-yellow)]/10 p-4 mb-6" style={{ borderRadius: 'var(--radius-card, 6px)' }}>
+              <div
+                className="border border-[var(--acid-yellow)]/30 bg-[var(--acid-yellow)]/10 p-4 mb-6"
+                style={{ borderRadius: 'var(--radius-card, 6px)' }}
+              >
                 <h2 className="text-sm font-theme-data text-[var(--acid-yellow)] mb-2">
                   Partial Readiness
                 </h2>
                 <p className="text-xs text-[var(--text-muted)]">
-                  Recent bridge activity is flowing, but the current events are not tagged with
-                  a debate ID. This surface stays honest and does not invent clickable live
-                  debates until attribution is present.
+                  Recent bridge activity is flowing, but the current events are not tagged with a
+                  debate ID. This surface stays honest and does not invent clickable live debates
+                  until attribution is present.
                 </p>
               </div>
             )}
@@ -514,10 +507,14 @@ export default function SpectatePage() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[var(--acid-cyan)]">{event.event_type}</span>
                             {event.agent_name && (
-                              <span className="text-[var(--text-muted)]">by {event.agent_name}</span>
+                              <span className="text-[var(--text-muted)]">
+                                by {event.agent_name}
+                              </span>
                             )}
                             {event.round_number != null && (
-                              <span className="text-[var(--text-muted)]">R{event.round_number}</span>
+                              <span className="text-[var(--text-muted)]">
+                                R{event.round_number}
+                              </span>
                             )}
                           </div>
                           {details && (
@@ -554,16 +551,10 @@ export default function SpectatePage() {
                   {getEmptyStateBody(bridgeState)}
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <Link
-                    href="/arena"
-                    className="px-6 py-2 btn-theme-primary"
-                  >
+                  <Link href="/arena" className="px-6 py-2 btn-theme-primary">
                     START DEBATE
                   </Link>
-                  <Link
-                    href="/debates"
-                    className="px-6 py-2 btn-theme-secondary"
-                  >
+                  <Link href="/debates" className="px-6 py-2 btn-theme-secondary">
                     VIEW ARCHIVE
                   </Link>
                 </div>
@@ -576,8 +567,13 @@ export default function SpectatePage() {
               About Spectate Mode
             </h3>
             <ul className="text-xs text-[var(--text-muted)] space-y-1">
-              <li>• This page only lists debates that appear in recent bridge events with a debate ID.</li>
-              <li>• If activity is real but unattributed, the surface stays partial instead of inventing a live card.</li>
+              <li>
+                • This page only lists debates that appear in recent bridge events with a debate ID.
+              </li>
+              <li>
+                • If activity is real but unattributed, the surface stays partial instead of
+                inventing a live card.
+              </li>
               <li>• Recent bridge status is shown separately from the raw event feed.</li>
               <li>• Read-only: spectators cannot influence debates.</li>
               <li>• Use the archive when no live debate is currently discoverable.</li>

@@ -25,8 +25,15 @@ const PHASE_COLOR_MAP: Record<string, { active: string; bg: string; border: stri
   violet: { active: 'text-violet-400', bg: 'bg-violet-500/20', border: 'border-violet-500/40' },
 };
 
-export function AutoFlowOrchestrator({ currentPhase, phaseProgress, nodesCreated, onPause, onSkipToEnd, onCancel }: AutoFlowOrchestratorProps) {
-  const currentIndex = PHASES.findIndex(p => p.key === currentPhase);
+export function AutoFlowOrchestrator({
+  currentPhase,
+  phaseProgress,
+  nodesCreated,
+  onPause,
+  onSkipToEnd,
+  onCancel,
+}: AutoFlowOrchestratorProps) {
+  const currentIndex = PHASES.findIndex((p) => p.key === currentPhase);
   const overallPct = Math.round(((currentIndex + phaseProgress) / PHASES.length) * 100);
 
   return (
@@ -57,8 +64,11 @@ export function AutoFlowOrchestrator({ currentPhase, phaseProgress, nodesCreated
               <div
                 key={phase.key}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                  isActive ? `${colors.bg} border ${colors.border}` :
-                  isDone ? 'opacity-70' : 'opacity-30'
+                  isActive
+                    ? `${colors.bg} border ${colors.border}`
+                    : isDone
+                      ? 'opacity-70'
+                      : 'opacity-30'
                 }`}
               >
                 {/* Status indicator */}
@@ -76,7 +86,9 @@ export function AutoFlowOrchestrator({ currentPhase, phaseProgress, nodesCreated
                 <span className="text-lg">{phase.icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-theme-data ${isActive ? 'text-text font-bold' : 'text-text-muted'}`}>
+                    <span
+                      className={`text-sm font-theme-data ${isActive ? 'text-text font-bold' : 'text-text-muted'}`}
+                    >
                       {phase.label}
                     </span>
                     {isActive && (
@@ -99,9 +111,11 @@ export function AutoFlowOrchestrator({ currentPhase, phaseProgress, nodesCreated
                 </div>
 
                 {/* Phase percentage */}
-                <span className={`text-xs font-theme-data min-w-[3ch] text-right ${
-                  isDone ? 'text-emerald-400' : isActive ? colors.active : 'text-text-muted'
-                }`}>
+                <span
+                  className={`text-xs font-theme-data min-w-[3ch] text-right ${
+                    isDone ? 'text-emerald-400' : isActive ? colors.active : 'text-text-muted'
+                  }`}
+                >
                   {phasePct}%
                 </span>
               </div>

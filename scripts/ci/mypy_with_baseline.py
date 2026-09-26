@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 """Run mypy and filter its output through mypy-baseline.
 
+Required full tier
+------------------
+``--baseline scripts/baselines/root-mypy-full.json`` selects the shared JSON
+ratchet (check_tool_baseline), pinned to mypy 2.1.0 running on a CPython 3.11
+host. mypy parses with the host interpreter's ``ast`` (``--python-version``
+selects the target only), so the baseline's line attribution, and therefore its
+keys, are host-parser specific; any other host is refused before mypy runs. It
+checks diagnostic counts against mypy's summary before filtering, prints raw and
+NEW error occurrences, and supports shrink-only ``--update`` (an unchanged
+snapshot is not rewritten).
+Exit codes: 0 no new errors; 1 new errors/update growth; 2 baseline/usage error;
+3 wrong/missing mypy version, wrong host Python version, tool failure or
+incomplete diagnostic output.
+Without --baseline the legacy pre-push/.mypy-baseline interface is unchanged.
+
 Purpose
 -------
 Aragora has ~4,100 pre-existing mypy errors (see ``.mypy-baseline``). Failing
@@ -30,23 +45,102 @@ Sync mode
 ``python scripts/ci/mypy_with_baseline.py --sync`` regenerates
 ``.mypy-baseline`` from a fresh mypy run. Use after landing a PR that
 intentionally clears a batch of existing errors.
+
+Relocation tolerance
+--------------------
+``mypy-baseline filter`` matches each error's clean line (its own identity:
+``path:0: severity: message  [code]``) against the baseline, so moving a file
+would report every baselined error in it as new. Before filtering, errors of a
+moved file are pointed back at their baselined path when the new path exists,
+exactly one baselined path with the same basename is absent from the tree and
+no other new error claims it. Ambiguity, copies and changed messages stay new;
+relocated errors never change the exit code. Resync with ``--sync`` to rekey.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from check_tool_baseline import (  # noqa: E402
+    PARSERS,
+    Baseline,
+    BaselineError,
+    ToolFailed,
+    check_findings,
+    count_findings,
+    key_findings,
+    load_baseline,
+    run_tool,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = REPO_ROOT / ".mypy-baseline"
+MYPY_VERSION = "2.1.0"
+# The host major.minor that generated the JSON baseline. Must equal
+# [tool.mypy] python_version, the --python-version flag in scripts/test_tiers.sh
+# and the setup-python-safe pin of lint.yml's typecheck-run job.
+HOST_PYTHON_VERSION = "3.11"
 DEFAULT_MYPY_ARGS: tuple[str, ...] = (
     "aragora/",
     "scripts/",
     "--config-file=pyproject.toml",
     "--ignore-missing-imports",
 )
+
+
+def _host_python_version() -> str:
+    return f"{sys.version_info.major}.{sys.version_info.minor}"
+
+
+def _json_gate(mypy_args: tuple[str, ...], baseline_path: Path, *, update: bool) -> int:
+    """Validate a complete mypy run, then reuse the shared shrink-only ratchet."""
+    try:
+        installed = version("mypy")
+        if installed != MYPY_VERSION:
+            raise ToolFailed(f"mypy=={MYPY_VERSION} required; found {installed}")
+        host = _host_python_version()
+        if host != HOST_PYTHON_VERSION:
+            raise ToolFailed(
+                f"CPython {HOST_PYTHON_VERSION} host required; found {host} at {sys.executable}. "
+                "mypy parses with the host interpreter's ast (--python-version selects the "
+                "target only), so the baseline's line attribution and keys are specific to a "
+                f"{HOST_PYTHON_VERSION} host. Run the tier under {HOST_PYTHON_VERSION}; "
+                "regenerating the baseline under another host is not a fix."
+            )
+        baseline = (
+            Baseline(tool="mypy", findings={}, exists=False)
+            if update and not baseline_path.exists()
+            else load_baseline(baseline_path, "mypy")
+        )
+        rc, stdout, stderr = run_tool([sys.executable, "-m", "mypy", *mypy_args], REPO_ROOT)
+        findings = PARSERS["mypy"].parse(stdout)
+        summary = re.search(r"^Found (\d+) errors? in .+$", stdout, re.MULTILINE)
+        clean = re.search(r"^Success: no issues found in .+$", stdout, re.MULTILINE)
+        reported = int(summary[1]) if summary else (0 if clean else None)
+        if rc not in (0, 1) or reported != len(findings) or (rc == 0) != (reported == 0):
+            raise ToolFailed(
+                f"mypy exited {rc}; parsed {len(findings)} errors, summary {reported}."
+                f"\n{stdout}\n{stderr}"
+            )
+        print(f"Found {len(findings)} mypy error(s) before baseline filtering.")
+        keyed = key_findings(findings, PARSERS["mypy"], REPO_ROOT)
+        current = count_findings(keyed)
+        new_count = sum(max(0, n - baseline.findings.get(k, 0)) for k, n in current.items())
+        print(f"Typecheck: {new_count} NEW errors ({len(findings) - new_count} existing errors).")
+        return check_findings(baseline_path, baseline, keyed, update=update)
+    except BaselineError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    except (ToolFailed, PackageNotFoundError) as exc:
+        print(f"ERROR: mypy=={MYPY_VERSION}: {exc}", file=sys.stderr)
+        return 3
 
 
 def _run_mypy(mypy_args: tuple[str, ...]) -> subprocess.Popen[bytes]:
@@ -57,6 +151,9 @@ def _run_mypy(mypy_args: tuple[str, ...]) -> subprocess.Popen[bytes]:
         stderr=subprocess.STDOUT,
         cwd=str(REPO_ROOT),
     )
+
+
+FILTER_IGNORED_CATEGORIES: tuple[str, ...] = ("note",)
 
 
 def _filter(mypy_proc: subprocess.Popen[bytes]) -> int:
@@ -74,14 +171,124 @@ def _filter(mypy_proc: subprocess.Popen[bytes]) -> int:
         # overloads). We baseline them out here too so they do not register
         # as new violations.
         "--ignore-categories",
-        "note",
+        *FILTER_IGNORED_CATEGORIES,
     ]
     assert mypy_proc.stdout is not None
-    filter_proc = subprocess.Popen(cmd, stdin=mypy_proc.stdout, cwd=str(REPO_ROOT))
+    # surrogateescape keeps untouched lines byte-identical through the rewrite.
+    raw_lines = mypy_proc.stdout.read().decode("utf-8", "surrogateescape")
     mypy_proc.stdout.close()
-    filter_rc = filter_proc.wait()
     mypy_proc.wait()
-    return filter_rc
+    try:
+        baseline_lines = BASELINE_PATH.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        baseline_lines = []
+    lines, relocations = _relocate_moved_files(
+        raw_lines.splitlines(keepends=True), baseline_lines, REPO_ROOT
+    )
+    _print_relocations(relocations)
+    filter_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, cwd=str(REPO_ROOT))
+    filter_proc.communicate("".join(lines).encode("utf-8", "surrogateescape"))
+    return filter_proc.returncode
+
+
+def _relocate_moved_files(
+    mypy_lines: list[str], baseline_lines: list[str], tree_root: Path
+) -> tuple[list[str], list[tuple[str, str, int]]]:
+    """Point relocated files' errors back at their baselined path for the filter.
+
+    Identity is mypy-baseline's own clean line (``Error.get_clean_line`` of the
+    installed package, under the same options ``_filter`` passes) split into
+    path and rest, so this is exactly the filter's matching with the path
+    swapped. A new ``P + rest`` is relocated iff ``P`` exists under
+    ``tree_root``, exactly one baselined ``Q + rest`` has ``Q != P``, the same
+    basename and ``Q`` absent from the tree, and no other new line claims that
+    ``Q + rest``. Up to the baselined count of such lines is replaced by the
+    baseline line itself (which the filter then matches); everything else is
+    passed through untouched. Returns the rewritten stream and
+    ``(from_clean_line, to_clean_line, occurrences)`` per relocated identity.
+    """
+    # The package's own identity, not a re-implementation; these modules are
+    # stable across the mypy-baseline>=0.7.4,<0.8 pin in pyproject.toml.
+    from mypy_baseline._config import Config
+    from mypy_baseline._error import Error
+
+    config = Config().read_file(tree_root / "pyproject.toml")
+    config.ignore_categories = list(FILTER_IGNORED_CATEGORIES)
+
+    def split(error: Error) -> tuple[str, str] | None:
+        if config.is_ignored(error.message) or config.is_ignored_category(error.category):
+            return None
+        path = str(Path(*error.path.parts[: config.depth])).replace("\\", "/")
+        return path, error.get_clean_line(config)[len(path) :]
+
+    # Baseline lines are already clean; one that does not round-trip through the
+    # identity could never be matched by the filter either, so it is left alone.
+    baselined: dict[str, int] = {}
+    absent_by_rest: dict[str, list[str]] = {}
+    for line in baseline_lines:
+        error = Error.new(line)
+        parts = split(error) if error is not None else None
+        if parts is None or "".join(parts) != line:
+            continue
+        baselined[line] = baselined.get(line, 0) + 1
+        if not (tree_root / parts[0]).exists():
+            absent_by_rest.setdefault(parts[1], []).append(parts[0])
+
+    parsed: list[tuple[str, str] | None] = []
+    current: dict[tuple[str, str], int] = {}
+    for line in mypy_lines:
+        error = Error.new(line)
+        parts = split(error) if error is not None else None
+        parsed.append(parts)
+        if parts is not None:
+            current[parts] = current.get(parts, 0) + 1
+
+    claims: dict[str, list[tuple[str, str]]] = {}
+    for (path, rest), count in current.items():
+        if count <= baselined.get(path + rest, 0) or not (tree_root / path).exists():
+            continue
+        candidates = {
+            old
+            for old in absent_by_rest.get(rest, ())
+            if old != path and Path(old).name == Path(path).name
+        }
+        if len(candidates) == 1:
+            claims.setdefault(candidates.pop() + rest, []).append((path, rest))
+
+    target: dict[tuple[str, str], str] = {}
+    budget: dict[tuple[str, str], int] = {}
+    relocations: list[tuple[str, str, int]] = []
+    for old, claimants in claims.items():
+        if len(claimants) != 1:
+            continue
+        new = claimants[0]
+        moved = min(current[new] - baselined.get("".join(new), 0), baselined[old])
+        target[new] = old
+        budget[new] = moved
+        relocations.append((old, "".join(new), moved))
+
+    rewritten: list[str] = []
+    for line, parts in zip(mypy_lines, parsed):
+        if parts is not None and budget.get(parts, 0) > 0:
+            budget[parts] -= 1
+            rewritten.append(target[parts] + "\n")
+        else:
+            rewritten.append(line)
+    return rewritten, sorted(relocations)
+
+
+def _print_relocations(relocations: list[tuple[str, str, int]]) -> None:
+    if not relocations:
+        return
+    for old, new, _count in relocations:
+        print(f"  RELOCATED {old} -> {new}")
+    occurrences = sum(count for _old, _new, count in relocations)
+    print(
+        f"mypy-baseline: {len(relocations)} relocated error(s) ({occurrences} occurrence(s)) "
+        "matched by basename after a file move; counted as baselined, not new "
+        "(resync with --sync to rekey)",
+        flush=True,
+    )
 
 
 def _sync(mypy_proc: subprocess.Popen[bytes]) -> int:
@@ -108,8 +315,15 @@ def _sync(mypy_proc: subprocess.Popen[bytes]) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run mypy and filter through mypy-baseline.",
+        epilog=(
+            "With --baseline: exit 0 no new errors; 1 new errors/update growth; "
+            "2 baseline/usage error; 3 wrong/missing mypy, wrong host Python "
+            f"(CPython {HOST_PYTHON_VERSION} required) or incomplete/failed run."
+        ),
         add_help=True,
     )
+    parser.add_argument("--baseline", type=Path, help="Use the shared JSON ratchet instead.")
+    parser.add_argument("--update", action="store_true", help="Create/shrink the JSON baseline.")
     parser.add_argument(
         "--sync",
         action="store_true",
@@ -126,6 +340,12 @@ def main(argv: list[str] | None = None) -> int:
     raw_args = tuple(a for a in args.mypy_args if a != "--")
     mypy_args = raw_args or DEFAULT_MYPY_ARGS
 
+    if args.baseline is not None:
+        if args.sync:
+            parser.error("use --update, not --sync, with a JSON --baseline")
+        return _json_gate(mypy_args, REPO_ROOT / args.baseline, update=args.update)
+    if args.update:
+        parser.error("--update requires --baseline")
     mypy_proc = _run_mypy(mypy_args)
     if args.sync:
         return _sync(mypy_proc)

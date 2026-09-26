@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
@@ -27,6 +27,9 @@ from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.server.handlers.api_decorators import api_endpoint
 from aragora.server.validation.query_params import safe_query_int
 from aragora.rbac.decorators import require_permission
+
+if TYPE_CHECKING:
+    from aragora.analytics.outcome_analytics import OutcomeAnalytics
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +45,7 @@ _SAFE_EXCEPTIONS = (
 )
 
 
-def _get_outcome_analytics():
+def _get_outcome_analytics() -> OutcomeAnalytics:
     """Lazy import of OutcomeAnalytics to avoid heavy startup cost."""
     from aragora.analytics.outcome_analytics import get_outcome_analytics
 
@@ -442,7 +445,7 @@ class DecisionAnalyticsHandler:
 
             total = sum(topics.values()) if topics else 0
 
-            domains = sorted(
+            domains: list[dict[str, Any]] = sorted(
                 [
                     {
                         "domain": topic,

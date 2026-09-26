@@ -21,27 +21,25 @@ test.describe('Real OAuth Flow', () => {
       const url = response.url();
       // Log all API calls
       if (url.includes('/api/') || url.includes('api.aragora.ai')) {
-        apiRequests.push({
-          url,
-          status: response.status(),
-          method: response.request().method(),
-        });
+        apiRequests.push({ url, status: response.status(), method: response.request().method() });
       }
     });
 
     // Create a realistic-looking JWT (it won't validate but will trigger the flow)
     // Format: header.payload.signature (base64 encoded)
     const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = btoa(JSON.stringify({
-      sub: 'test-user-id',
-      email: 'test@example.com',
-      org_id: null,
-      role: 'member',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 86400,
-      type: 'access',
-      tv: 1
-    }));
+    const payload = btoa(
+      JSON.stringify({
+        sub: 'test-user-id',
+        email: 'test@example.com',
+        org_id: null,
+        role: 'member',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 86400,
+        type: 'access',
+        tv: 1,
+      }),
+    );
     const signature = 'fake-signature-for-testing';
     const fakeAccessToken = `${header}.${payload}.${signature}`;
     const fakeRefreshToken = `${header}.${btoa(JSON.stringify({ type: 'refresh' }))}.${signature}`;
@@ -65,19 +63,20 @@ test.describe('Real OAuth Flow', () => {
     }
 
     console.log('\n=== Console Logs (auth related) ===');
-    const authLogs = logs.filter(l =>
-      l.toLowerCase().includes('auth') ||
-      l.toLowerCase().includes('token') ||
-      l.toLowerCase().includes('/me') ||
-      l.toLowerCase().includes('oauth')
+    const authLogs = logs.filter(
+      (l) =>
+        l.toLowerCase().includes('auth') ||
+        l.toLowerCase().includes('token') ||
+        l.toLowerCase().includes('/me') ||
+        l.toLowerCase().includes('oauth'),
     );
     for (const log of authLogs) {
       console.log(`  ${log.substring(0, 200)}`);
     }
 
     // Check if any request went to wrong URL
-    const wrongUrls = apiRequests.filter(r =>
-      r.url.includes('aragora.ai/api') && !r.url.includes('api.aragora.ai')
+    const wrongUrls = apiRequests.filter(
+      (r) => r.url.includes('aragora.ai/api') && !r.url.includes('api.aragora.ai'),
     );
 
     if (wrongUrls.length > 0) {
@@ -88,7 +87,7 @@ test.describe('Real OAuth Flow', () => {
     }
 
     // Check the actual /me request
-    const meRequest = apiRequests.find(r => r.url.includes('/me'));
+    const meRequest = apiRequests.find((r) => r.url.includes('/me'));
     if (meRequest) {
       console.log(`\n=== /me Request ===`);
       console.log(`URL: ${meRequest.url}`);

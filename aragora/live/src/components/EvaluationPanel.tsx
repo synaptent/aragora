@@ -44,11 +44,7 @@ interface ComparisonResult {
   winner: string;
   confidence: number;
   rationale: string;
-  dimension_comparisons: Array<{
-    dimension: string;
-    winner: string;
-    explanation: string;
-  }>;
+  dimension_comparisons: Array<{ dimension: string; winner: string; explanation: string }>;
 }
 
 interface EvaluationPanelProps {
@@ -60,7 +56,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'evaluate' | 'compare' | 'dimensions' | 'profiles'>('evaluate');
+  const [activeTab, setActiveTab] = useState<'evaluate' | 'compare' | 'dimensions' | 'profiles'>(
+    'evaluate',
+  );
 
   // Evaluate state
   const [evalQuery, setEvalQuery] = useState('');
@@ -146,18 +144,21 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
     setCompareResult(null);
     setError(null);
 
-    const { data, error: compareError } = await apiFetch<ComparisonResult>('/api/evaluate/compare', {
-      method: 'POST',
-      body: JSON.stringify({
-        query: compareQuery,
-        response_a: responseA,
-        response_b: responseB,
-        context: compareContext || undefined,
-        use_case: compareProfile,
-        response_a_id: 'Response A',
-        response_b_id: 'Response B',
-      }),
-    });
+    const { data, error: compareError } = await apiFetch<ComparisonResult>(
+      '/api/evaluate/compare',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          query: compareQuery,
+          response_a: responseA,
+          response_b: responseB,
+          context: compareContext || undefined,
+          use_case: compareProfile,
+          response_a_id: 'Response A',
+          response_b_id: 'Response B',
+        }),
+      },
+    );
 
     if (compareError) {
       setError(compareError);
@@ -168,8 +169,8 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
   };
 
   const toggleDimension = (dimId: string) => {
-    setSelectedDimensions(prev =>
-      prev.includes(dimId) ? prev.filter(d => d !== dimId) : [...prev, dimId]
+    setSelectedDimensions((prev) =>
+      prev.includes(dimId) ? prev.filter((d) => d !== dimId) : [...prev, dimId],
     );
   };
 
@@ -215,7 +216,7 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-[var(--accent)]/30 pb-2">
-        {(['evaluate', 'compare', 'dimensions', 'profiles'] as const).map(tab => (
+        {(['evaluate', 'compare', 'dimensions', 'profiles'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -240,20 +241,24 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
             </p>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Query/Prompt *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Query/Prompt *
+              </label>
               <textarea
                 value={evalQuery}
-                onChange={e => setEvalQuery(e.target.value)}
+                onChange={(e) => setEvalQuery(e.target.value)}
                 placeholder="The original question or task..."
                 className="w-full h-20 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Response to Evaluate *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Response to Evaluate *
+              </label>
               <textarea
                 value={evalResponse}
-                onChange={e => setEvalResponse(e.target.value)}
+                onChange={(e) => setEvalResponse(e.target.value)}
                 placeholder="The response to be evaluated..."
                 className="w-full h-32 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -261,20 +266,24 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Context (optional)</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Context (optional)
+                </label>
                 <textarea
                   value={evalContext}
-                  onChange={e => setEvalContext(e.target.value)}
+                  onChange={(e) => setEvalContext(e.target.value)}
                   placeholder="Additional context..."
                   className="w-full h-20 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Reference Answer (optional)</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Reference Answer (optional)
+                </label>
                 <textarea
                   value={evalReference}
-                  onChange={e => setEvalReference(e.target.value)}
+                  onChange={(e) => setEvalReference(e.target.value)}
                   placeholder="Ground truth or ideal answer..."
                   className="w-full h-20 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
@@ -283,14 +292,18 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Evaluation Profile</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Evaluation Profile
+                </label>
                 <select
                   value={selectedProfile}
-                  onChange={e => setSelectedProfile(e.target.value)}
+                  onChange={(e) => setSelectedProfile(e.target.value)}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 >
-                  {profiles.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -303,7 +316,7 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
                 <input
                   type="range"
                   value={threshold}
-                  onChange={e => setThreshold(parseFloat(e.target.value))}
+                  onChange={(e) => setThreshold(parseFloat(e.target.value))}
                   min={1}
                   max={5}
                   step={0.5}
@@ -312,16 +325,20 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Dimensions</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Dimensions
+                </label>
                 <div className="text-xs text-text-muted">
-                  {selectedDimensions.length === 0 ? 'All (default)' : `${selectedDimensions.length} selected`}
+                  {selectedDimensions.length === 0
+                    ? 'All (default)'
+                    : `${selectedDimensions.length} selected`}
                 </div>
               </div>
             </div>
 
             {/* Dimension selector */}
             <div className="flex flex-wrap gap-2">
-              {dimensions.map(dim => (
+              {dimensions.map((dim) => (
                 <button
                   key={dim.id}
                   onClick={() => toggleDimension(dim.id)}
@@ -349,7 +366,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
           {evalResult && (
             <div className="card p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-theme-data text-[var(--acid-cyan)]">Evaluation Results</h4>
+                <h4 className="text-sm font-theme-data text-[var(--acid-cyan)]">
+                  Evaluation Results
+                </h4>
                 <span
                   className={`px-3 py-1 text-sm font-theme-data rounded ${
                     evalResult.passed
@@ -363,7 +382,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
               {/* Overall Score */}
               <div className="flex items-center gap-4">
-                <div className={`text-4xl font-theme-data font-bold ${getScoreColor(evalResult.overall_score)}`}>
+                <div
+                  className={`text-4xl font-theme-data font-bold ${getScoreColor(evalResult.overall_score)}`}
+                >
                   {evalResult.overall_score.toFixed(2)}
                 </div>
                 <div className="flex-1">
@@ -389,11 +410,16 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
               {/* Dimension Scores */}
               <div className="space-y-2">
                 <h5 className="text-xs font-theme-data text-text-muted">DIMENSION SCORES</h5>
-                {evalResult.scores.map(score => (
-                  <div key={score.dimension} className="p-3 bg-surface border border-[var(--accent)]/20 rounded">
+                {evalResult.scores.map((score) => (
+                  <div
+                    key={score.dimension}
+                    className="p-3 bg-surface border border-[var(--accent)]/20 rounded"
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-theme-data text-text">
-                        {score.dimension.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        {score.dimension
+                          .replace(/_/g, ' ')
+                          .replace(/\b\w/g, (l) => l.toUpperCase())}
                       </span>
                       <span className={`font-theme-data font-bold ${getScoreColor(score.score)}`}>
                         {score.score.toFixed(1)}/5
@@ -417,7 +443,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
                     <h5 className="text-xs font-theme-data text-green-400 mb-2">STRENGTHS</h5>
                     <ul className="space-y-1">
                       {evalResult.strengths.map((s, i) => (
-                        <li key={i} className="text-xs text-text-muted">+ {s}</li>
+                        <li key={i} className="text-xs text-text-muted">
+                          + {s}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -427,7 +455,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
                     <h5 className="text-xs font-theme-data text-red-400 mb-2">WEAKNESSES</h5>
                     <ul className="space-y-1">
                       {evalResult.weaknesses.map((w, i) => (
-                        <li key={i} className="text-xs text-text-muted">- {w}</li>
+                        <li key={i} className="text-xs text-text-muted">
+                          - {w}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -448,10 +478,12 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
             </p>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Query/Prompt *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Query/Prompt *
+              </label>
               <textarea
                 value={compareQuery}
-                onChange={e => setCompareQuery(e.target.value)}
+                onChange={(e) => setCompareQuery(e.target.value)}
                 placeholder="The original question or task..."
                 className="w-full h-20 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -459,20 +491,24 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1">Response A *</label>
+                <label className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1">
+                  Response A *
+                </label>
                 <textarea
                   value={responseA}
-                  onChange={e => setResponseA(e.target.value)}
+                  onChange={(e) => setResponseA(e.target.value)}
                   placeholder="First response..."
                   className="w-full h-32 p-3 bg-surface border border-[var(--acid-cyan)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--acid-cyan)]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-purple-400 mb-1">Response B *</label>
+                <label className="block text-xs font-theme-data text-purple-400 mb-1">
+                  Response B *
+                </label>
                 <textarea
                   value={responseB}
-                  onChange={e => setResponseB(e.target.value)}
+                  onChange={(e) => setResponseB(e.target.value)}
                   placeholder="Second response..."
                   className="w-full h-32 p-3 bg-surface border border-purple-400/30 rounded font-theme-data text-sm focus:outline-none focus:border-purple-400"
                 />
@@ -481,24 +517,30 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Context (optional)</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Context (optional)
+                </label>
                 <textarea
                   value={compareContext}
-                  onChange={e => setCompareContext(e.target.value)}
+                  onChange={(e) => setCompareContext(e.target.value)}
                   placeholder="Additional context..."
                   className="w-full h-16 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Evaluation Profile</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Evaluation Profile
+                </label>
                 <select
                   value={compareProfile}
-                  onChange={e => setCompareProfile(e.target.value)}
+                  onChange={(e) => setCompareProfile(e.target.value)}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 >
-                  {profiles.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -506,7 +548,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
             <button
               onClick={handleCompare}
-              disabled={compareLoading || !compareQuery.trim() || !responseA.trim() || !responseB.trim()}
+              disabled={
+                compareLoading || !compareQuery.trim() || !responseA.trim() || !responseB.trim()
+              }
               className="px-4 py-2 text-xs font-theme-data bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/50 rounded hover:bg-[var(--accent)]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {compareLoading ? '[COMPARING...]' : '[COMPARE]'}
@@ -516,7 +560,9 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
           {/* Comparison Results */}
           {compareResult && (
             <div className="card p-6 space-y-4">
-              <h4 className="text-sm font-theme-data text-[var(--acid-cyan)]">Comparison Results</h4>
+              <h4 className="text-sm font-theme-data text-[var(--acid-cyan)]">
+                Comparison Results
+              </h4>
 
               {/* Winner */}
               <div className="text-center p-6 bg-surface border border-[var(--accent)]/30 rounded">
@@ -526,8 +572,8 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
                     compareResult.winner === 'Response A'
                       ? 'text-[var(--acid-cyan)]'
                       : compareResult.winner === 'Response B'
-                      ? 'text-purple-400'
-                      : 'text-yellow-400'
+                        ? 'text-purple-400'
+                        : 'text-yellow-400'
                   }`}
                 >
                   {compareResult.winner}
@@ -544,32 +590,38 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
               </div>
 
               {/* Dimension Comparisons */}
-              {compareResult.dimension_comparisons && compareResult.dimension_comparisons.length > 0 && (
-                <div className="space-y-2">
-                  <h5 className="text-xs font-theme-data text-text-muted">DIMENSION BREAKDOWN</h5>
-                  {compareResult.dimension_comparisons.map((comp, idx) => (
-                    <div key={idx} className="p-3 bg-surface border border-[var(--accent)]/20 rounded">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-theme-data text-text text-sm">
-                          {comp.dimension.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </span>
-                        <span
-                          className={`text-xs font-theme-data ${
-                            comp.winner === 'Response A'
-                              ? 'text-[var(--acid-cyan)]'
-                              : comp.winner === 'Response B'
-                              ? 'text-purple-400'
-                              : 'text-yellow-400'
-                          }`}
-                        >
-                          {comp.winner}
-                        </span>
+              {compareResult.dimension_comparisons &&
+                compareResult.dimension_comparisons.length > 0 && (
+                  <div className="space-y-2">
+                    <h5 className="text-xs font-theme-data text-text-muted">DIMENSION BREAKDOWN</h5>
+                    {compareResult.dimension_comparisons.map((comp, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 bg-surface border border-[var(--accent)]/20 rounded"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-theme-data text-text text-sm">
+                            {comp.dimension
+                              .replace(/_/g, ' ')
+                              .replace(/\b\w/g, (l) => l.toUpperCase())}
+                          </span>
+                          <span
+                            className={`text-xs font-theme-data ${
+                              comp.winner === 'Response A'
+                                ? 'text-[var(--acid-cyan)]'
+                                : comp.winner === 'Response B'
+                                  ? 'text-purple-400'
+                                  : 'text-yellow-400'
+                            }`}
+                          >
+                            {comp.winner}
+                          </span>
+                        </div>
+                        <p className="text-xs text-text-muted">{comp.explanation}</p>
                       </div>
-                      <p className="text-xs text-text-muted">{comp.explanation}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
             </div>
           )}
         </div>
@@ -579,19 +631,23 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
       {activeTab === 'dimensions' && (
         <div className="space-y-4">
           <div className="card p-6">
-            <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">Evaluation Dimensions</h3>
+            <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+              Evaluation Dimensions
+            </h3>
             <p className="text-xs text-text-muted font-theme-data mb-4">
               Click on a dimension to view its detailed rubric.
             </p>
 
             <div className="space-y-2">
-              {dimensions.map(dim => (
+              {dimensions.map((dim) => (
                 <div
                   key={dim.id}
                   className="border border-[var(--accent)]/20 rounded overflow-hidden"
                 >
                   <button
-                    onClick={() => setExpandedDimension(expandedDimension === dim.id ? null : dim.id)}
+                    onClick={() =>
+                      setExpandedDimension(expandedDimension === dim.id ? null : dim.id)
+                    }
                     className="w-full p-3 flex items-center justify-between bg-surface hover:bg-[var(--accent)]/5 transition-colors"
                   >
                     <div className="text-left">
@@ -605,16 +661,18 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
 
                   {expandedDimension === dim.id && (
                     <div className="p-4 bg-bg border-t border-[var(--accent)]/20 space-y-2">
-                      <h5 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3">SCORING RUBRIC</h5>
-                      {[5, 4, 3, 2, 1].map(score => (
+                      <h5 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3">
+                        SCORING RUBRIC
+                      </h5>
+                      {[5, 4, 3, 2, 1].map((score) => (
                         <div key={score} className="flex gap-3 items-start">
                           <span
                             className={`w-8 h-8 flex items-center justify-center rounded font-theme-data font-bold text-sm ${
                               score >= 4
                                 ? 'bg-green-500/20 text-green-400'
                                 : score === 3
-                                ? 'bg-yellow-500/20 text-yellow-400'
-                                : 'bg-red-500/20 text-red-400'
+                                  ? 'bg-yellow-500/20 text-yellow-400'
+                                  : 'bg-red-500/20 text-red-400'
                             }`}
                           >
                             {score}
@@ -637,13 +695,15 @@ export function EvaluationPanel({ apiBase: _apiBase }: EvaluationPanelProps) {
       {activeTab === 'profiles' && (
         <div className="space-y-4">
           <div className="card p-6">
-            <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">Evaluation Profiles</h3>
+            <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+              Evaluation Profiles
+            </h3>
             <p className="text-xs text-text-muted font-theme-data mb-4">
               Pre-configured dimension weights for different use cases.
             </p>
 
             <div className="space-y-4">
-              {profiles.map(profile => (
+              {profiles.map((profile) => (
                 <div
                   key={profile.id}
                   className="p-4 border border-[var(--accent)]/20 rounded bg-surface"

@@ -55,7 +55,7 @@ export function CrossDebateLearning() {
   const { data: debateOutcomes, isLoading: outcomesLoading } = useSWR<CrossDebateResponse>(
     `${API_BASE_URL}/api/v1/knowledge/mound/query?query=debate+outcome&limit=10`,
     fetcher,
-    { refreshInterval: 60000 }
+    { refreshInterval: 60000 },
   );
 
   const handleSearch = useCallback(
@@ -63,9 +63,14 @@ export function CrossDebateLearning() {
       e.preventDefault();
       if (!searchQuery.trim()) return;
       // Search across all systems with debate-focused query
-      await search(`debate insights: ${searchQuery}`, ['continuum', 'km', 'supermemory', 'claude_mem']);
+      await search(`debate insights: ${searchQuery}`, [
+        'continuum',
+        'km',
+        'supermemory',
+        'claude_mem',
+      ]);
     },
-    [search, searchQuery]
+    [search, searchQuery],
   );
 
   const handleQuickQuery = useCallback(
@@ -73,7 +78,7 @@ export function CrossDebateLearning() {
       setSearchQuery(query);
       await search(`debate insights: ${query}`, ['continuum', 'km', 'supermemory', 'claude_mem']);
     },
-    [search]
+    [search],
   );
 
   const activeSources = sources.filter((s) => s.status === 'active');
@@ -90,9 +95,7 @@ export function CrossDebateLearning() {
             <div
               key={system}
               className={`p-3 rounded border ${
-                isActive
-                  ? sourceColors[system]
-                  : 'border-border text-text-muted bg-surface/50'
+                isActive ? sourceColors[system] : 'border-border text-text-muted bg-surface/50'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
@@ -100,13 +103,11 @@ export function CrossDebateLearning() {
                   {sourceLabels[system]}
                 </span>
                 <span
-                  className={`w-2 h-2 rounded-full ${
-                    isActive ? 'bg-green-400' : 'bg-red-400'
-                  }`}
+                  className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-400' : 'bg-red-400'}`}
                 />
               </div>
               <div className="text-lg font-theme-data">
-                {sourcesLoading ? '...' : src?.entry_count?.toLocaleString() ?? '0'}
+                {sourcesLoading ? '...' : (src?.entry_count?.toLocaleString() ?? '0')}
               </div>
               <div className="text-xs text-text-muted">
                 {src?.last_activity
@@ -173,7 +174,7 @@ export function CrossDebateLearning() {
                   <span key={sys} className={sourceColors[sys]?.split(' ')[0] || 'text-text-muted'}>
                     {sourceLabels[sys] || sys}: {count}
                   </span>
-                ) : null
+                ) : null,
               )}
             </div>
           </div>

@@ -58,7 +58,7 @@ export interface CreateInviteResponse {
 export function useWorkspaceInvites(
   workspaceId: string | null,
   status?: InviteStatus,
-  options?: UseSWRFetchOptions<InviteListResponse>
+  options?: UseSWRFetchOptions<InviteListResponse>,
 ) {
   // Build API URL with optional status filter
   const url = workspaceId
@@ -77,17 +77,12 @@ export function useWorkspaceInvites(
         throw new Error('Workspace ID is required');
       }
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/workspaces/${workspaceId}/invites`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify(data),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ message: 'Failed to create invite' }));
@@ -99,7 +94,7 @@ export function useWorkspaceInvites(
 
       return response.json();
     },
-    [workspaceId, result]
+    [workspaceId, result],
   );
 
   // Cancel invite
@@ -111,10 +106,7 @@ export function useWorkspaceInvites(
 
       const response = await fetch(
         `${API_BASE_URL}/api/v1/workspaces/${workspaceId}/invites/${inviteId}`,
-        {
-          method: 'DELETE',
-          credentials: 'include',
-        }
+        { method: 'DELETE', credentials: 'include' },
       );
 
       if (!response.ok) {
@@ -125,7 +117,7 @@ export function useWorkspaceInvites(
       // Revalidate the list
       result.mutate();
     },
-    [workspaceId, result]
+    [workspaceId, result],
   );
 
   // Resend invite
@@ -137,10 +129,7 @@ export function useWorkspaceInvites(
 
       const response = await fetch(
         `${API_BASE_URL}/api/v1/workspaces/${workspaceId}/invites/${inviteId}/resend`,
-        {
-          method: 'POST',
-          credentials: 'include',
-        }
+        { method: 'POST', credentials: 'include' },
       );
 
       if (!response.ok) {
@@ -151,7 +140,7 @@ export function useWorkspaceInvites(
       // Revalidate the list
       result.mutate();
     },
-    [workspaceId, result]
+    [workspaceId, result],
   );
 
   return {
@@ -180,19 +169,22 @@ export function useWorkspaceInvites(
  * Used on the invite acceptance page.
  */
 export function useAcceptInvite() {
-  const acceptInvite = useCallback(async (token: string): Promise<{ workspace_id: string; role: string }> => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/invites/${token}/accept`, {
-      method: 'POST',
-      credentials: 'include',
-    });
+  const acceptInvite = useCallback(
+    async (token: string): Promise<{ workspace_id: string; role: string }> => {
+      const response = await fetch(`${API_BASE_URL}/api/v1/invites/${token}/accept`, {
+        method: 'POST',
+        credentials: 'include',
+      });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Failed to accept invite' }));
-      throw new Error(error.message || 'Failed to accept invite');
-    }
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Failed to accept invite' }));
+        throw new Error(error.message || 'Failed to accept invite');
+      }
 
-    return response.json();
-  }, []);
+      return response.json();
+    },
+    [],
+  );
 
   return { acceptInvite };
 }

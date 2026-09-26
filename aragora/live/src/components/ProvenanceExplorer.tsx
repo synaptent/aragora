@@ -41,17 +41,8 @@ interface ProvenanceData {
 }
 
 interface ReactFlowLayout {
-  nodes: Array<{
-    id: string;
-    position: { x: number; y: number };
-    data: ProvenanceNode;
-  }>;
-  edges: Array<{
-    id: string;
-    source: string;
-    target: string;
-    label?: string;
-  }>;
+  nodes: Array<{ id: string; position: { x: number; y: number }; data: ProvenanceNode }>;
+  edges: Array<{ id: string; source: string; target: string; label?: string }>;
 }
 
 interface ProvenanceExplorerProps {
@@ -69,11 +60,7 @@ const STAGE_COLORS: Record<string, { bg: string; border: string; text: string }>
     border: 'rgb(59, 130, 246)',
     text: 'rgb(147, 197, 253)',
   },
-  goal: {
-    bg: 'rgba(34, 197, 94, 0.15)',
-    border: 'rgb(34, 197, 94)',
-    text: 'rgb(134, 239, 172)',
-  },
+  goal: { bg: 'rgba(34, 197, 94, 0.15)', border: 'rgb(34, 197, 94)', text: 'rgb(134, 239, 172)' },
   action: {
     bg: 'rgba(249, 115, 22, 0.15)',
     border: 'rgb(249, 115, 22)',
@@ -100,20 +87,13 @@ function ProvenanceNodeComponent({ data }: { data: ProvenanceNode }) {
   return (
     <div
       className="font-theme-data text-xs p-3 min-w-[180px]"
-      style={{
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-        color: colors.text,
-      }}
+      style={{ background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text }}
       data-testid={`provenance-node-${data.type}`}
     >
       <div className="flex items-center justify-between mb-1">
         <span
           className="px-1 py-0.5 text-[9px] font-bold uppercase"
-          style={{
-            background: colors.border,
-            color: '#000',
-          }}
+          style={{ background: colors.border, color: '#000' }}
         >
           {data.type}
         </span>
@@ -132,9 +112,7 @@ function ProvenanceNodeComponent({ data }: { data: ProvenanceNode }) {
   );
 }
 
-const nodeTypes = {
-  provenance: ProvenanceNodeComponent,
-};
+const nodeTypes = { provenance: ProvenanceNodeComponent };
 
 // =============================================================================
 // Main component (inner, inside ReactFlowProvider)
@@ -153,7 +131,7 @@ function ProvenanceExplorerInner({ graphId, nodeId }: ProvenanceExplorerProps) {
     try {
       // Try React Flow layout endpoint first
       const layout = await apiFetch<ReactFlowLayout>(
-        `/api/v1/pipeline/graph/${graphId}/react-flow`
+        `/api/v1/pipeline/graph/${graphId}/react-flow`,
       );
 
       const flowNodes: Node[] = layout.nodes.map((n) => ({
@@ -202,9 +180,7 @@ function ProvenanceExplorerInner({ graphId, nodeId }: ProvenanceExplorerProps) {
         setNodes(flowNodes);
         setEdges(flowEdges);
       } catch (innerErr) {
-        setError(
-          innerErr instanceof Error ? innerErr.message : 'Failed to load provenance data'
-        );
+        setError(innerErr instanceof Error ? innerErr.message : 'Failed to load provenance data');
       }
     } finally {
       setLoading(false);
@@ -262,10 +238,7 @@ function ProvenanceExplorerInner({ graphId, nodeId }: ProvenanceExplorerProps) {
               className="flex items-center gap-1 text-[10px] font-theme-data"
               style={{ color: colors.text }}
             >
-              <span
-                className="w-2 h-2 inline-block"
-                style={{ background: colors.border }}
-              />
+              <span className="w-2 h-2 inline-block" style={{ background: colors.border }} />
               {stage}
             </span>
           ))}
@@ -281,10 +254,7 @@ function ProvenanceExplorerInner({ graphId, nodeId }: ProvenanceExplorerProps) {
           fitView
           proOptions={{ hideAttribution: true }}
         >
-          <Controls
-            className="font-theme-data"
-            showInteractive={false}
-          />
+          <Controls className="font-theme-data" showInteractive={false} />
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           <MiniMap
             nodeColor={minimapNodeColor}

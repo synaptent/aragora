@@ -62,7 +62,7 @@ export function WatchDemoStep() {
       timers.push(
         setTimeout(() => {
           setVisibleMessages(i + 1);
-        }, msg.delay)
+        }, msg.delay),
       );
     });
 
@@ -71,7 +71,7 @@ export function WatchDemoStep() {
       setTimeout(() => {
         setShowConsensus(true);
         setDemoWatched(true);
-      }, 4500)
+      }, 4500),
     );
 
     return () => timers.forEach(clearTimeout);
@@ -157,9 +157,8 @@ export function WatchDemoStep() {
             </span>
           </div>
           <p className="text-xs font-theme-data text-[var(--text)] leading-relaxed">
-            Start with a modular monolith. Extract services when team contention
-            provides a concrete trigger. This balances development velocity with
-            future scalability.
+            Start with a modular monolith. Extract services when team contention provides a concrete
+            trigger. This balances development velocity with future scalability.
           </p>
           <p className="text-xs font-theme-data text-[var(--acid-cyan)] mt-2">
             This is how Aragora turns complex decisions into clear, defensible outcomes.

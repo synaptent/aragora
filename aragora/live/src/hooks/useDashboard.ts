@@ -49,12 +49,7 @@ export interface DashboardOverview {
 /** Dashboard statistics */
 export interface DashboardStats {
   period: string;
-  email_volume: {
-    labels: string[];
-    received: number[];
-    sent: number[];
-    archived: number[];
-  };
+  email_volume: { labels: string[]; received: number[]; sent: number[]; archived: number[] };
   response_time: { labels: string[]; values: number[] };
   priority_distribution: { labels: string[]; values: number[] };
   categories: { labels: string[]; values: number[] };
@@ -132,10 +127,10 @@ export function useDashboardOverview(
   options?: UseSWRFetchOptions<{ data: DashboardOverview }>,
 ) {
   const qs = refresh ? '?refresh=true' : '';
-  const result = useSWRFetch<{ data: DashboardOverview }>(
-    `/api/v1/dashboard${qs}`,
-    { refreshInterval: 30000, ...options },
-  );
+  const result = useSWRFetch<{ data: DashboardOverview }>(`/api/v1/dashboard${qs}`, {
+    refreshInterval: 30000,
+    ...options,
+  });
   return { ...result, overview: result.data?.data ?? null };
 }
 
@@ -147,10 +142,10 @@ export function useDashboardStats(
   period: DashboardPeriod = 'week',
   options?: UseSWRFetchOptions<{ data: DashboardStats }>,
 ) {
-  const result = useSWRFetch<{ data: DashboardStats }>(
-    `/api/v1/dashboard/stats?period=${period}`,
-    { refreshInterval: 60000, ...options },
-  );
+  const result = useSWRFetch<{ data: DashboardStats }>(`/api/v1/dashboard/stats?period=${period}`, {
+    refreshInterval: 60000,
+    ...options,
+  });
   return { ...result, stats: result.data?.data ?? null };
 }
 
@@ -160,12 +155,13 @@ export function useDashboardStats(
  */
 export function useDashboardActivity(
   limit: number = 20,
-  options?: UseSWRFetchOptions<{ data: { activities: Array<Record<string, unknown>>; total: number } }>,
+  options?: UseSWRFetchOptions<{
+    data: { activities: Array<Record<string, unknown>>; total: number };
+  }>,
 ) {
-  const result = useSWRFetch<{ data: { activities: Array<Record<string, unknown>>; total: number } }>(
-    `/api/v1/dashboard/activity?limit=${limit}`,
-    { refreshInterval: 30000, ...options },
-  );
+  const result = useSWRFetch<{
+    data: { activities: Array<Record<string, unknown>>; total: number };
+  }>(`/api/v1/dashboard/activity?limit=${limit}`, { refreshInterval: 30000, ...options });
   return { ...result, activities: result.data?.data?.activities ?? [] };
 }
 
@@ -176,10 +172,10 @@ export function useDashboardActivity(
 export function useDashboardInboxSummary(
   options?: UseSWRFetchOptions<{ data: Record<string, unknown> }>,
 ) {
-  const result = useSWRFetch<{ data: Record<string, unknown> }>(
-    '/api/v1/dashboard/inbox-summary',
-    { refreshInterval: 30000, ...options },
-  );
+  const result = useSWRFetch<{ data: Record<string, unknown> }>('/api/v1/dashboard/inbox-summary', {
+    refreshInterval: 30000,
+    ...options,
+  });
   return { ...result, inbox: result.data?.data ?? null };
 }
 
@@ -244,7 +240,9 @@ export function useDashboardUrgentItems(
  * Hits GET /api/v1/dashboard/pending-actions
  */
 export function useDashboardPendingActions(
-  options?: UseSWRFetchOptions<{ data: { actions: Array<Record<string, unknown>>; total: number } }>,
+  options?: UseSWRFetchOptions<{
+    data: { actions: Array<Record<string, unknown>>; total: number };
+  }>,
 ) {
   const result = useSWRFetch<{ data: { actions: Array<Record<string, unknown>>; total: number } }>(
     '/api/v1/dashboard/pending-actions',
@@ -323,12 +321,16 @@ export function useOutcomeAgents(
 export function useOutcomeHistory(
   period: OutcomePeriod = '30d',
   limit: number = 50,
-  options?: UseSWRFetchOptions<{ data: { decisions: Array<Record<string, unknown>>; total: number } }>,
+  options?: UseSWRFetchOptions<{
+    data: { decisions: Array<Record<string, unknown>>; total: number };
+  }>,
 ) {
-  const result = useSWRFetch<{ data: { decisions: Array<Record<string, unknown>>; total: number } }>(
-    `/api/v1/outcome-dashboard/history?period=${period}&limit=${limit}`,
-    { refreshInterval: 60000, ...options },
-  );
+  const result = useSWRFetch<{
+    data: { decisions: Array<Record<string, unknown>>; total: number };
+  }>(`/api/v1/outcome-dashboard/history?period=${period}&limit=${limit}`, {
+    refreshInterval: 60000,
+    ...options,
+  });
   return {
     ...result,
     decisions: result.data?.data?.decisions ?? [],
@@ -363,10 +365,10 @@ export function useUsageSummary(
   period: OutcomePeriod = '30d',
   options?: UseSWRFetchOptions<{ data: UsageSummary }>,
 ) {
-  const result = useSWRFetch<{ data: UsageSummary }>(
-    `/api/v1/usage/summary?period=${period}`,
-    { refreshInterval: 60000, ...options },
-  );
+  const result = useSWRFetch<{ data: UsageSummary }>(`/api/v1/usage/summary?period=${period}`, {
+    refreshInterval: 60000,
+    ...options,
+  });
   return { ...result, usage: result.data?.data ?? null };
 }
 
@@ -393,10 +395,10 @@ export function useUsageBreakdown(
 export function useBudgetStatusDashboard(
   options?: UseSWRFetchOptions<{ data: Record<string, unknown> }>,
 ) {
-  const result = useSWRFetch<{ data: Record<string, unknown> }>(
-    '/api/v1/usage/budget-status',
-    { refreshInterval: 60000, ...options },
-  );
+  const result = useSWRFetch<{ data: Record<string, unknown> }>('/api/v1/usage/budget-status', {
+    refreshInterval: 60000,
+    ...options,
+  });
   return { ...result, budget: result.data?.data ?? null };
 }
 
@@ -408,13 +410,11 @@ export function useBudgetStatusDashboard(
  * Fetch spend analytics summary.
  * Hits GET /api/v1/analytics/spend/summary
  */
-export function useSpendSummary(
-  options?: UseSWRFetchOptions<{ data: SpendSummary }>,
-) {
-  const result = useSWRFetch<{ data: SpendSummary }>(
-    '/api/v1/analytics/spend/summary',
-    { refreshInterval: 60000, ...options },
-  );
+export function useSpendSummary(options?: UseSWRFetchOptions<{ data: SpendSummary }>) {
+  const result = useSWRFetch<{ data: SpendSummary }>('/api/v1/analytics/spend/summary', {
+    refreshInterval: 60000,
+    ...options,
+  });
   return { ...result, spend: result.data?.data ?? null };
 }
 
@@ -422,9 +422,7 @@ export function useSpendSummary(
  * Fetch spend by agent breakdown.
  * Hits GET /api/v1/analytics/spend/by-agent
  */
-export function useSpendByAgent(
-  options?: UseSWRFetchOptions<{ data: Record<string, unknown> }>,
-) {
+export function useSpendByAgent(options?: UseSWRFetchOptions<{ data: Record<string, unknown> }>) {
   const result = useSWRFetch<{ data: Record<string, unknown> }>(
     '/api/v1/analytics/spend/by-agent',
     { refreshInterval: 60000, ...options },
@@ -453,9 +451,9 @@ export function useSpendByDecision(
 export function useSpendBudgetForecast(
   options?: UseSWRFetchOptions<{ data: Record<string, unknown> }>,
 ) {
-  const result = useSWRFetch<{ data: Record<string, unknown> }>(
-    '/api/v1/analytics/spend/budget',
-    { refreshInterval: 120000, ...options },
-  );
+  const result = useSWRFetch<{ data: Record<string, unknown> }>('/api/v1/analytics/spend/budget', {
+    refreshInterval: 120000,
+    ...options,
+  });
   return { ...result, budgetForecast: result.data?.data ?? null };
 }

@@ -4,10 +4,7 @@ import { useActionCanvas } from '../useActionCanvas';
 jest.mock('@/components/BackendSelector', () => ({
   useBackend: () => ({
     backend: 'production',
-    config: {
-      api: 'https://backend.test',
-      ws: 'wss://backend.test/ws',
-    },
+    config: { api: 'https://backend.test', ws: 'wss://backend.test/ws' },
   }),
 }));
 
@@ -64,17 +61,11 @@ describe('useActionCanvas', () => {
       }
 
       if (url === 'https://backend.test/api/v1/actions/canvas-1' && init?.method === 'PUT') {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({}),
-        });
+        return Promise.resolve({ ok: true, json: async () => ({}) });
       }
 
       if (url === 'https://backend.test/api/v1/canvas/pipeline/advance') {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ status: 'ok' }),
-        });
+        return Promise.resolve({ ok: true, json: async () => ({ status: 'ok' }) });
       }
 
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
@@ -106,17 +97,11 @@ describe('useActionCanvas', () => {
     expect(mockFetch).toHaveBeenCalledWith('https://backend.test/api/v1/actions/canvas-1');
     expect(mockFetch).toHaveBeenCalledWith(
       'https://backend.test/api/v1/actions/canvas-1',
-      expect.objectContaining({
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      expect.objectContaining({ method: 'PUT', headers: { 'Content-Type': 'application/json' } }),
     );
     expect(mockFetch).toHaveBeenCalledWith(
       'https://backend.test/api/v1/canvas/pipeline/advance',
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      expect.objectContaining({ method: 'POST', headers: { 'Content-Type': 'application/json' } }),
     );
     expect(MockWebSocket.instances[0]?.url).toBe('wss://backend.test/ws/canvas/canvas-1');
   });

@@ -1,0 +1,13 @@
+# Dependencies and generated build output
+node_modules/
+build/
+.docusaurus/
+.jscpd-report/
+
+# Generated from the root docs/ tree by scripts/sync-docs.js
+docs/
+
+# Tool-generated and tool-owned files retain their generators' formatting
+package-lock.json
+CLAUDE.md
+static/

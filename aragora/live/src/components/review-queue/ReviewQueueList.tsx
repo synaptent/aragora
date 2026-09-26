@@ -15,20 +15,16 @@ export interface ReviewQueueListProps {
   promptFn?: (message: string, defaultValue?: string) => string | null;
 }
 
-export function ReviewQueueList({
-  prs,
-  onSettled,
-  confirmFn,
-  promptFn,
-}: ReviewQueueListProps) {
+export function ReviewQueueList({ prs, onSettled, confirmFn, promptFn }: ReviewQueueListProps) {
   const visible = useMemo(() => prs.filter((p) => !p.deferred), [prs]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [promptState, setPromptState] = useState<
-    | { action: Extract<SettlementAction, 'request-changes'>; prNumber: number; draft: string }
-    | null
-  >(null);
+  const [promptState, setPromptState] = useState<{
+    action: Extract<SettlementAction, 'request-changes'>;
+    prNumber: number;
+    draft: string;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const selectionTimestampRef = useRef<number>(Date.now());
 
@@ -105,10 +101,7 @@ export function ReviewQueueList({
       if (target) {
         const tag = target.tagName;
         const editable =
-          tag === 'INPUT' ||
-          tag === 'TEXTAREA' ||
-          tag === 'SELECT' ||
-          target.isContentEditable;
+          tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
         if (editable) return;
       }
 
@@ -213,18 +206,13 @@ export function ReviewQueueList({
           selected={index === selectedIndex}
           expanded={expandedIndex === index}
           onSelect={() => setSelectedIndex(index)}
-          onToggleExpand={() =>
-            setExpandedIndex((curr) => (curr === index ? null : index))
-          }
+          onToggleExpand={() => setExpandedIndex((curr) => (curr === index ? null : index))}
           onSettle={async (action, options) => {
             await runSettle(pr, action, options);
           }}
         />
       ))}
-      <div
-        className="mt-4 text-center text-xs"
-        style={{ color: 'var(--text-muted)' }}
-      >
+      <div className="mt-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
         {selectedPr ? (
           <>
             selected <span style={{ color: 'var(--text)' }}>PR #{selectedPr.number}</span>
@@ -260,9 +248,7 @@ export function ReviewQueueList({
               data-testid="review-queue-reason-keyboard-input"
               autoFocus
               value={promptState.draft}
-              onChange={(ev) =>
-                setPromptState((s) => (s ? { ...s, draft: ev.target.value } : s))
-              }
+              onChange={(ev) => setPromptState((s) => (s ? { ...s, draft: ev.target.value } : s))}
               rows={3}
               className="w-full rounded-lg border px-3 py-2 focus:outline-none"
               style={{
@@ -275,10 +261,7 @@ export function ReviewQueueList({
               <button
                 type="button"
                 className="rounded-lg border px-3 py-1.5 text-xs font-theme-data uppercase tracking-wider hover:opacity-80"
-                style={{
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-muted)',
-                }}
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                 onClick={() => setPromptState(null)}
               >
                 Cancel

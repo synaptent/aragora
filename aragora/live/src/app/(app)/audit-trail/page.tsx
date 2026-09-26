@@ -143,14 +143,17 @@ function RiskBadge({ level }: { level: string | null }) {
   };
 
   return (
-    <span className={`px-1.5 py-0.5 text-[10px] font-theme-data rounded ${colors[level.toLowerCase()] || 'text-[var(--text-muted)] bg-[var(--surface)]'}`}>
+    <span
+      className={`px-1.5 py-0.5 text-[10px] font-theme-data rounded ${colors[level.toLowerCase()] || 'text-[var(--text-muted)] bg-[var(--surface)]'}`}
+    >
       {level.toUpperCase()}
     </span>
   );
 }
 
 function ConfidenceBar({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-[var(--text-muted)] text-xs font-theme-data">--</span>;
+  if (value == null)
+    return <span className="text-[var(--text-muted)] text-xs font-theme-data">--</span>;
 
   const pct = Math.round(value * 100);
   const color = pct >= 80 ? 'bg-[var(--acid-green)]' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400';
@@ -166,7 +169,8 @@ function ConfidenceBar({ value }: { value: number | null }) {
 }
 
 function ChecksumDisplay({ checksum }: { checksum: string | null }) {
-  if (!checksum) return <span className="text-[var(--text-muted)] text-xs font-theme-data">--</span>;
+  if (!checksum)
+    return <span className="text-[var(--text-muted)] text-xs font-theme-data">--</span>;
   return (
     <span className="text-[10px] font-theme-data text-purple-400" title={checksum}>
       {checksum.substring(0, 12)}...
@@ -206,11 +210,14 @@ export default function AuditTrailPage() {
     ...(verdictFilter ? { verdict: verdictFilter } : {}),
   });
 
-  const { data: trailsData, isLoading: trailsLoading, error: trailsError } =
-    useSWRFetch<AuditTrailsResponse>(
-      activeTab === 'trails' ? `/api/v1/audit-trails?${trailParams}` : null,
-      { refreshInterval: 30000 },
-    );
+  const {
+    data: trailsData,
+    isLoading: trailsLoading,
+    error: trailsError,
+  } = useSWRFetch<AuditTrailsResponse>(
+    activeTab === 'trails' ? `/api/v1/audit-trails?${trailParams}` : null,
+    { refreshInterval: 30000 },
+  );
 
   // Fetch receipts
   const receiptParams = new URLSearchParams({
@@ -218,11 +225,14 @@ export default function AuditTrailPage() {
     offset: String(receiptOffset),
   });
 
-  const { data: receiptsData, isLoading: receiptsLoading, error: receiptsError } =
-    useSWRFetch<ReceiptsResponse>(
-      activeTab === 'receipts' ? `/api/v1/receipts?${receiptParams}` : null,
-      { refreshInterval: 30000 },
-    );
+  const {
+    data: receiptsData,
+    isLoading: receiptsLoading,
+    error: receiptsError,
+  } = useSWRFetch<ReceiptsResponse>(
+    activeTab === 'receipts' ? `/api/v1/receipts?${receiptParams}` : null,
+    { refreshInterval: 30000 },
+  );
 
   const trails = trailsData?.trails ?? [];
   const trailsTotal = trailsData?.total ?? 0;
@@ -234,9 +244,8 @@ export default function AuditTrailPage() {
     setVerifying(id);
     setVerifyResult(null);
     try {
-      const endpoint = type === 'trail'
-        ? `/api/v1/audit-trails/${id}/verify`
-        : `/api/v1/receipts/${id}/verify`;
+      const endpoint =
+        type === 'trail' ? `/api/v1/audit-trails/${id}/verify` : `/api/v1/receipts/${id}/verify`;
       const data = await apiPost<VerifyResult>(endpoint);
       setVerifyResult(data);
     } catch (error) {
@@ -290,20 +299,23 @@ export default function AuditTrailPage() {
               {'>'} AUDIT TRAIL & DECISION RECEIPTS
             </h1>
             <p className="text-xs text-[var(--text-muted)] font-theme-data mt-1">
-              Cryptographically verified audit trails and decision receipts.
-              Full provenance for compliance documentation with SHA-256 integrity checks.
+              Cryptographically verified audit trails and decision receipts. Full provenance for
+              compliance documentation with SHA-256 integrity checks.
             </p>
           </div>
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
-            {([
+            {[
               { key: 'trails' as const, label: 'AUDIT TRAILS' },
               { key: 'receipts' as const, label: 'DECISION RECEIPTS' },
-            ]).map(({ key, label }) => (
+            ].map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => { setActiveTab(key); setVerifyResult(null); }}
+                onClick={() => {
+                  setActiveTab(key);
+                  setVerifyResult(null);
+                }}
                 className={`px-4 py-2 font-theme-data text-sm border transition-colors ${
                   activeTab === key
                     ? 'border-[var(--acid-green)] bg-[var(--acid-green)]/10 text-[var(--acid-green)]'
@@ -324,7 +336,9 @@ export default function AuditTrailPage() {
 
           {/* Verification Result */}
           {verifyResult && (
-            <div className={`mb-6 p-4 border font-theme-data text-sm ${VERIFY_RESULT_STYLES[verifyState!]}`}>
+            <div
+              className={`mb-6 p-4 border font-theme-data text-sm ${VERIFY_RESULT_STYLES[verifyState!]}`}
+            >
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-lg">{VERIFY_RESULT_LABELS[verifyState!]}</span>
                 <span className="text-xs text-[var(--text-muted)]">
@@ -339,7 +353,9 @@ export default function AuditTrailPage() {
                   </div>
                   <div>
                     <span className="text-[var(--text-muted)]">Computed: </span>
-                    <span className="text-purple-400">{verifyResult.computed_checksum || '--'}</span>
+                    <span className="text-purple-400">
+                      {verifyResult.computed_checksum || '--'}
+                    </span>
                   </div>
                 </div>
               )}
@@ -349,7 +365,9 @@ export default function AuditTrailPage() {
                 </div>
               )}
               {verifyResult.error && (
-                <div className={`mt-2 text-xs ${verifyResult.request_failed ? 'text-yellow-200' : 'text-red-400'}`}>
+                <div
+                  className={`mt-2 text-xs ${verifyResult.request_failed ? 'text-yellow-200' : 'text-red-400'}`}
+                >
                   {verifyResult.error}
                 </div>
               )}
@@ -370,7 +388,10 @@ export default function AuditTrailPage() {
                 <div className="flex items-center gap-3 mb-4">
                   <select
                     value={verdictFilter}
-                    onChange={(e) => { setVerdictFilter(e.target.value); setTrailOffset(0); }}
+                    onChange={(e) => {
+                      setVerdictFilter(e.target.value);
+                      setTrailOffset(0);
+                    }}
                     className="px-3 py-1.5 bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-xs font-theme-data rounded focus:outline-none focus:border-[var(--acid-green)]/50"
                   >
                     <option value="">All Verdicts</option>
@@ -403,13 +424,19 @@ export default function AuditTrailPage() {
                       <tbody>
                         {isLoading ? (
                           <tr>
-                            <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse">
+                            <td
+                              colSpan={8}
+                              className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse"
+                            >
                               Loading audit trails...
                             </td>
                           </tr>
                         ) : trails.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data">
+                            <td
+                              colSpan={8}
+                              className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data"
+                            >
                               No audit trails found. Run a Gauntlet to generate trails.
                             </td>
                           </tr>
@@ -472,7 +499,8 @@ export default function AuditTrailPage() {
                       PREV
                     </button>
                     <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                      {trailOffset + 1}-{Math.min(trailOffset + PAGE_SIZE, trailsTotal)} of {trailsTotal}
+                      {trailOffset + 1}-{Math.min(trailOffset + PAGE_SIZE, trailsTotal)} of{' '}
+                      {trailsTotal}
                     </span>
                     <button
                       onClick={() => setTrailOffset(trailOffset + PAGE_SIZE)}
@@ -513,13 +541,19 @@ export default function AuditTrailPage() {
                       <tbody>
                         {receiptsLoading ? (
                           <tr>
-                            <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse">
+                            <td
+                              colSpan={8}
+                              className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse"
+                            >
                               Loading receipts...
                             </td>
                           </tr>
                         ) : receipts.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data">
+                            <td
+                              colSpan={8}
+                              className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data"
+                            >
                               No decision receipts found. Run a Gauntlet to generate receipts.
                             </td>
                           </tr>
@@ -580,7 +614,8 @@ export default function AuditTrailPage() {
                       PREV
                     </button>
                     <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                      {receiptOffset + 1}-{Math.min(receiptOffset + PAGE_SIZE, receiptsTotal)} of {receiptsTotal}
+                      {receiptOffset + 1}-{Math.min(receiptOffset + PAGE_SIZE, receiptsTotal)} of{' '}
+                      {receiptsTotal}
                     </span>
                     <button
                       onClick={() => setReceiptOffset(receiptOffset + PAGE_SIZE)}
@@ -629,9 +664,7 @@ export default function AuditTrailPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // AUDIT TRAIL
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // AUDIT TRAIL</p>
         </footer>
       </main>
     </>

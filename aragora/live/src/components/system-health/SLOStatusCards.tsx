@@ -43,7 +43,11 @@ export function SLOStatusCards() {
           {slos.map((s) => {
             const compliantColor = s.compliant ? 'acid-green' : 'acid-red';
             const burnColor =
-              s.burn_rate > 5 ? 'text-acid-red' : s.burn_rate > 1 ? 'text-[var(--acid-yellow)]' : 'text-text-muted';
+              s.burn_rate > 5
+                ? 'text-acid-red'
+                : s.burn_rate > 1
+                  ? 'text-[var(--acid-yellow)]'
+                  : 'text-text-muted';
             // For latency SLO (lte comparison), gauge shows target/current
             const isLatency = s.key === 'latency_p99';
             const gaugePct = isLatency
@@ -70,10 +74,15 @@ export function SLOStatusCards() {
                 {/* Target vs current */}
                 <div className="flex justify-between text-[10px] font-theme-data">
                   <span className="text-text-muted">
-                    Target: {isLatency ? `${(s.target * 1000).toFixed(0)}ms` : `${(s.target * 100).toFixed(2)}%`}
+                    Target:{' '}
+                    {isLatency
+                      ? `${(s.target * 1000).toFixed(0)}ms`
+                      : `${(s.target * 100).toFixed(2)}%`}
                   </span>
                   <span className={`text-${compliantColor}`}>
-                    {isLatency ? `${(s.current * 1000).toFixed(0)}ms` : `${(s.current * 100).toFixed(2)}%`}
+                    {isLatency
+                      ? `${(s.current * 1000).toFixed(0)}ms`
+                      : `${(s.current * 100).toFixed(2)}%`}
                   </span>
                 </div>
                 {/* Compliance gauge */}
@@ -88,9 +97,7 @@ export function SLOStatusCards() {
                   <span className="text-text-muted">
                     Budget: {s.error_budget_remaining.toFixed(1)}%
                   </span>
-                  <span className={burnColor}>
-                    Burn: {s.burn_rate.toFixed(2)}x
-                  </span>
+                  <span className={burnColor}>Burn: {s.burn_rate.toFixed(2)}x</span>
                 </div>
               </div>
             );

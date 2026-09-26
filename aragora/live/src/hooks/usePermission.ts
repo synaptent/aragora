@@ -48,7 +48,7 @@ export function useHasRole(roles: string[]): boolean {
     return false;
   }
 
-  const normalizedRoles = roles.map(r => r.toLowerCase());
+  const normalizedRoles = roles.map((r) => r.toLowerCase());
 
   // Check org role first
   const orgRole = getCurrentOrgRole();

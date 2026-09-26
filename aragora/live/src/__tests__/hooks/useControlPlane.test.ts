@@ -105,10 +105,7 @@ jest.mock('@/store/controlPlaneStore', () => ({
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 jest.mock('@/hooks/useAragoraClient', () => ({
-  useAragoraClient: () => ({
-    get: mockGet,
-    post: mockPost,
-  }),
+  useAragoraClient: () => ({ get: mockGet, post: mockPost }),
 }));
 
 // Mock useControlPlaneWebSocket

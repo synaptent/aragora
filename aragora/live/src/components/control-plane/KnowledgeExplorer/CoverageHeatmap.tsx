@@ -43,7 +43,7 @@ export function CoverageHeatmap({
 
   const sortedTopics = useMemo(
     () => [...topics].sort((a, b) => b.nodeCount - a.nodeCount),
-    [topics]
+    [topics],
   );
 
   const gaps = useMemo(() => topics.filter((t) => t.isGap), [topics]);
@@ -106,7 +106,9 @@ export function CoverageHeatmap({
       {/* Summary Stats */}
       <div className="grid grid-cols-4 gap-3">
         <div className="p-3 bg-surface rounded-lg border border-border text-center">
-          <div className="text-2xl font-theme-data font-bold text-[var(--acid-cyan)]">{topics.length}</div>
+          <div className="text-2xl font-theme-data font-bold text-[var(--acid-cyan)]">
+            {topics.length}
+          </div>
           <div className="text-xs text-text-muted">Topics</div>
         </div>
         <div className="p-3 bg-surface rounded-lg border border-border text-center">
@@ -137,9 +139,7 @@ export function CoverageHeatmap({
         />
       )}
 
-      {viewMode === 'list' && (
-        <ListView topics={sortedTopics} onTopicClick={onTopicClick} />
-      )}
+      {viewMode === 'list' && <ListView topics={sortedTopics} onTopicClick={onTopicClick} />}
 
       {viewMode === 'gaps' && <GapsView gaps={gaps} onTopicClick={onTopicClick} />}
     </div>

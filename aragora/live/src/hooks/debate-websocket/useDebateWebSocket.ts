@@ -44,7 +44,11 @@ import {
 } from './constants';
 
 // Import event handlers
-import { eventHandlerRegistry, type EventHandlerContext, type ParsedEventData } from './eventHandlers';
+import {
+  eventHandlerRegistry,
+  type EventHandlerContext,
+  type ParsedEventData,
+} from './eventHandlers';
 
 // Re-export types for convenience
 export type {
@@ -100,7 +104,9 @@ export function useDebateWebSocket({
   const [debateMode, setDebateMode] = useState<string | null>(null);
   const [settlementMetadata, setSettlementMetadata] = useState<SettlementMetadata | null>(null);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
-  const [streamingMessages, setStreamingMessages] = useState<Map<string, StreamingMessage>>(new Map());
+  const [streamingMessages, setStreamingMessages] = useState<Map<string, StreamingMessage>>(
+    new Map(),
+  );
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
   const [hasCitations, setHasCitations] = useState(false);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -141,7 +147,7 @@ export function useDebateWebSocket({
 
   // Helper to add stream event with size limit
   const addStreamEvent = useCallback((event: StreamEvent) => {
-    setStreamEvents(prev => {
+    setStreamEvents((prev) => {
       const updated = [...prev, event];
       if (updated.length > MAX_STREAM_EVENTS) {
         return updated.slice(-MAX_STREAM_EVENTS);
@@ -153,7 +159,7 @@ export function useDebateWebSocket({
   // Orphaned stream cleanup - handles agents that never send token_end
   useEffect(() => {
     const interval = setInterval(() => {
-      setStreamingMessages(prev => {
+      setStreamingMessages((prev) => {
         const now = Date.now();
         const updated = new Map(prev);
         let changed = false;
@@ -170,7 +176,7 @@ export function useDebateWebSocket({
               const msgKey = `${timedOutMsg.agent}-${timedOutMsg.content.slice(0, 100)}`;
               if (!seenMessagesRef.current.has(msgKey)) {
                 seenMessagesRef.current.add(msgKey);
-                setMessages(prevMsgs => [...prevMsgs, timedOutMsg]);
+                setMessages((prevMsgs) => [...prevMsgs, timedOutMsg]);
               }
             }
             updated.delete(streamKey);
@@ -200,8 +206,12 @@ export function useDebateWebSocket({
     const checkStall = () => {
       const timeSinceLastEvent = Date.now() - lastEventTimestampRef.current;
       if (timeSinceLastEvent > STALL_WARNING_MS) {
-        logger.warn(`[WS] Debate may be stalled - no events for ${Math.round(timeSinceLastEvent / 1000)}s`);
-        logger.warn('[WS] Check server logs for consensus_phase or synthesis_or_hooks_failed errors');
+        logger.warn(
+          `[WS] Debate may be stalled - no events for ${Math.round(timeSinceLastEvent / 1000)}s`,
+        );
+        logger.warn(
+          '[WS] Check server logs for consensus_phase or synthesis_or_hooks_failed errors',
+        );
       }
     };
 
@@ -230,36 +240,46 @@ export function useDebateWebSocket({
   }, [debateId]);
 
   // Send vote to server
-  const sendVote = useCallback((choice: string, intensity?: number) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'user_vote',
-        debate_id: debateId,
-        data: { choice, intensity: intensity ?? 5 },
-      }));
-    }
-  }, [debateId]);
+  const sendVote = useCallback(
+    (choice: string, intensity?: number) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'user_vote',
+            debate_id: debateId,
+            data: { choice, intensity: intensity ?? 5 },
+          }),
+        );
+      }
+    },
+    [debateId],
+  );
 
   // Send suggestion to server
-  const sendSuggestion = useCallback((suggestion: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'user_suggestion',
-        debate_id: debateId,
-        data: { suggestion },
-      }));
-    }
-  }, [debateId]);
+  const sendSuggestion = useCallback(
+    (suggestion: string) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({ type: 'user_suggestion', debate_id: debateId, data: { suggestion } }),
+        );
+      }
+    },
+    [debateId],
+  );
 
   // Register callbacks
   const registerAckCallback = useCallback((callback: (msgType: string) => void) => {
     ackCallbackRef.current = callback;
-    return () => { ackCallbackRef.current = null; };
+    return () => {
+      ackCallbackRef.current = null;
+    };
   }, []);
 
   const registerErrorCallback = useCallback((callback: (message: string) => void) => {
     errorCallbackRef.current = callback;
-    return () => { errorCallbackRef.current = null; };
+    return () => {
+      errorCallbackRef.current = null;
+    };
   }, []);
 
   // Clear timeouts
@@ -328,110 +348,115 @@ export function useDebateWebSocket({
 
     if (seenMessagesRef.current.has(msgKey)) return false;
     seenMessagesRef.current.add(msgKey);
-    setMessages(prev => [...prev, msg]);
+    setMessages((prev) => [...prev, msg]);
     return true;
   }, []);
 
   // Send application-level ping for latency measurement
   const sendPing = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'ping',
-        ts: Date.now(),
-      }));
+      wsRef.current.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
     }
   }, []);
 
   // Create event handler context for extracted handlers
-  const createHandlerContext = useCallback((): EventHandlerContext => ({
-    debateId,
-    setTask,
-    setAgents,
-    setDebateMode,
-    setSettlementMetadata,
-    setStatus,
-    setError,
-    setErrorDetails,
-    setHasCitations,
-    setHasReceivedDebateStart,
-    setStreamingMessages,
-    addMessageIfNew,
-    addStreamEvent,
-    clearDebateStartTimeout,
-    setConnectionQuality,
-    errorCallbackRef,
-    ackCallbackRef,
-    seenMessagesRef,
-    lastSeqRef,
-    lastActivityRef: lastEventTimestampRef,
-    onAuthRevoked,
-  }), [debateId, addMessageIfNew, addStreamEvent, clearDebateStartTimeout, onAuthRevoked]);
+  const createHandlerContext = useCallback(
+    (): EventHandlerContext => ({
+      debateId,
+      setTask,
+      setAgents,
+      setDebateMode,
+      setSettlementMetadata,
+      setStatus,
+      setError,
+      setErrorDetails,
+      setHasCitations,
+      setHasReceivedDebateStart,
+      setStreamingMessages,
+      addMessageIfNew,
+      addStreamEvent,
+      clearDebateStartTimeout,
+      setConnectionQuality,
+      errorCallbackRef,
+      ackCallbackRef,
+      seenMessagesRef,
+      lastSeqRef,
+      lastActivityRef: lastEventTimestampRef,
+      onAuthRevoked,
+    }),
+    [debateId, addMessageIfNew, addStreamEvent, clearDebateStartTimeout, onAuthRevoked],
+  );
 
   // Process a single event from the WebSocket (or polling response)
-  const processEvent = useCallback((data: Record<string, unknown>) => {
-    // Update last event timestamp for stall detection
-    lastEventTimestampRef.current = Date.now();
+  const processEvent = useCallback(
+    (data: Record<string, unknown>) => {
+      // Update last event timestamp for stall detection
+      lastEventTimestampRef.current = Date.now();
 
-    // Debug logging for all WebSocket events
-    if (process.env.NODE_ENV === 'development') {
-      const eventInfo = data.agent ? ` from ${data.agent}` : '';
-      const seqInfo = data.seq ? ` (seq=${data.seq})` : '';
-      logger.debug(`[WS] Event: ${data.type}${eventInfo}${seqInfo}`);
-    }
-
-    // Enhanced logging for debate completion events
-    if (data.type === 'consensus' || data.type === 'debate_end') {
-      logger.debug(`[WS] DEBATE COMPLETION: ${data.type}`, data);
-    }
-
-    // Track sequence numbers for gap detection
-    if (data.seq && typeof data.seq === 'number' && data.seq > 0) {
-      const isTokenEvent = data.type === 'token_delta';
-      if (lastSeqRef.current > 0 && data.seq > lastSeqRef.current + 1 && !isTokenEvent) {
-        const gap = data.seq - lastSeqRef.current - 1;
-        if (gap <= 2) {
-          logger.debug(`Sequence reorder: expected ${lastSeqRef.current + 1}, got ${data.seq}`);
-        } else if (gap <= 5) {
-          logger.warn(`[WebSocket] Sequence gap: ${gap} events (minor, likely reordering)`);
-        } else {
-          logger.error(`[WebSocket] Large sequence gap: ${gap} events missed - may have lost data`);
-        }
+      // Debug logging for all WebSocket events
+      if (process.env.NODE_ENV === 'development') {
+        const eventInfo = data.agent ? ` from ${data.agent}` : '';
+        const seqInfo = data.seq ? ` (seq=${data.seq})` : '';
+        logger.debug(`[WS] Event: ${data.type}${eventInfo}${seqInfo}`);
       }
-      lastSeqRef.current = data.seq as number;
-    }
 
-    // Check if event belongs to this debate
-    const eventData = data.data as Record<string, unknown> | undefined;
-    const eventDebateId =
-      (data.loop_id as string | undefined)
-      || (data.debate_id as string | undefined)
-      || (eventData?.debate_id as string | undefined)
-      || (eventData?.loop_id as string | undefined)
-      || (eventData?.id as string | undefined);
-    const isOurDebate = !eventDebateId || eventDebateId === debateId;
+      // Enhanced logging for debate completion events
+      if (data.type === 'consensus' || data.type === 'debate_end') {
+        logger.debug(`[WS] DEBATE COMPLETION: ${data.type}`, data);
+      }
 
-    if (!isOurDebate) return;
+      // Track sequence numbers for gap detection
+      if (data.seq && typeof data.seq === 'number' && data.seq > 0) {
+        const isTokenEvent = data.type === 'token_delta';
+        if (lastSeqRef.current > 0 && data.seq > lastSeqRef.current + 1 && !isTokenEvent) {
+          const gap = data.seq - lastSeqRef.current - 1;
+          if (gap <= 2) {
+            logger.debug(`Sequence reorder: expected ${lastSeqRef.current + 1}, got ${data.seq}`);
+          } else if (gap <= 5) {
+            logger.warn(`[WebSocket] Sequence gap: ${gap} events (minor, likely reordering)`);
+          } else {
+            logger.error(
+              `[WebSocket] Large sequence gap: ${gap} events missed - may have lost data`,
+            );
+          }
+        }
+        lastSeqRef.current = data.seq as number;
+      }
 
-    // Get handler for this event type
-    const eventType = data.type as string;
-    const handler = eventHandlerRegistry[eventType];
+      // Check if event belongs to this debate
+      const eventData = data.data as Record<string, unknown> | undefined;
+      const eventDebateId =
+        (data.loop_id as string | undefined) ||
+        (data.debate_id as string | undefined) ||
+        (eventData?.debate_id as string | undefined) ||
+        (eventData?.loop_id as string | undefined) ||
+        (eventData?.id as string | undefined);
+      const isOurDebate = !eventDebateId || eventDebateId === debateId;
 
-    if (handler) {
-      const ctx = createHandlerContext();
-      const parsedEvent: ParsedEventData = {
-        type: eventType,
-        agent: data.agent as string,
-        seq: data.seq as number,
-        agent_seq: data.agent_seq as number,
-        loop_id: data.loop_id as string,
-        task_id: data.task_id as string,
-        round: data.round as number,
-        timestamp: data.timestamp as number,
-        data: eventData,
-      };
-      handler(parsedEvent, ctx);
-    }
-  }, [debateId, createHandlerContext]);
+      if (!isOurDebate) return;
+
+      // Get handler for this event type
+      const eventType = data.type as string;
+      const handler = eventHandlerRegistry[eventType];
+
+      if (handler) {
+        const ctx = createHandlerContext();
+        const parsedEvent: ParsedEventData = {
+          type: eventType,
+          agent: data.agent as string,
+          seq: data.seq as number,
+          agent_seq: data.agent_seq as number,
+          loop_id: data.loop_id as string,
+          task_id: data.task_id as string,
+          round: data.round as number,
+          timestamp: data.timestamp as number,
+          data: eventData,
+        };
+        handler(parsedEvent, ctx);
+      }
+    },
+    [debateId, createHandlerContext],
+  );
 
   // Start polling fallback -- called when WebSocket is permanently unavailable
   const startPollingFallback = useCallback(() => {
@@ -496,7 +521,9 @@ export function useDebateWebSocket({
   const handleDebateStartTimeout = useCallback(async () => {
     if (isUnmountedRef.current || hasReceivedDebateStart) return;
 
-    logger.warn(`[WebSocket] No debate_start received within ${DEBATE_START_TIMEOUT_MS}ms, checking debate status`);
+    logger.warn(
+      `[WebSocket] No debate_start received within ${DEBATE_START_TIMEOUT_MS}ms, checking debate status`,
+    );
 
     const debateStatus = await fetchDebateStatus();
 
@@ -513,7 +540,9 @@ export function useDebateWebSocket({
       if (debateStatus.status === 'not_found') {
         setStatus('error');
         setError('Debate not found');
-        setErrorDetails('The debate could not be found. It may have been deleted or never created.');
+        setErrorDetails(
+          'The debate could not be found. It may have been deleted or never created.',
+        );
         return;
       }
       if (debateStatus.status === 'running' || debateStatus.status === 'active') {
@@ -528,7 +557,9 @@ export function useDebateWebSocket({
     if (reconnectAttempt >= 3) {
       setStatus('error');
       setError('Debate failed to start');
-      setErrorDetails('The debate did not start within the expected time. This could be due to invalid configuration or server issues.');
+      setErrorDetails(
+        'The debate did not start within the expected time. This could be due to invalid configuration or server issues.',
+      );
     }
   }, [hasReceivedDebateStart, reconnectAttempt, fetchDebateStatus]);
 
@@ -548,8 +579,8 @@ export function useDebateWebSocket({
     clearReconnectTimeout();
     reconnectTimeoutRef.current = setTimeout(() => {
       if (!isUnmountedRef.current) {
-        setReconnectAttempt(prev => prev + 1);
-        setReconnectTrigger(prev => prev + 1);
+        setReconnectAttempt((prev) => prev + 1);
+        setReconnectTrigger((prev) => prev + 1);
       }
     }, delay);
   }, [reconnectAttempt, clearReconnectTimeout]);
@@ -567,29 +598,34 @@ export function useDebateWebSocket({
     setHasReceivedDebateStart(false);
     hasEverConnectedRef.current = false;
     handshakeFailuresRef.current = 0;
-    setReconnectTrigger(prev => prev + 1);
+    setReconnectTrigger((prev) => prev + 1);
   }, [clearReconnectTimeout, clearDebateStartTimeout, clearHeartbeatTimeout, stopPolling]);
 
   // Handle incoming WebSocket message
-  const handleMessage = useCallback((event: MessageEvent) => {
-    try {
-      const parsed = JSON.parse(event.data);
+  const handleMessage = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const parsed = JSON.parse(event.data);
 
-      if (Array.isArray(parsed)) {
-        if (process.env.NODE_ENV === 'development' && parsed.length > 10) {
-          const tokenDeltas = parsed.filter((e: Record<string, unknown>) => e.type === 'token_delta').length;
-          logger.debug(`[WS] BATCH: ${parsed.length} events (${tokenDeltas} token_deltas)`);
+        if (Array.isArray(parsed)) {
+          if (process.env.NODE_ENV === 'development' && parsed.length > 10) {
+            const tokenDeltas = parsed.filter(
+              (e: Record<string, unknown>) => e.type === 'token_delta',
+            ).length;
+            logger.debug(`[WS] BATCH: ${parsed.length} events (${tokenDeltas} token_deltas)`);
+          }
+          for (const evt of parsed) {
+            processEvent(evt as Record<string, unknown>);
+          }
+        } else {
+          processEvent(parsed as Record<string, unknown>);
         }
-        for (const evt of parsed) {
-          processEvent(evt as Record<string, unknown>);
-        }
-      } else {
-        processEvent(parsed as Record<string, unknown>);
+      } catch (e) {
+        logger.error('Failed to parse WebSocket message:', e);
       }
-    } catch (e) {
-      logger.error('Failed to parse WebSocket message:', e);
-    }
-  }, [processEvent]);
+    },
+    [processEvent],
+  );
 
   // Keep refs updated with latest callbacks
   useEffect(() => {
@@ -656,10 +692,7 @@ export function useDebateWebSocket({
       stopPolling();
 
       // Build subscribe message with optional replay_from_seq for reconnects
-      const subscribeMsg: Record<string, unknown> = {
-        type: 'subscribe',
-        debate_id: debateId,
-      };
+      const subscribeMsg: Record<string, unknown> = { type: 'subscribe', debate_id: debateId };
       if (lastSeqRef.current > 0) {
         // Reconnecting -- request replay of missed events
         subscribeMsg.replay_from_seq = lastSeqRef.current;
@@ -709,7 +742,9 @@ export function useDebateWebSocket({
         return;
       }
 
-      logger.warn(`[WebSocket] Connection closed (code: ${event.code}, reason: ${event.reason || 'none'})`);
+      logger.warn(
+        `[WebSocket] Connection closed (code: ${event.code}, reason: ${event.reason || 'none'})`,
+      );
 
       // Handle auth failure close codes (4003 = auth failed, 4401 = token expired)
       if (event.code === 4003 || event.code === 4401) {
@@ -743,8 +778,17 @@ export function useDebateWebSocket({
         ws.close(1000, 'Component unmounted');
       }
     };
-
-  }, [enabled, resolvedWsUrl, debateId, reconnectTrigger, clearDebateStartTimeout, clearHeartbeatTimeout, stopPolling, accessToken, onAuthRevoked]);
+  }, [
+    enabled,
+    resolvedWsUrl,
+    debateId,
+    reconnectTrigger,
+    clearDebateStartTimeout,
+    clearHeartbeatTimeout,
+    stopPolling,
+    accessToken,
+    onAuthRevoked,
+  ]);
 
   return {
     status,

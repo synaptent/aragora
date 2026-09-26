@@ -100,7 +100,7 @@ class FeedbackEntry:
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.created_at:
             self.created_at = datetime.now(timezone.utc).isoformat()
 

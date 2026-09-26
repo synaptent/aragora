@@ -29,45 +29,48 @@ export function UserMenu() {
   }, []);
 
   // Handle keyboard navigation
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!isOpen) {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
-        event.preventDefault();
-        setIsOpen(true);
-        setFocusedIndex(0);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!isOpen) {
+        if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          setIsOpen(true);
+          setFocusedIndex(0);
+        }
+        return;
       }
-      return;
-    }
 
-    switch (event.key) {
-      case 'Escape':
-        event.preventDefault();
-        setIsOpen(false);
-        setFocusedIndex(-1);
-        buttonRef.current?.focus();
-        break;
-      case 'ArrowDown':
-        event.preventDefault();
-        setFocusedIndex((prev) => (prev + 1) % menuItems.length);
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        setFocusedIndex((prev) => (prev - 1 + menuItems.length) % menuItems.length);
-        break;
-      case 'Home':
-        event.preventDefault();
-        setFocusedIndex(0);
-        break;
-      case 'End':
-        event.preventDefault();
-        setFocusedIndex(menuItems.length - 1);
-        break;
-      case 'Tab':
-        setIsOpen(false);
-        setFocusedIndex(-1);
-        break;
-    }
-  }, [isOpen, menuItems.length]);
+      switch (event.key) {
+        case 'Escape':
+          event.preventDefault();
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          buttonRef.current?.focus();
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          setFocusedIndex((prev) => (prev + 1) % menuItems.length);
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          setFocusedIndex((prev) => (prev - 1 + menuItems.length) % menuItems.length);
+          break;
+        case 'Home':
+          event.preventDefault();
+          setFocusedIndex(0);
+          break;
+        case 'End':
+          event.preventDefault();
+          setFocusedIndex(menuItems.length - 1);
+          break;
+        case 'Tab':
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          break;
+      }
+    },
+    [isOpen, menuItems.length],
+  );
 
   // Focus menu item when focusedIndex changes
   useEffect(() => {
@@ -78,9 +81,7 @@ export function UserMenu() {
 
   if (isLoading) {
     return (
-      <div className="text-xs font-theme-data text-text-muted animate-pulse">
-        [LOADING...]
-      </div>
+      <div className="text-xs font-theme-data text-text-muted animate-pulse">[LOADING...]</div>
     );
   }
 
@@ -117,7 +118,9 @@ export function UserMenu() {
           {user.name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
         </span>
         <span className="hidden sm:inline">{user.name || user.email.split('@')[0]}</span>
-        <span className="text-[var(--accent)]/50" aria-hidden="true">{isOpen ? '[^]' : '[v]'}</span>
+        <span className="text-[var(--accent)]/50" aria-hidden="true">
+          {isOpen ? '[^]' : '[v]'}
+        </span>
       </button>
 
       {isOpen && (
@@ -150,7 +153,9 @@ export function UserMenu() {
           {/* Menu Items */}
           <div className="py-2">
             <Link
-              ref={(el) => { menuItemsRef.current[0] = el; }}
+              ref={(el) => {
+                menuItemsRef.current[0] = el;
+              }}
               href="/billing"
               role="menuitem"
               tabIndex={focusedIndex === 0 ? 0 : -1}
@@ -160,7 +165,9 @@ export function UserMenu() {
               [BILLING & USAGE]
             </Link>
             <Link
-              ref={(el) => { menuItemsRef.current[1] = el; }}
+              ref={(el) => {
+                menuItemsRef.current[1] = el;
+              }}
               href="/settings"
               role="menuitem"
               tabIndex={focusedIndex === 1 ? 0 : -1}
@@ -170,7 +177,9 @@ export function UserMenu() {
               [SETTINGS]
             </Link>
             <Link
-              ref={(el) => { menuItemsRef.current[2] = el; }}
+              ref={(el) => {
+                menuItemsRef.current[2] = el;
+              }}
               href="/developer"
               role="menuitem"
               tabIndex={focusedIndex === 2 ? 0 : -1}
@@ -180,7 +189,9 @@ export function UserMenu() {
               [DEVELOPER]
             </Link>
             <Link
-              ref={(el) => { menuItemsRef.current[3] = el; }}
+              ref={(el) => {
+                menuItemsRef.current[3] = el;
+              }}
               href="/ab-testing"
               role="menuitem"
               tabIndex={focusedIndex === 3 ? 0 : -1}
@@ -194,7 +205,9 @@ export function UserMenu() {
           {/* Logout */}
           <div className="border-t border-[var(--accent)]/20 py-2">
             <button
-              ref={(el) => { menuItemsRef.current[4] = el; }}
+              ref={(el) => {
+                menuItemsRef.current[4] = el;
+              }}
               role="menuitem"
               tabIndex={focusedIndex === 4 ? 0 : -1}
               onClick={() => {

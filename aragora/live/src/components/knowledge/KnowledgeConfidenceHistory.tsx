@@ -14,7 +14,7 @@ export function KnowledgeConfidenceHistory() {
     return entries
       .map((entry) => {
         const history = [...entry.confidence_history].sort(
-          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
         const latest = history[history.length - 1];
         const previous = history[history.length - 2];
@@ -29,15 +29,24 @@ export function KnowledgeConfidenceHistory() {
           delta,
         };
       })
-      .sort((a, b) => new Date(b.latestTimestamp || 0).getTime() - new Date(a.latestTimestamp || 0).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.latestTimestamp || 0).getTime() - new Date(a.latestTimestamp || 0).getTime(),
+      );
   }, [entries]);
 
   if (loading) {
-    return <div className="animate-pulse p-4 text-[var(--text-muted)] font-theme-data">Loading confidence trends...</div>;
+    return (
+      <div className="animate-pulse p-4 text-[var(--text-muted)] font-theme-data">
+        Loading confidence trends...
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="p-4 text-red-400 font-theme-data">Failed to load confidence history</div>;
+    return (
+      <div className="p-4 text-red-400 font-theme-data">Failed to load confidence history</div>
+    );
   }
 
   return (
@@ -66,7 +75,9 @@ export function KnowledgeConfidenceHistory() {
                 <span className="font-theme-data text-[11px] text-[var(--text)] truncate">
                   {truncate(entry.preview || entry.nodeId, 46)}
                 </span>
-                <span className={`font-theme-data text-[10px] ${entry.delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <span
+                  className={`font-theme-data text-[10px] ${entry.delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                >
                   {entry.delta >= 0 ? '+' : ''}
                   {entry.delta.toFixed(3)}
                 </span>

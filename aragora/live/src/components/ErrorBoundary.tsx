@@ -74,12 +74,8 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex items-start gap-3 mb-4">
               <div className="text-[var(--crimson)] text-2xl">{'>'}</div>
               <div>
-                <div className="text-[var(--crimson)] font-bold mb-2">
-                  RUNTIME ERROR
-                </div>
-                <div className="text-warning text-sm mb-4">
-                  {displayName} crashed during render
-                </div>
+                <div className="text-[var(--crimson)] font-bold mb-2">RUNTIME ERROR</div>
+                <div className="text-warning text-sm mb-4">{displayName} crashed during render</div>
               </div>
             </div>
 
@@ -87,9 +83,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <div className="mb-2 text-text">
                 {'>'} {this.state.error.name}
               </div>
-              <div className="pl-4 text-[var(--crimson)]">
-                {this.state.error.message}
-              </div>
+              <div className="pl-4 text-[var(--crimson)]">{this.state.error.message}</div>
               {this.state.error.stack && (
                 <div className="mt-3 pl-4 text-text-muted text-[10px] font-normal opacity-70 whitespace-pre-wrap">
                   {this.state.error.stack.split('\n').slice(1, 6).join('\n')}

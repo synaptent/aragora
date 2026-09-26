@@ -20,7 +20,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from aragora_debate.convergence import ConvergenceDetector
 from aragora_debate.events import EventEmitter, EventType
@@ -309,6 +309,8 @@ class Arena:
             if isinstance(result, Exception):
                 logger.warning("Agent proposal failed: %s", result)
                 continue
+            # Preserve Exception-only handling; casting does not swallow BaseException.
+            result = cast(Proposal, result)
             self._proposals[result.agent] = result
             self._messages.append(
                 Message(
@@ -340,6 +342,7 @@ class Arena:
             if isinstance(result, Exception):
                 logger.warning("Critique failed: %s", result)
                 continue
+            result = cast(Critique, result)
             self._critiques.append(result)
             self._messages.append(
                 Message(
@@ -381,6 +384,7 @@ class Arena:
             if isinstance(result, Exception):
                 logger.warning("Vote failed: %s", result)
                 continue
+            result = cast(Vote, result)
             votes.append(result)
             self._votes.append(result)
             self._messages.append(

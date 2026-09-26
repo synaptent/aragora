@@ -42,7 +42,7 @@ export function FeedbackLoopPanel({ pipelineId, isVisible = true }: FeedbackLoop
     setError(null);
     try {
       const data = await apiFetch<{ data: FeedbackSummary }>(
-        `/api/v1/self-improve/feedback-summary?pipeline_id=${encodeURIComponent(pipelineId)}`
+        `/api/v1/self-improve/feedback-summary?pipeline_id=${encodeURIComponent(pipelineId)}`,
       );
       setSummary(data.data);
     } catch (err) {
@@ -120,7 +120,8 @@ export function FeedbackLoopPanel({ pipelineId, isVisible = true }: FeedbackLoop
                                 : 'text-text-muted'
                           }
                         >
-                          {change.delta > 0 ? '+' : ''}{change.delta} ({change.new_rating})
+                          {change.delta > 0 ? '+' : ''}
+                          {change.delta} ({change.new_rating})
                         </span>
                       </div>
                     ))}

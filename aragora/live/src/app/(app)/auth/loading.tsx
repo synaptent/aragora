@@ -5,9 +5,7 @@ export default function AuthLoading() {
         <div className="font-theme-data text-[var(--acid-green)] animate-pulse text-lg mb-2">
           AUTHENTICATING...
         </div>
-        <div className="font-theme-data text-[var(--text-muted)] text-xs">
-          Please wait
-        </div>
+        <div className="font-theme-data text-[var(--text-muted)] text-xs">Please wait</div>
       </div>
     </main>
   );

@@ -3,9 +3,24 @@
 import { useSystemHealth } from '@/hooks/useSystemHealth';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; glow: string; label: string }> = {
-  healthy: { color: 'text-[var(--accent)]', bg: 'bg-[var(--accent)]', glow: 'shadow-[0_0_12px_var(--acid-green)]', label: 'ALL SYSTEMS OPERATIONAL' },
-  degraded: { color: 'text-[var(--acid-yellow)]', bg: 'bg-acid-yellow', glow: 'shadow-[0_0_12px_var(--acid-yellow)]', label: 'DEGRADED PERFORMANCE' },
-  critical: { color: 'text-acid-red', bg: 'bg-acid-red', glow: 'shadow-[0_0_12px_var(--acid-red)]', label: 'CRITICAL ISSUES DETECTED' },
+  healthy: {
+    color: 'text-[var(--accent)]',
+    bg: 'bg-[var(--accent)]',
+    glow: 'shadow-[0_0_12px_var(--acid-green)]',
+    label: 'ALL SYSTEMS OPERATIONAL',
+  },
+  degraded: {
+    color: 'text-[var(--acid-yellow)]',
+    bg: 'bg-acid-yellow',
+    glow: 'shadow-[0_0_12px_var(--acid-yellow)]',
+    label: 'DEGRADED PERFORMANCE',
+  },
+  critical: {
+    color: 'text-acid-red',
+    bg: 'bg-acid-red',
+    glow: 'shadow-[0_0_12px_var(--acid-red)]',
+    label: 'CRITICAL ISSUES DETECTED',
+  },
 };
 
 const SUBSYSTEM_STATUS_COLOR: Record<string, string> = {
@@ -30,7 +45,9 @@ export function SystemHealthSummary() {
   if (!health) {
     return (
       <div className="card p-6">
-        <p className="font-theme-data text-sm text-text-muted">Unable to load system health data.</p>
+        <p className="font-theme-data text-sm text-text-muted">
+          Unable to load system health data.
+        </p>
       </div>
     );
   }
@@ -50,7 +67,8 @@ export function SystemHealthSummary() {
           <div>
             <h2 className={`font-theme-data text-lg font-bold ${config.color}`}>{config.label}</h2>
             <p className="font-theme-data text-xs text-text-muted">
-              Last check: {health.last_check ? new Date(health.last_check).toLocaleTimeString() : 'N/A'}
+              Last check:{' '}
+              {health.last_check ? new Date(health.last_check).toLocaleTimeString() : 'N/A'}
             </p>
           </div>
         </div>
@@ -72,14 +90,13 @@ export function SystemHealthSummary() {
           {subsystems.map(([name, status]) => {
             const statusColor = SUBSYSTEM_STATUS_COLOR[status] || SUBSYSTEM_STATUS_COLOR.unknown;
             return (
-              <div
-                key={name}
-                className={`card p-3 border-l-2 ${statusColor.split(' ')[0]}`}
-              >
+              <div key={name} className={`card p-3 border-l-2 ${statusColor.split(' ')[0]}`}>
                 <span className="font-theme-data text-xs text-text capitalize">
                   {name.replace(/_/g, ' ')}
                 </span>
-                <span className={`block text-[10px] font-theme-data uppercase ${statusColor.split(' ')[1]}`}>
+                <span
+                  className={`block text-[10px] font-theme-data uppercase ${statusColor.split(' ')[1]}`}
+                >
                   {status}
                 </span>
               </div>

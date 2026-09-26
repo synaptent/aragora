@@ -20,7 +20,10 @@ interface PerformanceMetrics {
 }
 
 interface EvolutionMetrics {
-  agents: Record<string, { current_version: number; performance_score: number; debates_count: number }>;
+  agents: Record<
+    string,
+    { current_version: number; performance_score: number; debates_count: number }
+  >;
   total_versions: number;
   patterns_extracted: number;
   last_evolution: string | null;
@@ -155,7 +158,9 @@ export function QualityDashboard() {
         <MetricCard
           title="Avg Confidence"
           value={`${(debate_quality.avg_confidence * 100).toFixed(0)}%`}
-          color={debate_quality.avg_confidence > 0.7 ? 'text-[var(--accent)]' : 'text-[var(--acid-cyan)]'}
+          color={
+            debate_quality.avg_confidence > 0.7 ? 'text-[var(--accent)]' : 'text-[var(--acid-cyan)]'
+          }
         />
         <MetricCard
           title="Success Rate"
@@ -207,7 +212,9 @@ export function QualityDashboard() {
 
           {calibration.underconfident_agents.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              <span className="text-xs font-theme-data text-[var(--acid-cyan)]">Underconfident:</span>
+              <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                Underconfident:
+              </span>
               {calibration.underconfident_agents.map((agent) => (
                 <span
                   key={agent}
@@ -251,12 +258,7 @@ export function QualityDashboard() {
           {Object.keys(performance.agents).length > 0 && (
             <div className="flex flex-wrap gap-2 pt-2 border-t border-gold/20">
               {Object.entries(performance.agents).map(([agent, stats]) => (
-                <AgentBadge
-                  key={agent}
-                  agent={agent}
-                  metric={stats.avg_latency_ms}
-                  label="ms"
-                />
+                <AgentBadge key={agent} agent={agent} metric={stats.avg_latency_ms} label="ms" />
               ))}
             </div>
           )}
@@ -274,7 +276,9 @@ export function QualityDashboard() {
           <div className="grid grid-cols-2 gap-4 text-center">
             <div>
               <div className="text-xs font-theme-data text-text-muted">Patterns</div>
-              <div className="text-lg font-theme-data text-purple">{evolution.patterns_extracted}</div>
+              <div className="text-lg font-theme-data text-purple">
+                {evolution.patterns_extracted}
+              </div>
             </div>
             <div>
               <div className="text-xs font-theme-data text-text-muted">Total Versions</div>

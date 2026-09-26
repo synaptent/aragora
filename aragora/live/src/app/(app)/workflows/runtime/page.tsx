@@ -40,7 +40,11 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }
   completed: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-500' },
   failed: { bg: 'bg-red-900/30', text: 'text-red-400', border: 'border-red-500' },
   paused: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-500' },
-  waiting_approval: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-500' },
+  waiting_approval: {
+    bg: 'bg-purple-900/30',
+    text: 'text-purple-400',
+    border: 'border-purple-500',
+  },
   pending: { bg: 'bg-gray-900/30', text: 'text-gray-400', border: 'border-gray-500' },
 };
 
@@ -65,7 +69,11 @@ function formatDuration(startedAt: string, completedAt?: string): string {
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 export default function WorkflowRuntimePage() {
@@ -111,13 +119,16 @@ export default function WorkflowRuntimePage() {
     return executions.filter((e) => e.status === statusFilter);
   }, [executions, statusFilter]);
 
-  const stats = useMemo(() => ({
-    total: executions.length,
-    running: executions.filter((e) => e.status === 'running').length,
-    completed: executions.filter((e) => e.status === 'completed').length,
-    failed: executions.filter((e) => e.status === 'failed').length,
-    waitingApproval: executions.filter((e) => e.status === 'waiting_approval').length,
-  }), [executions]);
+  const stats = useMemo(
+    () => ({
+      total: executions.length,
+      running: executions.filter((e) => e.status === 'running').length,
+      completed: executions.filter((e) => e.status === 'completed').length,
+      failed: executions.filter((e) => e.status === 'failed').length,
+      waitingApproval: executions.filter((e) => e.status === 'waiting_approval').length,
+    }),
+    [executions],
+  );
 
   const selectedExecutionData = useMemo(() => {
     return executions.find((e) => e.id === selectedExecution);
@@ -166,9 +177,7 @@ export default function WorkflowRuntimePage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-theme-data font-bold text-text mb-2">
-              Workflow Runtime
-            </h1>
+            <h1 className="text-3xl font-theme-data font-bold text-text mb-2">Workflow Runtime</h1>
             <p className="text-text-muted">Monitor active workflow executions</p>
           </div>
           <Link
@@ -274,10 +283,16 @@ export default function WorkflowRuntimePage() {
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h3 className="font-theme-data font-bold text-text">{execution.workflowName}</h3>
-                        <span className="text-xs text-text-muted font-theme-data">{execution.id}</span>
+                        <h3 className="font-theme-data font-bold text-text">
+                          {execution.workflowName}
+                        </h3>
+                        <span className="text-xs text-text-muted font-theme-data">
+                          {execution.id}
+                        </span>
                       </div>
-                      <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${colors.bg} ${colors.text}`}>
+                      <span
+                        className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${colors.bg} ${colors.text}`}
+                      >
                         {execution.status.replace('_', ' ')}
                       </span>
                     </div>
@@ -297,7 +312,9 @@ export default function WorkflowRuntimePage() {
 
                     <div className="flex items-center justify-between text-xs text-text-muted mt-2">
                       <span>Started: {formatTime(execution.startedAt)}</span>
-                      <span>Duration: {formatDuration(execution.startedAt, execution.completedAt)}</span>
+                      <span>
+                        Duration: {formatDuration(execution.startedAt, execution.completedAt)}
+                      </span>
                     </div>
                   </div>
                 );
@@ -314,7 +331,10 @@ export default function WorkflowRuntimePage() {
             {selectedExecutionData ? (
               viewMode === 'dag' ? (
                 /* DAG View */
-                <div className="bg-surface border border-border rounded-lg overflow-hidden" style={{ height: '600px' }}>
+                <div
+                  className="bg-surface border border-border rounded-lg overflow-hidden"
+                  style={{ height: '600px' }}
+                >
                   <ExecutionDAGView
                     execution={selectedExecutionData}
                     onStepSelect={setSelectedStep}
@@ -364,10 +384,14 @@ export default function WorkflowRuntimePage() {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-lg">{STEP_ICONS[step.type] || '📦'}</span>
-                              <span className="font-theme-data font-bold text-text">{step.name}</span>
+                              <span className="font-theme-data font-bold text-text">
+                                {step.name}
+                              </span>
                               <span className="text-xs text-text-muted">({step.type})</span>
                             </div>
-                            <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${stepColors.bg} ${stepColors.text}`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${stepColors.bg} ${stepColors.text}`}
+                            >
                               {step.status.replace('_', ' ')}
                             </span>
                           </div>
@@ -390,17 +414,24 @@ export default function WorkflowRuntimePage() {
                           {isWaitingApproval && (
                             <div className="mt-3 p-3 bg-purple-900/20 border border-purple-800/30 rounded">
                               <p className="text-sm text-purple-300 mb-3">
-                                {step.approvalMessage || 'This step requires human approval to continue.'}
+                                {step.approvalMessage ||
+                                  'This step requires human approval to continue.'}
                               </p>
                               <div className="flex gap-2">
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleApprove(selectedExecutionData.id, step.id); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleApprove(selectedExecutionData.id, step.id);
+                                  }}
                                   className="flex-1 px-3 py-2 text-xs font-theme-data bg-green-900/30 text-green-400 border border-green-800/30 rounded hover:bg-green-900/50"
                                 >
                                   Approve
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleReject(selectedExecutionData.id, step.id); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReject(selectedExecutionData.id, step.id);
+                                  }}
                                   className="flex-1 px-3 py-2 text-xs font-theme-data bg-red-900/30 text-red-400 border border-red-800/30 rounded hover:bg-red-900/50"
                                 >
                                   Reject
@@ -432,10 +463,7 @@ export default function WorkflowRuntimePage() {
         {/* Step Detail Panel */}
         {selectedStep && (
           <>
-            <div
-              className="fixed inset-0 bg-bg/60 z-40"
-              onClick={() => setSelectedStep(null)}
-            />
+            <div className="fixed inset-0 bg-bg/60 z-40" onClick={() => setSelectedStep(null)} />
             <StepDetailPanel
               step={selectedStep}
               onClose={() => setSelectedStep(null)}

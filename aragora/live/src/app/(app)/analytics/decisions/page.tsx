@@ -3,15 +3,8 @@
 import { useState, useMemo } from 'react';
 import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
-import {
-  MetricCard,
-  TrendChart,
-  type DataPoint,
-} from '@/components/analytics';
-import {
-  useDecisionAnalytics,
-  type AnalyticsPeriod,
-} from '@/hooks/useDecisionAnalytics';
+import { MetricCard, TrendChart, type DataPoint } from '@/components/analytics';
+import { useDecisionAnalytics, type AnalyticsPeriod } from '@/hooks/useDecisionAnalytics';
 
 // ============================================================================
 // Helpers
@@ -75,11 +68,10 @@ function AgentTable({
   if (agents.length === 0) {
     return (
       <div className="card p-4">
-        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
-          {'>'} AGENT QUALITY
-        </h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">{'>'} AGENT QUALITY</h3>
         <p className="text-text-muted font-theme-data text-sm text-center py-4">
-          No agent quality data yet. Debates will show contribution scores and consensus accuracy here.
+          No agent quality data yet. Debates will show contribution scores and consensus accuracy
+          here.
         </p>
       </div>
     );
@@ -87,21 +79,15 @@ function AgentTable({
 
   return (
     <div className="card p-4">
-      <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
-        {'>'} AGENT QUALITY
-      </h3>
+      <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">{'>'} AGENT QUALITY</h3>
       <div className="overflow-x-auto">
         <table className="w-full font-theme-data text-sm">
           <thead>
             <tr className="border-b border-[var(--accent)]/30">
               <th className="py-2 px-3 text-[var(--accent)] text-left">Agent</th>
               <th className="py-2 px-3 text-[var(--accent)] text-right">Debates</th>
-              <th className="py-2 px-3 text-[var(--accent)] text-right">
-                Consensus
-              </th>
-              <th className="py-2 px-3 text-[var(--accent)] text-right">
-                Confidence
-              </th>
+              <th className="py-2 px-3 text-[var(--accent)] text-right">Consensus</th>
+              <th className="py-2 px-3 text-[var(--accent)] text-right">Confidence</th>
               <th className="py-2 px-3 text-[var(--accent)] text-right">Score</th>
             </tr>
           </thead>
@@ -114,12 +100,8 @@ function AgentTable({
                 }`}
               >
                 <td className="py-2 px-3 text-[var(--acid-cyan)]">{a.agent_name}</td>
-                <td className="py-2 px-3 text-right text-text">
-                  {a.debates_participated}
-                </td>
-                <td className="py-2 px-3 text-right text-text">
-                  {a.consensus_contributions}
-                </td>
+                <td className="py-2 px-3 text-right text-text">{a.debates_participated}</td>
+                <td className="py-2 px-3 text-right text-text">{a.consensus_contributions}</td>
                 <td className="py-2 px-3 text-right text-text-muted">
                   {formatPct(a.avg_confidence)}
                 </td>
@@ -131,9 +113,7 @@ function AgentTable({
                     <div className="w-16 h-2 bg-surface rounded overflow-hidden">
                       <div
                         className="h-full bg-[var(--accent)]/60 rounded"
-                        style={{
-                          width: `${Math.min(a.contribution_score * 100, 100)}%`,
-                        }}
+                        style={{ width: `${Math.min(a.contribution_score * 100, 100)}%` }}
                       />
                     </div>
                   </div>
@@ -158,11 +138,10 @@ function DomainTable({
   if (domains.length === 0) {
     return (
       <div className="card p-4">
-        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
-          {'>'} DOMAINS
-        </h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">{'>'} DOMAINS</h3>
         <p className="text-text-muted font-theme-data text-sm text-center py-4">
-          No domain data yet. Run debates across different topics to see decision distribution by domain.
+          No domain data yet. Run debates across different topics to see decision distribution by
+          domain.
         </p>
       </div>
     );
@@ -192,12 +171,8 @@ function DomainTable({
                 }`}
               >
                 <td className="py-2 px-3 text-[var(--acid-cyan)]">{d.domain}</td>
-                <td className="py-2 px-3 text-right text-text">
-                  {d.decision_count}
-                </td>
-                <td className="py-2 px-3 text-right text-text-muted">
-                  {d.percentage.toFixed(1)}%
-                </td>
+                <td className="py-2 px-3 text-right text-text">{d.decision_count}</td>
+                <td className="py-2 px-3 text-right text-text-muted">{d.percentage.toFixed(1)}%</td>
                 <td className="py-2 px-3 text-right">
                   <div className="w-24 h-2 bg-surface rounded overflow-hidden ml-auto">
                     <div
@@ -239,7 +214,8 @@ function OutcomesList({
           {'>'} RECENT DECISIONS ({total})
         </h3>
         <p className="text-text-muted font-theme-data text-sm text-center py-4">
-          No decisions recorded yet. Start a debate to see verdicts, quality scores, and agent participation here.
+          No decisions recorded yet. Start a debate to see verdicts, quality scores, and agent
+          participation here.
         </p>
       </div>
     );
@@ -271,15 +247,9 @@ function OutcomesList({
               <span className="text-text truncate">{o.task || o.debate_id}</span>
             </div>
             <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-              <span className="text-text-muted">
-                {o.rounds}r
-              </span>
-              <span className="text-text-muted">
-                {o.agents.length}a
-              </span>
-              <span className="text-text-muted">
-                {formatDuration(o.duration_seconds)}
-              </span>
+              <span className="text-text-muted">{o.rounds}r</span>
+              <span className="text-text-muted">{o.agents.length}a</span>
+              <span className="text-text-muted">{formatDuration(o.duration_seconds)}</span>
               <span className="text-text-muted text-[10px]">
                 {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''}
               </span>
@@ -298,15 +268,8 @@ function OutcomesList({
 export default function DecisionAnalyticsPage() {
   const [period, setPeriod] = useState<AnalyticsPeriod>('30d');
 
-  const {
-    overview,
-    trends,
-    outcomes,
-    agentMetrics,
-    domainMetrics,
-    isLoading,
-    error,
-  } = useDecisionAnalytics(period);
+  const { overview, trends, outcomes, agentMetrics, domainMetrics, isLoading, error } =
+    useDecisionAnalytics(period);
 
   // Transform trend points into DataPoint[] for the TrendChart
   const consensusTrendData: DataPoint[] = useMemo(() => {
@@ -341,8 +304,8 @@ export default function DecisionAnalyticsPage() {
                 {'>'} DECISION ANALYTICS
               </h1>
               <p className="text-text-muted font-theme-data text-sm">
-                Track AI-assisted decision quality, consensus rates, and agent
-                performance over time.
+                Track AI-assisted decision quality, consensus rates, and agent performance over
+                time.
               </p>
             </div>
             <PeriodSelector value={period} onChange={setPeriod} />
@@ -358,9 +321,7 @@ export default function DecisionAnalyticsPage() {
           {/* ---- Overview Cards ---- */}
           <PanelErrorBoundary panelName="Decision Overview">
             <section className="mb-6">
-              <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
-                {'>'} OVERVIEW
-              </h2>
+              <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} OVERVIEW</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <MetricCard
                   title="Total Decisions"
@@ -372,11 +333,7 @@ export default function DecisionAnalyticsPage() {
                 />
                 <MetricCard
                   title="Consensus Rate"
-                  value={
-                    overview
-                      ? `${(overview.consensus_rate * 100).toFixed(1)}%`
-                      : '--'
-                  }
+                  value={overview ? `${(overview.consensus_rate * 100).toFixed(1)}%` : '--'}
                   subtitle={`${overview?.consensus_reached ?? 0} reached`}
                   color="cyan"
                   loading={isLoading}
@@ -384,11 +341,7 @@ export default function DecisionAnalyticsPage() {
                 />
                 <MetricCard
                   title="Avg Confidence"
-                  value={
-                    overview
-                      ? `${(overview.avg_confidence * 100).toFixed(1)}%`
-                      : '--'
-                  }
+                  value={overview ? `${(overview.avg_confidence * 100).toFixed(1)}%` : '--'}
                   subtitle="mean confidence"
                   color="yellow"
                   loading={isLoading}
@@ -455,19 +408,14 @@ export default function DecisionAnalyticsPage() {
           {/* ---- Recent Decisions ---- */}
           <PanelErrorBoundary panelName="Recent Decisions">
             <section className="mb-6">
-              <OutcomesList
-                outcomes={outcomes?.outcomes ?? []}
-                total={outcomes?.total ?? 0}
-              />
+              <OutcomesList outcomes={outcomes?.outcomes ?? []} total={outcomes?.total ?? 0} />
             </section>
           </PanelErrorBoundary>
 
           {/* Footer */}
           <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
             <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
-            <p className="text-text-muted">
-              {'>'} ARAGORA // DECISION OUTCOME ANALYTICS
-            </p>
+            <p className="text-text-muted">{'>'} ARAGORA // DECISION OUTCOME ANALYTICS</p>
           </footer>
         </div>
       </main>

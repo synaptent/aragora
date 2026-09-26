@@ -3,9 +3,19 @@
 import { useTheme, type Theme } from '@/context/ThemeContext';
 
 const THEME_OPTIONS: Array<{ value: Theme; label: string; glyph: string; title: string }> = [
-  { value: 'warm', label: 'Warm', glyph: '☀', title: 'Warm theme — humanistic cream + forest green' },
+  {
+    value: 'warm',
+    label: 'Warm',
+    glyph: '☀',
+    title: 'Warm theme — humanistic cream + forest green',
+  },
   { value: 'dark', label: 'Dark', glyph: '◐', title: 'Dark theme — demoscene black + acid green' },
-  { value: 'professional', label: 'Pro', glyph: '◆', title: 'Professional theme — muted, enterprise-ready' },
+  {
+    value: 'professional',
+    label: 'Pro',
+    glyph: '◆',
+    title: 'Professional theme — muted, enterprise-ready',
+  },
 ];
 
 export function ThemeToggle() {
@@ -80,7 +90,11 @@ export function ThemeSelector() {
   }
 
   return (
-    <div className="flex gap-1 p-1 bg-surface rounded" role="radiogroup" aria-label="Theme selection">
+    <div
+      className="flex gap-1 p-1 bg-surface rounded"
+      role="radiogroup"
+      aria-label="Theme selection"
+    >
       <button
         role="radio"
         aria-checked={preference === 'dark'}

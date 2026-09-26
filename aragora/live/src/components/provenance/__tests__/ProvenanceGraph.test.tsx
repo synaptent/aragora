@@ -23,15 +23,14 @@ describe('ProvenanceGraph', () => {
 
     render(<ProvenanceGraph debateId="debate-empty" apiBase="http://example.test" />);
 
-    expect(await screen.findByText(/no provenance data available for this debate/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/no provenance data available for this debate/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText('DEMO')).not.toBeInTheDocument();
   });
 
   it('shows an error instead of fabricated demo provenance when the request fails', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({}),
-    } as Response);
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) } as Response);
 
     render(<ProvenanceGraph debateId="debate-error" apiBase="http://example.test" />);
 

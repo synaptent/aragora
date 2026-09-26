@@ -65,23 +65,11 @@ export interface DecisionPackage {
   final_answer: string;
   agents: string[];
   rounds: number;
-  arguments: Array<{
-    agent: string;
-    round: number;
-    position: string;
-    content: string;
-  }>;
-  cost_breakdown: Array<{
-    agent: string;
-    tokens: number;
-    cost: number;
-  }>;
+  arguments: Array<{ agent: string; round: number; position: string; content: string }>;
+  cost_breakdown: Array<{ agent: string; tokens: number; cost: number }>;
   total_cost: number;
   receipt: DecisionPackageReceipt | null;
-  next_steps: Array<{
-    action: string;
-    priority: 'high' | 'medium' | 'low';
-  }>;
+  next_steps: Array<{ action: string; priority: 'high' | 'medium' | 'low' }>;
   provider_names: string[];
   provider_hints: string[];
   provider_routing: DecisionPackageProviderRouting | null;
@@ -109,17 +97,32 @@ function asNumber(value: unknown, fallback = 0): number {
 
 function normalizeDebateStatus(
   value: unknown,
-  fallback: DecisionPackageStatus = 'pending'
+  fallback: DecisionPackageStatus = 'pending',
 ): DecisionPackageStatus {
   const normalized = asString(value).trim().toLowerCase();
   if (!normalized) return fallback;
   if (['pending', 'queued', 'created', 'initialized'].includes(normalized)) return 'pending';
   if (['running', 'in_progress', 'active', 'started'].includes(normalized)) return 'running';
-  if (['blocked', 'timeout', 'timed_out', 'aborted', 'paused'].includes(normalized)) return 'blocked';
-  if (['failed', 'failure', 'error', 'process_verification_failed', 'verification_failed'].includes(normalized)) {
+  if (['blocked', 'timeout', 'timed_out', 'aborted', 'paused'].includes(normalized))
+    return 'blocked';
+  if (
+    ['failed', 'failure', 'error', 'process_verification_failed', 'verification_failed'].includes(
+      normalized,
+    )
+  ) {
     return 'failed';
   }
-  if (['completed', 'complete', 'consensus_reached', 'success', 'succeeded', 'settled', 'no_consensus'].includes(normalized)) {
+  if (
+    [
+      'completed',
+      'complete',
+      'consensus_reached',
+      'success',
+      'succeeded',
+      'settled',
+      'no_consensus',
+    ].includes(normalized)
+  ) {
     return 'completed';
   }
   return fallback;
@@ -127,7 +130,7 @@ function normalizeDebateStatus(
 
 function normalizeDebateStatusSource(
   value: unknown,
-  fallback: DecisionPackageStatusSource = 'live'
+  fallback: DecisionPackageStatusSource = 'live',
 ): DecisionPackageStatusSource {
   const normalized = asString(value).trim().toLowerCase();
   if (['synthetic', 'demo', 'mock'].includes(normalized)) return 'synthetic';
@@ -146,8 +149,9 @@ function asStringRecord(value: unknown): Record<string, string> {
 
   return Object.fromEntries(
     Object.entries(obj).filter(
-      (entry): entry is [string, string] => typeof entry[0] === 'string' && typeof entry[1] === 'string'
-    )
+      (entry): entry is [string, string] =>
+        typeof entry[0] === 'string' && typeof entry[1] === 'string',
+    ),
   );
 }
 
@@ -158,7 +162,7 @@ function asNumberRecord(value: unknown): Record<string, number> {
   return Object.fromEntries(
     Object.entries(obj)
       .map(([key, rawValue]) => [key, asNumber(rawValue, Number.NaN)] as const)
-      .filter((entry) => Number.isFinite(entry[1]))
+      .filter((entry) => Number.isFinite(entry[1])),
   );
 }
 
@@ -176,9 +180,9 @@ function tokenMapFromCostSummary(value: unknown): Record<string, unknown> | null
     const summaryObj = asObject(summary);
     if (!summaryObj) continue;
 
-    const totalTokens = summaryObj.total_tokens ?? (
-      asNumber(summaryObj.total_tokens_in, 0) + asNumber(summaryObj.total_tokens_out, 0)
-    );
+    const totalTokens =
+      summaryObj.total_tokens ??
+      asNumber(summaryObj.total_tokens_in, 0) + asNumber(summaryObj.total_tokens_out, 0);
 
     tokenEntries.push([agent, totalTokens]);
   }
@@ -213,7 +217,7 @@ function normalizeArguments(value: unknown): DecisionPackage['arguments'] {
 
 function normalizeCostBreakdown(
   value: unknown,
-  tokenMap: Record<string, unknown> | null = null
+  tokenMap: Record<string, unknown> | null = null,
 ): DecisionPackage['cost_breakdown'] {
   if (Array.isArray(value)) {
     return value
@@ -246,7 +250,7 @@ function normalizeCostBreakdown(
     const summaryObj = asObject(summary);
     const tokens = asNumber(
       summaryObj?.total_tokens,
-      asNumber(summaryObj?.total_tokens_in, 0) + asNumber(summaryObj?.total_tokens_out, 0)
+      asNumber(summaryObj?.total_tokens_in, 0) + asNumber(summaryObj?.total_tokens_out, 0),
     );
     return {
       agent,
@@ -270,10 +274,7 @@ function normalizeReceiptCostSummary(value: unknown): DecisionPackageReceiptCost
           const rawModelsUsed = asObject(summary.models_used);
           const modelsUsed = rawModelsUsed
             ? Object.entries(rawModelsUsed)
-                .map(([model, callCount]) => ({
-                  model,
-                  call_count: asNumber(callCount, 0),
-                }))
+                .map(([model, callCount]) => ({ model, call_count: asNumber(callCount, 0) }))
                 .filter((entry) => entry.call_count > 0)
             : [];
 
@@ -312,8 +313,7 @@ function normalizeReceiptCostSummary(value: unknown): DecisionPackageReceiptCost
         .filter((entry): entry is DecisionPackageReceiptModelUsage => entry !== null)
     : [];
 
-  const totalCost =
-    obj.total_cost_usd === undefined ? null : asNumber(obj.total_cost_usd, 0);
+  const totalCost = obj.total_cost_usd === undefined ? null : asNumber(obj.total_cost_usd, 0);
 
   if (
     totalCost === null &&
@@ -336,10 +336,7 @@ function normalizeReceiptCostSummary(value: unknown): DecisionPackageReceiptCost
   };
 }
 
-function normalizeReceipt(
-  value: unknown,
-  fallbackTimestamp = ''
-): DecisionPackage['receipt'] {
+function normalizeReceipt(value: unknown, fallbackTimestamp = ''): DecisionPackage['receipt'] {
   const obj = asObject(value);
   if (!obj) return null;
 
@@ -417,13 +414,12 @@ export function normalizeDecisionPackage(raw: unknown, fallbackId: string): Deci
   const tokenMap = asObject(obj.per_agent_tokens) ?? tokenMapFromCostSummary(receiptCostSummary);
   const createdAt = asString(obj.created_at, asString(obj.assembled_at, new Date().toISOString()));
   const debateStatus = normalizeDebateStatus(obj.debate_status ?? obj.status, 'completed');
-  const syntheticFlag =
-    typeof obj.synthetic === 'boolean' ? obj.synthetic : undefined;
+  const syntheticFlag = typeof obj.synthetic === 'boolean' ? obj.synthetic : undefined;
   const debateStatusSource = normalizeDebateStatusSource(
     obj.debate_status_source ??
       obj.status_source ??
       (syntheticFlag === undefined ? obj.mode : syntheticFlag ? 'synthetic' : 'live'),
-    'live'
+    'live',
   );
 
   return {
@@ -441,7 +437,7 @@ export function normalizeDecisionPackage(raw: unknown, fallbackId: string): Deci
     agents: agents.length > 0 ? agents : participants,
     rounds: asNumber(
       obj.rounds,
-      argumentsList.reduce((maxRound, arg) => Math.max(maxRound, arg.round), 0)
+      argumentsList.reduce((maxRound, arg) => Math.max(maxRound, arg.round), 0),
     ),
     arguments: argumentsList,
     cost_breakdown: normalizeCostBreakdown(obj.cost_breakdown ?? cost, tokenMap),

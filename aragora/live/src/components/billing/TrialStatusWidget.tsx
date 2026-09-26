@@ -27,7 +27,7 @@ export function TrialStatusWidget() {
     if (!accessToken) return;
     try {
       const res = await fetch(`${API_BASE}/api/billing/plan`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -51,21 +51,22 @@ export function TrialStatusWidget() {
   // Don't show for paid tiers (non-trial)
   if (!plan.is_trial && plan.tier !== 'free') return null;
 
-  const usagePercent = plan.debates_limit > 0
-    ? Math.min(100, (plan.debates_used / plan.debates_limit) * 100)
-    : 0;
+  const usagePercent =
+    plan.debates_limit > 0 ? Math.min(100, (plan.debates_used / plan.debates_limit) * 100) : 0;
 
   const isNearLimit = usagePercent >= 80;
   const isAtLimit = usagePercent >= 100;
 
   return (
-    <div className={`bg-[var(--surface)] border ${
-      plan.is_expired || isAtLimit
-        ? 'border-red-500/40 bg-red-500/5'
-        : isNearLimit
-        ? 'border-yellow-500/40 bg-yellow-500/5'
-        : 'border-[var(--acid-cyan)]/30'
-    } p-4`}>
+    <div
+      className={`bg-[var(--surface)] border ${
+        plan.is_expired || isAtLimit
+          ? 'border-red-500/40 bg-red-500/5'
+          : isNearLimit
+            ? 'border-yellow-500/40 bg-yellow-500/5'
+            : 'border-[var(--acid-cyan)]/30'
+      } p-4`}
+    >
       <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Left: Status info */}
         <div className="flex-1 min-w-0">
@@ -90,7 +91,11 @@ export function TrialStatusWidget() {
               <div className="h-2 bg-[var(--bg)] rounded overflow-hidden">
                 <div
                   className={`h-full transition-all duration-500 ${
-                    isAtLimit ? 'bg-red-500' : isNearLimit ? 'bg-yellow-500' : 'bg-[var(--acid-green)]'
+                    isAtLimit
+                      ? 'bg-red-500'
+                      : isNearLimit
+                        ? 'bg-yellow-500'
+                        : 'bg-[var(--acid-green)]'
                   }`}
                   style={{ width: `${usagePercent}%` }}
                 />
@@ -100,9 +105,11 @@ export function TrialStatusWidget() {
               {plan.debates_used}/{plan.debates_limit} debates
             </span>
             {plan.is_trial && plan.trial_days_remaining !== null && (
-              <span className={`text-xs font-theme-data whitespace-nowrap ${
-                plan.trial_days_remaining <= 3 ? 'text-red-400' : 'text-[var(--acid-cyan)]'
-              }`}>
+              <span
+                className={`text-xs font-theme-data whitespace-nowrap ${
+                  plan.trial_days_remaining <= 3 ? 'text-red-400' : 'text-[var(--acid-cyan)]'
+                }`}
+              >
                 {plan.trial_days_remaining}d remaining
               </span>
             )}

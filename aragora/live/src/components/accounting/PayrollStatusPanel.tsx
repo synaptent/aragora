@@ -56,9 +56,9 @@ export function PayrollStatusPanel() {
               payPeriodEnd: '2025-01-15',
               checkDate: '2025-01-17',
               status: 'synced',
-              totalGross: 45250.00,
-              totalNet: 32175.50,
-              totalTaxes: 13074.50,
+              totalGross: 45250.0,
+              totalNet: 32175.5,
+              totalTaxes: 13074.5,
               employeeCount: 12,
               qboSynced: true,
               journalEntryId: 'JE-1234',
@@ -69,14 +69,14 @@ export function PayrollStatusPanel() {
               payPeriodEnd: '2025-01-31',
               checkDate: '2025-02-01',
               status: 'processed',
-              totalGross: 46100.00,
+              totalGross: 46100.0,
               totalNet: 32780.25,
               totalTaxes: 13319.75,
               employeeCount: 12,
               qboSynced: false,
             },
           ],
-          ytdGross: 91350.00,
+          ytdGross: 91350.0,
           ytdTaxes: 26394.25,
         });
       }
@@ -111,28 +111,31 @@ export function PayrollStatusPanel() {
     }
   }, [backendConfig.api, tokens?.access_token]);
 
-  const handleSyncToQBO = useCallback(async (runId: string) => {
-    setSyncing(runId);
-    try {
-      const response = await fetch(`${backendConfig.api}/api/accounting/payroll/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.access_token || ''}`,
-        },
-        body: JSON.stringify({ payroll_run_id: runId }),
-      });
-      if (response.ok) {
-        fetchStatus();
-      } else {
-        setError('Failed to sync payroll to QuickBooks');
+  const handleSyncToQBO = useCallback(
+    async (runId: string) => {
+      setSyncing(runId);
+      try {
+        const response = await fetch(`${backendConfig.api}/api/accounting/payroll/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.access_token || ''}`,
+          },
+          body: JSON.stringify({ payroll_run_id: runId }),
+        });
+        if (response.ok) {
+          fetchStatus();
+        } else {
+          setError('Failed to sync payroll to QuickBooks');
+        }
+      } catch {
+        setError('Failed to sync payroll');
+      } finally {
+        setSyncing(null);
       }
-    } catch {
-      setError('Failed to sync payroll');
-    } finally {
-      setSyncing(null);
-    }
-  }, [backendConfig.api, tokens?.access_token, fetchStatus]);
+    },
+    [backendConfig.api, tokens?.access_token, fetchStatus],
+  );
 
   if (loading) {
     return (
@@ -151,7 +154,8 @@ export function PayrollStatusPanel() {
           Connect Gusto Payroll
         </h3>
         <p className="text-xs text-[var(--text-muted)] mb-4 max-w-sm mx-auto">
-          Link your Gusto account to automatically sync payroll data and generate QuickBooks journal entries.
+          Link your Gusto account to automatically sync payroll data and generate QuickBooks journal
+          entries.
         </p>
         <button
           onClick={handleConnect}
@@ -171,9 +175,7 @@ export function PayrollStatusPanel() {
           <span className="text-xl">💰</span>
           <div>
             <h3 className="text-sm font-theme-data text-[var(--acid-green)]">Payroll (Gusto)</h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Connected to {status.companyName}
-            </p>
+            <p className="text-xs text-[var(--text-muted)]">Connected to {status.companyName}</p>
           </div>
         </div>
         <span className="flex items-center gap-1 text-xs text-green-400">
@@ -186,7 +188,9 @@ export function PayrollStatusPanel() {
       {error && (
         <div className="m-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 hover:text-red-300">×</button>
+          <button onClick={() => setError(null)} className="ml-2 hover:text-red-300">
+            ×
+          </button>
         </div>
       )}
 
@@ -210,11 +214,8 @@ export function PayrollStatusPanel() {
       <div className="p-4 border-b border-[var(--border)]">
         <h4 className="text-xs text-[var(--text-muted)] mb-3">Recent Payroll Runs</h4>
         <div className="space-y-3">
-          {status.recentRuns.map(run => (
-            <div
-              key={run.id}
-              className="p-3 bg-[var(--bg)] rounded border border-[var(--border)]"
-            >
+          {status.recentRuns.map((run) => (
+            <div key={run.id} className="p-3 bg-[var(--bg)] rounded border border-[var(--border)]">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <div className="text-sm font-theme-data">
@@ -258,11 +259,15 @@ export function PayrollStatusPanel() {
                 </div>
                 <div>
                   <span className="text-[var(--text-muted)] text-xs">Taxes</span>
-                  <div className="font-theme-data text-red-400">${run.totalTaxes.toLocaleString()}</div>
+                  <div className="font-theme-data text-red-400">
+                    ${run.totalTaxes.toLocaleString()}
+                  </div>
                 </div>
                 <div>
                   <span className="text-[var(--text-muted)] text-xs">Net</span>
-                  <div className="font-theme-data text-[var(--acid-green)]">${run.totalNet.toLocaleString()}</div>
+                  <div className="font-theme-data text-[var(--acid-green)]">
+                    ${run.totalNet.toLocaleString()}
+                  </div>
                 </div>
               </div>
               {run.journalEntryId && (

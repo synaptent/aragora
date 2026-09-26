@@ -52,35 +52,35 @@ export function useDashboardPreferences() {
   }, [preferences, isLoaded]);
 
   const setMode = useCallback((mode: DashboardMode) => {
-    setPreferences(prev => ({
+    setPreferences((prev) => ({
       ...prev,
       mode,
       // When switching to explorer mode, expand more sections
-      expandedSections: mode === 'explorer'
-        ? ['core-debate', 'browse-discover', 'agent-analysis', 'insights-learning']
-        : ['core-debate'],
+      expandedSections:
+        mode === 'explorer'
+          ? ['core-debate', 'browse-discover', 'agent-analysis', 'insights-learning']
+          : ['core-debate'],
     }));
   }, []);
 
   const toggleSection = useCallback((sectionId: string) => {
-    setPreferences(prev => ({
+    setPreferences((prev) => ({
       ...prev,
       expandedSections: prev.expandedSections.includes(sectionId)
-        ? prev.expandedSections.filter(id => id !== sectionId)
+        ? prev.expandedSections.filter((id) => id !== sectionId)
         : [...prev.expandedSections, sectionId],
     }));
   }, []);
 
-  const isSectionExpanded = useCallback((sectionId: string) => {
-    return preferences.expandedSections.includes(sectionId);
-  }, [preferences.expandedSections]);
+  const isSectionExpanded = useCallback(
+    (sectionId: string) => {
+      return preferences.expandedSections.includes(sectionId);
+    },
+    [preferences.expandedSections],
+  );
 
   const markOnboardingComplete = useCallback(() => {
-    setPreferences(prev => ({
-      ...prev,
-      hasSeenOnboarding: true,
-      gauntletFirstRun: false,
-    }));
+    setPreferences((prev) => ({ ...prev, hasSeenOnboarding: true, gauntletFirstRun: false }));
   }, []);
 
   const resetToDefaults = useCallback(() => {

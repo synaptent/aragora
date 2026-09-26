@@ -21,10 +21,10 @@ const STATUS_CONFIG: Record<string, { ring: string; bg: string; label: string; p
 
 /** Stage-specific icons for node headers. */
 const STAGE_ICONS: Record<DAGStage, string> = {
-  ideas: '\u2726',       // four-pointed star
-  principles: '\u25C8',  // diamond
-  goals: '\u25CE',       // bullseye
-  actions: '\u2611',     // ballot box with check
+  ideas: '\u2726', // four-pointed star
+  principles: '\u25C8', // diamond
+  goals: '\u25CE', // bullseye
+  actions: '\u2611', // ballot box with check
   orchestration: '\u2699', // gear
 };
 
@@ -46,8 +46,8 @@ export function ExecutionDAGNode({ id, data, selected, onExecuteNode }: Executio
   const agents = (nodeData.metadata?.agents as string[]) || [];
   const progress = (nodeData.metadata?.progress as number) || 0;
   const executeHandler =
-    onExecuteNode
-    ?? (typeof nodeData.onExecuteNode === 'function'
+    onExecuteNode ??
+    (typeof nodeData.onExecuteNode === 'function'
       ? (nodeData.onExecuteNode as (nodeId: string) => void)
       : undefined);
 
@@ -68,9 +68,7 @@ export function ExecutionDAGNode({ id, data, selected, onExecuteNode }: Executio
       >
         <span>{icon}</span>
         <span>{stage}</span>
-        {nodeData.subtype && (
-          <span className="ml-auto opacity-60">{nodeData.subtype}</span>
-        )}
+        {nodeData.subtype && <span className="ml-auto opacity-60">{nodeData.subtype}</span>}
       </div>
 
       {/* Body */}
@@ -79,9 +77,7 @@ export function ExecutionDAGNode({ id, data, selected, onExecuteNode }: Executio
           {nodeData.label}
         </div>
         {nodeData.description && (
-          <div className="text-[11px] text-text-muted line-clamp-2">
-            {nodeData.description}
-          </div>
+          <div className="text-[11px] text-text-muted line-clamp-2">{nodeData.description}</div>
         )}
 
         {/* Agents row (orchestration stage) */}
@@ -96,7 +92,9 @@ export function ExecutionDAGNode({ id, data, selected, onExecuteNode }: Executio
               </span>
             ))}
             {agents.length > 3 && (
-              <span className="text-[10px] font-theme-data text-text-muted">+{agents.length - 3}</span>
+              <span className="text-[10px] font-theme-data text-text-muted">
+                +{agents.length - 3}
+              </span>
             )}
           </div>
         )}

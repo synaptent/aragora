@@ -15,7 +15,7 @@ SOC 2 Compliance: CC9.1, CC9.2 (Business Continuity)
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.base import (
@@ -28,6 +28,9 @@ from aragora.server.handlers.utils.decorators import handle_errors
 from aragora.server.handlers.utils.lazy_stores import LazyStoreFactory
 from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.server.validation.query_params import safe_query_int
+
+if TYPE_CHECKING:
+    from aragora.backup.manager import BackupManager
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +60,9 @@ class BackupOffsiteHandler(BaseHandler):
             factory_name="get_backup_manager",
             logger_context="BackupOffsite",
         )
-        self._manager = None  # Set by tests or lazy init
+        self._manager: BackupManager | None = None  # Set by tests or lazy init
 
-    def _get_manager(self):
+    def _get_manager(self) -> BackupManager | None:
         """Get or create backup manager (lazy initialization)."""
         if self._manager is None:
             self._manager = self._manager_factory.get()
@@ -112,6 +115,8 @@ class BackupOffsiteHandler(BaseHandler):
         counts, and latest drill result.
         """
         manager = self._get_manager()
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'get_backup_status'")
         status = manager.get_backup_status()
 
         return json_response({"data": status})
@@ -127,6 +132,8 @@ class BackupOffsiteHandler(BaseHandler):
         manager = self._get_manager()
         limit = safe_query_int(query_params, "limit", default=50, min_val=1, max_val=200)
 
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'get_drill_history'")
         drills = manager.get_drill_history(limit=limit)
 
         return json_response(
@@ -150,6 +157,8 @@ class BackupOffsiteHandler(BaseHandler):
         manager = self._get_manager()
         backup_id = body.get("backup_id")
 
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'restore_drill'")
         report = manager.restore_drill(backup_id=backup_id)
 
         return json_response(

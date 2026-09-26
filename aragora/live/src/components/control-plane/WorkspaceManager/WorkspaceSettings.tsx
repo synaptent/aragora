@@ -41,7 +41,7 @@ export function WorkspaceSettings({
   const [description, setDescription] = useState(workspace.description);
   const [defaultVertical, setDefaultVertical] = useState(workspace.settings.defaultVertical || '');
   const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>(
-    workspace.settings.complianceFrameworks
+    workspace.settings.complianceFrameworks,
   );
   const [agentLimit, setAgentLimit] = useState(workspace.settings.agentLimit);
   const [documentsQuota, setDocumentsQuota] = useState(workspace.settings.documentsQuota);
@@ -53,9 +53,7 @@ export function WorkspaceSettings({
 
   const toggleFramework = (framework: string) => {
     setSelectedFrameworks((prev) =>
-      prev.includes(framework)
-        ? prev.filter((f) => f !== framework)
-        : [...prev, framework]
+      prev.includes(framework) ? prev.filter((f) => f !== framework) : [...prev, framework],
     );
     handleChange();
   };
@@ -79,7 +77,7 @@ export function WorkspaceSettings({
   };
 
   const availableFrameworks = COMPLIANCE_FRAMEWORKS.filter(
-    (fw) => !defaultVertical || fw.vertical === defaultVertical
+    (fw) => !defaultVertical || fw.vertical === defaultVertical,
   );
 
   return (
@@ -133,9 +131,10 @@ export function WorkspaceSettings({
                 }}
                 className={`
                   p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-2
-                  ${defaultVertical === vertical.id
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-border hover:border-text-muted bg-bg'
+                  ${
+                    defaultVertical === vertical.id
+                      ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+                      : 'border-border hover:border-text-muted bg-bg'
                   }
                 `}
               >
@@ -156,9 +155,10 @@ export function WorkspaceSettings({
                 onClick={() => toggleFramework(framework.name)}
                 className={`
                   px-3 py-1.5 text-xs font-theme-data rounded-lg border transition-all
-                  ${selectedFrameworks.includes(framework.name)
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent)]'
-                    : 'border-border hover:border-text-muted text-text-muted'
+                  ${
+                    selectedFrameworks.includes(framework.name)
+                      ? 'border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent)]'
+                      : 'border-border hover:border-text-muted text-text-muted'
                   }
                 `}
               >
@@ -214,7 +214,8 @@ export function WorkspaceSettings({
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="text-text-muted">Current Usage:</span>
               <span className="font-theme-data text-text">
-                {workspace.settings.documentsUsed.toLocaleString()} / {documentsQuota.toLocaleString()}
+                {workspace.settings.documentsUsed.toLocaleString()} /{' '}
+                {documentsQuota.toLocaleString()}
               </span>
             </div>
             <div className="h-2 bg-surface rounded-full overflow-hidden">

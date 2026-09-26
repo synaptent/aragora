@@ -24,11 +24,7 @@ describe('debateStore', () => {
     const { useDebateStore } = await import('../src/store/debateStore');
     const store = useDebateStore.getState();
 
-    const message = {
-      agent: 'test-agent',
-      content: 'Hello world',
-      timestamp: 1234567890,
-    };
+    const message = { agent: 'test-agent', content: 'Hello world', timestamp: 1234567890 };
 
     // First add should succeed
     const added1 = store.addMessage(message);

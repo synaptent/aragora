@@ -100,11 +100,7 @@ export const SelectField = memo(function SelectField({
   return (
     <div className="mb-3">
       <label className={LABEL_CLS}>{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={INPUT_CLS}
-      >
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLS}>
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
@@ -211,9 +207,7 @@ export const CheckboxField = memo(function CheckboxField({
         />
         <span className="text-sm text-text">{label}</span>
       </label>
-      {description && (
-        <p className="text-xs text-text-muted mt-0.5 ml-6">{description}</p>
-      )}
+      {description && <p className="text-xs text-text-muted mt-0.5 ml-6">{description}</p>}
     </div>
   );
 });

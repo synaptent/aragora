@@ -1,11 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useOpenRouterConnection } from '@/hooks/useOpenRouterConnection';
 import { getStoredProviderKeys, storeProviderKeys } from '@/lib/provider-keys';
-import {
-  fetchKeyInfo,
-  startOpenRouterAuth,
-  type OpenRouterKeyInfo,
-} from '@/lib/openrouter-pkce';
+import { fetchKeyInfo, startOpenRouterAuth, type OpenRouterKeyInfo } from '@/lib/openrouter-pkce';
 
 jest.mock('@/lib/provider-keys', () => ({
   getStoredProviderKeys: jest.fn(),
@@ -20,9 +16,7 @@ jest.mock('@/lib/openrouter-pkce', () => ({
 const mockGetStoredProviderKeys = getStoredProviderKeys as jest.MockedFunction<
   typeof getStoredProviderKeys
 >;
-const mockStoreProviderKeys = storeProviderKeys as jest.MockedFunction<
-  typeof storeProviderKeys
->;
+const mockStoreProviderKeys = storeProviderKeys as jest.MockedFunction<typeof storeProviderKeys>;
 const mockFetchKeyInfo = fetchKeyInfo as jest.MockedFunction<typeof fetchKeyInfo>;
 const mockStartOpenRouterAuth = startOpenRouterAuth as jest.MockedFunction<
   typeof startOpenRouterAuth
@@ -103,9 +97,7 @@ describe('useOpenRouterConnection', () => {
     };
 
     mockGetStoredProviderKeys.mockReturnValue({ openrouter: 'sk-or-test' });
-    mockFetchKeyInfo
-      .mockResolvedValueOnce(initialInfo)
-      .mockRejectedValueOnce(new Error('boom'));
+    mockFetchKeyInfo.mockResolvedValueOnce(initialInfo).mockRejectedValueOnce(new Error('boom'));
 
     const { result } = renderHook(() => useOpenRouterConnection());
 
@@ -118,7 +110,7 @@ describe('useOpenRouterConnection', () => {
     await waitFor(() => expect(result.current.keyInfo).toBeNull());
     expect(debugSpy).toHaveBeenCalledWith(
       'Failed to refresh OpenRouter key info',
-      expect.any(Error)
+      expect.any(Error),
     );
 
     debugSpy.mockRestore();
@@ -165,7 +157,7 @@ describe('useOpenRouterConnection', () => {
     });
 
     expect(mockStartOpenRouterAuth).toHaveBeenCalledWith(
-      `${window.location.origin}/openrouter/callback/`
+      `${window.location.origin}/openrouter/callback/`,
     );
   });
 });

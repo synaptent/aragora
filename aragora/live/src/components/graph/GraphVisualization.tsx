@@ -15,7 +15,7 @@ import { getBranchColor, getEdgeColor } from './types';
 // Calculate node depths using BFS
 function calculateNodeDepths(
   nodes: Record<string, DebateNode>,
-  rootId: string | null
+  rootId: string | null,
 ): Map<string, number> {
   const depths = new Map<string, number>();
   if (!rootId || !nodes[rootId]) return depths;
@@ -47,8 +47,12 @@ function createForceSimulation(
   nodes: Record<string, DebateNode>,
   rootId: string | null,
   width: number,
-  height: number
-): { nodes: SimulationNode[]; links: SimulationLink[]; simulation: d3Force.Simulation<SimulationNode, SimulationLink> } {
+  height: number,
+): {
+  nodes: SimulationNode[];
+  links: SimulationLink[];
+  simulation: d3Force.Simulation<SimulationNode, SimulationLink>;
+} {
   const depths = calculateNodeDepths(nodes, rootId);
   const maxDepth = Math.max(...Array.from(depths.values()), 0);
   const levelHeight = height / (maxDepth + 2);
@@ -67,27 +71,24 @@ function createForceSimulation(
   Object.values(nodes).forEach((node) => {
     node.parent_ids.forEach((parentId) => {
       if (nodes[parentId]) {
-        simLinks.push({
-          source: parentId,
-          target: node.id,
-          branchId: node.branch_id || 'main',
-        });
+        simLinks.push({ source: parentId, target: node.id, branchId: node.branch_id || 'main' });
       }
     });
   });
 
   // Create D3 force simulation
-  const simulation = d3Force.forceSimulation<SimulationNode, SimulationLink>(simNodes)
-    .force('link', d3Force.forceLink<SimulationNode, SimulationLink>(simLinks)
-      .id((d) => d.id)
-      .distance(100)
-      .strength(0.8))
-    .force('charge', d3Force.forceManyBody<SimulationNode>()
-      .strength(-300)
-      .distanceMax(400))
-    .force('collide', d3Force.forceCollide<SimulationNode>()
-      .radius(50)
-      .strength(0.7))
+  const simulation = d3Force
+    .forceSimulation<SimulationNode, SimulationLink>(simNodes)
+    .force(
+      'link',
+      d3Force
+        .forceLink<SimulationNode, SimulationLink>(simLinks)
+        .id((d) => d.id)
+        .distance(100)
+        .strength(0.8),
+    )
+    .force('charge', d3Force.forceManyBody<SimulationNode>().strength(-300).distanceMax(400))
+    .force('collide', d3Force.forceCollide<SimulationNode>().radius(50).strength(0.7))
     .force('x', d3Force.forceX<SimulationNode>(width / 2).strength(0.05))
     .force('y', d3Force.forceY<SimulationNode>((d) => d.depth * levelHeight + 60).strength(0.3))
     .alphaDecay(0.02)
@@ -126,11 +127,7 @@ function GraphNode({ position, isSelected, onClick }: GraphNodeProps) {
   const branchColor = getBranchColor(node.branch_id || 'main');
 
   return (
-    <g
-      transform={`translate(${x}, ${y})`}
-      onClick={onClick}
-      className="cursor-pointer"
-    >
+    <g transform={`translate(${x}, ${y})`} onClick={onClick} className="cursor-pointer">
       {/* Node circle */}
       <circle
         r={isSelected ? 28 : 24}
@@ -153,21 +150,13 @@ function GraphNode({ position, isSelected, onClick }: GraphNodeProps) {
 
       {/* Confidence indicator */}
       {node.confidence > 0 && (
-        <text
-          y={35}
-          textAnchor="middle"
-          className="text-[10px] font-theme-data fill-text-muted"
-        >
+        <text y={35} textAnchor="middle" className="text-[10px] font-theme-data fill-text-muted">
           {(node.confidence * 100).toFixed(0)}%
         </text>
       )}
 
       {/* Agent label */}
-      <text
-        y={-35}
-        textAnchor="middle"
-        className={`text-[10px] font-theme-data ${colors.text}`}
-      >
+      <text y={-35} textAnchor="middle" className={`text-[10px] font-theme-data ${colors.text}`}>
         {node.agent_id.slice(0, 8)}
       </text>
     </g>
@@ -214,11 +203,17 @@ export function NodeDetailPanel({ node, onClose }: NodeDetailPanelProps) {
         {/* Claims */}
         {node.claims.length > 0 && (
           <div>
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-1">CLAIMS ({node.claims.length})</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-1">
+              CLAIMS ({node.claims.length})
+            </div>
             <ul className="space-y-1">
               {node.claims.slice(0, 5).map((claim, i) => (
-                <li key={i} className="text-xs font-theme-data text-text-muted pl-2 border-l border-[var(--acid-cyan)]/30">
-                  {claim.slice(0, 100)}{claim.length > 100 ? '...' : ''}
+                <li
+                  key={i}
+                  className="text-xs font-theme-data text-text-muted pl-2 border-l border-[var(--acid-cyan)]/30"
+                >
+                  {claim.slice(0, 100)}
+                  {claim.length > 100 ? '...' : ''}
                 </li>
               ))}
             </ul>
@@ -293,12 +288,11 @@ export function GraphVisualization({
 
     const width = 800;
     const height = 600;
-    const { nodes: simNodes, links: simLinks, simulation } = createForceSimulation(
-      graph.nodes,
-      graph.root_id,
-      width,
-      height
-    );
+    const {
+      nodes: simNodes,
+      links: simLinks,
+      simulation,
+    } = createForceSimulation(graph.nodes, graph.root_id, width, height);
 
     nodesRef.current = simNodes;
     linksRef.current = simLinks;
@@ -311,7 +305,7 @@ export function GraphVisualization({
           x: simNode.x || 400,
           y: simNode.y || 60,
           node: simNode.node,
-        }))
+        })),
       );
     };
 
@@ -349,11 +343,7 @@ export function GraphVisualization({
     toPos.node.parent_ids.forEach((parentId) => {
       const fromPos = positions.find((p) => p.node.id === parentId);
       if (fromPos) {
-        edges.push({
-          from: fromPos,
-          to: toPos,
-          branchId: toPos.node.branch_id || 'main',
-        });
+        edges.push({ from: fromPos, to: toPos, branchId: toPos.node.branch_id || 'main' });
       }
     });
   });
@@ -389,10 +379,7 @@ export function GraphVisualization({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      });
+      setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
   };
 
@@ -581,10 +568,7 @@ export function GraphVisualization({
           return (
             <g
               key={pos.node.id}
-              style={{
-                opacity: nodeInBranch ? 1 : 0.3,
-                cursor: isDragging ? 'grabbing' : 'grab',
-              }}
+              style={{ opacity: nodeInBranch ? 1 : 0.3, cursor: isDragging ? 'grabbing' : 'grab' }}
               className="transition-opacity duration-200"
               onMouseDown={(e) => handleNodeDragStart(pos.node.id, e)}
             >

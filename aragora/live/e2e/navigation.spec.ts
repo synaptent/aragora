@@ -131,9 +131,11 @@ test.describe('Navigation - Sidebar', () => {
 
     if (!sidebarVisible) {
       // On narrower viewports the sidebar may need to be opened via a toggle
-      const menuToggle = page.locator(
-        'button[aria-label*="menu" i], button[aria-label*="sidebar" i], [data-testid="sidebar-toggle"]'
-      ).first();
+      const menuToggle = page
+        .locator(
+          'button[aria-label*="menu" i], button[aria-label*="sidebar" i], [data-testid="sidebar-toggle"]',
+        )
+        .first();
       if (await menuToggle.isVisible({ timeout: 3000 }).catch(() => false)) {
         await menuToggle.click();
         await sidebar.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
@@ -171,9 +173,11 @@ test.describe('Navigation - Sidebar', () => {
 
     // Look for breadcrumb-like elements (nav with aria-label breadcrumb, or
     // elements containing path segments)
-    const breadcrumb = page.locator(
-      'nav[aria-label*="breadcrumb" i], [data-testid*="breadcrumb"], [class*="breadcrumb"]'
-    ).first();
+    const breadcrumb = page
+      .locator(
+        'nav[aria-label*="breadcrumb" i], [data-testid*="breadcrumb"], [class*="breadcrumb"]',
+      )
+      .first();
 
     const hasBreadcrumb = await breadcrumb.isVisible({ timeout: 3000 }).catch(() => false);
 
@@ -187,10 +191,14 @@ test.describe('Navigation - Sidebar', () => {
       await aragoraPage.dismissAllOverlays();
       await page.waitForLoadState('domcontentloaded');
 
-      const updatedBreadcrumb = page.locator(
-        'nav[aria-label*="breadcrumb" i], [data-testid*="breadcrumb"], [class*="breadcrumb"]'
-      ).first();
-      const updatedVisible = await updatedBreadcrumb.isVisible({ timeout: 3000 }).catch(() => false);
+      const updatedBreadcrumb = page
+        .locator(
+          'nav[aria-label*="breadcrumb" i], [data-testid*="breadcrumb"], [class*="breadcrumb"]',
+        )
+        .first();
+      const updatedVisible = await updatedBreadcrumb
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
       if (updatedVisible) {
         const updatedText = await updatedBreadcrumb.textContent();
         // Breadcrumb text should differ between pages
@@ -214,7 +222,9 @@ test.describe('Navigation - Mobile', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Look for hamburger menu or mobile nav
-    const mobileMenu = page.locator('[class*="mobile"], [class*="hamburger"], button[aria-label*="menu"]').first();
+    const mobileMenu = page
+      .locator('[class*="mobile"], [class*="hamburger"], button[aria-label*="menu"]')
+      .first();
 
     if (await mobileMenu.isVisible()) {
       await mobileMenu.click();

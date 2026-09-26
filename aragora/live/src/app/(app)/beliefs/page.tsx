@@ -30,12 +30,7 @@ interface RecentDebate {
 
 function ConfidenceBar({ value, label }: { value: number; label: string }) {
   const pct = Math.round(value * 100);
-  const color =
-    pct >= 70
-      ? 'bg-[var(--acid-green)]'
-      : pct >= 40
-        ? 'bg-yellow-400'
-        : 'bg-red-400';
+  const color = pct >= 70 ? 'bg-[var(--acid-green)]' : pct >= 40 ? 'bg-yellow-400' : 'bg-red-400';
 
   return (
     <div className="flex items-center gap-2">
@@ -43,14 +38,9 @@ function ConfidenceBar({ value, label }: { value: number; label: string }) {
         {label}
       </span>
       <div className="flex-1 h-2 bg-[var(--bg)] rounded overflow-hidden">
-        <div
-          className={`h-full ${color} rounded transition-all`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full ${color} rounded transition-all`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-theme-data text-[var(--text)] w-10 text-right">
-        {pct}%
-      </span>
+      <span className="text-xs font-theme-data text-[var(--text)] w-10 text-right">{pct}%</span>
     </div>
   );
 }
@@ -117,10 +107,7 @@ function NodeCard({
           <>
             <span>|</span>
             <span>
-              Crux Score:{' '}
-              <span className="text-red-400">
-                {Math.round(node.crux_score * 100)}%
-              </span>
+              Crux Score: <span className="text-red-400">{Math.round(node.crux_score * 100)}%</span>
             </span>
           </>
         )}
@@ -141,13 +128,10 @@ function EmptyState() {
   return (
     <div className="p-12 border border-[var(--border)] rounded bg-[var(--surface)]/30 text-center">
       <div className="text-4xl mb-4 font-theme-data">{'\u0394'}</div>
-      <h3 className="font-theme-data text-lg text-[var(--text)] mb-2">
-        No Belief Networks Yet
-      </h3>
+      <h3 className="font-theme-data text-lg text-[var(--text)] mb-2">No Belief Networks Yet</h3>
       <p className="font-theme-data text-sm text-[var(--text-muted)] max-w-md mx-auto mb-4">
-        Belief networks are built from debate traces. Run a debate first, then
-        select it here to explore the claims, cruxes, and evidence
-        relationships.
+        Belief networks are built from debate traces. Run a debate first, then select it here to
+        explore the claims, cruxes, and evidence relationships.
       </p>
       <a
         href="/arena"
@@ -187,33 +171,27 @@ export default function BeliefsPage() {
   const [selectedNode, setSelectedNode] = useState<BeliefNode | null>(null);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<
-    'graph' | 'cruxes' | 'load-bearing' | 'support'
-  >('graph');
+  const [activeTab, setActiveTab] = useState<'graph' | 'cruxes' | 'load-bearing' | 'support'>(
+    'graph',
+  );
 
   // Fetch recent debates on mount
   const fetchRecentDebates = useCallback(async () => {
     setDebatesLoading(true);
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (tokens?.access_token) {
         headers['Authorization'] = `Bearer ${tokens.access_token}`;
       }
-      const res = await fetch(`${backendConfig.api}/api/debates?limit=20`, {
-        headers,
-      });
+      const res = await fetch(`${backendConfig.api}/api/debates?limit=20`, { headers });
       if (res.ok) {
         const data = await res.json();
-        const debates = (data.debates || data.items || []).map(
-          (d: Record<string, unknown>) => ({
-            debate_id: d.id || d.debate_id || '',
-            topic: d.topic || d.question || d.task || 'Untitled',
-            created_at: d.created_at || '',
-            agent_count: (d.agents as string[] | undefined)?.length || 0,
-          })
-        );
+        const debates = (data.debates || data.items || []).map((d: Record<string, unknown>) => ({
+          debate_id: d.id || d.debate_id || '',
+          topic: d.topic || d.question || d.task || 'Untitled',
+          created_at: d.created_at || '',
+          agent_count: (d.agents as string[] | undefined)?.length || 0,
+        }));
         setRecentDebates(debates);
       }
     } catch (err) {
@@ -249,7 +227,7 @@ export default function BeliefsPage() {
       setSelectedNode(null);
       await fetchGraph(debateId);
     },
-    [fetchGraph]
+    [fetchGraph],
   );
 
   // Load tab data
@@ -270,7 +248,7 @@ export default function BeliefsPage() {
         await fetchClaimSupport(selectedDebateId, node.claim_id);
       }
     },
-    [selectedDebateId, activeTab, fetchClaimSupport]
+    [selectedDebateId, activeTab, fetchClaimSupport],
   );
 
   // Switch to support tab when clicking a node
@@ -282,7 +260,7 @@ export default function BeliefsPage() {
         await fetchClaimSupport(selectedDebateId, node.claim_id);
       }
     },
-    [selectedDebateId, fetchClaimSupport]
+    [selectedDebateId, fetchClaimSupport],
   );
 
   return (
@@ -298,17 +276,15 @@ export default function BeliefsPage() {
               {'>'} BELIEFS &amp; PREDICTIONS
             </h1>
             <p className="text-[var(--text-muted)] font-theme-data text-sm">
-              Explore belief networks built from debate traces. View claims,
-              crux points, load-bearing arguments, and evidence support chains.
+              Explore belief networks built from debate traces. View claims, crux points,
+              load-bearing arguments, and evidence support chains.
             </p>
           </div>
 
           {/* Debate Selector */}
           <div className="mb-6 p-4 border border-[var(--border)] rounded bg-[var(--surface)]/30">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-theme-data text-sm text-[var(--acid-green)]">
-                SELECT DEBATE
-              </h2>
+              <h2 className="font-theme-data text-sm text-[var(--acid-green)]">SELECT DEBATE</h2>
               <button
                 onClick={fetchRecentDebates}
                 disabled={debatesLoading}
@@ -341,8 +317,7 @@ export default function BeliefsPage() {
               </div>
             ) : (
               <p className="text-sm font-theme-data text-[var(--text-muted)]">
-                No recent debates found. Start a debate to build belief
-                networks.
+                No recent debates found. Start a debate to build belief networks.
               </p>
             )}
           </div>
@@ -432,12 +407,8 @@ export default function BeliefsPage() {
 
           {/* Footer */}
           <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--acid-green)]/20 mt-8">
-            <div className="text-[var(--acid-green)]/50 mb-2">
-              {'='.repeat(40)}
-            </div>
-            <p className="text-[var(--text-muted)]">
-              {'>'} ARAGORA // BELIEFS &amp; PREDICTIONS
-            </p>
+            <div className="text-[var(--acid-green)]/50 mb-2">{'='.repeat(40)}</div>
+            <p className="text-[var(--text-muted)]">{'>'} ARAGORA // BELIEFS &amp; PREDICTIONS</p>
           </footer>
         </div>
       </main>
@@ -463,9 +434,7 @@ function GraphTab({
   if (!graph || graph.nodes.length === 0) {
     return (
       <div className="p-8 border border-[var(--border)] rounded text-center">
-        <p className="font-theme-data text-[var(--text-muted)]">
-          No claims found for this debate.
-        </p>
+        <p className="font-theme-data text-[var(--text-muted)]">No claims found for this debate.</p>
         <p className="font-theme-data text-[var(--text-muted)]/60 text-xs mt-2">
           The debate trace may not have generated belief network data.
         </p>
@@ -482,25 +451,17 @@ function GraphTab({
             <div className="text-2xl font-theme-data text-[var(--acid-green)]">
               {graph.metadata.total_claims}
             </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Total Claims
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Total Claims</div>
           </div>
           <div className="p-3 border border-[var(--acid-green)]/30 rounded bg-[var(--surface)]/30 text-center">
-            <div className="text-2xl font-theme-data text-red-400">
-              {graph.metadata.crux_count}
-            </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Crux Points
-            </div>
+            <div className="text-2xl font-theme-data text-red-400">{graph.metadata.crux_count}</div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Crux Points</div>
           </div>
           <div className="p-3 border border-[var(--acid-green)]/30 rounded bg-[var(--surface)]/30 text-center">
             <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
               {graph.links.length}
             </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Relationships
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Relationships</div>
           </div>
         </div>
       </div>
@@ -523,26 +484,20 @@ function GraphTab({
       <div>
         {selectedNode ? (
           <div className="p-4 border border-[var(--acid-green)]/30 rounded bg-[var(--surface)]/30 sticky top-24">
-            <h3 className="font-theme-data text-sm text-[var(--acid-green)] mb-3">
-              CLAIM DETAILS
-            </h3>
+            <h3 className="font-theme-data text-sm text-[var(--acid-green)] mb-3">CLAIM DETAILS</h3>
             <p className="font-theme-data text-sm text-[var(--text)] mb-4">
               {selectedNode.statement}
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="p-2 bg-[var(--bg)] rounded">
-                <div className="text-[10px] text-[var(--text-muted)]">
-                  AUTHOR
-                </div>
+                <div className="text-[10px] text-[var(--text-muted)]">AUTHOR</div>
                 <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
                   {selectedNode.author}
                 </div>
               </div>
               <div className="p-2 bg-[var(--bg)] rounded">
-                <div className="text-[10px] text-[var(--text-muted)]">
-                  CENTRALITY
-                </div>
+                <div className="text-[10px] text-[var(--text-muted)]">CENTRALITY</div>
                 <div className="font-theme-data text-sm text-[var(--text)]">
                   {Math.round(selectedNode.centrality * 100)}%
                 </div>
@@ -554,18 +509,9 @@ function GraphTab({
                 <div className="text-[10px] font-theme-data text-[var(--text-muted)] mb-1">
                   BELIEF DISTRIBUTION
                 </div>
-                <ConfidenceBar
-                  value={selectedNode.belief.true_prob}
-                  label="True"
-                />
-                <ConfidenceBar
-                  value={selectedNode.belief.false_prob}
-                  label="False"
-                />
-                <ConfidenceBar
-                  value={selectedNode.belief.uncertain_prob}
-                  label="Unsure"
-                />
+                <ConfidenceBar value={selectedNode.belief.true_prob} label="True" />
+                <ConfidenceBar value={selectedNode.belief.false_prob} label="False" />
+                <ConfidenceBar value={selectedNode.belief.uncertain_prob} label="Unsure" />
               </div>
             )}
 
@@ -576,25 +522,13 @@ function GraphTab({
                   RELATIONSHIPS
                 </div>
                 {graph.links
-                  .filter(
-                    (l) =>
-                      l.source === selectedNode.id ||
-                      l.target === selectedNode.id
-                  )
+                  .filter((l) => l.source === selectedNode.id || l.target === selectedNode.id)
                   .slice(0, 8)
                   .map((link, i) => {
-                    const otherId =
-                      link.source === selectedNode.id
-                        ? link.target
-                        : link.source;
-                    const otherNode = graph.nodes.find(
-                      (n) => n.id === otherId
-                    );
+                    const otherId = link.source === selectedNode.id ? link.target : link.source;
+                    const otherNode = graph.nodes.find((n) => n.id === otherId);
                     return (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between py-1 text-xs"
-                      >
+                      <div key={i} className="flex items-center justify-between py-1 text-xs">
                         <span className="font-theme-data text-[var(--text-muted)] truncate max-w-[180px]">
                           {otherNode?.statement?.slice(0, 40) || otherId}...
                         </span>
@@ -636,8 +570,7 @@ function CruxesTab({
           No crux points detected for this debate.
         </p>
         <p className="font-theme-data text-[var(--text-muted)]/60 text-xs mt-2">
-          Cruxes are claims where changing belief would most affect the debate
-          outcome.
+          Cruxes are claims where changing belief would most affect the debate outcome.
         </p>
       </div>
     );
@@ -646,8 +579,8 @@ function CruxesTab({
   return (
     <div className="space-y-4">
       <p className="font-theme-data text-sm text-[var(--text-muted)]">
-        Crux points are claims that, if resolved differently, would most change
-        the debate outcome. High crux scores indicate pivotal arguments.
+        Crux points are claims that, if resolved differently, would most change the debate outcome.
+        High crux scores indicate pivotal arguments.
       </p>
       {cruxAnalysis.cruxes.map((crux, idx) => (
         <div
@@ -656,12 +589,8 @@ function CruxesTab({
         >
           <div className="flex items-start justify-between gap-4 mb-3">
             <div className="flex items-center gap-2">
-              <span className="font-theme-data text-lg text-red-400 font-bold">
-                #{idx + 1}
-              </span>
-              <p className="font-theme-data text-sm text-[var(--text)]">
-                {crux.statement}
-              </p>
+              <span className="font-theme-data text-lg text-red-400 font-bold">#{idx + 1}</span>
+              <p className="font-theme-data text-sm text-[var(--text)]">{crux.statement}</p>
             </div>
             <span className="px-2 py-1 text-xs font-theme-data bg-red-500/20 text-red-400 border border-red-500/30 rounded shrink-0">
               {Math.round(crux.crux_score * 100)}%
@@ -669,9 +598,7 @@ function CruxesTab({
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="p-2 bg-[var(--bg)] rounded">
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                INFLUENCE
-              </div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">INFLUENCE</div>
               <div className="font-theme-data text-sm text-[var(--acid-green)]">
                 {Math.round(crux.influence * 100)}%
               </div>
@@ -707,12 +634,10 @@ function LoadBearingTab({
   if (!claims || claims.length === 0) {
     return (
       <div className="p-8 border border-[var(--border)] rounded text-center">
-        <p className="font-theme-data text-[var(--text-muted)]">
-          No load-bearing claims found.
-        </p>
+        <p className="font-theme-data text-[var(--text-muted)]">No load-bearing claims found.</p>
         <p className="font-theme-data text-[var(--text-muted)]/60 text-xs mt-2">
-          Load-bearing claims have the highest centrality in the belief network,
-          meaning many other claims depend on them.
+          Load-bearing claims have the highest centrality in the belief network, meaning many other
+          claims depend on them.
         </p>
       </div>
     );
@@ -721,25 +646,17 @@ function LoadBearingTab({
   return (
     <div className="space-y-4">
       <p className="font-theme-data text-sm text-[var(--text-muted)]">
-        Load-bearing claims have the highest centrality -- many other arguments
-        depend on them. If they fall, the argument structure collapses.
+        Load-bearing claims have the highest centrality -- many other arguments depend on them. If
+        they fall, the argument structure collapses.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full font-theme-data text-sm">
           <thead>
             <tr className="border-b border-[var(--acid-green)]/30">
-              <th className="py-2 px-3 text-[var(--acid-green)] text-left">
-                #
-              </th>
-              <th className="py-2 px-3 text-[var(--acid-green)] text-left">
-                Claim
-              </th>
-              <th className="py-2 px-3 text-[var(--acid-green)] text-left">
-                Author
-              </th>
-              <th className="py-2 px-3 text-[var(--acid-green)] text-right">
-                Centrality
-              </th>
+              <th className="py-2 px-3 text-[var(--acid-green)] text-left">#</th>
+              <th className="py-2 px-3 text-[var(--acid-green)] text-left">Claim</th>
+              <th className="py-2 px-3 text-[var(--acid-green)] text-left">Author</th>
+              <th className="py-2 px-3 text-[var(--acid-green)] text-right">Centrality</th>
             </tr>
           </thead>
           <tbody>
@@ -750,15 +667,9 @@ function LoadBearingTab({
                   idx % 2 === 0 ? 'bg-[var(--acid-green)]/5' : ''
                 }`}
               >
-                <td className="py-2 px-3 text-[var(--text-muted)]">
-                  {idx + 1}
-                </td>
-                <td className="py-2 px-3 text-[var(--text)]">
-                  {claim.statement}
-                </td>
-                <td className="py-2 px-3 text-[var(--acid-cyan)]">
-                  {claim.author}
-                </td>
+                <td className="py-2 px-3 text-[var(--text-muted)]">{idx + 1}</td>
+                <td className="py-2 px-3 text-[var(--text)]">{claim.statement}</td>
+                <td className="py-2 px-3 text-[var(--acid-cyan)]">{claim.author}</td>
                 <td className="py-2 px-3 text-right">
                   <span
                     className={
@@ -827,12 +738,9 @@ function SupportTab({
         <div className="text-[10px] font-theme-data text-[var(--acid-green)] mb-1">
           SELECTED CLAIM
         </div>
-        <p className="font-theme-data text-sm text-[var(--text)]">
-          {selectedNode.statement}
-        </p>
+        <p className="font-theme-data text-sm text-[var(--text)]">{selectedNode.statement}</p>
         <span className="font-theme-data text-xs text-[var(--text-muted)] mt-1 block">
-          by {selectedNode.author} | centrality:{' '}
-          {Math.round(selectedNode.centrality * 100)}%
+          by {selectedNode.author} | centrality: {Math.round(selectedNode.centrality * 100)}%
         </span>
       </div>
 
@@ -843,40 +751,30 @@ function SupportTab({
             <div className="text-2xl font-theme-data text-[var(--acid-green)]">
               {claimSupport.support.supporting}
             </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Supporting
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Supporting</div>
           </div>
           <div className="p-3 border border-[var(--border)] rounded bg-[var(--surface)]/30 text-center">
             <div className="text-2xl font-theme-data text-red-400">
               {claimSupport.support.contradicting}
             </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Contradicting
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Contradicting</div>
           </div>
           <div className="p-3 border border-[var(--border)] rounded bg-[var(--surface)]/30 text-center">
             <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
               {claimSupport.support.evidence_count}
             </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Evidence Total
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Evidence Total</div>
           </div>
           <div className="p-3 border border-[var(--border)] rounded bg-[var(--surface)]/30 text-center">
             <div className="text-2xl font-theme-data text-[var(--text)]">
               {Math.round(claimSupport.support.confidence * 100)}%
             </div>
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              Confidence
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">Confidence</div>
           </div>
         </div>
       ) : claimSupport?.message ? (
         <div className="p-4 border border-[var(--border)] rounded text-center">
-          <p className="font-theme-data text-sm text-[var(--text-muted)]">
-            {claimSupport.message}
-          </p>
+          <p className="font-theme-data text-sm text-[var(--text-muted)]">{claimSupport.message}</p>
         </div>
       ) : (
         <div className="p-4 border border-[var(--border)] rounded text-center">

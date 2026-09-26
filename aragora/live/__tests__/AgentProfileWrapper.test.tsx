@@ -30,13 +30,7 @@ global.fetch = mockFetch;
 const mockProfileData = {
   agent: 'claude-3-opus',
   ranking: {
-    rating: {
-      elo: 1650,
-      wins: 25,
-      losses: 10,
-      draws: 5,
-      games_played: 40,
-    },
+    rating: { elo: 1650, wins: 25, losses: 10, draws: 5, games_played: 40 },
     recent_matches: 10,
   },
   persona: {
@@ -45,14 +39,8 @@ const mockProfileData = {
     specializations: ['technology', 'ethics'],
     debate_count: 40,
   },
-  consistency: {
-    score: 0.85,
-    recent_flips: 2,
-  },
-  calibration: {
-    brier_score: 0.15,
-    prediction_count: 30,
-  },
+  consistency: { score: 0.85, recent_flips: 2 },
+  calibration: { brier_score: 0.15, prediction_count: 30 },
 };
 
 const mockMomentsData = {
@@ -78,9 +66,7 @@ const mockNetworkData = {
     { agent: 'gpt-4o', score: 0.8, debate_count: 10 },
     { agent: 'gemini-pro', score: 0.6, debate_count: 5 },
   ],
-  allies: [
-    { agent: 'claude-3-sonnet', score: 0.7, debate_count: 8 },
-  ],
+  allies: [{ agent: 'claude-3-sonnet', score: 0.7, debate_count: 8 }],
   influences: [],
   influenced_by: [],
 };
@@ -108,11 +94,7 @@ const mockPerformanceData = {
   critiques_accepted: 15,
   critiques_total: 20,
   critique_acceptance_rate: 0.75,
-  calibration: {
-    accuracy: 0.8,
-    brier_score: 0.15,
-    prediction_count: 30,
-  },
+  calibration: { accuracy: 0.8, brier_score: 0.15, prediction_count: 30 },
 };
 
 const mockHistoryData = {

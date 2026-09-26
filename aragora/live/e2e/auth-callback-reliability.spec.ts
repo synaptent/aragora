@@ -11,9 +11,12 @@ test.describe('Auth Callback Reliability', () => {
     const returnUrl = '/debates?source=e2e-callback';
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.evaluate(({ storageKey, value }) => {
-      sessionStorage.setItem(storageKey, value);
-    }, { storageKey: RETURN_URL_STORAGE_KEY, value: returnUrl });
+    await page.evaluate(
+      ({ storageKey, value }) => {
+        sessionStorage.setItem(storageKey, value);
+      },
+      { storageKey: RETURN_URL_STORAGE_KEY, value: returnUrl },
+    );
 
     await page.route('**/api/auth/me', async (route) => {
       await route.fulfill({
@@ -38,10 +41,13 @@ test.describe('Auth Callback Reliability', () => {
     const callbackUrl = `/auth/callback/#access_token=${makeToken('access')}&refresh_token=${makeToken('refresh')}&expires_in=3600`;
     await page.goto(callbackUrl, { waitUntil: 'domcontentloaded' });
 
-    await expect.poll(() => page.url().includes('/auth/callback'), {
-      timeout: 10_000,
-      message: 'OAuth callback should redirect away from /auth/callback after successful token exchange',
-    }).toBe(false);
+    await expect
+      .poll(() => page.url().includes('/auth/callback'), {
+        timeout: 10_000,
+        message:
+          'OAuth callback should redirect away from /auth/callback after successful token exchange',
+      })
+      .toBe(false);
 
     const storedTokens = await page.evaluate(() => localStorage.getItem('aragora_tokens'));
     const storedUser = await page.evaluate(() => localStorage.getItem('aragora_user'));
@@ -50,7 +56,9 @@ test.describe('Auth Callback Reliability', () => {
     expect(storedUser).toBeTruthy();
   });
 
-  test('surfaces callback failure instead of hanging when token validation fails', async ({ page }) => {
+  test('surfaces callback failure instead of hanging when token validation fails', async ({
+    page,
+  }) => {
     await page.route('**/api/auth/me', async (route) => {
       await route.fulfill({
         status: 401,
@@ -63,6 +71,8 @@ test.describe('Auth Callback Reliability', () => {
     await page.goto(callbackUrl, { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('AUTHENTICATION FAILED')).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByText('OAuth tokens were rejected by the server. Please try logging in again.')).toBeVisible({ timeout: 8_000 });
+    await expect(
+      page.getByText('OAuth tokens were rejected by the server. Please try logging in again.'),
+    ).toBeVisible({ timeout: 8_000 });
   });
 });

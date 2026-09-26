@@ -35,7 +35,7 @@ describe('provider-keys', () => {
 
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
       PROVIDER_KEYS_STORAGE_KEY,
-      JSON.stringify(keys)
+      JSON.stringify(keys),
     );
     expect(getStoredProviderKeys()).toEqual(keys);
   });
@@ -47,7 +47,7 @@ describe('provider-keys', () => {
     expect(getStoredProviderKeys()).toEqual({});
     expect(warnSpy).toHaveBeenCalledWith(
       'Failed to parse stored provider keys from localStorage.',
-      expect.any(Error)
+      expect.any(Error),
     );
 
     warnSpy.mockRestore();
@@ -55,11 +55,7 @@ describe('provider-keys', () => {
 
   it('builds provider headers for known configured keys', () => {
     localStorageMock.getItem.mockReturnValue(
-      JSON.stringify({
-        openrouter: 'sk-or-test',
-        openai: 'sk-test',
-        unknown: 'ignored',
-      })
+      JSON.stringify({ openrouter: 'sk-or-test', openai: 'sk-test', unknown: 'ignored' }),
     );
 
     expect(getProviderKeyHeaders()).toEqual({

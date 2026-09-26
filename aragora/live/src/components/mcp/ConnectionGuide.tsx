@@ -63,10 +63,18 @@ function ClaudeDesktopGuide() {
 
       <Step n={2} title="Add to Claude Desktop config">
         <p className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
-          Edit <code className="text-[var(--acid-cyan)]">~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS)
-          or <code className="text-[var(--acid-cyan)]">%APPDATA%/Claude/claude_desktop_config.json</code> (Windows):
+          Edit{' '}
+          <code className="text-[var(--acid-cyan)]">
+            ~/Library/Application Support/Claude/claude_desktop_config.json
+          </code>{' '}
+          (macOS) or{' '}
+          <code className="text-[var(--acid-cyan)]">
+            %APPDATA%/Claude/claude_desktop_config.json
+          </code>{' '}
+          (Windows):
         </p>
-        <CodeBlock code={`{
+        <CodeBlock
+          code={`{
   "mcpServers": {
     "aragora": {
       "command": "python",
@@ -77,13 +85,15 @@ function ClaudeDesktopGuide() {
       }
     }
   }
-}`} />
+}`}
+        />
       </Step>
 
       <Step n={3} title="Restart Claude Desktop">
         <p className="text-xs font-theme-data text-[var(--text-muted)]">
-          Close and reopen Claude Desktop. You should see Aragora tools available in the tool picker.
-          Try asking Claude: &quot;Run a debate about whether we should use Kubernetes&quot;.
+          Close and reopen Claude Desktop. You should see Aragora tools available in the tool
+          picker. Try asking Claude: &quot;Run a debate about whether we should use
+          Kubernetes&quot;.
         </p>
       </Step>
     </>
@@ -101,7 +111,8 @@ function CursorGuide() {
         <p className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
           Edit <code className="text-[var(--acid-cyan)]">~/.cursor/mcp.json</code>:
         </p>
-        <CodeBlock code={`{
+        <CodeBlock
+          code={`{
   "mcpServers": {
     "aragora": {
       "command": "python",
@@ -112,13 +123,14 @@ function CursorGuide() {
       }
     }
   }
-}`} />
+}`}
+        />
       </Step>
 
       <Step n={3} title="Reload Cursor">
         <p className="text-xs font-theme-data text-[var(--text-muted)]">
-          Restart Cursor or reload the window (Cmd+Shift+P / Ctrl+Shift+P, then &quot;Reload Window&quot;).
-          Aragora tools will appear in Cursor&apos;s tool palette.
+          Restart Cursor or reload the window (Cmd+Shift+P / Ctrl+Shift+P, then &quot;Reload
+          Window&quot;). Aragora tools will appear in Cursor&apos;s tool palette.
         </p>
       </Step>
     </>
@@ -138,20 +150,22 @@ function ManualGuide() {
 
       <Step n={2} title="Configure your MCP client">
         <p className="text-xs font-theme-data text-[var(--text-muted)]">
-          Point your MCP-compatible client to the server. The server exposes 60+ tools
-          across debate, audit, knowledge, workflow, and platform categories.
+          Point your MCP-compatible client to the server. The server exposes 60+ tools across
+          debate, audit, knowledge, workflow, and platform categories.
         </p>
       </Step>
 
       <Step n={3} title="Environment variables">
-        <CodeBlock code={`# Required (at least one AI provider)
+        <CodeBlock
+          code={`# Required (at least one AI provider)
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
 # Optional
 ARAGORA_API_URL=http://localhost:8080
 OPENROUTER_API_KEY=sk-or-...
-MISTRAL_API_KEY=...`} />
+MISTRAL_API_KEY=...`}
+        />
       </Step>
     </>
   );

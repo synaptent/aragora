@@ -26,6 +26,7 @@ EXPECTED_SELECTOR_VERSIONS = {
     ("lighthouse.yml", "accessibility-audit"): LIVE_NODE_VERSION,
     ("lighthouse.yml", "mobile-responsiveness"): LIVE_NODE_VERSION,
     ("lint.yml", "frontend-lint"): LIVE_NODE_VERSION,
+    ("lint.yml", "ratchets"): "25.9.0",
     ("live-deploy-mode-gate.yml", "gate"): LIVE_NODE_VERSION,
     ("merge-group-frontend-typecheck.yml", "frontend-typecheck"): LIVE_NODE_VERSION,
     ("nightly-full-matrix.yml", "frontend-build"): LIVE_NODE_VERSION,
@@ -47,6 +48,7 @@ EXPECTED_SELECTOR_VERSIONS = {
 }
 
 NON_LIVE_SELECTORS = {
+    ("lint.yml", "ratchets"),
     ("release.yml", "sdk-parity-gate"),
     ("test.yml", "version-check"),
     ("test.yml", "sdk-typescript-compile-gate"),
@@ -71,7 +73,22 @@ def _workflow_triggers(workflow: dict[str, Any]) -> dict[str, Any]:
 
 
 def _setup_node_steps(job: dict[str, Any]) -> list[dict[str, Any]]:
-    return [step for step in job.get("steps", []) if step.get("uses") == "actions/setup-node@v4"]
+    return [
+        step
+        for step in job.get("steps", [])
+        if step.get("uses", "").startswith("actions/setup-node@")
+        or step.get("uses") == "./.github/actions/setup-node-safe"
+    ]
+
+
+def test_setup_node_inventory_recognizes_direct_and_safe_actions() -> None:
+    selectors = [
+        {"uses": "actions/setup-node@v4"},
+        {"uses": "actions/setup-node@" + "a" * 40},
+        {"uses": "./.github/actions/setup-node-safe"},
+    ]
+    job = {"steps": [*selectors, {"uses": "actions/checkout@v4"}, {"run": "node --version"}]}
+    assert _setup_node_steps(job) == selectors
 
 
 def _resolve_node_version(

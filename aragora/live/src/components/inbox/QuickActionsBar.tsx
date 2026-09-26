@@ -245,7 +245,10 @@ function BulkActionItem({
       } ${loading ? 'opacity-50' : ''}`}
     >
       <span className="flex items-center justify-between">
-        <span>{loading ? '⏳ ' : ''}{label}</span>
+        <span>
+          {loading ? '⏳ ' : ''}
+          {label}
+        </span>
         {count !== undefined && count > 0 && (
           <span className="text-[var(--text-muted)]">({count})</span>
         )}

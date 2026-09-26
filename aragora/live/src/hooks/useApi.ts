@@ -49,15 +49,8 @@ interface UseApiOptions extends RetryConfig {
  * // Make a POST request
  * await api.post('/api/debate', { question: 'Is AI good?' });
  */
-export function useApi<T = unknown>(
-  baseUrl: string = API_BASE_URL,
-  options: UseApiOptions = {}
-) {
-  const [state, setState] = useState<ApiState<T>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
+export function useApi<T = unknown>(baseUrl: string = API_BASE_URL, options: UseApiOptions = {}) {
+  const [state, setState] = useState<ApiState<T>>({ data: null, loading: false, error: null });
 
   // Track in-flight requests to prevent duplicates
   const inFlightRef = useRef<Map<string, Promise<T>>>(new Map());
@@ -66,7 +59,7 @@ export function useApi<T = unknown>(
     async (
       endpoint: string,
       init: RequestInit = {},
-      customRetryConfig?: RetryConfig
+      customRetryConfig?: RetryConfig,
     ): Promise<T> => {
       const url = `${baseUrl}${endpoint}`;
       const requestKey = `${init.method || 'GET'}:${url}`;
@@ -77,7 +70,7 @@ export function useApi<T = unknown>(
         return existingRequest;
       }
 
-      setState(prev => ({ ...prev, loading: true, error: null }));
+      setState((prev) => ({ ...prev, loading: true, error: null }));
 
       const retryConfig: RetryConfig = {
         maxAttempts: 3,
@@ -100,11 +93,7 @@ export function useApi<T = unknown>(
 
       const fetchPromise = (async (): Promise<T> => {
         try {
-          const response = await fetchWithRetry(
-            url,
-            { ...init, headers },
-            retryConfig
-          );
+          const response = await fetchWithRetry(url, { ...init, headers }, retryConfig);
 
           const data = await response.json();
 
@@ -113,8 +102,7 @@ export function useApi<T = unknown>(
 
           return data;
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Request failed';
+          const errorMessage = error instanceof Error ? error.message : 'Request failed';
           setState({ data: null, loading: false, error: errorMessage });
 
           const err = error instanceof Error ? error : new Error(errorMessage);
@@ -129,62 +117,48 @@ export function useApi<T = unknown>(
       inFlightRef.current.set(requestKey, fetchPromise);
       return fetchPromise;
     },
-    [baseUrl, options]
+    [baseUrl, options],
   );
 
   const get = useCallback(
     (endpoint: string, retryConfig?: RetryConfig): Promise<T> => {
       return request(endpoint, { method: 'GET' }, retryConfig);
     },
-    [request]
+    [request],
   );
 
   const post = useCallback(
     (endpoint: string, body?: unknown, retryConfig?: RetryConfig): Promise<T> => {
       return request(
         endpoint,
-        {
-          method: 'POST',
-          body: body ? JSON.stringify(body) : undefined,
-        },
-        retryConfig
+        { method: 'POST', body: body ? JSON.stringify(body) : undefined },
+        retryConfig,
       );
     },
-    [request]
+    [request],
   );
 
   const put = useCallback(
     (endpoint: string, body?: unknown, retryConfig?: RetryConfig): Promise<T> => {
       return request(
         endpoint,
-        {
-          method: 'PUT',
-          body: body ? JSON.stringify(body) : undefined,
-        },
-        retryConfig
+        { method: 'PUT', body: body ? JSON.stringify(body) : undefined },
+        retryConfig,
       );
     },
-    [request]
+    [request],
   );
 
   const del = useCallback(
     (endpoint: string, retryConfig?: RetryConfig) => {
       return request(endpoint, { method: 'DELETE' }, retryConfig);
     },
-    [request]
+    [request],
   );
 
   const reset = useCallback(() => {
     setState({ data: null, loading: false, error: null });
   }, []);
 
-  return {
-    ...state,
-    get,
-    post,
-    put,
-    delete: del,
-    request,
-    reset,
-  };
+  return { ...state, get, post, put, delete: del, request, reset };
 }

@@ -38,7 +38,7 @@ interface DashboardHeaderProps {
 }
 
 function formatRelativeTime(timestamp: number): string {
-  const seconds = Math.floor((Date.now() / 1000) - timestamp);
+  const seconds = Math.floor(Date.now() / 1000 - timestamp);
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   return `${Math.floor(seconds / 3600)}h ago`;
@@ -85,7 +85,11 @@ export function DashboardHeader({
             )}
 
             {/* View Mode Toggle - Hidden on mobile */}
-            <div className="hidden sm:flex items-center gap-0.5 bg-bg border border-[var(--accent)]/30 p-0.5 font-theme-data text-xs" role="tablist" aria-label="View mode selection">
+            <div
+              className="hidden sm:flex items-center gap-0.5 bg-bg border border-[var(--accent)]/30 p-0.5 font-theme-data text-xs"
+              role="tablist"
+              aria-label="View mode selection"
+            >
               <button
                 onClick={() => onViewModeChange('tabs')}
                 role="tab"
@@ -155,7 +159,9 @@ export function DashboardHeader({
             {/* Loop Selector - Only show if multiple loops */}
             {activeLoops.length > 1 && (
               <div className="hidden md:flex items-center gap-2">
-                <label htmlFor="loop-selector" className="text-text-muted text-xs font-theme-data">{activeLoops.length} LOOPS</label>
+                <label htmlFor="loop-selector" className="text-text-muted text-xs font-theme-data">
+                  {activeLoops.length} LOOPS
+                </label>
                 <select
                   id="loop-selector"
                   value={selectedLoopId || ''}

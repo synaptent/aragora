@@ -79,7 +79,10 @@ export default function PrivacyPage() {
         {/* Header */}
         <header className="border-b border-[var(--accent)]/30 bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-            <Link href="/" className="text-[var(--accent)] font-theme-data font-bold hover:text-[var(--acid-cyan)] transition-colors">
+            <Link
+              href="/"
+              className="text-[var(--accent)] font-theme-data font-bold hover:text-[var(--acid-cyan)] transition-colors"
+            >
               [ARAGORA]
             </Link>
             <div className="flex items-center gap-4">
@@ -111,11 +114,15 @@ export default function PrivacyPage() {
         {/* Data Collection */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Information We Collect</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Information We Collect
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {DATA_COLLECTED.map((item) => (
                 <div key={item.category} className="border border-[var(--accent)]/20 p-4 bg-bg/50">
-                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm mb-2">{item.category}</h3>
+                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm mb-2">
+                    {item.category}
+                  </h3>
                   <p className="text-text-muted text-xs font-theme-data mb-1">
                     <span className="text-text-muted/60">Examples:</span> {item.examples}
                   </p>
@@ -131,11 +138,16 @@ export default function PrivacyPage() {
         {/* What We Don't Do */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">What We Don&apos;t Do</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              What We Don&apos;t Do
+            </h2>
             <div className="border border-[var(--accent)]/30 p-6 bg-surface/20">
               <ul className="space-y-3">
                 {DONT_DO.map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-text font-theme-data text-sm">
+                  <li
+                    key={item}
+                    className="flex items-center gap-3 text-text font-theme-data text-sm"
+                  >
                     <span className="text-[var(--accent)]">✗</span>
                     {item}
                   </li>
@@ -148,12 +160,16 @@ export default function PrivacyPage() {
         {/* Your Rights */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-5xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Your Rights</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Your Rights
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {USER_RIGHTS.map((right) => (
                 <div key={right.title} className="border border-[var(--accent)]/20 p-5 bg-bg/50">
                   <div className="text-2xl mb-3">{right.icon}</div>
-                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm mb-2">{right.title}</h3>
+                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm mb-2">
+                    {right.title}
+                  </h3>
                   <p className="text-text-muted text-xs font-theme-data">{right.description}</p>
                 </div>
               ))}
@@ -175,7 +191,9 @@ export default function PrivacyPage() {
         {/* Data Retention */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Data Retention</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Data Retention
+            </h2>
             <div className="border border-[var(--accent)]/20 overflow-hidden">
               <table className="w-full text-sm font-theme-data">
                 <thead className="bg-surface/50">
@@ -203,27 +221,29 @@ export default function PrivacyPage() {
         {/* International & Compliance */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Compliance</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Compliance
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="border border-[var(--accent)]/30 p-5 bg-bg/50">
                 <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-3">GDPR</h3>
                 <p className="text-text-muted text-xs font-theme-data">
-                  Full compliance for EU/EEA users including lawful basis for processing,
-                  data subject rights, and 72-hour breach notification.
+                  Full compliance for EU/EEA users including lawful basis for processing, data
+                  subject rights, and 72-hour breach notification.
                 </p>
               </div>
               <div className="border border-[var(--accent)]/30 p-5 bg-bg/50">
                 <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-3">CCPA</h3>
                 <p className="text-text-muted text-xs font-theme-data">
-                  California residents have rights to know, delete, and opt out.
-                  We do not sell personal information.
+                  California residents have rights to know, delete, and opt out. We do not sell
+                  personal information.
                 </p>
               </div>
               <div className="border border-[var(--accent)]/30 p-5 bg-bg/50">
                 <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-3">SOC 2</h3>
                 <p className="text-text-muted text-xs font-theme-data">
-                  Security, Availability, Processing Integrity, and Confidentiality
-                  controls audited by third party.
+                  Security, Availability, Processing Integrity, and Confidentiality controls audited
+                  by third party.
                 </p>
               </div>
             </div>
@@ -233,19 +253,38 @@ export default function PrivacyPage() {
         {/* Data Processing */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Data Processors</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Data Processors
+            </h2>
             <div className="space-y-3">
               {[
-                { name: 'AI Providers (OpenAI, Anthropic)', purpose: 'Process debate requests', safeguard: 'Data Processing Agreements' },
+                {
+                  name: 'AI Providers (OpenAI, Anthropic)',
+                  purpose: 'Process debate requests',
+                  safeguard: 'Data Processing Agreements',
+                },
                 { name: 'Stripe', purpose: 'Payment processing', safeguard: 'PCI DSS compliant' },
-                { name: 'AWS/GCP', purpose: 'Infrastructure hosting', safeguard: 'SOC 2 certified' },
+                {
+                  name: 'AWS/GCP',
+                  purpose: 'Infrastructure hosting',
+                  safeguard: 'SOC 2 certified',
+                },
               ].map((processor) => (
-                <div key={processor.name} className="flex items-center justify-between border border-[var(--accent)]/20 p-4 bg-surface/20">
+                <div
+                  key={processor.name}
+                  className="flex items-center justify-between border border-[var(--accent)]/20 p-4 bg-surface/20"
+                >
                   <div>
-                    <span className="text-[var(--acid-cyan)] font-theme-data text-sm">{processor.name}</span>
-                    <span className="text-text-muted font-theme-data text-xs ml-4">{processor.purpose}</span>
+                    <span className="text-[var(--acid-cyan)] font-theme-data text-sm">
+                      {processor.name}
+                    </span>
+                    <span className="text-text-muted font-theme-data text-xs ml-4">
+                      {processor.purpose}
+                    </span>
                   </div>
-                  <span className="text-[var(--accent)]/70 font-theme-data text-xs">{processor.safeguard}</span>
+                  <span className="text-[var(--accent)]/70 font-theme-data text-xs">
+                    {processor.safeguard}
+                  </span>
                 </div>
               ))}
             </div>
@@ -255,21 +294,31 @@ export default function PrivacyPage() {
         {/* Cookies */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Cookies</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Cookies
+            </h2>
             <div className="border border-[var(--accent)]/20 p-6 bg-bg/50">
-              <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-4">Essential Cookies Only</h3>
+              <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-4">
+                Essential Cookies Only
+              </h3>
               <ul className="space-y-2 text-text-muted text-sm font-theme-data">
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--accent)]">•</span>
-                  <span><strong>session_token:</strong> Authentication (session duration)</span>
+                  <span>
+                    <strong>session_token:</strong> Authentication (session duration)
+                  </span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--accent)]">•</span>
-                  <span><strong>csrf_token:</strong> Security (session duration)</span>
+                  <span>
+                    <strong>csrf_token:</strong> Security (session duration)
+                  </span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--accent)]">•</span>
-                  <span><strong>preferences:</strong> User settings (1 year)</span>
+                  <span>
+                    <strong>preferences:</strong> User settings (1 year)
+                  </span>
                 </li>
               </ul>
               <p className="text-text-muted/60 text-xs font-theme-data mt-4">
@@ -282,20 +331,28 @@ export default function PrivacyPage() {
         {/* Contact */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Contact Us</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Contact Us
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="border border-[var(--accent)]/20 p-5 bg-surface/20 text-center">
-                <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-2">Privacy Inquiries</h3>
+                <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-2">
+                  Privacy Inquiries
+                </h3>
                 <a
                   href="mailto:privacy@aragora.ai"
                   className="text-[var(--accent)] font-theme-data text-sm hover:underline"
                 >
                   privacy@aragora.ai
                 </a>
-                <p className="text-text-muted text-xs font-theme-data mt-2">Response within 3 business days</p>
+                <p className="text-text-muted text-xs font-theme-data mt-2">
+                  Response within 3 business days
+                </p>
               </div>
               <div className="border border-[var(--accent)]/20 p-5 bg-surface/20 text-center">
-                <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-2">Data Protection Officer</h3>
+                <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-2">
+                  Data Protection Officer
+                </h3>
                 <a
                   href="mailto:dpo@aragora.ai"
                   className="text-[var(--accent)] font-theme-data text-sm hover:underline"
@@ -311,35 +368,42 @@ export default function PrivacyPage() {
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-12 border-t border-[var(--accent)]/20">
           <div className="container mx-auto px-4">
-            <div className="text-[var(--accent)]/50 mb-4">
-              {'═'.repeat(50)}
-            </div>
+            <div className="text-[var(--accent)]/50 mb-4">{'═'.repeat(50)}</div>
             <div className="flex justify-center gap-6 mb-6">
-              <Link href="/" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Home
               </Link>
-              <Link href="/security" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/security"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Security
               </Link>
-              <Link href="/terms" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/terms"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Terms
               </Link>
-              <Link href="/system-status" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/system-status"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Status
               </Link>
-              <a href="mailto:privacy@aragora.ai" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <a
+                href="mailto:privacy@aragora.ai"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Contact
               </a>
             </div>
-            <p className="text-text-muted mb-2">
-              Your privacy is our priority.
-            </p>
-            <p className="text-text-muted/60">
-              Last updated: January 14, 2026
-            </p>
-            <div className="text-[var(--accent)]/50 mt-4">
-              {'═'.repeat(50)}
-            </div>
+            <p className="text-text-muted mb-2">Your privacy is our priority.</p>
+            <p className="text-text-muted/60">Last updated: January 14, 2026</p>
+            <div className="text-[var(--accent)]/50 mt-4">{'═'.repeat(50)}</div>
           </div>
         </footer>
       </main>

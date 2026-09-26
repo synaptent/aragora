@@ -10,7 +10,7 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DebateThisButton } from '@/components/DebateThisButton';
 
 const CruxPanel = dynamic(
-  () => import('@/components/CruxPanel').then(m => ({ default: m.CruxPanel })),
+  () => import('@/components/CruxPanel').then((m) => ({ default: m.CruxPanel })),
   {
     ssr: false,
     loading: () => (
@@ -18,7 +18,7 @@ const CruxPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function CruxPage() {
@@ -74,16 +74,17 @@ export default function CruxPage() {
               {'>'} CRUX ANALYSIS
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Identify load-bearing claims that debates hinge upon.
-              Analyze centrality and entropy scores for key arguments.
+              Identify load-bearing claims that debates hinge upon. Analyze centrality and entropy
+              scores for key arguments.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-acid-purple/30 bg-acid-purple/5 rounded">
             <h3 className="text-sm font-theme-data text-acid-purple mb-2">What is a Crux?</h3>
             <p className="text-xs font-theme-data text-text-muted mb-3">
-              A <span className="text-[var(--accent)]">crux</span> is a claim that, if resolved, would significantly
-              change the outcome of a debate. Finding cruxes helps focus discussion on what matters most.{' '}
+              A <span className="text-[var(--accent)]">crux</span> is a claim that, if resolved,
+              would significantly change the outcome of a debate. Finding cruxes helps focus
+              discussion on what matters most.{' '}
               <DebateThisButton
                 question="Which crux claims are most likely to shift the debate outcome if resolved?"
                 source="crux"
@@ -114,12 +115,8 @@ export default function CruxPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // CRUX ANALYSIS
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // CRUX ANALYSIS</p>
         </footer>
       </main>
     </>

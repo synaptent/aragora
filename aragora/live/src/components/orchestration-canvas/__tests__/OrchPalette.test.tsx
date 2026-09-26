@@ -28,7 +28,9 @@ describe('OrchPalette', () => {
   it('renders exactly 6 draggable items', () => {
     render(<OrchPalette />);
 
-    const items = screen.getAllByText(/^(Agent Task|Debate|Human Gate|Parallel Fan|Merge|Verification)$/);
+    const items = screen.getAllByText(
+      /^(Agent Task|Debate|Human Gate|Parallel Fan|Merge|Verification)$/,
+    );
     expect(items).toHaveLength(6);
   });
 

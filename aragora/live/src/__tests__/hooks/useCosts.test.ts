@@ -36,12 +36,7 @@ jest.mock('@/hooks/useSWRFetch', () => ({
 
 // Mock useApi
 const mockPost = jest.fn();
-jest.mock('@/hooks/useApi', () => ({
-  useApi: () => ({
-    post: mockPost,
-    get: jest.fn(),
-  }),
-}));
+jest.mock('@/hooks/useApi', () => ({ useApi: () => ({ post: mockPost, get: jest.fn() }) }));
 
 import { useSWRFetch, invalidateCache } from '@/hooks/useSWRFetch';
 
@@ -69,16 +64,13 @@ describe('useCostSummary', () => {
     renderHook(() => useCostSummary());
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs?range=30d',
-      expect.objectContaining({ refreshInterval: 60000 })
+      expect.objectContaining({ refreshInterval: 60000 }),
     );
   });
 
   it('fetches with custom time range', () => {
     renderHook(() => useCostSummary('7d'));
-    expect(mockUseSWRFetch).toHaveBeenCalledWith(
-      '/api/v1/costs?range=7d',
-      expect.anything()
-    );
+    expect(mockUseSWRFetch).toHaveBeenCalledWith('/api/v1/costs?range=7d', expect.anything());
   });
 
   it('unwraps data envelope', () => {
@@ -113,7 +105,7 @@ describe('useCostsBreakdown', () => {
     renderHook(() => useCostsBreakdown('24h'));
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/breakdown?range=24h',
-      expect.anything()
+      expect.anything(),
     );
   });
 
@@ -144,7 +136,7 @@ describe('useCostTimeline', () => {
     renderHook(() => useCostTimeline('90d'));
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/timeline?range=90d',
-      expect.anything()
+      expect.anything(),
     );
   });
 });
@@ -159,7 +151,7 @@ describe('useCostAlerts', () => {
     renderHook(() => useCostAlerts());
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/alerts',
-      expect.objectContaining({ refreshInterval: 30000 })
+      expect.objectContaining({ refreshInterval: 30000 }),
     );
   });
 
@@ -196,7 +188,7 @@ describe('useCostRecommendations', () => {
     renderHook(() => useCostRecommendations());
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/recommendations',
-      expect.objectContaining({ refreshInterval: 300000 })
+      expect.objectContaining({ refreshInterval: 300000 }),
     );
   });
 });
@@ -211,7 +203,7 @@ describe('useCostEfficiency', () => {
     renderHook(() => useCostEfficiency('7d'));
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/efficiency?range=7d',
-      expect.anything()
+      expect.anything(),
     );
   });
 });
@@ -226,7 +218,7 @@ describe('useCostForecast', () => {
     renderHook(() => useCostForecast());
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/forecast',
-      expect.objectContaining({ refreshInterval: 300000 })
+      expect.objectContaining({ refreshInterval: 300000 }),
     );
   });
 });
@@ -241,7 +233,7 @@ describe('useSpendTrend', () => {
     renderHook(() => useSpendTrend('7d'));
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/analytics/trend?period=7d',
-      expect.anything()
+      expect.anything(),
     );
   });
 });
@@ -256,7 +248,7 @@ describe('useAgentCostBreakdown', () => {
     renderHook(() => useAgentCostBreakdown());
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/analytics/by-agent',
-      expect.anything()
+      expect.anything(),
     );
   });
 });
@@ -278,7 +270,7 @@ describe('useDebateCostBreakdown', () => {
     renderHook(() => useDebateCostBreakdown(10));
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/analytics/by-debate?limit=10',
-      expect.anything()
+      expect.anything(),
     );
   });
 });
@@ -293,7 +285,7 @@ describe('useBudgetUtilization', () => {
     renderHook(() => useBudgetUtilization());
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/costs/analytics/budget-utilization',
-      expect.objectContaining({ refreshInterval: 30000 })
+      expect.objectContaining({ refreshInterval: 30000 }),
     );
   });
 });

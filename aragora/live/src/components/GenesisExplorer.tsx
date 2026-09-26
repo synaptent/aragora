@@ -4,11 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAragoraClient } from '@/hooks/useAragoraClient';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ApiError } from './ApiError';
-import type {
-  GenesisStats,
-  Genome,
-  GenesisLineage,
-} from '@/lib/aragora-client';
+import type { GenesisStats, Genome, GenesisLineage } from '@/lib/aragora-client';
 
 interface GenesisExplorerProps {
   initialGenomeId?: string;
@@ -51,17 +47,20 @@ export function GenesisExplorer({ initialGenomeId }: GenesisExplorerProps) {
     }
   }, [client]);
 
-  const fetchLineage = useCallback(async (genomeId: string) => {
-    if (!client) return;
-    try {
-      const res = await client.genesis.lineage(genomeId);
-      setLineage(res.lineage);
-      setSelectedGenome(genomeId);
-      setActiveTab('lineage');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load lineage');
-    }
-  }, [client]);
+  const fetchLineage = useCallback(
+    async (genomeId: string) => {
+      if (!client) return;
+      try {
+        const res = await client.genesis.lineage(genomeId);
+        setLineage(res.lineage);
+        setSelectedGenome(genomeId);
+        setActiveTab('lineage');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load lineage');
+      }
+    },
+    [client],
+  );
 
   useEffect(() => {
     fetchData();
@@ -103,9 +102,7 @@ export function GenesisExplorer({ initialGenomeId }: GenesisExplorerProps) {
           <span className="text-green-400">&#x1F9EC;</span>
           Genesis Explorer
         </h2>
-        <p className="text-sm text-slate-400 mt-1">
-          Genetic evolution and genome lineage
-        </p>
+        <p className="text-sm text-slate-400 mt-1">Genetic evolution and genome lineage</p>
       </div>
 
       {/* Tabs */}
@@ -136,7 +133,11 @@ export function GenesisExplorer({ initialGenomeId }: GenesisExplorerProps) {
               <StatCard label="Active" value={stats.active_genomes} color="text-green-400" />
               <StatCard label="Debates" value={stats.total_debates} />
               <StatCard label="Avg Fitness" value={stats.average_fitness.toFixed(2)} />
-              <StatCard label="Top Fitness" value={stats.top_fitness.toFixed(2)} color="text-yellow-400" />
+              <StatCard
+                label="Top Fitness"
+                value={stats.top_fitness.toFixed(2)}
+                color="text-yellow-400"
+              />
             </div>
 
             {/* Top Genomes */}
@@ -160,12 +161,8 @@ export function GenesisExplorer({ initialGenomeId }: GenesisExplorerProps) {
         {activeTab === 'population' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-slate-300">
-                Current Population
-              </h3>
-              <span className="text-sm text-slate-400">
-                Generation {generation}
-              </span>
+              <h3 className="text-sm font-medium text-slate-300">Current Population</h3>
+              <span className="text-sm text-slate-400">Generation {generation}</span>
             </div>
             <div className="grid gap-3 max-h-96 overflow-y-auto">
               {population.length === 0 ? (
@@ -196,9 +193,7 @@ export function GenesisExplorer({ initialGenomeId }: GenesisExplorerProps) {
               )
             ) : (
               <div className="text-center py-8">
-                <p className="text-slate-400 mb-4">
-                  Select a genome to view its lineage
-                </p>
+                <p className="text-slate-400 mb-4">Select a genome to view its lineage</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {topGenomes.slice(0, 5).map((genome) => (
                     <button
@@ -258,28 +253,24 @@ function GenomeCard({
                 rank === 1
                   ? 'bg-yellow-500 text-black'
                   : rank === 2
-                  ? 'bg-slate-300 text-black'
-                  : rank === 3
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-700 text-slate-300'
+                    ? 'bg-slate-300 text-black'
+                    : rank === 3
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-700 text-slate-300'
               }`}
             >
               {rank}
             </span>
           )}
           <div>
-            <p className="text-white font-theme-data text-sm">
-              {genome.genome_id.slice(0, 12)}...
-            </p>
+            <p className="text-white font-theme-data text-sm">{genome.genome_id.slice(0, 12)}...</p>
             <p className="text-xs text-slate-400">
               Gen {genome.generation} &bull; {genome.debates_count} debates
             </p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-green-400 font-semibold">
-            {genome.fitness.toFixed(2)}
-          </p>
+          <p className="text-green-400 font-semibold">{genome.fitness.toFixed(2)}</p>
           <p className="text-xs text-slate-400">fitness</p>
         </div>
       </div>
@@ -300,9 +291,7 @@ function LineageView({
       <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg">
         <p className="text-xs text-green-400 mb-1">Selected Genome</p>
         <p className="text-white font-theme-data">{lineage.genome_id}</p>
-        <p className="text-sm text-slate-400 mt-1">
-          Depth: {lineage.depth} generations
-        </p>
+        <p className="text-sm text-slate-400 mt-1">Depth: {lineage.depth} generations</p>
       </div>
 
       {/* Ancestors */}
@@ -324,9 +313,7 @@ function LineageView({
                   <span className="text-white font-theme-data text-sm">
                     {ancestor.genome_id.slice(0, 12)}...
                   </span>
-                  <span className="text-slate-400 text-xs">
-                    Gen {ancestor.generation}
-                  </span>
+                  <span className="text-slate-400 text-xs">Gen {ancestor.generation}</span>
                 </div>
               </button>
             ))
@@ -354,12 +341,8 @@ function LineageView({
                     {descendant.genome_id.slice(0, 12)}...
                   </span>
                   <div className="text-right">
-                    <span className="text-green-400 text-sm">
-                      {descendant.fitness.toFixed(2)}
-                    </span>
-                    <span className="text-slate-400 text-xs ml-2">
-                      Gen {descendant.generation}
-                    </span>
+                    <span className="text-green-400 text-sm">{descendant.fitness.toFixed(2)}</span>
+                    <span className="text-slate-400 text-xs ml-2">Gen {descendant.generation}</span>
                   </div>
                 </div>
               </button>

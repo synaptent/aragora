@@ -12,7 +12,8 @@ import { CrossDebateLearning } from '@/components/memory/CrossDebateLearning';
 import { MemoryTiersPanel } from '@/components/memory/MemoryTiersPanel';
 
 const MemoryExplorerPanel = dynamic(
-  () => import('@/components/MemoryExplorerPanel').then(m => ({ default: m.MemoryExplorerPanel })),
+  () =>
+    import('@/components/MemoryExplorerPanel').then((m) => ({ default: m.MemoryExplorerPanel })),
   {
     ssr: false,
     loading: () => (
@@ -20,11 +21,12 @@ const MemoryExplorerPanel = dynamic(
         <div className="h-96 bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 const MemoryAnalyticsPanel = dynamic(
-  () => import('@/components/MemoryAnalyticsPanel').then(m => ({ default: m.MemoryAnalyticsPanel })),
+  () =>
+    import('@/components/MemoryAnalyticsPanel').then((m) => ({ default: m.MemoryAnalyticsPanel })),
   {
     ssr: false,
     loading: () => (
@@ -32,27 +34,17 @@ const MemoryAnalyticsPanel = dynamic(
         <div className="h-48 bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 interface MemoryPressure {
   overall_pressure: number;
-  tier_pressure: {
-    fast: number;
-    medium: number;
-    slow: number;
-    glacial: number;
-  };
+  tier_pressure: { fast: number; medium: number; slow: number; glacial: number };
   alerts: string[];
   recommendation?: string;
 }
 
-const DEFAULT_TIER_PRESSURE = {
-  fast: 0,
-  medium: 0,
-  slow: 0,
-  glacial: 0,
-};
+const DEFAULT_TIER_PRESSURE = { fast: 0, medium: 0, slow: 0, glacial: 0 };
 
 function _asNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -80,12 +72,11 @@ function normalizeMemoryPressure(data: unknown): MemoryPressure | null {
     }
 
     const tierKey = tier.toUpperCase();
-    const tierUtilizationEntry =
-      rawTierUtilization?.[tierKey] ?? rawTierUtilization?.[tier];
+    const tierUtilizationEntry = rawTierUtilization?.[tierKey] ?? rawTierUtilization?.[tier];
     if (tierUtilizationEntry && typeof tierUtilizationEntry === 'object') {
       return _asNumber(
         (tierUtilizationEntry as { utilization?: unknown }).utilization,
-        DEFAULT_TIER_PRESSURE[tier]
+        DEFAULT_TIER_PRESSURE[tier],
       );
     }
 
@@ -101,7 +92,7 @@ function normalizeMemoryPressure(data: unknown): MemoryPressure | null {
 
   const overall_pressure = _asNumber(
     payload.overall_pressure ?? payload.pressure,
-    Math.max(...Object.values(tier_pressure))
+    Math.max(...Object.values(tier_pressure)),
   );
 
   const alerts = Array.isArray(payload.alerts)
@@ -112,8 +103,7 @@ function normalizeMemoryPressure(data: unknown): MemoryPressure | null {
     overall_pressure,
     tier_pressure,
     alerts,
-    recommendation:
-      typeof payload.recommendation === 'string' ? payload.recommendation : undefined,
+    recommendation: typeof payload.recommendation === 'string' ? payload.recommendation : undefined,
   };
 }
 
@@ -125,7 +115,9 @@ function PressureGauge({ value, label, color }: { value: number; label: string; 
     <div className="flex-1">
       <div className="flex justify-between text-xs font-theme-data mb-1">
         <span className="text-text-muted">{label}</span>
-        <span className={percentage > 80 ? 'text-warning' : 'text-text'}>{percentage.toFixed(0)}%</span>
+        <span className={percentage > 80 ? 'text-warning' : 'text-text'}>
+          {percentage.toFixed(0)}%
+        </span>
       </div>
       <div className="h-2 bg-bg rounded overflow-hidden">
         <div className={`h-full transition-all ${barColor}`} style={{ width: `${percentage}%` }} />
@@ -137,7 +129,9 @@ function PressureGauge({ value, label, color }: { value: number; label: string; 
 export default function MemoryPage() {
   const { config: backendConfig } = useBackend();
   const [pressure, setPressure] = useState<MemoryPressure | null>(null);
-  const [activeTab, setActiveTab] = useState<'explorer' | 'analytics' | 'tiers' | 'unified' | 'retention' | 'dedup' | 'learning'>('explorer');
+  const [activeTab, setActiveTab] = useState<
+    'explorer' | 'analytics' | 'tiers' | 'unified' | 'retention' | 'dedup' | 'learning'
+  >('explorer');
 
   // Fetch memory pressure data
   useEffect(() => {
@@ -180,25 +174,47 @@ export default function MemoryPage() {
             <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-theme-data text-[var(--acid-cyan)]">Memory Pressure</h3>
-                <span className={`text-xs font-theme-data px-2 py-0.5 rounded ${
-                  pressure.overall_pressure > 0.8 ? 'bg-warning/20 text-warning' :
-                  pressure.overall_pressure > 0.6 ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]' :
-                  'bg-[var(--accent)]/20 text-[var(--accent)]'
-                }`}>
-                  {pressure.overall_pressure > 0.8 ? 'HIGH' :
-                   pressure.overall_pressure > 0.6 ? 'MODERATE' : 'NORMAL'}
+                <span
+                  className={`text-xs font-theme-data px-2 py-0.5 rounded ${
+                    pressure.overall_pressure > 0.8
+                      ? 'bg-warning/20 text-warning'
+                      : pressure.overall_pressure > 0.6
+                        ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]'
+                        : 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                  }`}
+                >
+                  {pressure.overall_pressure > 0.8
+                    ? 'HIGH'
+                    : pressure.overall_pressure > 0.6
+                      ? 'MODERATE'
+                      : 'NORMAL'}
                 </span>
               </div>
               <div className="flex gap-4">
-                <PressureGauge value={pressure.tier_pressure.fast} label="Fast" color="bg-[var(--accent)]" />
-                <PressureGauge value={pressure.tier_pressure.medium} label="Medium" color="bg-[var(--acid-cyan)]" />
+                <PressureGauge
+                  value={pressure.tier_pressure.fast}
+                  label="Fast"
+                  color="bg-[var(--accent)]"
+                />
+                <PressureGauge
+                  value={pressure.tier_pressure.medium}
+                  label="Medium"
+                  color="bg-[var(--acid-cyan)]"
+                />
                 <PressureGauge value={pressure.tier_pressure.slow} label="Slow" color="bg-gold" />
-                <PressureGauge value={pressure.tier_pressure.glacial} label="Glacial" color="bg-acid-purple" />
+                <PressureGauge
+                  value={pressure.tier_pressure.glacial}
+                  label="Glacial"
+                  color="bg-acid-purple"
+                />
               </div>
               {pressure.alerts && pressure.alerts.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-[var(--acid-cyan)]/20">
                   {pressure.alerts.map((alert, i) => (
-                    <div key={i} className="text-xs font-theme-data text-warning flex items-center gap-2">
+                    <div
+                      key={i}
+                      className="text-xs font-theme-data text-warning flex items-center gap-2"
+                    >
                       <span>!</span> {alert}
                     </div>
                   ))}
@@ -214,15 +230,17 @@ export default function MemoryPage() {
 
           {/* Tab Navigation */}
           <div className="flex gap-2 mb-6">
-            {([
-              { key: 'explorer', label: 'EXPLORER' },
-              { key: 'analytics', label: 'ANALYTICS' },
-              { key: 'tiers', label: 'TIERS' },
-              { key: 'unified', label: 'UNIFIED' },
-              { key: 'retention', label: 'RETENTION' },
-              { key: 'dedup', label: 'DEDUP' },
-              { key: 'learning', label: 'LEARNING' },
-            ] as const).map(({ key, label }) => (
+            {(
+              [
+                { key: 'explorer', label: 'EXPLORER' },
+                { key: 'analytics', label: 'ANALYTICS' },
+                { key: 'tiers', label: 'TIERS' },
+                { key: 'unified', label: 'UNIFIED' },
+                { key: 'retention', label: 'RETENTION' },
+                { key: 'dedup', label: 'DEDUP' },
+                { key: 'learning', label: 'LEARNING' },
+              ] as const
+            ).map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -239,7 +257,9 @@ export default function MemoryPage() {
 
           {activeTab === 'explorer' && (
             <PanelErrorBoundary panelName="Memory Explorer">
-              <MemoryExplorerPanel backendConfig={{ apiUrl: backendConfig.api, wsUrl: backendConfig.ws }} />
+              <MemoryExplorerPanel
+                backendConfig={{ apiUrl: backendConfig.api, wsUrl: backendConfig.ws }}
+              />
             </PanelErrorBoundary>
           )}
           {activeTab === 'analytics' && (
@@ -260,12 +280,8 @@ export default function MemoryPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // MEMORY EXPLORER
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // MEMORY EXPLORER</p>
         </footer>
       </main>
     </>

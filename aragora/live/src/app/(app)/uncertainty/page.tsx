@@ -8,7 +8,7 @@ import { useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const UncertaintyPanel = dynamic(
-  () => import('@/components/UncertaintyPanel').then(m => ({ default: m.UncertaintyPanel })),
+  () => import('@/components/UncertaintyPanel').then((m) => ({ default: m.UncertaintyPanel })),
   {
     ssr: false,
     loading: () => (
@@ -16,7 +16,7 @@ const UncertaintyPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 // Types
@@ -39,7 +39,10 @@ interface CalibrationBucket {
 }
 
 interface CalibrationVisualization {
-  calibration_curves: Record<string, { buckets: CalibrationBucket[]; perfect_line: { x: number; y: number }[] }>;
+  calibration_curves: Record<
+    string,
+    { buckets: CalibrationBucket[]; perfect_line: { x: number; y: number }[] }
+  >;
   scatter_data: Array<{
     agent: string;
     accuracy: number;
@@ -96,7 +99,9 @@ export default function UncertaintyPage() {
   const fetchLeaderboard = useCallback(async () => {
     try {
       setLeaderboardLoading(true);
-      const response = await fetch(`${apiBase}/api/calibration/leaderboard?metric=${sortMetric}&limit=20`);
+      const response = await fetch(
+        `${apiBase}/api/calibration/leaderboard?metric=${sortMetric}&limit=20`,
+      );
       if (response.ok) {
         const data = await response.json();
         setLeaderboard(data.agents || []);
@@ -125,21 +130,24 @@ export default function UncertaintyPage() {
   }, [apiBase]);
 
   // Fetch agent calibration
-  const fetchAgentCalibration = useCallback(async (agentId: string) => {
-    if (!agentId) return;
-    try {
-      setAgentLoading(true);
-      const response = await fetch(`${apiBase}/api/uncertainty/agent/${agentId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setAgentCalibration(data);
+  const fetchAgentCalibration = useCallback(
+    async (agentId: string) => {
+      if (!agentId) return;
+      try {
+        setAgentLoading(true);
+        const response = await fetch(`${apiBase}/api/uncertainty/agent/${agentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setAgentCalibration(data);
+        }
+      } catch (error) {
+        logger.error('Failed to fetch agent calibration:', error);
+      } finally {
+        setAgentLoading(false);
       }
-    } catch (error) {
-      logger.error('Failed to fetch agent calibration:', error);
-    } finally {
-      setAgentLoading(false);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   // Load data on mount and tab change
   useEffect(() => {
@@ -230,24 +238,42 @@ export default function UncertaintyPage() {
               {/* Leaderboard Table */}
               {leaderboardLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-pulse text-text-muted font-theme-data">Loading leaderboard...</div>
+                  <div className="animate-pulse text-text-muted font-theme-data">
+                    Loading leaderboard...
+                  </div>
                 </div>
               ) : leaderboard.length === 0 ? (
                 <div className="text-center py-12 border border-[var(--accent)]/20 rounded">
-                  <p className="text-text-muted font-theme-data text-sm">No calibration data available yet.</p>
+                  <p className="text-text-muted font-theme-data text-sm">
+                    No calibration data available yet.
+                  </p>
                 </div>
               ) : (
                 <div className="border border-[var(--accent)]/30 rounded overflow-hidden">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-[var(--accent)]/10">
-                        <th className="px-4 py-2 text-left text-xs font-theme-data text-[var(--accent)]">RANK</th>
-                        <th className="px-4 py-2 text-left text-xs font-theme-data text-[var(--accent)]">AGENT</th>
-                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">BRIER</th>
-                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">ECE</th>
-                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">ACCURACY</th>
-                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">PREDICTIONS</th>
-                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">ELO</th>
+                        <th className="px-4 py-2 text-left text-xs font-theme-data text-[var(--accent)]">
+                          RANK
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-theme-data text-[var(--accent)]">
+                          AGENT
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">
+                          BRIER
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">
+                          ECE
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">
+                          ACCURACY
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">
+                          PREDICTIONS
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-theme-data text-[var(--accent)]">
+                          ELO
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -257,15 +283,25 @@ export default function UncertaintyPage() {
                           className="border-t border-[var(--accent)]/10 hover:bg-[var(--accent)]/5 cursor-pointer transition-colors"
                           onClick={() => handleSelectAgent(agent.agent)}
                         >
-                          <td className="px-4 py-2 font-theme-data text-sm text-text-muted">#{idx + 1}</td>
-                          <td className="px-4 py-2 font-theme-data text-sm text-text">{agent.agent}</td>
-                          <td className={`px-4 py-2 font-theme-data text-sm text-right ${getScoreColor(1 - agent.brier_score)}`}>
+                          <td className="px-4 py-2 font-theme-data text-sm text-text-muted">
+                            #{idx + 1}
+                          </td>
+                          <td className="px-4 py-2 font-theme-data text-sm text-text">
+                            {agent.agent}
+                          </td>
+                          <td
+                            className={`px-4 py-2 font-theme-data text-sm text-right ${getScoreColor(1 - agent.brier_score)}`}
+                          >
                             {agent.brier_score.toFixed(3)}
                           </td>
-                          <td className={`px-4 py-2 font-theme-data text-sm text-right ${getScoreColor(1 - agent.ece)}`}>
+                          <td
+                            className={`px-4 py-2 font-theme-data text-sm text-right ${getScoreColor(1 - agent.ece)}`}
+                          >
                             {agent.ece.toFixed(3)}
                           </td>
-                          <td className={`px-4 py-2 font-theme-data text-sm text-right ${getScoreColor(agent.accuracy)}`}>
+                          <td
+                            className={`px-4 py-2 font-theme-data text-sm text-right ${getScoreColor(agent.accuracy)}`}
+                          >
                             {(agent.accuracy * 100).toFixed(1)}%
                           </td>
                           <td className="px-4 py-2 font-theme-data text-sm text-right text-text-muted">
@@ -284,7 +320,9 @@ export default function UncertaintyPage() {
               {/* Metric Explanations */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
                 <div>
-                  <span className="text-xs font-theme-data text-[var(--acid-cyan)]">Brier Score</span>
+                  <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                    Brier Score
+                  </span>
                   <p className="text-xs text-text-muted">Lower is better (0 = perfect)</p>
                 </div>
                 <div>
@@ -308,28 +346,38 @@ export default function UncertaintyPage() {
             <div className="space-y-6">
               {vizLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-pulse text-text-muted font-theme-data">Loading visualization...</div>
+                  <div className="animate-pulse text-text-muted font-theme-data">
+                    Loading visualization...
+                  </div>
                 </div>
               ) : !visualization ? (
                 <div className="text-center py-12 border border-[var(--accent)]/20 rounded">
-                  <p className="text-text-muted font-theme-data text-sm">No visualization data available yet.</p>
+                  <p className="text-text-muted font-theme-data text-sm">
+                    No visualization data available yet.
+                  </p>
                 </div>
               ) : (
                 <>
                   {/* Summary Stats */}
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded text-center">
-                      <div className="text-2xl font-theme-data text-[var(--accent)]">{visualization.summary.total_agents}</div>
+                      <div className="text-2xl font-theme-data text-[var(--accent)]">
+                        {visualization.summary.total_agents}
+                      </div>
                       <div className="text-xs text-text-muted font-theme-data">TOTAL AGENTS</div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded text-center">
-                      <div className={`text-2xl font-theme-data ${getScoreColor(1 - visualization.summary.avg_brier)}`}>
+                      <div
+                        className={`text-2xl font-theme-data ${getScoreColor(1 - visualization.summary.avg_brier)}`}
+                      >
                         {visualization.summary.avg_brier.toFixed(3)}
                       </div>
                       <div className="text-xs text-text-muted font-theme-data">AVG BRIER</div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded text-center">
-                      <div className={`text-2xl font-theme-data ${getScoreColor(1 - visualization.summary.avg_ece)}`}>
+                      <div
+                        className={`text-2xl font-theme-data ${getScoreColor(1 - visualization.summary.avg_ece)}`}
+                      >
                         {visualization.summary.avg_ece.toFixed(3)}
                       </div>
                       <div className="text-xs text-text-muted font-theme-data">AVG ECE</div>
@@ -344,27 +392,48 @@ export default function UncertaintyPage() {
                       <div className="text-sm font-theme-data text-error truncate">
                         {visualization.summary.worst_calibrated || '-'}
                       </div>
-                      <div className="text-xs text-text-muted font-theme-data">NEEDS IMPROVEMENT</div>
+                      <div className="text-xs text-text-muted font-theme-data">
+                        NEEDS IMPROVEMENT
+                      </div>
                     </div>
                   </div>
 
                   {/* Calibration Curves */}
                   <div className="border border-[var(--accent)]/30 rounded p-4">
-                    <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">CALIBRATION CURVES</h3>
+                    <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                      CALIBRATION CURVES
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {Object.entries(visualization.calibration_curves).map(([agent, data]) => (
-                        <div key={agent} className="p-3 border border-[var(--accent)]/20 bg-bg rounded">
+                        <div
+                          key={agent}
+                          className="p-3 border border-[var(--accent)]/20 bg-bg rounded"
+                        >
                           <div className="text-xs font-theme-data text-text mb-2">{agent}</div>
                           <div className="h-32 relative">
                             {/* Perfect calibration line */}
-                            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                              <line x1="0" y1="100" x2="100" y2="0" stroke="rgba(0,255,65,0.3)" strokeWidth="1" strokeDasharray="4" />
+                            <svg
+                              className="absolute inset-0 w-full h-full"
+                              viewBox="0 0 100 100"
+                              preserveAspectRatio="none"
+                            >
+                              <line
+                                x1="0"
+                                y1="100"
+                                x2="100"
+                                y2="0"
+                                stroke="rgba(0,255,65,0.3)"
+                                strokeWidth="1"
+                                strokeDasharray="4"
+                              />
                               {/* Actual calibration curve */}
                               <polyline
                                 fill="none"
                                 stroke="#00ffff"
                                 strokeWidth="2"
-                                points={data.buckets.map(b => `${b.x * 100},${100 - b.actual * 100}`).join(' ')}
+                                points={data.buckets
+                                  .map((b) => `${b.x * 100},${100 - b.actual * 100}`)
+                                  .join(' ')}
                               />
                               {/* Data points */}
                               {data.buckets.map((b, i) => (
@@ -378,9 +447,15 @@ export default function UncertaintyPage() {
                               ))}
                             </svg>
                             {/* Axis labels */}
-                            <div className="absolute bottom-0 left-0 text-xs text-text-muted">0%</div>
-                            <div className="absolute bottom-0 right-0 text-xs text-text-muted">100%</div>
-                            <div className="absolute top-0 left-0 text-xs text-text-muted">100%</div>
+                            <div className="absolute bottom-0 left-0 text-xs text-text-muted">
+                              0%
+                            </div>
+                            <div className="absolute bottom-0 right-0 text-xs text-text-muted">
+                              100%
+                            </div>
+                            <div className="absolute top-0 left-0 text-xs text-text-muted">
+                              100%
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -393,10 +468,14 @@ export default function UncertaintyPage() {
 
                   {/* Confidence Distribution */}
                   <div className="border border-[var(--accent)]/30 rounded p-4">
-                    <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">CONFIDENCE DISTRIBUTION</h3>
+                    <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                      CONFIDENCE DISTRIBUTION
+                    </h3>
                     <div className="flex items-end gap-1 h-32">
                       {visualization.confidence_histogram.map((bucket, i) => {
-                        const maxCount = Math.max(...visualization.confidence_histogram.map(b => b.count));
+                        const maxCount = Math.max(
+                          ...visualization.confidence_histogram.map((b) => b.count),
+                        );
                         const height = maxCount > 0 ? (bucket.count / maxCount) * 100 : 0;
                         return (
                           <div key={i} className="flex-1 flex flex-col items-center">
@@ -417,7 +496,9 @@ export default function UncertaintyPage() {
                   {/* Scatter Data */}
                   {visualization.scatter_data.length > 0 && (
                     <div className="border border-[var(--accent)]/30 rounded p-4">
-                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">AGENT COMPARISON</h3>
+                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                        AGENT COMPARISON
+                      </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                         {visualization.scatter_data.map((agent) => (
                           <div
@@ -426,24 +507,37 @@ export default function UncertaintyPage() {
                             onClick={() => handleSelectAgent(agent.agent)}
                           >
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-theme-data text-sm text-text">{agent.agent}</span>
-                              <span className={`text-xs font-theme-data px-2 py-0.5 border rounded ${
-                                agent.is_overconfident ? 'bg-error/10 text-error border-error/30' :
-                                agent.is_underconfident ? 'bg-warning/10 text-warning border-warning/30' :
-                                'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/30'
-                              }`}>
-                                {agent.is_overconfident ? 'OVERCONFIDENT' :
-                                 agent.is_underconfident ? 'UNDERCONFIDENT' : 'WELL-CALIBRATED'}
+                              <span className="font-theme-data text-sm text-text">
+                                {agent.agent}
+                              </span>
+                              <span
+                                className={`text-xs font-theme-data px-2 py-0.5 border rounded ${
+                                  agent.is_overconfident
+                                    ? 'bg-error/10 text-error border-error/30'
+                                    : agent.is_underconfident
+                                      ? 'bg-warning/10 text-warning border-warning/30'
+                                      : 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/30'
+                                }`}
+                              >
+                                {agent.is_overconfident
+                                  ? 'OVERCONFIDENT'
+                                  : agent.is_underconfident
+                                    ? 'UNDERCONFIDENT'
+                                    : 'WELL-CALIBRATED'}
                               </span>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                               <div>
                                 <span className="text-text-muted">Accuracy:</span>
-                                <span className={`ml-1 ${getScoreColor(agent.accuracy)}`}>{(agent.accuracy * 100).toFixed(1)}%</span>
+                                <span className={`ml-1 ${getScoreColor(agent.accuracy)}`}>
+                                  {(agent.accuracy * 100).toFixed(1)}%
+                                </span>
                               </div>
                               <div>
                                 <span className="text-text-muted">Brier:</span>
-                                <span className={`ml-1 ${getScoreColor(1 - agent.brier_score)}`}>{agent.brier_score.toFixed(3)}</span>
+                                <span className={`ml-1 ${getScoreColor(1 - agent.brier_score)}`}>
+                                  {agent.brier_score.toFixed(3)}
+                                </span>
                               </div>
                               <div>
                                 <span className="text-text-muted">Preds:</span>
@@ -464,7 +558,9 @@ export default function UncertaintyPage() {
           {activeTab === 'debate' && (
             <div className="space-y-4">
               <div className="p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-                <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Uncertainty Metrics</h3>
+                <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+                  Uncertainty Metrics
+                </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-theme-data text-text-muted">
                   <div>
                     <span className="text-[var(--accent)]">Collective Confidence</span>
@@ -549,25 +645,37 @@ export default function UncertaintyPage() {
 
               {agentLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-pulse text-text-muted font-theme-data">Loading agent data...</div>
+                  <div className="animate-pulse text-text-muted font-theme-data">
+                    Loading agent data...
+                  </div>
                 </div>
               ) : agentCalibration ? (
                 <div className="space-y-4">
                   {/* Agent Summary */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded text-center">
-                      <div className="text-2xl font-theme-data text-[var(--accent)]">{agentCalibration.agent_id}</div>
+                      <div className="text-2xl font-theme-data text-[var(--accent)]">
+                        {agentCalibration.agent_id}
+                      </div>
                       <div className="text-xs text-text-muted font-theme-data">AGENT</div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded text-center">
-                      <div className={`text-2xl font-theme-data ${getScoreColor(agentCalibration.calibration_quality)}`}>
+                      <div
+                        className={`text-2xl font-theme-data ${getScoreColor(agentCalibration.calibration_quality)}`}
+                      >
                         {(agentCalibration.calibration_quality * 100).toFixed(0)}%
                       </div>
-                      <div className="text-xs text-text-muted font-theme-data">CALIBRATION QUALITY</div>
+                      <div className="text-xs text-text-muted font-theme-data">
+                        CALIBRATION QUALITY
+                      </div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded text-center">
-                      <div className={`text-2xl font-theme-data ${agentCalibration.brier_score !== null ? getScoreColor(1 - agentCalibration.brier_score) : 'text-text-muted'}`}>
-                        {agentCalibration.brier_score !== null ? agentCalibration.brier_score.toFixed(3) : 'N/A'}
+                      <div
+                        className={`text-2xl font-theme-data ${agentCalibration.brier_score !== null ? getScoreColor(1 - agentCalibration.brier_score) : 'text-text-muted'}`}
+                      >
+                        {agentCalibration.brier_score !== null
+                          ? agentCalibration.brier_score.toFixed(3)
+                          : 'N/A'}
                       </div>
                       <div className="text-xs text-text-muted font-theme-data">BRIER SCORE</div>
                     </div>
@@ -582,7 +690,9 @@ export default function UncertaintyPage() {
                   {/* Confidence History */}
                   {agentCalibration.confidence_history.length > 0 && (
                     <div className="border border-[var(--accent)]/30 rounded p-4">
-                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">RECENT CONFIDENCE HISTORY</h3>
+                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                        RECENT CONFIDENCE HISTORY
+                      </h3>
                       <div className="space-y-2">
                         {agentCalibration.confidence_history.map((entry, idx) => (
                           <div key={idx} className="flex items-center gap-2">
@@ -595,7 +705,9 @@ export default function UncertaintyPage() {
                             <span className="text-xs font-theme-data text-text-muted w-16 text-right">
                               {(entry.confidence * 100).toFixed(0)}%
                             </span>
-                            <span className={`text-xs font-theme-data ${entry.was_correct ? 'text-[var(--accent)]' : 'text-error'}`}>
+                            <span
+                              className={`text-xs font-theme-data ${entry.was_correct ? 'text-[var(--accent)]' : 'text-error'}`}
+                            >
                               {entry.was_correct ? '✓' : '✗'}
                             </span>
                           </div>
@@ -607,7 +719,9 @@ export default function UncertaintyPage() {
                   {/* Calibration History */}
                   {agentCalibration.calibration_history.length > 0 && (
                     <div className="border border-[var(--accent)]/30 rounded p-4">
-                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">CALIBRATION HISTORY</h3>
+                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                        CALIBRATION HISTORY
+                      </h3>
                       <div className="flex items-end gap-1 h-24">
                         {agentCalibration.calibration_history.map((entry, idx) => (
                           <div
@@ -638,12 +752,8 @@ export default function UncertaintyPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // UNCERTAINTY & CALIBRATION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // UNCERTAINTY & CALIBRATION</p>
         </footer>
       </main>
     </>

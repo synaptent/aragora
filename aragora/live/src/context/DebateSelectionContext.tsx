@@ -130,13 +130,21 @@ export function DebateSelectionProvider({
       recentDebates,
       addToRecent,
     }),
-    [debateId, metadata, hasSelection, isLiveDebate, setDebateId, updateMetadata, clearSelection, recentDebates, addToRecent]
+    [
+      debateId,
+      metadata,
+      hasSelection,
+      isLiveDebate,
+      setDebateId,
+      updateMetadata,
+      clearSelection,
+      recentDebates,
+      addToRecent,
+    ],
   );
 
   return (
-    <DebateSelectionContext.Provider value={value}>
-      {children}
-    </DebateSelectionContext.Provider>
+    <DebateSelectionContext.Provider value={value}>{children}</DebateSelectionContext.Provider>
   );
 }
 

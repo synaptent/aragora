@@ -22,7 +22,14 @@ body {
     radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 38%),
     linear-gradient(180deg, #f4eee1 0%, #efe6d6 100%);
   color: var(--ink);
-  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font:
+    13px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
 }
 
 .shell {
@@ -54,7 +61,7 @@ body {
 h1,
 h2 {
   margin: 0;
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   font-weight: 600;
 }
 

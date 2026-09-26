@@ -1,0 +1,31 @@
+[WARNING] Markdown link with URL `../plans/EPISTEMIC_CI_AND_CRUX_ENGINE.md` in source file "docs/contributing/active-execution-issues.md" (233:15) couldn't be resolved.
+Make sure it references a local Markdown file that exists within the current plugin.
+[webpackbar] ✔ Server: Compiled successfully in 19.09s
+[WARNING] Docusaurus found broken links!
+
+Please check the pages of your site in the list below, and make sure you don't reference any path that does not exist.
+Note: it's possible to ignore broken links with the 'onBrokenLinks' Docusaurus configuration, and let the build pass.
+
+Exhaustive list of all broken links found:
+- Broken link on source page path = /docs/analysis/adr/:
+   -> linking to 017-backend-runtime-entrypoint-and-compatibility.md (resolved as: /docs/analysis/adr/017-backend-runtime-entrypoint-and-compatibility.md)
+   -> linking to 018-self-hosted-worker-canonicalization.md (resolved as: /docs/analysis/adr/018-self-hosted-worker-canonicalization.md)
+   -> linking to 019-standardized-health-check-endpoints.md (resolved as: /docs/analysis/adr/019-standardized-health-check-endpoints.md)
+   -> linking to 020-event-dispatch-consolidation.md (resolved as: /docs/analysis/adr/020-event-dispatch-consolidation.md)
+   -> linking to 021-storage-layer-consolidation.md (resolved as: /docs/analysis/adr/021-storage-layer-consolidation.md)
+- Broken link on source page path = /docs/contributing/active-execution-issues:
+   -> linking to ../plans/EPISTEMIC_CI_AND_CRUX_ENGINE.md (resolved as: /docs/plans/EPISTEMIC_CI_AND_CRUX_ENGINE.md)
+- Broken link on source page path = /docs/contributing/aragora-evolution-roadmap:
+   -> linking to 2026-04-18-3-horizon-roadmap.md (resolved as: /docs/contributing/2026-04-18-3-horizon-roadmap.md)
+   -> linking to 2026-04-19-pr-intelligence-brief.md (resolved as: /docs/contributing/2026-04-19-pr-intelligence-brief.md)
+   -> linking to EPISTEMIC_CI_AND_CRUX_ENGINE.md (resolved as: /docs/contributing/EPISTEMIC_CI_AND_CRUX_ENGINE.md)
+- Broken link on source page path = /docs/guides/modes:
+   -> linking to PIPELINE_GUIDE.md (resolved as: /docs/guides/PIPELINE_GUIDE.md)
+- Broken link on source page path = /docs/guides/sdk-quickstart:
+   -> linking to ../examples/quickstart/basic_debate.py (resolved as: /docs/examples/quickstart/basic_debate.py)
+   -> linking to ../examples/batch_verify_claims.py (resolved as: /docs/examples/batch_verify_claims.py)
+- Broken link on source page path = /docs/security/eu-ai-act-guide:
+   -> linking to ../../scripts/demo_compliance.sh (resolved as: /scripts/demo_compliance.sh)
+
+[SUCCESS] Generated static files in "build".
+[INFO] Use `npm run serve` command to test your build locally.

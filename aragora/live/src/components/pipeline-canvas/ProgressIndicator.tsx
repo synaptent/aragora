@@ -44,8 +44,8 @@ export const ProgressIndicator = memo(function ProgressIndicator({
                   isComplete
                     ? 'text-[var(--accent)]'
                     : isCurrent
-                    ? 'text-text'
-                    : 'text-text-muted/50'
+                      ? 'text-text'
+                      : 'text-text-muted/50'
                 }`}
               >
                 {isComplete ? '\u2713' : i + 1}

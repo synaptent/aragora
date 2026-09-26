@@ -20,7 +20,7 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
   // Animate the dots
   useEffect(() => {
     const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
     }, 500);
     return () => clearInterval(interval);
   }, []);
@@ -35,8 +35,8 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
     { name: 'Generate Report', threshold: 100 },
   ];
 
-  const currentPhaseIndex = phases.findIndex(p => progress.percent <= p.threshold);
-  const activeAgent = agents.find(a => a.name === progress.currentAgent);
+  const currentPhaseIndex = phases.findIndex((p) => progress.percent <= p.threshold);
+  const activeAgent = agents.find((a) => a.name === progress.currentAgent);
 
   return (
     <div className="space-y-6">
@@ -48,7 +48,8 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
             {progress.percent < 35 ? '1' : progress.percent < 70 ? '2' : '3'}
           </div>
           <h2 className="text-lg font-theme-data text-[var(--acid-green)]">
-            {progress.phase}{dots}
+            {progress.phase}
+            {dots}
           </h2>
           <p className="text-sm text-[var(--text-muted)] mt-1">
             Round {progress.debateRound} of {progress.totalRounds}
@@ -78,17 +79,15 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
             return (
               <div
                 key={phase.name}
-                className={`flex flex-col items-center ${
-                  i === 0 ? '' : 'flex-1'
-                }`}
+                className={`flex flex-col items-center ${i === 0 ? '' : 'flex-1'}`}
               >
                 <div
                   className={`w-3 h-3 rounded-full transition-colors ${
                     isComplete
                       ? 'bg-[var(--acid-green)]'
                       : isCurrent
-                      ? 'bg-[var(--acid-cyan)] animate-pulse'
-                      : 'bg-[var(--border)]'
+                        ? 'bg-[var(--acid-cyan)] animate-pulse'
+                        : 'bg-[var(--border)]'
                   }`}
                 />
                 <span
@@ -111,9 +110,7 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
               <div className="font-theme-data text-sm text-[var(--text)]">
                 {activeAgent.name} is analyzing
               </div>
-              <div className="text-xs text-[var(--text-muted)]">
-                {activeAgent.specialty}
-              </div>
+              <div className="text-xs text-[var(--text-muted)]">{activeAgent.specialty}</div>
             </div>
           </div>
         )}
@@ -125,7 +122,7 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
           {'>'} AGENT ACTIVITY
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {agents.map(agent => {
+          {agents.map((agent) => {
             const isActive = agent.name === progress.currentAgent;
             const hasSpoken = progress.percent > 30;
             return (
@@ -135,13 +132,15 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
                   isActive
                     ? 'bg-[var(--acid-green)]/10 border-[var(--acid-green)] animate-pulse'
                     : hasSpoken
-                    ? 'bg-[var(--bg)] border-[var(--border)]'
-                    : 'bg-[var(--bg)] border-[var(--border)] opacity-50'
+                      ? 'bg-[var(--bg)] border-[var(--border)]'
+                      : 'bg-[var(--bg)] border-[var(--border)] opacity-50'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl">{agent.icon}</span>
-                  <span className={`text-sm font-theme-data ${isActive ? 'text-[var(--acid-green)]' : 'text-[var(--text)]'}`}>
+                  <span
+                    className={`text-sm font-theme-data ${isActive ? 'text-[var(--acid-green)]' : 'text-[var(--text)]'}`}
+                  >
                     {agent.name}
                   </span>
                 </div>
@@ -156,9 +155,7 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
 
       {/* Debate Preview */}
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)] mb-4">
-          {'>'} LIVE DEBATE
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)] mb-4">{'>'} LIVE DEBATE</h3>
         <div className="space-y-3 max-h-64 overflow-y-auto">
           {progress.debateRound >= 1 && (
             <DebateMessage
@@ -195,8 +192,8 @@ export function ReviewProgress({ progress, agents }: ReviewProgressProps) {
       <div className="flex items-center gap-3 p-4 bg-[var(--bg)] rounded border border-[var(--border)]">
         <span className="text-xl">i</span>
         <p className="text-sm text-[var(--text-muted)]">
-          Multiple AI agents are debating your code changes. Each agent brings unique expertise
-          to identify issues that a single reviewer might miss.
+          Multiple AI agents are debating your code changes. Each agent brings unique expertise to
+          identify issues that a single reviewer might miss.
         </p>
       </div>
     </div>
@@ -218,9 +215,7 @@ function DebateMessage({ agent, message, isTyping }: DebateMessageProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="font-theme-data text-sm text-[var(--text)]">{agent.name}</span>
-          {isTyping && (
-            <span className="text-xs text-[var(--acid-cyan)]">typing...</span>
-          )}
+          {isTyping && <span className="text-xs text-[var(--acid-cyan)]">typing...</span>}
         </div>
         <p className={`text-sm ${isTyping ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>
           {message}

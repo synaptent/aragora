@@ -34,11 +34,7 @@ interface RankedInboxResponse {
   emails: PrioritizedEmail[];
   total_count: number;
   processing_time_ms: number;
-  tiers_summary: {
-    tier_1_count: number;
-    tier_2_count: number;
-    tier_3_count: number;
-  };
+  tiers_summary: { tier_1_count: number; tier_2_count: number; tier_3_count: number };
 }
 
 // Legacy email format from older API
@@ -67,13 +63,29 @@ export interface PriorityInboxListProps {
 }
 
 const PRIORITY_CONFIG: Record<EmailPriority, { color: string; icon: string; label: string }> = {
-  critical: { color: 'text-red-400 border-red-500/40 bg-red-500/10', icon: '🔴', label: 'CRITICAL' },
-  high: { color: 'text-orange-400 border-orange-500/40 bg-orange-500/10', icon: '🟠', label: 'HIGH' },
-  medium: { color: 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10', icon: '🟡', label: 'MEDIUM' },
+  critical: {
+    color: 'text-red-400 border-red-500/40 bg-red-500/10',
+    icon: '🔴',
+    label: 'CRITICAL',
+  },
+  high: {
+    color: 'text-orange-400 border-orange-500/40 bg-orange-500/10',
+    icon: '🟠',
+    label: 'HIGH',
+  },
+  medium: {
+    color: 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10',
+    icon: '🟡',
+    label: 'MEDIUM',
+  },
   low: { color: 'text-blue-400 border-blue-500/40 bg-blue-500/10', icon: '🔵', label: 'LOW' },
   defer: { color: 'text-gray-400 border-gray-500/40 bg-gray-500/10', icon: '⚪', label: 'DEFER' },
   spam: { color: 'text-red-600 border-red-600/40 bg-red-600/10', icon: '🚫', label: 'SPAM' },
-  blocked: { color: 'text-slate-500 border-slate-600/40 bg-slate-600/10', icon: '⛔', label: 'BLOCKED' },
+  blocked: {
+    color: 'text-slate-500 border-slate-600/40 bg-slate-600/10',
+    icon: '⛔',
+    label: 'BLOCKED',
+  },
 };
 
 export function PriorityInboxList({
@@ -98,93 +110,107 @@ export function PriorityInboxList({
   const setIsLoading = isControlled ? () => {} : setInternalLoading;
   const [error, setError] = useState<string | null>(null);
   const [processingTime, setProcessingTime] = useState<number | null>(null);
-  const [tiersSummary, setTiersSummary] = useState<RankedInboxResponse['tiers_summary'] | null>(null);
+  const [tiersSummary, setTiersSummary] = useState<RankedInboxResponse['tiers_summary'] | null>(
+    null,
+  );
   const [selectedEmail, setSelectedEmail] = useState<PrioritizedEmail | null>(null);
   const [modalEmailId, setModalEmailId] = useState<string | null>(null);
   const [filter, setFilter] = useState<EmailPriority | 'all'>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchEmails = useCallback(async (showRefresh = false) => {
-    if (showRefresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
+  const fetchEmails = useCallback(
+    async (showRefresh = false) => {
+      if (showRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError(null);
 
-    try {
-      // Use the new email prioritization API
-      const response = await fetch(`${apiBase}/api/email/inbox?user_id=${userId}`, {
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-      });
-
-      if (!response.ok) {
-        // Fallback to legacy Gmail API if new API not available
-        const legacyResponse = await fetch(`${apiBase}/api/gmail/inbox/priority?user_id=${userId}`, {
+      try {
+        // Use the new email prioritization API
+        const response = await fetch(`${apiBase}/api/email/inbox?user_id=${userId}`, {
           headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         });
-        if (!legacyResponse.ok) throw new Error('Failed to fetch emails');
-        const legacyData = await legacyResponse.json();
-        // Map legacy format to new format
-        const mappedEmails: PrioritizedEmail[] = ((legacyData.emails || []) as LegacyEmail[]).map((e) => ({
-          ...e,
-          from_address: e.sender,
-          priority: e.priority_score > 80 ? 'critical' :
-                   e.priority_score > 60 ? 'high' :
-                   e.priority_score > 40 ? 'medium' :
-                   e.priority_score > 20 ? 'low' : 'defer',
-          confidence: e.priority_score / 100,
-          score: e.priority_score,
-          tier_used: 1,
-        }));
-        setEmails(mappedEmails);
-        return;
-      }
 
-      const data: RankedInboxResponse = await response.json();
-      setEmails(data.emails || []);
-      setProcessingTime(data.processing_time_ms);
-      setTiersSummary(data.tiers_summary);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- state setters are stable
-  }, [apiBase, userId, authToken]);
+        if (!response.ok) {
+          // Fallback to legacy Gmail API if new API not available
+          const legacyResponse = await fetch(
+            `${apiBase}/api/gmail/inbox/priority?user_id=${userId}`,
+            { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+          );
+          if (!legacyResponse.ok) throw new Error('Failed to fetch emails');
+          const legacyData = await legacyResponse.json();
+          // Map legacy format to new format
+          const mappedEmails: PrioritizedEmail[] = ((legacyData.emails || []) as LegacyEmail[]).map(
+            (e) => ({
+              ...e,
+              from_address: e.sender,
+              priority:
+                e.priority_score > 80
+                  ? 'critical'
+                  : e.priority_score > 60
+                    ? 'high'
+                    : e.priority_score > 40
+                      ? 'medium'
+                      : e.priority_score > 20
+                        ? 'low'
+                        : 'defer',
+              confidence: e.priority_score / 100,
+              score: e.priority_score,
+              tier_used: 1,
+            }),
+          );
+          setEmails(mappedEmails);
+          return;
+        }
+
+        const data: RankedInboxResponse = await response.json();
+        setEmails(data.emails || []);
+        setProcessingTime(data.processing_time_ms);
+        setTiersSummary(data.tiers_summary);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state setters are stable
+    [apiBase, userId, authToken],
+  );
 
   useEffect(() => {
     fetchEmails();
   }, [fetchEmails]);
 
-  const handleFeedback = useCallback(async (emailId: string, isCorrect: boolean) => {
-    try {
-      await fetch(`${apiBase}/api/email/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          email_id: emailId,
-          user_id: userId,
-          is_correct: isCorrect,
-        }),
-      });
-    } catch (err) {
-      logger.error('Failed to send feedback:', err);
-    }
-  }, [apiBase, userId, authToken]);
+  const handleFeedback = useCallback(
+    async (emailId: string, isCorrect: boolean) => {
+      try {
+        await fetch(`${apiBase}/api/email/feedback`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({ email_id: emailId, user_id: userId, is_correct: isCorrect }),
+        });
+      } catch (err) {
+        logger.error('Failed to send feedback:', err);
+      }
+    },
+    [apiBase, userId, authToken],
+  );
 
-  const filteredEmails = filter === 'all'
-    ? emails
-    : emails.filter(e => e.priority === filter);
+  const filteredEmails = filter === 'all' ? emails : emails.filter((e) => e.priority === filter);
 
-  const priorityCounts = emails.reduce((acc, e) => {
-    acc[e.priority] = (acc[e.priority] || 0) + 1;
-    return acc;
-  }, {} as Record<EmailPriority, number>);
+  const priorityCounts = emails.reduce(
+    (acc, e) => {
+      acc[e.priority] = (acc[e.priority] || 0) + 1;
+      return acc;
+    },
+    {} as Record<EmailPriority, number>,
+  );
 
   if (isLoading) {
     return (
@@ -202,9 +228,7 @@ export function PriorityInboxList({
     return (
       <div className="border border-[var(--accent)]/30 bg-surface/50 p-4 rounded">
         <h3 className="text-[var(--accent)] font-theme-data text-sm mb-4">AI Priority Inbox</h3>
-        <div className="text-center py-8 text-red-400 font-theme-data text-sm">
-          {error}
-        </div>
+        <div className="text-center py-8 text-red-400 font-theme-data text-sm">{error}</div>
         <button
           onClick={() => fetchEmails()}
           className="mt-4 w-full px-3 py-2 text-sm font-theme-data bg-[var(--accent)]/10 border border-[var(--accent)]/40 text-[var(--accent)] hover:bg-[var(--accent)]/20 rounded"
@@ -233,9 +257,7 @@ export function PriorityInboxList({
         <h3 className="text-[var(--accent)] font-theme-data text-sm">AI Priority Inbox</h3>
         <div className="flex items-center gap-2">
           {processingTime && (
-            <span className="text-xs text-text-muted font-theme-data">
-              {processingTime}ms
-            </span>
+            <span className="text-xs text-text-muted font-theme-data">{processingTime}ms</span>
           )}
           <button
             onClick={() => fetchEmails(true)}
@@ -274,20 +296,22 @@ export function PriorityInboxList({
         >
           All ({emails.length})
         </button>
-        {(['critical', 'high', 'medium', 'low', 'defer', 'blocked'] as EmailPriority[]).map(priority => (
-          <button
-            key={priority}
-            onClick={() => setFilter(priority)}
-            className={`px-2 py-1 text-xs font-theme-data rounded flex items-center gap-1 ${
-              filter === priority
-                ? PRIORITY_CONFIG[priority].color + ' border'
-                : 'bg-surface border border-[var(--accent)]/30 text-text-muted hover:text-[var(--accent)]'
-            }`}
-          >
-            <span>{PRIORITY_CONFIG[priority].icon}</span>
-            <span>{priorityCounts[priority] || 0}</span>
-          </button>
-        ))}
+        {(['critical', 'high', 'medium', 'low', 'defer', 'blocked'] as EmailPriority[]).map(
+          (priority) => (
+            <button
+              key={priority}
+              onClick={() => setFilter(priority)}
+              className={`px-2 py-1 text-xs font-theme-data rounded flex items-center gap-1 ${
+                filter === priority
+                  ? PRIORITY_CONFIG[priority].color + ' border'
+                  : 'bg-surface border border-[var(--accent)]/30 text-text-muted hover:text-[var(--accent)]'
+              }`}
+            >
+              <span>{PRIORITY_CONFIG[priority].icon}</span>
+              <span>{priorityCounts[priority] || 0}</span>
+            </button>
+          ),
+        )}
       </div>
 
       {/* Email List */}
@@ -307,7 +331,9 @@ export function PriorityInboxList({
               <div className="p-3">
                 <div className="flex items-start justify-between mb-1 gap-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${config.color}`}>
+                    <span
+                      className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${config.color}`}
+                    >
                       {config.icon}
                     </span>
                     <span className="text-text font-theme-data text-sm truncate flex-1">
@@ -354,7 +380,9 @@ export function PriorityInboxList({
                 <div className="border-t border-[var(--accent)]/20 p-3 bg-surface/30">
                   {email.rationale && (
                     <div className="mb-3">
-                      <span className="text-[var(--accent)] text-xs font-theme-data">AI Rationale:</span>
+                      <span className="text-[var(--accent)] text-xs font-theme-data">
+                        AI Rationale:
+                      </span>
                       <p className="text-text-muted text-xs mt-1">{email.rationale}</p>
                     </div>
                   )}

@@ -54,7 +54,10 @@ export function DebateBrowser() {
           <span className="text-[var(--accent)]">[</span>
           <span className="panel-title-sm text-[var(--accent)]">DEBATE_ARCHIVE</span>
           <span className="text-[var(--accent)]">]</span>
-          <span className="text-text-muted text-xs">{'// '}{debates.length} recent</span>
+          <span className="text-text-muted text-xs">
+            {'// '}
+            {debates.length} recent
+          </span>
         </div>
       </div>
 
@@ -62,16 +65,11 @@ export function DebateBrowser() {
         {loading && <DebateListSkeleton count={4} />}
 
         {!loading && debates.length === 0 && (
-          <div className="text-center text-text-muted py-4 text-xs">
-            No debates archived yet.
-          </div>
+          <div className="text-center text-text-muted py-4 text-xs">No debates archived yet.</div>
         )}
 
         {debates.map((debate) => (
-          <div
-            key={debate.id}
-            className="panel-item"
-          >
+          <div key={debate.id} className="panel-item">
             <div className="flex items-start justify-between gap-2 mb-2">
               <Link
                 href={`/debate/${debate.id}`}
@@ -92,11 +90,7 @@ export function DebateBrowser() {
               {/* Agents */}
               <div className="flex items-center gap-1">
                 {debate.agents.slice(0, 4).map((agent, i) => (
-                  <span
-                    key={i}
-                    className={getAgentColor(agent)}
-                    title={agent}
-                  >
+                  <span key={i} className={getAgentColor(agent)} title={agent}>
                     {agent.charAt(0).toUpperCase()}
                   </span>
                 ))}
@@ -111,17 +105,13 @@ export function DebateBrowser() {
               </span>
 
               {/* Confidence */}
-              <span className="text-text-muted">
-                {Math.round(debate.confidence * 100)}%
-              </span>
+              <span className="text-text-muted">{Math.round(debate.confidence * 100)}%</span>
 
               {/* Separator */}
               <span className="text-text-muted/30">|</span>
 
               {/* Time */}
-              <span className="text-text-muted">
-                {formatTimeAgo(debate.created_at)}
-              </span>
+              <span className="text-text-muted">{formatTimeAgo(debate.created_at)}</span>
             </div>
           </div>
         ))}

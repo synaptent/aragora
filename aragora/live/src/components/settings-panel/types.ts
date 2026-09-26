@@ -72,43 +72,22 @@ export interface ApiKey {
 
 export interface UserPreferences {
   theme: 'dark' | 'light' | 'system' | 'warm' | 'professional';
-  notifications: {
-    email_digest: boolean;
-    debate_completed: boolean;
-    weekly_summary: boolean;
-  };
-  display: {
-    compact_mode: boolean;
-    show_agent_icons: boolean;
-    auto_scroll_messages: boolean;
-  };
+  notifications: { email_digest: boolean; debate_completed: boolean; weekly_summary: boolean };
+  display: { compact_mode: boolean; show_agent_icons: boolean; auto_scroll_messages: boolean };
   api_keys: ApiKey[];
-  integrations: {
-    slack_webhook: string | null;
-    discord_webhook: string | null;
-  };
+  integrations: { slack_webhook: string | null; discord_webhook: string | null };
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   theme: 'dark',
-  notifications: {
-    email_digest: true,
-    debate_completed: true,
-    weekly_summary: false,
-  },
-  display: {
-    compact_mode: false,
-    show_agent_icons: true,
-    auto_scroll_messages: true,
-  },
+  notifications: { email_digest: true, debate_completed: true, weekly_summary: false },
+  display: { compact_mode: false, show_agent_icons: true, auto_scroll_messages: true },
   api_keys: [],
-  integrations: {
-    slack_webhook: null,
-    discord_webhook: null,
-  },
+  integrations: { slack_webhook: null, discord_webhook: null },
 };
 
-export type SettingsTab = 'features' | 'debate' | 'appearance' | 'notifications' | 'api' | 'integrations' | 'account';
+export type SettingsTab =
+  'features' | 'debate' | 'appearance' | 'notifications' | 'api' | 'integrations' | 'account';
 
 export interface SlackNotifications {
   notify_on_consensus: boolean;

@@ -74,9 +74,7 @@ describe('generateBrief', () => {
     mockFetch(() => ({ status: 202, _body: { state: 'queued' } }));
     await generateBrief(7, { force: true });
     const [, init] = fetchCalls()[0];
-    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
-      force: true,
-    });
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({ force: true });
   });
 
   it('tags 503 with feature-flag metadata and caches the flag as off', async () => {
@@ -86,19 +84,13 @@ describe('generateBrief', () => {
   });
 
   it('returns 409 payload without throwing (dedupe path)', async () => {
-    mockFetch(() => ({
-      status: 409,
-      _body: { state: 'running', message: 'already running' },
-    }));
+    mockFetch(() => ({ status: 409, _body: { state: 'running', message: 'already running' } }));
     const resp = await generateBrief(1);
     expect(resp.state).toBe('running');
   });
 
   it('throws with API error detail on other non-2xx responses', async () => {
-    mockFetch(() => ({
-      status: 500,
-      _body: { error: 'boom' },
-    }));
+    mockFetch(() => ({ status: 500, _body: { error: 'boom' } }));
     await expect(generateBrief(1)).rejects.toThrow('boom');
   });
 });
@@ -195,22 +187,15 @@ describe('useBriefState polling', () => {
   }
 
   it('does not fetch when enabled is false', async () => {
-    const { result } = renderHook(() =>
-      useBriefState(42, { enabled: false, pollIntervalMs: 50 }),
-    );
+    const { result } = renderHook(() => useBriefState(42, { enabled: false, pollIntervalMs: 50 }));
     await flushMicrotasks();
     expect(fetchCalls()).toHaveLength(0);
     expect(result.current.snapshot).toBeNull();
   });
 
   it('fetches once then stops polling when state is ready', async () => {
-    mockFetch(() => ({
-      status: 200,
-      _body: { state: 'ready', head_sha: 'sha' },
-    }));
-    const { result } = renderHook(() =>
-      useBriefState(42, { pollIntervalMs: 50 }),
-    );
+    mockFetch(() => ({ status: 200, _body: { state: 'ready', head_sha: 'sha' } }));
+    const { result } = renderHook(() => useBriefState(42, { pollIntervalMs: 50 }));
     await waitFor(() => expect(result.current.snapshot?.state).toBe('ready'));
     const initial = fetchCalls().length;
     // Advance time — should NOT trigger extra fetches.
@@ -224,14 +209,9 @@ describe('useBriefState polling', () => {
   it('polls while state is queued/running then stops on ready', async () => {
     const states = ['queued', 'running', 'ready'];
     let i = 0;
-    mockFetch(() => ({
-      status: 200,
-      _body: { state: states[Math.min(i++, states.length - 1)] },
-    }));
+    mockFetch(() => ({ status: 200, _body: { state: states[Math.min(i++, states.length - 1)] } }));
 
-    const { result } = renderHook(() =>
-      useBriefState(42, { pollIntervalMs: 50 }),
-    );
+    const { result } = renderHook(() => useBriefState(42, { pollIntervalMs: 50 }));
     // First fetch → queued
     await waitFor(() => expect(result.current.snapshot?.state).toBe('queued'));
 
@@ -261,9 +241,7 @@ describe('useBriefState polling', () => {
 
   it('surfaces feature-disabled when backend returns 503', async () => {
     mockFetch(() => ({ status: 503 }));
-    const { result } = renderHook(() =>
-      useBriefState(42, { pollIntervalMs: 50 }),
-    );
+    const { result } = renderHook(() => useBriefState(42, { pollIntervalMs: 50 }));
     await waitFor(() => expect(result.current.snapshot?.state).toBe('absent'));
     expect(result.current.featureDisabled).toBe(true);
   });

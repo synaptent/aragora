@@ -54,9 +54,7 @@ export const StageNavigator = memo(function StageNavigator({
             </button>
 
             {i < STAGES.length - 1 && (
-              <div
-                className={`w-6 h-0.5 mx-1 ${isComplete ? 'bg-text-muted' : 'bg-border'}`}
-              />
+              <div className={`w-6 h-0.5 mx-1 ${isComplete ? 'bg-text-muted' : 'bg-border'}`} />
             )}
           </div>
         );

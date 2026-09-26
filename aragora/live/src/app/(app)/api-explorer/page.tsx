@@ -9,7 +9,7 @@ import { BackendSelector } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const ApiExplorerPanel = dynamic(
-  () => import('@/components/ApiExplorerPanel').then(m => ({ default: m.ApiExplorerPanel })),
+  () => import('@/components/ApiExplorerPanel').then((m) => ({ default: m.ApiExplorerPanel })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +17,7 @@ const ApiExplorerPanel = dynamic(
         <div className="h-96 bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function ApiExplorerPage() {
@@ -80,9 +80,7 @@ export default function ApiExplorerPage() {
           <div className="text-[var(--accent)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // INTERACTIVE API EXPLORER
-          </p>
+          <p className="text-text-muted">{'>'} ARAGORA // INTERACTIVE API EXPLORER</p>
         </footer>
       </main>
     </>

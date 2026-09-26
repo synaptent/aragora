@@ -67,12 +67,7 @@ export function SyncTimeline({
         }
       }
 
-      slots.push({
-        hour: slotHour,
-        date: slotDate,
-        syncs: syncsInSlot,
-        status,
-      });
+      slots.push({ hour: slotHour, date: slotDate, syncs: syncsInSlot, status });
     }
 
     return slots;

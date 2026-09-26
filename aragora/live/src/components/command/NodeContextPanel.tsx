@@ -22,7 +22,15 @@ interface NodeContextPanelProps {
   onClose: () => void;
 }
 
-const STAGE_CONFIG: Record<DAGStage, { color: string; bg: string; border: string; actions: { label: string; action: string; icon: string }[] }> = {
+const STAGE_CONFIG: Record<
+  DAGStage,
+  {
+    color: string;
+    bg: string;
+    border: string;
+    actions: { label: string; action: string; icon: string }[];
+  }
+> = {
   ideas: {
     color: 'text-indigo-400',
     bg: 'bg-indigo-500/10',
@@ -87,16 +95,16 @@ export function NodeContextPanel({ node, events, onAction, onClose }: NodeContex
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase tracking-wider rounded ${config.bg} ${config.color} border ${config.border}`}>
+              <span
+                className={`px-2 py-0.5 text-[10px] font-theme-data uppercase tracking-wider rounded ${config.bg} ${config.color} border ${config.border}`}
+              >
                 {node.stage}
               </span>
               <span className="px-2 py-0.5 text-[10px] font-theme-data text-text-muted bg-bg rounded border border-border">
                 {node.subtype}
               </span>
             </div>
-            <h3 className="text-sm font-theme-data font-bold text-text truncate">
-              {node.label}
-            </h3>
+            <h3 className="text-sm font-theme-data font-bold text-text truncate">{node.label}</h3>
           </div>
           <button
             onClick={onClose}
@@ -125,9 +133,11 @@ export function NodeContextPanel({ node, events, onAction, onClose }: NodeContex
 
         {/* Action Buttons */}
         <div className="space-y-2">
-          <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">Actions</h4>
+          <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
+            Actions
+          </h4>
           <div className="grid grid-cols-1 gap-1.5">
-            {config.actions.map(a => (
+            {config.actions.map((a) => (
               <button
                 key={a.action}
                 onClick={() => onAction(a.action, node.id)}
@@ -142,7 +152,9 @@ export function NodeContextPanel({ node, events, onAction, onClose }: NodeContex
 
         {/* Related Knowledge (placeholder) */}
         <div className="space-y-2">
-          <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">Related Knowledge</h4>
+          <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
+            Related Knowledge
+          </h4>
           <div className="text-xs font-theme-data text-text-muted/50 bg-bg p-3 rounded border border-border text-center">
             Select a node to see related knowledge from the Knowledge Mound
           </div>
@@ -155,16 +167,22 @@ export function NodeContextPanel({ node, events, onAction, onClose }: NodeContex
               Events ({events.length})
             </h4>
             <div className="space-y-1">
-              {recentEvents.map(e => (
+              {recentEvents.map((e) => (
                 <div
                   key={e.id}
                   className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-theme-data bg-bg rounded border border-border"
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    e.severity === 'error' ? 'bg-red-500' :
-                    e.severity === 'warning' ? 'bg-amber-500' :
-                    e.severity === 'success' ? 'bg-emerald-500' : 'bg-gray-500'
-                  }`} />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      e.severity === 'error'
+                        ? 'bg-red-500'
+                        : e.severity === 'warning'
+                          ? 'bg-amber-500'
+                          : e.severity === 'success'
+                            ? 'bg-emerald-500'
+                            : 'bg-gray-500'
+                    }`}
+                  />
                   <span className="truncate text-text-muted">{e.summary}</span>
                 </div>
               ))}
@@ -175,7 +193,9 @@ export function NodeContextPanel({ node, events, onAction, onClose }: NodeContex
         {/* Metadata */}
         {Object.keys(node.metadata).length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">Metadata</h4>
+            <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
+              Metadata
+            </h4>
             <pre className="text-[10px] font-theme-data text-text-muted bg-bg p-2 rounded border border-border overflow-x-auto max-h-32">
               {JSON.stringify(node.metadata, null, 2)}
             </pre>
@@ -205,7 +225,9 @@ function StatusBadge({ status }: { status: string }) {
     blocked: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
   };
   return (
-    <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded border ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded border ${colors[status] || colors.pending}`}
+    >
       {status}
     </span>
   );

@@ -161,10 +161,7 @@ export function SnoozePanel({
       const res = await fetch(`${baseUrl}/api/v1/email/${emailId}/snooze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          snooze_until: snoozeUntil,
-          label: 'Snoozed',
-        }),
+        body: JSON.stringify({ snooze_until: snoozeUntil, label: 'Snoozed' }),
       });
 
       const data = await res.json();
@@ -203,10 +200,7 @@ export function SnoozePanel({
     const isToday = date.toDateString() === now.toDateString();
     const isTomorrow = date.toDateString() === tomorrow.toDateString();
 
-    const timeStr = date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     if (isToday) return `Today at ${timeStr}`;
     if (isTomorrow) return `Tomorrow at ${timeStr}`;
@@ -229,15 +223,11 @@ export function SnoozePanel({
   };
 
   return (
-    <div
-      className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}
-    >
+    <div className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}>
       {/* Header */}
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
         <div>
-          <h3 className="font-theme-data text-sm font-medium text-[var(--text)]">
-            Snooze Email
-          </h3>
+          <h3 className="font-theme-data text-sm font-medium text-[var(--text)]">Snooze Email</h3>
           {emailSubject && (
             <p className="text-xs text-[var(--text-muted)] truncate max-w-xs mt-1">
               {emailSubject}
@@ -297,9 +287,7 @@ export function SnoozePanel({
 
             {/* Other Suggestions */}
             <div className="space-y-2">
-              <div className="text-xs text-[var(--text-muted)] font-theme-data">
-                QUICK OPTIONS
-              </div>
+              <div className="text-xs text-[var(--text-muted)] font-theme-data">QUICK OPTIONS</div>
               {suggestions
                 .filter((s) => s !== recommended)
                 .map((suggestion, index) => (
@@ -357,9 +345,7 @@ export function SnoozePanel({
             </div>
 
             {/* Error */}
-            {error && (
-              <div className="mt-3 text-xs text-red-400 font-theme-data">{error}</div>
-            )}
+            {error && <div className="mt-3 text-xs text-red-400 font-theme-data">{error}</div>}
           </>
         )}
       </div>
@@ -405,9 +391,7 @@ export function SnoozedEmailsList({
 
   const handleCancel = async (emailId: string) => {
     try {
-      const res = await fetch(`${baseUrl}/api/v1/email/${emailId}/snooze`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`${baseUrl}/api/v1/email/${emailId}/snooze`, { method: 'DELETE' });
       const data = await res.json();
       if (data.status === 'success') {
         onWake?.(emailId);
@@ -421,14 +405,10 @@ export function SnoozedEmailsList({
   const dueCount = snoozed.filter((s) => s.is_due).length;
 
   return (
-    <div
-      className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}
-    >
+    <div className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}>
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="font-theme-data text-sm font-medium text-[var(--text)]">
-            Snoozed Emails
-          </h3>
+          <h3 className="font-theme-data text-sm font-medium text-[var(--text)]">Snoozed Emails</h3>
           {dueCount > 0 && (
             <span className="px-2 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">
               {dueCount} due
@@ -457,9 +437,7 @@ export function SnoozedEmailsList({
                 className={`p-3 flex items-center justify-between ${item.is_due ? 'bg-blue-500/10' : ''}`}
               >
                 <div>
-                  <div className="text-sm font-theme-data text-[var(--text)]">
-                    {item.label}
-                  </div>
+                  <div className="text-sm font-theme-data text-[var(--text)]">{item.label}</div>
                   <div className="text-xs text-[var(--text-muted)]">
                     Until{' '}
                     {new Date(item.snooze_until).toLocaleString([], {

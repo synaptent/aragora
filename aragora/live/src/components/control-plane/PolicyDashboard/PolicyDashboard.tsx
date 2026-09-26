@@ -41,31 +41,35 @@ export function PolicyDashboard({
   const [selectedVertical, setSelectedVertical] = useState<string | null>(null);
 
   // Map policy violations to ComplianceViolation format for ViolationTracker
-  const violations: ComplianceViolation[] = useMemo(() =>
-    policyViolations.map((v) => ({
-      id: v.id,
-      rule_id: v.rule_id,
-      rule_name: v.rule_name,
-      framework_id: v.framework_id,
-      vertical_id: v.vertical_id,
-      severity: v.severity,
-      status: v.status,
-      description: v.description,
-      source: v.source,
-      detected_at: v.detected_at,
-      resolved_at: v.resolved_at,
-    })),
-    [policyViolations]
+  const violations: ComplianceViolation[] = useMemo(
+    () =>
+      policyViolations.map((v) => ({
+        id: v.id,
+        rule_id: v.rule_id,
+        rule_name: v.rule_name,
+        framework_id: v.framework_id,
+        vertical_id: v.vertical_id,
+        severity: v.severity,
+        status: v.status,
+        description: v.description,
+        source: v.source,
+        detected_at: v.detected_at,
+        resolved_at: v.resolved_at,
+      })),
+    [policyViolations],
   );
 
   // Available verticals
-  const verticals = useMemo(() => [
-    { id: 'software', name: 'Software Engineering' },
-    { id: 'legal', name: 'Legal' },
-    { id: 'healthcare', name: 'Healthcare' },
-    { id: 'accounting', name: 'Accounting & Finance' },
-    { id: 'research', name: 'Research' },
-  ], []);
+  const verticals = useMemo(
+    () => [
+      { id: 'software', name: 'Software Engineering' },
+      { id: 'legal', name: 'Legal' },
+      { id: 'healthcare', name: 'Healthcare' },
+      { id: 'accounting', name: 'Accounting & Finance' },
+      { id: 'research', name: 'Research' },
+    ],
+    [],
+  );
 
   // Load frameworks from verticals API
   const loadFrameworks = useCallback(async () => {
@@ -75,7 +79,7 @@ export function PolicyDashboard({
 
       for (const vertical of verticals) {
         try {
-          const response = await api.get(`/api/verticals/${vertical.id}/compliance`) as {
+          const response = (await api.get(`/api/verticals/${vertical.id}/compliance`)) as {
             compliance_frameworks: Array<{
               framework_id: string;
               name: string;
@@ -119,20 +123,27 @@ export function PolicyDashboard({
   const loading = frameworksLoading || violationsLoading;
 
   // Stats - use values from the hook for violations
-  const stats = useMemo(() => ({
-    totalFrameworks: frameworks.length,
-    enabledFrameworks: frameworks.filter((f) => f.enabled).length,
-    totalRules: frameworks.reduce((acc, f) => acc + f.rules_count, 0),
-    openViolations: openViolations.length,
-    criticalViolations: criticalViolations.length,
-    riskScore,
-  }), [frameworks, openViolations, criticalViolations, riskScore]);
+  const stats = useMemo(
+    () => ({
+      totalFrameworks: frameworks.length,
+      enabledFrameworks: frameworks.filter((f) => f.enabled).length,
+      totalRules: frameworks.reduce((acc, f) => acc + f.rules_count, 0),
+      openViolations: openViolations.length,
+      criticalViolations: criticalViolations.length,
+      riskScore,
+    }),
+    [frameworks, openViolations, criticalViolations, riskScore],
+  );
 
   const tabs: Array<{ id: PolicyTab; label: string; badge?: number }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'frameworks', label: 'Frameworks', badge: stats.enabledFrameworks },
     { id: 'violations', label: 'Violations', badge: stats.openViolations },
-    { id: 'risk', label: 'Risk', badge: stats.criticalViolations > 0 ? stats.criticalViolations : undefined },
+    {
+      id: 'risk',
+      label: 'Risk',
+      badge: stats.criticalViolations > 0 ? stats.criticalViolations : undefined,
+    },
   ];
 
   return (
@@ -140,8 +151,12 @@ export function PolicyDashboard({
       {/* Header */}
       <div className="px-4 py-3 border-b border-border bg-bg">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-theme-data font-bold text-[var(--accent)]">POLICY & COMPLIANCE</h2>
-          <span className="text-xs text-text-muted font-theme-data">[{stats.totalFrameworks} FRAMEWORKS]</span>
+          <h2 className="text-sm font-theme-data font-bold text-[var(--accent)]">
+            POLICY & COMPLIANCE
+          </h2>
+          <span className="text-xs text-text-muted font-theme-data">
+            [{stats.totalFrameworks} FRAMEWORKS]
+          </span>
         </div>
       </div>
 
@@ -159,11 +174,15 @@ export function PolicyDashboard({
           >
             {tab.label}
             {tab.badge !== undefined && (
-              <span className={`px-1.5 py-0.5 rounded text-xs ${
-                tab.id === 'violations' && tab.badge > 0 ? 'bg-yellow-900/30 text-yellow-400' :
-                tab.id === 'risk' && tab.badge > 0 ? 'bg-red-900/30 text-red-400' :
-                'bg-surface text-text-muted'
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs ${
+                  tab.id === 'violations' && tab.badge > 0
+                    ? 'bg-yellow-900/30 text-yellow-400'
+                    : tab.id === 'risk' && tab.badge > 0
+                      ? 'bg-red-900/30 text-red-400'
+                      : 'bg-surface text-text-muted'
+                }`}
+              >
                 {tab.badge}
               </span>
             )}
@@ -174,7 +193,9 @@ export function PolicyDashboard({
       {/* Stats bar */}
       <div className="grid grid-cols-5 gap-4 p-4 border-b border-border bg-bg">
         <div className="text-center">
-          <div className="text-xl font-theme-data text-[var(--accent)]">{stats.totalFrameworks}</div>
+          <div className="text-xl font-theme-data text-[var(--accent)]">
+            {stats.totalFrameworks}
+          </div>
           <div className="text-xs text-text-muted">Frameworks</div>
         </div>
         <div className="text-center">
@@ -190,9 +211,17 @@ export function PolicyDashboard({
           <div className="text-xs text-text-muted">Critical</div>
         </div>
         <div className="text-center">
-          <div className={`text-xl font-theme-data ${
-            stats.riskScore > 70 ? 'text-red-400' : stats.riskScore > 40 ? 'text-yellow-400' : 'text-green-400'
-          }`}>{stats.riskScore}</div>
+          <div
+            className={`text-xl font-theme-data ${
+              stats.riskScore > 70
+                ? 'text-red-400'
+                : stats.riskScore > 40
+                  ? 'text-yellow-400'
+                  : 'text-green-400'
+            }`}
+          >
+            {stats.riskScore}
+          </div>
           <div className="text-xs text-text-muted">Risk Score</div>
         </div>
       </div>
@@ -204,11 +233,7 @@ export function PolicyDashboard({
         ) : (
           <>
             {activeTab === 'overview' && (
-              <RiskOverview
-                frameworks={frameworks}
-                violations={violations}
-                verticals={verticals}
-              />
+              <RiskOverview frameworks={frameworks} violations={violations} verticals={verticals} />
             )}
             {activeTab === 'frameworks' && (
               <ComplianceFrameworkList

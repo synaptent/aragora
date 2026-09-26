@@ -3,7 +3,8 @@
  */
 
 export type NodeType = 'fact' | 'claim' | 'memory' | 'evidence' | 'consensus' | 'entity';
-export type RelationshipType = 'supports' | 'contradicts' | 'derived_from' | 'related_to' | 'supersedes';
+export type RelationshipType =
+  'supports' | 'contradicts' | 'derived_from' | 'related_to' | 'supersedes';
 export type MemoryTier = 'fast' | 'medium' | 'slow' | 'glacial';
 export type SortField = 'created' | 'confidence' | 'accessed' | 'relevance';
 
@@ -168,7 +169,16 @@ export interface KnowledgeExplorerState {
   nodeEditor: NodeEditorState;
   stats: MoundStats | null;
   statsLoading: boolean;
-  activeTab: 'search' | 'browse' | 'graph' | 'stale' | 'shared' | 'federation' | 'quality' | 'adapters' | 'contradictions';
+  activeTab:
+    | 'search'
+    | 'browse'
+    | 'graph'
+    | 'stale'
+    | 'shared'
+    | 'federation'
+    | 'quality'
+    | 'adapters'
+    | 'contradictions';
 }
 
 export interface KnowledgeExplorerActions {
@@ -226,7 +236,18 @@ export interface KnowledgeExplorerActions {
   setStatsLoading: (loading: boolean) => void;
 
   // Tab navigation
-  setActiveTab: (tab: 'search' | 'browse' | 'graph' | 'stale' | 'shared' | 'federation' | 'quality' | 'adapters' | 'contradictions') => void;
+  setActiveTab: (
+    tab:
+      | 'search'
+      | 'browse'
+      | 'graph'
+      | 'stale'
+      | 'shared'
+      | 'federation'
+      | 'quality'
+      | 'adapters'
+      | 'contradictions',
+  ) => void;
 
   // Reset
   resetExplorer: () => void;

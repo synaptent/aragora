@@ -19,10 +19,7 @@ interface MLModelsResponse {
 
 interface MLStatsResponse {
   stats: {
-    routing?: {
-      registered_agents: number;
-      historical_records: number;
-    };
+    routing?: { registered_agents: number; historical_records: number };
     consensus?: {
       calibration_samples: number;
       accuracy: number;
@@ -73,7 +70,9 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
   // Routing state
   const [routingTask, setRoutingTask] = useState('');
-  const [availableAgents, setAvailableAgents] = useState('anthropic-api,openai-api,grok,deepseek,mistral');
+  const [availableAgents, setAvailableAgents] = useState(
+    'anthropic-api,openai-api,grok,deepseek,mistral',
+  );
   const [teamSize, setTeamSize] = useState(3);
   const [routingResult, setRoutingResult] = useState<RoutingResult | null>(null);
   const [routingLoading, setRoutingLoading] = useState(false);
@@ -125,14 +124,13 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
     setRoutingLoading(true);
     setRoutingResult(null);
 
-    const agents = availableAgents.split(',').map(a => a.trim()).filter(Boolean);
+    const agents = availableAgents
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
     const { data, error: routeError } = await apiFetch<RoutingResult>('/api/ml/route', {
       method: 'POST',
-      body: JSON.stringify({
-        task: routingTask,
-        available_agents: agents,
-        team_size: teamSize,
-      }),
+      body: JSON.stringify({ task: routingTask, available_agents: agents, team_size: teamSize }),
     });
 
     if (routeError) {
@@ -151,10 +149,7 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
     // Backend expects 'text' and 'context', not 'response' and 'task'
     const { data, error: scoreError } = await apiFetch<ScoringResult>('/api/ml/score', {
       method: 'POST',
-      body: JSON.stringify({
-        text: scoreText,
-        context: scoreTask || undefined,
-      }),
+      body: JSON.stringify({ text: scoreText, context: scoreTask || undefined }),
     });
 
     if (scoreError) {
@@ -170,13 +165,13 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
     setPredictionLoading(true);
     setPredictionResult(null);
 
-    const agents = predictionAgents.split(',').map(a => a.trim()).filter(Boolean);
+    const agents = predictionAgents
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
     const { data, error: predError } = await apiFetch<ConsensusPrediction>('/api/ml/consensus', {
       method: 'POST',
-      body: JSON.stringify({
-        task: predictionTask,
-        agents: agents,
-      }),
+      body: JSON.stringify({ task: predictionTask, agents: agents }),
     });
 
     if (predError) {
@@ -205,10 +200,7 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
       {error && (
         <div className="p-4 border border-red-500/30 bg-red-500/10 rounded text-red-400 text-sm font-theme-data">
           {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-4 text-red-500 hover:text-red-400"
-          >
+          <button onClick={() => setError(null)} className="ml-4 text-red-500 hover:text-red-400">
             [DISMISS]
           </button>
         </div>
@@ -216,7 +208,7 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-[var(--accent)]/30 pb-2">
-        {(['stats', 'route', 'score', 'predict'] as const).map(tab => (
+        {(['stats', 'route', 'score', 'predict'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -238,26 +230,11 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
           {capabilities && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <StatusIndicator
-                label="Agent Router"
-                available={capabilities.routing}
-              />
-              <StatusIndicator
-                label="Quality Scorer"
-                available={capabilities.scoring}
-              />
-              <StatusIndicator
-                label="Consensus Predictor"
-                available={capabilities.consensus}
-              />
-              <StatusIndicator
-                label="Embeddings"
-                available={capabilities.embeddings}
-              />
-              <StatusIndicator
-                label="Training Exporter"
-                available={capabilities.training_export}
-              />
+              <StatusIndicator label="Agent Router" available={capabilities.routing} />
+              <StatusIndicator label="Quality Scorer" available={capabilities.scoring} />
+              <StatusIndicator label="Consensus Predictor" available={capabilities.consensus} />
+              <StatusIndicator label="Embeddings" available={capabilities.embeddings} />
+              <StatusIndicator label="Training Exporter" available={capabilities.training_export} />
             </div>
           )}
 
@@ -265,7 +242,9 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
             <div className="space-y-4 mt-6">
               {stats.stats.routing && (
                 <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded">
-                  <h4 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">Routing Stats</h4>
+                  <h4 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">
+                    Routing Stats
+                  </h4>
                   <div className="grid grid-cols-2 gap-4">
                     <MetricCard
                       label="Registered Agents"
@@ -281,7 +260,9 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
               {stats.stats.consensus && (
                 <div className="p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-                  <h4 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">Consensus Predictor Calibration</h4>
+                  <h4 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">
+                    Consensus Predictor Calibration
+                  </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <MetricCard
                       label="Calibration Samples"
@@ -304,7 +285,16 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
               )}
 
               <div className="text-xs font-theme-data text-text-muted">
-                Status: <span className={stats.status === 'healthy' ? 'text-[var(--accent)]' : 'text-[var(--acid-yellow)]'}>{stats.status.toUpperCase()}</span>
+                Status:{' '}
+                <span
+                  className={
+                    stats.status === 'healthy'
+                      ? 'text-[var(--accent)]'
+                      : 'text-[var(--acid-yellow)]'
+                  }
+                >
+                  {stats.status.toUpperCase()}
+                </span>
               </div>
             </div>
           )}
@@ -334,10 +324,12 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Task Description</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Task Description
+              </label>
               <textarea
                 value={routingTask}
-                onChange={e => setRoutingTask(e.target.value)}
+                onChange={(e) => setRoutingTask(e.target.value)}
                 placeholder="Describe the task for the debate..."
                 className="w-full h-24 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -345,20 +337,24 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Available Agents (comma-separated)</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Available Agents (comma-separated)
+                </label>
                 <input
                   type="text"
                   value={availableAgents}
-                  onChange={e => setAvailableAgents(e.target.value)}
+                  onChange={(e) => setAvailableAgents(e.target.value)}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Team Size</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Team Size
+                </label>
                 <input
                   type="number"
                   value={teamSize}
-                  onChange={e => setTeamSize(parseInt(e.target.value) || 3)}
+                  onChange={(e) => setTeamSize(parseInt(e.target.value) || 3)}
                   min={1}
                   max={10}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -383,8 +379,11 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
                 <div>
                   <span className="text-xs text-text-muted">Selected Agents:</span>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {routingResult.selected_agents.map(agent => (
-                      <span key={agent} className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] text-xs font-theme-data rounded">
+                    {routingResult.selected_agents.map((agent) => (
+                      <span
+                        key={agent}
+                        className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] text-xs font-theme-data rounded"
+                      >
                         {agent}
                       </span>
                     ))}
@@ -448,21 +447,25 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Response to Score</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Response to Score
+              </label>
               <textarea
                 value={scoreText}
-                onChange={e => setScoreText(e.target.value)}
+                onChange={(e) => setScoreText(e.target.value)}
                 placeholder="Paste response text to analyze..."
                 className="w-full h-32 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Original Task (optional)</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Original Task (optional)
+              </label>
               <input
                 type="text"
                 value={scoreTask}
-                onChange={e => setScoreTask(e.target.value)}
+                onChange={(e) => setScoreTask(e.target.value)}
                 placeholder="What task was this response for?"
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -492,7 +495,9 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <span className={`px-2 py-1 text-xs font-theme-data rounded ${scoringResult.is_high_quality ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                  <span
+                    className={`px-2 py-1 text-xs font-theme-data rounded ${scoringResult.is_high_quality ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'bg-yellow-500/20 text-yellow-500'}`}
+                  >
                     {scoringResult.is_high_quality ? 'HIGH QUALITY' : 'NEEDS IMPROVEMENT'}
                   </span>
                   {scoringResult.needs_review && (
@@ -526,7 +531,10 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
               </div>
 
               <div className="text-xs text-text-muted">
-                Confidence: <span className="text-[var(--acid-cyan)] font-theme-data">{(scoringResult.confidence * 100).toFixed(0)}%</span>
+                Confidence:{' '}
+                <span className="text-[var(--acid-cyan)] font-theme-data">
+                  {(scoringResult.confidence * 100).toFixed(0)}%
+                </span>
               </div>
             </div>
           )}
@@ -543,21 +551,25 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Task Description</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Task Description
+              </label>
               <textarea
                 value={predictionTask}
-                onChange={e => setPredictionTask(e.target.value)}
+                onChange={(e) => setPredictionTask(e.target.value)}
                 placeholder="Describe the debate topic..."
                 className="w-full h-24 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Participating Agents (comma-separated)</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Participating Agents (comma-separated)
+              </label>
               <input
                 type="text"
                 value={predictionAgents}
-                onChange={e => setPredictionAgents(e.target.value)}
+                onChange={(e) => setPredictionAgents(e.target.value)}
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
@@ -578,7 +590,9 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <span className="text-xs text-text-muted">Will Converge:</span>
-                  <p className={`font-theme-data text-lg ${predictionResult.will_converge ? 'text-[var(--accent)]' : 'text-yellow-500'}`}>
+                  <p
+                    className={`font-theme-data text-lg ${predictionResult.will_converge ? 'text-[var(--accent)]' : 'text-yellow-500'}`}
+                  >
                     {predictionResult.will_converge ? 'YES' : 'UNCERTAIN'}
                   </p>
                 </div>
@@ -627,12 +641,18 @@ export function MLDashboard({ apiBase: _apiBase }: MLDashboardProps) {
 
 function StatusIndicator({ label, available }: { label: string; available: boolean }) {
   return (
-    <div className={`p-3 rounded border ${available ? 'border-[var(--accent)]/30 bg-[var(--accent)]/5' : 'border-red-500/30 bg-red-500/5'}`}>
+    <div
+      className={`p-3 rounded border ${available ? 'border-[var(--accent)]/30 bg-[var(--accent)]/5' : 'border-red-500/30 bg-red-500/5'}`}
+    >
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${available ? 'bg-[var(--accent)] animate-pulse' : 'bg-red-500'}`} />
+        <div
+          className={`w-2 h-2 rounded-full ${available ? 'bg-[var(--accent)] animate-pulse' : 'bg-red-500'}`}
+        />
         <span className="text-xs font-theme-data">{label}</span>
       </div>
-      <p className={`text-xs font-theme-data mt-1 ${available ? 'text-[var(--accent)]' : 'text-red-400'}`}>
+      <p
+        className={`text-xs font-theme-data mt-1 ${available ? 'text-[var(--accent)]' : 'text-red-400'}`}
+      >
         {available ? 'ONLINE' : 'UNAVAILABLE'}
       </p>
     </div>

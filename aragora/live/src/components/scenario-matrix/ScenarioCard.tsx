@@ -10,12 +10,7 @@ export interface ScenarioCardProps {
   index?: number;
 }
 
-export function ScenarioCard({
-  result,
-  isExpanded,
-  onToggle,
-  index,
-}: ScenarioCardProps) {
+export function ScenarioCard({ result, isExpanded, onToggle, index }: ScenarioCardProps) {
   const winnerColors = result.winner ? getAgentColors(result.winner) : null;
   const cardId = `scenario-card-${index ?? result.scenario_name.replace(/\s+/g, '-')}`;
 
@@ -25,8 +20,8 @@ export function ScenarioCard({
         result.is_baseline
           ? 'border-gold/40'
           : result.consensus_reached
-          ? 'border-[var(--accent)]/40'
-          : 'border-[var(--crimson)]/40'
+            ? 'border-[var(--accent)]/40'
+            : 'border-[var(--crimson)]/40'
       }`}
       role="article"
       aria-labelledby={`${cardId}-title`}
@@ -67,7 +62,9 @@ export function ScenarioCard({
 
           <div className="flex items-center gap-3">
             {result.winner && winnerColors && (
-              <span className={`px-2 py-0.5 ${winnerColors.bg} ${winnerColors.text} text-xs font-theme-data`}>
+              <span
+                className={`px-2 py-0.5 ${winnerColors.bg} ${winnerColors.text} text-xs font-theme-data`}
+              >
                 {result.winner}
               </span>
             )}
@@ -116,7 +113,10 @@ export function ScenarioCard({
               <div className="text-xs font-theme-data text-text-muted mb-1">CONSTRAINTS</div>
               <ul className="space-y-1">
                 {result.constraints.map((c, i) => (
-                  <li key={i} className="text-xs font-theme-data text-text-muted pl-2 border-l border-gold/30">
+                  <li
+                    key={i}
+                    className="text-xs font-theme-data text-text-muted pl-2 border-l border-gold/30"
+                  >
                     {c}
                   </li>
                 ))}
@@ -132,13 +132,19 @@ export function ScenarioCard({
             </div>
             <div className="text-xs font-theme-data">
               <span className="text-text-muted">Consensus: </span>
-              <span className={result.consensus_reached ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}>
+              <span
+                className={
+                  result.consensus_reached ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'
+                }
+              >
                 {result.consensus_reached ? 'YES' : 'NO'}
               </span>
             </div>
             <div className="text-xs font-theme-data">
               <span className="text-text-muted">Confidence: </span>
-              <span className="text-[var(--acid-cyan)]">{(result.confidence * 100).toFixed(0)}%</span>
+              <span className="text-[var(--acid-cyan)]">
+                {(result.confidence * 100).toFixed(0)}%
+              </span>
             </div>
           </div>
         </div>

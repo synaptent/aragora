@@ -120,7 +120,7 @@ export default function IntelligencePage() {
   const factsFetcher = useCallback(async (): Promise<FactsResponse | null> => {
     try {
       const res = await fetch(
-        `${backendConfig.api}/api/v1/knowledge/facts?page=${factsPage}&per_page=20`
+        `${backendConfig.api}/api/v1/knowledge/facts?page=${factsPage}&per_page=20`,
       );
       if (!res.ok) return null;
       const data = await res.json();
@@ -136,7 +136,7 @@ export default function IntelligencePage() {
     if (!searchQuery) return [];
     try {
       const res = await fetch(
-        `${backendConfig.api}/api/v1/memory/search?q=${encodeURIComponent(searchQuery)}&tier=fast,medium,slow,glacial&limit=20`
+        `${backendConfig.api}/api/v1/memory/search?q=${encodeURIComponent(searchQuery)}&tier=fast,medium,slow,glacial&limit=20`,
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -234,15 +234,16 @@ export default function IntelligencePage() {
               <PanelErrorBoundary panelName="Memory">
                 <div className="space-y-6">
                   <section>
-                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} TIER DISTRIBUTION</h2>
-                    <MemoryTierViz
-                      tiers={tierStats ?? []}
-                      loading={tierLoading}
-                    />
+                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                      {'>'} TIER DISTRIBUTION
+                    </h2>
+                    <MemoryTierViz tiers={tierStats ?? []} loading={tierLoading} />
                   </section>
 
                   <section>
-                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} PRESSURE MONITOR</h2>
+                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                      {'>'} PRESSURE MONITOR
+                    </h2>
                     <PressureGauge
                       pressure={pressure?.pressure ?? 0}
                       byTier={pressure?.by_tier}
@@ -259,15 +260,26 @@ export default function IntelligencePage() {
               <PanelErrorBoundary panelName="Knowledge">
                 <div className="space-y-6">
                   <section>
-                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} KNOWLEDGE MOUND</h2>
+                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                      {'>'} KNOWLEDGE MOUND
+                    </h2>
                     <KnowledgeDashboard
-                      stats={knowledgeStats ?? { coverage: 0, quality: 0, total_nodes: 0, contradictions: 0 }}
+                      stats={
+                        knowledgeStats ?? {
+                          coverage: 0,
+                          quality: 0,
+                          total_nodes: 0,
+                          contradictions: 0,
+                        }
+                      }
                       loading={knowledgeLoading}
                     />
                   </section>
 
                   <section>
-                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} FACTS BROWSER</h2>
+                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                      {'>'} FACTS BROWSER
+                    </h2>
                     <FactsBrowser
                       facts={factsData?.facts ?? []}
                       onPageChange={setFactsPage}
@@ -285,7 +297,9 @@ export default function IntelligencePage() {
               <PanelErrorBoundary panelName="Search">
                 <div className="space-y-6">
                   <section>
-                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} UNIFIED SEARCH</h2>
+                    <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                      {'>'} UNIFIED SEARCH
+                    </h2>
 
                     {/* Search input */}
                     <div className="flex gap-2 mb-4">

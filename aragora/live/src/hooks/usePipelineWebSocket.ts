@@ -51,10 +51,7 @@ export interface PipelineTransitionEvent {
 }
 
 export interface PipelineGraphEvent {
-  graph: {
-    nodes: Array<Record<string, unknown>>;
-    edges: Array<Record<string, unknown>>;
-  };
+  graph: { nodes: Array<Record<string, unknown>>; edges: Array<Record<string, unknown>> };
 }
 
 export interface PipelineNodeStatusEvent {
@@ -81,9 +78,7 @@ export interface PipelineCompletionEvent {
 export interface PipelineStreamEvent {
   type: PipelineEventType;
   timestamp: number;
-  data: {
-    pipeline_id: string;
-  } & Record<string, unknown>;
+  data: { pipeline_id: string } & Record<string, unknown>;
 }
 
 export interface UsePipelineWebSocketOptions {
@@ -232,9 +227,7 @@ export function usePipelineWebSocket({
           break;
 
         case 'pipeline_graph_updated':
-          onGraphUpdated?.({
-            graph: data.graph as PipelineGraphEvent['graph'],
-          });
+          onGraphUpdated?.({ graph: data.graph as PipelineGraphEvent['graph'] });
           break;
 
         case 'pipeline_completed':
@@ -251,7 +244,17 @@ export function usePipelineWebSocket({
           break;
       }
     },
-    [onStageStarted, onStageCompleted, onNodeAdded, onNodeStatus, onTransitionPending, onStepProgress, onGraphUpdated, onCompleted, onFailed],
+    [
+      onStageStarted,
+      onStageCompleted,
+      onNodeAdded,
+      onNodeStatus,
+      onTransitionPending,
+      onStepProgress,
+      onGraphUpdated,
+      onCompleted,
+      onFailed,
+    ],
   );
 
   const { status, error, isConnected, reconnect, disconnect, send } =

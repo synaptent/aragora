@@ -44,10 +44,7 @@ export function DebateExportModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const focusTrapRef = useFocusTrap<HTMLDivElement>({
-    isActive: isOpen,
-    onEscape: onClose,
-  });
+  const focusTrapRef = useFocusTrap<HTMLDivElement>({ isActive: isOpen, onEscape: onClose });
 
   const handleExport = useCallback(async () => {
     setLoading(true);
@@ -107,7 +104,9 @@ export function DebateExportModal({
         className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="export-modal-title" className="text-lg font-semibold text-white mb-4">Export Debate</h2>
+        <h2 id="export-modal-title" className="text-lg font-semibold text-white mb-4">
+          Export Debate
+        </h2>
 
         {/* Format Selection */}
         <div className="mb-4">
@@ -127,9 +126,7 @@ export function DebateExportModal({
                 }`}
               >
                 <div className="font-medium uppercase text-sm">{f}</div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  {FORMAT_DESCRIPTIONS[f]}
-                </div>
+                <div className="text-xs text-zinc-500 mt-1">{FORMAT_DESCRIPTIONS[f]}</div>
               </button>
             ))}
           </div>
@@ -138,7 +135,9 @@ export function DebateExportModal({
         {/* CSV Table Selection */}
         {format === 'csv' && (
           <div className="mb-4">
-            <label htmlFor="csv-table-select" className="block text-sm text-zinc-400 mb-2">Table</label>
+            <label htmlFor="csv-table-select" className="block text-sm text-zinc-400 mb-2">
+              Table
+            </label>
             <select
               id="csv-table-select"
               value={selectedTable}

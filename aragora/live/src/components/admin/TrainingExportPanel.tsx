@@ -205,7 +205,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
       <div className="bg-surface border border-[var(--accent)]/30 p-8">
         <div className="flex items-center justify-center gap-2">
           <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse" />
-          <span className="text-xs font-theme-data text-[var(--accent)]">LOADING TRAINING DATA...</span>
+          <span className="text-xs font-theme-data text-[var(--accent)]">
+            LOADING TRAINING DATA...
+          </span>
         </div>
       </div>
     );
@@ -221,7 +223,8 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
           </span>
           {stats && (
             <span className="text-xs font-theme-data text-text-muted">
-              {stats.available_exporters.length} exporter{stats.available_exporters.length !== 1 ? 's' : ''} available
+              {stats.available_exporters.length} exporter
+              {stats.available_exporters.length !== 1 ? 's' : ''} available
             </span>
           )}
         </div>
@@ -238,7 +241,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
         {/* Export Configuration */}
         <div className="space-y-4">
           <div className="border border-border p-4">
-            <h3 className="text-xs font-theme-data text-[var(--accent)] uppercase mb-4">EXPORT CONFIGURATION</h3>
+            <h3 className="text-xs font-theme-data text-[var(--accent)] uppercase mb-4">
+              EXPORT CONFIGURATION
+            </h3>
 
             {/* Export Type */}
             <div className="space-y-2 mb-4">
@@ -288,7 +293,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-theme-data text-text-muted block mb-1">MIN CONFIDENCE</label>
+                    <label className="text-xs font-theme-data text-text-muted block mb-1">
+                      MIN CONFIDENCE
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -300,7 +307,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-theme-data text-text-muted block mb-1">MIN SUCCESS RATE</label>
+                    <label className="text-xs font-theme-data text-text-muted block mb-1">
+                      MIN SUCCESS RATE
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -313,7 +322,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">LIMIT</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    LIMIT
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -359,7 +370,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
             {exportType === 'dpo' && (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">MIN CONFIDENCE DIFF</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    MIN CONFIDENCE DIFF
+                  </label>
                   <input
                     type="number"
                     min="0"
@@ -371,7 +384,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">LIMIT</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    LIMIT
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -388,7 +403,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
             {exportType === 'gauntlet' && (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">PERSONA</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    PERSONA
+                  </label>
                   <select
                     value={persona}
                     onChange={(e) => setPersona(e.target.value)}
@@ -401,7 +418,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">MIN SEVERITY</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    MIN SEVERITY
+                  </label>
                   <input
                     type="number"
                     min="0"
@@ -413,7 +432,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">LIMIT</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    LIMIT
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -464,7 +485,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
           {lastExport && (
             <div className="border border-[var(--accent)]/40 bg-[var(--accent)]/5 p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-theme-data text-[var(--accent)] uppercase">EXPORT COMPLETE</h3>
+                <h3 className="text-xs font-theme-data text-[var(--accent)] uppercase">
+                  EXPORT COMPLETE
+                </h3>
                 <button
                   onClick={downloadExport}
                   className="px-3 py-1 text-xs font-theme-data text-[var(--acid-cyan)] border border-[var(--acid-cyan)]/40 hover:bg-[var(--acid-cyan)]/10 transition-colors"
@@ -475,19 +498,27 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span className="text-xs font-theme-data text-text-muted">Type:</span>
-                  <span className="text-xs font-theme-data text-text-primary">{lastExport.export_type.toUpperCase()}</span>
+                  <span className="text-xs font-theme-data text-text-primary">
+                    {lastExport.export_type.toUpperCase()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-xs font-theme-data text-text-muted">Records:</span>
-                  <span className="text-xs font-theme-data text-[var(--accent)]">{lastExport.total_records.toLocaleString()}</span>
+                  <span className="text-xs font-theme-data text-[var(--accent)]">
+                    {lastExport.total_records.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-xs font-theme-data text-text-muted">Format:</span>
-                  <span className="text-xs font-theme-data text-text-primary">{lastExport.format.toUpperCase()}</span>
+                  <span className="text-xs font-theme-data text-text-primary">
+                    {lastExport.format.toUpperCase()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-xs font-theme-data text-text-muted">Exported:</span>
-                  <span className="text-xs font-theme-data text-text-primary">{formatDate(lastExport.exported_at)}</span>
+                  <span className="text-xs font-theme-data text-text-primary">
+                    {formatDate(lastExport.exported_at)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -496,7 +527,9 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
           {/* Available Exporters */}
           {stats && (
             <div className="border border-border p-4">
-              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-3">AVAILABLE EXPORTERS</h3>
+              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-3">
+                AVAILABLE EXPORTERS
+              </h3>
               <div className="flex flex-wrap gap-2">
                 {['sft', 'dpo', 'gauntlet'].map((type) => (
                   <span
@@ -521,13 +554,23 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
               <h3 className="text-xs font-theme-data text-gold uppercase mb-3">RECENT EXPORTS</h3>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {stats.exported_files.slice(0, 10).map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-1 border-b border-border last:border-0">
-                    <span className="text-xs font-theme-data text-text-primary truncate max-w-[200px]" title={file.name}>
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between py-1 border-b border-border last:border-0"
+                  >
+                    <span
+                      className="text-xs font-theme-data text-text-primary truncate max-w-[200px]"
+                      title={file.name}
+                    >
                       {file.name}
                     </span>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-theme-data text-text-muted">{formatBytes(file.size_bytes)}</span>
-                      <span className="text-xs font-theme-data text-text-muted">{formatDate(file.created_at)}</span>
+                      <span className="text-xs font-theme-data text-text-muted">
+                        {formatBytes(file.size_bytes)}
+                      </span>
+                      <span className="text-xs font-theme-data text-text-muted">
+                        {formatDate(file.created_at)}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -538,8 +581,12 @@ export function TrainingExportPanel({ apiBase = '/api' }: TrainingExportPanelPro
           {/* Export Directory */}
           {stats && (
             <div className="border border-border p-4">
-              <h3 className="text-xs font-theme-data text-text-muted uppercase mb-2">EXPORT DIRECTORY</h3>
-              <code className="text-xs font-theme-data text-text-primary break-all">{stats.export_directory}</code>
+              <h3 className="text-xs font-theme-data text-text-muted uppercase mb-2">
+                EXPORT DIRECTORY
+              </h3>
+              <code className="text-xs font-theme-data text-text-primary break-all">
+                {stats.export_directory}
+              </code>
             </div>
           )}
         </div>

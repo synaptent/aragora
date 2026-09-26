@@ -30,7 +30,7 @@ interface UseFetchReturn<T> {
 
 export function useFetch<T>(
   fetcher: () => Promise<T>,
-  options: UseFetchOptions<T> = {}
+  options: UseFetchOptions<T> = {},
 ): UseFetchReturn<T> {
   const {
     initialData = null,
@@ -141,15 +141,8 @@ export function useFetch<T>(
 /**
  * Hook for simple async state management with retry
  */
-export function useAsyncState<T>(
-  asyncFn: () => Promise<T>,
-  deps: React.DependencyList = []
-) {
-  const [state, setState] = useState<{
-    data: T | null;
-    loading: boolean;
-    error: Error | null;
-  }>({
+export function useAsyncState<T>(asyncFn: () => Promise<T>, deps: React.DependencyList = []) {
+  const [state, setState] = useState<{ data: T | null; loading: boolean; error: Error | null }>({
     data: null,
     loading: true,
     error: null,
@@ -166,7 +159,7 @@ export function useAsyncState<T>(
       setState((s) => ({ ...s, loading: false, error }));
       return null;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   useEffect(() => {

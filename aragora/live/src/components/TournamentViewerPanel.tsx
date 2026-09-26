@@ -66,7 +66,11 @@ const ELO_TIERS: Record<string, { color: string; bg: string; label: string }> = 
   grandmaster: { color: 'text-acid-red', bg: 'bg-acid-red/20', label: 'Grandmaster' },
   master: { color: 'text-[var(--acid-yellow)]', bg: 'bg-acid-yellow/20', label: 'Master' },
   expert: { color: 'text-[var(--acid-cyan)]', bg: 'bg-[var(--acid-cyan)]/20', label: 'Expert' },
-  intermediate: { color: 'text-[var(--accent)]', bg: 'bg-[var(--accent)]/20', label: 'Intermediate' },
+  intermediate: {
+    color: 'text-[var(--accent)]',
+    bg: 'bg-[var(--accent)]/20',
+    label: 'Intermediate',
+  },
   novice: { color: 'text-text-muted', bg: 'bg-surface', label: 'Novice' },
 };
 
@@ -89,7 +93,9 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
   const [stats, setStats] = useState<RankingStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'tournaments' | 'matches'>('leaderboard');
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'tournaments' | 'matches'>(
+    'leaderboard',
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -144,23 +150,26 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
     }
   }, [apiBase]);
 
-  const fetchTournamentStandings = useCallback(async (tournamentId: string) => {
-    try {
-      const response = await fetchWithRetry(
-        `${apiBase}/api/tournaments/${tournamentId}/standings`,
-        undefined,
-        { maxRetries: 2 }
-      );
+  const fetchTournamentStandings = useCallback(
+    async (tournamentId: string) => {
+      try {
+        const response = await fetchWithRetry(
+          `${apiBase}/api/tournaments/${tournamentId}/standings`,
+          undefined,
+          { maxRetries: 2 },
+        );
 
-      if (response.ok) {
-        const data = await response.json();
-        setStandings(data.standings || []);
-        setSelectedTournament(tournamentId);
+        if (response.ok) {
+          const data = await response.json();
+          setStandings(data.standings || []);
+          setSelectedTournament(tournamentId);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch standings:', err);
       }
-    } catch (err) {
-      logger.error('Failed to fetch standings:', err);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     fetchData();
@@ -178,12 +187,7 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
   }
 
   if (error && rankings.length === 0) {
-    return (
-      <ErrorWithRetry
-        error={error || "Failed to load tournament data"}
-        onRetry={fetchData}
-      />
-    );
+    return <ErrorWithRetry error={error || 'Failed to load tournament data'} onRetry={fetchData} />;
   }
 
   return (
@@ -194,15 +198,21 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
           <h3 className="font-theme-data text-[var(--accent)] mb-4">System Overview</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-3xl font-theme-data text-[var(--accent)]">{stats.total_agents}</div>
+              <div className="text-3xl font-theme-data text-[var(--accent)]">
+                {stats.total_agents}
+              </div>
               <div className="text-xs font-theme-data text-text-muted">Total Agents</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">{stats.total_matches}</div>
+              <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">
+                {stats.total_matches}
+              </div>
               <div className="text-xs font-theme-data text-text-muted">Total Matches</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-theme-data text-[var(--acid-yellow)]">{Math.round(stats.mean_elo)}</div>
+              <div className="text-3xl font-theme-data text-[var(--acid-yellow)]">
+                {Math.round(stats.mean_elo)}
+              </div>
               <div className="text-xs font-theme-data text-text-muted">Mean ELO</div>
             </div>
             <div className="text-center">
@@ -219,7 +229,8 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                   <span className="text-xs font-theme-data text-text-muted">Trending Up: </span>
                   {stats.trending_up.slice(0, 3).map((agent, i) => (
                     <span key={agent} className="text-xs font-theme-data text-[var(--accent)]">
-                      {agent}{i < Math.min(stats.trending_up.length, 3) - 1 ? ', ' : ''}
+                      {agent}
+                      {i < Math.min(stats.trending_up.length, 3) - 1 ? ', ' : ''}
                     </span>
                   ))}
                 </div>
@@ -229,7 +240,8 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                   <span className="text-xs font-theme-data text-text-muted">Trending Down: </span>
                   {stats.trending_down.slice(0, 3).map((agent, i) => (
                     <span key={agent} className="text-xs font-theme-data text-acid-red">
-                      {agent}{i < Math.min(stats.trending_down.length, 3) - 1 ? ', ' : ''}
+                      {agent}
+                      {i < Math.min(stats.trending_down.length, 3) - 1 ? ', ' : ''}
                     </span>
                   ))}
                 </div>
@@ -291,7 +303,9 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
                             <span className={tierInfo.color}>{agent.name}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${tierInfo.bg} ${tierInfo.color}`}>
+                            <span
+                              className={`text-xs px-1.5 py-0.5 rounded ${tierInfo.bg} ${tierInfo.color}`}
+                            >
                               {tierInfo.label}
                             </span>
                           </div>
@@ -301,7 +315,9 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                         </td>
                         <td className="py-2 px-2 text-right text-[var(--accent)]">{agent.wins}</td>
                         <td className="py-2 px-2 text-right text-acid-red">{agent.losses}</td>
-                        <td className="py-2 px-2 text-right text-[var(--acid-yellow)]">{agent.draws}</td>
+                        <td className="py-2 px-2 text-right text-[var(--acid-yellow)]">
+                          {agent.draws}
+                        </td>
                         <td className="py-2 px-2 text-right">
                           {((agent.win_rate || 0) * 100).toFixed(1)}%
                         </td>
@@ -390,9 +406,7 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                           idx === 0 ? 'bg-[var(--accent)]/5' : ''
                         }`}
                       >
-                        <td className="py-2 px-2 text-text-muted">
-                          {idx === 0 ? '🏆' : idx + 1}
-                        </td>
+                        <td className="py-2 px-2 text-text-muted">{idx === 0 ? '🏆' : idx + 1}</td>
                         <td className="py-2 px-2">
                           <span className={idx === 0 ? 'text-[var(--accent)]' : 'text-text'}>
                             {standing.agent}
@@ -404,9 +418,7 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                         <td className="py-2 px-2 text-right text-[var(--accent)]">
                           {standing.wins}
                         </td>
-                        <td className="py-2 px-2 text-right text-acid-red">
-                          {standing.losses}
-                        </td>
+                        <td className="py-2 px-2 text-right text-acid-red">{standing.losses}</td>
                         <td className="py-2 px-2 text-right text-[var(--acid-yellow)]">
                           {standing.draws}
                         </td>
@@ -460,8 +472,8 @@ export function TournamentViewerPanel({ backendConfig }: TournamentViewerPanelPr
                             match.winner === agent
                               ? 'text-[var(--accent)] font-bold'
                               : match.winner === null
-                              ? 'text-[var(--acid-yellow)]'
-                              : 'text-text-muted'
+                                ? 'text-[var(--acid-yellow)]'
+                                : 'text-text-muted'
                           }
                         >
                           {agent}

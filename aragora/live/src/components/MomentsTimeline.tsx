@@ -51,8 +51,10 @@ const MOMENT_COLORS: Record<string, string> = {
 };
 
 const getMomentIcon = (type: string): string => MOMENT_ICONS[type] || '📌';
-const getMomentColor = (type: string): string => MOMENT_COLORS[type] || 'text-text-muted bg-surface border-border';
-const formatMomentType = (type: string): string => type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const getMomentColor = (type: string): string =>
+  MOMENT_COLORS[type] || 'text-text-muted bg-surface border-border';
+const formatMomentType = (type: string): string =>
+  type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export function MomentsTimeline({ apiBase = DEFAULT_API_BASE }: MomentsTimelineProps) {
   const [summary, setSummary] = useState<MomentsSummary | null>(null);
@@ -87,9 +89,10 @@ export function MomentsTimeline({ apiBase = DEFAULT_API_BASE }: MomentsTimelineP
     fetchSummary();
   }, [fetchSummary]);
 
-  const filteredMoments = selectedType && summary
-    ? summary.recent.filter(m => m.type === selectedType)
-    : summary?.recent || [];
+  const filteredMoments =
+    selectedType && summary
+      ? summary.recent.filter((m) => m.type === selectedType)
+      : summary?.recent || [];
 
   // Content to render inside the panel
   const renderContent = () => {
@@ -103,9 +106,7 @@ export function MomentsTimeline({ apiBase = DEFAULT_API_BASE }: MomentsTimelineP
             <button
               onClick={() => setSelectedType(null)}
               className={`px-2 py-1 text-xs rounded transition-colors ${
-                !selectedType
-                  ? 'bg-accent text-bg'
-                  : 'bg-surface text-text-muted hover:text-text'
+                !selectedType ? 'bg-accent text-bg' : 'bg-surface text-text-muted hover:text-text'
               }`}
             >
               All
@@ -159,22 +160,15 @@ export function MomentsTimeline({ apiBase = DEFAULT_API_BASE }: MomentsTimelineP
           </div>
           {filteredMoments.length > 0 ? (
             filteredMoments.map((moment) => (
-              <div
-                key={moment.id}
-                className={`p-2 rounded border ${getMomentColor(moment.type)}`}
-              >
+              <div key={moment.id} className={`p-2 rounded border ${getMomentColor(moment.type)}`}>
                 <div className="flex items-center gap-2">
                   <span>{getMomentIcon(moment.type)}</span>
-                  <span className="text-sm font-medium flex-1 truncate">
-                    {moment.agent}
-                  </span>
+                  <span className="text-sm font-medium flex-1 truncate">{moment.agent}</span>
                   <span className="text-xs opacity-70">
                     {(moment.significance * 100).toFixed(0)}%
                   </span>
                 </div>
-                <p className="text-xs text-text-muted mt-1 line-clamp-2">
-                  {moment.description}
-                </p>
+                <p className="text-xs text-text-muted mt-1 line-clamp-2">{moment.description}</p>
                 {moment.created_at && (
                   <div className="text-xs text-text-muted/50 mt-1">
                     {new Date(moment.created_at).toLocaleString()}
@@ -183,25 +177,23 @@ export function MomentsTimeline({ apiBase = DEFAULT_API_BASE }: MomentsTimelineP
               </div>
             ))
           ) : (
-            <div className="text-center text-text-muted text-sm py-4">
-              No moments of this type.
-            </div>
+            <div className="text-center text-text-muted text-sm py-4">No moments of this type.</div>
           )}
         </div>
 
         {/* Agent Distribution */}
         {Object.keys(summary.by_agent).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-border" data-testid="moments-agent-distribution">
+          <div
+            className="mt-4 pt-4 border-t border-border"
+            data-testid="moments-agent-distribution"
+          >
             <div className="text-xs text-text-muted mb-2">BY AGENT</div>
             <div className="flex flex-wrap gap-2">
               {Object.entries(summary.by_agent)
                 .sort(([, a], [, b]) => b - a)
                 .slice(0, 5)
                 .map(([agent, count]) => (
-                  <span
-                    key={agent}
-                    className="text-xs bg-surface px-2 py-1 rounded"
-                  >
+                  <span key={agent} className="text-xs bg-surface px-2 py-1 rounded">
                     <span className="text-text">{agent}</span>
                     <span className="text-text-muted ml-1">({count})</span>
                   </span>

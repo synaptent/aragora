@@ -15,12 +15,7 @@ import {
   type ProvenanceLink,
   type StageTransition,
 } from '../types';
-import {
-  InputField,
-  SelectField,
-  SliderField,
-  CheckboxField,
-} from './shared-fields';
+import { InputField, SelectField, SliderField, CheckboxField } from './shared-fields';
 
 /* -------------------------------------------------------------------------- */
 /*  Props                                                                     */
@@ -466,7 +461,9 @@ function ProvenanceTab({
               <div
                 key={s}
                 className={`flex-1 h-2 rounded-full transition-opacity ${isActive ? colors.bg : 'bg-border'}`}
-                style={isActive ? { backgroundColor: config.primary, opacity: 1 } : { opacity: 0.3 }}
+                style={
+                  isActive ? { backgroundColor: config.primary, opacity: 1 } : { opacity: 0.3 }
+                }
                 title={`${config.label}${isActive ? ' (in chain)' : ''}`}
               />
             );
@@ -480,7 +477,9 @@ function ProvenanceTab({
       {/* Transition details */}
       {relevantTransition && (
         <div className="mb-4 p-3 bg-bg border border-border rounded">
-          <label className="block text-xs text-text-muted mb-2 uppercase font-bold">Transition</label>
+          <label className="block text-xs text-text-muted mb-2 uppercase font-bold">
+            Transition
+          </label>
           <div className="space-y-1 text-xs font-theme-data">
             <div className="flex justify-between">
               <span className="text-text-muted">From</span>
@@ -521,12 +520,22 @@ function ProvenanceTab({
           const sourceColors = STAGE_COLOR_CLASSES[link.source_stage];
           const targetColors = STAGE_COLOR_CLASSES[link.target_stage];
           return (
-            <div key={i} className="p-2 bg-bg rounded border border-border" data-testid="provenance-link">
+            <div
+              key={i}
+              className="p-2 bg-bg rounded border border-border"
+              data-testid="provenance-link"
+            >
               <div className="flex items-center gap-1 text-xs font-theme-data mb-1">
                 <span className={`px-1 py-0.5 rounded ${sourceColors?.bg} ${sourceColors?.text}`}>
                   {link.source_stage}
                 </span>
-                <svg className="w-3 h-3 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <svg
+                  className="w-3 h-3 text-text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
                 <span className={`px-1 py-0.5 rounded ${targetColors?.bg} ${targetColors?.text}`}>
@@ -534,8 +543,12 @@ function ProvenanceTab({
                 </span>
               </div>
               <div className="text-xs font-theme-data text-text-muted space-y-0.5">
-                <p className="truncate">Source: <span className="text-text">{link.source_node_id}</span></p>
-                <p className="truncate">Target: <span className="text-text">{link.target_node_id}</span></p>
+                <p className="truncate">
+                  Source: <span className="text-text">{link.source_node_id}</span>
+                </p>
+                <p className="truncate">
+                  Target: <span className="text-text">{link.target_node_id}</span>
+                </p>
                 <div className="flex gap-3 mt-1">
                   <span>#{link.content_hash.slice(0, 8)}</span>
                   {link.method && <span>{link.method}</span>}
@@ -570,10 +583,7 @@ export const PipelinePropertyEditor = memo(function PipelinePropertyEditor({
 }: PipelinePropertyEditorProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>('properties');
 
-  const handleLabelChange = useCallback(
-    (label: string) => onUpdate({ label }),
-    [onUpdate],
-  );
+  const handleLabelChange = useCallback((label: string) => onUpdate({ label }), [onUpdate]);
 
   /* -- Empty state -------------------------------------------------------- */
   if (!node) {
@@ -596,10 +606,7 @@ export const PipelinePropertyEditor = memo(function PipelinePropertyEditor({
         className="flex items-center gap-2 mb-3 pb-3 border-b border-border"
         style={{ borderBottomColor: stageConfig.primary }}
       >
-        <div
-          className="w-1 h-8 rounded-full"
-          style={{ backgroundColor: stageConfig.primary }}
-        />
+        <div className="w-1 h-8 rounded-full" style={{ backgroundColor: stageConfig.primary }} />
         <div>
           <h3 className="text-sm font-theme-data font-bold text-text uppercase">
             {stageConfig.label} Properties
@@ -633,9 +640,7 @@ export const PipelinePropertyEditor = memo(function PipelinePropertyEditor({
           data-testid="tab-provenance"
         >
           Provenance
-          {hasProvenance && (
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          )}
+          {hasProvenance && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
         </button>
       </div>
 
@@ -674,11 +679,7 @@ export const PipelinePropertyEditor = memo(function PipelinePropertyEditor({
 
       {/* Tab content: Provenance */}
       {activeTab === 'provenance' && (
-        <ProvenanceTab
-          provenanceLinks={provenanceLinks}
-          transitions={transitions}
-          stage={stage}
-        />
+        <ProvenanceTab provenanceLinks={provenanceLinks} transitions={transitions} stage={stage} />
       )}
 
       {/* Bottom actions */}

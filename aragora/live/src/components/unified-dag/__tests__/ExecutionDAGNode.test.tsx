@@ -61,11 +61,7 @@ describe('ExecutionDAGNode', () => {
 
   it('shows ready status with Run button', () => {
     const onExecuteNode = jest.fn();
-    render(
-      <ExecutionDAGNode
-        {...makeProps({ data: { status: 'ready' }, onExecuteNode })}
-      />,
-    );
+    render(<ExecutionDAGNode {...makeProps({ data: { status: 'ready' }, onExecuteNode })} />);
     expect(screen.getByText('Ready')).toBeInTheDocument();
     const btn = screen.getByTestId('run-btn-node-1');
     expect(btn).toBeInTheDocument();
@@ -75,22 +71,14 @@ describe('ExecutionDAGNode', () => {
 
   it('shows failed status with Retry button', () => {
     const onExecuteNode = jest.fn();
-    render(
-      <ExecutionDAGNode
-        {...makeProps({ data: { status: 'failed' }, onExecuteNode })}
-      />,
-    );
+    render(<ExecutionDAGNode {...makeProps({ data: { status: 'failed' }, onExecuteNode })} />);
     expect(screen.getByText('Failed')).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
   });
 
   it('uses the execute callback embedded in node data', () => {
     const onExecuteNode = jest.fn();
-    render(
-      <ExecutionDAGNode
-        {...makeProps({ data: { status: 'ready', onExecuteNode } })}
-      />,
-    );
+    render(<ExecutionDAGNode {...makeProps({ data: { status: 'ready', onExecuteNode } })} />);
     fireEvent.click(screen.getByTestId('run-btn-node-1'));
     expect(onExecuteNode).toHaveBeenCalledWith('node-1');
   });
@@ -133,27 +121,19 @@ describe('ExecutionDAGNode', () => {
   });
 
   it('shows Done status for succeeded nodes', () => {
-    render(
-      <ExecutionDAGNode
-        {...makeProps({ data: { status: 'succeeded' } })}
-      />,
-    );
+    render(<ExecutionDAGNode {...makeProps({ data: { status: 'succeeded' } })} />);
     expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
   it('applies selected ring', () => {
-    const { container } = render(
-      <ExecutionDAGNode {...makeProps({ selected: true })} />,
-    );
+    const { container } = render(<ExecutionDAGNode {...makeProps({ selected: true })} />);
     const node = container.querySelector('[data-testid="dag-node-node-1"]');
     expect(node?.className).toContain('ring-2');
   });
 
   it('renders the principles stage icon and label', () => {
     render(
-      <ExecutionDAGNode
-        {...makeProps({ data: { stage: 'principles', status: 'active' } })}
-      />,
+      <ExecutionDAGNode {...makeProps({ data: { stage: 'principles', status: 'active' } })} />,
     );
     expect(screen.getByText('principles')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();

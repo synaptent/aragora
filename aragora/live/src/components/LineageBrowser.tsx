@@ -27,9 +27,21 @@ interface LineageBrowserProps {
 }
 
 const NODE_COLORS = {
-  root: { bg: 'bg-[var(--accent)]/20', border: 'border-[var(--accent)]', text: 'text-[var(--accent)]' },
-  parent: { bg: 'bg-[var(--acid-cyan)]/20', border: 'border-[var(--acid-cyan)]', text: 'text-[var(--acid-cyan)]' },
-  ancestor: { bg: 'bg-acid-yellow/20', border: 'border-acid-yellow', text: 'text-[var(--acid-yellow)]' },
+  root: {
+    bg: 'bg-[var(--accent)]/20',
+    border: 'border-[var(--accent)]',
+    text: 'text-[var(--accent)]',
+  },
+  parent: {
+    bg: 'bg-[var(--acid-cyan)]/20',
+    border: 'border-[var(--acid-cyan)]',
+    text: 'text-[var(--acid-cyan)]',
+  },
+  ancestor: {
+    bg: 'bg-acid-yellow/20',
+    border: 'border-acid-yellow',
+    text: 'text-[var(--acid-yellow)]',
+  },
   origin: { bg: 'bg-accent/20', border: 'border-accent', text: 'text-accent' },
 };
 
@@ -49,10 +61,10 @@ function LineageNode({
   const colors = isRoot
     ? NODE_COLORS.root
     : depth === 1
-    ? NODE_COLORS.parent
-    : depth < 4
-    ? NODE_COLORS.ancestor
-    : NODE_COLORS.origin;
+      ? NODE_COLORS.parent
+      : depth < 4
+        ? NODE_COLORS.ancestor
+        : NODE_COLORS.origin;
 
   const isSelected = selectedId === node.genome_id;
 
@@ -80,9 +92,7 @@ function LineageNode({
         {node.name || node.genome_id.slice(0, 12) + '...'}
       </div>
       {node.event_type && (
-        <div className="text-xs font-theme-data text-text-muted mt-1">
-          via {node.event_type}
-        </div>
+        <div className="text-xs font-theme-data text-text-muted mt-1">via {node.event_type}</div>
       )}
     </button>
   );
@@ -140,7 +150,10 @@ function LineageTree({
             </div>
 
             {/* Nodes at this generation */}
-            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(genNodes.length, 3)}, 1fr)` }}>
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: `repeat(${Math.min(genNodes.length, 3)}, 1fr)` }}
+            >
               {genNodes.map((node) => (
                 <div key={node.genome_id} className="relative">
                   <LineageNode
@@ -183,31 +196,34 @@ export function LineageBrowser({
   const [selectedId, setSelectedId] = useState<string | undefined>(genomeId);
   const [searchId, setSearchId] = useState(genomeId || '');
 
-  const fetchLineage = useCallback(async (id: string) => {
-    if (!id) return;
+  const fetchLineage = useCallback(
+    async (id: string) => {
+      if (!id) return;
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-    try {
-      const response = await fetch(`${apiBase}/api/genesis/lineage/${id}?max_depth=${maxDepth}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('Genome not found');
+      try {
+        const response = await fetch(`${apiBase}/api/genesis/lineage/${id}?max_depth=${maxDepth}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error('Genome not found');
+          }
+          const data = await response.json();
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
         const data = await response.json();
-        throw new Error(data.error || `HTTP ${response.status}`);
+        setLineage(data);
+        setSelectedId(id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch lineage');
+        setLineage(null);
+      } finally {
+        setLoading(false);
       }
-      const data = await response.json();
-      setLineage(data);
-      setSelectedId(id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch lineage');
-      setLineage(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, maxDepth]);
+    },
+    [apiBase, maxDepth],
+  );
 
   useEffect(() => {
     if (genomeId) {
@@ -299,9 +315,7 @@ export function LineageBrowser({
 
           {/* Selected node details */}
           <div className="bg-surface border border-[var(--acid-cyan)]/30 rounded-lg p-4">
-            <h5 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-4">
-              NODE DETAILS
-            </h5>
+            <h5 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-4">NODE DETAILS</h5>
             {selectedNode ? (
               <div className="space-y-4">
                 <div>
@@ -314,9 +328,7 @@ export function LineageBrowser({
                 {selectedNode.name && (
                   <div>
                     <div className="text-xs text-text-muted mb-1">NAME</div>
-                    <div className="font-theme-data text-sm text-text">
-                      {selectedNode.name}
-                    </div>
+                    <div className="font-theme-data text-sm text-text">{selectedNode.name}</div>
                   </div>
                 )}
 
@@ -405,19 +417,27 @@ export function LineageBrowser({
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs font-theme-data">
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded ${NODE_COLORS.root.bg} ${NODE_COLORS.root.border} border`} />
+          <div
+            className={`w-3 h-3 rounded ${NODE_COLORS.root.bg} ${NODE_COLORS.root.border} border`}
+          />
           <span className="text-text-muted">Current</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded ${NODE_COLORS.parent.bg} ${NODE_COLORS.parent.border} border`} />
+          <div
+            className={`w-3 h-3 rounded ${NODE_COLORS.parent.bg} ${NODE_COLORS.parent.border} border`}
+          />
           <span className="text-text-muted">Parent</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded ${NODE_COLORS.ancestor.bg} ${NODE_COLORS.ancestor.border} border`} />
+          <div
+            className={`w-3 h-3 rounded ${NODE_COLORS.ancestor.bg} ${NODE_COLORS.ancestor.border} border`}
+          />
           <span className="text-text-muted">Ancestor</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded ${NODE_COLORS.origin.bg} ${NODE_COLORS.origin.border} border`} />
+          <div
+            className={`w-3 h-3 rounded ${NODE_COLORS.origin.bg} ${NODE_COLORS.origin.border} border`}
+          />
           <span className="text-text-muted">Origin</span>
         </div>
       </div>

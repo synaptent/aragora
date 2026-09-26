@@ -52,7 +52,9 @@ function OAuthCallbackContent() {
         if (!isMountedRef.current) return;
         clearProcessingTimeout();
         setStatus('success');
-        setMessage(`Successfully linked ${linked.charAt(0).toUpperCase() + linked.slice(1)} account`);
+        setMessage(
+          `Successfully linked ${linked.charAt(0).toUpperCase() + linked.slice(1)} account`,
+        );
         redirectTimerRef.current = setTimeout(() => {
           if (isMountedRef.current) router.replace('/settings');
         }, 1500);
@@ -69,7 +71,9 @@ function OAuthCallbackContent() {
         tokenString = window.location.search.substring(1);
         logger.debug('[OAuth Callback] Query params fallback present:', !!tokenString);
         if (tokenString) {
-          logger.warn('[OAuth Callback] Tokens received via query params - this is less secure than fragments');
+          logger.warn(
+            '[OAuth Callback] Tokens received via query params - this is less secure than fragments',
+          );
         }
       }
 
@@ -92,7 +96,12 @@ function OAuthCallbackContent() {
           logger.debug('[OAuth Callback] Processing OAuth token pair');
           // Pass AbortSignal so in-flight retries cancel on unmount
           // Pass server-provided expiry if available
-          await setTokens(accessToken, refreshToken, controller.signal, expiresIn ? parseInt(expiresIn, 10) : undefined);
+          await setTokens(
+            accessToken,
+            refreshToken,
+            controller.signal,
+            expiresIn ? parseInt(expiresIn, 10) : undefined,
+          );
           logger.debug('[OAuth Callback] setTokens completed successfully');
 
           // Bail if unmounted during await
@@ -107,7 +116,12 @@ function OAuthCallbackContent() {
           // Verify tokens are stored before redirect
           const storedTokens = localStorage.getItem('aragora_tokens');
           const storedUser = localStorage.getItem('aragora_user');
-          logger.debug('[OAuth Callback] Pre-redirect check - tokens:', !!storedTokens, 'user:', !!storedUser);
+          logger.debug(
+            '[OAuth Callback] Pre-redirect check - tokens:',
+            !!storedTokens,
+            'user:',
+            !!storedUser,
+          );
 
           // Check for a saved return URL (e.g., user was viewing a debate before login)
           const returnUrl = sessionStorage.getItem(RETURN_URL_STORAGE_KEY);
@@ -138,7 +152,10 @@ function OAuthCallbackContent() {
               setMessage('OAuth tokens were rejected by the server. Please try logging in again.');
             } else if (err.message.includes('401')) {
               setMessage('Authentication failed. Please try logging in again.');
-            } else if (err.message.includes('Network error') || err.message.includes('Server error')) {
+            } else if (
+              err.message.includes('Network error') ||
+              err.message.includes('Server error')
+            ) {
               setMessage(err.message + ' Your tokens have been saved.');
             } else {
               setMessage(err.message || 'Failed to complete authentication');
@@ -152,7 +169,12 @@ function OAuthCallbackContent() {
         clearProcessingTimeout();
         setStatus('error');
         setMessage('Missing authentication tokens');
-        logger.error('[OAuth Callback] Tokens missing from URL params. access_token:', !!accessToken, 'refresh_token:', !!refreshToken);
+        logger.error(
+          '[OAuth Callback] Tokens missing from URL params. access_token:',
+          !!accessToken,
+          'refresh_token:',
+          !!refreshToken,
+        );
       }
     };
 
@@ -184,9 +206,7 @@ function OAuthCallbackContent() {
               {status === 'success' && (
                 <div className="text-4xl text-[var(--accent)]">&#x2713;</div>
               )}
-              {status === 'error' && (
-                <div className="text-4xl text-warning">&#x2717;</div>
-              )}
+              {status === 'error' && <div className="text-4xl text-warning">&#x2717;</div>}
             </div>
 
             {/* Title */}
@@ -250,7 +270,9 @@ function LoadingFallback() {
               </div>
             </div>
             <h1 className="text-xl font-theme-data text-[var(--accent)] mb-4">AUTHENTICATING...</h1>
-            <p className="text-text-muted text-sm font-theme-data mb-6">Processing authentication...</p>
+            <p className="text-text-muted text-sm font-theme-data mb-6">
+              Processing authentication...
+            </p>
             <div className="text-[var(--accent)]/50 text-xs font-theme-data">
               <p>{'═'.repeat(25)}</p>
               <p className="mt-2">Please wait...</p>

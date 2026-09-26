@@ -75,11 +75,7 @@ interface CodeMetrics {
   maintainability_index: number;
   test_coverage?: number;
   code_duplication?: number;
-  hotspots: Array<{
-    file: string;
-    complexity: number;
-    lines: number;
-  }>;
+  hotspots: Array<{ file: string; complexity: number; lines: number }>;
   languages: Record<string, number>;
 }
 
@@ -164,7 +160,7 @@ export default function CodebaseAuditPage() {
             'Content-Type': 'application/json',
             ...(tokens?.access_token && { Authorization: `Bearer ${tokens.access_token}` }),
           },
-        }
+        },
       );
 
       if (!response.ok) throw new Error('Failed to fetch findings');
@@ -225,10 +221,7 @@ export default function CodebaseAuditPage() {
           'Content-Type': 'application/json',
           ...(tokens?.access_token && { Authorization: `Bearer ${tokens.access_token}` }),
         },
-        body: JSON.stringify({
-          target_path: targetPath,
-          scan_types: selectedScanTypes,
-        }),
+        body: JSON.stringify({ target_path: targetPath, scan_types: selectedScanTypes }),
       });
 
       if (!response.ok) throw new Error('Failed to start scan');
@@ -253,7 +246,7 @@ export default function CodebaseAuditPage() {
             ...(tokens?.access_token && { Authorization: `Bearer ${tokens.access_token}` }),
           },
           body: JSON.stringify({ reason, status }),
-        }
+        },
       );
 
       if (!response.ok) throw new Error('Failed to dismiss finding');
@@ -274,7 +267,7 @@ export default function CodebaseAuditPage() {
             ...(tokens?.access_token && { Authorization: `Bearer ${tokens.access_token}` }),
           },
           body: JSON.stringify({ repo }),
-        }
+        },
       );
 
       if (!response.ok) throw new Error('Failed to create GitHub issue');
@@ -447,7 +440,7 @@ function DashboardView({
                       setSelectedScanTypes(
                         selectedScanTypes.includes(type)
                           ? selectedScanTypes.filter((t) => t !== type)
-                          : [...selectedScanTypes, type]
+                          : [...selectedScanTypes, type],
                       )
                     }
                     className={`px-3 py-1 text-sm font-theme-data rounded border transition-colors ${
@@ -499,7 +492,9 @@ function DashboardView({
                 className="flex items-center justify-between p-2 border border-[var(--border)] rounded text-sm"
               >
                 <div className="flex items-center gap-3">
-                  <span className={`font-theme-data ${scan.status === 'completed' ? 'text-green-400' : scan.status === 'running' ? 'text-cyan-400' : 'text-yellow-400'}`}>
+                  <span
+                    className={`font-theme-data ${scan.status === 'completed' ? 'text-green-400' : scan.status === 'running' ? 'text-cyan-400' : 'text-yellow-400'}`}
+                  >
                     [{scan.status}]
                   </span>
                   <span className="text-[var(--muted)]">{scan.scan_type}</span>
@@ -563,12 +558,16 @@ function FindingsView({
           <label className="block text-xs text-[var(--muted)] mb-1">Severity</label>
           <select
             value={filter.severity || ''}
-            onChange={(e) => setFilter({ ...filter, severity: (e.target.value || undefined) as FindingSeverity })}
+            onChange={(e) =>
+              setFilter({ ...filter, severity: (e.target.value || undefined) as FindingSeverity })
+            }
             className="px-2 py-1 bg-[var(--background)] border border-[var(--border)] rounded text-sm font-theme-data"
           >
             <option value="">All</option>
             {(['critical', 'high', 'medium', 'low', 'info'] as FindingSeverity[]).map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
         </div>
@@ -576,12 +575,16 @@ function FindingsView({
           <label className="block text-xs text-[var(--muted)] mb-1">Type</label>
           <select
             value={filter.type || ''}
-            onChange={(e) => setFilter({ ...filter, type: (e.target.value || undefined) as ScanType })}
+            onChange={(e) =>
+              setFilter({ ...filter, type: (e.target.value || undefined) as ScanType })
+            }
             className="px-2 py-1 bg-[var(--background)] border border-[var(--border)] rounded text-sm font-theme-data"
           >
             <option value="">All</option>
             {(Object.keys(SCAN_TYPE_LABELS) as ScanType[]).map((t) => (
-              <option key={t} value={t}>{SCAN_TYPE_LABELS[t].label}</option>
+              <option key={t} value={t}>
+                {SCAN_TYPE_LABELS[t].label}
+              </option>
             ))}
           </select>
         </div>
@@ -589,12 +592,18 @@ function FindingsView({
           <label className="block text-xs text-[var(--muted)] mb-1">Status</label>
           <select
             value={filter.status || ''}
-            onChange={(e) => setFilter({ ...filter, status: (e.target.value || undefined) as FindingStatus })}
+            onChange={(e) =>
+              setFilter({ ...filter, status: (e.target.value || undefined) as FindingStatus })
+            }
             className="px-2 py-1 bg-[var(--background)] border border-[var(--border)] rounded text-sm font-theme-data"
           >
             <option value="">All</option>
-            {(['open', 'acknowledged', 'fixed', 'false_positive', 'wont_fix'] as FindingStatus[]).map((s) => (
-              <option key={s} value={s}>{s.replace('_', ' ')}</option>
+            {(
+              ['open', 'acknowledged', 'fixed', 'false_positive', 'wont_fix'] as FindingStatus[]
+            ).map((s) => (
+              <option key={s} value={s}>
+                {s.replace('_', ' ')}
+              </option>
             ))}
           </select>
         </div>
@@ -647,7 +656,9 @@ function FindingCard({
         <div className="flex items-center gap-3">
           <span className={`font-theme-data font-bold ${config.color}`}>[{config.icon}]</span>
           <span className="font-theme-data text-sm">{finding.title}</span>
-          <span className="text-xs text-[var(--muted)]">{SCAN_TYPE_LABELS[finding.scan_type]?.label}</span>
+          <span className="text-xs text-[var(--muted)]">
+            {SCAN_TYPE_LABELS[finding.scan_type]?.label}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-[var(--muted)] font-theme-data">{finding.file_path}</span>
@@ -680,7 +691,9 @@ function FindingCard({
               <span className="px-2 py-1 bg-[var(--surface)] rounded">{finding.cwe_id}</span>
             )}
             {finding.owasp_category && (
-              <span className="px-2 py-1 bg-[var(--surface)] rounded">{finding.owasp_category}</span>
+              <span className="px-2 py-1 bg-[var(--surface)] rounded">
+                {finding.owasp_category}
+              </span>
             )}
           </div>
 
@@ -734,15 +747,23 @@ function ScansView({ scans }: { scans: ScanResult[] }) {
         </div>
       ) : (
         scans.map((scan) => (
-          <div key={scan.id} className="border border-[var(--border)] rounded p-4 bg-[var(--surface)]">
+          <div
+            key={scan.id}
+            className="border border-[var(--border)] rounded p-4 bg-[var(--surface)]"
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
-                <span className={`font-theme-data text-sm ${
-                  scan.status === 'completed' ? 'text-green-400' :
-                  scan.status === 'running' ? 'text-cyan-400 animate-pulse' :
-                  scan.status === 'failed' ? 'text-red-400' :
-                  'text-yellow-400'
-                }`}>
+                <span
+                  className={`font-theme-data text-sm ${
+                    scan.status === 'completed'
+                      ? 'text-green-400'
+                      : scan.status === 'running'
+                        ? 'text-cyan-400 animate-pulse'
+                        : scan.status === 'failed'
+                          ? 'text-red-400'
+                          : 'text-yellow-400'
+                  }`}
+                >
                   [{scan.status.toUpperCase()}]
                 </span>
                 <span className="font-theme-data">{scan.scan_type}</span>
@@ -782,19 +803,27 @@ function MetricsView({ metrics }: { metrics: CodeMetrics | null }) {
       {/* Overview Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="border border-[var(--border)] rounded p-4 bg-[var(--surface)]">
-          <div className="text-2xl font-theme-data font-bold">{metrics.total_files.toLocaleString()}</div>
+          <div className="text-2xl font-theme-data font-bold">
+            {metrics.total_files.toLocaleString()}
+          </div>
           <div className="text-sm text-[var(--muted)]">Total Files</div>
         </div>
         <div className="border border-[var(--border)] rounded p-4 bg-[var(--surface)]">
-          <div className="text-2xl font-theme-data font-bold">{metrics.total_lines.toLocaleString()}</div>
+          <div className="text-2xl font-theme-data font-bold">
+            {metrics.total_lines.toLocaleString()}
+          </div>
           <div className="text-sm text-[var(--muted)]">Lines of Code</div>
         </div>
         <div className="border border-[var(--border)] rounded p-4 bg-[var(--surface)]">
-          <div className="text-2xl font-theme-data font-bold">{metrics.average_complexity.toFixed(1)}</div>
+          <div className="text-2xl font-theme-data font-bold">
+            {metrics.average_complexity.toFixed(1)}
+          </div>
           <div className="text-sm text-[var(--muted)]">Avg Complexity</div>
         </div>
         <div className="border border-[var(--border)] rounded p-4 bg-[var(--surface)]">
-          <div className="text-2xl font-theme-data font-bold">{metrics.maintainability_index.toFixed(0)}</div>
+          <div className="text-2xl font-theme-data font-bold">
+            {metrics.maintainability_index.toFixed(0)}
+          </div>
           <div className="text-sm text-[var(--muted)]">Maintainability</div>
         </div>
       </div>
@@ -830,7 +859,9 @@ function MetricsView({ metrics }: { metrics: CodeMetrics | null }) {
                 key={i}
                 className="flex items-center justify-between p-2 border border-[var(--border)] rounded text-sm"
               >
-                <span className="font-theme-data text-[var(--muted)] truncate flex-1">{hotspot.file}</span>
+                <span className="font-theme-data text-[var(--muted)] truncate flex-1">
+                  {hotspot.file}
+                </span>
                 <div className="flex gap-4 text-xs">
                   <span className="text-orange-400">complexity: {hotspot.complexity}</span>
                   <span className="text-[var(--muted)]">{hotspot.lines} lines</span>
@@ -850,13 +881,7 @@ function getDemoSummary(): DashboardSummary {
     total_scans: 5,
     total_findings: 23,
     open_findings: 18,
-    findings_by_severity: {
-      critical: 2,
-      high: 5,
-      medium: 8,
-      low: 6,
-      info: 2,
-    },
+    findings_by_severity: { critical: 2, high: 5, medium: 8, low: 6, info: 2 },
     findings_by_type: {
       sast: 8,
       bugs: 6,
@@ -944,11 +969,6 @@ function getDemoMetrics(): CodeMetrics {
       { file: 'src/server/unified_server.py', complexity: 24, lines: 680 },
       { file: 'src/analysis/codebase/sast_scanner.py', complexity: 22, lines: 520 },
     ],
-    languages: {
-      Python: 35000,
-      TypeScript: 8000,
-      JavaScript: 1500,
-      YAML: 500,
-    },
+    languages: { Python: 35000, TypeScript: 8000, JavaScript: 1500, YAML: 500 },
   };
 }
