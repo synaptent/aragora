@@ -263,6 +263,46 @@
           "type": "array",
           "default": [],
           "description": "List of finding IDs to ignore"
+        },
+        "aragora.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "off"
+          ],
+          "default": "info",
+          "description": "Minimum level of messages written to the Aragora output channel. Secrets such as API keys and tokens are redacted."
+        },
+        "aragora.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "tags": [
+            "telemetry",
+            "usesOnlineServices"
+          ],
+          "description": "Send error reports (Sentry) and usage events (PostHog) to the Aragora team. Only takes effect when VS Code telemetry is also enabled and a Sentry DSN or PostHog key is configured. Reload the window after changing it."
+        },
+        "aragora.telemetry.sentryDsn": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "tags": [
+            "telemetry"
+          ],
+          "description": "Sentry DSN for error reports. Falls back to the ARAGORA_SENTRY_DSN environment variable when empty."
+        },
+        "aragora.telemetry.posthogKey": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "tags": [
+            "telemetry"
+          ],
+          "description": "PostHog project key for usage events. Falls back to the ARAGORA_POSTHOG_KEY environment variable when empty; ARAGORA_POSTHOG_HOST overrides the default host (https://us.i.posthog.com)."
         }
       }
     },
@@ -503,7 +543,10 @@
     "typescript": "^5.3.0",
     "typescript-eslint": "^8.70.1"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@sentry/node": "^10.73.0",
+    "posthog-node": "^5.51.8"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/aragora/aragora"

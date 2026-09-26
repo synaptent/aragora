@@ -29,5 +29,5 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.ts', '!src/test/**', '!src/extension.ts', '!src/**/*.d.ts'],
   // Ratchet floors: measured coverage minus one point, rounded down. Raise
   // them as tests are added; never lower them.
-  coverageThreshold: { global: { branches: 4, functions: 9, lines: 7, statements: 7 } },
+  coverageThreshold: { global: { branches: 23, functions: 26, lines: 21, statements: 21 } },
 };

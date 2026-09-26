@@ -7,6 +7,9 @@
 
 import * as vscode from 'vscode';
 import type { SecurityFinding } from '../types/messages';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 type AragoraClient = {
   analyzeSelection(content: string, languageId: string): Promise<{ explanation: string }>;
@@ -494,7 +497,7 @@ export function registerCodeActionsCommands(
                 increment: (1 / diagnostics.length) * 100,
               });
             } catch (error) {
-              console.error(`Failed to fix issue: ${error}`);
+              logger.error('Failed to fix issue:', error);
             }
           }
           vscode.window.showInformationMessage(`Fixed ${fixed}/${diagnostics.length} issues`);

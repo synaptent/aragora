@@ -326,6 +326,96 @@ export class MockTextDocument {
   }
 }
 
+// Mock OutputChannel: records every appended line so tests can read the channel text.
+export class MockOutputChannel {
+  readonly lines: string[] = [];
+  disposed = false;
+
+  constructor(public readonly name: string) {}
+
+  append(value: string): void {
+    this.lines.push(value);
+  }
+
+  appendLine(value: string): void {
+    this.lines.push(value);
+  }
+
+  replace(value: string): void {
+    this.lines.length = 0;
+    this.lines.push(value);
+  }
+
+  clear(): void {
+    this.lines.length = 0;
+  }
+
+  show(): void {}
+
+  hide(): void {}
+
+  dispose(): void {
+    this.disposed = true;
+  }
+
+  get text(): string {
+    return this.lines.join('\n');
+  }
+}
+
+export enum ExtensionMode {
+  Production = 1,
+  Development = 2,
+  Test = 3,
+}
+
+// Settings read through workspace.getConfiguration(section).get(key), keyed by full name.
+const mockSettings = new Map<string, unknown>();
+
+export const createdOutputChannels: MockOutputChannel[] = [];
+
+export const window = {
+  createOutputChannel(name: string): MockOutputChannel {
+    const channel = new MockOutputChannel(name);
+    createdOutputChannels.push(channel);
+    return channel;
+  },
+};
+
+export const workspace = {
+  getConfiguration(section?: string) {
+    const fullKey = (key: string): string => (section ? `${section}.${key}` : key);
+    return {
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        const name = fullKey(key);
+        return mockSettings.has(name) ? (mockSettings.get(name) as T) : defaultValue;
+      },
+      has(key: string): boolean {
+        return mockSettings.has(fullKey(key));
+      },
+      async update(key: string, value: unknown): Promise<void> {
+        mockSettings.set(fullKey(key), value);
+      },
+    };
+  },
+};
+
+export const env = { isTelemetryEnabled: true, machineId: 'mock-machine-id' };
+
+/** Sets settings by full name, e.g. `{ 'aragora.logLevel': 'debug' }`. */
+export function setMockConfiguration(values: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(values)) {
+    mockSettings.set(key, value);
+  }
+}
+
+/** Restores the configurable parts of the mock to their defaults. */
+export function resetMockVscode(): void {
+  mockSettings.clear();
+  createdOutputChannels.length = 0;
+  env.isTelemetryEnabled = true;
+}
+
 // Export combined mock module
 export const vscode = {
   Uri: MockUri,

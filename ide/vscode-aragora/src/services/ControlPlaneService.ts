@@ -8,6 +8,9 @@
  */
 
 import * as vscode from 'vscode';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 /** Active deliberation information */
 export interface Deliberation {
@@ -130,12 +133,12 @@ export class ControlPlaneService implements vscode.Disposable {
           const data = JSON.parse(event.data) as ControlPlaneEvent;
           this.handleEvent(data);
         } catch (error) {
-          console.error('Failed to parse control plane event:', error);
+          logger.error('Failed to parse control plane event:', error);
         }
       };
 
       this.ws.onerror = (error) => {
-        console.error('Control plane WebSocket error:', error);
+        logger.error('Control plane WebSocket error:', error);
       };
 
       this.ws.onclose = (event) => {
@@ -153,7 +156,7 @@ export class ControlPlaneService implements vscode.Disposable {
         }
       };
     } catch (error) {
-      console.error('Failed to connect to control plane:', error);
+      logger.error('Failed to connect to control plane:', error);
       this.setConnectionStatus('disconnected');
       this.scheduleReconnect();
     }
@@ -212,7 +215,7 @@ export class ControlPlaneService implements vscode.Disposable {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch vetted decisionmaking sessions:', error);
+        logger.error('Failed to fetch vetted decisionmaking sessions:', error);
       }
     }
 
@@ -337,7 +340,7 @@ export class ControlPlaneService implements vscode.Disposable {
       try {
         handler(event);
       } catch (error) {
-        console.error('Handler error:', error);
+        logger.error('Handler error:', error);
       }
     }
   }

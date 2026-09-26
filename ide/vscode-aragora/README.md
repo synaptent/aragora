@@ -38,14 +38,29 @@ npm run package
 
 Open Settings (`Ctrl+,`) and search for "Aragora":
 
-| Setting                 | Description                | Default                  |
-| ----------------------- | -------------------------- | ------------------------ |
-| `aragora.apiUrl`        | Aragora API URL            | `https://api.aragora.ai` |
-| `aragora.apiKey`        | Your API key               | (empty)                  |
-| `aragora.defaultAgents` | Default agents for debates | `claude,gpt-4`           |
-| `aragora.defaultRounds` | Default number of rounds   | `3`                      |
+| Setting                        | Description                                                                                   | Default                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------- | ------------------------ |
+| `aragora.apiUrl`               | Aragora API URL                                                                               | `https://api.aragora.ai` |
+| `aragora.apiKey`               | Your API key                                                                                  | (empty)                  |
+| `aragora.defaultAgents`        | Default agents for debates                                                                    | `claude,gpt-4`           |
+| `aragora.defaultRounds`        | Default number of rounds                                                                      | `3`                      |
+| `aragora.logLevel`             | Minimum level written to the Aragora output channel (`debug`, `info`, `warn`, `error`, `off`) | `info`                   |
+| `aragora.telemetry.enabled`    | Send error reports and usage events                                                           | `false`                  |
+| `aragora.telemetry.sentryDsn`  | Sentry DSN for error reports                                                                  | (empty)                  |
+| `aragora.telemetry.posthogKey` | PostHog project key for usage events                                                          | (empty)                  |
 
 Or use the command `Aragora: Configure API` from the command palette.
+
+Logs go to the **Aragora** output channel. API keys, tokens, secrets, passwords and
+`Authorization` values are redacted before they are written.
+
+Telemetry is off by default. The extension creates Sentry or PostHog clients only when all of
+these hold: VS Code telemetry is enabled, `aragora.telemetry.enabled` is `true`, and a Sentry DSN
+or PostHog key is set. The DSN and key can also come from the `ARAGORA_SENTRY_DSN` and
+`ARAGORA_POSTHOG_KEY` environment variables; `ARAGORA_POSTHOG_HOST` overrides the PostHog host.
+The telemetry settings are user-level only, so a workspace cannot turn them on. The SDKs are
+optional at runtime: if `@sentry/node` or `posthog-node` cannot be loaded (for example in a VSIX
+packaged with `--no-dependencies`), that client stays off.
 
 ## Commands
 

@@ -16,6 +16,9 @@ import type {
   getAgentColor,
 } from '../types/messages';
 import type { StreamManager } from '../services/StreamManager';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 export class DebatePanel {
   public static currentPanel: DebatePanel | undefined;
@@ -331,7 +334,7 @@ export class DebatePanel {
         vscode.window.showInformationMessage('Thank you for your feedback!');
       }
     } catch (error) {
-      console.error('Failed to send feedback:', error);
+      logger.error('Failed to send feedback:', error);
     }
   }
 

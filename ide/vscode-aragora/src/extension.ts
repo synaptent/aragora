@@ -27,6 +27,9 @@ import {
   disposeControlPlaneService,
 } from './services/ControlPlaneService';
 import type { SecurityFinding } from './types/messages';
+import { ResilientHttpClient, type RequestOptions } from './client';
+import { getLogger } from './logger';
+import { Telemetry } from './telemetry';
 
 // ============================================
 // Type Definitions
@@ -96,40 +99,31 @@ interface ResourceUtilization {
 // Aragora API Client
 // ============================================
 
+// Debates and model-backed code analysis run agents server-side, so they get
+// longer budgets than the client's default per-request timeout.
+const DEBATE_TIMEOUT_MS = 10 * 60_000;
+const ANALYSIS_TIMEOUT_MS = 2 * 60_000;
+
 class AragoraClient {
-  private apiUrl: string;
-  private apiKey: string;
+  private readonly http: ResilientHttpClient;
 
   constructor() {
     const config = vscode.workspace.getConfiguration('aragora');
-    this.apiUrl = config.get('apiUrl') || 'https://api.aragora.ai';
-    this.apiKey = config.get('apiKey') || '';
+    this.http = new ResilientHttpClient({
+      baseUrl: config.get<string>('apiUrl') || 'https://api.aragora.ai',
+      apiKey: config.get<string>('apiKey') || '',
+    });
   }
 
-  private async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-    }
-
-    const response = await fetch(`${this.apiUrl}${path}`, {
-      ...options,
-      headers: { ...headers, ...options.headers },
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`API Error: ${response.status} - ${error}`);
-    }
-
-    return response.json() as Promise<T>;
+  private fetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    return this.http.request<T>(path, options);
   }
 
   async runDebate(question: string, agents: string[], rounds: number): Promise<DebateResult> {
     return this.fetch<DebateResult>('/api/debates', {
       method: 'POST',
       body: JSON.stringify({ task: question, agents, protocol: { rounds, consensus: 'majority' } }),
+      timeoutMs: DEBATE_TIMEOUT_MS,
     });
   }
 
@@ -274,6 +268,7 @@ class AragoraClient {
       return await this.fetch<{ explanation: string }>('/api/v1/codebase/explain', {
         method: 'POST',
         body: JSON.stringify({ content, language: languageId }),
+        timeoutMs: ANALYSIS_TIMEOUT_MS,
       });
     } catch {
       return {
@@ -287,6 +282,7 @@ class AragoraClient {
       return await this.fetch<{ tests: string }>('/api/v1/codebase/generate-tests', {
         method: 'POST',
         body: JSON.stringify({ content, language: languageId }),
+        timeoutMs: ANALYSIS_TIMEOUT_MS,
       });
     } catch {
       return {
@@ -300,6 +296,7 @@ class AragoraClient {
       return await this.fetch<{ fix: string }>('/api/v1/codebase/suggest-fix', {
         method: 'POST',
         body: JSON.stringify({ finding, content }),
+        timeoutMs: ANALYSIS_TIMEOUT_MS,
       });
     } catch {
       return { fix: content }; // Return unchanged in offline mode
@@ -322,6 +319,7 @@ class AragoraClient {
       return await this.fetch('/api/v1/codebase/review', {
         method: 'POST',
         body: JSON.stringify({ content, language: languageId, file_name: fileName }),
+        timeoutMs: ANALYSIS_TIMEOUT_MS,
       });
     } catch {
       return {
@@ -699,7 +697,15 @@ class FleetStatusManager {
 // Extension Activation
 // ============================================
 
+let telemetry: Telemetry | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
+  const logger = getLogger();
+  const activeTelemetry = new Telemetry({ extensionMode: context.extensionMode });
+  telemetry = activeTelemetry;
+  activeTelemetry.start();
+  logger.setErrorReporter((error) => activeTelemetry.captureException(error));
+
   const client = new AragoraClient();
 
   // Initialize new providers
@@ -1326,10 +1332,18 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push({ dispose: () => fleetManager.stop() });
 
+  logger.info('Aragora extension activated.');
+  activeTelemetry.trackEvent('extension_activated');
   vscode.window.showInformationMessage('Aragora Control Plane activated with code analysis!');
 }
 
-export function deactivate() {
+export async function deactivate(): Promise<void> {
   // Clean up Control Plane Service
   disposeControlPlaneService();
+
+  const logger = getLogger();
+  logger.setErrorReporter(undefined);
+  await telemetry?.shutdown();
+  telemetry = undefined;
+  logger.dispose();
 }

@@ -14,6 +14,9 @@ import type {
   Agent,
   TokenUsage,
 } from '../types/messages';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 interface StreamEvent {
   type: string;
@@ -134,12 +137,12 @@ export class StreamManager implements vscode.Disposable {
           const data = JSON.parse(event.data) as AnyStreamEvent;
           this.handleStreamEvent(data);
         } catch (error) {
-          console.error('Failed to parse stream event:', error);
+          logger.error('Failed to parse stream event:', error);
         }
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        logger.error('WebSocket error:', error);
       };
 
       this.ws.onclose = (event) => {
@@ -152,7 +155,7 @@ export class StreamManager implements vscode.Disposable {
         }
       };
     } catch (error) {
-      console.error('Failed to connect:', error);
+      logger.error('Failed to connect:', error);
       this.setConnectionStatus('disconnected');
       this.scheduleReconnect();
     }
@@ -213,7 +216,7 @@ export class StreamManager implements vscode.Disposable {
         try {
           handler(message);
         } catch (error) {
-          console.error('Handler error:', error);
+          logger.error('Handler error:', error);
         }
       }
     }

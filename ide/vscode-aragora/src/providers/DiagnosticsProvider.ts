@@ -7,6 +7,9 @@
 
 import * as vscode from 'vscode';
 import type { SecurityFinding, Severity, CodeLocation } from '../types/messages';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 interface AnalyzeResponse {
   findings: Array<{
@@ -185,7 +188,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
       this.updateDiagnostics(uri, findings);
       return findings;
     } catch (error) {
-      console.error('Aragora analysis failed:', error);
+      logger.error('Aragora analysis failed:', error);
       // Don't clear existing diagnostics on error
       return this.findings.get(uri.toString()) || [];
     }
@@ -442,7 +445,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
           results.set(file.fsPath, findings);
         }
       } catch (error) {
-        console.error(`Failed to analyze ${file.fsPath}:`, error);
+        logger.error(`Failed to analyze ${file.fsPath}:`, error);
       }
 
       processed++;

@@ -8,6 +8,9 @@
 import * as vscode from 'vscode';
 import type { SecurityFinding, Severity } from '../types/messages';
 import { SEVERITY_PRIORITY, compareSeverity } from '../types/messages';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 /**
  * Tree item representing a severity group or individual finding
@@ -387,7 +390,7 @@ export function registerSecurityTreeCommands(
                 increment: (1 / findings.length) * 100,
               });
             } catch (error) {
-              console.error(`Failed to fix finding: ${error}`);
+              logger.error('Failed to fix finding:', error);
             }
           }
           vscode.window.showInformationMessage(`Fixed ${fixed}/${findings.length} issues`);
