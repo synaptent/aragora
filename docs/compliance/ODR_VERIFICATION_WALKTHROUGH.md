@@ -9,11 +9,12 @@ network access to Aragora — verification is fully offline.
 
 This document is executable: every command below was run against the
 checked-in sample receipt in [`fixtures/`](fixtures/) and the outputs shown
-are real. The sample is an ODR v0.2 receipt, the emitter's default output from
-release 2.11.0; the output below was captured on 2026-09-25 with the published
-`aragora-verify` 0.2.0 installed from PyPI into a clean venv (Python 3.11).
-The earlier v0.1 sample was verified on 2026-07-02 with `aragora-verify` 0.1.0
-and re-verified on 2026-07-04 with 0.1.1.
+are real. The sample is a pinned ODR v0.1 document, kept byte-stable on
+purpose; the reference emitter's default output is ODR v0.2 (spec §9.5), and
+`aragora-verify` 0.2.0 accepts both versions. The output below was captured on
+2026-09-26 with the published `aragora-verify` 0.2.0 installed from PyPI into
+a clean venv (Python 3.11). The same sample was first verified on 2026-07-02
+with `aragora-verify` 0.1.0 and re-verified on 2026-07-04 with 0.1.1.
 
 ---
 
@@ -25,8 +26,8 @@ which exact input, by which AI models, with what independence and dissent, at
 what confidence, and whether a human accepted the risk*.
 
 For exchange with outside parties the receipt is exported to the **Open
-Decision Receipt (ODR v0.2)** profile — a vendor-neutral JSON document
-normatively specified in
+Decision Receipt (ODR)** profile (v0.2 by default; this sample is v0.1) — a
+vendor-neutral JSON document normatively specified in
 [`docs/specs/OPEN_DECISION_RECEIPT.md`](../specs/OPEN_DECISION_RECEIPT.md).
 The members an auditor will inspect:
 
@@ -59,13 +60,13 @@ dependency is the `cryptography` package.
 
 > PyPI release verified: `pip install -U 'aragora-verify>=0.2.0'` from a clean
 > venv (real PyPI, no local wheel) installed `aragora-verify-0.2.0` and verified
-> this fixture with all checks PASS on 2026-09-25 (verify the release live:
-> https://pypi.org/pypi/aragora-verify/json). Version 0.2.0 is the first
-> release that accepts ODR v0.2 receipts such as this one; 0.1.x rejects them
-> at `schema_conformance`. Since 0.1.1 the verifier binds each signature's
-> recorded `key_id` to the supplied key, so a relabeled signer fails as
-> tampering. CI additionally smoke-tests the CLI against a wheel built from the
-> in-repo [`aragora-verify/`](../../aragora-verify/) source.
+> this v0.1 fixture with all checks PASS on 2026-09-26 (verify the release
+> live: https://pypi.org/pypi/aragora-verify/json). Version 0.2.0 is the first
+> release that also accepts ODR v0.2 receipts, the emitter's default output;
+> 0.1.x rejects those at `schema_conformance`. Since 0.1.1 the verifier binds
+> each signature's recorded `key_id` to the supplied key, so a relabeled signer
+> fails as tampering. CI additionally smoke-tests the CLI against a wheel built
+> from the in-repo [`aragora-verify/`](../../aragora-verify/) source.
 
 ```bash
 # 1. Install the standalone verifier into a clean environment
@@ -91,7 +92,7 @@ Open Decision Receipt — VERIFIED
   odr_digest: sha-256:<64 hex digits>
 
   checks:
-    [PASS] schema_conformance: conforms to ODR v0.2 profile
+    [PASS] schema_conformance: conforms to ODR v0.1 profile
     [PASS] quorum_consistency: supporting/dissenting agents all appear in participants
     [PASS] canonical_digest: sha-256:<64 hex digits>
     [PASS] signature: Ed25519 signature verified — sig[0] (key_id=ed25519-…): verified

@@ -1,8 +1,8 @@
 # Independent Verifier Guide — `aragora-verify`
 
 **Status:** guide. References — does not edit —
-[`docs/specs/OPEN_DECISION_RECEIPT.md`](OPEN_DECISION_RECEIPT.md) (the ODR v0.1
-content profile) and
+[`docs/specs/OPEN_DECISION_RECEIPT.md`](OPEN_DECISION_RECEIPT.md) (the ODR
+content profile; v0.2 is the default output and v0.1 is still accepted) and
 [`docs/specs/RECEIPT_LINEAGE_RECONCILIATION.md`](RECEIPT_LINEAGE_RECONCILIATION.md)
 (how the ODR relates to the native `DecisionReceipt`). This is the practical
 "how do I actually run it" companion to those two.
@@ -66,7 +66,7 @@ check different objects entirely. Use this table to pick the right one:
 
 | Command | Validates | Aragora install required? |
 |---|---|---|
-| **`aragora-verify <file>.odr.json`** | the **Open Decision Receipt (ODR v0.1)** — the public, portable format: schema conformance, JCS canonical digest, Ed25519 signature, quorum consistency, hash-chain link | No — stdlib + `cryptography` only |
+| **`aragora-verify <file>.odr.json`** | the **Open Decision Receipt (ODR)**, v0.2 by default with v0.1 still accepted — the public, portable format: schema conformance, JCS canonical digest, Ed25519 signature, quorum consistency, hash-chain link | No — stdlib + `cryptography` only |
 | `aragora verify <file>.json` | the **native `DecisionReceipt`** (Aragora's internal record) — its `artifact_hash`/legacy-checksum integrity hash, `schema_version`, verdict enum, timestamp format | Yes |
 | `aragora receipt verify <file>.json` | the same native `DecisionReceipt`, via the `receipt` subcommand group | Yes |
 
@@ -272,7 +272,7 @@ they bound what an exit-`0` result actually proves:
 ## See also
 
 - [`docs/specs/OPEN_DECISION_RECEIPT.md`](OPEN_DECISION_RECEIPT.md) — the ODR
-  v0.1 content profile this verifier checks.
+  content profile this verifier checks (v0.2 by default, v0.1 still accepted).
 - [`docs/specs/RECEIPT_LINEAGE_RECONCILIATION.md`](RECEIPT_LINEAGE_RECONCILIATION.md)
   — how the ODR relates to the native `DecisionReceipt` and the legacy
   lineage.

@@ -6,8 +6,11 @@ Executable sample artifacts for
 | File | What it is |
 |---|---|
 | `sample_decision_receipt.json` | A representative native `DecisionReceipt` (synthetic invoice-approval decision: 3 agents, 2+ model families, one preserved dissent, CONDITIONAL verdict). |
-| `sample_decision_receipt.odr.json` | The same decision exported to the vendor-neutral Open Decision Receipt (ODR v0.2) profile and carrying one Ed25519 detached signature. |
+| `sample_decision_receipt.odr.json` | The same decision exported to the vendor-neutral Open Decision Receipt (ODR v0.1) profile and carrying one Ed25519 detached signature. |
 | `odr_sample_signing_public_key.pem` | The public key that verifies that signature. |
+
+This sample is pinned as an ODR v0.1 document; the emitter's default output is
+ODR v0.2, and `aragora-verify` 0.2.0 or later verifies both.
 
 Verify the signed receipt with nothing but the standalone verifier:
 
