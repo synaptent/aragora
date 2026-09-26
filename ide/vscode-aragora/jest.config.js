@@ -26,6 +26,11 @@ module.exports = {
   moduleNameMapper: {
     '^vscode$': '<rootDir>/src/test/vscode.mock.ts',
   },
+  // junit.xml is git-ignored by the repository root .gitignore.
+  reporters: [
+    'default',
+    ['jest-junit', { outputDirectory: '<rootDir>', outputName: 'junit.xml' }],
+  ],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/test/**',

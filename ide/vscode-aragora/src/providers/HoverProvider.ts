@@ -47,7 +47,7 @@ function getSeverityColor(severity: Severity): string {
   }
 }
 
-export class AragoraHoverProvider implements vscode.HoverProvider {
+class AragoraHoverProvider implements vscode.HoverProvider {
   private diagnosticsProvider: AragoraDiagnosticsProvider;
 
   constructor(diagnosticsProvider: AragoraDiagnosticsProvider) {

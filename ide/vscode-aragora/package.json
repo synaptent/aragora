@@ -481,25 +481,29 @@
     "pretest": "npm run compile",
     "test": "jest",
     "test:watch": "jest --watch",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
     "package": "vsce package",
     "build:webview": "npm --prefix webview-ui ci && npm --prefix webview-ui run build"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/node": "^20.10.0",
+    "@eslint/js": "^9.39.5",
     "@types/jest": "^29.5.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.45.0",
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
+    "eslint": "^9.39.5",
     "jest": "^29.7.0",
+    "jest-junit": "^17.0.0",
+    "knip": "^6.38.0",
+    "prettier": "^3.9.9",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.0",
-    "@vscode/vsce": "^3.9.2"
+    "typescript-eslint": "^8.70.1"
   },
-  "dependencies": {
-    "node-fetch": "^3.3.2"
-  },
+  "dependencies": {},
   "repository": {
     "type": "git",
     "url": "https://github.com/aragora/aragora"

@@ -342,5 +342,3 @@ export const vscode = {
   EventEmitter: MockEventEmitter,
   Disposable: MockDisposable,
 };
-
-export default vscode;

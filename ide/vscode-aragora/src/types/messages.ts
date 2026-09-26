@@ -174,7 +174,7 @@ export type WebviewMessage =
 // State Types
 // ============================================
 
-export interface WebviewState {
+interface WebviewState {
   debates: DebateState[];
   reviews: ReviewResult[];
   findings: SecurityFinding[];
@@ -182,7 +182,7 @@ export interface WebviewState {
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
 }
 
-export interface ExtensionSettings {
+interface ExtensionSettings {
   apiUrl: string;
   defaultAgents: string[];
   defaultRounds: number;
