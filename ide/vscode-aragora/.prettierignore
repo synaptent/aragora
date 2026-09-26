@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+webview-ui/node_modules/
+
+# Tool-owned lockfiles keep npm's formatting
+package-lock.json
+webview-ui/package-lock.json
+
+# Build and test output
+out/
+webview-ui/dist/
+.vscode-test/
+coverage/
+junit.xml
+*.vsix
