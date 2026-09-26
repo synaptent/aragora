@@ -395,7 +395,7 @@ READINESS_DONE = echo "[readiness] $@ ok ($$(( $$(date +%s) - start ))s)"
 .PHONY: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 .PHONY: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
 .PHONY: readiness-test-root readiness-test-debate readiness-test-verify readiness-test-live readiness-test-docs readiness-test-vscode readiness-test-operator
-.PHONY: readiness-heavy-live readiness-heavy-docs
+.PHONY: readiness-heavy-live readiness-heavy-docs readiness-heavy-vscode
 
 readiness-lint: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 readiness-typecheck: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
@@ -648,7 +648,7 @@ readiness-typecheck-vscode:
 	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
 	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
 	[ -d ide/vscode-aragora/webview-ui/node_modules ] || { echo "SKIP vscode: webview-ui node_modules missing (npm ci in ide/vscode-aragora/webview-ui)"; exit 0; }; \
-	(cd ide/vscode-aragora && npx tsc --noEmit -p .) && \
+	(cd ide/vscode-aragora && npx tsc --noEmit -p . && npx tsc --noEmit -p tsconfig.integration.json) && \
 	(cd ide/vscode-aragora/webview-ui && npx tsc --noEmit -p .) && \
 	$(READINESS_DONE)
 
@@ -658,6 +658,18 @@ readiness-test-vscode:
 	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
 	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
 	cd ide/vscode-aragora && npx jest --ci --coverage --maxWorkers=4 && \
+	$(READINESS_DONE)
+
+# test-electron suite (src/test/suite) inside VS Code 1.136.1, pinned in
+# src/test/runTest.ts. Reuses ide/vscode-aragora/.vscode-test/ when present,
+# otherwise downloads it once. Opens a VS Code window (CI wraps it in xvfb-run);
+# run one at a time. No ports.
+readiness-heavy-vscode:
+	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP vscode: npm not found"; exit 0; }; \
+	command -v node >/dev/null 2>&1 || { echo "SKIP vscode: node not found"; exit 0; }; \
+	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
+	cd ide/vscode-aragora && npm run test:integration && \
 	$(READINESS_DONE)
 
 # --- operator (aragora-operator, Go) ----------------------------------------

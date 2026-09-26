@@ -219,6 +219,25 @@ repos:
         stages: [pre-push]
         verbose: true
 
+  # VS Code extension: `npm run compile` type-checks both the extension and the
+  # mocha integration suite (tsconfig.integration.json). Same SKIP contract as
+  # `make readiness-typecheck-vscode`.
+  - repo: local
+    hooks:
+      - id: vscode-typecheck
+        name: TypeScript type check (VS Code extension)
+        entry: >-
+          bash -c 'command -v npm >/dev/null 2>&1 || {
+          echo "SKIP vscode: npm not found (install Node and put it on PATH)"; exit 0; };
+          [ -d ide/vscode-aragora/node_modules ] || {
+          echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; };
+          cd ide/vscode-aragora && npm run compile'
+        language: system
+        pass_filenames: false
+        files: ^ide/vscode-aragora/.*\.ts$
+        stages: [pre-push]
+        verbose: true
+
   # Portability guard: block new hardcoded private/legacy references
   # (private home dirs, .venv/bin/python, an0mium/aragora slug). Baselined in
   # scripts/portability_baseline.json so it only fails on NEW violations.
