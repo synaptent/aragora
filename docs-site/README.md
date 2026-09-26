@@ -86,7 +86,27 @@ readiness-test-docs` runs the same checks plus the knip and file-size ratchets
 
 `.github/workflows/deploy-docs.yml` builds the site on every push to `main`
 that touches `docs/**` or `docs-site/**` and publishes `build/` to GitHub Pages
-at `https://docs.aragora.ai`. No manual step is involved.
+at `https://docs.aragora.ai`. Pushes to `main` deploy automatically; no manual
+step is involved.
+
+To reproduce the published artifact locally, run the workflow's build steps in
+`docs-site/`:
+
+```bash
+npm ci
+node scripts/sync-docs.js
+npm run build   # static site in build/, the directory the workflow uploads to Pages
+```
+
+To redeploy `main` without a new push, for example after a failed run, trigger
+the workflow by hand. This needs write access to the repository:
+
+```bash
+gh workflow run deploy-docs.yml --ref main
+```
+
+After deploying, the workflow checks that `https://docs.aragora.ai/` responds
+(five attempts, 20 seconds apart) and fails the run otherwise.
 
 The `deploy` and `deploy:preview` npm scripts and `DEPLOY.md` describe the
 earlier Vercel flow. They are unused: GitHub Pages is the deploy target and the
