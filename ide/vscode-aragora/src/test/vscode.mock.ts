@@ -10,7 +10,7 @@ export class MockUri {
   constructor(
     public readonly scheme: string,
     public readonly path: string,
-    public readonly fsPath: string = path
+    public readonly fsPath: string = path,
   ) {}
 
   static file(path: string): MockUri {
@@ -34,7 +34,7 @@ export class MockUri {
 export class MockPosition {
   constructor(
     public readonly line: number,
-    public readonly character: number
+    public readonly character: number,
   ) {}
 
   isEqual(other: MockPosition): boolean {
@@ -54,13 +54,18 @@ export class MockPosition {
 export class MockRange {
   constructor(
     public readonly start: MockPosition,
-    public readonly end: MockPosition
+    public readonly end: MockPosition,
   ) {}
 
-  static fromNumbers(startLine: number, startChar: number, endLine: number, endChar: number): MockRange {
+  static fromNumbers(
+    startLine: number,
+    startChar: number,
+    endLine: number,
+    endChar: number,
+  ): MockRange {
     return new MockRange(
       new MockPosition(startLine, startChar),
-      new MockPosition(endLine, endChar)
+      new MockPosition(endLine, endChar),
     );
   }
 
@@ -77,7 +82,7 @@ export class MockRange {
 export class MockSelection extends MockRange {
   constructor(
     public readonly anchor: MockPosition,
-    public readonly active: MockPosition
+    public readonly active: MockPosition,
   ) {
     super(anchor, active);
   }
@@ -100,7 +105,7 @@ export class MockDiagnostic {
   constructor(
     public range: MockRange,
     public message: string,
-    public severity: MockDiagnosticSeverity = MockDiagnosticSeverity.Warning
+    public severity: MockDiagnosticSeverity = MockDiagnosticSeverity.Warning,
   ) {}
 
   source?: string;
@@ -129,19 +134,14 @@ export class MockCodeActionKind {
 
 // Mock Code Action
 export class MockCodeAction {
-  command?: {
-    command: string;
-    title: string;
-    arguments?: unknown[];
-    tooltip?: string;
-  };
+  command?: { command: string; title: string; arguments?: unknown[]; tooltip?: string };
   diagnostics?: MockDiagnostic[];
   isPreferred?: boolean;
   edit?: unknown;
 
   constructor(
     public title: string,
-    public kind?: MockCodeActionKind
+    public kind?: MockCodeActionKind,
   ) {}
 }
 
@@ -155,7 +155,7 @@ export class MockTreeItem {
 
   constructor(
     public label: string,
-    public collapsibleState: MockTreeItemCollapsibleState = MockTreeItemCollapsibleState.None
+    public collapsibleState: MockTreeItemCollapsibleState = MockTreeItemCollapsibleState.None,
   ) {}
 }
 
@@ -170,7 +170,7 @@ export enum MockTreeItemCollapsibleState {
 export class MockThemeIcon {
   constructor(
     public readonly id: string,
-    public readonly color?: MockThemeColor
+    public readonly color?: MockThemeColor,
   ) {}
 }
 
@@ -208,7 +208,7 @@ export class MockMarkdownString {
 export class MockHover {
   constructor(
     public contents: MockMarkdownString | MockMarkdownString[],
-    public range?: MockRange
+    public range?: MockRange,
   ) {}
 }
 
@@ -271,7 +271,7 @@ export class MockTextLine {
     public readonly range: MockRange,
     public readonly rangeIncludingLineBreak: MockRange,
     public readonly firstNonWhitespaceCharacterIndex: number = 0,
-    public readonly isEmptyOrWhitespace: boolean = false
+    public readonly isEmptyOrWhitespace: boolean = false,
   ) {}
 }
 
@@ -283,7 +283,7 @@ export class MockTextDocument {
     public readonly uri: MockUri,
     public readonly languageId: string,
     public readonly content: string,
-    public readonly fileName: string = uri.fsPath
+    public readonly fileName: string = uri.fsPath,
   ) {
     this.lines = this.content.split('\n');
   }
@@ -300,7 +300,7 @@ export class MockTextDocument {
       MockRange.fromNumbers(line, 0, line, text.length),
       MockRange.fromNumbers(line, 0, line, text.length + 1),
       text.search(/\S/),
-      text.trim().length === 0
+      text.trim().length === 0,
     );
   }
 
@@ -315,7 +315,10 @@ export class MockTextDocument {
         text = text.substring(range.start.character);
       }
       if (i === range.end.line) {
-        text = text.substring(0, range.end.character - (i === range.start.line ? range.start.character : 0));
+        text = text.substring(
+          0,
+          range.end.character - (i === range.start.line ? range.start.character : 0),
+        );
       }
       lines.push(text);
     }

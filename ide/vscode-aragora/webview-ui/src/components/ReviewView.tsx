@@ -37,7 +37,7 @@ export function ReviewView({
       acc[comment.category].push(comment);
       return acc;
     },
-    {}
+    {},
   );
 
   return (
@@ -52,9 +52,7 @@ export function ReviewView({
           <span className={`status-badge ${review.status}`}>
             {review.status === 'in_progress' ? 'Reviewing...' : review.status}
           </span>
-          {review.overallScore !== undefined && (
-            <ScoreIndicator score={review.overallScore} />
-          )}
+          {review.overallScore !== undefined && <ScoreIndicator score={review.overallScore} />}
         </div>
       </div>
 
@@ -68,10 +66,7 @@ export function ReviewView({
       {/* Quick Actions */}
       {fixableComments.length > 0 && review.status === 'completed' && (
         <div className="quick-actions">
-          <button
-            className="primary-button"
-            onClick={() => onApplyAllFixes(review.id)}
-          >
+          <button className="primary-button" onClick={() => onApplyAllFixes(review.id)}>
             ✓ Apply All Fixes ({fixableComments.length})
           </button>
         </div>
@@ -126,13 +121,7 @@ interface CommentCardProps {
   onNavigate: (reviewId: string, commentId: string) => void;
 }
 
-function CommentCard({
-  comment,
-  reviewId,
-  onApplyFix,
-  onDismiss,
-  onNavigate,
-}: CommentCardProps) {
+function CommentCard({ comment, reviewId, onApplyFix, onDismiss, onNavigate }: CommentCardProps) {
   const severityColor = getSeverityColor(comment.severity);
 
   return (
@@ -147,9 +136,7 @@ function CommentCard({
         </div>
       </div>
 
-      <div className="comment-content">
-        {comment.content}
-      </div>
+      <div className="comment-content">{comment.content}</div>
 
       {comment.suggestedFix && (
         <div className="suggested-fix">
@@ -163,32 +150,21 @@ function CommentCard({
 
       <div className="comment-actions">
         {comment.suggestedFix && !comment.isResolved && (
-          <button
-            className="apply-button"
-            onClick={() => onApplyFix(reviewId, comment.id)}
-          >
+          <button className="apply-button" onClick={() => onApplyFix(reviewId, comment.id)}>
             Apply Fix
           </button>
         )}
         {!comment.isResolved && (
-          <button
-            className="dismiss-button"
-            onClick={() => onDismiss(reviewId, comment.id)}
-          >
+          <button className="dismiss-button" onClick={() => onDismiss(reviewId, comment.id)}>
             Dismiss
           </button>
         )}
-        <button
-          className="navigate-button"
-          onClick={() => onNavigate(reviewId, comment.id)}
-        >
+        <button className="navigate-button" onClick={() => onNavigate(reviewId, comment.id)}>
           Go to Code
         </button>
       </div>
 
-      {comment.isResolved && (
-        <div className="resolved-badge">✓ Resolved</div>
-      )}
+      {comment.isResolved && <div className="resolved-badge">✓ Resolved</div>}
     </div>
   );
 }
@@ -201,10 +177,7 @@ function ScoreIndicator({ score }: { score: number }) {
   };
 
   return (
-    <div
-      className="score-indicator"
-      style={{ borderColor: getScoreColor(score) }}
-    >
+    <div className="score-indicator" style={{ borderColor: getScoreColor(score) }}>
       <span className="score-value" style={{ color: getScoreColor(score) }}>
         {score}
       </span>

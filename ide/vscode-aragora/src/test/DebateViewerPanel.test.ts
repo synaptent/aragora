@@ -8,11 +8,7 @@ import * as vscode from 'vscode';
 jest.mock('vscode', () => ({
   window: {
     createWebviewPanel: jest.fn(() => ({
-      webview: {
-        html: '',
-        onDidReceiveMessage: jest.fn(),
-        postMessage: jest.fn(),
-      },
+      webview: { html: '', onDidReceiveMessage: jest.fn(), postMessage: jest.fn() },
       onDidDispose: jest.fn(),
       reveal: jest.fn(),
       dispose: jest.fn(),
@@ -22,9 +18,7 @@ jest.mock('vscode', () => ({
     showErrorMessage: jest.fn(),
   },
   commands: {
-    registerCommand: jest.fn((command, callback) => ({
-      dispose: jest.fn(),
-    })),
+    registerCommand: jest.fn((command, callback) => ({ dispose: jest.fn() })),
     executeCommand: jest.fn(),
   },
   workspace: {
@@ -40,14 +34,8 @@ jest.mock('vscode', () => ({
     joinPath: jest.fn((...args) => ({ fsPath: args.join('/') })),
     file: jest.fn((path: string) => ({ fsPath: path })),
   },
-  ViewColumn: {
-    Beside: 2,
-  },
-  env: {
-    clipboard: {
-      writeText: jest.fn(),
-    },
-  },
+  ViewColumn: { Beside: 2 },
+  env: { clipboard: { writeText: jest.fn() } },
   Disposable: class {
     dispose(): void {}
   },
@@ -143,9 +131,7 @@ describe('ControlPlaneService', () => {
 
       expect(global.fetch).toHaveBeenCalledWith(
         'http://localhost:8080/api/v1/control-plane/deliberations',
-        expect.objectContaining({
-          method: 'POST',
-        })
+        expect.objectContaining({ method: 'POST' }),
       );
       expect(id).toBe('delib-123');
     });
@@ -251,8 +237,11 @@ describe('DebateViewerPanel', () => {
 
 describe('Deliberation event types', () => {
   it('exports event type definitions', () => {
-    const { ControlPlaneEvent, ControlPlaneEventType, Deliberation } =
-      require('../services/ControlPlaneService');
+    const {
+      ControlPlaneEvent,
+      ControlPlaneEventType,
+      Deliberation,
+    } = require('../services/ControlPlaneService');
 
     // These are type definitions, so we just verify the exports exist
     expect(true).toBe(true);

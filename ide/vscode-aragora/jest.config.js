@@ -23,28 +23,11 @@ module.exports = {
     ],
   },
   // Don't try to import actual vscode module
-  moduleNameMapper: {
-    '^vscode$': '<rootDir>/src/test/vscode.mock.ts',
-  },
+  moduleNameMapper: { '^vscode$': '<rootDir>/src/test/vscode.mock.ts' },
   // junit.xml is git-ignored by the repository root .gitignore.
-  reporters: [
-    'default',
-    ['jest-junit', { outputDirectory: '<rootDir>', outputName: 'junit.xml' }],
-  ],
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/test/**',
-    '!src/extension.ts',
-    '!src/**/*.d.ts',
-  ],
+  reporters: ['default', ['jest-junit', { outputDirectory: '<rootDir>', outputName: 'junit.xml' }]],
+  collectCoverageFrom: ['src/**/*.ts', '!src/test/**', '!src/extension.ts', '!src/**/*.d.ts'],
   // Ratchet floors: measured coverage minus one point, rounded down. Raise
   // them as tests are added; never lower them.
-  coverageThreshold: {
-    global: {
-      branches: 4,
-      functions: 9,
-      lines: 7,
-      statements: 7,
-    },
-  },
+  coverageThreshold: { global: { branches: 4, functions: 9, lines: 7, statements: 7 } },
 };

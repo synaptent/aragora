@@ -23,12 +23,7 @@ interface StreamEvent {
 
 interface DeliberationStartedEvent extends StreamEvent {
   type: 'deliberation_started';
-  data: {
-    debate_id: string;
-    question: string;
-    agents: string[];
-    rounds: number;
-  };
+  data: { debate_id: string; question: string; agents: string[]; rounds: number };
 }
 
 interface AgentMessageEvent extends StreamEvent {
@@ -38,11 +33,7 @@ interface AgentMessageEvent extends StreamEvent {
     agent: string;
     content: string;
     round: number;
-    tokens?: {
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-    };
+    tokens?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
   };
 }
 
@@ -60,18 +51,11 @@ interface ConsensusEvent extends StreamEvent {
 
 interface TaskCompletedEvent extends StreamEvent {
   type: 'task_completed';
-  data: {
-    task_id: string;
-    result: unknown;
-  };
+  data: { task_id: string; result: unknown };
 }
 
 type AnyStreamEvent =
-  | DeliberationStartedEvent
-  | AgentMessageEvent
-  | ConsensusEvent
-  | TaskCompletedEvent
-  | StreamEvent;
+  DeliberationStartedEvent | AgentMessageEvent | ConsensusEvent | TaskCompletedEvent | StreamEvent;
 
 export type StreamEventHandler = (event: ExtensionMessage) => void;
 
@@ -93,10 +77,7 @@ export class StreamManager implements vscode.Disposable {
 
   constructor() {
     // Create status bar item for connection status
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      99
-    );
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
     this.statusBarItem.command = 'aragora.toggleStream';
     this.updateStatusBar();
 
@@ -108,7 +89,7 @@ export class StreamManager implements vscode.Disposable {
         } else {
           this.connect();
         }
-      })
+      }),
     );
   }
 
@@ -139,10 +120,7 @@ export class StreamManager implements vscode.Disposable {
 
         // Send authentication if we have an API key
         if (apiKey) {
-          this.ws?.send(JSON.stringify({
-            type: 'auth',
-            token: apiKey,
-          }));
+          this.ws?.send(JSON.stringify({ type: 'auth', token: apiKey }));
         }
 
         // Start ping interval to keep connection alive
@@ -201,9 +179,7 @@ export class StreamManager implements vscode.Disposable {
    */
   subscribe(handler: StreamEventHandler): vscode.Disposable {
     this.handlers.add(handler);
-    return {
-      dispose: () => this.handlers.delete(handler),
-    };
+    return { dispose: () => this.handlers.delete(handler) };
   }
 
   /**
@@ -275,11 +251,13 @@ export class StreamManager implements vscode.Disposable {
           content: e.data.content,
           round: e.data.round,
           timestamp: event.timestamp,
-          tokens: e.data.tokens ? {
-            promptTokens: e.data.tokens.prompt_tokens,
-            completionTokens: e.data.tokens.completion_tokens,
-            totalTokens: e.data.tokens.total_tokens,
-          } : undefined,
+          tokens: e.data.tokens
+            ? {
+                promptTokens: e.data.tokens.prompt_tokens,
+                completionTokens: e.data.tokens.completion_tokens,
+                totalTokens: e.data.tokens.total_tokens,
+              }
+            : undefined,
         };
 
         debate.messages.push(message);
@@ -351,7 +329,9 @@ export class StreamManager implements vscode.Disposable {
       case 'disconnected':
         this.statusBarItem.text = '$(broadcast) Aragora Offline';
         this.statusBarItem.tooltip = 'Disconnected from Aragora stream. Click to connect.';
-        this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+        this.statusBarItem.backgroundColor = new vscode.ThemeColor(
+          'statusBarItem.warningBackground',
+        );
         break;
     }
     this.statusBarItem.show();
@@ -359,18 +339,13 @@ export class StreamManager implements vscode.Disposable {
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      vscode.window.showErrorMessage(
-        'Failed to connect to Aragora stream after multiple attempts'
-      );
+      vscode.window.showErrorMessage('Failed to connect to Aragora stream after multiple attempts');
       return;
     }
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++;
-      this.reconnectDelay = Math.min(
-        this.reconnectDelay * 2,
-        this.maxReconnectDelay
-      );
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
       this.connect();
     }, this.reconnectDelay);
   }

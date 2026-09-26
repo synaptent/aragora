@@ -34,7 +34,7 @@ export class ReviewPanel {
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
-    client?: AragoraClient
+    client?: AragoraClient,
   ) {
     this.panel = panel;
     this.extensionUri = extensionUri;
@@ -50,17 +50,14 @@ export class ReviewPanel {
     this.panel.webview.onDidReceiveMessage(
       (message: WebviewMessage) => this.handleWebviewMessage(message),
       null,
-      this.disposables
+      this.disposables,
     );
   }
 
   /**
    * Create or show the review panel
    */
-  public static createOrShow(
-    extensionUri: vscode.Uri,
-    client?: AragoraClient
-  ): ReviewPanel {
+  public static createOrShow(extensionUri: vscode.Uri, client?: AragoraClient): ReviewPanel {
     const column = vscode.ViewColumn.Beside;
 
     // If we already have a panel, show it
@@ -70,16 +67,11 @@ export class ReviewPanel {
     }
 
     // Create a new panel
-    const panel = vscode.window.createWebviewPanel(
-      ReviewPanel.viewType,
-      'Aragora Review',
-      column,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview-ui', 'dist')],
-      }
-    );
+    const panel = vscode.window.createWebviewPanel(ReviewPanel.viewType, 'Aragora Review', column, {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview-ui', 'dist')],
+    });
 
     ReviewPanel.currentPanel = new ReviewPanel(panel, extensionUri, client);
     return ReviewPanel.currentPanel;
@@ -104,10 +96,7 @@ export class ReviewPanel {
       agents: [],
     };
 
-    this.postMessage({
-      type: 'review_started',
-      review: this.review,
-    });
+    this.postMessage({ type: 'review_started', review: this.review });
 
     this.panel.title = `Review: ${fileName}`;
 
@@ -116,10 +105,7 @@ export class ReviewPanel {
       try {
         const result = await this.client.reviewCode(content, document.languageId, fileName);
         this.review = result;
-        this.postMessage({
-          type: 'review_completed',
-          review: result,
-        });
+        this.postMessage({ type: 'review_completed', review: result });
       } catch (error) {
         // Use mock review for development
         await this.runMockReview(content, document.languageId, range?.start.line || 0);
@@ -133,7 +119,11 @@ export class ReviewPanel {
   /**
    * Run a mock review for development/demo
    */
-  private async runMockReview(content: string, languageId: string, startLine: number): Promise<void> {
+  private async runMockReview(
+    content: string,
+    languageId: string,
+    startLine: number,
+  ): Promise<void> {
     if (!this.review || !this.sourceUri) return;
 
     const agents: Agent[] = [
@@ -149,10 +139,7 @@ export class ReviewPanel {
     for (const comment of mockComments) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       this.review.comments.push(comment);
-      this.postMessage({
-        type: 'review_comment',
-        comment,
-      });
+      this.postMessage({ type: 'review_comment', comment });
     }
 
     // Complete the review
@@ -160,17 +147,19 @@ export class ReviewPanel {
     this.review.summary = this.generateSummary(mockComments);
     this.review.overallScore = Math.max(
       0,
-      100 - mockComments.filter((c) => c.severity === 'high' || c.severity === 'critical').length * 15 -
-      mockComments.filter((c) => c.severity === 'medium').length * 5
+      100 -
+        mockComments.filter((c) => c.severity === 'high' || c.severity === 'critical').length * 15 -
+        mockComments.filter((c) => c.severity === 'medium').length * 5,
     );
 
-    this.postMessage({
-      type: 'review_completed',
-      review: this.review,
-    });
+    this.postMessage({ type: 'review_completed', review: this.review });
   }
 
-  private generateMockComments(content: string, languageId: string, startLine: number): ReviewComment[] {
+  private generateMockComments(
+    content: string,
+    languageId: string,
+    startLine: number,
+  ): ReviewComment[] {
     const comments: ReviewComment[] = [];
     const lines = content.split('\n');
 
@@ -182,7 +171,8 @@ export class ReviewPanel {
         comments.push({
           id: `comment-${Date.now()}-${index}`,
           agent: { id: 'claude', name: 'Claude', provider: 'anthropic' },
-          content: 'Consider removing console statements before production deployment, or replace with a proper logging framework.',
+          content:
+            'Consider removing console statements before production deployment, or replace with a proper logging framework.',
           location: {
             file: this.sourceUri?.fsPath || '',
             line: lineNumber,
@@ -197,7 +187,8 @@ export class ReviewPanel {
         comments.push({
           id: `comment-${Date.now()}-${index}-any`,
           agent: { id: 'gpt-4', name: 'GPT-4', provider: 'openai' },
-          content: 'Using `any` defeats the purpose of TypeScript. Consider using a more specific type or `unknown` if the type is truly unknown.',
+          content:
+            'Using `any` defeats the purpose of TypeScript. Consider using a more specific type or `unknown` if the type is truly unknown.',
           location: {
             file: this.sourceUri?.fsPath || '',
             line: lineNumber,
@@ -205,10 +196,7 @@ export class ReviewPanel {
           },
           severity: 'medium',
           category: 'suggestion',
-          suggestedFix: {
-            oldCode: 'any',
-            newCode: 'unknown',
-          },
+          suggestedFix: { oldCode: 'any', newCode: 'unknown' },
         });
       }
 
@@ -216,7 +204,8 @@ export class ReviewPanel {
         comments.push({
           id: `comment-${Date.now()}-${index}-catch`,
           agent: { id: 'claude', name: 'Claude', provider: 'anthropic' },
-          content: 'Empty catch blocks swallow errors silently. At minimum, log the error for debugging.',
+          content:
+            'Empty catch blocks swallow errors silently. At minimum, log the error for debugging.',
           location: {
             file: this.sourceUri?.fsPath || '',
             line: lineNumber,
@@ -235,7 +224,8 @@ export class ReviewPanel {
         comments.push({
           id: `comment-${Date.now()}-${index}-eq`,
           agent: { id: 'gpt-4', name: 'GPT-4', provider: 'openai' },
-          content: 'Use strict equality (===) instead of loose equality (==) to avoid type coercion bugs.',
+          content:
+            'Use strict equality (===) instead of loose equality (==) to avoid type coercion bugs.',
           location: {
             file: this.sourceUri?.fsPath || '',
             line: lineNumber,
@@ -250,12 +240,9 @@ export class ReviewPanel {
         comments.push({
           id: `comment-${Date.now()}-${index}-params`,
           agent: { id: 'claude', name: 'Claude', provider: 'anthropic' },
-          content: 'Functions with many parameters are hard to use and maintain. Consider using an options object instead.',
-          location: {
-            file: this.sourceUri?.fsPath || '',
-            line: lineNumber,
-            column: 0,
-          },
+          content:
+            'Functions with many parameters are hard to use and maintain. Consider using an options object instead.',
+          location: { file: this.sourceUri?.fsPath || '', line: lineNumber, column: 0 },
           severity: 'low',
           category: 'suggestion',
         });
@@ -268,11 +255,7 @@ export class ReviewPanel {
         id: `comment-${Date.now()}-praise`,
         agent: { id: 'gpt-4', name: 'GPT-4', provider: 'openai' },
         content: 'Overall clean code structure with good readability. Keep up the good work!',
-        location: {
-          file: this.sourceUri?.fsPath || '',
-          line: startLine + 1,
-          column: 0,
-        },
+        location: { file: this.sourceUri?.fsPath || '', line: startLine + 1, column: 0 },
         severity: 'info',
         category: 'praise',
       });
@@ -294,7 +277,9 @@ export class ReviewPanel {
     if (issues === 0) {
       parts.push('No significant issues found in this code.');
     } else {
-      parts.push(`Found ${issues} issue${issues !== 1 ? 's' : ''} across ${total} comment${total !== 1 ? 's' : ''}.`);
+      parts.push(
+        `Found ${issues} issue${issues !== 1 ? 's' : ''} across ${total} comment${total !== 1 ? 's' : ''}.`,
+      );
     }
 
     if (byCategory.security) {
@@ -304,7 +289,9 @@ export class ReviewPanel {
       parts.push(`${byCategory.bug} potential bug${byCategory.bug !== 1 ? 's' : ''}.`);
     }
     if (byCategory.performance) {
-      parts.push(`${byCategory.performance} performance suggestion${byCategory.performance !== 1 ? 's' : ''}.`);
+      parts.push(
+        `${byCategory.performance} performance suggestion${byCategory.performance !== 1 ? 's' : ''}.`,
+      );
     }
 
     return parts.join(' ');
@@ -365,7 +352,7 @@ export class ReviewPanel {
       comment.location.line - 1,
       startIndex,
       comment.location.line - 1,
-      startIndex + oldText.length
+      startIndex + oldText.length,
     );
 
     await editor.edit((editBuilder) => {
@@ -374,10 +361,7 @@ export class ReviewPanel {
 
     // Mark as resolved
     comment.isResolved = true;
-    this.postMessage({
-      type: 'review_comment',
-      comment,
-    });
+    this.postMessage({ type: 'review_comment', comment });
 
     vscode.window.showInformationMessage('Fix applied');
   }
@@ -385,9 +369,7 @@ export class ReviewPanel {
   private async applyAllFixes(): Promise<void> {
     if (!this.review) return;
 
-    const fixableComments = this.review.comments.filter(
-      (c) => c.suggestedFix && !c.isResolved
-    );
+    const fixableComments = this.review.comments.filter((c) => c.suggestedFix && !c.isResolved);
 
     if (fixableComments.length === 0) {
       vscode.window.showInformationMessage('No fixes to apply');
@@ -397,15 +379,13 @@ export class ReviewPanel {
     const choice = await vscode.window.showWarningMessage(
       `Apply ${fixableComments.length} fixes?`,
       'Yes, Apply All',
-      'Cancel'
+      'Cancel',
     );
 
     if (choice !== 'Yes, Apply All') return;
 
     // Sort by line number descending to avoid offset issues
-    const sorted = [...fixableComments].sort(
-      (a, b) => b.location.line - a.location.line
-    );
+    const sorted = [...fixableComments].sort((a, b) => b.location.line - a.location.line);
 
     for (const comment of sorted) {
       await this.applyFix(comment.id);
@@ -420,10 +400,7 @@ export class ReviewPanel {
     const comment = this.review.comments.find((c) => c.id === commentId);
     if (comment) {
       comment.isResolved = true;
-      this.postMessage({
-        type: 'review_comment',
-        comment,
-      });
+      this.postMessage({ type: 'review_comment', comment });
     }
   }
 
@@ -442,7 +419,7 @@ export class ReviewPanel {
       comment.location.line - 1,
       comment.location.column,
       comment.location.line - 1,
-      comment.location.column + 10
+      comment.location.column + 10,
     );
 
     editor.selection = new vscode.Selection(range.start, range.end);
@@ -468,10 +445,10 @@ export class ReviewPanel {
   private getHtmlContent(): string {
     const webview = this.panel.webview;
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.js')
+      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.js'),
     );
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.css')
+      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.css'),
     );
 
     const nonce = this.getNonce();
@@ -518,7 +495,7 @@ export class ReviewPanel {
  */
 export function registerReviewPanelCommands(
   context: vscode.ExtensionContext,
-  client?: AragoraClient
+  client?: AragoraClient,
 ): void {
   // Show review panel
   context.subscriptions.push(
@@ -535,14 +512,11 @@ export function registerReviewPanelCommands(
           const editor = vscode.window.activeTextEditor;
           if (editor) {
             const selection = editor.selection;
-            await panel.startReview(
-              editor.document.uri,
-              selection.isEmpty ? undefined : selection
-            );
+            await panel.startReview(editor.document.uri, selection.isEmpty ? undefined : selection);
           }
         }
-      }
-    )
+      },
+    ),
   );
 
   // Quick review from editor
@@ -556,10 +530,7 @@ export function registerReviewPanelCommands(
 
       const selection = editor.selection;
       const panel = ReviewPanel.createOrShow(context.extensionUri, client);
-      await panel.startReview(
-        editor.document.uri,
-        selection.isEmpty ? undefined : selection
-      );
-    })
+      await panel.startReview(editor.document.uri, selection.isEmpty ? undefined : selection);
+    }),
   );
 }

@@ -28,7 +28,9 @@ describe('CodeActionsProvider Helper Functions', () => {
 
   function isFunctionDefinition(line: string, languageId: string): boolean {
     if (languageId.includes('script') || languageId.includes('typescript')) {
-      return /(?:function\s+\w+|(?:async\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>|(?:async\s+)?\w+\s*\([^)]*\)\s*\{)/.test(line);
+      return /(?:function\s+\w+|(?:async\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>|(?:async\s+)?\w+\s*\([^)]*\)\s*\{)/.test(
+        line,
+      );
     }
     if (languageId === 'python') {
       return /^\s*(?:async\s+)?def\s+\w+/.test(line);
@@ -374,7 +376,7 @@ describe('SecurityTreeProvider Helper Functions', () => {
       id: string,
       severity: Severity,
       file: string,
-      line: number
+      line: number,
     ): SecurityFinding => ({
       id,
       title: `Finding ${id}`,
@@ -434,10 +436,7 @@ describe('SecurityTreeProvider Helper Functions', () => {
         counts[finding.severity]++;
       }
 
-      const lines = [
-        '| Severity | Count |',
-        '|----------|-------|',
-      ];
+      const lines = ['| Severity | Count |', '|----------|-------|'];
 
       for (const [severity, count] of Object.entries(counts)) {
         if (count > 0) {
@@ -462,9 +461,30 @@ describe('SecurityTreeProvider Helper Functions', () => {
 
     it('should generate markdown summary table', () => {
       const findings: SecurityFinding[] = [
-        { id: '1', title: 'A', description: 'D', severity: 'critical', category: 'security', location: { file: 'a.ts', line: 1, column: 0 } },
-        { id: '2', title: 'B', description: 'E', severity: 'critical', category: 'security', location: { file: 'b.ts', line: 1, column: 0 } },
-        { id: '3', title: 'C', description: 'F', severity: 'high', category: 'security', location: { file: 'c.ts', line: 1, column: 0 } },
+        {
+          id: '1',
+          title: 'A',
+          description: 'D',
+          severity: 'critical',
+          category: 'security',
+          location: { file: 'a.ts', line: 1, column: 0 },
+        },
+        {
+          id: '2',
+          title: 'B',
+          description: 'E',
+          severity: 'critical',
+          category: 'security',
+          location: { file: 'b.ts', line: 1, column: 0 },
+        },
+        {
+          id: '3',
+          title: 'C',
+          description: 'F',
+          severity: 'high',
+          category: 'security',
+          location: { file: 'c.ts', line: 1, column: 0 },
+        },
       ];
 
       const markdown = generateMarkdownSummary(findings);
@@ -579,11 +599,7 @@ describe('VSCode Mock Classes', () => {
   describe('MockTextDocument', () => {
     it('should get line content', () => {
       const content = 'line1\nline2\nline3';
-      const doc = new MockTextDocument(
-        MockUri.file('/test.ts'),
-        'typescript',
-        content
-      );
+      const doc = new MockTextDocument(MockUri.file('/test.ts'), 'typescript', content);
 
       expect(doc.lineCount).toBe(3);
       expect(doc.lineAt(0).text).toBe('line1');
@@ -593,11 +609,7 @@ describe('VSCode Mock Classes', () => {
 
     it('should get text for range', () => {
       const content = 'function foo() {\n  return 42;\n}';
-      const doc = new MockTextDocument(
-        MockUri.file('/test.ts'),
-        'typescript',
-        content
-      );
+      const doc = new MockTextDocument(MockUri.file('/test.ts'), 'typescript', content);
 
       const range = MockRange.fromNumbers(1, 2, 1, 14);
       expect(doc.getText(range)).toBe('return 42;');
@@ -605,11 +617,7 @@ describe('VSCode Mock Classes', () => {
 
     it('should return full content when no range specified', () => {
       const content = 'line1\nline2\nline3';
-      const doc = new MockTextDocument(
-        MockUri.file('/test.ts'),
-        'typescript',
-        content
-      );
+      const doc = new MockTextDocument(MockUri.file('/test.ts'), 'typescript', content);
 
       expect(doc.getText()).toBe(content);
     });

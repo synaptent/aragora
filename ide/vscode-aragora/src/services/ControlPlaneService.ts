@@ -70,10 +70,10 @@ export class ControlPlaneService implements vscode.Disposable {
   constructor() {
     // Register commands
     this.disposables.push(
-      vscode.commands.registerCommand('aragora.connectControlPlane', () => this.connect())
+      vscode.commands.registerCommand('aragora.connectControlPlane', () => this.connect()),
     );
     this.disposables.push(
-      vscode.commands.registerCommand('aragora.disconnectControlPlane', () => this.disconnect())
+      vscode.commands.registerCommand('aragora.disconnectControlPlane', () => this.disconnect()),
     );
   }
 
@@ -104,17 +104,13 @@ export class ControlPlaneService implements vscode.Disposable {
 
         // Send authentication if we have an API key
         if (apiKey) {
-          this.ws?.send(JSON.stringify({
-            type: 'auth',
-            token: apiKey,
-          }));
+          this.ws?.send(JSON.stringify({ type: 'auth', token: apiKey }));
         }
 
         // Subscribe to deliberation events
-        this.ws?.send(JSON.stringify({
-          type: 'subscribe',
-          channels: ['deliberations', 'agents', 'tasks'],
-        }));
+        this.ws?.send(
+          JSON.stringify({ type: 'subscribe', channels: ['deliberations', 'agents', 'tasks'] }),
+        );
 
         // Start ping interval
         this.startPingInterval();
@@ -183,9 +179,7 @@ export class ControlPlaneService implements vscode.Disposable {
    */
   subscribe(handler: ControlPlaneEventHandler): vscode.Disposable {
     this.handlers.add(handler);
-    return {
-      dispose: () => this.handlers.delete(handler),
-    };
+    return { dispose: () => this.handlers.delete(handler) };
   }
 
   /**
@@ -211,7 +205,7 @@ export class ControlPlaneService implements vscode.Disposable {
         });
 
         if (response.ok) {
-          const data = await response.json() as { deliberations: Deliberation[] };
+          const data = (await response.json()) as { deliberations: Deliberation[] };
           // Update local cache
           for (const delib of data.deliberations) {
             this.activeDeliberations.set(delib.id, delib);
@@ -231,7 +225,7 @@ export class ControlPlaneService implements vscode.Disposable {
   async triggerDeliberation(
     question: string,
     agents?: string[],
-    rounds?: number
+    rounds?: number,
   ): Promise<string | null> {
     const config = vscode.workspace.getConfiguration('aragora');
     const apiUrl = config.get<string>('apiUrl') || 'http://localhost:8080';
@@ -252,7 +246,7 @@ export class ControlPlaneService implements vscode.Disposable {
       });
 
       if (response.ok) {
-        const data = await response.json() as { deliberation_id: string };
+        const data = (await response.json()) as { deliberation_id: string };
         return data.deliberation_id;
       }
 
@@ -268,19 +262,17 @@ export class ControlPlaneService implements vscode.Disposable {
    */
   connectToDeliberation(deliberationId: string): vscode.Disposable {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: 'subscribe_deliberation',
-        deliberation_id: deliberationId,
-      }));
+      this.ws.send(
+        JSON.stringify({ type: 'subscribe_deliberation', deliberation_id: deliberationId }),
+      );
     }
 
     return {
       dispose: () => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({
-            type: 'unsubscribe_deliberation',
-            deliberation_id: deliberationId,
-          }));
+          this.ws.send(
+            JSON.stringify({ type: 'unsubscribe_deliberation', deliberation_id: deliberationId }),
+          );
         }
       },
     };

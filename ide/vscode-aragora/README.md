@@ -38,24 +38,24 @@ npm run package
 
 Open Settings (`Ctrl+,`) and search for "Aragora":
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `aragora.apiUrl` | Aragora API URL | `https://api.aragora.ai` |
-| `aragora.apiKey` | Your API key | (empty) |
-| `aragora.defaultAgents` | Default agents for debates | `claude,gpt-4` |
-| `aragora.defaultRounds` | Default number of rounds | `3` |
+| Setting                 | Description                | Default                  |
+| ----------------------- | -------------------------- | ------------------------ |
+| `aragora.apiUrl`        | Aragora API URL            | `https://api.aragora.ai` |
+| `aragora.apiKey`        | Your API key               | (empty)                  |
+| `aragora.defaultAgents` | Default agents for debates | `claude,gpt-4`           |
+| `aragora.defaultRounds` | Default number of rounds   | `3`                      |
 
 Or use the command `Aragora: Configure API` from the command palette.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `Aragora: Run Debate` | Start a new multi-agent debate |
-| `Aragora: Run Gauntlet on Selection` | Stress-test selected code |
-| `Aragora: List Available Agents` | Show available AI agents |
-| `Aragora: Show Recent Results` | Open the Aragora sidebar |
-| `Aragora: Configure API` | Quick configuration wizard |
+| Command                              | Description                    |
+| ------------------------------------ | ------------------------------ |
+| `Aragora: Run Debate`                | Start a new multi-agent debate |
+| `Aragora: Run Gauntlet on Selection` | Stress-test selected code      |
+| `Aragora: List Available Agents`     | Show available AI agents       |
+| `Aragora: Show Recent Results`       | Open the Aragora sidebar       |
+| `Aragora: Configure API`             | Quick configuration wizard     |
 
 ## Usage
 

@@ -35,10 +35,7 @@ export function DebateView({
         <div className="empty-icon">💭</div>
         <h2>No Active Debate</h2>
         <p>Start a debate to see multi-agent discussion here.</p>
-        <button
-          className="primary-button"
-          onClick={() => onStartDebate('', [], 3)}
-        >
+        <button className="primary-button" onClick={() => onStartDebate('', [], 3)}>
           Start New Debate
         </button>
       </div>
@@ -52,22 +49,15 @@ export function DebateView({
         <div className="debate-title">
           <h1>{debate.question}</h1>
           <div className="debate-meta">
-            <span className={`status-badge ${debate.status}`}>
-              {debate.status}
-            </span>
+            <span className={`status-badge ${debate.status}`}>{debate.status}</span>
             <span className="round-indicator">
               Round {debate.currentRound}/{debate.totalRounds}
             </span>
-            {connectionStatus === 'connected' && (
-              <span className="live-indicator">● LIVE</span>
-            )}
+            {connectionStatus === 'connected' && <span className="live-indicator">● LIVE</span>}
           </div>
         </div>
         {debate.status === 'running' && (
-          <button
-            className="stop-button"
-            onClick={() => onStopDebate(debate.id)}
-          >
+          <button className="stop-button" onClick={() => onStopDebate(debate.id)}>
             Stop Debate
           </button>
         )}
@@ -103,9 +93,7 @@ export function DebateView({
       )}
 
       {/* Token Metrics */}
-      {debate.totalTokens && (
-        <TokenMetrics usage={debate.totalTokens} />
-      )}
+      {debate.totalTokens && <TokenMetrics usage={debate.totalTokens} />}
     </div>
   );
 }
@@ -115,10 +103,7 @@ function MessageBubble({ message }: { message: DebateMessage }) {
 
   return (
     <div className="message-bubble">
-      <div
-        className="agent-avatar"
-        style={{ backgroundColor: agentColor }}
-      >
+      <div className="agent-avatar" style={{ backgroundColor: agentColor }}>
         {message.agent.name.charAt(0).toUpperCase()}
       </div>
       <div className="message-content">
@@ -129,13 +114,9 @@ function MessageBubble({ message }: { message: DebateMessage }) {
           <span className="agent-provider">({message.agent.provider})</span>
           <span className="message-round">Round {message.round}</span>
         </div>
-        <div className="message-text">
-          {message.content}
-        </div>
+        <div className="message-text">{message.content}</div>
         {message.tokens && (
-          <div className="message-tokens">
-            {message.tokens.totalTokens.toLocaleString()} tokens
-          </div>
+          <div className="message-tokens">{message.tokens.totalTokens.toLocaleString()} tokens</div>
         )}
       </div>
     </div>
@@ -150,28 +131,18 @@ interface ConsensusCardProps {
   onFeedback: (debateId: string, vote: 'up' | 'down') => void;
 }
 
-function ConsensusCard({
-  consensus,
-  debateId,
-  onCopy,
-  onExport,
-  onFeedback,
-}: ConsensusCardProps) {
+function ConsensusCard({ consensus, debateId, onCopy, onExport, onFeedback }: ConsensusCardProps) {
   return (
     <div className="consensus-card">
       <div className="consensus-header">
         <h2>✨ Consensus Reached</h2>
         <div className="consensus-meta">
-          <span className="confidence">
-            {(consensus.confidence * 100).toFixed(0)}% confidence
-          </span>
+          <span className="confidence">{(consensus.confidence * 100).toFixed(0)}% confidence</span>
           <span className="method">via {consensus.method}</span>
         </div>
       </div>
 
-      <div className="consensus-answer">
-        {consensus.answer}
-      </div>
+      <div className="consensus-answer">{consensus.answer}</div>
 
       <div className="consensus-agents">
         <span className="label">Agreeing:</span>
@@ -198,12 +169,8 @@ function ConsensusCard({
       )}
 
       <div className="consensus-actions">
-        <button onClick={() => onCopy(debateId)}>
-          📋 Copy
-        </button>
-        <button onClick={() => onExport(debateId, 'markdown')}>
-          📄 Export
-        </button>
+        <button onClick={() => onCopy(debateId)}>📋 Copy</button>
+        <button onClick={() => onExport(debateId, 'markdown')}>📄 Export</button>
         <div className="feedback-buttons">
           <button
             className="feedback-up"

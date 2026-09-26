@@ -57,7 +57,7 @@ class AragoraHoverProvider implements vscode.HoverProvider {
   provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
-    _token: vscode.CancellationToken
+    _token: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.Hover> {
     const findings = this.diagnosticsProvider.getFindings(document.uri);
     if (findings.length === 0) {
@@ -67,9 +67,7 @@ class AragoraHoverProvider implements vscode.HoverProvider {
     // Find findings at the current position
     const relevantFindings = findings.filter((finding) => {
       const startLine = finding.location.line - 1;
-      const endLine = finding.location.endLine
-        ? finding.location.endLine - 1
-        : startLine;
+      const endLine = finding.location.endLine ? finding.location.endLine - 1 : startLine;
 
       return position.line >= startLine && position.line <= endLine;
     });
@@ -91,18 +89,16 @@ class AragoraHoverProvider implements vscode.HoverProvider {
       // Header with severity badge
       const icon = getSeverityIcon(finding.severity);
       const color = getSeverityColor(finding.severity);
-      md.appendMarkdown(
-        `### ${icon} ${finding.title}\n\n`
-      );
+      md.appendMarkdown(`### ${icon} ${finding.title}\n\n`);
 
       // Severity badge
       md.appendMarkdown(
-        `<span style="background-color:${color};color:white;padding:2px 6px;border-radius:3px;font-size:10px;text-transform:uppercase;">${finding.severity}</span>`
+        `<span style="background-color:${color};color:white;padding:2px 6px;border-radius:3px;font-size:10px;text-transform:uppercase;">${finding.severity}</span>`,
       );
 
       if (finding.category) {
         md.appendMarkdown(
-          ` <span style="background-color:#555;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">${finding.category}</span>`
+          ` <span style="background-color:#555;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">${finding.category}</span>`,
         );
       }
 
@@ -116,7 +112,7 @@ class AragoraHoverProvider implements vscode.HoverProvider {
         md.appendMarkdown('**References:**\n');
         if (finding.cweId) {
           md.appendMarkdown(
-            `- [${finding.cweId}](https://cwe.mitre.org/data/definitions/${finding.cweId.replace('CWE-', '')}.html)\n`
+            `- [${finding.cweId}](https://cwe.mitre.org/data/definitions/${finding.cweId.replace('CWE-', '')}.html)\n`,
           );
         }
         if (finding.owaspCategory) {
@@ -137,7 +133,7 @@ class AragoraHoverProvider implements vscode.HoverProvider {
       const explainCommand = `command:aragora.explainCode`;
 
       md.appendMarkdown(
-        `[$(wrench) Fix Issue](${fixCommand}) | [$(question) Explain](${explainCommand})`
+        `[$(wrench) Fix Issue](${fixCommand}) | [$(question) Explain](${explainCommand})`,
       );
 
       return md;
@@ -150,7 +146,7 @@ class AragoraHoverProvider implements vscode.HoverProvider {
  */
 export function registerHoverProvider(
   context: vscode.ExtensionContext,
-  diagnosticsProvider: AragoraDiagnosticsProvider
+  diagnosticsProvider: AragoraDiagnosticsProvider,
 ): vscode.Disposable {
   const hoverProvider = new AragoraHoverProvider(diagnosticsProvider);
 
@@ -173,10 +169,7 @@ export function registerHoverProvider(
   ];
 
   const disposables = languages.map((language) =>
-    vscode.languages.registerHoverProvider(
-      { language, scheme: 'file' },
-      hoverProvider
-    )
+    vscode.languages.registerHoverProvider({ language, scheme: 'file' }, hoverProvider),
   );
 
   const disposable = vscode.Disposable.from(...disposables);
