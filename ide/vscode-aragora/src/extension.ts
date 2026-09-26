@@ -751,7 +751,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize Control Plane Service
   const controlPlaneService = getControlPlaneService();
 
-  // Register commands from new providers
+  // Register commands from new providers. VS Code rejects a second registration of
+  // the same command id, which aborts activation, so these own their ids exclusively.
   registerCodeActionsCommands(context, client);
   registerSecurityTreeCommands(context, securityTreeProvider);
   registerDebatePanelCommands(context, streamManager);
@@ -1163,147 +1164,6 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  // Clear Debate Context command
-  const clearDebateContextCmd = vscode.commands.registerCommand(
-    'aragora.clearDebateContext',
-    async () => {
-      await context.workspaceState.update('debateContext', []);
-      vscode.window.showInformationMessage('Debate context cleared');
-    },
-  );
-
-  // View Debate Context command
-  const viewDebateContextCmd = vscode.commands.registerCommand(
-    'aragora.viewDebateContext',
-    async () => {
-      const debateContext = context.workspaceState.get<string[]>('debateContext', []);
-
-      if (debateContext.length === 0) {
-        vscode.window.showInformationMessage(
-          'No code snippets in debate context. Use "Add to Debate" on selected code.',
-        );
-        return;
-      }
-
-      const content = `# Debate Context\n\nTotal snippets: ${debateContext.length}\n${debateContext.join('\n---\n')}`;
-
-      const doc = await vscode.workspace.openTextDocument({ content, language: 'markdown' });
-      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
-    },
-  );
-
-  // Quick Review command - performs a quick review of current file or selection
-  const quickReviewCmd = vscode.commands.registerCommand('aragora.quickReview', async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('No active editor');
-      return;
-    }
-
-    const selection = editor.selection;
-    const text = selection.isEmpty ? editor.document.getText() : editor.document.getText(selection);
-
-    const fileName = editor.document.fileName.split('/').pop() || 'code';
-    const scope = selection.isEmpty ? 'file' : 'selection';
-
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Quick Review: ${fileName}`,
-        cancellable: false,
-      },
-      async (progress) => {
-        progress.report({ message: 'Analyzing...' });
-
-        try {
-          const result = await client.reviewCode(text, editor.document.languageId, fileName);
-
-          // Show toast notification with summary
-          const action = await vscode.window.showInformationMessage(
-            `Review complete: ${result.summary || 'No issues found'}`,
-            'View Details',
-          );
-
-          if (action === 'View Details') {
-            const detailDoc = await vscode.workspace.openTextDocument({
-              content: `# Quick Review: ${fileName}\n\n**Scope:** ${scope}\n**Lines:** ${text.split('\n').length}\n\n## Summary\n\n${result.summary}\n\n## Comments\n\n${result.comments.length === 0 ? 'No specific comments.' : result.comments.map((c: unknown) => `- ${c}`).join('\n')}`,
-              language: 'markdown',
-            });
-            await vscode.window.showTextDocument(detailDoc, {
-              viewColumn: vscode.ViewColumn.Beside,
-            });
-          }
-        } catch (error) {
-          vscode.window.showErrorMessage(`Quick review failed: ${error}`);
-        }
-      },
-    );
-  });
-
-  // Trigger Vetted Decisionmaking command - triggers a new session from selected text
-  const triggerDeliberationCmd = vscode.commands.registerCommand(
-    'aragora.triggerDeliberation',
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-
-      // Get question from selection or prompt user
-      let question: string | undefined;
-
-      if (editor && !editor.selection.isEmpty) {
-        question = editor.document.getText(editor.selection);
-      }
-
-      if (!question) {
-        question = await vscode.window.showInputBox({
-          prompt: 'Enter the question for multi-agent vetted decisionmaking',
-          placeHolder: 'What is the best approach for...',
-        });
-      }
-
-      if (!question) return;
-
-      const deliberationId = await controlPlaneService.triggerDeliberation(question);
-
-      if (deliberationId) {
-        const action = await vscode.window.showInformationMessage(
-          `Vetted decisionmaking started: ${deliberationId}`,
-          'Watch Live',
-        );
-
-        if (action === 'Watch Live') {
-          vscode.commands.executeCommand('aragora.showDebateViewer', deliberationId);
-        }
-      }
-    },
-  );
-
-  // Connect to Deliberation command
-  const connectToDeliberationCmd = vscode.commands.registerCommand(
-    'aragora.connectToDeliberation',
-    async () => {
-      const deliberations = await controlPlaneService.getActiveDeliberations();
-
-      if (deliberations.length === 0) {
-        vscode.window.showInformationMessage('No active vetted decisionmaking sessions');
-        return;
-      }
-
-      const items = deliberations.map((d) => ({
-        label: d.question.substring(0, 60) + (d.question.length > 60 ? '...' : ''),
-        description: `Round ${d.currentRound}/${d.totalRounds}`,
-        id: d.id,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select a vetted decisionmaking session to watch',
-      });
-
-      if (selected) {
-        vscode.commands.executeCommand('aragora.showDebateViewer', selected.id);
-      }
-    },
-  );
-
   // Register all commands
   context.subscriptions.push(
     runDebateCmd,
@@ -1319,11 +1179,6 @@ export function activate(context: vscode.ExtensionContext) {
     cancelTaskCmd,
     registerAgentCmd,
     analyzeWorkspaceCmd,
-    clearDebateContextCmd,
-    viewDebateContextCmd,
-    quickReviewCmd,
-    triggerDeliberationCmd,
-    connectToDeliberationCmd,
   );
 
   // Fleet Status Manager
