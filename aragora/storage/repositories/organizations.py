@@ -59,6 +59,9 @@ class OrganizationRepository:
     }
 
     _AUTO_SLUG_ATTEMPTS = 10
+    # sqlite3 names the violated column only in the message text; the extended
+    # error code (SQLITE_CONSTRAINT_UNIQUE) does not say which index failed.
+    _SLUG_CONFLICT_MESSAGE = "UNIQUE constraint failed: organizations.slug"
 
     def __init__(
         self,
@@ -148,7 +151,7 @@ class OrganizationRepository:
             except sqlite3.IntegrityError as exc:
                 if (
                     not auto_slug
-                    or "organizations.slug" not in str(exc)
+                    or self._SLUG_CONFLICT_MESSAGE not in str(exc)
                     or attempt == self._AUTO_SLUG_ATTEMPTS - 1
                 ):
                     raise
