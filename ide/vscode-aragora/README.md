@@ -25,14 +25,88 @@ Search for "Aragora" in the Extensions view (`Ctrl+Shift+X`).
 
 ### Build from Source
 
-Requires Node.js `^20.19.0 || >=22.12.0`.
+See [Setup](#setup) and [Build](#build).
+
+## Setup
+
+Requires Node.js `>=22.22.0`. `.npmrc` sets `engine-strict=true`, so `npm ci` refuses older
+releases (`@vscode/test-electron` 3 needs Node 22 and `posthog-node` needs 22.22). CI uses Node
+22.22.2.
 
 ```bash
 cd ide/vscode-aragora
 npm ci
+npm --prefix webview-ui ci
+```
+
+## Run
+
+```bash
+npm ci
 npm run compile
+```
+
+`npm run compile` builds the extension into `out/` and also compiles the integration suite.
+
+### Debug with F5
+
+Open `ide/vscode-aragora` itself as the VS Code workspace folder (the launch configuration uses
+`${workspaceFolder}` as the extension directory), then press **F5** or pick **Run Aragora
+Extension** in Run and Debug. The `preLaunchTask` in `.vscode/launch.json` runs the `npm: compile`
+task from `.vscode/tasks.json` first, so F5 always starts from a fresh build, then opens an
+Extension Development Host with the extension loaded. Breakpoints in `src/` resolve through the
+source maps in `out/`. The webview panels load `webview-ui/dist/`, so run `npm run build:webview`
+once before opening them.
+
+## Build
+
+```bash
 npm run package
 ```
+
+This writes `aragora-<version>.vsix`; `vscode:prepublish` compiles the extension and builds the
+webview first. The script runs `vsce package --no-dependencies`, and `.vscodeignore` keeps only
+`out/` (without tests), `webview-ui/dist/`, `resources/`, `package.json` and this README, so
+`node_modules/` is never bundled. Such a VSIX does not contain the telemetry SDKs, so telemetry
+stays off in it (see [Configuration](#configuration)). To write the VSIX elsewhere, run
+`npx vsce package --no-dependencies --out /tmp/aragora.vsix`.
+
+## Test
+
+Unit tests run under Jest with a mocked `vscode` module, the coverage thresholds from
+`jest.config.js`, and a JUnit report in `junit.xml`:
+
+```bash
+npx jest --ci --coverage
+```
+
+Integration tests run Mocha inside a real VS Code 1.136.1 through `@vscode/test-electron`:
+
+```bash
+npm run test:integration
+```
+
+The first run downloads VS Code 1.136.1 into `.vscode-test/` (about 300 MB); later runs reuse it.
+A VS Code window opens for a few seconds, so run one suite at a time. On Linux without a display,
+use `xvfb-run -a npm run test:integration`. The suite lives in `src/test/suite/` and the version
+pin is `VSCODE_VERSION` in `src/test/runTest.ts`. `tsconfig.integration.json` compiles the suite
+as a separate program because the Mocha and Jest global types clash, and Jest ignores it.
+
+From the repository root, `make readiness-test-vscode` runs the unit tests and
+`make readiness-heavy-vscode` runs the integration suite.
+
+## Lint
+
+```bash
+npm run lint                     # ESLint (flat config)
+npm --prefix webview-ui run lint # ESLint for the webview
+npm run format:check             # Prettier for the extension and webview-ui
+npx knip                         # unused files, exports and dependencies
+```
+
+From the repository root, `make readiness-lint-vscode` runs these plus the file-size ratchet, and
+`make readiness-typecheck-vscode` type-checks the extension, the integration suite and the
+webview. The `vscode-typecheck` pre-push hook runs `npm run compile`.
 
 ## Configuration
 
@@ -99,7 +173,7 @@ The Aragora sidebar shows:
 ## Requirements
 
 - VS Code 1.85.0 or higher
-- Node.js 20.19.0 or higher, or Node.js 22.12.0 or higher, when building from source
+- Node.js 22.22.0 or higher when building from source
 - Aragora API key (get one at https://aragora.ai)
 
 ## Support
