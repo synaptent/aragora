@@ -6,7 +6,7 @@
   "publisher": "aragora",
   "engines": {
     "vscode": "^1.85.0",
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.22.0"
   },
   "categories": [
     "Other",
@@ -516,11 +516,12 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build:webview",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p ./tsconfig.integration.json",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:integration": "npm run compile && node ./out/test/runTest.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -531,13 +532,17 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/jest": "^29.5.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "^3.9.2",
     "eslint": "^9.39.5",
+    "glob": "^13.0.6",
     "jest": "^29.7.0",
     "jest-junit": "^17.0.0",
     "knip": "^6.38.0",
+    "mocha": "^11.8.0",
     "prettier": "^3.9.9",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.0",

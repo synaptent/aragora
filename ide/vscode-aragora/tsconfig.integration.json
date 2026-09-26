@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node", "mocha"] },
+  "include": ["src/test/runTest.ts", "src/test/suite/**/*.ts"],
+  "exclude": []
+}

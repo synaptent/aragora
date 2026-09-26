@@ -4,6 +4,13 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
+  // The mocha suite needs the real `vscode` module and runs only under
+  // `npm run test:integration`.
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '<rootDir>/src/test/suite/',
+    '<rootDir>/src/test/runTest.ts',
+  ],
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
     '^.+\\.ts$': [
