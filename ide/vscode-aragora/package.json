@@ -526,7 +526,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
-    "package": "vsce package",
+    "package": "vsce package --no-dependencies",
     "build:webview": "npm --prefix webview-ui ci && npm --prefix webview-ui run build"
   },
   "devDependencies": {

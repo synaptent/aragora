@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "compile",
+      "label": "npm: compile",
+      "detail": "tsc -p ./ && tsc -p ./tsconfig.integration.json",
+      "problemMatcher": "$tsc",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "silent" }
+    }
+  ]
+}

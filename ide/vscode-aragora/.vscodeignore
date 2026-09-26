@@ -1,0 +1,41 @@
+# Only the compiled extension (out/), the built webview (webview-ui/dist/),
+# resources/, package.json and README.md belong in the VSIX.
+# `npm run package` passes --no-dependencies, so node_modules/ is never bundled.
+
+# Sources, tests and source maps
+src/**
+out/test/**
+out/**/*.test.js
+out/**/__tests__/**
+**/*.map
+
+# Test and coverage output
+.vscode-test/**
+coverage/**
+junit.xml
+
+# Dependencies
+node_modules/**
+webview-ui/node_modules/**
+
+# Webview sources and build config (webview-ui/dist/** is kept)
+webview-ui/src/**
+webview-ui/scripts/**
+webview-ui/index.html
+webview-ui/.npmrc
+webview-ui/*.json
+webview-ui/*.ts
+webview-ui/*.mjs
+
+# Editor, lint, format and build config
+.vscode/**
+.gitignore
+.npmrc
+.prettierignore
+.prettierrc
+eslint.config.mjs
+jest.config.js
+knip.json
+tsconfig*.json
+package-lock.json
+*.vsix

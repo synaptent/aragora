@@ -273,3 +273,6 @@ docs-site/.jscpd-report/
 ide/vscode-aragora/junit.xml
 ide/vscode-aragora/.vscode-test/
 aragora-operator/cover.out
+# The extension's F5 launch/task files are tracked despite the global `.vscode/` rule.
+!ide/vscode-aragora/.vscode/
+!ide/vscode-aragora/.vscode/*.json
