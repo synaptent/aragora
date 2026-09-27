@@ -160,6 +160,96 @@ class TestAuthExemptGetPrefixes:
             assert matches, f"Path {path} should match a GET-only exempt prefix"
 
 
+class TestReceiptExportExemptionPattern:
+    """The public ODR export exemption must not admit a sibling receipt route."""
+
+    RESERVED_SEGMENTS = ("dsar", "share", "search", "stats", "verify")
+
+    @pytest.fixture
+    def handler(self):
+        """An uninitialised handler; the exemption checks read class state only."""
+        from aragora.server.unified_server import UnifiedHandler
+
+        return UnifiedHandler.__new__(UnifiedHandler)
+
+    @pytest.mark.parametrize("segment", RESERVED_SEGMENTS)
+    def test_reserved_segment_export_is_not_exempt(self, handler, segment):
+        """Path /api/v2/receipts/<reserved>/export must never bypass authentication."""
+        path = f"/api/v2/receipts/{segment}/export"
+        assert not handler._is_path_exempt_for_get(path)
+        assert not handler._is_path_exempt(path)
+
+    def test_receipt_id_export_stays_exempt(self, handler):
+        """A real receipt id keeps the public ODR export exemption."""
+        assert handler._is_path_exempt_for_get("/api/v2/receipts/crux-1a2b3c4d/export")
+
+    def test_dsar_still_requires_authentication(self, handler):
+        """No DSAR path is exempt by any mechanism, for any request shape."""
+        for path in ("/api/v2/receipts/dsar/export", "/api/v2/receipts/dsar/user-42"):
+            assert not handler._is_path_exempt(path)
+            assert not handler._is_path_exempt_for_get(path)
+
+
+class TestReceiptExportRoutePermission:
+    """The RBAC route rule must admit exactly what the GET exemption pattern admits.
+
+    Both layers carry the same regex, so a request denied by one is denied by the
+    other; neither relies on the order the server runs its gates in.
+    """
+
+    RESERVED_SEGMENTS = ("dsar", "share", "search", "stats", "verify")
+
+    @pytest.fixture
+    def rbac(self):
+        """Middleware carrying the default route permissions."""
+        from aragora.rbac.middleware import RBACMiddleware, RBACMiddlewareConfig
+
+        return RBACMiddleware(RBACMiddlewareConfig(), validate_permissions=False)
+
+    @pytest.mark.parametrize("segment", RESERVED_SEGMENTS)
+    def test_reserved_segment_export_requires_authentication(self, rbac, segment):
+        """Path /api/v2/receipts/<reserved>/export must not be allowed unauthenticated."""
+        allowed, _reason, _permission = rbac.check_request(
+            f"/api/v2/receipts/{segment}/export", "GET", None
+        )
+        assert allowed is False
+
+    def test_receipt_id_export_allows_unauthenticated(self, rbac):
+        """A real receipt id keeps the public ODR export exemption at this layer."""
+        allowed, _reason, _permission = rbac.check_request(
+            "/api/v2/receipts/crux-1a2b3c4d/export", "GET", None
+        )
+        assert allowed is True
+
+
+def test_rbac_and_auth_checks_export_exemption_patterns_are_byte_identical():
+    """The two gates must carry the same receipts-export regex, byte for byte.
+
+    The sources are `AUTH_EXEMPT_GET_PATTERNS` in `aragora/server/auth_checks.py`
+    and the `allow_unauthenticated` export rule in `DEFAULT_ROUTE_PERMISSIONS` in
+    `aragora/rbac/middleware.py`. They are maintained as duplicate literals so
+    neither layer imports the other; this test is what keeps the copies in step,
+    so a request admitted by one gate is never denied by the other.
+    """
+    import re
+
+    from aragora.rbac.middleware import DEFAULT_ROUTE_PERMISSIONS
+    from aragora.server.auth_checks import AuthChecksMixin
+
+    def _source(pattern) -> str:
+        return pattern.pattern if isinstance(pattern, re.Pattern) else pattern
+
+    exempt = [p for p in map(_source, AuthChecksMixin.AUTH_EXEMPT_GET_PATTERNS) if "/export" in p]
+    routed = [
+        _source(r.pattern)
+        for r in DEFAULT_ROUTE_PERMISSIONS
+        if r.method == "GET" and r.allow_unauthenticated and "/export" in _source(r.pattern)
+    ]
+
+    assert len(exempt) == 1, f"expected one export exemption pattern, got {exempt}"
+    assert exempt == routed
+
+
 class TestOAuthQueryParams:
     """Tests for OAuth query parameter whitelist."""
 

@@ -38,7 +38,8 @@ CURRENT_CONTEXTS = [
     "aragora-merge-quorum",
 ]
 SCOPE_CLAUSE = "needs.test-shard-scope.outputs.in_scope == 'true'"
-# PR trigger and allowlist provenance: test.yml at mission-base 23909906e8.
+# PR trigger and allowlist provenance: test.yml at mission-base 23909906e8; the allowlist
+# also carries the two trigger paths main added in 678a1b44b4 (#10112).
 MISSION_BASE_PR_TRIGGER = {
     "types": ["opened", "synchronize", "reopened", "ready_for_review"],
     "branches": ["main"],
@@ -46,9 +47,11 @@ MISSION_BASE_PR_TRIGGER = {
 SCOPE_ALLOWLIST = [
     "aragora/**",
     "aragora-debate/**",
+    "aragora-verify/**",
     "tests/**",
     "pyproject.toml",
     "requirements.txt",
+    "scripts/gen_odr_vectors.py",
     "scripts/capability_gap_report.py",
     "scripts/generate_capability_matrix.py",
     "scripts/check_capability_matrix_sync.py",
@@ -223,7 +226,7 @@ def test_single_workflow_scope_gate() -> None:
     assert primary_pr == MISSION_BASE_PR_TRIGGER
     assert "paths" not in primary_pr and "paths-ignore" not in primary_pr
     filters = _scope_filters(workflow)
-    assert len(filters["in_scope"]) == 19
+    assert len(filters["in_scope"]) == 21
     assert set(filters["in_scope"]) == set(SCOPE_ALLOWLIST)
     assert set(filters) - {"in_scope"} == SHARD_SCOPE_NAMES
     assert "core" in filters

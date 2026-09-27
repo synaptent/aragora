@@ -67,6 +67,16 @@ inputs:
     description: 'Space-separated model families for the receipt quorum (keys must be provided)'
     required: false
     default: 'claude openai'
+  odr-signing-key:
+    description: >-
+      PEM-encoded Ed25519 private key (PKCS#8) that signs the emitted receipt.
+      Pass a repository secret. With a key the receipt carries a detached
+      signature that anyone holding the matching public key can check offline
+      with `aragora-verify --pubkey`; without one the receipt is unsigned. The
+      key is written to a runner-private file for the emit step only and is
+      never placed in a child process's environment.
+    required: false
+    default: ''
   use-secrets-manager:
     description: >-
       Load provider API keys from AWS Secrets Manager instead of inputs (the
@@ -135,6 +145,12 @@ outputs:
   receipt-verified:
     description: 'Whether the emitted receipt passed schema + digest verification'
     value: ${{ steps.receipt.outputs.receipt_verified }}
+  receipt-signed:
+    description: 'Whether the emitted receipt carries an Ed25519 signature'
+    value: ${{ steps.receipt.outputs.receipt_signed }}
+  receipt-key-id:
+    description: 'Key id of the receipt signature (empty when unsigned); match it against your published public key'
+    value: ${{ steps.receipt.outputs.receipt_key_id }}
 
 runs:
   using: 'composite'
@@ -257,6 +273,16 @@ runs:
         mkdir -p ./aragora-artifacts
         LOG=./aragora-artifacts/receipt.log
         RECEIPT_REVIEWERS="${RECEIPT_REVIEWERS:-claude openai}"
+        # Keep the signing key out of every child process's environment (the
+        # quorum step runs third-party model CLIs): write it to a runner-private
+        # file now and hand only the path to the emit step below.
+        ODR_KEY_FILE=""
+        if [ -n "${ODR_SIGNING_KEY:-}" ]; then
+          ODR_KEY_FILE="${RUNNER_TEMP:-/tmp}/aragora-odr-signing-key.pem"
+          ( umask 077 && printf '%s\n' "$ODR_SIGNING_KEY" > "$ODR_KEY_FILE" )
+          trap 'rm -f "$ODR_KEY_FILE"' EXIT
+        fi
+        unset ODR_SIGNING_KEY
         receipt_failed() {
           echo "$1" >> "$LOG"
           echo "receipt_verified=false" >> "$GITHUB_OUTPUT"
@@ -296,6 +322,8 @@ runs:
 
         RECEIPT_OK=false
         if [ -s ./aragora-artifacts/outcome.json ]; then
+          # An empty path is equivalent to unset: the receipt is emitted unsigned.
+          ARAGORA_ODR_SIGNING_KEY_FILE="$ODR_KEY_FILE" \
           "$RECEIPT_PY" "$GITHUB_ACTION_PATH/scripts/emit_pr_receipt.py" \
             --outcome ./aragora-artifacts/outcome.json \
             --out ./aragora-artifacts/decision-receipt.odr.json \
@@ -315,13 +343,18 @@ runs:
         if [ "$RECEIPT_OK" = "true" ] && [ -f "$RECEIPT" ] && [ -f ./aragora-artifacts/comment.md ]; then
           VERDICT=$("$RECEIPT_PY" -c "import json;print(json.load(open('$RECEIPT'))['claim'].get('verdict',''))" 2>>"$LOG")
           RID=$("$RECEIPT_PY" -c "import json;print(json.load(open('$RECEIPT')).get('receipt_id',''))" 2>>"$LOG")
+          KID=$("$RECEIPT_PY" -c "import json;s=json.load(open('$RECEIPT')).get('signatures') or [];print(s[0].get('key_id','') if s else '')" 2>>"$LOG")
           {
             echo ""
             echo "---"
             echo "### 🧾 Decision Receipt"
             echo ""
             echo "- Receipt: \`$RID\`  ·  Verdict: \`$VERDICT\`"
-            echo "- Independently verifiable: \`pip install aragora-verify && aragora-verify decision-receipt.odr.json\`"
+            if [ -n "$KID" ]; then
+              echo "- Signed with Ed25519 key \`$KID\`. Verify offline against this repository's published public key: \`pip install aragora-verify && aragora-verify decision-receipt.odr.json --pubkey <public-key.pem>\`"
+            else
+              echo "- Independently verifiable: \`pip install aragora-verify && aragora-verify decision-receipt.odr.json\` (unsigned: pass \`odr-signing-key\` to sign receipts)"
+            fi
             echo "- The full portable receipt is attached as a build artifact."
           } >> ./aragora-artifacts/comment.md
         fi
@@ -332,6 +365,7 @@ runs:
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         RECEIPT_REVIEWERS: ${{ inputs.receipt-reviewers }}
+        ODR_SIGNING_KEY: ${{ inputs.odr-signing-key }}
         REPO: ${{ github.repository }}
         PR: ${{ steps.diff.outputs.pr_number }}
         ARAGORA_USE_SECRETS_MANAGER: ${{ inputs.use-secrets-manager }}
