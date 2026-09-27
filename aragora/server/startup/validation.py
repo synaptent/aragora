@@ -269,6 +269,20 @@ def check_production_requirements() -> list[str]:
         "yes",
     )
 
+    # Strict secrets mode (production/staging by default) needs a managed custody
+    # backend. ARAGORA_ENV alone no longer enables AWS Secrets Manager, so a
+    # deployment that relied on that would otherwise start without its secrets.
+    from aragora.config.secrets import is_strict_mode, managed_custody_configured
+
+    if is_strict_mode() and not managed_custody_configured():
+        missing.append(
+            "Strict secrets mode is on (ARAGORA_ENV=production/staging or "
+            "ARAGORA_SECRETS_STRICT=true) but no managed secret custody is configured. "
+            "Mount protected secret files and set ARAGORA_SECRETS_DIR, or enable AWS "
+            "Secrets Manager with ARAGORA_USE_SECRETS_MANAGER=true (ARAGORA_ENV no "
+            "longer enables it), or set ARAGORA_SECRETS_STRICT=false (not recommended)"
+        )
+
     if is_production:
         # =====================================================================
         # HARD REQUIREMENTS (fail startup)
