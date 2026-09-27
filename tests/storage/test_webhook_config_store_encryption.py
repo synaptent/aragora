@@ -116,6 +116,7 @@ class TestEncryptionAvailable:
     @pytest.fixture(autouse=True)
     def development_key(self, monkeypatch):
         monkeypatch.setenv("ARAGORA_ENV", "development")
+        monkeypatch.delenv("ARAGORA_SECRETS_STRICT", raising=False)
         monkeypatch.setenv("ARAGORA_ENCRYPTION_KEY", "0" * 64)
         monkeypatch.setattr(encryption_module, "_encryption_service", None)
 
@@ -261,6 +262,7 @@ class TestRealEncryptionRoundTrip:
     @pytest.fixture(autouse=True)
     def development_key(self, monkeypatch):
         monkeypatch.setenv("ARAGORA_ENV", "development")
+        monkeypatch.delenv("ARAGORA_SECRETS_STRICT", raising=False)
         monkeypatch.setenv("ARAGORA_ENCRYPTION_KEY", "0" * 64)
         monkeypatch.setattr(encryption_module, "_encryption_service", None)
 
