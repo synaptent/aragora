@@ -1331,8 +1331,63 @@ class ReceiptsHandler(BaseHandler):
         tags=["Receipts", "Verification"],
         operation_id="verify_odr_document",
         auth_required=False,
+        request_body={
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "description": "An ODR document, as emitted or exported",
+                        "required": ["odr_version"],
+                        "properties": {"odr_version": {"type": "string", "enum": ["0.1", "0.2"]}},
+                        "additionalProperties": True,
+                    }
+                }
+            },
+        },
         responses={
-            "200": {"description": "Verification verdict returned (verified true or false)"},
+            "200": {
+                "description": "Verification verdict returned (verified true or false)",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": [
+                                "verified",
+                                "receipt_id",
+                                "odr_digest",
+                                "checks",
+                                "warnings",
+                                "dissent_trail",
+                                "key_id",
+                            ],
+                            "properties": {
+                                "verified": {"type": "boolean"},
+                                "receipt_id": {"type": "string"},
+                                "odr_digest": {"type": "string"},
+                                "checks": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": ["name", "status", "detail"],
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "status": {
+                                                "type": "string",
+                                                "enum": ["pass", "fail", "warn", "skip"],
+                                            },
+                                            "detail": {"type": "string"},
+                                        },
+                                    },
+                                },
+                                "warnings": {"type": "array", "items": {"type": "string"}},
+                                "dissent_trail": {"type": "array", "items": {}},
+                                "key_id": {"type": ["string", "null"]},
+                            },
+                        }
+                    }
+                },
+            },
             "400": {"description": "Body is not a JSON object carrying odr_version"},
             "413": {"description": "Request body exceeds 262144 bytes"},
             "429": {"description": "Rate limit exceeded (60 requests per minute per client)"},
