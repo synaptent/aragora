@@ -128,7 +128,7 @@ class InboxDebateTrigger:
             # Use the inline mock debate from the playground handler.
             # This provides a fast, lightweight analysis without needing
             # the full debate orchestrator or external API calls.
-            from aragora.server.handlers.playground import _run_inline_mock_debate
+            from aragora.server.handlers.demo.playground import _run_inline_mock_debate
 
             result = _run_inline_mock_debate(
                 topic=topic,

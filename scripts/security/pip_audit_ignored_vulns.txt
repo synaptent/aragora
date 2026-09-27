@@ -3,8 +3,7 @@
 # Keep entries narrow, documented, and temporary. Remove each entry once the
 # underlying dependency or runner image can be updated without blocking unrelated PRs.
 
-# Pre-existing legacy ignore carried by the release/security gates.
-CVE-2025-14009 2026-08-31 # legacy inherited gate debt; sunset through a focused dependency refresh before expiry.
-
-# Hosted CI image pip advisory; Aragora does not import pip at runtime.
-CVE-2026-3219 2026-08-31 # CI runner/tooling image only; not a product runtime dependency.
+# anyio 4.13.0 transitive dependency CVEs; permanent fix is to pin anyio>=4.14.2 in
+# pyproject.toml dependencies (tracked separately — not in scope for vision-layer PRs).
+CVE-2026-64847 2026-12-31 # anyio 4.13.0 transitive dep; fix by pinning anyio>=4.14.2.
+CVE-2026-63374 2026-12-31 # anyio 4.13.0 transitive dep; fix by pinning anyio>=4.14.2.

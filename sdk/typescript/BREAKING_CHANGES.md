@@ -6,9 +6,134 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-09-21)
+
+#### Breaking Changes
+
+Contract-drift batch 4 removes 16 TypeScript operations on unserved routes absent
+from both OpenAPI documents. Every route below was dispatched through the live
+`HANDLER_REGISTRY`: each either matches no handler at all, or reaches a selected
+handler whose verb method has no branch for the path and therefore returns no
+result. `media.getPodcastEpisode` and `podcast.deleteEpisode` are removed together
+with the Python twins so the `/api/podcast/episodes/{id}` path leaves both SDKs at
+once; `debates.addTags` and `debates.removeTags` likewise pair with Python
+`debates.get_tags`. Routes below use normalized parameters.
+
+Every replacement named in the Migration column was dispatched on the same server
+and answered with a resource-level, permission-level or validation-level result
+rather than a route-level 404 or `handler_no_result`. Where no such route exists
+the column says so instead of naming a method that is equally undispatched.
+
+This reverses the earlier decision, recorded under Unreleased (2026-09-03)
+below, to keep `media.uploadAudio` because the audio handler declares
+`/api/v1/media/audio` without a POST branch. The branch is still unimplemented
+and the route answers `handler_no_result`, so the call remains undispatchable
+and is removed rather than held open indefinitely.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `tasks.update` | `POST /api/v2/tasks/{id}` | No replacement; `tasks.get(taskId)` reads a task and `POST /api/v2/tasks/{id}/approve` approves one |
+| `policies.enable` | `POST /api/policies/{id}/enable` | Not `policies.toggle(policyId)`, which flips the current state. To enable idempotently, send the body `{ "enabled": true }` with `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}`. A toggle request without `enabled` inverts the current state. No typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
+| `policies.disable` | `POST /api/policies/{id}/disable` | Not `policies.toggle(policyId)`, which flips the current state. To disable idempotently, send the body `{ "enabled": false }` with `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}`. A toggle request without `enabled` inverts the current state. No typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
+| `IndexAPI.getIndex` | `GET /api/v1/index/{name}` | No replacement: `IndexAPI.listIndexes()` calls `GET /api/v1/index`, which `KnowledgeHandler` claims but has no branch for, so it answers `handler_no_result` too |
+| `IndexAPI.deleteIndex` | `DELETE /api/v1/index/{name}` | No replacement |
+| `debates.addTags` | `POST /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` |
+| `debates.removeTags` | `DELETE /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` with the desired list |
+| `checkpoints.listForDebate` | `GET /api/v1/debates/{id}/checkpoints` | `checkpoints.list({ debate_id })` |
+| `checkpoints.createForDebate` | `POST /api/v1/debates/{id}/checkpoint` | No replacement: `checkpoints.pauseDebate(debateId)` pauses a live debate through the interventions handler but creates no checkpoint, and `POST /api/v1/debates/{id}/checkpoint/pause` is not dispatched to the checkpoint handler |
+| `teams.getTenant` | `GET /api/v1/teams/tenants/{id}` | No replacement: `GET /api/v1/sme/teams/tenants/{id}` is served but answers 403 to every default role, because none holds its `sme:workspaces:read` permission, and no SDK method calls it |
+| `teams.setTenantEnabled` | `PATCH /api/v1/teams/tenants/{id}` | No replacement: `PATCH /api/v1/sme/teams/tenants/{id}` (body `is_active`) is served but answers 403 to every default role, because none holds its `sme:workspaces:write` permission, and no SDK method calls it |
+| `teams.getNotificationSettings` | `GET /api/v1/teams/tenants/{id}/channels/{id}/notifications` | No replacement |
+| `teams.updateNotificationSettings` | `PATCH /api/v1/teams/tenants/{id}/channels/{id}/notifications` | No replacement |
+| `media.uploadAudio` | `POST /api/v1/media/audio` | No replacement |
+| `media.getPodcastEpisode` | `GET /api/v1/podcast/episodes/{id}` | `media.listPodcastEpisodes()` and select by episode ID |
+| `organizations.createTenant` | `POST /api/v1/tenants` | No replacement |
+
+Two further TypeScript methods are removed for cross-SDK path closure rather than
+as drift rows, because the paths they hold would otherwise survive in TypeScript
+after Python loses them:
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `podcast.getEpisode` | `GET /api/v1/podcast/episodes/{id}` | `podcast.listEpisodes()` and select by episode ID |
+| `podcast.deleteEpisode` | `DELETE /api/v1/podcast/episodes/{id}` | No replacement |
+
+`POST /api/v1/tenants` reaches TypeScript through two further call sites that the
+namespace-scoped drift extractor does not see. They are removed as well, so the
+retired route leaves the SDK entirely rather than surviving behind a delegating
+wrapper:
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `client.createTenant` | `POST /api/v1/tenants` | No replacement |
+| `tenants.create` | `POST /api/v1/tenants` | No replacement |
+
+The now-orphaned `CreateTenantRequest` interface exported from
+`src/namespaces/tenants.ts` is removed with them. The identically named type in
+`src/types.ts` is unchanged.
+
+### Unreleased (2026-09-13)
+
+#### Breaking Changes
+
+Contract-drift batch 3 removes 24 operations on unserved routes absent from both
+OpenAPI documents. The deprecated debate methods are included.
+`PipelineTransitionsNamespace` and its barrel export are removed, as is the
+orphaned `DebateAgentStatistics` interface. Routes below use normalized parameters.
+
+`replays.getHtml(replayId)` is retained: the aiohttp server serves
+`GET /api/replays/{replay_id}/html` and its `/api/v1` alias.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `decisions.getOutcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.getPlanOutcome(planId)` for a completed plan |
+| `PipelineTransitionsNamespace.transition` | `POST /api/v2/pipelines/{id}/items/{id}/transition` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.getHistory` | `GET /api/v2/pipelines/{id}/items/{id}/transitions` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.validate` | `POST /api/v2/pipelines/{id}/items/{id}/transition/validate` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.available` | `GET /api/v2/pipelines/{id}/items/{id}/transitions/available` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.rollback` | `POST /api/v2/pipelines/{id}/items/{id}/transition/rollback` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `leaderboard.getDomainRankings` | `GET /api/leaderboard/domain/{domain}` | `leaderboard.getDomains()`, `/api/leaderboard/domains` |
+| `leaderboard.getAgentPerformance` | `GET /api/leaderboard/agent/{agent}` | `leaderboard.getRankings()` for aggregate rankings |
+| `leaderboard.getEloHistory` | `GET /api/leaderboard/agent/{agent}/elo-history` | No replacement |
+| `rbac.getEffectivePermissions` | `GET /api/v1/rbac/users/{id}/permissions` | No replacement |
+| `rbac.removeUser` | `DELETE /api/users/{id}` | Use the `users` or `organizations` namespace for the intended operation |
+| `rbac.changeUserRole` | `PUT /api/users/{id}/role` | Use the `users` or `organizations` namespace for the intended operation |
+| `replays.listForks` | `GET /api/replays/{id}/forks` | No replacement |
+| `transcription.getJob` | `GET /api/v1/transcription/{id}` | No replacement; only `/status` is served |
+| `transcription.getSegments` | `GET /api/v1/transcription/{id}/segments` | No replacement; only `/status` is served |
+| `transcription.deleteJob` | `DELETE /api/v1/transcription/{id}` | No replacement; only `/status` is served |
+| `batch.getStatus` | `GET /api/v1/batch/{id}` | No replacement |
+| `genesis.getDebateTree` | `GET /api/v1/genesis/debates/{id}/tree` | No replacement |
+| `voice.synthesizeDebate` | `POST /api/v1/voice/debates/{id}/synthesize` | No replacement |
+| `unifiedInbox.reply` | `POST /inbox/messages/{id}/reply` | No replacement |
+| `learning.stopSession` | `POST /api/v1/learning/sessions/{id}/stop` | No replacement |
+| `learning.validatePattern` | `POST /api/v1/learning/patterns/{id}/validate` | No replacement |
+| `debates.getAgentStatistics` | `GET /api/v1/debates/statistics/agents` | `debates.getStatsAgents()` |
+| `debates.deletePermanently` | `DELETE /api/v1/debates/{id}/permanent` | `debates.delete(debateId)` |
+
 ### Unreleased (2026-09-03)
 
 #### Breaking Changes
+
+`streamDebate`, `streamDebateById`, and client stream wrappers now drain accepted
+events before ending. A socket close without a genuine terminal event throws
+`ConnectionError` after buffered delivery; it no longer manufactures `debate_end`.
+Wrap `for await` in `try/catch` (see the [streaming example](../../docs/guides/SDK_QUICKSTART_TYPESCRIPT.md#real-time-streaming)).
+Close errors expose `WS_CLOSE_<number>` via `error.code`/`error.errorCode` and the
+numeric value via `error.responseBody.code`, without the raw remote reason.
+A native transport error may precede close: the iterator retains close diagnostics
+for up to 1,000 ms after the first error; repeated errors do not restart the window.
+If no close arrives, it throws a sanitized, non-retryable `ConnectionError` without
+a close code. Parsing errors fail immediately and are also non-retryable. Here,
+non-retryable means explicit caller handling is required, not proof of permanence.
+Buffered events still drain; an accepted genuine terminal event before finalization
+takes precedence. Close arriving after finalization cannot revise the outcome.
+`isRetryableError` respects the new optional fifth `ConnectionError` constructor
+argument, `retryable` (default `true` for existing callers). Only close codes
+1001,1006,1011,1012,1013,4029 are retryable; all others, including premature1000,
+require explicit caller handling. This is eligibility, not automatic retry:
+the iterator does not resume, and a new connection guarantees neither replay nor
+gap-free delivery. Bound application retries with backoff; do not restart blindly.
 
 Batch 06 removes 11 matched phantom operations from `IndexAPI`, `ReplaysAPI`, and `DocumentsAPI`.
 For each removed index method, the named route is absent from both OpenAPI documents and is not accepted by the knowledge-base handler: `getIndexStats` (`GET /api/v1/index/{name}/stats`), `addDocuments` (`POST /api/v1/index/{name}/documents`), `updateDocument` (`PUT /api/v1/index/{name}/documents/{documentId}`), `deleteDocuments` (`DELETE /api/v1/index/{name}/documents`), `rebuildIndex` (`POST /api/v1/index/{name}/rebuild`), and `optimizeIndex` (`POST /api/v1/index/{name}/optimize`). The `IndexDocument` and `UpdateDocumentOptions` interfaces are deleted with `addDocuments` and `updateDocument` and are no longer re-exported by the `namespaces` barrel.

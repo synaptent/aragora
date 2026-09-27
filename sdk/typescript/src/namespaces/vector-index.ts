@@ -176,11 +176,6 @@ export class IndexAPI {
     return this.client.request('GET', '/api/v1/index');
   }
 
-  /** Get details of a specific index. */
-  async getIndex(indexName: string): Promise<{ name: string; status: IndexStatus; document_count: number; dimension: number }> {
-    return this.client.request('GET', `/api/v1/index/${indexName}`);
-  }
-
   /** Create a new vector index. */
   async createIndex(options: CreateIndexOptions): Promise<{ name: string; status: IndexStatus; created_at: string }> {
     const data: Record<string, unknown> = {
@@ -190,10 +185,5 @@ export class IndexAPI {
     if (options.dimension !== undefined) data.dimension = options.dimension;
     if (options.description !== undefined) data.description = options.description;
     return this.client.request('POST', '/api/v1/index', { json: data });
-  }
-
-  /** Delete a vector index. */
-  async deleteIndex(indexName: string): Promise<{ deleted: boolean }> {
-    return this.client.request('DELETE', `/api/v1/index/${indexName}`);
   }
 }

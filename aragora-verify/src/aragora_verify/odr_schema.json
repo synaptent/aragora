@@ -20,6 +20,36 @@
           "profile": {"const": "https://aragora.ai/specs/open-decision-receipt/v0.2"}
         }
       }
+    },
+    {
+      "if": {"required": ["odr_version"], "properties": {"odr_version": {"const": "0.1"}}},
+      "then": {
+        "properties": {
+          "adjudication": false,
+          "subject": {
+            "properties": {
+              "repository": false,
+              "pr_number": false,
+              "head_sha": false,
+              "base_sha": false
+            }
+          },
+          "quorum": {
+            "properties": {
+              "verdicts": false,
+              "rule": false,
+              "dissent": {
+                "properties": {
+                  "findings": false,
+                  "severity_max": false,
+                  "blocking": false
+                }
+              }
+            }
+          },
+          "reasoning": {"properties": {"observations": false}}
+        }
+      }
     }
   ],
   "required": [
@@ -118,6 +148,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "required": ["kind", "family", "detail"],
                 "properties": {
                   "kind": { "enum": ["timeout", "failure", "rerun"] },
                   "family": { "type": "string" },
@@ -153,6 +184,7 @@
               "type": "array",
               "items": {
                 "type": "object",
+                "required": ["issuer", "verdict", "model_family", "model_id"],
                 "properties": {
                   "issuer": { "type": "string" },
                   "role": { "type": "string" },
@@ -171,6 +203,12 @@
             },
             "rule": {
               "type": "object",
+              "required": [
+                "required_signals",
+                "requires_western_frontier",
+                "western_only_counted",
+                "counted_families"
+              ],
               "properties": {
                 "required_signals": { "type": "integer" },
                 "requires_western_frontier": { "type": "boolean" },
@@ -222,6 +260,7 @@
                   "type": "array",
                   "items": {
                     "type": "object",
+                    "required": ["issuer", "severity", "blocking", "text"],
                     "properties": {
                       "issuer": { "type": "string" },
                       "severity": { "$ref": "#/$defs/severity" },
@@ -374,11 +413,13 @@
     },
     "adjudication": {
       "type": "object",
+      "required": ["kind", "verdict", "reason"],
       "properties": {
-        "status": { "enum": ["present", "absent"] },
         "kind": { "const": "review_adjudication.v1" },
         "verdict": { "enum": ["settle", "block", "escalate", "not_applicable"] },
         "reason": { "type": "string" },
+        "groundedness_bar": { "type": "number" },
+        "advisory_severity_policy": { "enum": ["cap_at_advisory", "promote_grounded_to_block"] },
         "policy": { "type": "object" },
         "assessments": { "type": "array", "items": { "type": "object" } },
         "blocking_findings": { "type": "array", "items": { "type": "string" } },
@@ -398,7 +439,7 @@
     },
     "signatures": {
       "type": "array",
-      "description": "Reserved for detached signatures (Ed25519, issue #8225). Empty in v0.1; signatures cover the SHA-256 of the JCS bytes of the payload with this array removed.",
+      "description": "Detached Ed25519 signatures (spec §6). Every entry covers odr_digest, the SHA-256 of the JCS bytes of the payload with this array removed. On a v0.1 document the signed message is the 32 raw digest bytes and the entry is {alg, key_id, signature} (signed_at tolerated, unauthenticated). On a v0.2 document the signed message is JCS({odr_digest, odr_signature_input: \"0.2\", protected}) where protected is the entry without signature, so issuer, role, signed_at and expires_at are signer-committed.",
       "items": {
         "type": "object",
         "required": ["alg", "key_id", "signature"],
@@ -406,7 +447,10 @@
           "alg": { "type": "string", "enum": ["Ed25519"] },
           "key_id": { "type": "string", "minLength": 1 },
           "signature": { "type": "string", "minLength": 1 },
-          "signed_at": { "type": "string" }
+          "issuer": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["emitter", "reviewer", "attestor", "notary"] },
+          "signed_at": { "type": "string" },
+          "expires_at": { "type": "string" }
         },
         "additionalProperties": false
       }

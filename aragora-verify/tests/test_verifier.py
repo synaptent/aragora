@@ -2,13 +2,165 @@
 
 from __future__ import annotations
 
+import base64
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from aragora_verify import compute_key_id, load_public_key, verify
+from aragora_verify.cli import main
+from aragora_verify.jcs import odr_content_digest, odr_signature_message
 from aragora_verify.verifier import FAIL, PASS, SKIP, WARN
 
 from _fixtures import make_keypair, sign_odr, valid_odr
+
+
+def _v02_signed(doc=None):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    # Public test material, identical to tests/gauntlet/odr_test_keys.py.
+    key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    if doc is None:
+        doc = valid_odr(odr_version="0.2")
+        doc["quorum"]["dissent"].update(
+            findings=[{"issuer": "claude", "severity": "P2", "blocking": False, "text": "Review"}],
+            severity_max="P2",
+            blocking=False,
+        )
+    entry = {
+        "alg": "Ed25519",
+        "key_id": compute_key_id(key.public_key()),
+        "issuer": "aragora",
+        "signed_at": "2000-01-01T00:00:00Z",
+        "expires_at": "2001-01-01T00:00:00Z",
+    }
+    entry["signature"] = base64.b64encode(
+        key.sign(odr_signature_message(odr_content_digest(doc), "0.2", entry))
+    ).decode()
+    doc["signatures"] = [entry]
+    return doc, key
+
+
+def test_v02_per_finding_blocking_consistency():
+    doc = valid_odr(odr_version="0.2")
+    doc["quorum"]["dissent"].update(
+        findings=[{"issuer": "claude", "severity": "P1", "blocking": False, "text": "Review"}],
+        severity_max="P1",
+        blocking=True,
+    )
+    doc, key = _v02_signed(doc)
+    fails = [c for c in verify(doc, public_key=key.public_key()).checks if c.status == FAIL]
+    assert [c.name for c in fails] == ["dissent_consistency"]
+    assert fails[0].detail == "quorum.dissent.findings[0].blocking: expected True for P1"
+    assert verify(valid_odr()).ok
+
+
+@pytest.mark.parametrize("member,value", [("severity_max", "P0"), ("blocking", True)])
+def test_v02_dissent_consistency_precedes_signature(member, value):
+    doc, key = _v02_signed()
+    doc["quorum"]["dissent"][member] = value
+    result = verify(doc, public_key=key.public_key())
+    assert next(c.name for c in result.checks if c.status == FAIL) == "dissent_consistency"
+    assert verify(valid_odr()).ok
+
+
+def test_v02_cli_flags_trail_and_issuer(tmp_path, capsys):
+    doc, key = _v02_signed()
+    receipt, pub = tmp_path / "r.json", tmp_path / "pub.pem"
+    receipt.write_text(json.dumps(doc))
+    pub.write_bytes(_pubkey_bytes(key.public_key()))
+    base = [str(receipt), "--pubkey", str(pub)]
+    assert main(base + ["--require-issuer", "aragora"]) == 0
+    output = capsys.readouterr().out
+    assert output.splitlines().count("Dissent trail") == 1
+    assert "[P2] claude (advisory): Review" in output
+    assert output.rstrip().endswith(f"=> VERIFIED (key_id={doc['signatures'][0]['key_id']})")
+    assert main(base + ["--strict-expiry"]) == 1
+    assert main(base + ["--strict-expiry", "--now", "2000-06-01T00:00:00Z"]) == 0
+    capsys.readouterr()
+    assert main(base + ["--now", "2000-06-01T00:00:00Z", "--json"]) == 0
+    assert not any("expire" in w for w in json.loads(capsys.readouterr().out)["warnings"])
+    for timestamp in ("bad", "2000-01-01T00:00:00"):
+        with pytest.raises(SystemExit) as exc:
+            main(base + ["--now", timestamp])
+        assert exc.value.code == 2
+    assert main(base + ["--require-issuer", "missing"]) == 1
+    assert main([str(receipt), "--require-issuer", "aragora"]) == 1
+    assert main([str(receipt)]) == 3
+    capsys.readouterr()
+    assert main(base + ["--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["key_id"] == compute_key_id(key.public_key())
+    assert result["dissent_trail"] == ["[P2] claude (advisory): Review"]
+    doc = sign_odr(valid_odr(), key)
+    doc["signatures"][0]["issuer"] = "aragora"
+    receipt.write_text(json.dumps(doc))
+    assert main(base + ["--require-issuer", "aragora"]) == 1
+    receipt.write_text(json.dumps(valid_odr()))
+    assert main([str(receipt)]) == 0
+    assert "(no dissent recorded)" in capsys.readouterr().out
+    assert main([str(receipt), "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["dissent_trail"] == [] and result["key_id"] is None
+
+
+def test_v02_issuer_requires_verifying_entry():
+    doc, key = _v02_signed()
+    doc["signatures"].insert(
+        0, dict(doc["signatures"][0], issuer="forged", key_id="ed25519-feedfacefeedface")
+    )
+    assert verify(doc, public_key=key.public_key(), require_issuer="aragora").ok
+    assert not verify(doc, public_key=key.public_key(), require_issuer="forged").ok
+    assert not verify(doc, public_key=make_keypair()[1], require_issuer="aragora").ok
+    assert not verify(valid_odr(), require_issuer="aragora").ok
+
+
+def test_v02_schema_labels_and_help(capsys):
+    doc, key = _v02_signed()
+    assert "ODR v0.2" in _check(verify(doc), "schema_conformance").detail
+    example = (
+        Path(__file__).resolve().parents[2] / "docs/specs/examples/example-approved-clean.odr.json"
+    )
+    legacy = json.loads(example.read_text()) if example.exists() else valid_odr()
+    assert "ODR v0.1" in _check(verify(legacy), "schema_conformance").detail
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--help"])
+    assert exit_info.value.code == 0
+    assert "v0.2" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("severity", ["P0", "P1", "P2", "P3", None])
+def test_v02_adjudication_trail(severity, tmp_path, capsys):
+    doc = valid_odr(odr_version="0.2")
+    blocking = severity in ("P0", "P1")
+    doc["quorum"]["dissent"]["findings"] = (
+        [{"issuer": "claude", "severity": severity, "blocking": blocking, "text": "Finding"}]
+        if severity
+        else []
+    )
+    doc["adjudication"] = {
+        "kind": "review_adjudication.v1",
+        "verdict": "settle",
+        "reason": "Reviewed",
+    }
+    doc, key = _v02_signed(doc)
+    path = tmp_path / "adjudicated.json"
+    pub = tmp_path / "pub.pem"
+    path.write_text(json.dumps(doc))
+    pub.write_bytes(_pubkey_bytes(key.public_key()))
+    assert main([str(path), "--pubkey", str(pub)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    label = "blocking" if blocking else "advisory"
+    finding = f"[{severity}] claude ({label}): Finding" if severity else "(no dissent recorded)"
+    assert lines[-4:] == [
+        "Dissent trail",
+        finding,
+        "Adjudication: settle — Reviewed",
+        f"  => VERIFIED (key_id={compute_key_id(key.public_key())})",
+    ]
+    assert verify(valid_odr()).ok
 
 
 def _check(result, name):
@@ -297,3 +449,161 @@ def test_load_public_key_rejects_garbage() -> None:
 
     with pytest.raises(VerificationError):
         load_public_key(b"not a key")
+
+
+# --- v0.2 signature entries: signer-committed metadata (spec §6) ------------
+
+_T0, _T1 = "2026-09-05T00:00:00+00:00", "2027-09-05T00:00:00+00:00"
+_DELETE = object()
+
+
+def _valid_odr_v02():
+    doc = valid_odr()
+    doc.update(odr_version="0.2", profile="https://aragora.ai/specs/open-decision-receipt/v0.2")
+    return doc
+
+
+def _sign_v02(doc, private_key, *, over_v01_message=False, **metadata):
+    """Sign per the v0.2 construction: JCS({odr_digest, odr_signature_input, protected})."""
+    import base64
+
+    from aragora_verify.jcs import jcs_canonicalize, odr_content_digest
+
+    protected = {"alg": "Ed25519", "key_id": compute_key_id(private_key.public_key())}
+    protected.update({"issuer": "aragora", "role": "emitter", "signed_at": _T0, **metadata})
+    digest_hex = odr_content_digest(doc)
+    payload = {"odr_digest": digest_hex, "odr_signature_input": "0.2", "protected": protected}
+    message = bytes.fromhex(digest_hex) if over_v01_message else jcs_canonicalize(payload)
+    signature = base64.b64encode(private_key.sign(message)).decode("ascii")
+    return dict(doc, signatures=[dict(protected, signature=signature)])
+
+
+def _verify_with(signed, public_key):
+    return verify(signed, public_key=load_public_key(_pubkey_bytes(public_key)))
+
+
+def _unauthenticated(result):
+    return [w for w in result.warnings if "unauthenticated signature metadata" in w]
+
+
+@pytest.mark.parametrize(
+    "metadata", [{}, {"role": "reviewer", "expires_at": _T1}], ids=["default", "with_expiry"]
+)
+def test_v02_signed_receipt_with_metadata_verifies(metadata) -> None:
+    private_key, public_key = make_keypair()
+    result = _verify_with(_sign_v02(_valid_odr_v02(), private_key, **metadata), public_key)
+    assert result.ok is True, result.checks
+    assert _check(result, "signature").status == PASS
+    assert _unauthenticated(result) == []
+
+
+@pytest.mark.parametrize(
+    "member,value",
+    [
+        pytest.param("issuer", "mallory", id="issuer_changed"),
+        pytest.param("expires_at", "2099-01-01T00:00:00Z", id="expires_at_added"),
+        pytest.param("signed_at", _DELETE, id="signed_at_stripped"),
+        pytest.param("role", "notary", id="role_changed"),
+        pytest.param("issuer", _DELETE, id="issuer_stripped"),
+        pytest.param("key_id", "ed25519-deadbeefdeadbeef", id="key_id_relabeled"),
+    ],
+)
+def test_v02_metadata_tamper_fails_signature_but_not_digest(member, value) -> None:
+    private_key, public_key = make_keypair()
+    signed = _sign_v02(_valid_odr_v02(), private_key)
+    if value is _DELETE:
+        del signed["signatures"][0][member]
+    else:
+        signed["signatures"][0][member] = value
+    result = _verify_with(signed, public_key)
+    assert result.ok is False
+    assert _check(result, "canonical_digest").status == PASS
+    assert _check(result, "signature").status == FAIL
+
+
+def test_v02_entry_over_v01_message_fails() -> None:
+    # No fallback between constructions: a 0.2 document is only ever checked
+    # under the 0.2 message, so an entry made over the raw digest bytes fails.
+    private_key, public_key = make_keypair()
+    signed = _sign_v02(_valid_odr_v02(), private_key, over_v01_message=True)
+    result = _verify_with(signed, public_key)
+    assert result.ok is False
+    assert _check(result, "canonical_digest").status == PASS
+    assert _check(result, "signature").status == FAIL
+
+
+def test_v01_signature_construction_unchanged_and_metadata_only_warns() -> None:
+    # The shared fixture signs a 0.1 document over the raw digest bytes with a
+    # signed_at member (no new warning); other metadata warns, with or without a key.
+    private_key, public_key = make_keypair()
+    signed = sign_odr(valid_odr(), private_key)
+    assert set(signed["signatures"][0]) == {"alg", "key_id", "signature", "signed_at"}
+    result = _verify_with(signed, public_key)
+    assert result.ok is True and _check(result, "signature").status == PASS
+    assert _unauthenticated(result) == []
+    signed["signatures"][0]["issuer"] = "aragora"
+    result = _verify_with(signed, public_key)
+    assert result.ok is True and _check(result, "signature").status == PASS
+    assert len(_unauthenticated(result)) == 1 and "issuer" in _unauthenticated(result)[0]
+    assert len(_unauthenticated(verify(signed))) == 1
+
+
+@pytest.mark.parametrize(
+    "member,value", [("issuer", ""), ("role", "auditor"), ("expires_at", 5), ("note", "x")]
+)
+def test_hand_written_signature_checks_without_jsonschema(monkeypatch, member, value) -> None:
+    from aragora_verify import schema
+
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    signed = _sign_v02(_valid_odr_v02(), make_keypair()[0])
+    signed["signatures"][0][member] = value
+    errors = schema.validate_structure(signed)
+    assert any(e.startswith(f"signatures[0].{member}: ") for e in errors), errors
+    assert _check(verify(signed), "schema_conformance").status == FAIL
+
+
+@pytest.mark.parametrize("version", ["0.1", "0.2"])
+@pytest.mark.parametrize("foreign", [False, True])
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_v02_signature_precedence_and_v01(version, foreign, corrupt):
+    doc, key = _v02_signed()
+    if version == "0.1":
+        doc = sign_odr(valid_odr(), key)
+    extra = dict(doc["signatures"][0])
+    if foreign:
+        extra["key_id"] = "ed25519-feedfacefeedface"
+        if version == "0.2":
+            extra["expires_at"] = "1999-01-01T00:00:00Z"
+    if corrupt:
+        extra["signature"] = base64.b64encode(bytes(64)).decode()
+    doc["signatures"].insert(0, extra)
+    result = verify(
+        doc,
+        public_key=key.public_key(),
+        strict_expiry=True,
+        now=datetime(2000, 1, 1, tzinfo=timezone.utc),
+    )
+    assert result.ok is (foreign or not corrupt)
+    assert not any("expire" in w for w in result.warnings)
+    mismatch = [w for w in result.warnings if "key_id_mismatch" in w]
+    assert len(mismatch) == int(foreign)
+    if foreign:
+        assert extra["key_id"] in mismatch[0]
+        doc["signatures"].pop()
+        assert not verify(doc, public_key=key.public_key()).ok
+
+
+def test_v02_expiry_clock_and_v01_compatibility():
+    doc, key = _v02_signed()
+    result = verify(doc, public_key=key.public_key())
+    assert result.ok and "expire" in " ".join(result.warnings)
+    assert not verify(doc, public_key=key.public_key(), strict_expiry=True).ok
+    for year, expected in [(2000, True), (2001, False), (2002, False)]:
+        result = verify(
+            doc,
+            public_key=key.public_key(),
+            strict_expiry=True,
+            now=datetime(year, 1, 1, tzinfo=timezone.utc),
+        )
+        assert result.ok is expected
+    assert verify(sign_odr(valid_odr(), key), public_key=key.public_key(), strict_expiry=True).ok

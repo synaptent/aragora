@@ -22,7 +22,7 @@ import pytest
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 from aragora.server.stream.server_base import ServerBase
 
 
@@ -195,7 +195,7 @@ class TestAudienceInbox:
     @pytest.mark.asyncio
     async def test_can_submit_to_inbox(self, server):
         """Verify messages can be submitted to audience inbox."""
-        from aragora.server.stream.events import AudienceMessage
+        from aragora.events.types import AudienceMessage
 
         # AudienceInbox uses put() method
         assert hasattr(server.audience_inbox, "put")

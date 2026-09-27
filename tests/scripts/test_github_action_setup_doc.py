@@ -13,19 +13,22 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from aragora.gauntlet.odr_verify import verify_odr_document
 
 DOC_PATH = Path("docs/GITHUB_ACTION_SETUP.md")
+DOCS_SITE_DOC_PATH = Path("docs-site/docs/guides/github-action-setup.md")
 README_PATH = Path("README.md")
 NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")
 ROOT_ACTION_PATH = Path("action.yml")
 EXAMPLE_RECEIPT_PATH = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
 RECEIPT_WORKFLOW_EXAMPLE_PATH = Path("examples/github-action/receipt.yml")
-PINNED_ROOT_ACTION_REF = "synaptent/aragora@8b600a3a8dbf076f4027ae27f3dcbbf48e75409f"
+PINNED_ROOT_ACTION_REF = "synaptent/aragora@272a7ef2f672bce4d7c79bdeb916053e95840bc5"
 
 _BACKTICK_TABLE_FIELD_RE = re.compile(r"^\|\s*`([a-zA-Z0-9_-]+)`\s*\|", re.MULTILINE)
+_PINNED_ACTION_REF_RE = re.compile(r"synaptent/aragora@[0-9a-f]{40}(?![0-9a-f])")
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -223,6 +226,23 @@ def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> Non
         "includes newer action.yml capabilities like emit-receipt"
     )
     assert aragora_step["with"]["emit-receipt"] == "true"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [README_PATH, DOC_PATH, DOCS_SITE_DOC_PATH, RECEIPT_WORKFLOW_EXAMPLE_PATH],
+    ids=str,
+)
+def test_every_pinned_root_action_ref_matches_the_tested_pin(path: Path) -> None:
+    """A pin bump must move every copy at once: a copy left on an older SHA sends
+    readers of that file to an Action that may lack the inputs the docs describe."""
+    refs = _PINNED_ACTION_REF_RE.findall(path.read_text(encoding="utf-8"))
+    assert refs, f"expected at least one synaptent/aragora@<40-hex> pin in {path}"
+    stale = sorted(set(refs) - {PINNED_ROOT_ACTION_REF})
+    assert not stale, (
+        f"{path} pins {stale} instead of {PINNED_ROOT_ACTION_REF}; "
+        "bump every pin and PINNED_ROOT_ACTION_REF together"
+    )
 
 
 def test_example_merge_quorum_receipt_verifies_with_sufficient_diversity() -> None:

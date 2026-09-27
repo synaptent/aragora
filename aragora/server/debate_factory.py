@@ -376,7 +376,7 @@ class DebateFactory:
         if stream_emitter is None:
             return
         try:
-            from aragora.server.stream.events import StreamEvent, StreamEventType
+            from aragora.events.types import StreamEvent, StreamEventType
 
             stream_emitter.emit(
                 StreamEvent(

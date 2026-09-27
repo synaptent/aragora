@@ -45,6 +45,8 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        # The job default is sdk/typescript; pyproject.toml lives at the repository root.
+        working-directory: ${{ github.workspace }}
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"
@@ -101,6 +103,8 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        # The job default is sdk/typescript; pyproject.toml lives at the repository root.
+        working-directory: ${{ github.workspace }}
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"

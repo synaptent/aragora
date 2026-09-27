@@ -17,6 +17,7 @@ from aragora.server.validation import (
     validate_list_field,
     validate_enum_field,
     validate_against_schema,
+    validate_agent_name,
     sanitize_string,
     sanitize_id,
     SAFE_ID_PATTERN,
@@ -689,6 +690,10 @@ class TestPatterns:
             ".hidden",  # leading dot
             ".",
             "..",
+            "test..admin",
+            "a..b",
+            "a...b",
+            "v1..2",
             "../etc",
             "a.",  # trailing dot: Windows drops it, so "a." and "a" would share a folder
             "claude.",
@@ -729,3 +734,47 @@ class TestPatterns:
         assert pattern.match("valid-name")
         assert not pattern.match("valid-name\n"), f"{pattern.pattern} accepted a trailing newline"
         assert not pattern.match("valid-name\r\n"), f"{pattern.pattern} accepted a trailing CRLF"
+
+
+class TestAgentNameValidation:
+    @pytest.mark.parametrize("agent", ["test..admin", "a..b", "a...b", "v1..2"])
+    def test_public_validator_rejects_consecutive_dots(self, agent: str):
+        valid, error = validate_agent_name(agent)
+        assert valid is False
+        assert error is not None
+
+    @pytest.mark.parametrize(
+        "agent,expected",
+        [
+            ("gpt-4.1", True),
+            ("gpt-4o-mini", True),
+            ("gemini-3.1-pro-preview", True),
+            ("v1.2.3", True),
+            ("AZaz09_-", True),
+            ("a", True),
+            ("9", True),
+            ("_", True),
+            ("-", True),
+            ("a" * 32, True),
+            ("a" * 15 + "." + "b" * 16, True),
+            ("", False),
+            ("a" * 33, False),
+            ("a" * 15 + "." + "b" * 17, False),
+            (".v1.2", False),
+            ("v1.2.", False),
+            ("v1.2\n", False),
+            ("v1.2\r\n", False),
+            ("v1.\n2", False),
+            ("v1/2", False),
+            ("v1\\2", False),
+            ("v1.2 ", False),
+            ("v1.\t2", False),
+            ("v1.é", False),
+            ("v1.@2", False),
+        ],
+    )
+    def test_pattern_and_public_validator_compatibility(self, agent: str, expected: bool):
+        assert bool(SAFE_AGENT_PATTERN.match(agent)) is expected
+        valid, error = validate_agent_name(agent)
+        assert valid is expected
+        assert (error is None) is expected
