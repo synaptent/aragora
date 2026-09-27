@@ -134,7 +134,7 @@ class APIKeyRotationHandler(RotationHandler):
             )
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("openai") as client:
@@ -237,7 +237,7 @@ class APIKeyRotationHandler(RotationHandler):
             )
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("anthropic") as client:
@@ -308,7 +308,7 @@ class APIKeyRotationHandler(RotationHandler):
             )
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("stripe") as client:
@@ -382,7 +382,7 @@ class APIKeyRotationHandler(RotationHandler):
         policies = metadata.get("policies", [])
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("cloudflare") as client:
@@ -514,7 +514,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_anthropic(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate Anthropic API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("anthropic") as client:
@@ -536,7 +536,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_openai(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate OpenAI API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("openai") as client:
@@ -554,7 +554,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_google(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate Google/Gemini API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("google") as client:
@@ -571,7 +571,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_mistral(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate Mistral API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("mistral") as client:
@@ -591,7 +591,7 @@ class APIKeyRotationHandler(RotationHandler):
     ) -> bool:
         """Validate OpenRouter API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("openrouter") as client:
@@ -609,7 +609,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_xai(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate xAI/Grok API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("xai") as client:
@@ -627,7 +627,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_deepseek(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate DeepSeek API key."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("deepseek") as client:
@@ -645,7 +645,7 @@ class APIKeyRotationHandler(RotationHandler):
     async def _validate_stripe(self, secret_id: str, key: str, metadata: dict[str, Any]) -> bool:
         """Validate Stripe API key by checking balance endpoint."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("stripe") as client:
@@ -665,7 +665,7 @@ class APIKeyRotationHandler(RotationHandler):
     ) -> bool:
         """Validate Cloudflare API token via verify endpoint."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("cloudflare") as client:
@@ -729,7 +729,7 @@ class APIKeyRotationHandler(RotationHandler):
             return False
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("openai") as client:
@@ -776,7 +776,7 @@ class APIKeyRotationHandler(RotationHandler):
             return False
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("anthropic") as client:

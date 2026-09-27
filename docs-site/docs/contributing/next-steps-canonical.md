@@ -5,7 +5,7 @@ description: Next Steps (Canonical)
 
 # Next Steps (Canonical)
 
-Last updated: 2026-07-20
+Last updated: 2026-09-25
 
 This is the single source of truth for short-horizon execution priorities.
 [CANONICAL_GOALS](./canonical-goals) defines what Aragora is and why.
@@ -15,7 +15,37 @@ This is the single source of truth for short-horizon execution priorities.
 
 ## Current Gate
 
-**The live execution spine is the Open Decision Receipt (ODR) tranche — ODR-1..7, epic [#8223](https://github.com/synaptent/aragora/issues/8223)** — adopted 2026-06-11 in [FEATURE_GAP_LIST — Active Direction](./feature-gap-list#active-direction--open-decision-receipt-odr-june-2026). That pivot supersedes the earlier framing of this section, which named the Foreman/`B0` proof loop as the sole gate. The Foreman/`B0` obligations are not cancelled: they are held open in the background (see the subsection below) and must not regress, but they are maintenance truth, not the execution priority.
+### Successor gate declared 2026-09-07
+
+**The live execution spine is the Receipt-First Mission, epic [#9966](https://github.com/synaptent/aragora/issues/9966)** (adopted 2026-09-03, baseline ref `23909906e8`). It supersedes the external-proof month (Jul 9 → Aug 9) as the dated frame, and it absorbs the open ODR tranche obligations below. Progress is measured only by the epic's ten exit metrics and six guardrails; `scripts/receipt_first_scoreboard.py` is the measuring instrument and every mission PR names the row it moves. Closes stage-gate drift [#9805](https://github.com/synaptent/aragora/issues/9805).
+
+Mission state (declared 2026-09-07; refreshed 2026-09-25 against `origin/main` `e411aefb`; scoreboard 7 of 10 exit metrics `ok`):
+
+| Milestone | Scope | State |
+|---|---|---|
+| M0 | scoreboard, import-cycle repair, Atlas v1, release 2.10.0, drift paydown batch 1 | **Done.** The v2.10.0 release commit merged 2026-09-04 ([#9977](https://github.com/synaptent/aragora/pull/9977), `be07ea5b`); the `v2.10.0` tag, GitHub release and PyPI upload followed on 2026-09-25 (metric 1 `ok`). Atlas v1 ([#9951](https://github.com/synaptent/aragora/pull/9951)), the import-cycle ratchet ([#9949](https://github.com/synaptent/aragora/pull/9949)) and drift batches 1–2 ([#9979](https://github.com/synaptent/aragora/pull/9979), [#10013](https://github.com/synaptent/aragora/pull/10013)) merged. Mutual import cycles sit at the 140 ceiling |
+| M1 | ODR v0.2 schema + vectors, `aragora-verify` 0.2.0, file-based signing keys | **Done** 2026-09-25. File-based keys ([#9984](https://github.com/synaptent/aragora/pull/9984)), the v0.2 emitter ([#9988](https://github.com/synaptent/aragora/pull/9988)), version-scoped membership ([#10105](https://github.com/synaptent/aragora/pull/10105)) and 15 pinned vectors ([#10110](https://github.com/synaptent/aragora/pull/10110)) merged; `aragora-verify` 0.2.0 from PyPI passes all 15 vectors in a clean venv, so ODR-2 [#8225](https://github.com/synaptent/aragora/issues/8225) closed. The first-hour job ([#10118](https://github.com/synaptent/aragora/pull/10118)) ran green against PyPI 2.10.0 + verify 0.2.0 (metric 8 `ok`). ODR v0.2 is the default output since 2.11.0 ([#10165](https://github.com/synaptent/aragora/pull/10165), spec §9.5); `--odr-version 0.1` still emits v0.1 |
+| M2 | dissent visibility, Atlas v2, release 2.11.0 | **Done** 2026-09-27. Release 2.11.0 shipped in [#10161](https://github.com/synaptent/aragora/pull/10161) on 2026-09-27 (merge `272a7ef2f6`). Advisory summaries ([#10016](https://github.com/synaptent/aragora/pull/10016), [#10036](https://github.com/synaptent/aragora/pull/10036)), Atlas pairwise summary and docs-site pages ([#10048](https://github.com/synaptent/aragora/pull/10048), [#10050](https://github.com/synaptent/aragora/pull/10050)) and the weekly Atlas job ([#10051](https://github.com/synaptent/aragora/pull/10051)) merged. Metric 6 only reads `ok` when the scoreboard is given `--quorum-runs` |
+| M3 | hosted receipts, public receipt endpoints, `api.aragora.ai` cutover on [#9391](https://github.com/synaptent/aragora/issues/9391) | In flight. Public export/verify endpoints merged ([#10126](https://github.com/synaptent/aragora/pull/10126)). Hosted receipts honour `ARAGORA_DB_BACKEND=postgres` since [#10073](https://github.com/synaptent/aragora/pull/10073); [#10159](https://github.com/synaptent/aragora/pull/10159) fixes the remaining settings-driven stores and explicit `backend="postgres"` arguments. The runner's PostgreSQL DDL was fixed by [#10053](https://github.com/synaptent/aragora/pull/10053). The provider-neutral deploy chain [#9846](https://github.com/synaptent/aragora/pull/9846) → [#9848](https://github.com/synaptent/aragora/pull/9848) → [#9849](https://github.com/synaptent/aragora/pull/9849) → [#9851](https://github.com/synaptent/aragora/pull/9851) → [#9853](https://github.com/synaptent/aragora/pull/9853) was brought up to `main` on 2026-09-25 (merges, no force-push); all five are mergeable and await review + settlement. The canary answers `/readyz` 200 but serves no ODR signing key and predates #10126; `api.aragora.ai` still times out |
+| M4 | external proof (receipts release, demo repo), release 2.12.0 | Started. The `receipts-2026-09-22` release carries four signed merged-PR receipts; the public demo repo [synaptent/aragora-receipt-demo](https://github.com/synaptent/aragora-receipt-demo) exists (metric 9 `ok`) and waits for its provider-key secrets. Signed receipts from the Action: [#10163](https://github.com/synaptent/aragora/pull/10163) |
+
+**Parallel Tier-4 queue (readiness mission).** A second stacked mission, `readiness/*` M1–M7 ([#9982](https://github.com/synaptent/aragora/pull/9982), [#9997](https://github.com/synaptent/aragora/pull/9997), [#10005](https://github.com/synaptent/aragora/pull/10005), [#10027](https://github.com/synaptent/aragora/pull/10027), [#10049](https://github.com/synaptent/aragora/pull/10049), [#10052](https://github.com/synaptent/aragora/pull/10052), [#10060](https://github.com/synaptent/aragora/pull/10060)), is queued for operator review as drafts labelled `operator-review-required`. Each milestone is cut from the previous tip, so the stack merges in order or not at all. On 2026-09-12 M1 carried a grounded `[P2]` from both families (the committed `uv.lock` violated the 7-day cooldown the PR introduces). That finding was time-sensitive: at the same head `a2cb3e08` on 2026-09-13 the cooldown helper passes with no lockfile change, `uv lock --check` passes and the 66 focused tests pass ([receipt](https://github.com/synaptent/aragora/pull/9982#issuecomment-5652420942)). The historical dissent stays on record and M1 still needs a fresh exact-head Tier 4 review plus human settlement; M5 conflicts with `main`. This mission does not move the Receipt-First exit metrics; it competes for the same operator settlement time.
+
+**Settlement mechanics worth knowing.** Under severity-gated dissent a `[P2]`/`[P3]`-only CHANGES-REQUESTED is advisory: it does not block, but it also does not count. A Tier 3-4 head with one counted PASS and one advisory CHANGES-REQUESTED therefore sits at one of two required signals and cannot be settled by authorization comment alone; the operator-advisory relief valve applies only when every review is advisory. The fix is a bounded repair and one fresh collection, not a stronger authorization comment.
+
+**External-proof month outcome by week (recorded, not re-litigated):**
+
+- W2 (Jul 16–23): shipped — Art.14 human-oversight attestation ([#9417](https://github.com/synaptent/aragora/pull/9417)), crux cards phase 1 ([#9414](https://github.com/synaptent/aragora/pull/9414)). ODR-6 [#8230](https://github.com/synaptent/aragora/issues/8230) closed 2026-07-23 and ODR-4 [#8227](https://github.com/synaptent/aragora/issues/8227) closed 2026-07-28.
+- W3 (Jul 23–30): **slipped** — the EU AI Act GPAI/Art-50 bundle was not published by Jul 30 (drift [#9699](https://github.com/synaptent/aragora/issues/9699)); ODR-2 [#8225](https://github.com/synaptent/aragora/issues/8225) did not close (signing shipped in [#8542](https://github.com/synaptent/aragora/pull/8542), file-based keys in [#9984](https://github.com/synaptent/aragora/pull/9984); PQC hybrid remains deferred).
+- W4 (Jul 30 – Aug 9): **slipped** — the enterprise decision-brief demo did not land.
+
+**Where the ODR obligations now live.** ODR-2 closes with mission M1 (`aragora-verify` 0.2.0 verifying v0.2 vectors from a clean venv is the exit condition). The EU AI Act GPAI/Art-50 bundle and the enterprise decision-brief demo are not in the mission's milestone list: they are **parked, not cancelled**, and re-enter only by an explicit operator decision recorded on [#9966](https://github.com/synaptent/aragora/issues/9966). Epic [#8223](https://github.com/synaptent/aragora/issues/8223) stays open until ODR-2 closes, then closes with PQC recorded as deferred.
+
+**Stage-Gate Conductor rule (supersedes the ODR/external-proof-month carve-out below):** Receipt-First mission work — any PR that names an exit-metric row or guardrail on [#9966](https://github.com/synaptent/aragora/issues/9966), M0–M4 — is execution against the current gate, not drift. The Foreman/`B0` proof loop remains background maintenance truth exactly as the subsection below states. Planning-truth deferrals (`AGT-*`, `DIC-13..22`, `RS-11..12`, `TW-07..09`, `UDW-01..06`, `MCF-01..03`) are unchanged: no gate that permits their promotion has opened. The Conductor should compare live execution against this frame and against the mission scoreboard, and should post to the rolling monthly anchor only when a finding changes.
+
+### Previous gate (2026-06-11 → 2026-09-07), retained for continuity
+
+**The live execution spine was the Open Decision Receipt (ODR) tranche — ODR-1..7, epic [#8223](https://github.com/synaptent/aragora/issues/8223)** — adopted 2026-06-11 in [FEATURE_GAP_LIST — Active Direction](./feature-gap-list#active-direction--open-decision-receipt-odr-june-2026). That pivot supersedes the earlier framing of this section, which named the Foreman/`B0` proof loop as the sole gate. The Foreman/`B0` obligations are not cancelled: they are held open in the background (see the subsection below) and must not regress, but they are maintenance truth, not the execution priority.
 
 ODR tranche state (checked 2026-07-20):
 
@@ -155,7 +185,7 @@ What is still missing:
 - ongoing discipline so actual external outreach stays no broader than the recurring proof surfaces and the preserved frontier-review evidence
 - delayed decision-integrity work that turns important claims into executable evidence-linked objects and debates into ranked `CruxSet` outputs, after the proof-first Foreman gate is stable
 
-For this background lane, the work is not “add more speculative autonomy.” It is “make bounded unattended execution boring.” The forward-execution work happens in the ODR tranche above.
+For this background lane, the work is not “add more speculative autonomy.” It is “make bounded unattended execution boring.” The forward-execution work happens in the Receipt-First Mission ([#9966](https://github.com/synaptent/aragora/issues/9966)) declared at the top of this document; the ODR tranche section above is retained as history and is not the live routing target.
 
 Queue rule for this background tranche:
 
@@ -170,14 +200,14 @@ Observer rule for this tranche:
 
 ## 30-Day Success Metric
 
-The current dated 30-day frame is the external-proof month (Jul 9 → Aug 9) in [2026-07-09-thirty-day-external-proof-month](../plans/2026-07-09-thirty-day-external-proof-month.md), including its weekly kill-switch metrics. The metric below is the standing Foreman/proof-loop target that predates it and remains the background truth bar:
+The current dated frame is the Receipt-First mission's exit-metric table on [#9966](https://github.com/synaptent/aragora/issues/9966) (ten metrics, frozen baseline column, scoreboard posts at each milestone). The external-proof month (Jul 9 → Aug 9, [2026-07-09-thirty-day-external-proof-month](../plans/2026-07-09-thirty-day-external-proof-month.md)) closed with W3/W4 slipped as recorded in the Current Gate section. The metric below is the standing Foreman/proof-loop target that predates both and remains the background truth bar:
 
 - fixed benchmark corpus of bounded issues
 - context-enriched workers complete **>=50%** of that corpus without human rescue
 - **100%** of failures land in truthful canonical buckets
 - repeated rescue classes become explicit product work
 
-Current status: `docs/status/B0_BENCHMARK_TRUTH_STATUS.md` and `docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md` are the live recurring proof surfaces. When benchmark publication drifts, lags, or lands incomplete corpus coverage, restoring that publication becomes the immediate gate again before any scope widening.
+Current status: `docs/status/B0_BENCHMARK_TRUTH_STATUS.md` and `docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md` are the live recurring proof surfaces. As of 2026-09-14 the `B0` surface on `main` is dated 2026-09-04T13:28:39Z: the automated refresh [#9980](https://github.com/synaptent/aragora/pull/9980) merged 2026-09-14 as `cedf5230` after a two-family review of its repaired renderer (machine-readable missing-observation disclosure plus a general data-driven guard) and a METRICS refresh, so no publication PR is parked. Reviewer capacity remains the general throughput limit for the queue, but it is no longer the gate on this surface. When benchmark publication drifts, lags, or lands incomplete corpus coverage, restoring that publication becomes the immediate gate again before any scope widening.
 
 Primary truth metric:
 
@@ -240,8 +270,11 @@ This is the executable backlog for the next 30 days. Keep it to one bounded lane
 
 ### Do now
 
-- ODR tranche closure per the external-proof month plan: ODR-2 ([#8225](https://github.com/synaptent/aragora/issues/8225)), ODR-4 ([#8227](https://github.com/synaptent/aragora/issues/8227)), ODR-6 ([#8230](https://github.com/synaptent/aragora/issues/8230))
-- EU AI Act GPAI/Art-50 bundle published by Jul 30 (W3 gate)
+- Receipt-First mission [#9966](https://github.com/synaptent/aragora/issues/9966), in milestone order: M1 (ODR v0.2 + vectors + `aragora-verify` 0.2.0, closes ODR-2 [#8225](https://github.com/synaptent/aragora/issues/8225)), M2 (dissent visibility, Atlas v2, 2.11.0), M3 (hosted receipts; needs the [#9391](https://github.com/synaptent/aragora/issues/9391) hosting decision), M4 (external proof, 2.12.0)
+- Contract-drift paydown batches (exit metric row 10) and the guardrail ceilings, every batch
+- Operator settlement of ready Tier 3-4 mission PRs within one working day of the packet comment, so workers are not parked on rulings
+- Keep at least two countable reviewer families available to workers (Claude profile usage/OAuth plus OpenAI); every mission park between 2026-09-10 and 2026-09-11 was a reviewer-transport park, not a ruling park
+- Restack any Tier 3-4 head that falls behind `main` before asking for settlement (currently readiness M5 [#10049](https://github.com/synaptent/aragora/pull/10049); [#10013](https://github.com/synaptent/aragora/pull/10013) was restacked on 2026-09-13 for this reason, re-collected on its exact head `5050f52d` with counted PASS from both families, operator-settled the same day, and merged 2026-09-14 as `1e40c078`)
 - `CS-01..03` (background)
 - observer truth on current `main` (background)
 - benchmark publication freshness and completeness (background)
@@ -267,7 +300,7 @@ This is the executable backlog for the next 30 days. Keep it to one bounded lane
 
 ## Live Boss-Ready Queue
 
-The active execution lane is the ODR tranche (epic [#8223](https://github.com/synaptent/aragora/issues/8223)) plus the external-proof month plan; the rules below govern the Foreman/proof-loop background queue only.
+The active execution lane is the Receipt-First mission (epic [#9966](https://github.com/synaptent/aragora/issues/9966)); the rules below govern the Foreman/proof-loop background queue only.
 
 - There is no dedicated open boss-ready trust-loop issue right now.
 - Keep the live queue empty unless the recurring `TW-01/TW-02/TW-03` publication surfaces expose a fresh repeated rescue class or a concrete regression.

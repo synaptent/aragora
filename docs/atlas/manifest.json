@@ -1,0 +1,93 @@
+{
+  "atlas_version": "1.0.0",
+  "canonicalization": "RFC 8785 (JCS); content_digest = SHA-256(JCS(manifest minus content_digest and signatures))",
+  "content_digest": {
+    "alg": "sha-256",
+    "value": "11d925b91bbad6cd10c4f62b0160e76b73af5871a3432832cd8b3eb5056eabf9"
+  },
+  "dataset": {
+    "bytes": 5991112,
+    "path": "docs/atlas/atlas-v1.jsonl",
+    "pr_count": 698,
+    "record_count": 1661,
+    "sha256": "3ddd6249d7370a9ddf40e7c2ea238107a7c2dd96db9781a6686beac47f4995c8"
+  },
+  "generator": "scripts/build_disagreement_atlas.py",
+  "ground_truth_fixture": {
+    "path": "tests/governance/fixtures/adjudicator_eval_cases.json",
+    "sha256": "237d20557c20ec495fdc4af8763c96cda0aac9195ed169e3410fbf95422872ab"
+  },
+  "manifest": "disagreement_atlas.manifest.v1",
+  "receipt_inputs": {
+    "dirs": [
+      "docs/receipts",
+      "docs/elves/receipts",
+      "docs/status/settlement-packets"
+    ],
+    "files": {
+      "docs/elves/receipts/b3-8767-settlement.json": "636b31d5dfb07aea12de0c797a30ee9bc05a4f02b251e65f1bbfa1a48c4b425c",
+      "docs/elves/receipts/b4-8768-settlement.json": "615d8a5023f990c995ed094ac6b3f48db14734e1729749c2e6e8b053b3e0219f",
+      "docs/elves/receipts/b6-cleanup-batch1.json": "bb965b3d8bdf92962389eaab6a5ddf442ef2437cf121b601584c50916ae3ecc8"
+    }
+  },
+  "record_schema": "disagreement_atlas.record.v1",
+  "record_schema_sha256": "98be80bc78948e91ae49c73201971ae4956ab401b4ee938ff09426472fe2c035",
+  "sample": {
+    "bytes": 737198,
+    "path": "docs/atlas/atlas-v1.sample.jsonl",
+    "record_count": 200,
+    "sha256": "f8f3d14809245aceca7e9c02ecfd9930802a39299ca44c5def4a8585b5c71249"
+  },
+  "signatures": [],
+  "source": {
+    "github_rest_endpoints": [
+      "pulls?state=closed",
+      "issues/{pr}/comments",
+      "pulls/{pr}/reviews",
+      "pulls/{pr}/commits",
+      "commits/{head}/statuses"
+    ],
+    "prs_scanned": 1097,
+    "prs_with_verdicts": 698,
+    "repo": "synaptent/aragora",
+    "since": "2026-06-26T21:04:36Z",
+    "since_basis": "PR #8638 merged_at",
+    "until": "2026-09-01T16:46:35Z"
+  },
+  "vocabularies": {
+    "failure_classes": [
+      "diff_blind_grounding",
+      "stale_external_world",
+      "temporal_reasoning",
+      "verbatim_repeat_dissent",
+      "out_of_scope_carousel",
+      "cross_family_contradiction",
+      "control"
+    ],
+    "resolution_mechanisms": [
+      "evidence_post",
+      "premise_removal",
+      "premise_self_expiry",
+      "severity_gating",
+      "operator_adjudication",
+      "re_filing",
+      "grounding_fix",
+      "revision",
+      "re_gate_flip",
+      "none_required",
+      "closed_unmerged",
+      "unresolved",
+      "not_applicable"
+    ],
+    "sources": [
+      "pr_comment",
+      "pr_review",
+      "eval_fixture"
+    ],
+    "verdicts": [
+      "pass",
+      "changes_requested",
+      "unknown"
+    ]
+  }
+}

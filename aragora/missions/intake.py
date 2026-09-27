@@ -56,7 +56,7 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from .orchestrator import Dispatch, Handoff
+from .handoff import Dispatch, Handoff
 from .state import PARK_KIND_DECOMPOSITION, Feature, Status
 
 if TYPE_CHECKING:

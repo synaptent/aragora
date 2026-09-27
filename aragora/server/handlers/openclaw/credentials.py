@@ -131,7 +131,7 @@ def _get_credential_rotation_limiter() -> CredentialRotationRateLimiter:
     try:
         import sys
 
-        gateway_module = sys.modules.get("aragora.server.handlers.openclaw_gateway")
+        gateway_module = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
         override = (
             getattr(gateway_module, "_get_credential_rotation_limiter", None)
             if gateway_module

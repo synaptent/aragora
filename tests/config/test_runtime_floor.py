@@ -17,8 +17,12 @@ whereas the *declared* floor is what governs a fresh ``pip install aragora``.
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 floor shard; tomli ships with pytest there.
+    import tomli as tomllib  # type: ignore[no-redef]
 
 _PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
@@ -28,6 +32,9 @@ _BASE_FLOORS: dict[str, tuple[int, ...]] = {
     "websockets": (13, 0),
     "pyyaml": (6, 0, 3),
     "pydantic": (2, 13, 4),
+    # Ed25519 receipt signing + AES-GCM are lazy imports; the floor is the
+    # GHSA-537c-gmf6-5ccf fix, matching [tool.uv] constraint-dependencies.
+    "cryptography": (48, 0, 1),
 }
 
 

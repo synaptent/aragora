@@ -8,10 +8,17 @@ import time
 import uuid
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .dev_coordination import _get_lane_telemetry
-from .dev_coordination import core as _dev
+
+if TYPE_CHECKING:
+    from .dev_coordination import core as _dev
+else:
+    # At runtime the package facade is the consumer surface (PEP 562 fall-through
+    # to ``core``); ``core`` itself delegates back here with function-local
+    # imports, so a direct module edge would make the two mutually dependent.
+    from . import dev_coordination as _dev
 from .dev_coordination.models import (
     CompletionReceipt,
     FileScopeViolationError,

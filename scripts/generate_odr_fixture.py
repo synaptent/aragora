@@ -196,9 +196,10 @@ def export_receipt_to_odr(receipt: DecisionReceipt) -> dict:
     guarantee. The regression tests in
     ``tests/gauntlet/test_odr_walkthrough_fixture.py`` call this same function
     so the fixture is always compared against the generator's actual export
-    path.
+    path. The profile is pinned to v0.1 for the same reason: the checked-in
+    fixture is a v0.1 document, and the library default moved to v0.2 in 2.11.0.
     """
-    return decision_receipt_to_odr(receipt)
+    return decision_receipt_to_odr(receipt, odr_version="0.1")
 
 
 def main() -> int:

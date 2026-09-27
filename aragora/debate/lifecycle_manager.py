@@ -15,7 +15,7 @@ import logging
 from types import TracebackType
 from typing import TYPE_CHECKING
 
-from aragora.server.metrics import track_circuit_breaker_state
+from aragora.observability.server_metrics import track_circuit_breaker_state
 
 if TYPE_CHECKING:
     from typing import Any
