@@ -366,7 +366,7 @@ class TestCheckProductionRequirements:
                 missing = check_production_requirements()
                 assert any("DATABASE_URL" in m for m in missing)
 
-    def test_production_all_requirements_met(self):
+    def test_production_all_requirements_met(self, tmp_path):
         with patch.dict(
             "os.environ",
             {
@@ -376,7 +376,7 @@ class TestCheckProductionRequirements:
                 "DATABASE_URL": "postgresql://localhost/db",
                 "JWT_SECRET": "secret",
                 "ARAGORA_REQUIRE_DATABASE": "true",
-                "ARAGORA_SECRETS_DIR": "/run/secrets/aragora",
+                "ARAGORA_SECRETS_DIR": str(tmp_path.resolve()),
             },
             clear=True,
         ):
@@ -423,7 +423,6 @@ class TestStrictSecretsCustodyRequirement:
     @pytest.mark.parametrize(
         "extra",
         [
-            {"ARAGORA_SECRETS_DIR": "/run/secrets/aragora"},
             {"ARAGORA_USE_SECRETS_MANAGER": "true"},
             {"AWS_EXECUTION_ENV": "AWS_ECS_FARGATE"},
             {"ARAGORA_SECRETS_STRICT": "false"},
@@ -431,7 +430,22 @@ class TestStrictSecretsCustodyRequirement:
     )
     def test_configured_custody_or_non_strict_passes(self, extra):
         missing = self._missing({"ARAGORA_ENV": "production", **extra})
-        assert not [m for m in missing if self.MESSAGE_KEY in m]
+        assert not [m for m in missing if "Strict secrets mode is on" in m]
+
+    def test_usable_mounted_directory_passes(self, tmp_path):
+        secrets_dir = tmp_path.resolve() / "secrets"
+        secrets_dir.mkdir(mode=0o700)
+        missing = self._missing(
+            {"ARAGORA_ENV": "production", "ARAGORA_SECRETS_DIR": str(secrets_dir)}
+        )
+        assert not [m for m in missing if "Strict secrets mode is on" in m]
+
+    @pytest.mark.parametrize("configured", ["relative/secrets", "/nonexistent/aragora-secrets"])
+    def test_unusable_mounted_directory_fails_loud(self, configured):
+        missing = self._missing({"ARAGORA_ENV": "staging", "ARAGORA_SECRETS_DIR": configured})
+        custody = [m for m in missing if "ARAGORA_SECRETS_DIR is not usable" in m]
+        assert len(custody) == 1
+        assert "Strict secrets mode is on" in custody[0]
 
     def test_development_is_not_strict(self):
         missing = self._missing({"ARAGORA_ENV": "development"})
