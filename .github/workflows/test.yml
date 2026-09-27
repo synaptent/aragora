@@ -7,9 +7,11 @@ on:
     paths:
       - 'aragora/**'
       - 'aragora-debate/**'
+      - 'aragora-verify/**'
       - 'tests/**'
       - 'pyproject.toml'
       - 'requirements.txt'
+      - 'scripts/gen_odr_vectors.py'
       - 'scripts/capability_gap_report.py'
       - 'scripts/generate_capability_matrix.py'
       - 'scripts/check_capability_matrix_sync.py'
@@ -664,6 +666,8 @@ jobs:
               - 'aragora/compliance/**'
               - 'aragora/gauntlet/**'
               - 'aragora/cli/**'
+              - 'aragora-verify/**'
+              - 'scripts/gen_odr_vectors.py'
               - 'tests/nomic/**'
               - 'tests/control_plane/**'
               - 'tests/rbac/**'
@@ -672,6 +676,7 @@ jobs:
               - 'tests/compliance/**'
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
+              - 'tests/verify/**'
 
       - name: Report scopes
         run: |
@@ -723,7 +728,7 @@ jobs:
             scope: storage
             timeout: 30
           - name: infra
-            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/verify
             scope: infra
             timeout: 30
 
