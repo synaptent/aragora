@@ -97,6 +97,8 @@ def test_memory_import_survives_missing_aiohttp() -> None:
         assert memory.CritiqueStore is not None
         for name in ("SemanticRetriever", "OpenAIEmbedding", "GeminiEmbedding", "OllamaEmbedding"):
             assert getattr(memory, name) is getattr(embeddings, name), name
+        # Deliberately strict: even a guarded module-level aiohttp import in this
+        # import chain would make the optional dependency eager again.
         assert blocker.attempted == [], blocker.attempted
 
         with tempfile.TemporaryDirectory() as tmp:
