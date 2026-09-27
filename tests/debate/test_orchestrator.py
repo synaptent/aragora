@@ -2013,6 +2013,27 @@ class TestLifecycleManagement:
             conn.close()
         assert delivery_count == 2
 
+    @pytest.mark.asyncio
+    async def test_cleanup_debate_persistence_outside_pytest_keeps_global_services(
+        self, environment, agents, monkeypatch
+    ):
+        """Production cleanup leaves the webhook dispatcher and shared stores running."""
+        arena = Arena(environment, agents)
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+        with (
+            patch("aragora.events.dispatcher.shutdown_dispatcher") as shutdown_dispatcher,
+            patch("aragora.storage.receipt_store.close_receipt_store") as close_receipt_store,
+            patch(
+                "aragora.storage.webhook_config_store.reset_webhook_config_store"
+            ) as reset_webhook_config_store,
+        ):
+            await arena._cleanup_debate_persistence()
+
+        shutdown_dispatcher.assert_not_called()
+        close_receipt_store.assert_not_called()
+        reset_webhook_config_store.assert_not_called()
+
 
 # =============================================================================
 # Integration Test - Full Debate Flow
