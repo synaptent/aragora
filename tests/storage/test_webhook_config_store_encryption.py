@@ -95,7 +95,6 @@ class TestEncryptionServiceContract:
         assert callable(wcs._EncryptedSecret.to_base64)
 
 
-@pytest.mark.skipif(not encryption_module.CRYPTO_AVAILABLE, reason="cryptography not installed")
 class TestEncryptionAvailable:
     @pytest.fixture(autouse=True)
     def development_key(self, monkeypatch):
