@@ -303,7 +303,7 @@ wheels = [
 
 [[package]]
 name = "aragora"
-version = "2.10.0"
+version = "2.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -473,7 +473,7 @@ provides-extras = ["anthropic", "openai", "mistral", "gemini", "all", "dev"]
 
 [[package]]
 name = "aragora-sdk"
-version = "2.10.0"
+version = "2.11.0"
 source = { editable = "sdk/python" }
 dependencies = [
     { name = "httpx" },
