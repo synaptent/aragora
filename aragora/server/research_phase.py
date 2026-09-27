@@ -23,7 +23,11 @@ import httpx
 
 from aragora.agents.errors.classifier import ErrorClassifier
 from aragora.agents.fallback import get_default_fallback_enabled
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import (
+    get_secret,
+    get_secret_presence,
+    is_secret_presence_available,
+)
 from aragora.models.compat import first_text_block
 
 if TYPE_CHECKING:
@@ -145,7 +149,10 @@ class PreDebateResearcher:
         if self._anthropic_client is None:
             import anthropic
 
-            self._anthropic_client = anthropic.Anthropic()
+            api_key = get_secret("ANTHROPIC_API_KEY")
+            self._anthropic_client = (
+                anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+            )
         return self._anthropic_client
 
     def _should_try_openrouter_fallback(self, error: Exception) -> bool:
@@ -158,7 +165,7 @@ class PreDebateResearcher:
             return None
         if self._openrouter_agent is not None:
             return self._openrouter_agent
-        if get_secret_presence("OPENROUTER_API_KEY").source not in {"aws", "env"}:
+        if not is_secret_presence_available(get_secret_presence("OPENROUTER_API_KEY")):
             return None
 
         from aragora.agents.api_agents import OpenRouterAgent

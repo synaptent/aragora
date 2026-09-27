@@ -899,40 +899,52 @@ class TestMissingRequiredEnvVars:
 class TestOpenrouterKeyAvailable:
     """Tests for _openrouter_key_available helper."""
 
-    def test_returns_true_with_secret(self):
-        """Returns True when secret is configured."""
-        from aragora.server.stream.debate_executor import _openrouter_key_available
+    @staticmethod
+    def _presence(source: str):
+        from aragora.config.secrets import SecretPresence
 
-        with patch("aragora.server.stream.debate_executor.get_secret", return_value="secret-key"):
-            result = _openrouter_key_available()
+        return SecretPresence(
+            name="OPENROUTER_API_KEY",
+            source=source,
+            critical=True,
+            managed=True,
+        )
 
-        assert result is True
-
-    def test_returns_true_with_env_var(self):
-        """Returns True when env var is set."""
+    def test_returns_true_with_managed_secret(self):
         from aragora.server.stream.debate_executor import _openrouter_key_available
 
         with patch(
-            "aragora.server.stream.debate_executor.get_secret",
-            side_effect=KeyError("Not found"),
+            "aragora.server.stream.debate_executor.get_secret_presence",
+            return_value=self._presence("mounted_file"),
         ):
-            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "env-key"}):
-                result = _openrouter_key_available()
+            assert _openrouter_key_available() is True
 
-        assert result is True
+    def test_returns_true_with_allowed_env_var(self):
+        from aragora.server.stream.debate_executor import _openrouter_key_available
+
+        with patch(
+            "aragora.server.stream.debate_executor.get_secret_presence",
+            return_value=self._presence("env"),
+        ):
+            assert _openrouter_key_available() is True
 
     def test_returns_false_when_not_configured(self):
-        """Returns False when no key configured."""
         from aragora.server.stream.debate_executor import _openrouter_key_available
 
         with patch(
-            "aragora.server.stream.debate_executor.get_secret",
-            side_effect=KeyError("Not found"),
+            "aragora.server.stream.debate_executor.get_secret_presence",
+            return_value=self._presence("missing"),
         ):
-            with patch.dict(os.environ, {}, clear=True):
-                result = _openrouter_key_available()
+            assert _openrouter_key_available() is False
 
-        assert result is False
+    def test_returns_false_when_strict_mode_blocks_env(self):
+        from aragora.server.stream.debate_executor import _openrouter_key_available
+
+        with patch(
+            "aragora.server.stream.debate_executor.get_secret_presence",
+            return_value=self._presence("blocked_by_strict_mode"),
+        ):
+            assert _openrouter_key_available() is False
 
 
 # =============================================================================

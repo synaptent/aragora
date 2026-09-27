@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 from aragora.prompt_engine.processing import append_context_block, parse_json_object
 from aragora.prompt_engine.timing import OperationTiming, append_timing, format_timings, start_timer
 from aragora.prompt_engine.types import (
@@ -90,7 +90,7 @@ class PromptInterrogator:
             logger.warning("Could not create Anthropic agent: %s", e)
 
         try:
-            if get_secret_presence("OPENROUTER_API_KEY").source in {"aws", "env"}:
+            if is_secret_presence_available(get_secret_presence("OPENROUTER_API_KEY")):
                 from aragora.agents.api_agents.openrouter import OpenRouterAgent
 
                 self._agent = OpenRouterAgent(name="interrogator", model="anthropic/claude-opus-5")

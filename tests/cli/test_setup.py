@@ -534,14 +534,9 @@ class TestRunSetupNonInteractive:
         # Must NOT silently write a keyless .env.
         assert not (tmp_path / ".env").exists()
 
-    def test_aws_secrets_posture_satisfies_key_requirement(self, tmp_path, monkeypatch):
-        """No env keys but AWS Secrets Manager posture available -> must NOT raise.
-
-        Regression guard: the canonical local posture keeps provider keys in AWS
-        Secrets Manager (not os.environ or .env). Non-interactive setup must
-        treat such a key as resolvable and complete, without writing the
-        AWS-resolved secret value into .env.
-        """
+    @pytest.mark.parametrize("managed_source", ["aws", "mounted_file"])
+    def test_managed_custody_satisfies_key_requirement(self, tmp_path, monkeypatch, managed_source):
+        """Managed provider custody satisfies non-interactive setup without copying values."""
         for var in (
             "ANTHROPIC_API_KEY",
             "OPENAI_API_KEY",
@@ -552,10 +547,9 @@ class TestRunSetupNonInteractive:
         ):
             monkeypatch.delenv(var, raising=False)
 
-        # Presence-only mock: ANTHROPIC_API_KEY is resolvable via AWS, the rest
-        # are absent. Mirrors the doctor secrets-posture probe.
+        # Presence-only mock: ANTHROPIC_API_KEY is resolvable from managed custody.
         def fake_presence(name):
-            source = "aws" if name == "ANTHROPIC_API_KEY" else "missing"
+            source = managed_source if name == "ANTHROPIC_API_KEY" else "missing"
             return MagicMock(source=source)
 
         monkeypatch.setattr("aragora.cli.setup.get_secret_presence", fake_presence)
