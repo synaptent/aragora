@@ -187,9 +187,19 @@ class WebhookHandler(SecureHandler):
     ]
 
     @staticmethod
+    def _normalize_path(path: str) -> str:
+        if path == "/api/v1/webhook-configs" or path.startswith("/api/v1/webhook-configs/"):
+            return path.replace("/api/v1/webhook-configs", "/api/v1/webhooks", 1)
+        return path
+
+    @staticmethod
     def can_handle(path: str) -> bool:
         """Check if this handler can handle the given path."""
-        return path.startswith("/api/v1/webhooks")
+        return (
+            path.startswith("/api/v1/webhooks")
+            or path == "/api/v1/webhook-configs"
+            or path.startswith("/api/v1/webhook-configs/")
+        )
 
     def __init__(self, server_context: dict[str, Any]):
         """Initialize with server context."""
@@ -381,6 +391,7 @@ class WebhookHandler(SecureHandler):
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Handle GET requests for webhook endpoints."""
+        path = self._normalize_path(path)
         # GET /api/webhooks/events - list available event types
         if path == "/api/v1/webhooks/events":
             return self._handle_list_events(handler)
@@ -494,6 +505,7 @@ The webhook secret is only returned once on creation - save it securely.""",
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Handle POST requests for webhook endpoints."""
+        path = self._normalize_path(path)
         # POST /api/webhooks/slo/test - send test SLO violation notification
         if path == "/api/v1/webhooks/slo/test":
             return self._handle_slo_test(handler)
@@ -557,6 +569,7 @@ The webhook secret is only returned once on creation - save it securely.""",
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Handle DELETE requests for webhook endpoints."""
+        path = self._normalize_path(path)
         # DELETE /api/webhooks/dead-letter/:id - remove from dead-letter queue
         if "/dead-letter/" in path:
             delivery_id, err = self.extract_path_param(path, 5, "delivery_id", SAFE_ID_PATTERN)
@@ -578,6 +591,7 @@ The webhook secret is only returned once on creation - save it securely.""",
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Handle PATCH requests for webhook endpoints."""
+        path = self._normalize_path(path)
         # PATCH /api/webhooks/:id
         if path.startswith("/api/v1/webhooks/") and path.count("/") == 4:
             webhook_id, err = self.extract_path_param(path, 4, "webhook_id", SAFE_ID_PATTERN)

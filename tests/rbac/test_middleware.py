@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.rbac.checker import PermissionChecker
 from aragora.rbac.middleware import (
     DEFAULT_ROUTE_PERMISSIONS,
     RBACMiddleware,
@@ -322,6 +323,43 @@ class TestRBACMiddleware:
 
             assert allowed is False
             assert perm == "debates:delete"
+
+    @pytest.mark.parametrize(
+        ("path", "method", "expected_permission"),
+        [
+            ("/api/v1/webhook-configs", "GET", "webhooks.read"),
+            ("/api/v1/webhook-configs", "POST", "webhooks.create"),
+            ("/api/v1/webhook-configs/probe-123", "GET", "webhooks.read"),
+            ("/api/v1/webhook-configs/probe-123", "DELETE", "webhooks.delete"),
+            ("/api/v1/webhook-configs/probe-123", "PATCH", "webhooks.update"),
+        ],
+    )
+    def test_webhook_config_alias_enforces_exact_default_permissions(
+        self, path: str, method: str, expected_permission: str
+    ) -> None:
+        checker = PermissionChecker(
+            enable_cache=False,
+            enable_delegation=False,
+            enable_workspace_scope=False,
+            enable_conditions=False,
+            enable_ownership=False,
+        )
+        middleware = RBACMiddleware(
+            RBACMiddlewareConfig(permission_checker=checker), validate_permissions=False
+        )
+        allowed_context = AuthorizationContext(
+            user_id="allowed-user", permissions={expected_permission}
+        )
+        denied_context = AuthorizationContext(user_id="denied-user", permissions={"debates.read"})
+
+        allowed, _reason, required = middleware.check_request(path, method, allowed_context)
+        denied, _reason, denied_required = middleware.check_request(path, method, denied_context)
+
+        assert allowed is True
+        assert required == expected_permission
+        assert denied is False
+        assert denied_required == expected_permission
+        assert middleware.get_required_permission(path + "/extra/deeper", method) is None
 
     def test_check_request_no_matching_rule_authenticated(self):
         """Test no matching rule with authenticated user is denied (default-deny)."""

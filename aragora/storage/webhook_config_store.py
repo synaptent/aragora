@@ -174,6 +174,7 @@ def _deserialize_events(value: Any) -> list[str]:
 
 # Events that can trigger webhooks
 WEBHOOK_EVENTS: set[str] = {
+    "canary_probe",
     "debate_start",
     "debate_end",
     "consensus",
