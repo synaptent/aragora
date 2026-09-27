@@ -134,7 +134,7 @@ const client = createClient({
 - `client.listAgents()` / `client.getAgent()`
 - `client.createTournament()` / `client.getTournamentStandings()`
 - `client.login()` / `client.register()` / `client.refreshToken()`
-- `client.listTenants()` / `client.createTenant()`
+- `client.listTenants()`
 - `client.listRoles()` / `client.assignRole()`
 - `client.listAuditEvents()` / `client.exportAuditLogs()`
 

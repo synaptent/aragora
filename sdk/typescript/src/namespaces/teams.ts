@@ -221,27 +221,6 @@ export class TeamsAPI {
     return response.tenants;
   }
 
-  /**
-   * Get a specific tenant's configuration.
-   *
-   * @param tenantId - The Microsoft 365 tenant ID
-   */
-  async getTenant(tenantId: string): Promise<TeamsTenant> {
-    return this.client.request('GET', `/api/v1/teams/tenants/${encodeURIComponent(tenantId)}`);
-  }
-
-  /**
-   * Enable or disable a tenant.
-   *
-   * @param tenantId - The Microsoft 365 tenant ID
-   * @param enabled - Whether to enable or disable
-   */
-  async setTenantEnabled(tenantId: string, enabled: boolean): Promise<TeamsTenant> {
-    return this.client.request('PATCH', `/api/v1/teams/tenants/${encodeURIComponent(tenantId)}`, {
-      body: { enabled },
-    });
-  }
-
   // ===========================================================================
   // Channel Management
   // ===========================================================================
@@ -265,53 +244,6 @@ export class TeamsAPI {
       `/api/v1/teams/tenants/${encodeURIComponent(tenantId)}/channels`
     );
     return response.channels;
-  }
-
-  // ===========================================================================
-  // Notification Settings
-  // ===========================================================================
-
-  /**
-   * Get notification settings for a channel.
-   *
-   * @param tenantId - The Microsoft 365 tenant ID
-   * @param channelId - The channel ID
-   */
-  async getNotificationSettings(
-    tenantId: string,
-    channelId: string
-  ): Promise<TeamsNotificationSettings> {
-    return this.client.request(
-      'GET',
-      `/api/v1/teams/tenants/${encodeURIComponent(tenantId)}/channels/${encodeURIComponent(channelId)}/notifications`
-    );
-  }
-
-  /**
-   * Update notification settings for a channel.
-   *
-   * @param tenantId - The Microsoft 365 tenant ID
-   * @param channelId - The channel ID
-   * @param settings - The notification settings to update
-   *
-   * @example
-   * ```typescript
-   * await client.teams.updateNotificationSettings('tenant-123', 'channel-456', {
-   *   notifications_enabled: true,
-   *   notify_on_consensus: true,
-   * });
-   * ```
-   */
-  async updateNotificationSettings(
-    tenantId: string,
-    channelId: string,
-    settings: Partial<TeamsNotificationSettings>
-  ): Promise<TeamsNotificationSettings> {
-    return this.client.request(
-      'PATCH',
-      `/api/v1/teams/tenants/${encodeURIComponent(tenantId)}/channels/${encodeURIComponent(channelId)}/notifications`,
-      { body: settings }
-    );
   }
 
   // ===========================================================================
