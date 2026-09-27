@@ -1,16 +1,23 @@
 """The dogfood replay must keep emitting ODR v0.1 documents.
 
-``docs/case-studies/dogfood/replay_dogfood_receipts.py`` regenerates the five
-committed M8 dogfood receipts from stored reviewer output. Those receipts are
-ODR v0.1 documents, while the emitter's default output is v0.2, so the replay
-pins ``odr_version="0.1"``. Without the pin a documented replay would silently
-rewrite the committed receipts as v0.2 documents.
+``docs/case-studies/dogfood/replay_dogfood_receipts.py`` rebuilds the M8
+dogfood receipts from stored reviewer output. The committed receipts are ODR
+v0.1 documents while the emitter's default output is v0.2, so the replay pins
+``odr_version="0.1"``.
+
+This test proves two things: every receipt the replay builds is an ODR v0.1
+document with the v0.1 profile, and running the replay does not rewrite the
+committed receipt bytes. It does not claim that the replay reproduces all five
+committed receipts. The replay no longer reproduces pr-9027 and pr-9056: their
+verdicts come out CHANGES_REQUESTED instead of the committed PASS. That verdict
+drift is pre-existing on main and is tracked as an operator follow-up.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 from aragora.gauntlet.odr_export import ODR_PROFILE_URIS
@@ -29,6 +36,8 @@ def _load_replay_module():
 
 
 def test_replay_emits_v01_like_the_committed_receipts(tmp_path, monkeypatch):
+    # The replay script inserts the repo root into sys.path at import time.
+    monkeypatch.setattr(sys, "path", list(sys.path))
     replay = _load_replay_module()
     # Redirect every import-time path constant so no replay write can reach the
     # committed receipts.
