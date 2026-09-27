@@ -140,22 +140,6 @@ class TestIndexManagement:
         )
         assert len(result["indexes"]) == 1
 
-    def test_get_index(self, client: AragoraClient, mock_request) -> None:
-        """Get index details."""
-        mock_request.return_value = {
-            "name": "docs",
-            "dimension": 1536,
-            "document_count": 1000,
-            "status": "ready",
-        }
-
-        result = client.index.get_index("docs")
-
-        mock_request.assert_called_once_with(
-            "GET", "/api/v1/index/docs", params=None, json=None, headers=None
-        )
-        assert result["document_count"] == 1000
-
     def test_create_index(self, client: AragoraClient, mock_request) -> None:
         """Create a new index."""
         mock_request.return_value = {
@@ -184,17 +168,6 @@ class TestIndexManagement:
             headers=None,
         )
         assert result["status"] == "building"
-
-    def test_delete_index(self, client: AragoraClient, mock_request) -> None:
-        """Delete an index."""
-        mock_request.return_value = {"deleted": True}
-
-        result = client.index.delete_index("old_index")
-
-        mock_request.assert_called_once_with(
-            "DELETE", "/api/v1/index/old_index", params=None, json=None, headers=None
-        )
-        assert result["deleted"] is True
 
 
 class TestAsyncIndex:

@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
+      - uses: synaptent/aragora@272a7ef2f672bce4d7c79bdeb916053e95840bc5
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -347,7 +347,7 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 > **~4,300 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
 > functions across ~5,600 files · 3,205 API operations across 2,912 paths ·
 > 35+ allowlisted agent types across 12+ providers · 41 Knowledge Mound adapter specs
-> (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.10.0.**
+> (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.11.0.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw
 > count — see docs/HONEST_ASSESSMENT.md.)
 <!-- metrics:end -->
