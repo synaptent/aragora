@@ -251,10 +251,10 @@ kubectl -n aragora rollout status deployment/aragora-backend
 pg_dump aragora > backup_$(date +%Y%m%d).sql
 
 # Run migrations
-python -m aragora.migrations.runner migrate
+python -m aragora.migrations upgrade
 
 # Verify
-python -m aragora.migrations.runner status
+python -m aragora.migrations status
 ```
 
 ### Certificate Renewal

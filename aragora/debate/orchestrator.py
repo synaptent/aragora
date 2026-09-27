@@ -1153,6 +1153,15 @@ class Arena(ArenaDelegatesMixin):
         if not os.environ.get("PYTEST_CURRENT_TEST"):
             return
 
+        # In-flight webhook workers record delivery results through the store
+        # reset below, so they must finish before its connections close.
+        try:
+            from aragora.events.dispatcher import shutdown_dispatcher
+
+            shutdown_dispatcher(wait=True)
+        except (ImportError, RuntimeError, OSError):
+            pass
+
         try:
             from aragora.storage.receipt_store import close_receipt_store
 
