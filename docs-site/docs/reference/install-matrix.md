@@ -25,7 +25,7 @@ re-verified 2026-09-27):
 
 | Distribution | PyPI name | Declared in | Current version | PyPI status (live-checked) |
 |---|---|---|---|---|
-| Root platform | `aragora` | `pyproject.toml` | **2.11.0** | Latest on PyPI = 2.11.0 (2026-09-27); the 2.11.0 build ships when the operator tags `v2.11.0` and dispatches `publish-aragora.yml` |
+| Root platform | `aragora` | `pyproject.toml` | **2.11.0** | Latest on PyPI = 2.11.0 (2026-09-27; the 2.11.0 build ships when the operator tags `v2.11.0` and dispatches `publish-aragora.yml`, which happened on 2026-09-27) |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
 | Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.11.0** | Published; latest on PyPI = **2.8.0** (2026-02-25) — the repo's in-tree version has moved to 2.11.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.8.0, not 2.11.0 |
 | Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.2.0** | Published; latest on PyPI = **0.2.0** (released 2026-09-25T00:08Z). It is the first line that accepts ODR v0.2, the default output since 2.11.0; 0.1.x rejects v0.2 documents at `schema_conformance`. Its published metadata requires `cryptography>=48.0.1` |

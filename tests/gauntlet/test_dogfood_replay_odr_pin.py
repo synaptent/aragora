@@ -44,6 +44,7 @@ def test_replay_emits_v01_like_the_committed_receipts(tmp_path, monkeypatch):
     monkeypatch.setattr(replay, "SCRIPT_DIR", tmp_path)
     monkeypatch.setattr(replay, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(replay, "RAW_DIR", tmp_path / "raw-reviews")
+    assert replay.SCRIPT_DIR == tmp_path
     committed_before = {p: p.read_bytes() for p in sorted(DOGFOOD_DIR.glob("*.json"))}
 
     assert len(replay.PRS) == 5

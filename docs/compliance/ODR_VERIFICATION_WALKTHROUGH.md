@@ -110,8 +110,9 @@ Dissent trail
 The `Dissent trail` section lists per-finding dissent
 (`quorum.dissent.findings[]`, which merge-quorum review receipts carry). This
 sample records its dissent as `quorum.dissent.views` instead, so the section
-reads `(no dissent recorded)`; the dissenting agent and its view are still in
-the signed receipt.
+reads `(no dissent recorded)`. v0.1 receipts cannot carry per-finding dissent,
+so this section is always empty for them; the dissenting agent and its view are
+still in `quorum.dissent.views`.
 
 Add `--json` for a machine-readable result suitable for archiving in an audit
 file.
