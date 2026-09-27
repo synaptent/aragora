@@ -57,7 +57,7 @@ print(__version__)  # "2.11.0"
 
 **Python support:** 3.10, 3.11, 3.12, 3.13
 
-**PyPI availability:** the `2.11.0` wheel ships when the operator pushes the `v2.11.0` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.9.0 and the exact-version commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
+**PyPI availability:** the `2.11.0` wheel ships when the operator pushes the `v2.11.0` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.10.0 and the `==2.11.0` commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
 
 ---
 
@@ -65,7 +65,7 @@ print(__version__)  # "2.11.0"
 
 ### v2.x.x -> v2.11.0 (Minor Upgrade)
 
-No server API breaking changes between v2.x releases. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 was never published to PyPI, so an upgrade from PyPI 2.9.0 picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
+No server API breaking changes between v2.x releases. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 reached PyPI on 2026-09-25, so an upgrade from 2.9.x picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
 
 ```bash
 pip install --upgrade aragora==2.11.0
@@ -334,7 +334,7 @@ Migration safety features:
 | **TypeScript SDK streaming** | A socket close without a genuine terminal event throws `ConnectionError` after buffered events drain, instead of synthesizing `debate_end` (#10014) | Wrap `for await` over debate streams in `try/catch` |
 | **Base dependencies** | `pip install aragora` now installs `cryptography>=48.0.1,<51.0` (#10010) | Environments that pin `cryptography` below 48.0.1 must raise the pin |
 | **Database backend** | `ARAGORA_DB_BACKEND=postgres` and `=postgresql` both select the PostgreSQL-backed stores (#10073); before, several stores accepted only one spelling and silently fell back to SQLite on the other. The backend image entrypoint now really applies migrations with `python -m aragora.migrations upgrade` against the selected DSN (#9882) | A store that ran on SQLite under the unrecognized spelling now opens PostgreSQL; make sure the DSN is set and migrate any SQLite data you need |
-| **ODR emitter default** | None: the default stays `0.1`; v0.2 is opt-in (`--odr-version 0.2` or `ARAGORA_ODR_PROFILE_VERSION=0.2`) | None |
+| **ODR emitter default** | The default output is now ODR `0.2` (#10165) for the CLI export, `aragora review`, the GitHub Action and `GET /api/v2/receipts/{id}/export?format=odr`; `aragora-verify` 0.1.1 rejects v0.2 documents at `schema_conformance` | Upgrade verifiers to `aragora-verify>=0.2.0`, or keep emitting 0.1 with `--odr-version 0.1`, `?odr_version=0.1` or `ARAGORA_ODR_PROFILE_VERSION=0.1` |
 
 ### v2.10.0 Behavioral Changes
 
