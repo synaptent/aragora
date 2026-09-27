@@ -29,7 +29,7 @@
 | Knowledge Mound adapter specs | `41` | `aragora/knowledge/mound/adapters/factory.py` | `git grep -E '"\.[a-z_]+_adapter"' -- aragora/knowledge/mound/adapters/factory.py \| wc -l` |
 | Knowledge Mound adapter files | `46` | `aragora/knowledge/mound/adapters/` | `git ls-files aragora/knowledge/mound/adapters \| grep -E '/[^/]+_adapter\.py$' \| wc -l` |
 | Markdown files under docs/ | `1124` | `docs/` | `git ls-files docs \| grep -E '\.md$' \| wc -l` |
-| GitHub Actions workflows | `103` | `.github/workflows/` | `git ls-files .github/workflows \| grep -E '\.yml$' \| wc -l` |
+| GitHub Actions workflows | `104` | `.github/workflows/` | `git ls-files .github/workflows \| grep -E '\.yml$' \| wc -l` |
 | Mypy baseline errors (grandfathered) | `3115` | `.mypy-baseline` | `wc -l .mypy-baseline` |
 
 ## Notes on counting methodology
