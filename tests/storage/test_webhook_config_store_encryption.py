@@ -7,7 +7,9 @@ encrypt and decrypt paths, including legacy plaintext secrets.
 
 from __future__ import annotations
 
+import base64
 import logging
+import sqlite3
 import typing
 
 import pytest
@@ -16,7 +18,22 @@ from aragora.security import encryption as encryption_module
 from aragora.storage import webhook_config_store as wcs
 
 STORE_LOGGER = "aragora.storage.webhook_config_store"
-CIPHERTEXT = "AAAA" + "x" * 60
+# Same serialization as EncryptionService.encrypt(...).to_base64(); it starts with
+# "AQ" (format byte 0x01), not "AAAA".
+CIPHERTEXT = encryption_module.EncryptedData(
+    ciphertext=bytes(range(48)),
+    nonce=bytes(12),
+    key_id="master",
+    key_version=1,
+    algorithm=encryption_module.EncryptionAlgorithm.AES_256_GCM,
+).to_base64()
+LEGACY_PLAINTEXT_SECRETS = [
+    pytest.param("short-legacy-secret", id="short"),
+    pytest.param("B" * 60, id="long-non-base64-header"),
+    pytest.param("AAAA" + "x" * 45, id="prefixed-49-chars"),
+    pytest.param("AAAA" + "x" * 60, id="prefixed-64-chars"),
+    pytest.param("AQ" + "A" * 62, id="format-byte-without-header"),
+]
 
 
 class _StubEncrypted:
@@ -99,6 +116,7 @@ class TestEncryptionAvailable:
     @pytest.fixture(autouse=True)
     def development_key(self, monkeypatch):
         monkeypatch.setenv("ARAGORA_ENV", "development")
+        monkeypatch.delenv("ARAGORA_SECRETS_STRICT", raising=False)
         monkeypatch.setenv("ARAGORA_ENCRYPTION_KEY", "0" * 64)
         monkeypatch.setattr(encryption_module, "_encryption_service", None)
 
@@ -230,16 +248,122 @@ class TestEncryptDecrypt:
         assert wcs._decrypt_secret(CIPHERTEXT) == "decrypted-secret"
         assert service.decrypted == [CIPHERTEXT]
 
-    @pytest.mark.parametrize(
-        "stored",
-        [
-            pytest.param("short-legacy-secret", id="short"),
-            pytest.param("B" * 60, id="no-ciphertext-prefix"),
-            pytest.param("AAAA" + "x" * 45, id="prefixed-but-49-chars"),
-        ],
-    )
+    @pytest.mark.parametrize("stored", LEGACY_PLAINTEXT_SECRETS)
     def test_decrypt_keeps_legacy_plaintext(self, provider, stored):
         service = _StubService()
         provider(service)
         assert wcs._decrypt_secret(stored) == stored
         assert service.decrypted == []
+
+
+class TestRealEncryptionRoundTrip:
+    """Secrets encrypted by the real EncryptionService must read back as plaintext."""
+
+    @pytest.fixture(autouse=True)
+    def development_key(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_ENV", "development")
+        monkeypatch.delenv("ARAGORA_SECRETS_STRICT", raising=False)
+        monkeypatch.setenv("ARAGORA_ENCRYPTION_KEY", "0" * 64)
+        monkeypatch.setattr(encryption_module, "_encryption_service", None)
+
+    @staticmethod
+    def _stored_secret(db_path, webhook_id: str) -> str:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute(
+                "SELECT secret FROM webhook_configs WHERE id = ?", (webhook_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+        return row[0]
+
+    @staticmethod
+    def _set_stored_secret(db_path, webhook_id: str, secret: str) -> None:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            conn.execute("UPDATE webhook_configs SET secret = ? WHERE id = ?", (secret, webhook_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_decrypt_secret_returns_the_plaintext(self):
+        stored = encryption_module.get_encryption_service().encrypt("whsec-real").to_base64()
+        assert wcs._decrypt_secret(stored) == "whsec-real"
+
+    def test_sqlite_store_reload_returns_the_registered_secret(self, tmp_path):
+        db_path = tmp_path / "webhooks.db"
+        store = wcs.SQLiteWebhookConfigStore(db_path)
+        registered = store.register(url="https://example.com/hook", events=["debate_end"])
+        store.close()
+
+        stored = self._stored_secret(db_path, registered.id)
+        assert stored != registered.secret
+        assert encryption_module.get_encryption_service().decrypt_string(stored) == (
+            registered.secret
+        )
+
+        reopened = wcs.SQLiteWebhookConfigStore(db_path)
+        try:
+            reloaded = reopened.get(registered.id)
+            assert reloaded is not None
+            assert reloaded.secret == registered.secret
+            assert [w.secret for w in reopened.get_for_event("debate_end")] == [registered.secret]
+        finally:
+            reopened.close()
+
+    def test_sqlite_update_keeps_a_single_encryption_layer(self, tmp_path):
+        db_path = tmp_path / "webhooks.db"
+        store = wcs.SQLiteWebhookConfigStore(db_path)
+        try:
+            registered = store.register(url="https://example.com/hook", events=["debate_end"])
+            stored_before = self._stored_secret(db_path, registered.id)
+            assert store.update(registered.id, name="renamed") is not None
+            assert self._stored_secret(db_path, registered.id) == stored_before
+            reloaded = store.get(registered.id)
+            assert reloaded is not None
+            assert reloaded.secret == registered.secret
+        finally:
+            store.close()
+
+    @pytest.mark.parametrize("legacy", LEGACY_PLAINTEXT_SECRETS)
+    def test_sqlite_store_returns_legacy_plaintext_unchanged(self, tmp_path, legacy):
+        db_path = tmp_path / "webhooks.db"
+        store = wcs.SQLiteWebhookConfigStore(db_path)
+        registered = store.register(url="https://example.com/hook", events=["debate_end"])
+        store.close()
+        self._set_stored_secret(db_path, registered.id, legacy)
+
+        reopened = wcs.SQLiteWebhookConfigStore(db_path)
+        try:
+            reloaded = reopened.get(registered.id)
+            assert reloaded is not None
+            assert reloaded.secret == legacy
+        finally:
+            reopened.close()
+
+    def test_redis_cache_payload_round_trips_the_secret(self):
+        webhook = wcs.WebhookConfig(
+            id="wh-cache",
+            url="https://example.com/hook",
+            events=["debate_end"],
+            secret="whsec-cache",
+        )
+        payload = wcs.RedisWebhookConfigStore._serialize_for_cache(webhook)
+        assert "whsec-cache" not in payload
+        restored = wcs.RedisWebhookConfigStore._deserialize_from_cache(payload)
+        assert restored.secret == "whsec-cache"
+
+    def test_tampered_ciphertext_returns_stored_value_with_debug_log(self, caplog):
+        stored = encryption_module.get_encryption_service().encrypt("whsec-real").to_base64()
+        raw = bytearray(base64.b64decode(stored))
+        raw[-1] ^= 0x01
+        tampered = base64.b64encode(bytes(raw)).decode("ascii")
+
+        with caplog.at_level(logging.DEBUG, logger=STORE_LOGGER):
+            assert wcs._decrypt_secret(tampered) == tampered
+        assert any("Secret decryption failed" in r.getMessage() for r in caplog.records)
+
+    def test_truncated_ciphertext_returns_stored_value(self):
+        stored = encryption_module.get_encryption_service().encrypt("whsec-real").to_base64()
+        truncated = stored[:-8]
+        assert wcs._decrypt_secret(truncated) == truncated
