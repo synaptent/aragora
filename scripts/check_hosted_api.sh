@@ -109,12 +109,19 @@ fi
 # websocket
 http_ws="${WS_URL/#wss:/https:}"
 http_ws="${http_ws/#ws:/http:}"
-line=$(curl -sS -m 6 --http1.1 -o /dev/null -D - \
+headers=$(curl -sS -m 6 --http1.1 -o /dev/null -D - \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
   -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Protocol: aragora-v1' \
-  "$http_ws" 2>/dev/null | head -1 | tr -d '\r')
+  "$http_ws" 2>/dev/null | tr -d '\r')
+line=$(printf '%s\n' "$headers" | head -1)
+protocol=$(printf '%s\n' "$headers" | awk -F': *' 'tolower($1)=="sec-websocket-protocol" {print $2; exit}')
 case "$line" in
-  *" 101"*) pass websocket "101 aragora-v1" ;;
+  *" 101"*)
+    if [ "$protocol" = "aragora-v1" ]; then
+      pass websocket "101 aragora-v1"
+    else
+      fail websocket "101 but subprotocol '${protocol:-none}' (expected aragora-v1)"
+    fi ;;
   *) fail websocket "${line:-no response}" ;;
 esac
 

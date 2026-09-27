@@ -17,7 +17,7 @@ PUBKEY = "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAstub\n-----END PUBLIC KEY-
 pytestmark = pytest.mark.skipif(shutil.which("curl") is None, reason="curl not available")
 
 
-def _stub(healthy: bool):
+def _stub(healthy: bool, ws_protocol: str | None = "aragora-v1"):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):  # noqa: D401 - silence the test output
             pass
@@ -46,7 +46,8 @@ def _stub(healthy: bool):
                 self.send_response(101)
                 self.send_header("Upgrade", "websocket")
                 self.send_header("Connection", "Upgrade")
-                self.send_header("Sec-WebSocket-Protocol", "aragora-v1")
+                if ws_protocol:
+                    self.send_header("Sec-WebSocket-Protocol", ws_protocol)
                 self.end_headers()
                 self.close_connection = True
             else:
@@ -118,3 +119,14 @@ def test_mismatched_public_key_fails(tmp_path):
         server.shutdown()
     assert result.returncode == 1
     assert "FAIL signing-key" in result.stdout
+
+
+def test_upgrade_without_the_aragora_subprotocol_fails():
+    server = _stub(healthy=True, ws_protocol=None)
+    try:
+        result = _run(server)
+    finally:
+        server.shutdown()
+    assert result.returncode == 1
+    assert "FAIL websocket" in result.stdout
+    assert "subprotocol 'none'" in result.stdout
