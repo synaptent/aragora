@@ -68,20 +68,35 @@ chmod 600 secrets.env
 nano secrets.env
 ```
 
-Generate four independent secrets:
+Generate five independent secrets:
 
 ```bash
 openssl rand -hex 32      # POSTGRES_PASSWORD (URL-safe)
 openssl rand -hex 32      # ARAGORA_API_TOKEN
 openssl rand -hex 32      # ARAGORA_ENCRYPTION_KEY
 openssl rand -hex 32      # ARAGORA_JWT_SECRET
+openssl rand -hex 32      # ARAGORA_RECEIPT_SIGNING_KEY
 ```
+
+Then create the ODR signing key that signs every exported receipt. Keep an
+offline copy of the private key; publish only the public half:
+
+```bash
+install -d -m 0700 odr
+openssl genpkey -algorithm ed25519 -out odr/odr-signing-key.pem
+chmod 0400 odr/odr-signing-key.pem
+openssl pkey -in odr/odr-signing-key.pem -pubout > odr-signing-key.pub.pem
+```
+
+`odr/` is git-ignored. `bring-up.sh` refuses to start without the key, and gives
+it to the container's unprivileged user. After start-up, the key is served at
+`/.well-known/aragora-odr-signing-key`, and it should match `odr-signing-key.pub.pem`.
 
 Set `DATABASE_URL` to `postgresql://aragora:<POSTGRES_PASSWORD>@postgres:5432/aragora`,
 using the same password as `POSTGRES_PASSWORD`. Compose loads this literal DSN
 through `env_file`; it does not interpolate values from `secrets.env`.
 Do not add a competing `ARAGORA_POSTGRES_DSN`.
-`bring-up.sh` refuses to start if any of these five values is blank.
+`bring-up.sh` refuses to start if any of these six values is blank.
 For live debates, the operator also adds freshly issued provider keys such as
 `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `secrets.env`. Provider setup, canary
 bring-up and monitoring require separate operator authorization.
