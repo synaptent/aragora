@@ -5512,13 +5512,6 @@ export class AragoraClient {
   }
 
   /**
-   * Create a new tenant.
-   */
-  async createTenant(body: import('./types').CreateTenantRequest): Promise<import('./types').Tenant> {
-    return this.request<import('./types').Tenant>('POST', '/api/v1/tenants', { body });
-  }
-
-  /**
    * Update a tenant.
    */
   async updateTenant(tenantId: string, body: import('./types').UpdateTenantRequest): Promise<import('./types').Tenant> {
