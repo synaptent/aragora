@@ -312,9 +312,20 @@ def metric_8(ctx: Any) -> Row:
         tag, target = newest["tagName"], str(views[newest["tagName"]].get("targetCommitish") or "")
         since = commit_date(target if HEX40.match(target) else tag, newest.get("publishedAt") or "")
     argv = f"gh run list -R {REPO} --workflow metrics-drift.yml --status success".split()
-    argv += ["--limit", "10", "--json", "databaseId,createdAt,url"]
+    argv += ["--limit", "30", "--json", "databaseId,createdAt,url,event"]
     c = run_cmd(argv) if total >= 3 else None
-    runs = [x for x in json.loads(c.out or "[]") if x.get("createdAt", "") >= since] if c else []
+    # receipt-first-hour only runs on the weekly schedule and manual dispatch;
+    # pull-request runs skip it, so they must not crowd a green run out of view.
+    events = ("schedule", "workflow_dispatch")
+    runs = (
+        [
+            x
+            for x in json.loads(c.out or "[]")
+            if x.get("createdAt", "") >= since and x.get("event") in events
+        ]
+        if c
+        else []
+    )
     jq = '[.jobs[]|select(.name=="receipt-first-hour" and .conclusion=="success")]|length'
     for run in runs[:3]:
         url = f"repos/{REPO}/actions/runs/{run['databaseId']}/jobs"
