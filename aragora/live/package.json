@@ -1,6 +1,6 @@
 {
   "name": "aragora-live",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "Control Plane for Multi-Agent Vetted Decisionmaking - Orchestrate AI debate across org knowledge and channels",
   "private": true,
   "engines": {
