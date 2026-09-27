@@ -376,6 +376,7 @@ class TestCheckProductionRequirements:
                 "DATABASE_URL": "postgresql://localhost/db",
                 "JWT_SECRET": "secret",
                 "ARAGORA_REQUIRE_DATABASE": "true",
+                "ARAGORA_SECRETS_DIR": "/run/secrets/aragora",
             },
             clear=True,
         ):
@@ -390,6 +391,51 @@ class TestCheckProductionRequirements:
                     m for m in missing if "required" in m.lower() or "missing" in m.lower()
                 ]
                 assert production_missing == [] or all("warning" in m.lower() for m in missing)
+
+
+class TestStrictSecretsCustodyRequirement:
+    """Strict secrets mode must name a managed custody backend at startup."""
+
+    MESSAGE_KEY = "no managed secret custody is configured"
+
+    def _missing(self, env: dict[str, str]) -> list[str]:
+        with patch.dict("os.environ", env, clear=True):
+            with patch(
+                "aragora.control_plane.leader.is_distributed_state_required",
+                return_value=False,
+            ):
+                return check_production_requirements()
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            {"ARAGORA_ENV": "production"},
+            {"ARAGORA_ENV": "staging"},
+            {"ARAGORA_ENV": "development", "ARAGORA_SECRETS_STRICT": "true"},
+        ],
+    )
+    def test_strict_mode_without_custody_fails_with_both_fixes(self, env):
+        custody = [m for m in self._missing(env) if self.MESSAGE_KEY in m]
+        assert len(custody) == 1
+        assert "ARAGORA_SECRETS_DIR" in custody[0]
+        assert "ARAGORA_USE_SECRETS_MANAGER=true" in custody[0]
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            {"ARAGORA_SECRETS_DIR": "/run/secrets/aragora"},
+            {"ARAGORA_USE_SECRETS_MANAGER": "true"},
+            {"AWS_EXECUTION_ENV": "AWS_ECS_FARGATE"},
+            {"ARAGORA_SECRETS_STRICT": "false"},
+        ],
+    )
+    def test_configured_custody_or_non_strict_passes(self, extra):
+        missing = self._missing({"ARAGORA_ENV": "production", **extra})
+        assert not [m for m in missing if self.MESSAGE_KEY in m]
+
+    def test_development_is_not_strict(self):
+        missing = self._missing({"ARAGORA_ENV": "development"})
+        assert not [m for m in missing if self.MESSAGE_KEY in m]
 
 
 # ---------------------------------------------------------------------------

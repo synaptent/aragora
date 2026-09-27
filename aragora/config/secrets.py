@@ -303,6 +303,16 @@ def is_critical_secret(name: str) -> bool:
     return name in CRITICAL_SECRETS
 
 
+def managed_custody_configured() -> bool:
+    """Whether a managed custody backend (mounted directory or AWS) is configured.
+
+    Reads the same environment rules as ``SecretsConfig.from_env()``; it never
+    touches the mounted directory or AWS.
+    """
+    config = SecretsConfig.from_env()
+    return bool(config.secrets_dir) or config.use_aws
+
+
 @dataclass
 class SecretsConfig:
     """Configuration for secrets management."""
@@ -790,6 +800,16 @@ class SecretManager:
                 )
                 continue
 
+        if self._last_aws_load_authoritative_failure and self._last_aws_load_transient_failure:
+            # A NotFound from one region is inconclusive while another configured region
+            # could not be checked: that region may be the one that holds the secret
+            # (the default list starts with the host's own AWS_REGION). Keep the
+            # last-known cache instead of treating the partial answer as a deletion.
+            logger.warning(
+                "AWS secret not found in some regions while others failed transiently; "
+                "keeping the last known cache"
+            )
+            self._last_aws_load_authoritative_failure = False
         if last_error:
             logger.warning("Failed to load secrets from AWS Secrets Manager in all regions")
         return {}
