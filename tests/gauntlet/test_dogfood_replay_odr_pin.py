@@ -30,9 +30,12 @@ def _load_replay_module():
 
 def test_replay_emits_v01_like_the_committed_receipts(tmp_path, monkeypatch):
     replay = _load_replay_module()
-    # Redirect the replay's writes so the committed receipts are never touched.
+    # Redirect every import-time path constant so no replay write can reach the
+    # committed receipts.
     monkeypatch.setattr(replay, "SCRIPT_DIR", tmp_path)
     monkeypatch.setattr(replay, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(replay, "RAW_DIR", tmp_path / "raw-reviews")
+    committed_before = {p: p.read_bytes() for p in sorted(DOGFOOD_DIR.glob("*.json"))}
 
     assert len(replay.PRS) == 5
     for pr, head_sha, title, tier in replay.PRS:
@@ -51,3 +54,6 @@ def test_replay_emits_v01_like_the_committed_receipts(tmp_path, monkeypatch):
         assert regenerated["odr_version"] == committed["odr_version"], f"PR #{pr}"
         assert regenerated["profile"] == ODR_PROFILE_URIS["0.1"], f"PR #{pr}"
         assert regenerated["profile"] == committed["profile"], f"PR #{pr}"
+
+    committed_after = {p: p.read_bytes() for p in sorted(DOGFOOD_DIR.glob("*.json"))}
+    assert committed_after == committed_before
