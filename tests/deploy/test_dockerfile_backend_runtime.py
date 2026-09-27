@@ -125,3 +125,24 @@ def test_ci_probes_backend_dependencies_and_both_migration_systems() -> None:
     assert "alembic upgrade head" in runs
     assert 'python -m aragora.migrations upgrade --database-url "$DATABASE_URL"' in runs
     assert "python -m aragora.migrations status" in runs
+
+
+def test_backend_image_carries_its_build_identity() -> None:
+    dockerfile = (ROOT / "deploy/Dockerfile.backend").read_text()
+    runtime = dockerfile[dockerfile.rindex("FROM ") :]
+    for name in ("ARAGORA_BUILD_SHA", "ARAGORA_BUILD_TIME", "ARAGORA_DEPLOY_VERSION"):
+        assert f'ARG {name}=""' in runtime
+        assert f"{name}=${{{name}}}" in runtime
+    # Declared after the dependency layers so a new SHA only rebuilds the last layers.
+    assert runtime.index("ARG ARAGORA_BUILD_SHA") > runtime.index("COPY aragora/ ./aragora/")
+
+    docker = yaml.safe_load((ROOT / ".github/workflows/docker.yml").read_text())
+    steps = docker["jobs"]["build-backend"]["steps"]
+    push = next(step for step in steps if step.get("name") == "Build and push backend")
+    build_args = push["with"]["build-args"]
+    assert "ARAGORA_BUILD_SHA=${{ github.sha }}" in build_args
+    assert "ARAGORA_DEPLOY_VERSION=${{ steps.version.outputs.version }}" in build_args
+    assert "ARAGORA_BUILD_TIME=${{ steps.version.outputs.build_time }}" in build_args
+    smoke = next(step for step in steps if step.get("name") == "Test backend image")["run"]
+    assert "--build-arg ARAGORA_BUILD_SHA=${{ github.sha }}" in smoke
+    assert "get_build_info()['sha']" in smoke
