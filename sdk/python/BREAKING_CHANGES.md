@@ -30,13 +30,13 @@ and is removed rather than held open indefinitely.
 
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
-| `index.get_index`, `vector_index.get_index` | `GET /api/v1/index/{name}` | `index.list_indexes()` and select by name |
+| `index.get_index`, `vector_index.get_index` | `GET /api/v1/index/{name}` | No replacement: `index.list_indexes()` calls `GET /api/v1/index`, which `KnowledgeHandler` claims but has no branch for, so it answers `handler_no_result` too |
 | `index.delete_index`, `vector_index.delete_index` | `DELETE /api/v1/index/{name}` | No replacement |
 | `podcast.get_episode`, `media.get_podcast_episode`, `audio.get_episode` | `GET /api/v1/podcast/episodes/{id}` | `podcast.list_episodes()` and select by episode ID |
 | `podcast.delete_episode` | `DELETE /api/v1/podcast/episodes/{id}` | No replacement |
 | `podcast.update_episode` | `PATCH /api/v1/podcast/episodes/{id}` | No replacement |
 | `checkpoints.list_for_debate` | `GET /api/v1/debates/{id}/checkpoints` | `checkpoints.list()` and filter by debate ID |
-| `checkpoints.create_for_debate` | `POST /api/v1/debates/{id}/checkpoint` | `checkpoints.pause_debate(debate_id)` |
+| `checkpoints.create_for_debate` | `POST /api/v1/debates/{id}/checkpoint` | No replacement: `checkpoints.pause_debate(debate_id)` pauses a live debate through the interventions handler but creates no checkpoint, and `POST /api/v1/debates/{id}/checkpoint/pause` is not dispatched to the checkpoint handler |
 | `media.upload_audio` | `POST /api/v1/media/audio` | No replacement |
 | `organizations.create_tenant`, `tenants.create` | `POST /api/v1/tenants` | No replacement |
 

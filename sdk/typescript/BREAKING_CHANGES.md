@@ -35,12 +35,12 @@ and is removed rather than held open indefinitely.
 | `tasks.update` | `POST /api/v2/tasks/{id}` | No replacement; `tasks.get(taskId)` reads a task and `POST /api/v2/tasks/{id}/approve` approves one |
 | `policies.enable` | `POST /api/policies/{id}/enable` | Not `policies.toggle(policyId)`, which flips the current state. To enable idempotently, send the body `{ "enabled": true }` with `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}`. A toggle request without `enabled` inverts the current state. No typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
 | `policies.disable` | `POST /api/policies/{id}/disable` | Not `policies.toggle(policyId)`, which flips the current state. To disable idempotently, send the body `{ "enabled": false }` with `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}`. A toggle request without `enabled` inverts the current state. No typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
-| `IndexAPI.getIndex` | `GET /api/v1/index/{name}` | `IndexAPI.listIndexes()` and select by name |
+| `IndexAPI.getIndex` | `GET /api/v1/index/{name}` | No replacement: `IndexAPI.listIndexes()` calls `GET /api/v1/index`, which `KnowledgeHandler` claims but has no branch for, so it answers `handler_no_result` too |
 | `IndexAPI.deleteIndex` | `DELETE /api/v1/index/{name}` | No replacement |
 | `debates.addTags` | `POST /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` |
 | `debates.removeTags` | `DELETE /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` with the desired list |
 | `checkpoints.listForDebate` | `GET /api/v1/debates/{id}/checkpoints` | `checkpoints.list({ debate_id })` |
-| `checkpoints.createForDebate` | `POST /api/v1/debates/{id}/checkpoint` | `checkpoints.pauseDebate(debateId)` |
+| `checkpoints.createForDebate` | `POST /api/v1/debates/{id}/checkpoint` | No replacement: `checkpoints.pauseDebate(debateId)` pauses a live debate through the interventions handler but creates no checkpoint, and `POST /api/v1/debates/{id}/checkpoint/pause` is not dispatched to the checkpoint handler |
 | `teams.getTenant` | `GET /api/v1/teams/tenants/{id}` | No replacement: `GET /api/v1/sme/teams/tenants/{id}` is served but answers 403 to every default role, because none holds its `sme:workspaces:read` permission, and no SDK method calls it |
 | `teams.setTenantEnabled` | `PATCH /api/v1/teams/tenants/{id}` | No replacement: `PATCH /api/v1/sme/teams/tenants/{id}` (body `is_active`) is served but answers 403 to every default role, because none holds its `sme:workspaces:write` permission, and no SDK method calls it |
 | `teams.getNotificationSettings` | `GET /api/v1/teams/tenants/{id}/channels/{id}/notifications` | No replacement |

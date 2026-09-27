@@ -474,10 +474,8 @@ result = client.policies.check(
 Administer tenants for multi-tenant deployments.
 
 ```python
-tenants, total = client.tenants.list()
-tenant = client.tenants.create(name="Acme Corp", slug="acme", tier="enterprise")
-usage = client.tenants.get_usage(tenant.id)
-client.tenants.update_quotas(tenant.id, {"debates_per_month": 5000})
+tenants = client.tenants.list(status="active")
+# The SDK has no tenant creation, usage or quota calls; see sdk/python/BREAKING_CHANGES.md.
 ```
 
 ### Health Check
