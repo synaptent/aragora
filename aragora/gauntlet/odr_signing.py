@@ -32,8 +32,10 @@ invalidates the signature while the digest still passes.
 Key management (per the post-incident security architecture):
     The private key is NEVER read from a raw environment variable or committed
     to the repo. It is read from the PKCS#8 Ed25519 PEM file named by
-    ``ARAGORA_ODR_SIGNING_KEY_FILE``, or resolved from AWS Secrets Manager via
-    :mod:`aragora.config.secrets` (PEM in the secret named by
+    ``ARAGORA_ODR_SIGNING_KEY_FILE``; otherwise production resolves
+    ``odr-signing-key.pem`` from the protected directory configured by
+    ``ARAGORA_SECRETS_DIR``. Explicitly enabled AWS Secrets Manager remains a
+    compatibility backend (PEM in the secret named by
     ``ARAGORA_ODR_SIGNING_KEY_SECRET``, default ``aragora/odr-signing-key``).
     Only the *public* key is published (repo + a ``.well-known`` endpoint).
     A loader from explicit PEM bytes is provided for tests and offline tooling.
@@ -42,10 +44,12 @@ Key management (per the post-incident security architecture):
 from __future__ import annotations
 
 import base64
+import binascii
 import copy
 import hashlib
 import logging
 import os
+import re
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -78,7 +82,9 @@ _SIGNATURE_ENTRY_MEMBERS = {
     "expires_at",
 }
 
-#: Name of the AWS Secrets Manager secret holding the PEM private key.
+MOUNTED_SIGNING_KEY_FILENAME = "odr-signing-key.pem"
+
+#: Name of the AWS Secrets Manager compatibility secret holding the PEM private key.
 DEFAULT_SIGNING_KEY_SECRET = "aragora/odr-signing-key"
 SIGNING_KEY_SECRET_ENV = "ARAGORA_ODR_SIGNING_KEY_SECRET"
 SIGNING_KEY_FILE_ENV = "ARAGORA_ODR_SIGNING_KEY_FILE"
@@ -155,15 +161,60 @@ def load_private_key_from_pem(pem: str | bytes) -> Ed25519PrivateKey:
     return key
 
 
-def _secret_id_label(secret_id: str) -> str:
+def _secret_id_label(secret_id: str, *, explicitly_named: bool = False) -> str:
     """Return a log-safe secret identifier label."""
-    if "-----BEGIN" in secret_id or "\n" in secret_id or len(secret_id) > 160:
+    if explicitly_named or _secret_id_contains_key_material(secret_id) or len(secret_id) > 160:
         return "<redacted-secret-id>"
     return secret_id
 
 
 def _secret_id_contains_key_material(secret_id: str) -> bool:
-    return "-----BEGIN" in secret_id or "PRIVATE KEY" in secret_id or "\n" in secret_id
+    if "-----BEGIN" in secret_id or "PRIVATE KEY" in secret_id or "\n" in secret_id:
+        return True
+    compact = secret_id.strip()
+    if not compact or not re.fullmatch(r"[A-Za-z0-9+/_=-]+", compact):
+        return False
+    try:
+        decoded = base64.b64decode(compact, altchars=b"-_", validate=True)
+    except (ValueError, binascii.Error):
+        return False
+    if b"-----BEGIN" in decoded or b"PRIVATE KEY" in decoded:
+        return True
+    try:
+        from cryptography.exceptions import UnsupportedAlgorithm
+
+        _, _, serialization, _ = _load_ed25519()
+        serialization.load_der_private_key(decoded, password=None)
+    except (OdrSigningError, UnsupportedAlgorithm, ValueError, TypeError):
+        return False
+    return True
+
+
+def _load_pem_from_mounted_custody() -> str | None:
+    """Read the fixed ODR key file from configured protected custody."""
+    try:
+        from aragora.config import secrets as secret_config
+    except ImportError as exc:  # pragma: no cover - environment-dependent
+        raise OdrSigningError("aragora.config.secrets is unavailable") from exc
+
+    config = secret_config.SecretsConfig.from_env()
+    if not config.secrets_dir:
+        return None
+
+    manager = secret_config.SecretManager(config)
+    try:
+        directory_fd = manager._open_secrets_directory()  # noqa: SLF001
+        try:
+            pem = manager._read_protected_file(  # noqa: SLF001
+                directory_fd, MOUNTED_SIGNING_KEY_FILENAME
+            )
+            if pem is None:
+                raise OdrSigningError("mounted ODR signing key is missing")
+            return pem
+        finally:
+            os.close(directory_fd)
+    except secret_config.SecretSourceError as exc:
+        raise OdrSigningError("mounted ODR signing key failed custody validation") from exc
 
 
 def _load_pem_secret_from_aws(secret_id: str, *, explicitly_named: bool = False) -> str:
@@ -180,7 +231,7 @@ def _load_pem_secret_from_aws(secret_id: str, *, explicitly_named: bool = False)
     that does not exist is a configuration ERROR (typo, deleted secret) and
     must fail closed, never be treated as "not configured".
     """
-    secret_label = _secret_id_label(secret_id)
+    secret_label = _secret_id_label(secret_id, explicitly_named=explicitly_named)
     if _secret_id_contains_key_material(secret_id):
         raise OdrSigningError(
             "ODR signing key secret identifier appears to contain raw key material; "
@@ -290,15 +341,33 @@ def _key_file_permission_reason(file_mode: int, *, warn: bool = True) -> str | N
 def load_signing_key_from_secrets(
     secret_name: str | None = None,
 ) -> Ed25519PrivateKey:
-    """Resolve the signing key from file custody or AWS Secrets Manager.
+    """Resolve the signing key from file, mounted, or AWS custody.
 
-    An explicit ``secret_name`` ignores file configuration. Otherwise a non-empty
-    file path takes precedence over the secret environment variable and default.
-    Empty file configuration is equivalent to unset; an unusable file fails closed.
-    Environment variables name custody locations, never raw key material.
+    An explicit ``secret_name`` ignores file and mounted configuration. Otherwise a
+    non-empty ``ARAGORA_ODR_SIGNING_KEY_FILE`` path takes precedence; empty file
+    configuration is equivalent to unset and an unusable file fails closed. Next,
+    when ``ARAGORA_SECRETS_DIR`` is configured its fixed ``odr-signing-key.pem`` is
+    authoritative: missing, unsafe, or invalid material fails closed before AWS
+    compatibility or unsigned degradation. Environment variables name custody
+    locations, never raw key material.
     """
-    key_file = os.environ.get(SIGNING_KEY_FILE_ENV) if secret_name is None else None
+    if secret_name:
+        return load_private_key_from_pem(
+            _load_pem_secret_from_aws(secret_name, explicitly_named=True)
+        )
+
+    key_file = os.environ.get(SIGNING_KEY_FILE_ENV)
     if key_file:
+        if (os.environ.get("ARAGORA_SECRETS_DIR") or "").strip():
+            # Both custody locations are configured. The explicit per-key file is
+            # the more specific instruction, so it wins; say so, because the
+            # mounted directory is then never consulted for the signing key.
+            logger.warning(
+                "Both %s and ARAGORA_SECRETS_DIR are set; signing with the key file "
+                "and ignoring %s in the mounted directory",
+                SIGNING_KEY_FILE_ENV,
+                MOUNTED_SIGNING_KEY_FILENAME,
+            )
         try:
             if os.name != "posix":
                 return load_private_key_from_pem(Path(key_file).read_bytes())
@@ -318,10 +387,16 @@ def load_signing_key_from_secrets(
                 "expected a readable PKCS#8 Ed25519 private-key PEM"
             ) from None
         raise OdrSigningError(f"ODR signing key file is configured but could not be used; {reason}")
-    explicit = secret_name or os.environ.get(SIGNING_KEY_SECRET_ENV)
+
+    pem = _load_pem_from_mounted_custody()
+    if pem is not None:
+        return load_private_key_from_pem(pem)
+
+    explicit = os.environ.get(SIGNING_KEY_SECRET_ENV)
     name = explicit or DEFAULT_SIGNING_KEY_SECRET
-    pem = _load_pem_secret_from_aws(name, explicitly_named=bool(explicit))
-    return load_private_key_from_pem(pem)
+    return load_private_key_from_pem(
+        _load_pem_secret_from_aws(name, explicitly_named=bool(explicit))
+    )
 
 
 def generate_signing_key() -> Ed25519PrivateKey:
@@ -491,6 +566,7 @@ def _is_signature_entry_compatible(entry: Any) -> bool:
 
 __all__ = [
     "DEFAULT_SIGNING_ISSUER",
+    "MOUNTED_SIGNING_KEY_FILENAME",
     "ODR_SIGNATURE_ALG",
     "ODR_SIGNATURE_ROLES",
     "SIGNING_ISSUER_ENV",
