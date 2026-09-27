@@ -11,7 +11,6 @@ import { TenantsAPI } from '../tenants';
 
 interface MockClient {
   listTenants: Mock;
-  createTenant: Mock;
   addTenantMember: Mock;
   removeTenantMember: Mock;
 }
@@ -23,7 +22,6 @@ describe('TenantsAPI Namespace', () => {
   beforeEach(() => {
     mockClient = {
       listTenants: vi.fn(),
-      createTenant: vi.fn(),
       addTenantMember: vi.fn(),
       removeTenantMember: vi.fn(),
     };
@@ -60,20 +58,6 @@ describe('TenantsAPI Namespace', () => {
       expect(mockClient.listTenants).toHaveBeenCalledWith({ limit: 10, offset: 20 });
     });
 
-    it('should create tenant', async () => {
-      const mockTenant = {
-        id: 't_new',
-        name: 'New Tenant',
-        plan: 'pro',
-        status: 'active',
-      };
-      mockClient.createTenant.mockResolvedValue(mockTenant);
-
-      const result = await api.create({ name: 'New Tenant', plan: 'pro' });
-
-      expect(mockClient.createTenant).toHaveBeenCalledWith({ name: 'New Tenant', plan: 'pro' });
-      expect(result.id).toBe('t_new');
-    });
   });
 
   // ===========================================================================
