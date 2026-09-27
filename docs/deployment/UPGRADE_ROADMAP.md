@@ -309,7 +309,7 @@ python -m aragora.migrations status
 python -m aragora.migrations downgrade
 
 # Rollback to specific migration
-python -m aragora.migrations downgrade --target v20260119000000
+python -m aragora.migrations downgrade --target 20260119000000
 ```
 
 Migration safety features:
