@@ -534,6 +534,12 @@ def test_row6_reads_the_newest_atlas_release_once_per_tag(fake, capsys, root, mo
     assert downloads == ["atlas-2026-09-25"]
     _, r = rows(capsys, "--offline")
     assert r[6]["source"] == str(source) and r[6]["summary_rounds"] == 3
+    # A local v1 build in the repo must not shadow the downloaded release, online or offline.
+    write_atlas(root, [rec(9, "f" * 40, BEFORE)])
+    for argv in ((), ("--offline",)):
+        _, r = rows(capsys, *argv)
+        assert r[6]["source"] == str(source) and r[6]["summary_rounds"] == 3
+    assert downloads == ["atlas-2026-09-25"]
 
 
 def test_markdown_row6_baseline_cell_unchanged_and_informational_ratio(fake, capsys, root):

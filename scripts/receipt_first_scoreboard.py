@@ -257,7 +257,11 @@ def marker_comments() -> tuple[int, set[tuple[int, str]]]:
 
 
 def atlas_jsonl(ctx: Any) -> Path | None:
-    """The in-repo JSONL, else the newest atlas-* release's (downloaded once per tag)."""
+    """The newest atlas-* release's JSONL (downloaded once per tag), else the in-repo copy.
+
+    A downloaded release always beats ``docs/atlas/atlas-v1.jsonl``: that file, when present,
+    is a local v1 build, and metric 6's denominator must come from the newest release.
+    """
     tag = getattr(ctx, "atlas_latest_tag", None)
     if not ctx.offline and tag and not list((ATLAS_DIR / tag).glob("*.jsonl")):
         (ATLAS_DIR / tag).mkdir(parents=True, exist_ok=True)
@@ -269,7 +273,7 @@ def atlas_jsonl(ctx: Any) -> Path | None:
         (d for d in ATLAS_DIR.glob("atlas-*") if d.is_dir() and full(d)), key=os.path.getmtime
     )
     cached = [*(full(ATLAS_DIR / tag) if tag else []), *(full(dirs[-1]) if dirs else [])]
-    candidates = [ctx.root / "docs/atlas/atlas-v1.jsonl", *cached, *full(ATLAS_DIR)]
+    candidates = [*cached, ctx.root / "docs/atlas/atlas-v1.jsonl", *full(ATLAS_DIR)]
     return next((p for p in candidates if p.is_file()), None)
 
 
