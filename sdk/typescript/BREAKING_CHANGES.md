@@ -33,8 +33,8 @@ and is removed rather than held open indefinitely.
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
 | `tasks.update` | `POST /api/v2/tasks/{id}` | No replacement; `tasks.get(taskId)` reads a task and `POST /api/v2/tasks/{id}/approve` approves one |
-| `policies.enable` | `POST /api/policies/{id}/enable` | Not `policies.toggle(policyId)`, which flips the current state. To enable idempotently, send `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}` with body `{ "enabled": true }`; no typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
-| `policies.disable` | `POST /api/policies/{id}/disable` | Not `policies.toggle(policyId)`, which flips the current state. To disable idempotently, send `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}` with body `{ "enabled": false }`; no typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
+| `policies.enable` | `POST /api/policies/{id}/enable` | Not `policies.toggle(policyId)`, which flips the current state. To enable idempotently, send the body `{ "enabled": true }` with `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}`. A toggle request without `enabled` inverts the current state. No typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
+| `policies.disable` | `POST /api/policies/{id}/disable` | Not `policies.toggle(policyId)`, which flips the current state. To disable idempotently, send the body `{ "enabled": false }` with `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}`. A toggle request without `enabled` inverts the current state. No typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
 | `IndexAPI.getIndex` | `GET /api/v1/index/{name}` | `IndexAPI.listIndexes()` and select by name |
 | `IndexAPI.deleteIndex` | `DELETE /api/v1/index/{name}` | No replacement |
 | `debates.addTags` | `POST /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` |
