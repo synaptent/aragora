@@ -282,6 +282,27 @@ class TestKMCheckpoints:
         assert result["additions"] == 100
         assert result["deletions"] == 20
 
+    def test_compare_km_checkpoints(self, client: AragoraClient, mock_request) -> None:
+        """Compare two named KM checkpoints via the POST body contract."""
+        mock_request.return_value = {
+            "checkpoint_a": "backup_2024_01",
+            "checkpoint_b": "backup_2024_02",
+            "additions": 5,
+            "deletions": 2,
+            "modifications": 3,
+        }
+
+        result = client.checkpoints.compare_km_checkpoints("backup_2024_01", "backup_2024_02")
+
+        mock_request.assert_called_once_with(
+            "POST",
+            "/api/v1/km/checkpoints/compare",
+            params=None,
+            json={"checkpoint_a": "backup_2024_01", "checkpoint_b": "backup_2024_02"},
+            headers=None,
+        )
+        assert result["additions"] == 5
+
     def test_restore_km(self, client: AragoraClient, mock_request) -> None:
         """Restore KM checkpoint."""
         mock_request.return_value = {"restored": True}
@@ -382,3 +403,17 @@ class TestAsyncCheckpoints:
             result = await client.checkpoints.compare_km("cp_a", "cp_b")
 
             assert result["additions"] == 50
+
+    @pytest.mark.asyncio
+    async def test_async_compare_km_checkpoints(self, mock_async_request) -> None:
+        """Compare two named KM checkpoints asynchronously via POST body."""
+        mock_async_request.return_value = {
+            "additions": 7,
+            "deletions": 1,
+            "modifications": 2,
+        }
+
+        async with AragoraAsyncClient(base_url="https://api.aragora.ai") as client:
+            result = await client.checkpoints.compare_km_checkpoints("cp_a", "cp_b")
+
+            assert result["additions"] == 7

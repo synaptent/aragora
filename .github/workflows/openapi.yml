@@ -10,10 +10,35 @@ on:
     # Nightly at 1:10 UTC
     - cron: '10 1 * * *'
   workflow_dispatch:
+    inputs:
+      publish_envelope:
+        description: >-
+          Publish and attest the immutable openapi-envelope-<sha> release
+          capsule for this main head (finalization delegation only).
+        type: boolean
+        required: false
+        default: false
+      operator_confirmed_immutable_releases:
+        description: >-
+          Attestation that an admin-capable read of
+          repos/<owner>/<repo>/immutable-releases returned {"enabled":true}
+          immediately before this dispatch. The in-run token cannot see that
+          setting, so the envelope job fails closed (blocked) without this.
+        type: boolean
+        default: false
 
 concurrency:
   group: openapi-sync-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Run/SHA-bound artifact names (FIX-RT-017). `github.sha` is the merge SHA on
+# pull_request events, so the pull-request head SHA must win there for the
+# name to end with the run's head_sha. The attempt is deliberately not part
+# of the name: re-running only a failed dependent job increments the run
+# attempt while the artifact keeps its original name.
+env:
+  OPENAPI_RUN_ARTIFACT: openapi-spec-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+  DRIFT_RUN_ARTIFACT: contract-drift-artifacts-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   scope:
@@ -121,6 +146,9 @@ jobs:
 
       - name: Set up Python 3.11
         id: setup-python
+        # Runner-resilience seam only (VAL-CDG-012 adjudicated): the next step
+        # re-verifies the python toolchain fail-closed (set -euo pipefail +
+        # exit 1), so a masked setup failure cannot reach any validation step.
         continue-on-error: true
         uses: ./.github/actions/setup-python-safe
         with:
@@ -168,10 +196,10 @@ jobs:
           "$PY_BIN" --version
           pip --version || "$PY_BIN" -m pip --version
 
-      - name: Set up Node 20
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.18.0"
 
       - name: Configure npm cache for self-hosted runners
         shell: bash
@@ -326,6 +354,9 @@ jobs:
 
       - name: Generate Live API types (best-effort on PR)
         if: github.event_name == 'pull_request'
+        # PR-lane frontend-types seam only (VAL-CDG-012 adjudicated): not a
+        # route/SDK authority. The strict twin above enforces this generation
+        # fail-closed on every push/schedule/dispatch execution.
         continue-on-error: true
         run: |
           set -o pipefail
@@ -370,6 +401,30 @@ jobs:
 
       - name: Validate handler route coverage
         run: |
+          # pipefail: without it, `| tee` masks the validator's exit code and
+          # the gate silently passes on drift (that happened Jan-Jul 2026).
+          set -o pipefail
+          # Method-aware operation plane (VAL-CDG-011/012): bind the route
+          # authority to this execution's exact resolved commit SHA and
+          # require the plane to echo the same binding back.
+          EXEC_SHA="$(git rev-parse HEAD)"
+          python scripts/validate_openapi_routes.py \
+            --spec docs/api/openapi.json \
+            --ref "${EXEC_SHA}" \
+            --internal-prefixes scripts/baselines/internal_route_prefixes.json \
+            --json > /tmp/route-plane.json
+          python - "${EXEC_SHA}" <<'PY'
+          import json, sys
+          plane = json.load(open("/tmp/route-plane.json"))
+          if plane.get("ref") != sys.argv[1]:
+              raise SystemExit(
+                  f"method-aware plane ref {plane.get('ref')!r} is not this "
+                  f"execution's exact SHA {sys.argv[1]!r}"
+              )
+          print(f"Method-aware plane bound to {sys.argv[1]}")
+          print(f"Served operations: {plane['served_operations_count']}")
+          PY
+          # Baseline-gated coverage: the fail-closed drift ratchet.
           python scripts/validate_openapi_routes.py \
             --spec docs/api/openapi.json \
             --fail-on-missing \
@@ -388,6 +443,9 @@ jobs:
 
       - name: Check for missing operationIds (warning only)
         run: |
+          # pipefail: the operationId count is advisory, but a crash of the
+          # audit producer must fail the step, not vanish into the pipe.
+          set -o pipefail
           python scripts/audit_openapi_docs.py --spec docs/api/openapi_generated.json --json | python -c "
           import json, sys
           data = json.load(sys.stdin)
@@ -413,6 +471,15 @@ jobs:
       - name: Generate contract drift summary
         if: always()
         run: |
+          # Present no verdict without parseable CURRENT-run inputs: the
+          # summary must reflect this execution's route-coverage output and
+          # generated spec. Missing or truncated inputs fail here instead of
+          # summarizing stale state.
+          python - <<'PY'
+          import json
+          json.load(open("/tmp/route-coverage.json"))
+          json.load(open("docs/api/openapi_generated.json"))
+          PY
           python scripts/contract_drift_report.py \
             --json-out /tmp/contract-drift-summary.json \
             --md-out /tmp/contract-drift-summary.md
@@ -420,19 +487,36 @@ jobs:
       - name: Generate contract drift backlog seeds
         if: always()
         run: |
+          # Backlog seeds derive from the CURRENT run's drift summary; never
+          # seed from a prior run's artifacts.
+          python - <<'PY'
+          import json
+          json.load(open("/tmp/contract-drift-summary.json"))
+          PY
           python scripts/generate_contract_drift_backlog.py \
             --markdown-out /tmp/CONTRACT_DRIFT_BACKLOG.md \
             --json-out /tmp/CONTRACT_DRIFT_BACKLOG.json
 
       - name: Run contract matrix tests
         run: |
+          # Authoritative: the pytest exit code IS the verdict. An
+          # unconditional-success guard here masked contract-matrix
+          # failures until the VAL-CDG-012 rearm.
           python -m pip install pytest pytest-asyncio
-          pytest tests/server/openapi/test_contract_matrix.py -v --timeout=60 || true
+          pytest tests/server/openapi/test_contract_matrix.py -v --timeout=60
 
+      - name: Validate release envelope helper (dry run)
+        run: |
+          set -euo pipefail
+          python3 scripts/openapi_release_envelope.py dry-run
+
+      # overwrite: v4 artifacts are immutable per run and the name carries no
+      # attempt, so re-running all jobs would otherwise 409 on the name laid
+      # down by the previous attempt.
       - name: Upload generated spec and SDK types
         uses: actions/upload-artifact@v4
         with:
-          name: openapi-spec
+          name: ${{ env.OPENAPI_RUN_ARTIFACT }}
           path: |
             docs/api/openapi_generated.json
             docs/api/openapi_generated.yaml
@@ -440,18 +524,20 @@ jobs:
             sdk/python/aragora/generated_types.py
             aragora/live/src/types/api.generated.ts
           retention-days: 14
+          overwrite: true
 
       - name: Upload contract drift artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: contract-drift-artifacts
+          name: ${{ env.DRIFT_RUN_ARTIFACT }}
           path: |
             /tmp/contract-drift-summary.json
             /tmp/contract-drift-summary.md
             /tmp/CONTRACT_DRIFT_BACKLOG.json
             /tmp/CONTRACT_DRIFT_BACKLOG.md
           retention-days: 14
+          overwrite: true
 
       - name: Comment on PR (if spec changed)
         if: github.event_name == 'pull_request' && steps.compare.outputs.spec_changed == 'true'
@@ -519,18 +605,22 @@ jobs:
       - name: Download generated spec
         uses: actions/download-artifact@v4
         with:
-          name: openapi-spec
+          name: ${{ env.OPENAPI_RUN_ARTIFACT }}
           path: /tmp/openapi-spec/
 
       - name: Check for changes
         id: changes
         run: |
-          # Copy generated files to compare
-          cp /tmp/openapi-spec/openapi_generated.json docs/api/openapi.json 2>/dev/null || true
-          cp /tmp/openapi-spec/openapi_generated.yaml docs/api/openapi.yaml 2>/dev/null || true
-          cp /tmp/openapi-spec/openapi-types.ts sdk/typescript/src/openapi-types.ts 2>/dev/null || true
-          cp /tmp/openapi-spec/generated_types.py sdk/python/aragora/generated_types.py 2>/dev/null || true
-          cp /tmp/openapi-spec/aragora/live/src/types/api.generated.ts aragora/live/src/types/api.generated.ts 2>/dev/null || true
+          # download-artifact@v4 preserves the upload's repo-root-relative
+          # layout, so the sources sit at their full nested paths. A flat
+          # basename copy matches nothing, and masking that turned the whole
+          # sync push into a silent no-op; a missing source now fails the
+          # job loudly (the dependent envelope job is then skipped).
+          cp /tmp/openapi-spec/docs/api/openapi_generated.json docs/api/openapi.json
+          cp /tmp/openapi-spec/docs/api/openapi_generated.yaml docs/api/openapi.yaml
+          cp /tmp/openapi-spec/sdk/typescript/src/openapi-types.ts sdk/typescript/src/openapi-types.ts
+          cp /tmp/openapi-spec/sdk/python/aragora/generated_types.py sdk/python/aragora/generated_types.py
+          cp /tmp/openapi-spec/aragora/live/src/types/api.generated.ts aragora/live/src/types/api.generated.ts
           git diff --quiet docs/api/ sdk/typescript/src/openapi-types.ts sdk/python/aragora/generated_types.py aragora/live/src/types/api.generated.ts || echo "changes=true" >> $GITHUB_OUTPUT
 
       - name: Commit updated spec
@@ -544,12 +634,13 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
-          # Re-apply the generated spec and SDK type files from temp location
-          cp /tmp/openapi-spec/openapi_generated.json docs/api/openapi.json 2>/dev/null || true
-          cp /tmp/openapi-spec/openapi_generated.yaml docs/api/openapi.yaml 2>/dev/null || true
-          cp /tmp/openapi-spec/openapi-types.ts sdk/typescript/src/openapi-types.ts 2>/dev/null || true
-          cp /tmp/openapi-spec/generated_types.py sdk/python/aragora/generated_types.py 2>/dev/null || true
-          cp /tmp/openapi-spec/aragora/live/src/types/api.generated.ts aragora/live/src/types/api.generated.ts 2>/dev/null || true
+          # Re-apply the generated files from the artifact's nested layout
+          # (same sources as "Check for changes"; no masking).
+          cp /tmp/openapi-spec/docs/api/openapi_generated.json docs/api/openapi.json
+          cp /tmp/openapi-spec/docs/api/openapi_generated.yaml docs/api/openapi.yaml
+          cp /tmp/openapi-spec/sdk/typescript/src/openapi-types.ts sdk/typescript/src/openapi-types.ts
+          cp /tmp/openapi-spec/sdk/python/aragora/generated_types.py sdk/python/aragora/generated_types.py
+          cp /tmp/openapi-spec/aragora/live/src/types/api.generated.ts aragora/live/src/types/api.generated.ts
 
           # Check if there are actual changes
           if git diff --quiet docs/api/ sdk/typescript/src/openapi-types.ts sdk/python/aragora/generated_types.py aragora/live/src/types/api.generated.ts 2>/dev/null; then
@@ -570,6 +661,172 @@ jobs:
             echo "::warning::Could not auto-push spec update (branch protection). The generated spec is available as a workflow artifact."
           fi
 
+  # FIX-RT-017 publication path: expiring run artifacts are authoritative only
+  # through this immutable, digest-bound release capsule. Dispatch-gated and
+  # default-off; the finalization delegation dispatches it deliberately at the
+  # exact main head it binds.
+  envelope:
+    name: Publish Release Envelope (dispatch only)
+    runs-on: ubuntu-latest
+    # sync runs on the same dispatch+main events and can push a spec-drift
+    # commit to main; needing it serializes any such push BEFORE preflight's
+    # main-still-at-bound-head check, so the movement is the free exit-3
+    # restart instead of a post-publish supersession record.
+    needs: [generate-run, sync]
+    timeout-minutes: 15
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_envelope == true && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      # Preflight/verify re-query the workflow, run, and run-level artifacts;
+      # an explicit permissions block zeroes unlisted scopes, so without this
+      # read every dispatch would 403 before publication.
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      # The workflow token reads admin-gated settings behind HTTP 404, so
+      # in-run report-mode preflight cannot distinguish "immutable releases
+      # disabled" from "hidden from this token" and a disabled setting would
+      # surface only post-publish. This gate machine-checks the operator's
+      # admin-capable {"enabled":true} pre-dispatch read instead of weakening
+      # that degradation: without an explicit true, nothing is downloaded,
+      # attested, or published.
+      - name: Require operator immutable-releases attestation
+        env:
+          OPERATOR_CONFIRMED: ${{ inputs.operator_confirmed_immutable_releases }}
+        run: |
+          set -euo pipefail
+          if [[ "$OPERATOR_CONFIRMED" != "true" ]]; then
+            echo "::error::blocked: operator_confirmed_immutable_releases is not true. Re-run the admin-capable immutable-releases enabled-check and re-dispatch with the attestation input set."
+            exit 2
+          fi
+          echo "Operator immutable-releases attestation present."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git reset --hard || true
+            git clean -ffdx || true
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
+            git checkout -f "${GITHUB_SHA:-HEAD}" || true
+            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+              git reset --hard FETCH_HEAD
+            else
+              git reset --hard HEAD
+            fi
+            git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - name: Download run-level spec artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.OPENAPI_RUN_ARTIFACT }}
+          path: /tmp/openapi-envelope/payload/
+
+      - name: Build deterministic release envelope
+        run: |
+          set -euo pipefail
+          python3 scripts/openapi_release_envelope.py build \
+            --repository "$GITHUB_REPOSITORY" \
+            --head-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --artifact-name "$OPENAPI_RUN_ARTIFACT" \
+            --payload-dir /tmp/openapi-envelope/payload \
+            --output-dir /tmp/openapi-envelope/assets
+          (cd /tmp/openapi-envelope/assets && sha256sum --check --strict checksums.txt)
+
+      # Attestation precedes publication: the only irreversible step
+      # (creating the immutable release) runs last, after the exact local
+      # bytes are attested and preflight-verified, so a failure never
+      # strands a half-published capsule.
+      - name: Attest the envelope assets
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: /tmp/openapi-envelope/assets/*
+
+      - name: Preflight verify before publication
+        run: |
+          set -euo pipefail
+          gh --version
+          python3 scripts/openapi_release_envelope.py preflight \
+            --repository "$GITHUB_REPOSITORY" \
+            --head-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --artifact-name "$OPENAPI_RUN_ARTIFACT" \
+            --assets-dir /tmp/openapi-envelope/assets \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/openapi.yml" \
+            --admin-reads report
+
+      - name: Publish immutable release
+        run: |
+          set -euo pipefail
+          tag="openapi-envelope-$GITHUB_SHA"
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$tag" \
+            --notes "Immutable OpenAPI contract envelope for $GITHUB_SHA (run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT)." \
+            /tmp/openapi-envelope/assets/*
+
+      - name: Verify release, assets, attestation, and rule suite
+        run: |
+          set -euo pipefail
+          verify_attempt=1
+          verify_delays=(5 10 20)
+          while true; do
+            set +e
+            python3 scripts/openapi_release_envelope.py verify \
+              --repository "$GITHUB_REPOSITORY" \
+              --head-sha "$GITHUB_SHA" \
+              --run-id "$GITHUB_RUN_ID" \
+              --run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --artifact-name "$OPENAPI_RUN_ARTIFACT" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/openapi.yml" \
+              --admin-reads report
+            verify_rc=$?
+            set -e
+
+            if [[ "$verify_rc" -eq 0 ]]; then
+              break
+            fi
+            if [[ "$verify_rc" -ne 2 ]]; then
+              exit "$verify_rc"
+            fi
+            if [[ "$verify_attempt" -gt "${#verify_delays[@]}" ]]; then
+              echo "::error::post-publish verification remained blocked after $verify_attempt attempts; use the original-identity recovery runbook."
+              exit "$verify_rc"
+            fi
+
+            verify_delay="${verify_delays[$((verify_attempt - 1))]}"
+            echo "::warning::post-publish verification attempt $verify_attempt blocked; retrying the same immutable capsule in ${verify_delay}s."
+            sleep "$verify_delay"
+            verify_attempt=$((verify_attempt + 1))
+          done
+
   generate:
     name: Generate & Validate
     needs: [scope, generate-run]
@@ -578,9 +835,33 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Evaluate OpenAPI result
+        env:
+          CLASSIFIER_RESULT: ${{ needs.scope.result }}
+          WORKER_RESULT: ${{ needs.generate-run.result }}
+          IN_SCOPE: ${{ needs.scope.outputs.run_openapi }}
         run: |
-          if [[ "${{ needs.generate-run.result }}" == "failure" ]]; then
-            echo "::error::OpenAPI generate & validate failed"
+          set -euo pipefail
+          if [[ "$CLASSIFIER_RESULT" != "success" ]]; then
+            echo "::error::OpenAPI scope classification concluded '$CLASSIFIER_RESULT'; its scope verdict cannot be trusted. Failing closed."
             exit 1
           fi
-          echo "OpenAPI passed (or skipped — no relevant changes)"
+          case "$IN_SCOPE" in
+            true)
+              if [[ "$WORKER_RESULT" != "success" ]]; then
+                echo "::error::OpenAPI generate & validate concluded '$WORKER_RESULT' (expected 'success'). Failing closed."
+                exit 1
+              fi
+              echo "OpenAPI generate & validate passed."
+              ;;
+            false)
+              if [[ "$WORKER_RESULT" != "skipped" ]]; then
+                echo "::error::OpenAPI was out of scope but concluded '$WORKER_RESULT'. Failing closed."
+                exit 1
+              fi
+              echo "OpenAPI not required — no relevant changes."
+              ;;
+            *)
+              echo "::error::OpenAPI scope classification produced invalid IN_SCOPE value '$IN_SCOPE' (expected exactly 'true' or 'false'). Failing closed."
+              exit 1
+              ;;
+          esac

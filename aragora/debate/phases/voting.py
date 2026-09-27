@@ -250,7 +250,7 @@ class VotingPhase:
                         agent=vote.agent,
                         choice=reverse_map[vote.choice],
                         reasoning=vote.reasoning,
-                        confidence=getattr(vote, "confidence", None),
+                        confidence=vote.confidence,
                     )
                 )
             else:
@@ -340,7 +340,7 @@ class VotingPhase:
         self,
         votes: list[Vote],
         weight_calculator: VoteWeightCalculator | None = None,
-        user_votes: list[dict[str, Any] | None] = None,
+        user_votes: list[dict[str, Any] | None] | None = None,
         user_vote_weight: float = 0.5,
         user_vote_multiplier: Callable[[int, Any], float] | None = None,
     ) -> WeightedVoteResult:
@@ -391,6 +391,8 @@ class VotingPhase:
         # Add user votes if provided
         if user_votes:
             for user_vote in user_votes:
+                if user_vote is None:
+                    continue
                 choice = user_vote.get("choice", "")
                 if choice:
                     canonical = result.choice_mapping.get(choice, choice)

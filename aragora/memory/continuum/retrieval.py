@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from aragora.memory.tier_manager import MemoryTier
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
@@ -19,6 +19,8 @@ from aragora.utils.json_helpers import safe_json_loads
 from .entry import AwaitableList, ContinuumMemoryEntry
 
 if TYPE_CHECKING:
+    from aragora.memory.hybrid_search import HybridMemorySearch
+
     from .core import ContinuumMemory
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ class RetrievalMixin:
     """Mixin providing retrieval operations for ContinuumMemory."""
 
     _GET_MANY_MAX_IDS: int = 200
+    _hybrid_search: HybridMemorySearch | None
 
     def retrieve(
         self: ContinuumMemory,
@@ -482,7 +485,7 @@ class RetrievalMixin:
         if tiers:
             tier_strings = [t.value if isinstance(t, MemoryTier) else str(t) for t in tiers]
 
-        results = await self._hybrid_search.search(
+        results = await cast(Any, self._hybrid_search).search(
             query=query,
             limit=limit,
             tiers=tier_strings,

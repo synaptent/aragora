@@ -271,11 +271,13 @@ def test_build_crux_finder_result_skips_counterfactuals_when_disabled(
 @pytest.mark.asyncio
 async def test_consensus_phase_dispatches_to_crux_finder(
     contested_network: BeliefNetwork,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`ConsensusPhase._execute_consensus("crux_finder")` must run the
     crux-finder handler end-to-end and attach a ConsensusProof + the
     formal_verification["crux_finder"] summary to `ctx.result`.
     """
+    monkeypatch.setenv("ARAGORA_CRUX_FINDER_ENABLED", "1")
     from types import SimpleNamespace
     from aragora.debate.phases.consensus_phase import ConsensusPhase
 
@@ -317,8 +319,11 @@ async def test_consensus_phase_dispatches_to_crux_finder(
 
 
 @pytest.mark.asyncio
-async def test_consensus_phase_records_crux_skip_metadata_without_belief_network() -> None:
+async def test_consensus_phase_records_crux_skip_metadata_without_belief_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The CLI needs a machine-readable skip reason for operator-facing errors."""
+    monkeypatch.setenv("ARAGORA_CRUX_FINDER_ENABLED", "1")
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
@@ -357,8 +362,11 @@ async def test_consensus_phase_records_crux_skip_metadata_without_belief_network
 
 
 @pytest.mark.asyncio
-async def test_consensus_phase_seeds_current_debate_claims_for_crux_finder() -> None:
+async def test_consensus_phase_seeds_current_debate_claims_for_crux_finder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A real contested debate must not sign an empty crux map."""
+    monkeypatch.setenv("ARAGORA_CRUX_FINDER_ENABLED", "1")
     from types import SimpleNamespace
 
     from aragora.core import Message

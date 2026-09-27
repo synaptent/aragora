@@ -1,0 +1,48 @@
+{
+  "gates": {
+    "clean_calls": {
+      "met": false,
+      "observed": 4,
+      "required": 100
+    },
+    "credential_errors": {
+      "met": true,
+      "observed": 0,
+      "required_maximum": 0
+    },
+    "family_identity_errors": {
+      "met": true,
+      "observed": 0,
+      "required_maximum": 0
+    },
+    "provider_families": {
+      "families": [
+        "gemini",
+        "grok",
+        "kimi",
+        "openai"
+      ],
+      "met": true,
+      "observed": 4,
+      "required": 3
+    },
+    "seven_day_span": {
+      "met": false,
+      "observed": 0.000329,
+      "required": 7
+    },
+    "shadow_reviews": {
+      "met": false,
+      "observed": 0,
+      "required": 20
+    }
+  },
+  "generated_at": "2026-07-23T16:45:18.214124Z",
+  "issue": 9409,
+  "ready": false,
+  "schema_version": "aragora.vibeproxy-burnin-proof.v1",
+  "source_jsonl": "docs/status/generated/vibeproxy_burnin/cohorts/20260723T164410Z/calls.jsonl",
+  "source_last_record_hash": "c15e0ccca2bc1114b07d03e23147d11ccd194d8fd8b5a2d687fbdfb91639c3ae",
+  "total_records": 4,
+  "transport_prerequisite_pr": 9483
+}

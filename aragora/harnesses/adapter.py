@@ -17,6 +17,7 @@ from aragora.harnesses.base import (
 
 if TYPE_CHECKING:
     from aragora.audit.document_auditor import AuditFinding
+    from aragora.debate.similarity.backends import SimilarityBackend
     from aragora.implement.types import TaskResult
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class HarnessResultAdapter:
 
     def __init__(self, config: AdapterConfig | None = None):
         self.config = config or AdapterConfig()
-        self._similarity_backend = None
+        self._similarity_backend: SimilarityBackend | None = None
 
     def adapt(self, result: HarnessResult) -> list[AuditFinding]:
         """

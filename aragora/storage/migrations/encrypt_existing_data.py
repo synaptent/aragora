@@ -140,7 +140,7 @@ async def migrate_sync_store(
     Returns:
         MigrationResult with counts and any errors
     """
-    from aragora.connectors.enterprise.sync_store import (
+    from aragora.storage.sync_store import (
         SyncStore,
         CREDENTIAL_KEYWORDS,
     )
@@ -177,8 +177,12 @@ async def migrate_sync_store(
                         logger.info("[DRY RUN] Would migrate connector: %s", connector_id)
                     else:
                         # Re-save triggers encryption
-                        # call-arg: save_connector accepts dynamic kwargs for encryption
-                        await store.save_connector(connector_id, connector)  # type: ignore[call-arg,arg-type]
+                        await store.save_connector(
+                            connector.id,
+                            connector.connector_type,
+                            connector.name,
+                            connector.config,
+                        )
                         logger.info("Migrated connector: %s", connector_id)
                     result.migrated += 1
                     record_migration_record("sync_store", "migrated")

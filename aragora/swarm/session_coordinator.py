@@ -15,7 +15,7 @@ side worktrees still share the same coordination state.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aragora.coordination import (
     ClaimManager,
@@ -180,7 +180,7 @@ def list_findings(
                 "kind": event_kind,
                 "message": str(payload.get("message") or ""),
                 "pr": event_pr,
-                "scope": list(payload.get("scope") or []),
+                "scope": list(cast(Any, payload.get("scope") or [])),
             }
         )
         if len(findings) >= limit:

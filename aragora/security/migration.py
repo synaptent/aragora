@@ -22,6 +22,24 @@ from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
+MigrationAuditProvider = Callable[..., Any]
+
+_migration_audit_provider: MigrationAuditProvider | None = None
+
+
+def register_migration_audit_provider(provider: MigrationAuditProvider | None) -> None:
+    """Register the higher-layer security audit provider."""
+    global _migration_audit_provider
+    _migration_audit_provider = provider
+
+
+def _audit_security(**kwargs: Any) -> Any:
+    """Emit a security audit event through the registered provider."""
+    if _migration_audit_provider is None:
+        logger.warning("Migration audit provider not registered; security event was not emitted")
+        return None
+    return _migration_audit_provider(**kwargs)
+
 
 @dataclass
 class MigrationResult:
@@ -321,42 +339,51 @@ def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
 
 def migrate_sync_store(dry_run: bool = False) -> MigrationResult:
     """Migrate connector sync store secrets."""
+    result = MigrationResult(store_name="sync_store")
+    sensitive_fields = [
+        "api_key",
+        "api_secret",
+        "token",
+        "password",
+        "auth_token",
+        "secret",
+    ]
+
     try:
-        from aragora.connectors.enterprise.sync_store import get_sync_store
+        from aragora.storage.sync_store import get_sync_store
+        from aragora.utils.async_utils import run_async
 
-        store = get_sync_store()
-        migrator = EncryptionMigrator(dry_run=dry_run)
+        store = run_async(get_sync_store())
+        connectors = run_async(store.list_connectors())
+        result.total_records = len(connectors)
 
-        # Connector credentials
-        sensitive_fields = [
-            "api_key",
-            "api_secret",
-            "token",
-            "password",
-            "auth_token",
-            "secret",
-        ]
+        for connector in connectors:
+            try:
+                if not needs_migration(connector.config, sensitive_fields):
+                    result.already_encrypted += 1
+                    continue
 
-        def list_all():
-            if hasattr(store, "list_all"):
-                return list(store.list_all())
-            return []
-
-        def save(job_id, record):
-            if hasattr(store, "save"):
-                return store.save(record)
-            return False
-
-        return migrator.migrate_store(
-            store_name="sync_store",
-            list_fn=list_all,
-            save_fn=save,
-            sensitive_fields=sensitive_fields,
-            id_field="job_id",
-        )
-    except ImportError as e:
+                if not dry_run:
+                    run_async(
+                        store.save_connector(
+                            connector.id,
+                            connector.connector_type,
+                            connector.name,
+                            connector.config,
+                        )
+                    )
+                result.migrated_records += 1
+            except (KeyError, ValueError, TypeError, RuntimeError, OSError) as e:
+                result.failed_records += 1
+                result.errors.append(f"Error migrating record: {connector.id}")
+                logger.warning("Failed to migrate sync connector %s: %s", connector.id, e)
+    except (ImportError, RuntimeError, ValueError, TypeError, OSError) as e:
         logger.warning("Sync store not available: %s", e)
-        return MigrationResult(store_name="sync_store", errors=["Sync store not available"])
+        result.errors.append("Sync store not available")
+
+    result.completed_at = datetime.now(timezone.utc)
+    result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
+    return result
 
 
 @dataclass
@@ -507,6 +534,7 @@ def rotate_and_reencrypt_store(
     sensitive_fields: list[str],
     id_field: str = "id",
     encryption_service: Any | None = None,
+    force_resave: bool = False,
 ) -> MigrationResult:
     """
     Re-encrypt all records in a store with the current active key.
@@ -521,6 +549,7 @@ def rotate_and_reencrypt_store(
         sensitive_fields: Fields that are encrypted
         id_field: Name of the ID field in records
         encryption_service: Encryption service (uses global if not provided)
+        force_resave: Re-save plaintext records so the store encrypts them with the active key
 
     Returns:
         MigrationResult with statistics
@@ -546,6 +575,16 @@ def rotate_and_reencrypt_store(
             try:
                 # Check if record has encrypted fields
                 has_encrypted = any(is_field_encrypted(record.get(f)) for f in sensitive_fields)
+
+                if force_resave:
+                    if has_encrypted:
+                        raise RuntimeError("Store returned an encrypted record")
+                    if save_fn(record_id, record):
+                        result.migrated_records += 1
+                    else:
+                        result.failed_records += 1
+                        result.errors.append(f"Failed to save record: {record_id}")
+                    continue
 
                 if not has_encrypted:
                     # Record has no encrypted fields, skip
@@ -596,7 +635,7 @@ def rotate_and_reencrypt_store(
 
     except (TypeError, RuntimeError, OSError, ValueError) as e:
         result.errors.append("Re-encryption failed due to an internal error")
-        result.failed_records = result.total_records
+        result.failed_records = max(1, result.total_records)
         logger.error("Key rotation re-encryption failed for %s: %s", store_name, e)
 
     return result
@@ -629,8 +668,9 @@ def rotate_encryption_key(
     service = get_encryption_service()
 
     # Get current key info
-    old_key = service._keys.get(service._active_key_id)
-    old_key_id = service._active_key_id or "default"
+    active_key_id = service._active_key_id
+    old_key = service._keys.get(active_key_id) if active_key_id else None
+    old_key_id = active_key_id or "default"
     old_version = old_key.version if old_key else 0
 
     result = KeyRotationResult(
@@ -648,9 +688,7 @@ def rotate_encryption_key(
             old_version + 1,
         )
         # Audit log would go here
-        from aragora.audit.unified import audit_security
-
-        audit_security(
+        _audit_security(
             event_type="key_rotation",
             actor_id="system",
             reason="dry_run_key_rotation",
@@ -669,9 +707,7 @@ def rotate_encryption_key(
 
         # Audit log key rotation
         try:
-            from aragora.audit.unified import audit_security
-
-            audit_security(
+            _audit_security(
                 event_type="key_rotation",
                 actor_id="system",
                 old_version=old_version,
@@ -693,10 +729,12 @@ def rotate_encryption_key(
             if not config_fn:
                 logger.warning("Unknown store for key rotation: %s", store_name)
                 continue
-
             try:
                 config = config_fn()
                 if config is None:
+                    if store_name == "sync":
+                        result.failed_records += 1
+                        result.errors.append("Store sync re-encryption failed")
                     continue
 
                 store_result = rotate_and_reencrypt_store(
@@ -706,6 +744,7 @@ def rotate_encryption_key(
                     sensitive_fields=config["sensitive_fields"],
                     id_field=config["id_field"],
                     encryption_service=service,
+                    force_resave=config.get("force_resave", False),
                 )
 
                 result.stores_processed += 1
@@ -715,6 +754,8 @@ def rotate_encryption_key(
 
             except (ImportError, RuntimeError, ValueError, TypeError, OSError) as e:
                 result.errors.append(f"Store {store_name} re-encryption failed")
+                if store_name == "sync":
+                    result.failed_records += 1
                 logger.error("Key rotation failed for store %s: %s", store_name, e)
 
         result.completed_at = datetime.now(timezone.utc)
@@ -782,13 +823,37 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
 def _get_sync_store_config() -> dict[str, Any] | None:
     """Get configuration for sync store re-encryption."""
     try:
-        from aragora.connectors.enterprise.sync_store import get_sync_store
+        from aragora.storage.sync_store import get_sync_store
+        from aragora.utils.async_utils import run_async
 
-        store = get_sync_store()
+        store = run_async(get_sync_store())
+        connectors_by_id: dict[str, Any] = {}
+
+        def list_connectors() -> list[dict[str, Any]]:
+            connectors = run_async(store.list_connectors())
+            connectors_by_id.clear()
+            records: list[dict[str, Any]] = []
+            for connector in connectors:
+                connectors_by_id[connector.id] = connector
+                records.append({**connector.config, "__sync_connector_id__": connector.id})
+            return records
+
+        def save_connector(connector_id: str, record: dict[str, Any]) -> bool:
+            connector = connectors_by_id[connector_id]
+            config = {key: value for key, value in record.items() if key != "__sync_connector_id__"}
+            run_async(
+                store.save_connector(
+                    connector.id,
+                    connector.connector_type,
+                    connector.name,
+                    config,
+                )
+            )
+            return True
 
         return {
-            "list_fn": lambda: list(store.list_all()) if hasattr(store, "list_all") else [],
-            "save_fn": lambda id, record: store.save(record) if hasattr(store, "save") else False,
+            "list_fn": list_connectors,
+            "save_fn": save_connector,
             "sensitive_fields": [
                 "api_key",
                 "api_secret",
@@ -797,7 +862,8 @@ def _get_sync_store_config() -> dict[str, Any] | None:
                 "auth_token",
                 "secret",
             ],
-            "id_field": "job_id",
+            "id_field": "__sync_connector_id__",
+            "force_resave": True,
         }
     except ImportError:
         return None
@@ -808,6 +874,7 @@ __all__ = [
     "MigrationResult",
     "KeyRotationResult",
     "StartupMigrationConfig",
+    "register_migration_audit_provider",
     "is_field_encrypted",
     "needs_migration",
     "migrate_integration_store",

@@ -1,0 +1,83 @@
+name: Contract Drift Trusted Bootstrap
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - ".github/workflows/contract-drift-trusted-bootstrap.yml"
+      - ".github/workflows/contract-drift-trusted-bootstrap-manifest.json"
+      - ".github/workflows/contract_drift_trusted_bootstrap.py"
+      - ".github/workflows/contract_drift_trusted_launcher.py"
+      - ".github/workflows/contract-drift-governance.yml"
+      - "scripts/check_contract_drift_ratchet.py"
+      - "scripts/generate_contract_drift_inventory.py"
+      - "scripts/baselines/contract_drift_inventory.json"
+      - "scripts/baselines/contract_drift_program.json"
+permissions:
+  contents: read
+concurrency:
+  group: contract-drift-trusted-bootstrap-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  trusted-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - env:
+          ANALYZER_SOURCE_SHA: 1722a6145c0c23a2c1c0d20be5ed1329bb01d666
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$ANALYZER_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$BASE_SHA" != "$HEAD_SHA"
+          git init -q "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" remote add origin "https://github.com/$REPOSITORY.git"
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
+            "$BASE_SHA" "$HEAD_SHA" "$ANALYZER_SOURCE_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse "$ANALYZER_SOURCE_SHA^{commit}")" \
+            = "$ANALYZER_SOURCE_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse "$BASE_SHA^{commit}")" = "$BASE_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse "$HEAD_SHA^{commit}")" = "$HEAD_SHA"
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BOOTSTRAP_PATH: .github/workflows/contract_drift_trusted_bootstrap.py
+          LAUNCHER_PATH: .github/workflows/contract_drift_trusted_launcher.py
+          MANIFEST_PATH: .github/workflows/contract-drift-trusted-bootstrap-manifest.json
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/.github/workflows"
+          for path in "$BOOTSTRAP_PATH" "$LAUNCHER_PATH" "$MANIFEST_PATH"; do
+            git -C "$GITHUB_WORKSPACE" show "$BASE_SHA:$path" > "$GITHUB_WORKSPACE/$path"
+            test "$(git -C "$GITHUB_WORKSPACE" show "$BASE_SHA:$path" | sha256sum | cut -d' ' -f1)" \
+              = "$(sha256sum "$GITHUB_WORKSPACE/$path" | cut -d' ' -f1)"
+          done
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python -I -S -B .github/workflows/contract_drift_trusted_bootstrap.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --event "$GITHUB_EVENT_PATH" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --output-dir "$RUNNER_TEMP/contract-drift-bootstrap/$HEAD_SHA" \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --run-id "$GITHUB_RUN_ID" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF"
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: contract-drift-trusted-bootstrap-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/contract-drift-bootstrap/${{ github.event.pull_request.head.sha }}
+          if-no-files-found: "error"
+          retention-days: 14

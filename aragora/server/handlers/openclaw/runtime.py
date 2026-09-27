@@ -18,7 +18,7 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeAlias
 
 from aragora.gateway.openclaw_policy import (
     ActionRequest,
@@ -79,7 +79,7 @@ class NormalizedAction:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-RuntimeApproval = ApprovalRequest
+RuntimeApproval: TypeAlias = ApprovalRequest
 
 
 @dataclass
@@ -109,13 +109,16 @@ class OpenClawExecutionRuntime:
     def dispatch_action(self, session: Session, action: Action) -> RuntimeDispatchResult:
         """Evaluate policy and execute immediately when allowed."""
         normalized, error = self._normalize_action(action)
-        if error is not None:
+        if error is not None or normalized is None:
+            failure_reason = error or _bounded_failure_reason(
+                "action_normalization_failed", str(action.action_type)
+            )
             return RuntimeDispatchResult(
                 action_id=action.id,
                 status=ActionStatus.FAILED,
-                error=error,
+                error=failure_reason,
                 audit_result="failed",
-                audit_details={"failure_reason": error},
+                audit_details={"failure_reason": failure_reason},
             )
 
         policy_result = self._policy.evaluate(
@@ -229,8 +232,8 @@ class OpenClawExecutionRuntime:
         else:
             store = _get_store()
             action = store.get_action(approval.action_id)
-            session = store.get_session(approval.session_id)
-            if action is None or session is None:
+            stored_session = store.get_session(approval.session_id)
+            if action is None or stored_session is None:
                 error = _bounded_failure_reason("approval_context_missing", approval_id)
                 return RuntimeDispatchResult(
                     action_id=approval.action_id,
@@ -239,15 +242,23 @@ class OpenClawExecutionRuntime:
                     audit_result="failed",
                     audit_details={"failure_reason": error, "approval_id": approval_id},
                 )
-            normalized, error = self._normalize_action(action)
-            if error is not None or normalized is None:
+            normalized_action, normalization_error = self._normalize_action(action)
+            if normalization_error is not None or normalized_action is None:
+                failure_reason = normalization_error or _bounded_failure_reason(
+                    "action_normalization_failed", str(action.action_type)
+                )
                 return RuntimeDispatchResult(
                     action_id=approval.action_id,
                     status=ActionStatus.FAILED,
-                    error=error,
+                    error=failure_reason,
                     audit_result="failed",
-                    audit_details={"failure_reason": error, "approval_id": approval_id},
+                    audit_details={
+                        "failure_reason": failure_reason,
+                        "approval_id": approval_id,
+                    },
                 )
+            normalized = normalized_action
+            session = stored_session
 
         updated = _get_store().update_approval_status(
             approval_id,

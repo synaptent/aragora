@@ -30,11 +30,11 @@
 # module_tiers cross-check (VAL-P0-006)
 # ----------------------------------------------------------------------------
 # Every layer assignment above was cross-checked against aragora/module_tiers.yaml
-# on 2026-06-12. Outcome: 0 discrepancies. All 47 layered names resolve to a real
+# on 2026-06-12. Outcome: 0 discrepancies. All 48 layered names resolve to a real
 # top-level module in the local source tree; the 44 that are directory packages
-# all appear in module_tiers.yaml with a consistent tier, and the 3 foundation
-# primitives that are single-file modules (core_types, exceptions, errors) are
-# real importable modules that module_tiers.yaml does not track because it
+# all appear in module_tiers.yaml with a consistent tier, and the 4 foundation
+# primitives that are single-file modules (api_errors, core_types, exceptions,
+# errors) are real importable modules that module_tiers.yaml does not track because it
 # enumerates package directories only (not a discrepancy). The remaining ~94
 # module_tiers packages are intentionally left unlayered here: architecture.md
 # section 2 lists representative members per layer (trailing "..."), and the full
@@ -50,9 +50,16 @@ name = Aragora layers: interface > application > domain > infrastructure > found
 type = layers
 containers =
     aragora
+ignore_imports =
+    # Authorized P4a exception seam: preserve the VAL-P4A-005 lazy fallback; sanctioned by VAL-P4B-004(b)/(c).
+    aragora.exceptions -> aragora.connectors.exceptions
+    # Authorized P4a exception seam: preserve the VAL-P4A-005 lazy fallback; sanctioned by VAL-P4B-004(b)/(c).
+    aragora.exceptions -> aragora.server.handlers.exceptions
+    # Authorized one-release compatibility shim; TODO remove when aragora.utils.redis_cache is retired.
+    aragora.utils.redis_cache -> aragora.caching.redis
 layers =
     server : cli : mcp : gateway : bots : channels : integrations : connectors
     workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate
     debate : agents : memory : knowledge : ranking : reasoning : evidence : evaluation : explainability : learning : ml
     storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations
-    config : core_types : exceptions : errors : utils : protocols : types
+    api_errors : config : core_types : exceptions : errors : utils : protocols : types

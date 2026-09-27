@@ -102,7 +102,7 @@ def _build_server_context(nomic_dir: Path | None = None) -> dict[str, Any]:
 
     This provides the same context as the legacy server for handler compatibility.
     """
-    from aragora.server.storage import DebateStorage
+    from aragora.storage.debate_storage import DebateStorage
 
     ctx: dict[str, Any] = {}
 
@@ -169,8 +169,10 @@ def _build_server_context(nomic_dir: Path | None = None) -> dict[str, Any]:
     try:
         from aragora.memory.continuum import get_continuum_memory
 
-        db_path = nomic_dir / "continuum_memory.db" if nomic_dir else None
-        ctx["continuum_memory"] = get_continuum_memory(db_path=str(db_path) if db_path else None)
+        continuum_db_path = nomic_dir / "continuum_memory.db" if nomic_dir else None
+        ctx["continuum_memory"] = get_continuum_memory(
+            db_path=str(continuum_db_path) if continuum_db_path else None
+        )
     except (ImportError, OSError, RuntimeError, ValueError) as e:
         logger.debug("ContinuumMemory not available: %s", e)
         ctx["continuum_memory"] = None
@@ -227,6 +229,10 @@ async def lifespan(app: FastAPI):
     Initializes server context on startup and cleans up on shutdown.
     """
     logger.info("FastAPI server starting up...")
+
+    from aragora.server.startup.event_subscribers import register_webhook_store
+
+    register_webhook_store()
 
     # Initialize shared PostgreSQL pool on the running event loop before
     # any stores attempt backend selection.

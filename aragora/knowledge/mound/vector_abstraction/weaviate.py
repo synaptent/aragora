@@ -11,6 +11,7 @@ Requirements:
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any, cast
 from collections.abc import Sequence
 
@@ -25,10 +26,14 @@ logger = logging.getLogger(__name__)
 
 # Check for weaviate library
 try:
-    import weaviate
-    from weaviate.classes.config import Configure, DataType, Property
-    from weaviate.classes.data import DataObject  # noqa: F401
-    from weaviate.classes.query import Filter, MetadataQuery
+    # weaviate's package __init__ calls a bare warnings.simplefilter("default")
+    # (and its transitive imports register more filters), globally rewriting the
+    # ambient warning policy; the scoped guard confines that to this import.
+    with warnings.catch_warnings():
+        import weaviate
+        from weaviate.classes.config import Configure, DataType, Property
+        from weaviate.classes.data import DataObject  # noqa: F401
+        from weaviate.classes.query import Filter, MetadataQuery
 
     WEAVIATE_AVAILABLE = True
 except ImportError:
@@ -55,6 +60,10 @@ class WeaviateVectorStore(BaseVectorStore):
         store = WeaviateVectorStore(config)
         await store.connect()
     """
+
+    # Initialized by BaseVectorStore.__init__; annotated here because the
+    # changed-file mypy hook runs with --follow-imports=skip and cannot see it.
+    _connected: bool
 
     def __init__(self, config: VectorStoreConfig):
         """Initialize Weaviate store."""
@@ -257,7 +266,9 @@ class WeaviateVectorStore(BaseVectorStore):
                 )
                 ids.append(item_id)
 
-        return ids
+        # Items without an explicit "id" append None here; preserved as-is, the
+        # cast only records the declared contract.
+        return cast("list[str]", ids)
 
     async def delete(
         self,

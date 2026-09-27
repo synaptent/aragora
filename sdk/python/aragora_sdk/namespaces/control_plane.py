@@ -293,7 +293,9 @@ class ControlPlaneAPI:
 
     def update_schedule(self, schedule_id: str, **kwargs: Any) -> dict[str, Any]:
         """Update a control plane task schedule."""
-        return self._client.request("PUT", f"/api/control-plane/schedules/{schedule_id}", json=kwargs)
+        return self._client.request(
+            "PUT", f"/api/control-plane/schedules/{schedule_id}", json=kwargs
+        )
 
     def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
         """Delete a control plane task schedule."""
@@ -527,7 +529,9 @@ class AsyncControlPlaneAPI:
 
     async def update_schedule(self, schedule_id: str, **kwargs: Any) -> dict[str, Any]:
         """Update a control plane task schedule."""
-        return await self._client.request("PUT", f"/api/control-plane/schedules/{schedule_id}", json=kwargs)
+        return await self._client.request(
+            "PUT", f"/api/control-plane/schedules/{schedule_id}", json=kwargs
+        )
 
     async def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
         """Delete a control plane task schedule."""

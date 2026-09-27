@@ -40,11 +40,14 @@ logger = logging.getLogger(__name__)
 # Model capability tiers for downgrade analysis
 MODEL_TIERS: dict[str, dict[str, Any]] = {
     # Tier 1: Most capable (complex reasoning, coding)
+    "claude-fable-5": {"tier": 1, "provider": "anthropic", "quality": 1.0},
+    "claude-opus-5": {"tier": 1, "provider": "anthropic", "quality": 1.0},
     "claude-opus-4-8": {"tier": 1, "provider": "anthropic", "quality": 1.0},
     "claude-opus-4-7": {"tier": 1, "provider": "anthropic", "quality": 1.0},
     "claude-opus-4.8": {"tier": 1, "provider": "anthropic", "quality": 1.0},
     "claude-opus-4.7": {"tier": 1, "provider": "anthropic", "quality": 1.0},
     "claude-opus-4": {"tier": 1, "provider": "anthropic", "quality": 1.0},
+    "gpt-5.6-sol": {"tier": 1, "provider": "openai", "quality": 0.99},
     "gpt-5.5": {"tier": 1, "provider": "openai", "quality": 0.98},
     "gpt-4o": {"tier": 1, "provider": "openai", "quality": 0.95},
     # Tier 2: Balanced (most tasks)

@@ -1,0 +1,104 @@
+[
+  {
+    "pr": 9193,
+    "head_sha": "65521e8926752a849b069e6dd16a64fef73bb71e",
+    "title": "tests(scripts): harden docs-site fallback mirror guard with source parity",
+    "receipt_path": "docs/case-studies/dogfood/pr-9193-receipt.odr.json",
+    "odr_digest": "dcf8b919b6461b1470e77961ba382c3bdbc8457dd1da70ce496465383cbdac8a",
+    "verdict": "CHANGES_REQUESTED",
+    "reached": false,
+    "supportive": [
+      "mistral"
+    ],
+    "dissenting": [
+      "grok"
+    ],
+    "confidence": 0.5,
+    "model_families": [
+      "mistral",
+      "xai"
+    ],
+    "distinct_model_families": 2
+  },
+  {
+    "pr": 9062,
+    "head_sha": "0a37ec64bde1fca2fbe099780b439b596d940de3",
+    "title": "feat(scripts): add OpenRouter fallback for Fable goal cycles",
+    "receipt_path": "docs/case-studies/dogfood/pr-9062-receipt.odr.json",
+    "odr_digest": "336acfd546595c61e44f53e02b751062d1a1b85691ce6183d7f54cae2e01c90b",
+    "verdict": "CHANGES_REQUESTED",
+    "reached": false,
+    "supportive": [
+      "mistral"
+    ],
+    "dissenting": [
+      "grok"
+    ],
+    "confidence": 0.5,
+    "model_families": [
+      "mistral",
+      "xai"
+    ],
+    "distinct_model_families": 2
+  },
+  {
+    "pr": 9030,
+    "head_sha": "6fe6ad588f4c2cb3999d60913bd2aa3b0ed2be5b",
+    "title": "fix(routing): handle empty LLM domain responses",
+    "receipt_path": "docs/case-studies/dogfood/pr-9030-receipt.odr.json",
+    "odr_digest": "f3d5d24513d1eef9950ac0b6a6146e4ea3984e6ed40cb0658a77b80b77940d0c",
+    "verdict": "CHANGES_REQUESTED",
+    "reached": false,
+    "supportive": [],
+    "dissenting": [
+      "grok",
+      "mistral"
+    ],
+    "confidence": 0.0,
+    "model_families": [
+      "mistral",
+      "xai"
+    ],
+    "distinct_model_families": 2
+  },
+  {
+    "pr": 9056,
+    "head_sha": "d7ed551d0564ffed4c6d3893e938dfa75ce0e573",
+    "title": "feat(swarm): wire PR-keyed round budget into A1 reconciler (Tier 4)",
+    "receipt_path": "docs/case-studies/dogfood/pr-9056-receipt.odr.json",
+    "odr_digest": "5dd3f6f3a5f0175049163586e1abef712fb1783c0c70af72be5b935a44fae416",
+    "verdict": "PASS",
+    "reached": true,
+    "supportive": [
+      "grok",
+      "mistral"
+    ],
+    "dissenting": [],
+    "confidence": 1.0,
+    "model_families": [
+      "mistral",
+      "xai"
+    ],
+    "distinct_model_families": 2
+  },
+  {
+    "pr": 9027,
+    "head_sha": "363bde32f58cfb81fab8582a641a0d323d9242c9",
+    "title": "fix(scripts): accept operator-context dir in goal-cycle context",
+    "receipt_path": "docs/case-studies/dogfood/pr-9027-receipt.odr.json",
+    "odr_digest": "dc8c8d52463a24cd2c6ec9b17b6cc1e4c138de33236a2226df60551e7f2fcf13",
+    "verdict": "PASS",
+    "reached": true,
+    "supportive": [
+      "grok",
+      "mistral"
+    ],
+    "dissenting": [],
+    "confidence": 1.0,
+    "model_families": [
+      "mistral",
+      "xai"
+    ],
+    "distinct_model_families": 2
+  }
+]

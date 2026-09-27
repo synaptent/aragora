@@ -7,12 +7,18 @@ including RSS feed generation and episode management.
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
 
 AudioFormat = Literal["mp3", "aac", "m4a"]
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class PodcastAPI:
@@ -107,6 +113,12 @@ class PodcastAPI:
         """
         Generate a podcast episode from a debate.
 
+        DEPRECATED: POST /api/v1/debates/{id}/podcast is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use debates.broadcast() (POST
+        /api/v1/debates/{id}/broadcast) to generate audio from a debate,
+        and list_episodes() to retrieve the results.
+
         Args:
             debate_id: The debate to convert to audio.
             title: Custom episode title.
@@ -116,10 +128,11 @@ class PodcastAPI:
             include_intro: Add intro segment.
             include_outro: Add outro segment.
             background_music: Add background music.
-
-        Returns:
-            Generated episode with audio URL.
         """
+        _warn_deprecated(
+            "podcast.generate_episode() targets an unserved route (404 via "
+            "slug fallback); use debates.broadcast() and list_episodes()."
+        )
         data: dict[str, Any] = {}
         if title is not None:
             data["title"] = title
@@ -223,7 +236,16 @@ class AsyncPodcastAPI:
         include_outro: bool | None = None,
         background_music: bool | None = None,
     ) -> dict[str, Any]:
-        """Generate a podcast episode from a debate."""
+        """Generate a podcast episode from a debate.
+
+        DEPRECATED: POST /api/v1/debates/{id}/podcast is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use debates.broadcast() and list_episodes().
+        """
+        _warn_deprecated(
+            "podcast.generate_episode() targets an unserved route (404 via "
+            "slug fallback); use debates.broadcast() and list_episodes()."
+        )
         data: dict[str, Any] = {}
         if title is not None:
             data["title"] = title

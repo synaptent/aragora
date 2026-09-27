@@ -506,9 +506,9 @@ async function demonstrateContinuumMemory(): Promise<void> {
       }
     );
 
-    console.log(`  Found ${retrieveResult.entries.length} entries (total: ${retrieveResult.total})`);
+    console.log(`  Found ${retrieveResult.memories.length} entries (count: ${retrieveResult.count})`);
 
-    for (const entry of retrieveResult.entries.slice(0, 3)) {
+    for (const entry of retrieveResult.memories.slice(0, 3)) {
       console.log(`\n  [${entry.tier}] ${entry.content.substring(0, 60)}...`);
       console.log(`    Importance: ${entry.importance}`);
       console.log(`    Tags: ${entry.tags?.join(', ') || 'none'}`);

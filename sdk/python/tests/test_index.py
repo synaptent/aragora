@@ -197,54 +197,6 @@ class TestIndexManagement:
         assert result["deleted"] is True
 
 
-class TestIndexDocuments:
-    """Tests for document operations."""
-
-    def test_add_documents(self, client: AragoraClient, mock_request) -> None:
-        """Add documents to an index."""
-        mock_request.return_value = {"added": 2}
-
-        result = client.index.add_documents(
-            index_name="docs",
-            documents=[
-                {"text": "Document 1", "metadata": {"id": 1}},
-                {"text": "Document 2", "metadata": {"id": 2}},
-            ],
-        )
-
-        call_kwargs = mock_request.call_args[1]
-        assert len(call_kwargs["json"]["documents"]) == 2
-        assert result["added"] == 2
-
-    def test_update_document(self, client: AragoraClient, mock_request) -> None:
-        """Update a document."""
-        mock_request.return_value = {"updated": True}
-
-        client.index.update_document(
-            index_name="docs",
-            document_id="doc_1",
-            text="Updated text",
-            metadata={"version": 2},
-        )
-
-        call_kwargs = mock_request.call_args[1]
-        assert call_kwargs["json"]["text"] == "Updated text"
-        assert call_kwargs["json"]["metadata"]["version"] == 2
-
-    def test_delete_documents(self, client: AragoraClient, mock_request) -> None:
-        """Delete documents from an index."""
-        mock_request.return_value = {"deleted": 3}
-
-        result = client.index.delete_documents(
-            index_name="docs",
-            document_ids=["doc_1", "doc_2", "doc_3"],
-        )
-
-        call_kwargs = mock_request.call_args[1]
-        assert len(call_kwargs["json"]["document_ids"]) == 3
-        assert result["deleted"] == 3
-
-
 class TestAsyncIndex:
     """Tests for async index API."""
 
@@ -277,16 +229,3 @@ class TestAsyncIndex:
             result = await client.index.create_index(name="async_index")
 
             assert result["status"] == "building"
-
-    @pytest.mark.asyncio
-    async def test_async_add_documents(self, mock_async_request) -> None:
-        """Add documents asynchronously."""
-        mock_async_request.return_value = {"added": 1}
-
-        async with AragoraAsyncClient(base_url="https://api.aragora.ai") as client:
-            result = await client.index.add_documents(
-                index_name="docs",
-                documents=[{"text": "async doc"}],
-            )
-
-            assert result["added"] == 1

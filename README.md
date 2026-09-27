@@ -19,14 +19,15 @@ standalone verifier ([`pip install -U 'aragora-verify>=0.1.1'`](https://pypi.org
 |------------|---------|
 | Run the standalone debate engine | `pip install aragora-debate` |
 | Verify an Open Decision Receipt with the standalone verifier | `pip install -U 'aragora-verify>=0.1.1' && aragora-verify receipt.odr.json` |
-| Run the current PyPI zero-key receipt demo | `pip install aragora && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
+| Run the current PyPI zero-key receipt demo | `pip install -U 'aragora>=2.9.0' && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
 | Audit this source checkout's exact CLI | `python3 -m pip install -e . && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
 | Call the Aragora API from Python | `pip install aragora-sdk` |
 | Self-host the full platform | `docker compose -f deploy/demo/docker-compose.yml up` |
 
-PyPI `aragora` 2.9.0 supports the explicit offline demo receipt round trip.
-Use the source checkout path when you need to audit this exact branch or
-unreleased local changes.
+Use `aragora>=2.9.0` for the explicit offline demo receipt round trip. Earlier
+PyPI releases do not support the `--offline` receipt flags. Use the source
+checkout path when you need to audit this exact branch or unreleased local
+changes.
 
 ## The problem
 
@@ -62,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: synaptent/aragora@8b600a3a8dbf076f4027ae27f3dcbbf48e75409f
+      - uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -96,6 +97,13 @@ for the receipt-specific inputs/outputs, secret-dependent limits (receipts are
 unsigned; reviewer defaults need reachable provider keys), and a committed
 example receipt you can verify right now without running any CI.
 
+Want to check one of ours instead? [**Verify an Aragora decision receipt in 60
+seconds**](docs/receipts/VERIFY_IN_60_SECONDS.md) walks through four receipts
+from real merged PRs in this repository — a clean pass, an adjudicated dissent,
+and a blocked head with the later head that fixed it. Those four are published
+with a signature, verifiable against a key we publish, which is what the
+Action's own receipts lack until you give it a signing key.
+
 We run this gate on our own repository — every substantive merge is reviewed
 by a heterogeneous model quorum, dissent preserved, receipts written. The
 evidence, with reproducible queries and caught-bug case studies:
@@ -106,7 +114,7 @@ evidence, with reproducible queries and caught-bug case studies:
 Current PyPI package:
 
 ```bash
-pip install aragora
+pip install -U 'aragora>=2.9.0'
 aragora demo --offline --receipt aragora-demo-receipt.json
 aragora receipt verify aragora-demo-receipt.json
 ```
@@ -117,6 +125,7 @@ Current source checkout:
 python3 -m pip install -e .
 aragora demo --offline --receipt aragora-demo-receipt.json
 aragora receipt verify aragora-demo-receipt.json
+aragora receipt export aragora-demo-receipt.json --format odr -o receipt.odr.json
 ```
 
 Live review with a provider key:
@@ -124,7 +133,6 @@ Live review with a provider key:
 ```bash
 export ANTHROPIC_API_KEY=...        # provider credential for live model review
 aragora review-pr 123               # multi-agent review of a GitHub PR
-aragora receipt export <id> --format odr -o receipt.odr.json   # portable receipt
 ```
 
 ## Core workflows
@@ -336,10 +344,10 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 
 <!-- metrics:begin readme-scale -->
 > Scale (canonical counts in [`docs/METRICS.md`](docs/METRICS.md), rounded):
-> **~4,200 Python files · ~1.9M LOC · 140+ top-level modules · 200,000+ test
-> functions across ~5,400 files · 3,297 API operations across 2,870 paths ·
+> **~4,300 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
+> functions across ~5,600 files · 3,205 API operations across 2,912 paths ·
 > 35+ allowlisted agent types across 12+ providers · 41 Knowledge Mound adapter specs
-> (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.9.0.**
+> (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.10.0.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw
 > count — see docs/HONEST_ASSESSMENT.md.)
 <!-- metrics:end -->

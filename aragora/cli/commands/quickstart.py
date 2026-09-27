@@ -134,9 +134,48 @@ def _quickstart_loop_factory() -> asyncio.AbstractEventLoop:
     return asyncio.new_event_loop()
 
 
+def _run_sync_without_runner(coro: Any) -> Any:
+    """Run a coroutine on a private loop with Runner-equivalent cleanup.
+
+    ``asyncio.Runner`` exists only from Python 3.11, and the advertised floor
+    is 3.10. Cleanup mirrors ``asyncio.Runner.close`` so the fallback path
+    does not leak pending tasks or async generators. Like ``Runner`` with a
+    ``loop_factory``, the policy's current loop is left untouched.
+    """
+    loop = _quickstart_loop_factory()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        try:
+            pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            for task in pending:
+                if task.cancelled():
+                    continue
+                task_exc = task.exception()
+                if task_exc is not None:
+                    loop.call_exception_handler(
+                        {
+                            "message": "unhandled exception during quickstart shutdown",
+                            "exception": task_exc,
+                            "task": task,
+                        }
+                    )
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
+        finally:
+            loop.close()
+
+
 def _run_sync(coro: Any) -> Any:
     """Run quickstart coroutines on an isolated event loop."""
-    with asyncio.Runner(loop_factory=_quickstart_loop_factory) as runner:
+    runner_cls = getattr(asyncio, "Runner", None)
+    if runner_cls is None:
+        return _run_sync_without_runner(coro)
+    with runner_cls(loop_factory=_quickstart_loop_factory) as runner:
         return runner.run(coro)
 
 
@@ -1164,7 +1203,7 @@ async def _run_live_debate(
     run_task = asyncio.create_task(arena.run())
     try:
         result = await asyncio.wait_for(run_task, timeout=_LIVE_DEBATE_TIMEOUT_SECONDS)
-    except TimeoutError as exc:
+    except asyncio.TimeoutError as exc:
         run_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, RuntimeError):
             await run_task
@@ -1484,7 +1523,7 @@ async def _can_reach_provider_tls(provider: str) -> tuple[bool, str | None]:
             return False, "CERTIFICATE_VERIFY_FAILED"
         detail = str(exc).strip() or type(exc).__name__
         return False, detail
-    except (OSError, TimeoutError, ConnectionError) as exc:
+    except (OSError, asyncio.TimeoutError, ConnectionError) as exc:
         if _is_tls_verification_failure(exc):
             return False, "CERTIFICATE_VERIFY_FAILED"
         detail = str(exc).strip() or type(exc).__name__

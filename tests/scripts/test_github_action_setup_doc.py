@@ -19,10 +19,11 @@ from aragora.gauntlet.odr_verify import verify_odr_document
 
 DOC_PATH = Path("docs/GITHUB_ACTION_SETUP.md")
 README_PATH = Path("README.md")
+NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")
 ROOT_ACTION_PATH = Path("action.yml")
 EXAMPLE_RECEIPT_PATH = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
 RECEIPT_WORKFLOW_EXAMPLE_PATH = Path("examples/github-action/receipt.yml")
-PINNED_ROOT_ACTION_REF = "synaptent/aragora@8b600a3a8dbf076f4027ae27f3dcbbf48e75409f"
+PINNED_ROOT_ACTION_REF = "synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d"
 
 _BACKTICK_TABLE_FIELD_RE = re.compile(r"^\|\s*`([a-zA-Z0-9_-]+)`\s*\|", re.MULTILINE)
 
@@ -55,6 +56,44 @@ def _first_uses_step(steps: list[dict[str, Any]], prefix: str) -> dict[str, Any]
         if str(step.get("uses", "")).startswith(prefix):
             return step
     raise AssertionError(f"no step with uses starting with {prefix!r} in {steps!r}")
+
+
+def _comment_permission_blocks(path: Path) -> list[tuple[str, dict[str, Any]]]:
+    blocks = []
+    for block in _fenced_blocks(path.read_text(encoding="utf-8"), "yaml"):
+        if "pull-requests: write" not in block:
+            continue
+        workflow = yaml.safe_load(block)
+        if not isinstance(workflow, dict) or "jobs" not in workflow:
+            continue
+        blocks.append((block, workflow))
+    return blocks
+
+
+def _workflow_permission_sets(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+    permission_sets = []
+    top_level = workflow.get("permissions")
+    if isinstance(top_level, dict):
+        permission_sets.append(top_level)
+    for job in workflow.get("jobs", {}).values():
+        if isinstance(job, dict) and isinstance(job.get("permissions"), dict):
+            permission_sets.append(job["permissions"])
+    return permission_sets
+
+
+def test_comment_posting_workflow_snippets_grant_issue_comment_permission() -> None:
+    """`gh pr comment` writes issue comments, so snippets that post PR comments
+    need `issues: write` in addition to `pull-requests: write`."""
+    for path in (README_PATH, DOC_PATH, NESTED_REVIEW_GUIDE_PATH):
+        blocks = _comment_permission_blocks(path)
+        assert blocks, f"expected at least one comment-posting workflow block in {path}"
+        for block, workflow in blocks:
+            permission_sets = _workflow_permission_sets(workflow)
+            assert permission_sets, f"workflow block in {path} has no permissions: {block}"
+            assert any(
+                permissions.get("pull-requests") == "write" and permissions.get("issues") == "write"
+                for permissions in permission_sets
+            ), f"workflow block in {path} must grant issues: write with pull-requests: write"
 
 
 def test_documented_input_names_match_action_yml_exactly() -> None:

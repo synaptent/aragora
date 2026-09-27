@@ -274,8 +274,7 @@ class TestVerifyManifest:
         manifest_path = (
             Path(__file__).parents[2] / "docs" / "status" / "claims" / "proof_first_claims.yaml"
         )
-        if not manifest_path.exists():
-            pytest.skip("proof_first_claims.yaml not found")
+        assert manifest_path.exists(), "required proof-first claims manifest is missing"
 
         verifier = ClaimVerifier(dry_run=True)
         results = verifier.verify_manifest(manifest_path)

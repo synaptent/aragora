@@ -94,6 +94,7 @@ See [MEMORY_STRATEGY](./knowledge/MEMORY_STRATEGY.md) for details.
 | [AGENTS](./debate/AGENTS.md) | Agent type catalog and defaults |
 | [AGENT_DEVELOPMENT](./debate/AGENT_DEVELOPMENT.md) | Creating custom agents |
 | [CUSTOM_AGENTS](./guides/CUSTOM_AGENTS.md) | Custom agent configuration |
+| [VIBEPROXY](./guides/VIBEPROXY.md) | Local VibeProxy transport and Fable advisory routing |
 | [MEMORY_STRATEGY](./knowledge/MEMORY_STRATEGY.md) | Memory tier architecture |
 | [MEMORY_ANALYTICS](./knowledge/MEMORY_ANALYTICS.md) | Memory system analytics |
 

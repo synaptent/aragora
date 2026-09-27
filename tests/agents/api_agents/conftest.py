@@ -317,12 +317,11 @@ def mock_env_no_api_keys(monkeypatch):
     ]:
         monkeypatch.delenv(key, raising=False)
     # Reset secret manager cache so it doesn't reuse previously loaded AWS secrets.
-    try:
-        from aragora.config.secrets import reset_secret_manager
+    # reset_secret_manager() only nulls a module global and cannot fail; a blanket
+    # except here would just hide a broken reset behind a passing test.
+    from aragora.config.secrets import reset_secret_manager
 
-        reset_secret_manager()
-    except Exception:
-        pass
+    reset_secret_manager()
 
 
 @pytest.fixture
@@ -568,3 +567,40 @@ def _allow_localhost_for_api_agents(monkeypatch):
     This fixture ensures ARAGORA_ENV doesn't block localhost access for these tests.
     """
     monkeypatch.delenv("ARAGORA_ENV", raising=False)
+
+
+# Defined last so it is set up last and torn down FIRST: the executor must be
+# reaped while sibling autouse patches (ARAGORA_ENV, create_client_session)
+# are still in place, or an abandoned proxy leg could finish against
+# unpatched globals during teardown.
+@pytest.fixture(autouse=True)
+def _fresh_vibeproxy_executor(monkeypatch):
+    """Give each test a private VibeProxy executor and reap its threads.
+
+    The module-level ``_PROXY_EXECUTOR`` in ``api_agents.openai`` keeps its
+    worker threads alive for the rest of the process once a test routes a
+    request through VibeProxy.  Lingering threads flip
+    ``threading.active_count() > 1`` checks elsewhere in the suite — notably
+    ``quorum_evidence._reviewer_process_context()``, which then selects a
+    forkserver context and fails to pickle locally defined reviewer runners.
+
+    The teardown join is bounded: tests that deliberately abandon a wedged
+    proxy leg must release it themselves (block on an event, not a bare
+    sleep) — a worker still alive after the grace period fails loudly here
+    rather than hanging the suite or silently leaking the thread.
+    """
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from aragora.agents.api_agents import openai as openai_module
+
+    executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="vibeproxy-openai-test")
+    monkeypatch.setattr(openai_module, "_PROXY_EXECUTOR", executor)
+    yield
+    executor.shutdown(wait=False, cancel_futures=True)
+    deadline = time.monotonic() + 10.0
+    for thread in list(executor._threads):
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    stuck = sorted(t.name for t in executor._threads if t.is_alive())
+    if stuck:
+        pytest.fail(f"VibeProxy executor threads did not exit within 10s: {stuck}")

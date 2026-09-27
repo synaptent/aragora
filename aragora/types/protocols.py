@@ -1,191 +1,39 @@
-"""
-Protocols for structural typing in Aragora.
+"""Deprecated compatibility exports for protocols moved to ``aragora.protocols``.
 
-These protocols define interfaces for key abstractions, enabling
-duck typing while maintaining type safety through structural subtyping.
-
-Usage:
-    from aragora.types.protocols import EventEmitterProtocol
-
-    def setup_listener(emitter: EventEmitterProtocol) -> None:
-        emitter.subscribe("debate_start", handler)
+Importing from ``aragora.types.protocols`` remains supported for one release,
+but new code should use the canonical ``aragora.protocols`` package.
 """
 
-from __future__ import annotations
+import warnings
 
-from typing import Any, Protocol, runtime_checkable
-from collections.abc import Callable, Coroutine
+from aragora.protocols import (
+    CacheProtocol,
+    EventData,
+    EventHandlerProtocol,
+    LegacyAgentProtocol,
+    LegacyEventEmitterProtocol,
+    LegacyMemoryProtocol,
+    StorageProtocol,
+    SyncEventHandlerProtocol,
+)
 
-# Type alias for event data
-EventData = dict[str, Any]
+AgentProtocol = LegacyAgentProtocol
+EventEmitterProtocol = LegacyEventEmitterProtocol
+MemoryProtocol = LegacyMemoryProtocol
 
-# Handler type aliases
-EventHandlerProtocol = Callable[[Any], Coroutine[Any, Any, None]]
-SyncEventHandlerProtocol = Callable[[Any], None]
+warnings.warn(
+    "aragora.types.protocols is deprecated; import protocols from aragora.protocols instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-
-@runtime_checkable
-class EventEmitterProtocol(Protocol):
-    """
-    Protocol for event emitters.
-
-    Defines the interface for event emission and subscription.
-    Both EventBus and external emitters can satisfy this protocol.
-
-    Example:
-        def process_events(emitter: EventEmitterProtocol) -> None:
-            async def handler(event):
-                print(f"Received: {event}")
-
-            emitter.subscribe("my_event", handler)
-    """
-
-    def subscribe(
-        self,
-        event_type: str,
-        handler: EventHandlerProtocol,
-    ) -> None:
-        """Subscribe an async handler to an event type."""
-        ...
-
-    def subscribe_sync(
-        self,
-        event_type: str,
-        handler: SyncEventHandlerProtocol,
-    ) -> None:
-        """Subscribe a sync handler to an event type."""
-        ...
-
-    def unsubscribe(
-        self,
-        event_type: str,
-        handler: EventHandlerProtocol,
-    ) -> bool:
-        """Unsubscribe a handler from an event type."""
-        ...
-
-    async def emit(
-        self,
-        event_type: str,
-        debate_id: str = "",
-        correlation_id: str | None = None,
-        **data: Any,
-    ) -> None:
-        """Emit an event asynchronously."""
-        ...
-
-    def emit_sync(
-        self,
-        event_type: str,
-        debate_id: str = "",
-        correlation_id: str | None = None,
-        **data: Any,
-    ) -> None:
-        """Emit an event synchronously."""
-        ...
-
-
-@runtime_checkable
-class StorageProtocol(Protocol):
-    """
-    Protocol for storage backends.
-
-    Defines the interface for persistent storage operations.
-    """
-
-    async def get(self, key: str) -> Any | None:
-        """Get a value by key."""
-        ...
-
-    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
-        """Set a value with optional TTL."""
-        ...
-
-    async def delete(self, key: str) -> bool:
-        """Delete a value by key."""
-        ...
-
-    async def exists(self, key: str) -> bool:
-        """Check if a key exists."""
-        ...
-
-
-@runtime_checkable
-class CacheProtocol(Protocol):
-    """
-    Protocol for caching backends.
-
-    Defines the interface for cache operations with TTL support.
-    """
-
-    def get(self, key: str) -> Any | None:
-        """Get a cached value."""
-        ...
-
-    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
-        """Set a cached value with optional TTL."""
-        ...
-
-    def delete(self, key: str) -> None:
-        """Delete a cached value."""
-        ...
-
-    def clear(self) -> None:
-        """Clear all cached values."""
-        ...
-
-
-@runtime_checkable
-class AgentProtocol(Protocol):
-    """
-    Protocol for debate agents.
-
-    Defines the minimal interface that all agents must implement.
-    """
-
-    @property
-    def name(self) -> str:
-        """Agent's display name."""
-        ...
-
-    @property
-    def model(self) -> str:
-        """Model identifier."""
-        ...
-
-    async def generate(
-        self,
-        prompt: str,
-        context: dict[str, Any] | None = None,
-    ) -> str:
-        """Generate a response to a prompt."""
-        ...
-
-
-@runtime_checkable
-class MemoryProtocol(Protocol):
-    """
-    Protocol for memory systems.
-
-    Defines the interface for storing and retrieving debate memories.
-    """
-
-    async def store(
-        self,
-        content: str,
-        metadata: dict[str, Any] | None = None,
-    ) -> str:
-        """Store content in memory, returns memory ID."""
-        ...
-
-    async def retrieve(
-        self,
-        query: str,
-        limit: int = 10,
-    ) -> list[dict[str, Any]]:
-        """Retrieve relevant memories for a query."""
-        ...
-
-    async def forget(self, memory_id: str) -> bool:
-        """Remove a memory by ID."""
-        ...
+__all__ = [
+    "AgentProtocol",
+    "CacheProtocol",
+    "EventData",
+    "EventEmitterProtocol",
+    "EventHandlerProtocol",
+    "MemoryProtocol",
+    "StorageProtocol",
+    "SyncEventHandlerProtocol",
+]

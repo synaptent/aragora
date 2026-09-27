@@ -17,10 +17,76 @@ from aragora.swarm.runner_registry import (
     authorization_context_with_defaults,
     configured_claude_runner_profiles,
     discover_runner_inspections,
+    prioritized_probe_candidates,
     probe_runner_execution,
 )
 
 UTC = timezone.utc
+
+
+class TestPrioritizedProbeCandidates:
+    def test_selected_unverified_precedes_proven_failed_runner(self, tmp_path: Path) -> None:
+        now = datetime.now(UTC).isoformat()
+        registry_path = tmp_path / "swarm-runners.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "registrations": [
+                        {
+                            "runner_id": "claude-runner-failed",
+                            "runner_type": "claude",
+                            "profile": "max-01",
+                            "owner_binding": {
+                                "user_id": "user-123",
+                                "workspace_id": "ws-456",
+                            },
+                            "probe_status": "failed",
+                            "probe_checked_at": now,
+                        },
+                        {
+                            "runner_id": "claude-runner-selected",
+                            "runner_type": "claude",
+                            "profile": "max-10",
+                            "owner_binding": {
+                                "user_id": "user-123",
+                                "workspace_id": "ws-456",
+                            },
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        registry = LocalRunnerRegistry(path=registry_path)
+        owner_context = authorization_context_from_env(
+            {"ARAGORA_USER_ID": "user-123", "ARAGORA_WORKSPACE_ID": "ws-456"}
+        )
+        failed = CodexRunnerInspection(
+            runner_id="claude-runner-failed",
+            runner_type="claude",
+            profile="max-01",
+            availability="available",
+            available=True,
+            auth_mode="subscription",
+        )
+        selected = CodexRunnerInspection(
+            runner_id="claude-runner-selected",
+            runner_type="claude",
+            profile="max-10",
+            availability="available",
+            available=True,
+            auth_mode="subscription",
+        )
+
+        candidates = prioritized_probe_candidates(
+            registry=registry,
+            runner_type="claude",
+            discovered_inspections=[failed, selected],
+            owner_context=owner_context,
+            selected_runners=[{"runner_id": selected.runner_id}],
+        )
+
+        assert [item.runner_id for item in candidates] == [selected.runner_id, failed.runner_id]
 
 
 class TestAuthorizationContextWithDefaults:

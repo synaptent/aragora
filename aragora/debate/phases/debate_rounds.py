@@ -1237,8 +1237,7 @@ class DebateRoundsPhase:
                     content=critique_content,
                     round=round_num,
                 )
-                ctx.add_message(msg)
-                result.messages.append(msg)
+                ctx.add_message(msg)  # also appends to result.messages (#9661)
                 self._partial_messages.append(msg)
 
         return round_critiques
@@ -1499,8 +1498,7 @@ class DebateRoundsPhase:
                     content=revised_str,
                     round=round_num,
                 )
-                ctx.add_message(msg)
-                result.messages.append(msg)
+                ctx.add_message(msg)  # also appends to result.messages (#9661)
                 self._partial_messages.append(msg)
 
                 # Emit message event

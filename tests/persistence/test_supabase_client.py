@@ -139,11 +139,18 @@ class TestSupabaseClientInitialization:
 
     def test_init_without_credentials(self):
         """Client should initialize with client=None if no credentials."""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch.object(os.environ, "get", return_value=None):
-                client = SupabaseClient(url=None, key=None)
-                # Either client is None or is_configured is False
-                assert not client.is_configured or client.client is None
+        # Remove only SUPABASE_* keys rather than stubbing os.environ.get:
+        # constructing the client triggers the lazy supabase -> websockets
+        # import, and websockets.frames evaluates
+        # int(os.environ.get("WEBSOCKETS_MAX_LOG_SIZE", "75")) at import time,
+        # which raises TypeError if get() is forced to return None globally.
+        env_without_supabase = {
+            k: v for k, v in os.environ.items() if not k.startswith("SUPABASE_")
+        }
+        with patch.dict(os.environ, env_without_supabase, clear=True):
+            client = SupabaseClient(url=None, key=None)
+            # Either client is None or is_configured is False
+            assert not client.is_configured or client.client is None
 
     def test_init_with_env_vars(self, mock_supabase_client):
         """Client should use environment variables."""

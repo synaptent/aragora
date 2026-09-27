@@ -69,6 +69,18 @@ class LiveBossLoopGate:
                     return bool(pr_branch) and pr_branch == branch
                 pr_head = str(payload.get("headRefOid") or "").strip()
                 return bool(pr_head) and pr_head == branch_head
+        # `git branch --merged base` lists any branch whose tip is REACHABLE
+        # from base — including a tip EQUAL to base, which is exactly what a
+        # freshly materialized branch looks like (#8766 claude P1: every
+        # decomposed child instantly "already merged" with zero work done).
+        # A branch with no commits beyond base has no work that could have
+        # merged: fail closed toward doing the work (the merge gate still
+        # prevents any double-merge).
+        try:
+            if self.head_of(branch) == self.head_of(self.base):
+                return False
+        except RuntimeError:
+            pass  # unresolvable ref: fall through to the reachability check
         output = self.runner(
             ["git", "branch", "--merged", self.base, "--list", branch], self.repo_root
         )

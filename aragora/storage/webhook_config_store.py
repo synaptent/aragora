@@ -32,7 +32,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from asyncpg import Pool
@@ -124,7 +124,7 @@ def _encrypt_secret(secret: str) -> str:
         return secret
 
     try:
-        service = get_encryption_service()
+        service = cast(Any, get_encryption_service())
         encrypted = service.encrypt(secret)
         return encrypted.to_base64()
     except (EncryptionError, ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
@@ -150,7 +150,7 @@ def _decrypt_secret(encrypted_secret: str) -> str:
         return encrypted_secret
 
     try:
-        service = get_encryption_service()
+        service = cast(Any, get_encryption_service())
         return service.decrypt_string(encrypted_secret)
     except (EncryptionError, ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
         logger.debug("Secret decryption failed (may be legacy unencrypted): %s", e)

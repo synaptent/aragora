@@ -1,0 +1,155 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "ac9676ff9715b724a436ac3f697e3599aba8416e061fe009088eea4360ad8bba",
+  "outcomes": [
+    {
+      "case_id": "biz-dev-twitter-merger-close",
+      "resolved_at": "2022-10-27T00:00:00Z",
+      "correct_option_id": "retain_close_readiness",
+      "resolution_summary": "The Twitter acquisition closed on October 27, 2022, so maintaining transaction and integration readiness through the stated decision horizon was the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "twitter-merger-completion-2022-10-27",
+          "title": "Twitter Form 8-K reporting completion of the merger",
+          "url": "https://www.sec.gov/Archives/edgar/data/1418091/000119312522272772/d411753d8k.htm",
+          "published_at": "2022-10-27T00:00:00Z",
+          "content_sha256": "60bfc50d97605692296877358a8150695e9ec7ae13a2df2bed331ddd1f33a653"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "specific_performance_enforceability",
+          "description": "Whether Delaware law and the signed merger agreement made specific performance a credible remedy despite the termination notice.",
+          "aliases": ["contract enforceability", "specific performance remedy"]
+        },
+        {
+          "crux_id": "buyer_financing_availability",
+          "description": "Whether committed debt and equity financing remained available to fund the transaction.",
+          "aliases": ["financing certainty", "funding availability"]
+        },
+        {
+          "crux_id": "trial_timing_pressure",
+          "description": "Whether an expedited Delaware trial would force a decision before financing or agreement deadlines weakened Twitter's remedy.",
+          "aliases": ["expedited trial", "closing deadline pressure"]
+        },
+        {
+          "crux_id": "buyer_willingness_to_settle",
+          "description": "Whether the buyer would reverse course or settle rather than risk an adverse specific-performance judgment.",
+          "aliases": ["settlement incentive", "buyer follow-through"]
+        }
+      ]
+    },
+    {
+      "case_id": "biz-dev-microsoft-activision-close",
+      "resolved_at": "2023-10-13T00:00:00Z",
+      "correct_option_id": "retain_close_readiness",
+      "resolution_summary": "Microsoft completed the Activision Blizzard acquisition on October 13, 2023, before the forecast horizon, making continued transaction readiness the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "microsoft-activision-completion-2023-10-13",
+          "title": "Microsoft Form 8-K reporting completion of the Activision Blizzard acquisition",
+          "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312523255762/d537928d8k.htm",
+          "published_at": "2023-10-13T00:00:00Z",
+          "content_sha256": "051d43e99ec522fc080e6c3e07e2ed4dae87e386cb9657c30e94b8f8599a525b"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "ftc_injunction_success",
+          "description": "Whether the FTC could obtain timely administrative or federal-court relief that prevented closing.",
+          "aliases": ["US antitrust injunction", "FTC litigation outcome"]
+        },
+        {
+          "crux_id": "uk_cloud_gaming_remedy",
+          "description": "Whether Microsoft could offer a cloud-gaming remedy acceptable to UK competition authorities.",
+          "aliases": ["CMA remedy", "cloud streaming concession"]
+        },
+        {
+          "crux_id": "outside_date_flexibility",
+          "description": "Whether the parties had enough contractual time and willingness to extend the closing timetable through regulatory litigation.",
+          "aliases": ["agreement extension", "closing timetable"]
+        },
+        {
+          "crux_id": "multijurisdiction_clearance",
+          "description": "Whether approvals outside the United States would leave the FTC challenge as a manageable rather than compounding obstacle.",
+          "aliases": ["global regulatory clearance", "jurisdictional approvals"]
+        }
+      ]
+    },
+    {
+      "case_id": "biz-dev-adobe-figma-close",
+      "resolved_at": "2023-12-17T00:00:00Z",
+      "correct_option_id": "demobilize_for_standalone",
+      "resolution_summary": "Adobe and Figma terminated their merger agreement after concluding that there was no clear path to required regulatory approvals, making standalone operating plans the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "adobe-figma-termination-2023-12-17",
+          "title": "Adobe Form 8-K reporting termination of the Figma merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/796343/000079634323000254/adbe-20231217.htm",
+          "published_at": "2023-12-18T00:00:00Z",
+          "content_sha256": "a984f09dbd8f10aaf08f6329442b047f168334fb5c5ba9e33f3d1641b74ef74b"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "uk_competition_remedy_scope",
+          "description": "Whether Adobe could offer a remedy that addressed UK concerns without destroying the transaction's strategic value.",
+          "aliases": ["CMA remedy viability", "UK competition concessions"]
+        },
+        {
+          "crux_id": "eu_regulatory_clearance",
+          "description": "Whether European regulators would accept the acquisition without incompatible or prohibitive conditions.",
+          "aliases": ["European approval", "EU competition clearance"]
+        },
+        {
+          "crux_id": "product_market_overlap",
+          "description": "Whether regulators would treat Adobe and Figma as current or potential close competitors in design software.",
+          "aliases": ["design software competition", "potential competition"]
+        },
+        {
+          "crux_id": "termination_fee_incentives",
+          "description": "Whether the cost of terminating was smaller than the operational and strategic cost of prolonged or heavily conditioned review.",
+          "aliases": ["break fee", "walk-away economics"]
+        }
+      ]
+    },
+    {
+      "case_id": "biz-dev-jetblue-spirit-close",
+      "resolved_at": "2024-03-01T00:00:00Z",
+      "correct_option_id": "demobilize_for_standalone",
+      "resolution_summary": "JetBlue and Spirit terminated their merger agreement after the transaction was blocked and the parties judged timely closing conditions unlikely to be met, making standalone operations the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "jetblue-spirit-termination-2024-03-01",
+          "title": "JetBlue Form 8-K reporting termination of the Spirit merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/1158463/000115846324000010/jblu-20240301.htm",
+          "published_at": "2024-03-04T00:00:00Z",
+          "content_sha256": "fa3497c69048456f37803c8ba619ad8c3b5ddf1dd9028c4a0dffead8b4a3f216"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "doj_injunction_success",
+          "description": "Whether the DOJ could prove that eliminating Spirit would substantially lessen competition and obtain an injunction.",
+          "aliases": ["antitrust injunction", "DOJ litigation outcome"]
+        },
+        {
+          "crux_id": "spirit_effect_evidence",
+          "description": "Whether evidence that Spirit independently lowered fares would make a structural remedy difficult to defend.",
+          "aliases": ["low-fare competition", "Spirit Effect"]
+        },
+        {
+          "crux_id": "remedy_feasibility",
+          "description": "Whether route, slot, or asset divestitures could preserve competition sufficiently for the transaction to proceed.",
+          "aliases": ["divestiture package", "antitrust remedy"]
+        },
+        {
+          "crux_id": "outside_date_headroom",
+          "description": "Whether litigation and any appeal could finish with enough time to close by the merger agreement's outside date.",
+          "aliases": ["appeal timing", "closing deadline"]
+        }
+      ]
+    }
+  ]
+}

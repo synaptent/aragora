@@ -13,10 +13,10 @@ from __future__ import annotations
 import logging
 import math
 import sqlite3
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier, TierConfig
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 from aragora.utils.json_helpers import safe_json_loads
 
 from aragora.memory.continuum.base import (
@@ -53,7 +53,7 @@ class CoordinatorTierOpsMixin:
                 SET tier = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (new_tier.value, datetime.now().isoformat(), memory_id),
+                (new_tier.value, utc_now_iso_naive(), memory_id),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -71,7 +71,7 @@ class CoordinatorTierOpsMixin:
                 SET tier = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (new_tier.value, datetime.now().isoformat(), memory_id),
+                (new_tier.value, utc_now_iso_naive(), memory_id),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -97,7 +97,7 @@ class CoordinatorTierOpsMixin:
         Returns:
             True if the entry was marked, False if entry not found
         """
-        now: str = datetime.now().isoformat()
+        now: str = utc_now_iso_naive()
 
         with self.connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
@@ -270,7 +270,7 @@ class CoordinatorTierOpsMixin:
                             updated_at = ?
                         WHERE id = ?
                         """,
-                        (updated_surprise, consolidation, datetime.now().isoformat(), id),
+                        (updated_surprise, consolidation, utc_now_iso_naive(), id),
                     )
                 else:
                     cursor.execute(
@@ -283,7 +283,7 @@ class CoordinatorTierOpsMixin:
                             updated_at = ?
                         WHERE id = ?
                         """,
-                        (updated_surprise, consolidation, datetime.now().isoformat(), id),
+                        (updated_surprise, consolidation, utc_now_iso_naive(), id),
                     )
 
                 cursor.execute("COMMIT")
@@ -357,7 +357,7 @@ class CoordinatorTierOpsMixin:
                 return None
 
             new_tier: MemoryTier = MemoryTier(tm_new.value)
-            now: str = datetime.now().isoformat()
+            now: str = utc_now_iso_naive()
 
             logger.info(
                 f"[memory] Promoting {id}: {current_tier.value} -> {new_tier.value} "
@@ -437,7 +437,7 @@ class CoordinatorTierOpsMixin:
                 return None
 
             new_tier: MemoryTier = MemoryTier(tm_new.value)
-            now: str = datetime.now().isoformat()
+            now: str = utc_now_iso_naive()
 
             logger.info(
                 f"[memory] Demoting {id}: {current_tier.value} -> {new_tier.value} "

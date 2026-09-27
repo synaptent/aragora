@@ -82,7 +82,7 @@ class TestQuickBooksConnector:
                 return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
             )
             mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_session.return_value.__aexit__ = AsyncMock()
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
 
             credentials = await qbo_connector.exchange_code(
                 authorization_code="test_code",

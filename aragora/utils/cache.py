@@ -202,38 +202,26 @@ class TTLCache(Generic[T]):
 _method_cache = TTLCache[Any](maxsize=1000, ttl_seconds=CACHE_TTL_METHOD)
 _query_cache = TTLCache[Any](maxsize=500, ttl_seconds=CACHE_TTL_QUERY)
 
-# Track registration status
-_caches_registered = False
+CacheRegistrationHook = Callable[[TTLCache[Any], TTLCache[Any]], None]
+_cache_registration_hook: CacheRegistrationHook | None = None
+
+
+def register_cache_registration_hook(hook: CacheRegistrationHook | None) -> None:
+    """Register a higher-layer observer for the two foundation cache instances."""
+    global _cache_registration_hook
+    _cache_registration_hook = hook
+    _register_caches_with_service_registry()
 
 
 def _register_caches_with_service_registry() -> None:
-    """Register caches with ServiceRegistry for observability.
-
-    Called lazily on first access to avoid circular imports.
-    Uses marker types from aragora.services for proper registration.
-    """
-    global _caches_registered
-    if _caches_registered:
+    """Notify the registered higher-layer cache observer, if any."""
+    if _cache_registration_hook is None:
         return
 
     try:
-        from aragora.services import (
-            MethodCacheService,
-            QueryCacheService,
-            ServiceRegistry,
-        )
-
-        registry = ServiceRegistry.get()
-
-        if not registry.has(MethodCacheService):
-            registry.register(MethodCacheService, _method_cache)
-        if not registry.has(QueryCacheService):
-            registry.register(QueryCacheService, _query_cache)
-
-        _caches_registered = True
-        logger.debug("Caches registered with ServiceRegistry")
+        _cache_registration_hook(_method_cache, _query_cache)
     except ImportError:
-        pass  # Services module not available
+        pass
 
 
 def get_method_cache() -> TTLCache[Any]:

@@ -11,11 +11,13 @@ Runs the following checks on a decision receipt JSON file:
   dual-field receipts cannot hide a mismatched proof. This hash covers the
   *decision-integrity fields* --
   ``receipt_id``, ``gauntlet_id``, ``input_hash``, ``risk_summary``, ``verdict``,
-  and ``confidence`` -- so tampering with any of those is detected. It does **not**
-  cover presentational/metadata fields such as ``timestamp`` or ``schema_version``;
-  for full-payload tamper-evidence, sign the receipt and use the signature check
-  (or ``aragora receipt verify``). The reported coverage is scoped accordingly so
-  the command does not overclaim.
+  and ``confidence`` -- so tampering with any of those is detected. Crux receipts
+  (schema >= 1.2) additionally bind ``cruxes`` and ``schema_version`` into the
+  hash, so a 1.2 -> 1.1 downgrade is detected as tampering. The hash does **not**
+  cover presentational/metadata fields such as ``timestamp`` (or
+  ``schema_version`` on pre-crux receipts); for full-payload tamper-evidence,
+  sign the receipt and use the signature check (or ``aragora receipt verify``).
+  The reported coverage is scoped accordingly so the command does not overclaim.
 - **Presence/format checks** (non-integrity): confirms ``schema_version`` is
   present, ``verdict`` is a recognised Verdict enum value, and ``timestamp`` is
   valid ISO 8601. These validate well-formedness, not tamper-evidence.
@@ -46,10 +48,11 @@ def create_verify_parser(subparsers: argparse._SubParsersAction) -> None:
             "Validate a decision receipt JSON file. Recomputes the SHA-256 "
             "decision-integrity hash (artifact_hash, plus legacy checksum fallback; "
             "both are checked when both are present) to detect tampering of the decision-integrity fields (receipt_id, "
-            "gauntlet_id, input_hash, risk_summary, verdict, confidence); also checks "
+            "gauntlet_id, input_hash, risk_summary, verdict, confidence; crux receipts "
+            "additionally bind cruxes and schema_version); also checks "
             "schema_version presence, that the verdict is a valid enum value, and "
             "timestamp format. Note: the integrity hash does not cover presentational "
-            "fields like timestamp/schema_version -- for full-payload tamper-evidence "
+            "fields like timestamp -- for full-payload tamper-evidence "
             "the receipt must be cryptographically signed (the signature is verified "
             "when present)."
         ),
@@ -88,6 +91,9 @@ _VALID_VERDICTS = frozenset(
         "pass",
         "fail",
         "conditional",
+        # Zero-evidence receipts (issue #9303): a valid receipt that truthfully
+        # asserts no deliberation occurred. Integrity-valid, never supportive.
+        "no_evidence",
     }
 )
 
@@ -119,7 +125,10 @@ def _is_valid_iso_timestamp(value: str) -> bool:
 # (mirrors ``DecisionReceipt._calculate_hash``). These -- and ONLY these -- are the
 # fields whose tampering this command's integrity check detects. Reported to the
 # user via the ``covers`` key so the command does not overclaim coverage of
-# presentational fields (timestamp, schema_version, ...) the hash does not include.
+# presentational fields (timestamp, ...) the hash does not include. Receipts
+# carrying ``cruxes`` additionally bind the crux block, and receipts stamped
+# schema 1.2 also bind ``schema_version`` (downgrade-tamper protection) -- see
+# ``_integrity_hash_fields``.
 _INTEGRITY_HASH_FIELDS: tuple[str, ...] = (
     "receipt_id",
     "gauntlet_id",
@@ -128,6 +137,76 @@ _INTEGRITY_HASH_FIELDS: tuple[str, ...] = (
     "verdict",
     "confidence",
 )
+
+# Schema version at which receipts bind ``schema_version`` into the hash
+# (mirrors ``RECEIPT_SCHEMA_VERSION_CRUXES`` in receipt_models; kept as a local
+# literal so this command never hard-depends on the gauntlet package). The
+# binding is version-gated, NOT crux-presence-gated: #9414 shipped crux binding
+# before the 1.2 stamp existed, so receipts with cruxes + schema_version 1.1
+# hashed without schema_version and must keep verifying.
+_SCHEMA_VERSION_CRUXES = "1.2"
+_SCHEMA_VERSION_EVIDENCE = "1.3"
+
+
+def _integrity_hash_fields(data: dict[str, Any]) -> tuple[str, ...]:
+    """Fields the artifact hash covers for THIS receipt (honest coverage)."""
+    fields = _INTEGRITY_HASH_FIELDS
+    if data.get("cruxes") is not None:
+        fields = fields + ("cruxes",)
+        if data.get("schema_version") == _SCHEMA_VERSION_CRUXES:
+            fields = fields + ("schema_version",)
+    if data.get("schema_version") == _SCHEMA_VERSION_EVIDENCE:
+        fields = fields + (
+            "decision_payload",
+            "decision_payload_hash",
+            "evidence_references",
+            "schema_version",
+        )
+    return fields
+
+
+def _inline_decision_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _inline_decision_value(value[key])
+            for key in sorted(value, key=lambda item: str(item))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_inline_decision_value(item) for item in value]
+    if isinstance(value, set):
+        normalized = [_inline_decision_value(item) for item in value]
+        return sorted(normalized, key=lambda item: json.dumps(item, sort_keys=True, default=str))
+    return value
+
+
+def _inline_evidence_references(references: Any) -> list[dict[str, Any]]:
+    normalized = [
+        value
+        for reference in references or []
+        if isinstance((value := _inline_decision_value(reference)), dict)
+    ]
+    return sorted(
+        normalized,
+        key=lambda item: (
+            str(item.get("evidence_id", "")),
+            str(item.get("path", "")),
+            json.dumps(item, sort_keys=True, default=str),
+        ),
+    )
+
+
+def _inline_decision_payload_hash(data: dict[str, Any]) -> str:
+    content = json.dumps(
+        {
+            "decision_payload": _inline_decision_value(data.get("decision_payload") or {}),
+            "evidence_references": _inline_evidence_references(data.get("evidence_references")),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(content.encode()).hexdigest()
+
 
 # Decision-integrity fields covered by the legacy ``checksum`` field.
 _LEGACY_CHECKSUM_FIELDS: tuple[str, ...] = (
@@ -158,30 +237,58 @@ def _recompute_checksum(data: dict[str, Any]) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
+def _inline_artifact_hash(data: dict[str, Any]) -> str:
+    """Inline fallback for :func:`_recompute_artifact_hash`.
+
+    Byte-for-byte equivalent to ``compute_receipt_artifact_hash`` in
+    ``aragora.gauntlet.receipt_models`` (equivalence is pinned by tests); used
+    only when the gauntlet package is not importable. Covers the fields
+    reported by :func:`_integrity_hash_fields`: the base decision-integrity
+    fields, plus ``cruxes`` when present, plus ``schema_version`` only for
+    receipts stamped :data:`_SCHEMA_VERSION_CRUXES` (downgrade-tamper
+    protection, version-gated for #9414-era 1.1 crux receipts).
+    """
+    payload: dict[str, Any] = {
+        "receipt_id": data.get("receipt_id", ""),
+        "gauntlet_id": data.get("gauntlet_id", ""),
+        "input_hash": data.get("input_hash", ""),
+        "risk_summary": data.get("risk_summary", {}),
+        "verdict": data.get("verdict", ""),
+        "confidence": data.get("confidence", 0.0),
+    }
+    if data.get("cruxes") is not None:
+        payload["cruxes"] = data.get("cruxes")
+        # Missing schema_version defaults to "1.0" (the from_dict convention)
+        # so the same JSON cannot hash two ways.
+        schema_version = data.get("schema_version", "1.0")
+        if schema_version == _SCHEMA_VERSION_CRUXES:
+            payload["schema_version"] = schema_version
+    if data.get("schema_version") == _SCHEMA_VERSION_EVIDENCE:
+        payload["schema_version"] = _SCHEMA_VERSION_EVIDENCE
+        payload["decision_payload_hash"] = data.get("decision_payload_hash", "")
+        payload["evidence_references"] = _inline_evidence_references(
+            data.get("evidence_references")
+        )
+    content = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
 def _recompute_artifact_hash(data: dict[str, Any]) -> str:
     """Recompute the canonical content-addressable ``artifact_hash``.
 
-    Mirrors ``DecisionReceipt._calculate_hash`` so that receipts emitted by the
-    canonical producer (``DecisionReceipt.to_dict``, used by ``aragora demo`` and
-    the gauntlet) -- which store their integrity hash under ``artifact_hash`` and
-    do *not* emit a separate ``checksum`` key -- can be verified by this command.
-
-    Implemented inline (rather than importing ``DecisionReceipt``) so verification
-    never hard-depends on the gauntlet package being importable. Covers exactly the
-    fields in :data:`_INTEGRITY_HASH_FIELDS`.
+    Delegates to ``compute_receipt_artifact_hash`` -- the single canonical
+    recipe shared with ``DecisionReceipt._calculate_hash`` -- so this command
+    can never drift from the producer (an earlier inline copy omitted the
+    ``cruxes`` branch and reported every untampered crux receipt as tampered).
+    Falls back to the byte-equivalent :func:`_inline_artifact_hash` when the
+    gauntlet package is not importable, so verification keeps working in
+    minimal installs.
     """
-    content = json.dumps(
-        {
-            "receipt_id": data.get("receipt_id", ""),
-            "gauntlet_id": data.get("gauntlet_id", ""),
-            "input_hash": data.get("input_hash", ""),
-            "risk_summary": data.get("risk_summary", {}),
-            "verdict": data.get("verdict", ""),
-            "confidence": data.get("confidence", 0.0),
-        },
-        sort_keys=True,
-    )
-    return hashlib.sha256(content.encode()).hexdigest()
+    try:
+        from aragora.gauntlet.receipt_models import compute_receipt_artifact_hash
+    except ImportError:
+        return _inline_artifact_hash(data)
+    return compute_receipt_artifact_hash(data)
 
 
 def _looks_like_artifact_hash_alias(value: Any) -> bool:
@@ -301,19 +408,49 @@ def _verify_receipt(data: dict[str, Any], *, verbose: bool = False) -> dict[str,
     # checksum.
     #
     # IMPORTANT (honest coverage): this hash only covers the *decision-integrity
-    # fields* listed in ``_INTEGRITY_HASH_FIELDS`` -- it does NOT cover presentational
-    # fields like ``timestamp`` or ``schema_version``. The check is named
-    # ``integrity`` (not ``checksum``) and reports a ``covers`` list so the command
-    # does not imply whole-payload tamper-evidence. Full-payload coverage requires a
+    # fields* reported by ``_integrity_hash_fields`` -- it does NOT cover
+    # presentational fields like ``timestamp``. (``schema_version`` IS covered
+    # for crux receipts, schema >= 1.2, to block downgrade tampering; it is NOT
+    # covered for pre-crux receipts.) The check is named ``integrity`` (not
+    # ``checksum``) and reports a ``covers`` list so the command does not imply
+    # whole-payload tamper-evidence. Full-payload coverage requires a
     # cryptographic signature (check #5 / ``aragora receipt verify``).
     stored_artifact_hash = data.get("artifact_hash")
     stored_checksum = data.get("checksum")
     proof_details: list[str] = []
     proof_failures: list[str] = []
     covered_fields: list[str] = []
+    # Crux receipts (a ``cruxes`` block, or a schema 1.2 stamp) MUST be
+    # verified against the full artifact hash: the legacy 16-char checksum
+    # covers neither cruxes nor schema_version, so accepting it alone would
+    # let an attacker strip ``artifact_hash`` and evade crux/downgrade
+    # tamper-protection. Pre-crux receipts keep the legacy fallback.
+    requires_full_artifact_hash = data.get("cruxes") is not None or data.get("schema_version") in {
+        _SCHEMA_VERSION_CRUXES,
+        _SCHEMA_VERSION_EVIDENCE,
+    }
+    if (
+        requires_full_artifact_hash
+        and not stored_artifact_hash
+        and not _looks_like_artifact_hash_alias(stored_checksum)
+    ):
+        proof_failures.append(
+            "receipt with crux/evidence content requires the full artifact_hash; "
+            "the legacy checksum does not cover schema-bound decision evidence"
+        )
+    if data.get("schema_version") == _SCHEMA_VERSION_EVIDENCE:
+        stored_decision_hash = data.get("decision_payload_hash")
+        expected_decision_hash = _inline_decision_payload_hash(data)
+        if not stored_decision_hash:
+            proof_failures.append("schema 1.3 receipt is missing decision_payload_hash")
+        elif stored_decision_hash != expected_decision_hash:
+            proof_failures.append(
+                f"decision_payload_hash mismatch: stored={stored_decision_hash[:16]}..., "
+                f"recomputed={expected_decision_hash[:16]}..."
+            )
     if stored_artifact_hash:
         expected_artifact_hash = _recompute_artifact_hash(data)
-        covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+        covered_fields.extend(_integrity_hash_fields(data))
         if stored_artifact_hash == expected_artifact_hash:
             detail = f"artifact_hash={stored_artifact_hash[:16]}..."
             if verbose:
@@ -327,7 +464,7 @@ def _verify_receipt(data: dict[str, Any], *, verbose: bool = False) -> dict[str,
     if stored_checksum:
         if _looks_like_artifact_hash_alias(stored_checksum):
             expected_checksum_alias = _recompute_artifact_hash(data)
-            covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+            covered_fields.extend(_integrity_hash_fields(data))
             if stored_checksum == expected_checksum_alias:
                 detail = f"checksum artifact_hash alias={stored_checksum[:16]}..."
                 if verbose:

@@ -17,6 +17,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import cast
 
 
 _STOP_WORDS = frozenset(
@@ -223,7 +224,7 @@ def cluster_ideas(
             # Merge: reassign all of cj to ci
             for k, v in cluster_map.items():
                 if v == cj:
-                    cluster_map[k] = ci
+                    cluster_map[k] = cast(int, ci)
 
     # Assign unclustered ideas to singleton clusters
     for i in range(n):

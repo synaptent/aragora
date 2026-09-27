@@ -24,7 +24,7 @@ __all__ = [
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from aragora.export.artifact import DebateArtifact
@@ -87,7 +87,7 @@ class Risk:
         return self.impact * self.likelihood
 
     def to_dict(self) -> dict:
-        result = {
+        result: dict[str, Any] = {
             "id": self.id,
             "title": self.title,
             "description": self.description,

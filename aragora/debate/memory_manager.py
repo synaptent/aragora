@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 from collections.abc import Callable
 
-from aragora.types.protocols import EventEmitterProtocol
+from aragora.protocols import LegacyEventEmitterProtocol
 
 from aragora.agents.errors import _build_error_action
 
@@ -442,7 +442,7 @@ class MemoryManager:
         consensus_memory: Optional["ConsensusMemory"] = None,
         debate_embeddings: Optional["DebateEmbeddingsDatabase"] = None,
         domain_extractor: Callable[[], str] | None = None,
-        event_emitter: EventEmitterProtocol | None = None,
+        event_emitter: LegacyEventEmitterProtocol | None = None,
         spectator: Optional["SpectatorStream"] = None,
         loop_id: str = "",
         tier_analytics_tracker: TierAnalyticsTracker | None = None,
@@ -625,7 +625,7 @@ class MemoryManager:
             )
 
             # Build metadata with optional crux claims
-            metadata = {
+            metadata: dict[str, Any] = {
                 "debate_id": result.id,
                 "task": task[:100],
                 "domain": domain,

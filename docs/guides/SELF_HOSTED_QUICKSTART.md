@@ -61,7 +61,7 @@ docker compose -f docker-compose.simple.yml up -d
 curl http://localhost:8080/api/health
 
 # Expected response:
-# {"status": "healthy", "version": "2.6.3"}
+# {"status": "healthy", "version": "2.10.0"}
 ```
 
 ### Step 5: Run Your First Debate
@@ -507,5 +507,5 @@ ufw deny 6379/tcp   # Block Redis
 
 ---
 
-*Updated: 2026-01-27*
-*Version: 2.6.3*
+*Updated: 2026-09-04*
+*Version: 2.10.0*

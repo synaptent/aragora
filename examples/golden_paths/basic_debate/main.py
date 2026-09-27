@@ -44,9 +44,9 @@ async def main() -> None:
     # Step 2: Configure the debate
     # ----------------------------------------------------------------
     config = DebateConfig(
-        rounds=2,               # Two rounds: propose -> critique -> vote each
+        rounds=2,  # Two rounds: propose -> critique -> vote each
         consensus_method="majority",
-        early_stopping=True,    # Stop if consensus is reached in round 1
+        early_stopping=True,  # Stop if consensus is reached in round 1
     )
 
     # ----------------------------------------------------------------
@@ -103,8 +103,10 @@ async def main() -> None:
     if result.votes:
         print("--- Votes ---")
         for vote in result.votes:
-            print(f"  [{vote.agent}] voted for {vote.choice} "
-                  f"(confidence: {vote.confidence:.0%}) -- {vote.reasoning[:80]}")
+            print(
+                f"  [{vote.agent}] voted for {vote.choice} "
+                f"(confidence: {vote.confidence:.0%}) -- {vote.reasoning[:80]}"
+            )
         print()
 
     # Show dissenting views

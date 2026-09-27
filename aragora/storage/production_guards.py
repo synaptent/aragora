@@ -30,6 +30,7 @@ import logging
 import os
 from dataclasses import dataclass
 from enum import Enum
+from typing import cast
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +68,8 @@ class StorageGuardConfig:
     """Configuration for storage guards."""
 
     require_distributed: bool = True
-    allowed_fallback_envs: set[EnvironmentMode] = None
-    fail_open_stores: set[str] = None
+    allowed_fallback_envs: set[EnvironmentMode] = cast(set[EnvironmentMode], None)
+    fail_open_stores: set[str] = cast(set[str], None)
 
     def __post_init__(self):
         if self.allowed_fallback_envs is None:

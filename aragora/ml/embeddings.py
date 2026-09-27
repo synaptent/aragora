@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
@@ -29,9 +30,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
-SentenceTransformer: Any
 try:
-    from sentence_transformers import SentenceTransformer
+    SentenceTransformer: Any = importlib.import_module("sentence_transformers").SentenceTransformer
 except ImportError:  # pragma: no cover - optional dependency
     SentenceTransformer = None
 

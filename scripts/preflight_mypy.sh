@@ -92,6 +92,27 @@ ${CHANGED_FILES_RAW}
 EOF
 fi
 
+# The three-dot diff above selects files from committed state only, so a
+# pre-commit run with python edits outside that diff silently skips them.
+# Files inside the committed diff ARE handed to mypy (which reads their
+# working-tree content), so only dirty paths outside the diff are unchecked —
+# surface those as a stderr advisory without touching stdout, mypy argv, or
+# exit codes.
+UNCOMMITTED_PY="$(
+    {
+        git diff --name-only --cached -- '*.py' || true
+        git diff --name-only -- '*.py' || true
+        git ls-files --others --exclude-standard -- '*.py' || true
+    } | sort -u | comm -23 - <(printf '%s\n' "${CHANGED_FILES}" | sort)
+)"
+if [ -n "${UNCOMMITTED_PY}" ]; then
+    {
+        echo "preflight_mypy: WARNING: uncommitted python changes are NOT checked by this committed-state gate (${DIFF_BASE}...HEAD):"
+        echo "${UNCOMMITTED_PY}" | sed 's/^/  /'
+        echo "preflight_mypy: commit them and re-run scripts/preflight_mypy.sh to type-check them."
+    } >&2
+fi
+
 if [ -z "${CHANGED_FILES}" ]; then
     echo "no python changes; mypy preflight skipped"
     exit 0

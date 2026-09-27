@@ -19,7 +19,6 @@ import json
 import logging
 import sqlite3
 import threading
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +31,7 @@ from aragora.persistence.db_config import DatabaseType, get_db_path
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
 from aragora.storage.base_store import SQLiteStore
 from aragora.storage.schema import SchemaManager
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 from aragora.utils.json_helpers import safe_json_loads
 
 # Import base types and tier mixins
@@ -305,7 +305,7 @@ class ContinuumMemory(
         Returns:
             The created memory entry
         """
-        now: str = datetime.now().isoformat()
+        now: str = utc_now_iso_naive()
 
         with self.connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
@@ -504,7 +504,7 @@ class ContinuumMemory(
                 SET success_count = ?, failure_count = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (entry.success_count, entry.failure_count, datetime.now().isoformat(), entry.id),
+                (entry.success_count, entry.failure_count, utc_now_iso_naive(), entry.id),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -559,7 +559,7 @@ class ContinuumMemory(
 
         # Always update timestamp
         updates.append("updated_at = ?")
-        params.append(datetime.now().isoformat())
+        params.append(utc_now_iso_naive())
 
         # Add memory_id as final parameter
         params.append(memory_id)

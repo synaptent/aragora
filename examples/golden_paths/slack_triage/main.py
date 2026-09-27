@@ -82,6 +82,7 @@ SAMPLE_MESSAGES = [
 # Triage logic
 # ----------------------------------------------------------------
 
+
 def classify_priority(message: dict) -> str:
     """Simple priority classifier based on keywords and source channel."""
     body = (message.get("subject", "") + " " + message.get("body", "")).lower()
@@ -89,8 +90,15 @@ def classify_priority(message: dict) -> str:
 
     # Critical indicators
     critical_keywords = [
-        "critical", "urgent", "down", "outage", "exhausted",
-        "exposed", "breach", "security", "immediate action",
+        "critical",
+        "urgent",
+        "down",
+        "outage",
+        "exhausted",
+        "exposed",
+        "breach",
+        "security",
+        "immediate action",
     ]
     if any(kw in body for kw in critical_keywords) or channel in ("#incidents", "#security"):
         return "critical"
@@ -185,6 +193,7 @@ async def run_triage_debate(message: dict) -> dict:
 # Main
 # ----------------------------------------------------------------
 
+
 async def main() -> None:
     print("=" * 64)
     print("  Aragora Golden Path: Slack Inbox Auto-Triage")
@@ -201,8 +210,10 @@ async def main() -> None:
             print("  -> Triggering triage debate...")
             triage = await run_triage_debate(message)
 
-            print(f"  -> Consensus: {'Yes' if triage['debate_consensus'] else 'No'} "
-                  f"({triage['confidence']:.0%} confidence)")
+            print(
+                f"  -> Consensus: {'Yes' if triage['debate_consensus'] else 'No'} "
+                f"({triage['confidence']:.0%} confidence)"
+            )
             print(f"  -> Verdict: {triage['verdict']}")
             print(f"  -> Receipt: {triage['receipt_id']}")
             print(f"  -> Agents: {', '.join(triage['agents_involved'])}")

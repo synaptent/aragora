@@ -4,13 +4,17 @@ Tests for encryption migration utilities.
 Tests automatic detection, migration, and startup migration functionality.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+import sys
 from datetime import datetime, timezone
+from types import ModuleType, SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from aragora.security.migration import (
     MigrationResult,
     EncryptionMigrator,
+    register_migration_audit_provider,
     is_field_encrypted,
     needs_migration,
     migrate_integration_store,
@@ -19,7 +23,16 @@ from aragora.security.migration import (
     StartupMigrationConfig,
     get_startup_migration_config,
     run_startup_migration,
+    rotate_encryption_key,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_migration_providers():
+    """Keep security migration provider registration isolated per test."""
+    register_migration_audit_provider(None)
+    yield
+    register_migration_audit_provider(None)
 
 
 class TestMigrationResult:
@@ -414,11 +427,279 @@ class TestStoreMigrations:
 
     def test_migrate_sync_store_empty(self):
         """Test migration with empty sync store."""
-        result = migrate_sync_store(dry_run=True)
+        store = MagicMock()
+        store.list_connectors = AsyncMock(return_value=[])
+
+        with patch(
+            "aragora.storage.sync_store.get_sync_store",
+            new=AsyncMock(return_value=store),
+        ):
+            result = migrate_sync_store(dry_run=True)
 
         assert result.store_name == "sync_store"
         # Should complete successfully even with empty store
         assert result.failed_records == 0
+
+    def test_unavailable_sync_store_preserves_best_effort_result(self):
+        """An unavailable storage implementation preserves the best-effort result."""
+        with patch(
+            "aragora.storage.sync_store.get_sync_store",
+            new=AsyncMock(side_effect=RuntimeError("unavailable")),
+        ):
+            result = migrate_sync_store(dry_run=True)
+
+        assert result.store_name == "sync_store"
+        assert result.errors == ["Sync store not available"]
+        assert result.success is True
+
+
+class TestMigrationAuditProvider:
+    """Tests for injected key-rotation audit emission."""
+
+    @pytest.fixture
+    def encryption_service(self):
+        service = MagicMock()
+        service._keys = {}
+        service._active_key_id = None
+        return service
+
+    def test_dry_run_emits_registered_audit_event(self, encryption_service):
+        audit = MagicMock()
+        register_migration_audit_provider(audit)
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=True, stores=[])
+
+        assert result.success is True
+        audit.assert_called_once_with(
+            event_type="key_rotation",
+            actor_id="system",
+            reason="dry_run_key_rotation",
+        )
+
+    def test_dry_run_missing_audit_provider_warns(self, encryption_service, caplog):
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=True, stores=[])
+
+        assert result.success is True
+        assert "Migration audit provider not registered" in caplog.text
+
+    def test_live_audit_import_failure_remains_best_effort(self, encryption_service):
+        old_key = MagicMock(version=1)
+        new_key = MagicMock(key_id="default", version=2)
+        encryption_service._keys = {"default": old_key}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = new_key
+        register_migration_audit_provider(MagicMock(side_effect=ImportError("unavailable")))
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+
+        assert result.success is True
+        assert result.old_key_version == 1
+        assert result.new_key_version == 2
+        assert result.errors == []
+
+    def test_live_sync_rotation_resolves_unregistered_storage_store(
+        self, encryption_service, monkeypatch
+    ):
+        old_key = MagicMock(version=1)
+        new_key = MagicMock(key_id="default", version=2)
+        encryption_service._keys = {"default": old_key}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = new_key
+        connector = SimpleNamespace(
+            id="connector-1",
+            connector_type="github",
+            name="GitHub",
+            config={"api_key": "decrypted-secret"},
+        )
+        store = MagicMock()
+        store.list_connectors = AsyncMock(return_value=[connector])
+        store.save_connector = AsyncMock(return_value=connector)
+        get_sync_store = AsyncMock(return_value=store)
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.get_sync_store = get_sync_store
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+
+        assert result.success is True
+        assert result.stores_processed == 1
+        assert result.records_reencrypted == 1
+        get_sync_store.assert_awaited_once_with()
+        store.list_connectors.assert_awaited_once_with()
+        store.save_connector.assert_awaited_once_with(
+            "connector-1",
+            "github",
+            "GitHub",
+            {"api_key": "decrypted-secret"},
+        )
+
+    def test_optional_store_absence_remains_best_effort(self, encryption_service, monkeypatch):
+        old_key = MagicMock(version=1)
+        new_key = MagicMock(key_id="default", version=2)
+        encryption_service._keys = {"default": old_key}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = new_key
+        store = MagicMock()
+        store.list_connectors = AsyncMock(return_value=[])
+        store.save_connector = AsyncMock()
+        get_sync_store = AsyncMock(return_value=store)
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.get_sync_store = get_sync_store
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+
+        with (
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+            patch("aragora.security.migration._get_integration_store_config", return_value=None),
+            patch("aragora.security.migration._get_gmail_store_config", return_value=None),
+        ):
+            result = rotate_encryption_key(dry_run=False)
+
+        assert result.success is True
+        assert result.stores_processed == 1
+        assert result.failed_records == 0
+        assert result.errors == []
+        get_sync_store.assert_awaited_once_with()
+        store.list_connectors.assert_awaited_once_with()
+
+    def test_live_sync_rotation_fails_closed_when_storage_resolution_fails(
+        self, encryption_service, monkeypatch
+    ):
+        old_key = MagicMock(version=1)
+        new_key = MagicMock(key_id="default", version=2)
+        encryption_service._keys = {"default": old_key}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = new_key
+        get_sync_store = AsyncMock(side_effect=RuntimeError("sync store unavailable"))
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.get_sync_store = get_sync_store
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+
+        assert result.success is False
+        assert result.stores_processed == 0
+        assert result.failed_records == 1
+        assert result.errors == ["Store sync re-encryption failed"]
+        get_sync_store.assert_awaited_once_with()
+
+    def test_live_sync_rotation_fails_closed_when_connector_list_fails(
+        self, encryption_service, monkeypatch
+    ):
+        old_key = MagicMock(version=1)
+        new_key = MagicMock(key_id="default", version=2)
+        encryption_service._keys = {"default": old_key}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = new_key
+        store = MagicMock()
+        store.list_connectors = AsyncMock(side_effect=RuntimeError("credential=secret-value"))
+        get_sync_store = AsyncMock(return_value=store)
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.get_sync_store = get_sync_store
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+
+        assert result.success is False
+        assert result.stores_processed == 1
+        assert result.failed_records >= 1
+        assert result.errors == ["Re-encryption failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
+        get_sync_store.assert_awaited_once_with()
+        store.list_connectors.assert_awaited_once_with()
+
+    def test_live_sync_rotation_fails_closed_when_connector_save_fails(
+        self, encryption_service, monkeypatch
+    ):
+        old_key = MagicMock(version=1)
+        new_key = MagicMock(key_id="default", version=2)
+        encryption_service._keys = {"default": old_key}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = new_key
+        connector = SimpleNamespace(
+            id="connector-1",
+            connector_type="github",
+            name="GitHub",
+            config={"api_key": "decrypted-secret"},
+        )
+        store = MagicMock()
+        store.list_connectors = AsyncMock(return_value=[connector])
+        store.save_connector = AsyncMock(side_effect=RuntimeError("write failed"))
+        get_sync_store = AsyncMock(return_value=store)
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.get_sync_store = get_sync_store
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+
+        assert result.success is False
+        assert result.stores_processed == 1
+        assert result.failed_records == 1
+        assert result.errors == ["Error re-encrypting record: connector-1"]
+        store.save_connector.assert_awaited_once()
+
+
+class TestDirectSyncMigration:
+    """Direct sync migration resolves and awaits the storage implementation."""
+
+    def test_migrate_sync_store_resaves_plaintext_connector(self, monkeypatch):
+        connector = SimpleNamespace(
+            id="connector-1",
+            connector_type="github",
+            name="GitHub",
+            config={"api_key": "plaintext-secret"},
+        )
+        store = MagicMock()
+        store.list_connectors = AsyncMock(return_value=[connector])
+        store.save_connector = AsyncMock(return_value=connector)
+        get_sync_store = AsyncMock(return_value=store)
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.get_sync_store = get_sync_store
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+
+        result = migrate_sync_store(dry_run=False)
+
+        assert result.success is True
+        assert result.total_records == 1
+        assert result.migrated_records == 1
+        get_sync_store.assert_awaited_once_with()
+        store.list_connectors.assert_awaited_once_with()
+        store.save_connector.assert_awaited_once_with(
+            "connector-1",
+            "github",
+            "GitHub",
+            {"api_key": "plaintext-secret"},
+        )
 
 
 class TestStartupMigrationConfig:

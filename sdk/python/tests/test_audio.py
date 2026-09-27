@@ -37,7 +37,9 @@ class TestAudioInfo:
 
         result = client.audio.get_audio_info("audio_123")
 
-        mock_request.assert_called_once_with("GET", "/api/v1/media/audio", params={"audio_id": "audio_123"})
+        mock_request.assert_called_once_with(
+            "GET", "/api/v1/media/audio", params={"audio_id": "audio_123"}
+        )
         assert result["format"] == "mp3"
         assert result["duration_seconds"] == 300
 

@@ -14,6 +14,7 @@ belief-analysis phase already populates.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -27,10 +28,55 @@ if TYPE_CHECKING:
     from aragora.debate.protocol import DebateProtocol
     from aragora.reasoning.belief import BeliefNetwork
 
+# ---------------------------------------------------------------------------
+# DIC-15 (#6025) flag gate — default OFF
+# ---------------------------------------------------------------------------
 
+CRUX_FINDER_ENV_VAR = "ARAGORA_CRUX_FINDER_ENABLED"
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+class CruxFinderDisabledError(RuntimeError):
+    """Raised when a caller requests crux-finder while its gate is disabled."""
+
+
+def crux_finder_enabled() -> bool:
+    """Return True when the crux_finder consensus mode is active.
+
+    Reads ``ARAGORA_CRUX_FINDER_ENABLED`` from the process environment.
+    Default is False; the mode is dormant unless explicitly enabled.
+    This satisfies the DIC-15 (#6025) flag-gate requirement from
+    ``docs/status/NEXT_STEPS_CANONICAL.md`` — no live queue effect until
+    the proof-first Foreman gate permits the upper-layer tranche.
+    """
+    raw = str(os.environ.get(CRUX_FINDER_ENV_VAR) or "").strip().lower()
+    return raw in _TRUTHY
+
+
+def require_crux_finder_enabled() -> None:
+    """Fail closed instead of silently degrading a requested crux-finder run."""
+    if not crux_finder_enabled():
+        raise CruxFinderDisabledError(
+            "crux_finder consensus mode is disabled; set "
+            f"{CRUX_FINDER_ENV_VAR}=1 before requesting this mode"
+        )
+
+
+def enable_crux_finder() -> None:
+    """Enable the crux_finder consensus mode for the current process.
+
+    Sets ``ARAGORA_CRUX_FINDER_ENABLED=1``.  Use only in tests or
+    operator tooling — never call from production code paths.
+    """
+    os.environ[CRUX_FINDER_ENV_VAR] = "1"
+
+
+# ---------------------------------------------------------------------------
 # Sentinel value attached to `ConsensusProof.final_claim` for crux-finder
 # runs. Downstream consumers assuming a verdict can detect this prefix and
 # route to the CruxReceipt surface instead.
+# ---------------------------------------------------------------------------
+
 CRUX_MAP_SENTINEL = "__CRUX_MAP__: no verdict by design; see CruxReceipt.cruxes"
 
 
@@ -135,7 +181,12 @@ def build_crux_finder_result(
 
 
 __all__ = [
+    "CRUX_FINDER_ENV_VAR",
     "CRUX_MAP_SENTINEL",
+    "CruxFinderDisabledError",
     "CruxFinderResult",
     "build_crux_finder_result",
+    "crux_finder_enabled",
+    "enable_crux_finder",
+    "require_crux_finder_enabled",
 ]

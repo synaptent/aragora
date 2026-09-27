@@ -20,9 +20,47 @@ from aragora.server.startup.security import (
     init_graphql_routes,
     init_key_rotation_scheduler,
     init_rbac_distributed_cache,
+    init_security_edge_adapters,
     init_secrets_rotation_scheduler,
     validate_required_secrets,
 )
+
+
+# =============================================================================
+# Test: init_security_edge_adapters
+# =============================================================================
+
+
+class TestInitSecurityEdgeAdapters:
+    """Tests for higher-layer security adapter registration."""
+
+    def test_returns_true_when_registration_succeeds(self):
+        with patch(
+            "aragora.ops.security_edge_adapters.register_security_edge_adapters"
+        ) as register:
+            result = init_security_edge_adapters()
+
+        assert result is True
+        register.assert_called_once_with()
+
+    def test_returns_false_when_registration_fails(self):
+        with patch(
+            "aragora.ops.security_edge_adapters.register_security_edge_adapters",
+            side_effect=ImportError("adapter unavailable"),
+        ):
+            result = init_security_edge_adapters()
+
+        assert result is False
+
+    def test_strict_mode_raises_when_registration_fails(self):
+        with (
+            patch(
+                "aragora.ops.security_edge_adapters.register_security_edge_adapters",
+                side_effect=ImportError("adapter unavailable"),
+            ),
+            pytest.raises(RuntimeError, match="Security edge adapter registration failed"),
+        ):
+            init_security_edge_adapters(strict=True)
 
 
 # =============================================================================

@@ -12,21 +12,30 @@ Get started with Aragora in under 5 minutes.
 pip install aragora-sdk
 ```
 
+> **Version note:** PyPI releases are cut deliberately and may trail the
+> repository (decoupled cadence, recorded in #9234 — see
+> [SDK_GUIDE.md](SDK_GUIDE.md#release-cadence-recorded-operator-policy-2026-07-16)).
+> Install from source if you need repo-tip behavior.
+
 ## Basic Usage
+
+The published 2.8.0 wheel includes synchronous and asynchronous clients. This
+quickstart uses the asynchronous client in offline demo mode, so it runs without
+an API key or server. Omit `demo=True` and provide `base_url` to call a running
+Aragora deployment.
 
 ```python
 import asyncio
-from aragora_sdk import AragoraClient
+from aragora_sdk import AragoraAsyncClient
 
 async def main():
-    async with AragoraClient("http://localhost:8080", api_key="your-key") as client:
-        # Run a debate
-        result = await client.debates.run(
+    async with AragoraAsyncClient(demo=True) as client:
+        debate = await client.debates.create(
             task="Should we use microservices or monolith?",
-            agents=["anthropic-api", "openai-api"],
+            agents=["demo"],
         )
-        if result.consensus:
-            print(f"Conclusion: {result.consensus.conclusion}")
+        print(f"Debate: {debate['debate_id']}")
+        print(f"Conclusion: {debate['consensus']['conclusion']}")
 
 asyncio.run(main())
 ```
@@ -35,37 +44,26 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from aragora_sdk import AragoraClient
+from aragora_sdk import AragoraAsyncClient
 
 async def main():
-    async with AragoraClient(
-        base_url="http://localhost:8080",
-        api_key="your-api-key",  # optional for local dev
-    ) as client:
+    async with AragoraAsyncClient(demo=True) as client:
         # 1. Create a debate
         created = await client.debates.create(
             task="Design a rate limiter for our API",
-            agents=["anthropic-api", "openai-api", "gemini-api"],
+            agents=["demo"],
             max_rounds=3,
         )
-        debate_id = created["id"]
+        debate_id = created["debate_id"]
         print(f"Created debate: {debate_id}")
 
-        # 2. Wait for completion
-        result = await client.debates.run(
-            task="What caching strategy should we use?",
-            timeout=120.0,
-        )
+        # 2. List recent debates
+        recent = await client.debates.list(limit=5)
+        print(f"Recent debates: {len(recent.get('debates', []))}")
 
-        # 3. Access results
-        if result.consensus:
-            print(f"Status: {result.status}")
-            print(f"Consensus: {result.consensus.conclusion}")
-            print(f"Confidence: {result.consensus.confidence}")
-
-        # 4. Fetch debate details
-        debate = await client.debates.get(debate_id)
-        print(f"Debate task: {debate.task}")
+        # 3. Inspect available agents
+        available = await client.agents.list()
+        print(f"Available agents: {len(available.get('agents', []))}")
 
 asyncio.run(main())
 ```
@@ -74,8 +72,11 @@ asyncio.run(main())
 
 | API | Description |
 |-----|-------------|
-| `client.debates.run()` | Run debate and wait for result |
-| `client.debates.create()` | Create debate (non-blocking) |
-| `client.debates.get(id)` | Get debate details |
-| `client.agents.list()` | List available agents |
-| `await client.health()` | Check API health |
+| `await client.debates.create()` | Create a debate |
+| `await client.debates.list()` | List recent debates |
+| `await client.agents.list()` | List available agents |
+
+These calls are checked against the committed
+[`aragora-sdk` 2.8.0 released-surface manifest](reference/sdk_released_surface_2.8.0.json).
+The repository-tip SDK can expose additional methods before the next PyPI
+release; install `./sdk/python` when following repository-tip API references.

@@ -1346,6 +1346,20 @@ class ContextInitializer:
             if not relevant_context or len(relevant_context.strip()) < 50:
                 return
 
+            # Never inject error placeholders as institutional knowledge
+            # (issue #9304: a failed attempt's 'tripped over an edge case'
+            # placeholder was re-fed to the next debate as a learned insight).
+            from aragora.agents.failure_semantics import looks_like_agent_failure_response
+
+            filtered_lines = [
+                line
+                for line in relevant_context.splitlines()
+                if not (line.strip() and looks_like_agent_failure_response(line))
+            ]
+            relevant_context = "\n".join(filtered_lines)
+            if len(relevant_context.strip()) < 50:
+                return
+
             # Inject as institutional knowledge section
             institutional_section = "\n\n## INSTITUTIONAL KNOWLEDGE\n"
             institutional_section += (

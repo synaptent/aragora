@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -22,6 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from aragora.config.trusted_authors import resolve_trusted_authors
+from aragora.swarm.auto_merge_green import _reduce_rollup_states
 from aragora.swarm.github_app_auth import gh_subprocess_run
 from aragora.swarm.merge_quorum_io import (
     fetch_evidence_comments,
@@ -71,6 +73,7 @@ AUTOMATION_REVIEWER_LOGINS = resolve_trusted_authors(
         "aragora-automation[bot]",
     }
 )
+_FULL_HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass
@@ -250,9 +253,18 @@ def _run_gh(
     return gh_subprocess_run(args, timeout=timeout, write_op=write_op)
 
 
+def _is_full_head_sha(head_sha: object) -> bool:
+    """Return whether ``head_sha`` is an exact lowercase Git commit SHA."""
+    return isinstance(head_sha, str) and _FULL_HEAD_SHA_RE.fullmatch(head_sha) is not None
+
+
 class ArbiterOperationalError(RuntimeError):
     """A genuine arbiter-operational fault (e.g. cannot list PRs), as opposed to a
     PR merely not being ready. Only these faults feed the circuit breaker."""
+
+
+class CheckSnapshotHeadMismatch(RuntimeError):
+    """The atomic check snapshot no longer belongs to the decision head."""
 
 
 def _list_candidate_prs(config: MergeArbiterConfig) -> list[dict]:
@@ -291,42 +303,52 @@ def _list_candidate_prs(config: MergeArbiterConfig) -> list[dict]:
     return candidates
 
 
-def _get_check_status(pr_number: int, repo: str) -> dict[str, str]:
-    """Return a mapping of check-name -> conclusion for a PR.
+def _get_check_status(pr_number: int, repo: str, expected_head_sha: str) -> dict[str, str]:
+    """Return checks from one PR snapshot bound to ``expected_head_sha``.
 
-    Merges both status checks and GitHub Actions check runs.
+    ``headRefOid`` and ``statusCheckRollup`` are fetched in the same GraphQL
+    response. A head change between the caller's decision snapshot and this
+    check snapshot fails closed instead of pairing checks from one commit with
+    merge authority for another.
 
-    Raises ``ArbiterOperationalError`` when ``gh pr checks`` fails without
-    producing parseable JSON (transport/auth fault). An empty mapping means
-    the call succeeded but reported no checks (a normal not-ready state)."""
+    Raises ``ArbiterOperationalError`` when the snapshot cannot be obtained or
+    parsed. Raises ``CheckSnapshotHeadMismatch`` when the returned head differs
+    from the decision head. An empty mapping means the matching snapshot
+    reported no checks (a normal not-ready state)."""
+    if not _is_full_head_sha(expected_head_sha):
+        raise CheckSnapshotHeadMismatch("missing or malformed expected check-snapshot head SHA")
     result = _run_gh(
         [
             "pr",
-            "checks",
+            "view",
             str(pr_number),
             "--repo",
             repo,
             "--json",
-            "name,state",
+            "headRefOid,statusCheckRollup",
         ]
     )
-    # gh pr checks uses non-zero exits for pending/failing checks too, so the
-    # exit code alone does not distinguish "checks are red" from "gh broke".
-    # Parseable JSON output is the truth regardless of exit code; no JSON plus
-    # a non-zero exit is an operational fault, not a not-ready PR.
+    if result.returncode != 0:
+        raise ArbiterOperationalError(
+            f"gh pr view failed for #{pr_number}: {result.stderr.strip()}"
+        )
     try:
-        checks = json.loads(result.stdout) if result.stdout else None
-    except (json.JSONDecodeError, TypeError):
-        checks = None
-    if not isinstance(checks, list):
-        checks = None
+        snapshot = json.loads(result.stdout) if result.stdout else None
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ArbiterOperationalError(f"failed to parse check snapshot for #{pr_number}") from exc
+    if not isinstance(snapshot, dict):
+        raise ArbiterOperationalError(f"check snapshot for #{pr_number} is not an object")
+    actual_head_sha = snapshot.get("headRefOid")
+    if actual_head_sha != expected_head_sha:
+        raise CheckSnapshotHeadMismatch(
+            f"check snapshot head changed: expected {expected_head_sha}, got {actual_head_sha or '<missing>'}"
+        )
+    checks = snapshot.get("statusCheckRollup")
     if checks is None:
-        if result.returncode != 0:
-            raise ArbiterOperationalError(
-                f"gh pr checks failed for #{pr_number}: {result.stderr.strip()}"
-            )
         return {}
-    return {c["name"]: c.get("state", "").upper() for c in checks if "name" in c}
+    if not isinstance(checks, list):
+        raise ArbiterOperationalError(f"check snapshot rollup for #{pr_number} is not a list")
+    return _reduce_rollup_states(checks)
 
 
 def _list_pr_reviews(pr_number: int, repo: str) -> list[dict]:
@@ -352,9 +374,11 @@ def _list_pr_reviews(pr_number: int, repo: str) -> list[dict]:
 
 def _review_counts_as_human_approval(review: dict, head_sha: str | None) -> bool:
     """Return True when a review is an approval tied to the current head and not automation."""
+    if not _is_full_head_sha(head_sha):
+        return False
     if str(review.get("state", "")).upper() != "APPROVED":
         return False
-    if head_sha and str(review.get("commit_id", "")).strip() != str(head_sha).strip():
+    if review.get("commit_id") != head_sha:
         return False
     user = review.get("user") or {}
     if not isinstance(user, dict):
@@ -370,6 +394,8 @@ def _review_counts_as_human_approval(review: dict, head_sha: str | None) -> bool
 
 def _has_matching_human_approval(pr_number: int, repo: str, head_sha: str | None) -> bool:
     """Require an explicit human approval on the current PR head SHA."""
+    if not _is_full_head_sha(head_sha):
+        return False
     for review in reversed(_list_pr_reviews(pr_number, repo)):
         if _review_counts_as_human_approval(review, head_sha):
             return True
@@ -380,10 +406,10 @@ def _has_local_settlement_receipt(
     pr_number: int, head_sha: str | None, repo_root: Path | None = None
 ) -> bool:
     """Accept a local review-queue approval receipt as an explicit settlement signal."""
-    if not head_sha:
+    if not isinstance(head_sha, str) or not _is_full_head_sha(head_sha):
         return False
     root = (repo_root or Path.cwd()) / ".aragora" / "review-queue" / "settlements"
-    receipt = root / f"pr-{pr_number}-{str(head_sha)[:12]}-approve.json"
+    receipt = root / f"pr-{pr_number}-{head_sha[:12]}-approve.json"
     if not receipt.exists():
         return False
     try:
@@ -391,8 +417,7 @@ def _has_local_settlement_receipt(
     except (OSError, json.JSONDecodeError):
         return False
     return (
-        str(payload.get("action", "")).strip() == "approve"
-        and str(payload.get("head_sha", "")).strip() == str(head_sha).strip()
+        str(payload.get("action", "")).strip() == "approve" and payload.get("head_sha") == head_sha
     )
 
 
@@ -411,7 +436,9 @@ def _merge_pr(
     repo: str,
     head_sha: str | None = None,
 ) -> tuple[bool, str]:
-    """Squash-merge a PR with admin override.  Returns (success, reason)."""
+    """Squash-merge a PR pinned to its authorized full head SHA."""
+    if not isinstance(head_sha, str) or not _is_full_head_sha(head_sha):
+        return False, "missing or malformed full head SHA"
     args = [
         "pr",
         "merge",
@@ -421,9 +448,9 @@ def _merge_pr(
         "--admin",
         "--squash",
         "--delete-branch",
+        "--match-head-commit",
+        head_sha,
     ]
-    if head_sha:
-        args.extend(["--match-head-commit", head_sha])
     result = _run_gh(args, write_op=True)
     if result.returncode != 0:
         reason = result.stderr.strip() or "unknown error"
@@ -438,10 +465,22 @@ def _evaluate_pr(pr: dict, config: MergeArbiterConfig) -> MergeResult:
     head_sha = pr.get("headRefOid")
     is_draft: bool = pr.get("isDraft", False)
     review_decision = str(pr.get("reviewDecision", "")).strip().upper()
+
+    if not isinstance(head_sha, str) or not _is_full_head_sha(head_sha):
+        return MergeResult(
+            pr_number,
+            branch,
+            False,
+            "missing or malformed full head SHA in PR snapshot",
+        )
     required_checks = _get_required_checks(config.repo)
 
+    try:
+        checks = _get_check_status(pr_number, config.repo, head_sha)
+    except CheckSnapshotHeadMismatch as exc:
+        return MergeResult(pr_number, branch, False, str(exc))
+
     if is_draft:
-        checks = _get_check_status(pr_number, config.repo)
         if not checks:
             return MergeResult(
                 pr_number,
@@ -464,7 +503,6 @@ def _evaluate_pr(pr: dict, config: MergeArbiterConfig) -> MergeResult:
             "draft PR: fast required checks passed; waiting for boss-loop promotion to ready",
         )
 
-    checks = _get_check_status(pr_number, config.repo)
     if not checks:
         return MergeResult(pr_number, branch, False, "no checks found")
 

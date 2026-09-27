@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aragora.audit.exploration.session import Insight
 from aragora.memory import MemoryTier
@@ -284,7 +284,7 @@ class ExplorationMemory:
 
         # Move to target tier
         if source_tier != target_tier:
-            del self._insights[source_tier][insight_id]
+            del self._insights[cast(MemoryTier, source_tier)][insight_id]
             stored.tier = target_tier
             stored.updated_at = datetime.now(timezone.utc)
             self._insights[target_tier][insight_id] = stored

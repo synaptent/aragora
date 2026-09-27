@@ -32,7 +32,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from asyncpg import Pool
@@ -232,7 +232,7 @@ class InMemoryFindingWorkflowStore(FindingWorkflowStoreBackend):
                 for wf in self._data.values()
                 if (
                     wf.get("due_date")
-                    and wf.get("due_date") < now
+                    and cast(str, wf.get("due_date")) < now
                     and wf.get("current_state") not in terminal_states
                 )
             ]

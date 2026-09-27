@@ -194,49 +194,6 @@ class VectorIndexAPI:
         """Delete a vector index."""
         return self._client.request("DELETE", f"/api/v1/index/{index_name}")
 
-    def get_index_stats(self, index_name: str) -> dict[str, Any]:
-        """Get statistics for a vector index."""
-        return self._client.request("GET", f"/api/v1/index/{index_name}/stats")
-
-    # =========================================================================
-    # Document Operations
-    # =========================================================================
-
-    def add_documents(self, index_name: str, documents: _List[dict[str, Any]]) -> dict[str, Any]:
-        """Add documents to an index."""
-        return self._client.request(
-            "POST", f"/api/v1/index/{index_name}/documents", json={"documents": documents}
-        )
-
-    def update_document(
-        self, index_name: str, document_id: str, text: str | None = None, metadata: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        """Update a document in an index."""
-        data: dict[str, Any] = {}
-        if text is not None:
-            data["text"] = text
-        if metadata is not None:
-            data["metadata"] = metadata
-        return self._client.request("PUT", f"/api/v1/index/{index_name}/documents/{document_id}", json=data)
-
-    def delete_documents(self, index_name: str, document_ids: _List[str]) -> dict[str, Any]:
-        """Delete documents from an index."""
-        return self._client.request(
-            "DELETE", f"/api/v1/index/{index_name}/documents", json={"document_ids": document_ids}
-        )
-
-    # =========================================================================
-    # Index Operations
-    # =========================================================================
-
-    def rebuild_index(self, index_name: str) -> dict[str, Any]:
-        """Rebuild an index from scratch."""
-        return self._client.request("POST", f"/api/v1/index/{index_name}/rebuild")
-
-    def optimize_index(self, index_name: str) -> dict[str, Any]:
-        """Optimize an index for better search performance."""
-        return self._client.request("POST", f"/api/v1/index/{index_name}/optimize")
-
 
 class AsyncVectorIndexAPI:
     """
@@ -277,7 +234,8 @@ class AsyncVectorIndexAPI:
     ) -> dict[str, Any]:
         """Perform semantic similarity search."""
         return await self._client.request(
-            "POST", "/api/v1/ml/search",
+            "POST",
+            "/api/v1/ml/search",
             json={"query": query, "documents": documents, "top_k": top_k, "threshold": threshold},
         )
 
@@ -299,7 +257,11 @@ class AsyncVectorIndexAPI:
         return await self._client.request("GET", f"/api/v1/index/{index_name}")
 
     async def create_index(
-        self, name: str, dimension: int | None = None, metric: str = "cosine", description: str | None = None
+        self,
+        name: str,
+        dimension: int | None = None,
+        metric: str = "cosine",
+        description: str | None = None,
     ) -> dict[str, Any]:
         """Create a new vector index."""
         data: dict[str, Any] = {"name": name, "metric": metric}
@@ -312,40 +274,3 @@ class AsyncVectorIndexAPI:
     async def delete_index(self, index_name: str) -> dict[str, Any]:
         """Delete a vector index."""
         return await self._client.request("DELETE", f"/api/v1/index/{index_name}")
-
-    async def get_index_stats(self, index_name: str) -> dict[str, Any]:
-        """Get statistics for a vector index."""
-        return await self._client.request("GET", f"/api/v1/index/{index_name}/stats")
-
-    async def add_documents(self, index_name: str, documents: _List[dict[str, Any]]) -> dict[str, Any]:
-        """Add documents to an index."""
-        return await self._client.request(
-            "POST", f"/api/v1/index/{index_name}/documents", json={"documents": documents}
-        )
-
-    async def update_document(
-        self, index_name: str, document_id: str, text: str | None = None, metadata: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        """Update a document in an index."""
-        data: dict[str, Any] = {}
-        if text is not None:
-            data["text"] = text
-        if metadata is not None:
-            data["metadata"] = metadata
-        return await self._client.request(
-            "PUT", f"/api/v1/index/{index_name}/documents/{document_id}", json=data
-        )
-
-    async def delete_documents(self, index_name: str, document_ids: _List[str]) -> dict[str, Any]:
-        """Delete documents from an index."""
-        return await self._client.request(
-            "DELETE", f"/api/v1/index/{index_name}/documents", json={"document_ids": document_ids}
-        )
-
-    async def rebuild_index(self, index_name: str) -> dict[str, Any]:
-        """Rebuild an index from scratch."""
-        return await self._client.request("POST", f"/api/v1/index/{index_name}/rebuild")
-
-    async def optimize_index(self, index_name: str) -> dict[str, Any]:
-        """Optimize an index for better search performance."""
-        return await self._client.request("POST", f"/api/v1/index/{index_name}/optimize")

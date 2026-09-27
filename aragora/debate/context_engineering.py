@@ -192,7 +192,7 @@ def _make_explorer_agents(
                         "kilocode-grok",
                         KiloCodeAgent(
                             name="kilocode_grok_explorer",
-                            provider_id="openrouter/x-ai/grok-4",
+                            provider_id="openrouter/x-ai/grok-4.5",
                             role="analyst",
                             timeout=config.per_explorer_timeout_seconds,
                             mode="architect",

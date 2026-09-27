@@ -24,7 +24,7 @@ async def handle_agent_operation(
     operation: Callable[[], Any],
     agent_name: str,
     operation_name: str = "operation",
-    fallback_value: T = None,
+    fallback_value: T | None = None,
     fallback_message: str | None = None,
 ) -> T:
     """Execute an async agent operation with autonomic error handling.

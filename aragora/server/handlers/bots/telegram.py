@@ -469,7 +469,7 @@ class TelegramHandler(BotHandlerMixin, SecureHandler):
             # Handle vote callback
             debate_id = parts[1] if len(parts) > 1 else ""
             vote_option = parts[2] if len(parts) > 2 else ""
-            return self._handle_vote(callback_id, user_id, debate_id, vote_option)
+            return self._handle_vote(cast(str, callback_id), user_id, debate_id, vote_option)
 
         # Default: acknowledge callback
         return json_response({"ok": True, "callback_handled": True})

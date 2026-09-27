@@ -145,6 +145,10 @@ from aragora.control_plane.channels import (
     create_deliberation_consensus_notification,
     create_sla_violation_notification,
 )
+from aragora.control_plane.slo_alert_sink import (
+    ControlPlaneSLOAlertSink,
+    register_slo_alert_sink,
+)
 from aragora.control_plane.notifications import (
     EmailProvider,
     NotificationDispatcher,
@@ -290,6 +294,8 @@ __all__ = [
     "create_task_completed_notification",
     "create_deliberation_consensus_notification",
     "create_sla_violation_notification",
+    "ControlPlaneSLOAlertSink",
+    "register_slo_alert_sink",
     # Notifications (Dispatcher)
     "EmailProvider",
     "NotificationDispatcher",

@@ -29,7 +29,8 @@ For detailed migration instructions, see:
 
 | Version | Release | End of Support | Status |
 |---------|---------|----------------|--------|
-| **v2.9.x** | 2026-04-25 | Active | **Current** |
+| **v2.10.x** | 2026-09-04 | Active | **Current** |
+| v2.9.x | 2026-04-25 | Active | Supported |
 | v2.8.x | 2026-02-25 | Active | Supported |
 | v2.7.x | 2026-02-15 | Active | Supported |
 | v2.6.x | 2026-02-03 | Active | Supported |
@@ -48,26 +49,28 @@ For detailed migration instructions, see:
 
 ## Current Version
 
-**Aragora v2.9.0** (released 2026-04-25)
+**Aragora v2.10.0** (released 2026-09-04)
 
 ```python
 # Check your version
 from aragora.__version__ import __version__
-print(__version__)  # "2.9.0"
+print(__version__)  # "2.10.0"
 ```
 
 **Python support:** 3.10, 3.11, 3.12, 3.13
+
+**PyPI availability:** the `2.10.0` wheel ships when the operator pushes the `v2.10.0` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.9.0 and the exact-version commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
 
 ---
 
 ## Upgrade Paths
 
-### v2.x.x -> v2.9.0 (Minor Upgrade)
+### v2.x.x -> v2.10.0 (Minor Upgrade)
 
-No breaking changes between v2.x releases. Standard upgrade:
+No API or SDK breaking changes between v2.x releases. One behavioral change: `DecisionReceipt` verdicts are never minted from zero evidence (#9306), so a pipeline that relied on an empty-evidence PASS now sees a non-passing verdict (see [Breaking Change Summary](#breaking-change-summary)). Standard upgrade:
 
 ```bash
-pip install --upgrade aragora==2.9.0
+pip install --upgrade aragora==2.10.0
 ```
 
 Run database migrations if any are pending:
@@ -76,13 +79,13 @@ Run database migrations if any are pending:
 python -m aragora.migrations.runner migrate
 ```
 
-### v1.0.x -> v2.9.0 (Major Upgrade)
+### v1.0.x -> v2.10.0 (Major Upgrade)
 
 This upgrade requires API and SDK migration. Follow these steps in order:
 
 **Step 1: Update dependencies**
 ```bash
-pip install --upgrade aragora==2.9.0
+pip install --upgrade aragora==2.10.0
 ```
 
 **Step 2: Run database migrations**
@@ -149,7 +152,7 @@ ARAGORA_REQUIRE_DISTRIBUTED=true
 
 See [MIGRATION_V1_TO_V2.md](../status/MIGRATION_V1_TO_V2.md) for the complete migration guide.
 
-### v0.8.x -> v2.9.0 (Legacy Upgrade)
+### v0.8.x -> v2.10.0 (Legacy Upgrade)
 
 Upgrade to v1.0.0 first, then follow the v1 -> v2 path:
 
@@ -161,8 +164,8 @@ python -m aragora.migrations.runner migrate
 # Step 2: Verify v1 works
 pytest tests/ -v --timeout=60
 
-# Step 3: Upgrade to v2.9.0
-pip install aragora==2.9.0
+# Step 3: Upgrade to v2.10.0
+pip install aragora==2.10.0
 python -m aragora.migrations.runner migrate
 ```
 
@@ -199,7 +202,7 @@ Run through this checklist before any upgrade:
 
 ```bash
 # Create a full backup
-python -m aragora.backup.manager create --label "pre-upgrade-v2.9.0"
+python -m aragora.backup.manager create --label "pre-upgrade-v2.10.0"
 
 # Verify the backup
 python -m aragora.backup.manager verify --latest
@@ -274,7 +277,7 @@ Major version rollbacks require restoring from backup:
 systemctl stop aragora
 
 # 2. Restore from backup
-python -m aragora.backup.manager restore --label "pre-upgrade-v2.9.0"
+python -m aragora.backup.manager restore --label "pre-upgrade-v2.10.0"
 
 # 3. Downgrade the package
 pip install aragora==1.0.0
@@ -319,6 +322,12 @@ Migration safety features:
 ---
 
 ## Breaking Change Summary
+
+### v2.10.0 Behavioral Changes
+
+| Area | Change | Action Required |
+|------|--------|-----------------|
+| **Receipt verdicts** | `DecisionReceipt` never reports PASS/APPROVED from zero evidence (#9306); `ConsensusProof.reached` is forced to `false` with `confidence` 0.0 | Merge gates that consumed an empty-evidence PASS must supply evidence or treat the verdict as non-passing |
 
 ### v2.0.0 Breaking Changes
 

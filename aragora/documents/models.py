@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from aragora.utils.datetime_helpers import parse_timestamp, utc_now
@@ -267,7 +267,10 @@ class IngestedDocument:
             headings=data.get("headings", []),
             tables_count=data.get("tables_count", 0),
             images_count=data.get("images_count", 0),
-            created_at=parse_timestamp(data.get("created_at"), default=utc_now()),
+            created_at=cast(
+                datetime,
+                parse_timestamp(data.get("created_at"), default=utc_now()),
+            ),
             processed_at=parse_timestamp(data.get("processed_at")),
             indexed_at=parse_timestamp(data.get("indexed_at")),
             metadata=data.get("metadata", {}),

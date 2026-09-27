@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, Mock, patch
 
@@ -30,6 +31,14 @@ from aragora.billing.calibration_cost_bridge import (
     CalibrationCostBridgeConfig,
     create_calibration_cost_bridge,
 )
+
+
+def test_bridge_source_has_no_agents_import():
+    """TYPE_CHECKING imports still count, so billing must define local protocols."""
+    import aragora.billing.calibration_cost_bridge as bridge_module
+
+    source = Path(bridge_module.__file__).read_text(encoding="utf-8")
+    assert "aragora.agents" not in source
 
 
 # =============================================================================

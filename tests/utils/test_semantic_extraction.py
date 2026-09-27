@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
+
 import pytest
 
-from aragora.utils.semantic_extraction import (
+from aragora.agents.semantic_extraction import (
     ExtractionProvider,
     extract_json_object_llm_first,
 )
+
+
+def test_legacy_semantic_extraction_path_warns_and_aliases_module():
+    """The old utils path remains a warning alias for monkeypatch compatibility."""
+    canonical = importlib.import_module("aragora.agents.semantic_extraction")
+    sys.modules.pop("aragora.utils.semantic_extraction", None)
+    with pytest.warns(DeprecationWarning, match=r"aragora\.utils\.semantic_extraction"):
+        legacy = importlib.import_module("aragora.utils.semantic_extraction")
+
+    assert legacy is canonical
 
 
 class _DummyAgent:

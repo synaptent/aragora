@@ -1,28 +1,48 @@
 #!/usr/bin/env python3
-"""Re-trigger PR workflow runs that were cancelled but not superseded.
+"""Re-run unexpectedly cancelled PROTECTED PR workflow runs — and advisory
+runs displaced while still QUEUED — once each.
 
-Companion to ``scripts/pr_stale_run_gc.py``. The GC *cancels* stale PR runs;
-this tool *re-runs* PR runs that were cancelled while still current, so a
-freshly-opened PR's advisory checks recover instead of staying red.
+Cancellation-provenance-aware M1 guardian (docs/governance/
+PR_RUN_CANCELLATION_DIAGNOSIS.md). The repo INTENTIONALLY cancels QUEUED
+non-required advisory ``pull_request`` runs through
+``.github/workflows/required-check-priority.yml`` (RCP) — that displacement
+is the prioritization system working, and this guardian completes it by
+rescheduling exactly those displaced runs once, so no run ends terminally
+``cancelled`` merely because it yielded queue capacity. What must never stay
+terminal-cancelled at all is the PROTECTED class: required checks and the
+priority keep-list (observed live 2026-07-09: keep-listed test shards killed
+mid-run — one at 96% all-passing — each clearing on manual rerun at 30-90min
+settlement latency).
 
-See ``docs/governance/PR_RUN_CANCELLATION_DIAGNOSIS.md``: on a freshly-opened
-PR a subset of advisory ``pull_request`` runs is cancelled at checkout by an
-external actor, even though the run is for the PR's current head and nothing
-superseded it. This tool detects exactly that case and re-runs it once.
+Provenance rule: a cancelled run is rerun-eligible if its workflow is in
+``scripts/ci/required_workflow_manifest.json`` (the versioned protected
+manifest mirroring the priority keep-list) —
+``unexpected_required_cancellation`` — OR, one narrow exception, if it is an
+advisory run that NEVER EXECUTED: a lazy jobs probe shows no job/step ever
+started, meaning required-check-priority.yml displaced it while it was still
+QUEUED (``queued_phase_advisory_displacement``). The exception is safe
+because (a) it is bounded once per ``run_attempt`` like every other rerun,
+(b) it never touches runs that actually started — an advisory run cancelled
+mid-execution (e.g. at Checkout) stays cancelled, and upstream RCP's
+queued-only rule now guarantees in-flight advisory runs are never cancelled
+at all, so the rerun cannot loop with the canceller — and (c) without it
+every queued-phase displacement ends as a terminal red ``cancelled``
+conclusion that taxes merge settlement. Advisory runs with any executed
+work remain ``intentional_advisory_priority`` and stay cancelled.
 
-A run is *re-triggerable* when all hold:
-- its event is a PR event (``pull_request`` / ``pull_request_target``);
-- its conclusion is ``cancelled`` (a completed-but-cancelled run);
-- its branch maps to an open, non-draft PR head (draft PRs are skipped);
-- its head SHA equals that PR's current head (not superseded by a new push);
-- no newer re-run of the same workflow+branch+head SHA via a PR event exists
-  (an unrelated ``push``/``workflow_dispatch`` or different-SHA run does not count);
-- it was created within a short TTL (stale cancellations are left alone);
-- it has not already been re-run (``run_attempt`` guard + optional marker file).
+A cancelled run is re-run ONLY when ALL hold:
+- ``conclusion == cancelled`` and the event is a PR event;
+- its workflow path is in the protected manifest, OR the never-executed
+  jobs probe above confirms a queued-phase advisory displacement;
+- its ``head_sha`` equals the PR's CURRENT head (not superseded);
+- no newer run of the same workflow+branch exists (rerun would be moot);
+- the PR is open and not draft;
+- the run is younger than ``--ttl-hours``;
+- ``run_attempt == 1`` — a rerun bumps the attempt counter, so this is the
+  stateless once-per-run marker that bounds re-run loops if the canceller
+  strikes again.
 
-The only privileged action is ``POST /actions/runs/{id}/rerun`` (equivalent to
-``gh run rerun``), gated behind ``--apply``. Default is a dry run that prints a
-JSON summary ``{scanned, candidates, eligible, reasons, ...}``.
+Dry-run by default; ``--apply`` performs the reruns.
 """
 
 from __future__ import annotations
@@ -30,44 +50,33 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
-import subprocess
 import sys
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+PR_EVENTS = {"pull_request"}
+DEFAULT_MANIFEST = Path(__file__).resolve().parent / "ci" / "required_workflow_manifest.json"
 
-PR_EVENTS = {"pull_request", "pull_request_target"}
-APP_TOKEN_RERUN_PERMISSION_MESSAGE = "Resource not accessible by integration"
-APP_TOKEN_RERUN_PERMISSION_RESULT = (
-    "app-token-rerun-permission-denied: Resource not accessible by integration"
-)
-OPERATOR_ACTION_EXIT = 2
+
+def load_protected_manifest(path: Path = DEFAULT_MANIFEST) -> set[str]:
+    """Load the protected workflow PATHS (names in the manifest are consumed
+    only by the future required-check-priority.yml migration). Fail CLOSED on
+    any problem:
+    an unreadable or empty manifest yields empty sets, and with empty sets no
+    run is rerun-eligible — the guardian then does nothing rather than risk
+    re-running intentionally cancelled advisory runs."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {str(p).strip() for p in data.get("workflow_paths", []) if str(p).strip()}
 
 
 class GitHubApiError(RuntimeError):
     """Raised when GitHub API calls fail."""
-
-
-def _resolve_github_token() -> str:
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if token:
-        return token
-    try:
-        completed = subprocess.run(
-            ["gh", "auth", "token"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    if completed.returncode != 0:
-        return ""
-    return completed.stdout.strip()
 
 
 class GitHubClient:
@@ -85,17 +94,16 @@ class GitHubClient:
         method: str,
         url: str,
         payload: dict[str, Any] | None = None,
-    ) -> tuple[Any, request.addinfourl]:
+    ) -> tuple[Any, Any]:
         body: bytes | None = None
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
-
         headers = {
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
             "Content-Type": "application/json",
-            "User-Agent": "aragora-retrigger-cancelled-pr-runs",
+            "User-Agent": "aragora-cancelled-run-guardian",
         }
         req = request.Request(url=url, data=body, headers=headers, method=method)
         try:
@@ -104,15 +112,15 @@ class GitHubClient:
             parsed = json.loads(raw) if raw else {}
             return parsed, resp
         except error.HTTPError as exc:
-            details = exc.read().decode("utf-8", errors="replace")
-            raise GitHubApiError(
-                f"GitHub API {method} {url} failed: {exc.code} {exc.reason}\n{details}"
-            ) from exc
+            detail = exc.read().decode("utf-8", errors="replace")[:200]
+            raise GitHubApiError(f"{method} {url} failed: {exc.code} {detail}") from exc
+        except error.URLError as exc:
+            raise GitHubApiError(f"{method} {url} failed: {exc.reason}") from exc
 
     def _api(self, path: str, query: dict[str, Any] | None = None) -> str:
         url = f"{self.api_base}{path}"
         if query:
-            url += "?" + parse.urlencode(query, doseq=True)
+            url = f"{url}?{parse.urlencode(query)}"
         return url
 
     def get(self, path: str, query: dict[str, Any] | None = None) -> Any:
@@ -120,7 +128,7 @@ class GitHubClient:
         return data
 
     def post(self, path: str, payload: dict[str, Any] | None = None) -> Any:
-        data, _ = self._request_json("POST", self._api(path), payload=payload)
+        data, _ = self._request_json("POST", self._api(path), payload)
         return data
 
     def paginate(
@@ -134,7 +142,6 @@ class GitHubClient:
         current_query = dict(query or {})
         current_query.setdefault("per_page", 100)
         current_query.setdefault("page", 1)
-
         pages = 0
         while pages < max_pages:
             pages += 1
@@ -143,6 +150,8 @@ class GitHubClient:
                 page_items = data
             elif isinstance(data, dict) and "workflow_runs" in data:
                 page_items = data["workflow_runs"]
+            elif isinstance(data, dict) and "jobs" in data:
+                page_items = data["jobs"]
             else:
                 raise GitHubApiError(
                     f"Expected list-like response for paginated endpoint {path}, got {type(data)}"
@@ -150,477 +159,256 @@ class GitHubClient:
             if not page_items:
                 break
             items.extend(page_items)
-
             link_header = response.headers.get("Link", "")
             if 'rel="next"' not in link_header:
                 break
             current_query["page"] = int(current_query["page"]) + 1
         return items
 
-    def list_open_pulls(self) -> list[dict[str, Any]]:
+    def list_open_pulls(self, max_pages: int = 10) -> tuple[list[dict[str, Any]], bool]:
+        """Return (open PRs, scan_truncated). A truncated scan can only cause
+        MISSED reruns (fail-safe direction), but it must be loud, not silent
+        (#9133 openai P2): callers surface the flag in output and stderr."""
         pulls = self.paginate(
             f"/repos/{self.repo}/pulls",
             query={"state": "open", "per_page": 100},
-            max_pages=5,
+            max_pages=max_pages,
         )
-        return [p for p in pulls if isinstance(p, dict)]
+        normalized = [p for p in pulls if isinstance(p, dict)]
+        truncated = len(normalized) >= max_pages * 100
+        return normalized, truncated
 
-    def get_pull(self, pr_number: int) -> dict[str, Any]:
-        pull = self.get(f"/repos/{self.repo}/pulls/{pr_number}")
-        if not isinstance(pull, dict):
-            raise GitHubApiError(f"Expected PR object for #{pr_number}, got {type(pull)}")
-        return pull
-
-    def list_recent_workflow_runs(
-        self,
-        max_runs: int,
-        *,
-        branch: str | None = None,
-        event: str | None = None,
-    ) -> list[dict[str, Any]]:
-        query: dict[str, Any] = {"per_page": 100}
-        if branch:
-            query["branch"] = branch
-        if event:
-            query["event"] = event
+    def list_recent_workflow_runs(self, max_runs: int) -> tuple[list[dict[str, Any]], bool]:
+        """Return (runs, scan_truncated) — truncation is LOUD, mirroring the
+        open-PR scan: it can only cause missed reruns, never wrong ones."""
+        # Filter server-side to PR-event runs: without it, push/schedule/
+        # dispatch runs consume the bounded window and eligible cancelled PR
+        # runs can fall outside it in a high-churn repo (#9133 openai P2 r5).
+        # Fetch one page BEYOND max_runs so truncation is detectable even
+        # when max_runs lands exactly on a page boundary (#9133 r8: with
+        # capacity == max_runs the flag could never fire).
         runs = self.paginate(
             f"/repos/{self.repo}/actions/runs",
-            query=query,
-            max_pages=max(1, (max_runs + 99) // 100),
+            query={"per_page": 100, "event": "pull_request"},
+            max_pages=max(1, (max_runs + 99) // 100) + 1,
         )
         normalized = [r for r in runs if isinstance(r, dict)]
-        return normalized[:max_runs]
+        truncated = len(normalized) > max_runs
+        return normalized[:max_runs], truncated
+
+    def list_run_jobs(self, run_id: int, max_pages: int = 3) -> list[dict[str, Any]]:
+        """Jobs of one run, for the queued-phase (never-executed) probe.
+
+        Called LAZILY — only for advisory candidates that already passed every
+        other guard — so the API budget is bounded by surviving candidates,
+        not by --max-runs."""
+        jobs = self.paginate(
+            f"/repos/{self.repo}/actions/runs/{run_id}/jobs",
+            query={"per_page": 100},
+            max_pages=max_pages,
+        )
+        return [j for j in jobs if isinstance(j, dict)]
 
     def rerun_workflow_run(self, run_id: int) -> tuple[bool, str]:
         try:
             self.post(f"/repos/{self.repo}/actions/runs/{run_id}/rerun")
             return True, "rerun_requested"
         except GitHubApiError as exc:
-            message = str(exc)
-            if _is_app_token_rerun_permission_failure(message):
-                return False, APP_TOKEN_RERUN_PERMISSION_RESULT
-            if "403" in message:
-                return False, "forbidden"
-            return False, message
+            return False, str(exc)
 
 
-def _field(run: dict[str, Any], *names: str, default: str = "") -> Any:
-    """Return the first present non-empty field (handles REST/CLI casing)."""
-    for name in names:
-        value = run.get(name)
-        if value not in (None, ""):
-            return value
-    return default
-
-
-def _is_app_token_rerun_permission_failure(message: str) -> bool:
-    return "403" in message and APP_TOKEN_RERUN_PERMISSION_MESSAGE in message
-
-
-def _parse_iso(ts: str) -> datetime | None:
-    text = str(ts).strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
+def _parse_created_at(value: str) -> datetime | None:
     try:
-        parsed = datetime.fromisoformat(text)
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
 
 
-def _run_sort_key(run: dict[str, Any]) -> tuple[float, int, int]:
-    created = _parse_iso(str(_field(run, "created_at", "createdAt")))
-    created_ts = created.timestamp() if created else 0.0
-    run_number = int(_field(run, "run_number", "runNumber", default=0) or 0)
-    run_id = int(_field(run, "id", "databaseId", default=0) or 0)
-    return (created_ts, run_number, run_id)
+def compute_active_head_pairs(open_pulls: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    """Return {(branch, head_sha)} pairs for open, NON-draft PR heads.
 
-
-def _run_branch(run: dict[str, Any]) -> str:
-    return str(_field(run, "head_branch", "headBranch")).strip()
-
-
-def _run_workflow_key(run: dict[str, Any]) -> Any:
-    return _field(run, "workflow_id", "workflowId") or _field(run, "name", default="")
-
-
-def _run_matches_pr(run: dict[str, Any], pr_number: int) -> bool:
-    pulls = run.get("pull_requests") or run.get("pullRequests") or []
-    if not isinstance(pulls, list):
-        return False
-    for pull in pulls:
-        if not isinstance(pull, dict):
-            continue
-        try:
-            number = int(pull.get("number", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        if number == pr_number:
-            return True
-    return False
-
-
-def _has_newer_sibling(
-    run: dict[str, Any],
-    runs: list[dict[str, Any]],
-    *,
-    pr_events: set[str] | None = None,
-) -> bool:
-    """True if a genuine newer re-run of the *same* PR check context exists.
-
-    A sibling only supersedes ``run`` when it targets the same workflow, branch,
-    and head SHA via a pull-request event. Unrelated ``push`` /
-    ``workflow_dispatch`` runs, or runs for a different head SHA on the same
-    branch, must not suppress re-running a still-current cancelled PR run.
-    """
-    wf = _run_workflow_key(run)
-    branch = _run_branch(run)
-    sha = str(_field(run, "head_sha", "headSha")).strip()
-    key = _run_sort_key(run)
-    run_id = int(_field(run, "id", "databaseId", default=0) or 0)
-    for other in runs:
-        other_id = int(_field(other, "id", "databaseId", default=0) or 0)
-        if other_id == run_id:
-            continue
-        if _run_workflow_key(other) != wf or _run_branch(other) != branch:
-            continue
-        if str(_field(other, "head_sha", "headSha")).strip() != sha:
-            continue
-        if pr_events is not None and str(_field(other, "event")).strip() not in pr_events:
-            continue
-        if _run_sort_key(other) > key:
-            return True
-    return False
-
-
-def compute_retriggerable_runs(
-    runs: list[dict[str, Any]],
-    *,
-    active_heads: dict[str, str],
-    cancel_events: set[str],
-    now: datetime,
-    ttl_minutes: int,
-    already_retriggered: set[int] | None = None,
-    max_attempts: int = 2,
-) -> tuple[list[dict[str, Any]], dict[str, int], int]:
-    """Classify cancelled PR runs into re-triggerable vs skipped.
-
-    Returns ``(eligible, reasons, candidates)`` where ``eligible`` is a list of
-    run descriptors to re-run, ``reasons`` counts skip reasons among cancelled
-    PR runs, and ``candidates`` is the number of cancelled PR runs examined.
-    """
-    marker = already_retriggered or set()
-    ttl_seconds = max(0, ttl_minutes) * 60
-    eligible: list[dict[str, Any]] = []
-    reasons: dict[str, int] = {}
-    candidates = 0
-
-    def mark(reason: str) -> None:
-        reasons[reason] = reasons.get(reason, 0) + 1
-
-    for run in runs:
-        event_name = str(_field(run, "event")).strip()
-        if event_name not in cancel_events:
-            continue
-        conclusion = str(_field(run, "conclusion")).strip().lower()
-        status = str(_field(run, "status")).strip().lower()
-        if conclusion != "cancelled" or status != "completed":
-            continue
-
-        # From here on the run is a completed-but-cancelled PR run: a candidate.
-        candidates += 1
-        run_id = int(_field(run, "id", "databaseId", default=0) or 0)
-        branch = _run_branch(run)
-        sha = str(_field(run, "head_sha", "headSha")).strip()
-        run_attempt = int(_field(run, "run_attempt", "runAttempt", default=1) or 1)
-
-        if not branch or run_id <= 0:
-            mark("missing-branch")
-            continue
-        active_sha = active_heads.get(branch)
-        if active_sha is None:
-            mark("draft-or-closed")
-            continue
-        if active_sha != sha:
-            mark("superseded-sha")
-            continue
-        if _has_newer_sibling(run, runs, pr_events=cancel_events):
-            mark("superseded-by-newer-run")
-            continue
-
-        created = _parse_iso(str(_field(run, "created_at", "createdAt")))
-        if created is None:
-            mark("bad-timestamp")
-            continue
-        if (now - created).total_seconds() > ttl_seconds:
-            mark("ttl-expired")
-            continue
-
-        if run_id in marker:
-            mark("already-retriggered")
-            continue
-        if run_attempt >= max_attempts:
-            mark("max-attempts")
-            continue
-
-        eligible.append(
-            {
-                "run_id": run_id,
-                "workflow": str(_field(run, "name", default="")),
-                "branch": branch,
-                "sha": sha,
-                "run_attempt": run_attempt,
-                "rerun_command": f"gh run rerun {run_id}",
-                "human_rerun_command": f"gh run rerun {run_id}",
-            }
-        )
-
-    return eligible, reasons, candidates
-
-
-def load_marker(path: str) -> dict[str, str]:
-    if not path or not os.path.exists(path):
-        return {}
-    try:
-        with open(path, encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return {str(k): str(v) for k, v in data.items()}
-
-
-def prune_marker(data: dict[str, str], *, now: datetime, retention_hours: int) -> dict[str, str]:
-    if retention_hours <= 0:
-        return dict(data)
-    cutoff = retention_hours * 3600
-    pruned: dict[str, str] = {}
-    for run_id, ts in data.items():
-        when = _parse_iso(ts)
-        if when is None:
-            continue
-        if (now - when).total_seconds() <= cutoff:
-            pruned[run_id] = ts
-    return pruned
-
-
-def save_marker(path: str, data: dict[str, str]) -> None:
-    if not path:
-        return
-    parent = os.path.dirname(os.path.abspath(path))
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2, sort_keys=True)
-
-
-def _safe_filename_fragment(value: str) -> str:
-    fragment = re.sub(r"[^A-Za-z0-9_.-]+", "-", value.strip())
-    return fragment.strip("-") or "all"
-
-
-def _prune_receipts(path: Path, *, now: datetime, retention_hours: int) -> None:
-    if retention_hours <= 0 or not path.exists():
-        return
-    cutoff = now.timestamp() - (retention_hours * 3600)
-    for child in path.glob("RETRIGGER_CANCELLED_RECEIPT_*.json"):
-        try:
-            if child.stat().st_mtime < cutoff:
-                child.unlink()
-        except OSError:
-            continue
-
-
-def _write_receipt(
-    *,
-    receipt_dir: str,
-    now: datetime,
-    repo: str,
-    scope: str,
-    summary: dict[str, Any],
-    retention_hours: int,
-) -> str:
-    path = Path(receipt_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    _prune_receipts(path, now=now, retention_hours=retention_hours)
-    timestamp = now.strftime("%Y%m%dT%H%M%S%fZ")
-    filename = (
-        f"RETRIGGER_CANCELLED_RECEIPT_{timestamp}_pid{os.getpid()}_"
-        f"{_safe_filename_fragment(scope)}.json"
-    )
-    receipt_path = path / filename
-    receipt = {
-        "schema": "retrigger-cancelled-pr-runs-receipt/v1",
-        "generated_at": now.isoformat(),
-        "repo": repo,
-        "scope": scope,
-        "dry_run": bool(summary.get("dry_run", True)),
-        "scanned": int(summary.get("scanned", 0) or 0),
-        "candidates": int(summary.get("candidates", 0) or 0),
-        "eligible": int(summary.get("eligible", 0) or 0),
-        "eligible_run_ids": [int(item["run_id"]) for item in summary.get("eligible_runs", [])],
-        "applied": int(summary.get("applied", 0) or 0),
-        "apply_failed": int(summary.get("apply_failed", 0) or 0),
-        "rerun_run_ids": [
-            int(item["run_id"]) for item in summary.get("rerun_results", []) if item.get("ok")
-        ],
-        "operator_action_required": bool(summary.get("operator_action_required", False)),
-        "permission_denied_run_ids": [
-            int(item["run_id"]) for item in summary.get("permission_denied_reruns", [])
-        ],
-        "human_rerun_commands": list(summary.get("human_rerun_commands", [])),
-        "operator_packet": str(summary.get("operator_packet", "") or ""),
-        "head_shas": sorted(
-            {
-                str(item.get("sha", "")).strip()
-                for item in summary.get("eligible_runs", [])
-                if str(item.get("sha", "")).strip()
-            }
-        ),
-        "summary": summary,
-    }
-    with receipt_path.open("w", encoding="utf-8") as handle:
-        json.dump(receipt, handle, indent=2, sort_keys=True)
-        handle.write("\n")
-    return str(receipt_path)
-
-
-def _human_rerun_items(
-    eligible_runs: list[dict[str, Any]],
-    rerun_results: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    eligible_by_id = {int(item["run_id"]): item for item in eligible_runs}
-    items: list[dict[str, Any]] = []
-    for result in rerun_results:
-        if result.get("ok"):
-            continue
-        message = str(result.get("message", ""))
-        if APP_TOKEN_RERUN_PERMISSION_RESULT not in message:
-            continue
-        run_id = int(result["run_id"])
-        run = eligible_by_id.get(run_id, {"run_id": run_id})
-        item = dict(run)
-        item["run_id"] = run_id
-        item["failure"] = APP_TOKEN_RERUN_PERMISSION_MESSAGE
-        item["human_rerun_command"] = str(
-            item.get("human_rerun_command") or f"gh run rerun {run_id} --failed"
-        )
-        items.append(item)
-    return items
-
-
-def _github_run_url(repo: str, run_id: int) -> str:
-    return f"https://github.com/{repo}/actions/runs/{run_id}"
-
-
-def _write_operator_rerun_packet(
-    *,
-    packet_dir: str,
-    now: datetime,
-    repo: str,
-    scope: str,
-    human_reruns: list[dict[str, Any]],
-    receipt_path: str = "",
-) -> str:
-    path = Path(packet_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    timestamp = now.strftime("%Y%m%dT%H%M%S%fZ")
-    packet_path = path / (
-        f"HUMAN_RERUN_PACKET_{timestamp}_pid{os.getpid()}_{_safe_filename_fragment(scope)}.md"
-    )
-
-    lines = [
-        "# Cancelled Run Human Rerun Packet",
-        "",
-        f"Generated: {now.isoformat()}",
-        "",
-        "Purpose: surface exact human/operator reruns after the GitHub App token "
-        f"failed with `{APP_TOKEN_RERUN_PERMISSION_MESSAGE}`.",
-        "",
-        "This packet does not edit workflow files, mutate PR state, merge, settle, "
-        "post evidence, or rerun checks by itself.",
-        "",
-        "## Pending Reruns",
-        "",
-        "| Priority | Link | Requested Action | Operator Command |",
-        "| --- | --- | --- | --- |",
-    ]
-    for item in human_reruns:
-        run_id = int(item["run_id"])
-        command = str(item.get("human_rerun_command") or f"gh run rerun {run_id} --failed")
-        workflow = str(item.get("workflow", "") or "workflow run")
-        branch = str(item.get("branch", "") or "unknown-branch")
-        sha = str(item.get("sha", "") or "unknown-sha")
-        requested = (
-            f"Run exactly `{command}` with human/operator credentials. "
-            f"Proof: `{workflow}` on `{branch}` at `{sha}` was selected as a current "
-            f"cancelled run, but the App-token rerun attempt failed with "
-            f"`{APP_TOKEN_RERUN_PERMISSION_MESSAGE}`."
-        )
-        lines.append(
-            "| "
-            + " | ".join(
-                [
-                    "P1",
-                    _github_run_url(repo, run_id),
-                    requested,
-                    f"`{command}`",
-                ]
-            )
-            + " |"
-        )
-
-    lines.extend(
-        [
-            "",
-            "## Source",
-            "",
-            f"- Repository: `{repo}`",
-            f"- Scope: `{scope}`",
-        ]
-    )
-    if receipt_path:
-        lines.append(f"- JSON receipt: `{receipt_path}`")
-    lines.append("")
-    packet_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return str(packet_path)
-
-
-def compute_active_head_map(
-    open_pulls: list[dict[str, Any]],
-    *,
-    keep_draft_runs: bool,
-) -> dict[str, str]:
-    """Return branch -> head_sha for open PR heads (draft excluded by default)."""
-    active: dict[str, str] = {}
+    Keyed by PAIR, not branch alone (#9133 openai P2): two open PRs — a fork
+    and a same-repo branch, or two forks — can share a branch name with
+    different SHAs; a branch-keyed dict lets whichever PR sorts last shadow
+    the other and could qualify a stale-head run for rerun."""
+    active: set[tuple[str, str]] = set()
     for pr in open_pulls:
-        if bool(pr.get("draft")) and not keep_draft_runs:
+        if bool(pr.get("draft")):
             continue
         head = pr.get("head", {})
         branch = str(head.get("ref", "")).strip()
         sha = str(head.get("sha", "")).strip()
         if branch and sha:
-            active[branch] = sha
+            active.add((branch, sha))
     return active
 
 
+def run_never_executed(jobs: list[dict[str, Any]]) -> bool:
+    """True iff a cancelled run was displaced while still QUEUED, i.e. it
+    never executed anything. Two independent signals, either suffices:
+
+    - every job has a null/empty ``started_at`` (nothing was ever assigned a
+      runner), OR
+    - no job contains any step with a non-null ``started_at`` (GitHub can
+      stamp a job-level ``started_at`` on queued-cancelled jobs, but a STEP
+      ``started_at`` appears only when the job genuinely began executing).
+
+    A run cancelled mid-execution — e.g. at the Checkout step — HAS a started
+    step and returns False; that class is eliminated upstream by RCP's
+    queued-only cancellation rule and is never this guardian's to undo."""
+    if all(not job.get("started_at") for job in jobs):
+        return True
+    return not any(
+        step.get("started_at")
+        for job in jobs
+        for step in job.get("steps") or []
+        if isinstance(step, dict)
+    )
+
+
+def compute_reruns(
+    runs: list[dict[str, Any]],
+    *,
+    active_head_pairs: set[tuple[str, str]],
+    now: datetime,
+    open_pr_numbers: set[int] | None = None,
+    ttl_hours: float,
+    protected_paths: set[str],
+    events: set[str] | None = None,
+    fetch_jobs: Callable[[int], list[dict[str, Any]] | None] | None = None,
+) -> list[dict[str, Any]]:
+    """Select cancelled PR runs that deserve exactly one honest rerun.
+
+    Two classes qualify; everything else stays cancelled:
+
+    - ``unexpected_required_cancellation`` — the workflow is in the protected
+      manifest (required checks + priority keep-list).
+    - ``queued_phase_advisory_displacement`` — the workflow is advisory (not
+      in the manifest) but the run NEVER EXECUTED: the jobs probe shows no
+      started job/step, i.e. required-check-priority.yml displaced it while
+      it was still queued. One rerun is safe: it is bounded by the
+      run_attempt == 1 marker like every other rerun, and it cannot loop with
+      the canceller because RCP now cancels queued runs only — once the rerun
+      starts executing, priority sweeps can no longer touch it.
+
+    An advisory run that actually STARTED (e.g. cancelled at the Checkout
+    step) is never selected — intentional_advisory_priority stays cancelled —
+    and that mid-execution class is eliminated upstream by RCP's queued-only
+    rule anyway. The jobs probe is LAZY: it fires only for advisory
+    candidates that already passed every other guard (attempt, head pair, PR
+    association, TTL, supersession), so API spend scales with surviving
+    candidates, not --max-runs. ``fetch_jobs=None`` (or a probe returning
+    ``None``) disables/fails the advisory class CLOSED: only protected runs
+    are then selected."""
+    considered_events = events or PR_EVENTS
+    cutoff = now - timedelta(hours=ttl_hours)
+    # Supersession is judged ONLY among runs of the same PR event class AND
+    # the same head SHA: a newer push/workflow_dispatch run does not
+    # re-evaluate the PR's required contexts (#9133 openai P2 r2), and a newer
+    # PR run at a DIFFERENT (stale) SHA does not cover the current head
+    # (#9133 claude P2 r3). Ties on GitHub's second-granular timestamps are
+    # broken by run id, so same-second bursts cannot both survive.
+    newest_by_group: dict[tuple[Any, str, str], tuple[datetime, int]] = {}
+    for run in runs:
+        if str(run.get("event", "")).strip() not in considered_events:
+            continue
+        created = _parse_created_at(str(run.get("created_at", "")))
+        if created is None:
+            continue
+        key = (
+            run.get("workflow_id"),
+            str(run.get("head_branch", "")).strip(),
+            str(run.get("head_sha", "")).strip(),
+        )
+        stamp = (created, int(run.get("id") or 0))
+        if key not in newest_by_group or stamp > newest_by_group[key]:
+            newest_by_group[key] = stamp
+
+    reruns: list[dict[str, Any]] = []
+    for run in runs:
+        if str(run.get("event", "")).strip() not in considered_events:
+            continue
+        if str(run.get("conclusion", "")).strip() != "cancelled":
+            continue
+        # Path-ONLY protection matching (#9133 claude P3): for pull_request
+        # runs both path and name come from the PR branch's workflow file, but
+        # spoofing a keep-list PATH requires the PR to modify a protected
+        # workflow file — which itself triggers Tier-4 review — while spoofing
+        # a display NAME is free. The residual blast radius is one bounded
+        # rerun (run_attempt==1 marker), never authority.
+        workflow_path = str(run.get("path", "")).split("@")[0].strip()
+        is_protected = workflow_path in protected_paths
+        if not is_protected and fetch_jobs is None:
+            continue  # intentional_advisory_priority cancellation: stays cancelled
+        if int(run.get("run_attempt") or 1) != 1:
+            continue  # once-per-run marker: a rerun already happened
+        branch = str(run.get("head_branch", "")).strip()
+        sha = str(run.get("head_sha", "")).strip()
+        if (branch, sha) not in active_head_pairs:
+            continue  # superseded head, closed PR, or draft
+        # Belt-and-braces PR association (#9133 r11 openai P2): when the API
+        # names the run's pull_requests, at least one must be an open
+        # non-draft PR we scanned; an empty list stays eligible (GitHub
+        # omits it for fork runs).
+        run_prs = [
+            int(p.get("number") or 0) for p in run.get("pull_requests") or [] if isinstance(p, dict)
+        ]
+        if run_prs and open_pr_numbers is not None and not (set(run_prs) & open_pr_numbers):
+            continue
+        cancelled_at = _parse_created_at(
+            str(run.get("updated_at", "")) or str(run.get("created_at", ""))
+        )
+        if cancelled_at is None or cancelled_at < cutoff:
+            # TTL anchors to CANCELLATION time (updated_at), not run creation:
+            # the motivating incidents were long-running shards cancelled
+            # hours after they started (#9133 claude P3 r7).
+            continue
+        # Supersession compares run CREATION times — parse THIS run's own
+        # created_at here (#9133 r8 convergent P1: a stale `created` leaking
+        # from the newest_by_group loop skewed the comparison).
+        created = _parse_created_at(str(run.get("created_at", "")))
+        if created is None:
+            continue
+        group = (run.get("workflow_id"), branch, sha)
+        newest = newest_by_group.get(group)
+        if newest is not None and (created, int(run.get("id") or 0)) < newest:
+            continue  # a newer same-head run of this workflow supersedes this one
+        classification = "unexpected_required_cancellation"
+        if not is_protected:
+            # LAZY jobs probe — deliberately the LAST guard, reached only by
+            # advisory candidates that survived every cheap guard above, so
+            # each 20-minute pass spends at most one extra API call per
+            # surviving candidate (not per --max-runs run scanned).
+            assert fetch_jobs is not None  # guarded above
+            jobs = fetch_jobs(int(run.get("id") or 0))
+            if jobs is None or not run_never_executed(jobs):
+                # Probe failed (fail closed: cannot PROVE it never executed)
+                # or the run genuinely started before cancellation — an
+                # in-flight advisory cancellation is not this guardian's to
+                # undo.
+                continue
+            classification = "queued_phase_advisory_displacement"
+        reruns.append(
+            {
+                "run_id": int(run.get("id") or 0),
+                "workflow": str(run.get("name", "")).strip(),
+                "branch": branch,
+                "sha": sha,
+                "created_at": str(run.get("created_at", "")),
+                "classification": classification,
+            }
+        )
+    return reruns
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Re-trigger cancelled, non-superseded PR runs")
+    parser = argparse.ArgumentParser(
+        description="Re-run externally cancelled PR workflow runs once"
+    )
     parser.add_argument(
         "--repo",
         default=os.environ.get("GITHUB_REPOSITORY", ""),
         help="GitHub repository in OWNER/REPO format",
-    )
-    parser.add_argument(
-        "--pr",
-        type=int,
-        default=None,
-        help="Scope scanning to one pull request's branch/head",
     )
     parser.add_argument(
         "--max-runs",
@@ -629,60 +417,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Maximum recent workflow runs to inspect",
     )
     parser.add_argument(
-        "--ttl-minutes",
-        type=int,
-        default=60,
-        help="Only re-trigger runs created within this many minutes",
-    )
-    parser.add_argument(
-        "--max-attempts",
-        type=int,
-        default=2,
-        help="Skip runs whose run_attempt is >= this value (loop guard)",
-    )
-    parser.add_argument(
-        "--events",
-        default="pull_request,pull_request_target",
-        help="Comma-separated run events to consider",
-    )
-    parser.add_argument(
-        "--keep-draft-runs",
-        action="store_true",
-        help="Treat draft PR branches as active and re-trigger their runs",
-    )
-    parser.add_argument(
-        "--marker-file",
-        default=os.environ.get("RETRIGGER_MARKER_FILE", ""),
-        help="Optional path to a JSON loop-guard marker (run_id -> ISO timestamp)",
-    )
-    parser.add_argument(
-        "--marker-retention-hours",
-        type=int,
-        default=24,
-        help="Prune marker entries older than this many hours",
-    )
-    parser.add_argument(
-        "--receipt-dir",
-        default=os.environ.get("RETRIGGER_RECEIPT_DIR", ".aragora/retrigger_cancelled/receipts"),
-        help="Directory for per-invocation JSON receipts",
-    )
-    parser.add_argument(
-        "--receipt-retention-hours",
-        type=int,
-        default=168,
-        help="Prune retrigger receipts older than this many hours (<=0 disables pruning)",
-    )
-    parser.add_argument(
-        "--operator-packet-dir",
-        default=os.environ.get(
-            "RETRIGGER_OPERATOR_PACKET_DIR", ".aragora/retrigger_cancelled/operator_packets"
-        ),
-        help="Directory for human rerun packets when App-token reruns are permission-denied",
+        "--ttl-hours",
+        type=float,
+        default=6.0,
+        help="Only rerun cancellations younger than this many hours",
     )
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Actually re-run eligible runs (default: dry run)",
+        help="Actually request reruns (default: dry-run report only)",
     )
     return parser.parse_args(argv)
 
@@ -691,153 +434,87 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if not args.repo:
         print("--repo is required (or set GITHUB_REPOSITORY)", file=sys.stderr)
-        return 1
-    token = _resolve_github_token()
+        return 2
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
     if not token:
+        print("GITHUB_TOKEN (or GH_TOKEN) is required", file=sys.stderr)
+        return 2
+    protected_paths = load_protected_manifest()
+    if not protected_paths:
+        # Fail closed AND loud: a permanently disarmed guardian must never
+        # look green on the schedule (#9133 claude P3 r7).
+        print("protected manifest empty/unreadable; failing closed (no reruns)", file=sys.stderr)
+        print(json.dumps({"repo": args.repo, "rerun_count": 0, "reruns": []}, indent=2))
+        return 2
+    client = GitHubClient(args.repo, token)
+    open_pulls, pr_scan_truncated = client.list_open_pulls()
+    runs, run_scan_truncated = client.list_recent_workflow_runs(args.max_runs)
+    if run_scan_truncated:
         print(
-            "GITHUB_TOKEN is required, or authenticate gh so `gh auth token` works", file=sys.stderr
+            "warning: workflow-run scan hit --max-runs; some protected "
+            "cancelled runs may be missed this pass",
+            file=sys.stderr,
         )
-        return 1
-    if args.max_runs < 1:
-        print("--max-runs must be >= 1", file=sys.stderr)
-        return 1
-
-    cancel_events = {e.strip() for e in args.events.split(",") if e.strip()}
-    if not cancel_events:
-        cancel_events = set(PR_EVENTS)
-
-    now = datetime.now(timezone.utc)
-    marker_data = prune_marker(
-        load_marker(args.marker_file), now=now, retention_hours=args.marker_retention_hours
-    )
-    already = {int(k) for k in marker_data if str(k).isdigit()}
-
-    try:
-        client = GitHubClient(repo=args.repo, token=token)
-        scoped_pr: dict[str, Any] | None = None
-        if args.pr is not None:
-            if args.pr <= 0:
-                print("--pr must be a positive integer", file=sys.stderr)
-                return 1
-            scoped_pr = client.get_pull(int(args.pr))
-            open_pulls = [scoped_pr] if str(scoped_pr.get("state")) == "open" else []
-        else:
-            open_pulls = client.list_open_pulls()
-        active_heads = compute_active_head_map(
-            open_pulls, keep_draft_runs=bool(args.keep_draft_runs)
+    if pr_scan_truncated:
+        print(
+            "warning: open-PR scan hit the pagination cap; some protected "
+            "cancelled runs may be missed this pass",
+            file=sys.stderr,
         )
-        runs: list[dict[str, Any]]
-        scoped_branch = ""
-        scoped_sha = ""
-        if scoped_pr is not None:
-            head = scoped_pr.get("head", {})
-            scoped_branch = str(head.get("ref", "")).strip()
-            scoped_sha = str(head.get("sha", "")).strip()
-            runs_by_id: dict[int, dict[str, Any]] = {}
-            for event_name in sorted(cancel_events):
-                for run in client.list_recent_workflow_runs(
-                    max_runs=args.max_runs,
-                    branch=scoped_branch,
-                    event=event_name,
-                ):
-                    run_id = int(_field(run, "id", "databaseId", default=0) or 0)
-                    if run_id > 0 and _run_matches_pr(run, int(args.pr)):
-                        runs_by_id[run_id] = run
-            runs = sorted(runs_by_id.values(), key=_run_sort_key, reverse=True)
-        else:
-            runs = client.list_recent_workflow_runs(max_runs=args.max_runs)
-        eligible, reasons, candidates = compute_retriggerable_runs(
-            runs,
-            active_heads=active_heads,
-            cancel_events=cancel_events,
-            now=now,
-            ttl_minutes=args.ttl_minutes,
-            already_retriggered=already,
-            max_attempts=args.max_attempts,
-        )
+    active_head_pairs = compute_active_head_pairs(open_pulls)
+    open_pr_numbers = {int(pr.get("number") or 0) for pr in open_pulls if not bool(pr.get("draft"))}
 
-        applied = 0
-        apply_failed = 0
-        rerun_results: list[dict[str, Any]] = []
-        if args.apply:
-            for item in eligible:
-                run_id = int(item["run_id"])
-                ok, msg = client.rerun_workflow_run(run_id)
-                rerun_results.append({"run_id": run_id, "ok": ok, "message": msg})
-                if ok:
-                    applied += 1
-                    marker_data[str(item["run_id"])] = now.isoformat()
-                else:
-                    apply_failed += 1
-            if args.marker_file:
-                save_marker(args.marker_file, marker_data)
-
-        human_reruns = _human_rerun_items(eligible, rerun_results)
-
-        summary = {
-            "open_prs_total": len(open_pulls),
-            "active_heads_total": len(active_heads),
-            "scanned": len(runs),
-            "candidates": candidates,
-            "eligible": len(eligible),
-            "eligible_runs": eligible,
-            "reasons": reasons,
-            "dry_run": not args.apply,
-            "applied": applied,
-            "apply_failed": apply_failed,
-            "rerun_results": rerun_results,
-            "ttl_minutes": args.ttl_minutes,
-            "max_attempts": args.max_attempts,
-            "pr": int(args.pr) if args.pr is not None else None,
-            "scope": f"pr-{args.pr}" if args.pr is not None else "all-open-prs",
-            "scoped_branch": scoped_branch,
-            "scoped_sha": scoped_sha,
-            "operator_action_required": bool(human_reruns),
-            "permission_denied_reruns": human_reruns,
-            "human_rerun_commands": [
-                str(item.get("human_rerun_command", "")) for item in human_reruns
-            ],
-            "operator_packet": "",
-            "operator_packet_error": "",
-        }
-        operator_packet_error = ""
-        if human_reruns:
-            try:
-                packet_path = _write_operator_rerun_packet(
-                    packet_dir=args.operator_packet_dir,
-                    now=now,
-                    repo=args.repo,
-                    scope=str(summary["scope"]),
-                    human_reruns=human_reruns,
-                )
-                summary["operator_packet"] = packet_path
-            except OSError as exc:
-                operator_packet_error = str(exc)
-                summary["operator_packet_error"] = operator_packet_error
+    def fetch_jobs(run_id: int) -> list[dict[str, Any]] | None:
         try:
-            receipt_path = _write_receipt(
-                receipt_dir=args.receipt_dir,
-                now=now,
-                repo=args.repo,
-                scope=str(summary["scope"]),
-                summary=summary,
-                retention_hours=int(args.receipt_retention_hours),
-            )
-            summary["receipt"] = receipt_path
-            summary["receipt_error"] = ""
-        except OSError as exc:
-            summary["receipt"] = ""
-            summary["receipt_error"] = str(exc)
-        print(json.dumps(summary))
-        if human_reruns:
-            if operator_packet_error or summary.get("receipt_error"):
-                return 1
-            return OPERATOR_ACTION_EXIT
-        return 0
-    except (GitHubApiError, ValueError) as exc:
-        print(f"Re-trigger error: {exc}", file=sys.stderr)
+            return client.list_run_jobs(run_id)
+        except GitHubApiError as exc:
+            # Fail CLOSED per run: without a readable jobs probe we cannot
+            # prove the run never executed, so it stays cancelled — but loud,
+            # so a permanently broken probe never looks green on schedule.
+            print(f"jobs probe failed for run {run_id}: {exc}", file=sys.stderr)
+            return None
+
+    reruns = compute_reruns(
+        runs,
+        active_head_pairs=active_head_pairs,
+        now=datetime.now(timezone.utc),
+        ttl_hours=args.ttl_hours,
+        protected_paths=protected_paths,
+        open_pr_numbers=open_pr_numbers,
+        fetch_jobs=fetch_jobs,
+    )
+    apply_failures = 0
+    for item in reruns:
+        if args.apply:
+            ok, detail = client.rerun_workflow_run(item["run_id"])
+            item["applied"] = ok
+            item["detail"] = detail
+            if not ok:
+                apply_failures += 1
+        else:
+            item["applied"] = False
+            item["detail"] = "dry-run"
+    print(
+        json.dumps(
+            {
+                "repo": args.repo,
+                "rerun_count": len(reruns),
+                "open_pr_scan_truncated": pr_scan_truncated,
+                "run_scan_truncated": run_scan_truncated,
+                "apply_failures": apply_failures,
+                "reruns": reruns,
+            },
+            indent=2,
+        )
+    )
+    if apply_failures:
+        # Fail LOUD: if actions:write is missing or GitHub rejects reruns, a
+        # green scheduled run would hide the very regression this guardian
+        # exists to repair (#9133 openai P3).
+        print(f"{apply_failures} rerun request(s) failed", file=sys.stderr)
         return 1
+    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

@@ -124,7 +124,7 @@ services:
   # Frontend Dev Server
   # ==========================================================================
   frontend-dev:
-    image: node:18.19-alpine
+    image: node:24.18-alpine
     container_name: aragora-frontend-dev
     working_dir: /app
     ports:
@@ -136,9 +136,21 @@ services:
       - WATCHPACK_POLLING=true
     volumes:
       - ./aragora/live:/app
+      # The frontend's file:../../sdk/typescript dependency resolves here from /app.
+      - typescript-sdk-dev:/sdk/typescript
+      - ./sdk/typescript/.npmrc:/sdk/typescript/.npmrc:ro
+      - ./sdk/typescript/package.json:/sdk/typescript/package.json:ro
+      - ./sdk/typescript/package-lock.json:/sdk/typescript/package-lock.json:ro
+      - ./sdk/typescript/tsconfig.json:/sdk/typescript/tsconfig.json:ro
+      - ./sdk/typescript/src:/sdk/typescript/src:ro
+      - frontend-dev-npm-cache:/root/.npm
       - /app/node_modules  # Exclude node_modules from mount
       - /app/.next         # Exclude .next from mount
-    command: sh -c "npm install && npm run dev"
+    command: >
+      sh -c "npm --prefix /sdk/typescript ci --legacy-peer-deps &&
+      npm --prefix /sdk/typescript run build &&
+      npm install &&
+      npm run dev"
     depends_on:
       - aragora-dev
     restart: unless-stopped
@@ -264,6 +276,8 @@ services:
 volumes:
   aragora-dev-data:
   aragora-dev-nomic:
+  typescript-sdk-dev:
+  frontend-dev-npm-cache:
   redis-dev-data:
   postgres-dev-data:
   weaviate-dev-data:

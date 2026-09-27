@@ -43,9 +43,9 @@ Delta detail pass:
 
 - Only PRs whose head moved since the cached entry (or with no cached checks)
   cost a ``repos/{repo}/commits/{sha}/check-runs?per_page=100`` call; the
-  latest run per check name (by completed/started timestamp) is stored as
-  ``{name: conclusion-or-status}``. At most ``--max-detail`` fetches per run;
-  over-cap PRs are annotated ``detail_deferred:<n>``.
+  latest run per check name (by run id, with creation-time fallback) is stored
+  as ``{name: conclusion-or-status}``. At most ``--max-detail`` fetches per
+  run; over-cap PRs are annotated ``detail_deferred:<n>``.
 
 Safety model (mirrors scripts/auto_evidence_cycle.py):
 
@@ -244,21 +244,50 @@ def normalize_pr(row: dict[str, Any]) -> dict[str, Any] | None:
 def extract_checks(payload: dict[str, Any]) -> dict[str, str]:
     """Latest check-run per name: ``{name: conclusion-or-status}``.
 
-    GitHub returns every attempt; only the most recent run per check name (by
-    completed/started timestamp, ISO-sortable) reflects current state.
+    GitHub returns every attempt. Run ids identify attempt creation order;
+    timestamps are only a fallback for incomplete fixtures or payloads. Using
+    completion time as the primary key can hide a newer queued attempt whose
+    ``started_at`` and ``completed_at`` fields are still null.
     """
-    latest: dict[str, tuple[str, str]] = {}  # name -> (timestamp_key, value)
-    for run in payload.get("check_runs") or []:
+    latest: dict[str, tuple[dict[str, Any], int, str]] = {}
+    for index, run in enumerate(payload.get("check_runs") or []):
         if not isinstance(run, dict):
             continue
         name = str(run.get("name") or "")
         if not name:
             continue
-        key = str(run.get("completed_at") or run.get("started_at") or "")
         value = str(run.get("conclusion") or run.get("status") or "")
-        if name not in latest or key >= latest[name][0]:
-            latest[name] = (key, value)
-    return {name: value for name, (_, value) in sorted(latest.items())}
+        previous = latest.get(name)
+        if previous is None or _check_run_is_newer(run, index, previous[0], previous[1]):
+            latest[name] = (run, index, value)
+    return {name: value for name, (_, _, value) in sorted(latest.items())}
+
+
+def _check_run_is_newer(
+    candidate: dict[str, Any],
+    candidate_index: int,
+    current: dict[str, Any],
+    current_index: int,
+) -> bool:
+    def run_id(run: dict[str, Any]) -> int:
+        try:
+            return int(run.get("id") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    candidate_id = run_id(candidate)
+    current_id = run_id(current)
+    if candidate_id and current_id and candidate_id != current_id:
+        return candidate_id > current_id
+
+    def timestamp(run: dict[str, Any]) -> str:
+        return str(run.get("created_at") or run.get("started_at") or run.get("completed_at") or "")
+
+    candidate_timestamp = timestamp(candidate)
+    current_timestamp = timestamp(current)
+    if candidate_timestamp != current_timestamp:
+        return candidate_timestamp > current_timestamp
+    return candidate_index > current_index
 
 
 # --- poll ------------------------------------------------------------------------

@@ -196,12 +196,20 @@ def collect_pending_approvals(
         try:
             from aragora.server.handlers.openclaw.store import _get_store
 
-            store = _get_store()
-            if hasattr(store, "list_approvals"):
-                approvals, _total = store.list_approvals(limit=limit, offset=0)
-                for req in approvals:
-                    req_dict = req.to_dict() if hasattr(req, "to_dict") else req
-                    created_at = req_dict.get("created_at") if isinstance(req_dict, dict) else None
+            gateway_store = _get_store()
+            if hasattr(gateway_store, "list_approvals"):
+                gateway_approvals, _total = gateway_store.list_approvals(limit=limit, offset=0)
+                for gateway_req in gateway_approvals:
+                    req_dict = (
+                        gateway_req.to_dict() if hasattr(gateway_req, "to_dict") else gateway_req
+                    )
+                    if not isinstance(req_dict, dict):
+                        logger.debug(
+                            "Skipping malformed gateway approval of type %s",
+                            type(req_dict).__name__,
+                        )
+                        continue
+                    created_at = req_dict.get("created_at")
                     items.append(
                         UnifiedApprovalItem(
                             id=req_dict.get("id", ""),
@@ -211,7 +219,7 @@ def collect_pending_approvals(
                             description=req_dict.get("description", ""),
                             requested_at=_iso_timestamp(created_at),
                             requested_by=req_dict.get("requested_by"),
-                            metadata=req_dict if isinstance(req_dict, dict) else {},
+                            metadata=req_dict,
                             actions={
                                 "approve": {
                                     "method": "POST",
@@ -234,8 +242,8 @@ def collect_pending_approvals(
         try:
             from aragora.inbox import ReceiptState, get_inbox_trust_wedge_store
 
-            store = get_inbox_trust_wedge_store()
-            for envelope in store.list_receipts(state=ReceiptState.CREATED, limit=limit):
+            wedge_store = get_inbox_trust_wedge_store()
+            for envelope in wedge_store.list_receipts(state=ReceiptState.CREATED, limit=limit):
                 created_at = envelope.receipt.created_at
                 label_id = envelope.intent.label_id or envelope.decision.label_id
                 action_label = envelope.intent.action.value.upper()

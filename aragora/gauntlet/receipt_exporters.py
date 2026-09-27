@@ -167,6 +167,20 @@ def receipt_to_markdown(
             lines.append(f"- **Evidence Hash:** `{receipt.consensus_proof.evidence_hash}`")
         lines.append("")
 
+    if receipt.evidence_references or receipt.decision_payload_hash:
+        lines.extend(["---", "", "## Decision Evidence", ""])
+        if receipt.decision_payload_hash:
+            lines.append(f"**Decision Payload Hash:** `{receipt.decision_payload_hash}`")
+            lines.append("")
+        for reference in receipt.evidence_references:
+            evidence_id = str(reference.get("evidence_id") or "evidence")
+            path = str(reference.get("path") or evidence_id)
+            target = str(reference.get("http_permalink") or reference.get("uri") or "")
+            role = str(reference.get("role") or "source")
+            label = f"`{evidence_id}` {path} ({role})"
+            lines.append(f"- [{label}]({target})" if target else f"- {label}")
+        lines.append("")
+
     lines.extend(
         [
             "---",

@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
 from aragora.billing import budget_guard
 from aragora.billing.budget_guard import BudgetExceededError
+
+
+def _clear_store_path_env(monkeypatch):
+    for name in (
+        "ARAGORA_BUDGET_GUARD_STORE",
+        "ARAGORA_DATA_DIR",
+        "ARAGORA_NOMIC_DIR",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
@@ -28,6 +41,101 @@ def test_disabled_by_default_is_noop(store, monkeypatch):
     assert budget_guard.current_spend_usd() == 0.0
     assert budget_guard.remaining_usd() == float("inf")
     assert not store.exists()  # nothing persisted when disabled
+
+
+def test_store_path_exact_override_wins_over_configured_data_dirs(tmp_path, monkeypatch):
+    override = tmp_path / "exact-budget-ledger.json"
+    monkeypatch.setenv("ARAGORA_BUDGET_GUARD_STORE", str(override))
+    monkeypatch.setenv("ARAGORA_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ARAGORA_NOMIC_DIR", str(tmp_path / "nomic"))
+
+    assert budget_guard._store_path() == override
+
+
+def test_store_path_uses_explicit_aragora_data_dir_before_nomic_dir(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    data_dir = tmp_path / "configured-data"
+    monkeypatch.setenv("ARAGORA_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("ARAGORA_NOMIC_DIR", str(tmp_path / "legacy-nomic"))
+
+    assert budget_guard._store_path() == data_dir / "budget_guard.json"
+
+
+def test_store_path_uses_explicit_aragora_nomic_dir(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    nomic_dir = tmp_path / "configured-nomic"
+    monkeypatch.setenv("ARAGORA_NOMIC_DIR", str(nomic_dir))
+
+    assert budget_guard._store_path() == nomic_dir / "budget_guard.json"
+
+
+def test_store_path_defaults_to_machine_global_home(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+
+    assert budget_guard._store_path() == home / ".aragora" / "budget_guard.json"
+
+
+def test_default_store_path_is_stable_across_process_working_directories(tmp_path):
+    home = tmp_path / "home"
+    first_cwd = tmp_path / "worktree-one"
+    second_cwd = tmp_path / "worktree-two"
+    first_cwd.mkdir()
+    second_cwd.mkdir()
+    repo_root = Path(budget_guard.__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["PYTHONPATH"] = str(repo_root)
+    env["ARAGORA_MONTHLY_BUDGET_USD"] = "100"
+    for name in (
+        "ARAGORA_BUDGET_GUARD_STORE",
+        "ARAGORA_DATA_DIR",
+        "ARAGORA_NOMIC_DIR",
+    ):
+        env.pop(name, None)
+    record_command = [
+        sys.executable,
+        "-c",
+        (
+            "from aragora.billing.budget_guard import _store_path, record_spend; "
+            "record_spend(12.5); print(_store_path())"
+        ),
+    ]
+    read_command = [
+        sys.executable,
+        "-c",
+        (
+            "from aragora.billing.budget_guard import _store_path, current_spend_usd; "
+            "print(f'{_store_path()}|{current_spend_usd()}')"
+        ),
+    ]
+
+    first = subprocess.run(
+        record_command,
+        cwd=first_cwd,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    second_path, second_spend = (
+        subprocess.run(
+            read_command,
+            cwd=second_cwd,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        .stdout.strip()
+        .split("|", maxsplit=1)
+    )
+
+    expected = str(home / ".aragora" / "budget_guard.json")
+    assert first == expected
+    assert second_path == expected
+    assert float(second_spend) == pytest.approx(12.5)
 
 
 def test_enabled_allows_under_cap(store, monkeypatch):

@@ -1,15 +1,13 @@
 """Tests for the server-domain (interface-tier) event-subscriber home
 (P4a Batch E6).
 
-Covers ``aragora.server.event_subscribers``: the webhook-delivery reaction
-relocated out of ``aragora.events.cross_subscribers.handlers.basic`` and the
-knowledge-staleness-to-debate reaction relocated out of
-``aragora.events.cross_subscribers.handlers.culture``, into this interface
-home, plus the self-registration surface (get-or-create accessor,
-``register()``).
+Covers ``aragora.server.event_subscribers``: the webhook-delivery,
+knowledge-staleness-to-debate, and gauntlet-notification reactions relocated
+out of infrastructure ``aragora.events`` into this interface home, plus the
+self-registration surface (get-or-create accessor, ``register()``).
 
-Both reactions are server-coupled (``server.handlers.webhooks``,
-``server.stream.state_manager``) so ``ServerEventSubscriber`` is wired ONLY
+These reactions are interface-coupled (server facilities or notification
+delivery), so ``ServerEventSubscriber`` is wired ONLY
 via the interface-superset bootstrap
 (``aragora.server.startup.event_subscribers.bootstrap_event_subscribers``),
 never the domain-subset one (``aragora.debate.event_subscribers.
@@ -20,7 +18,8 @@ golden-name parity/leak-prevention/fail-closed tests.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -56,6 +55,54 @@ def _clean_registry_and_manager():
 
 class TestServerEventSubscriberHandlers:
     """Direct handler-execution tests."""
+
+    def test_gauntlet_notification_sync_fallback_preserves_payload(self):
+        subscriber = ServerEventSubscriber()
+        event = make_stream_event(
+            StreamEventType.GAUNTLET_COMPLETE,
+            data={
+                "gauntlet_id": "gauntlet-123",
+                "verdict": "pass",
+                "confidence": 0.91,
+                "total_findings": 4,
+                "critical_count": 1,
+            },
+        )
+
+        with patch(
+            "aragora.notifications.service.notify_gauntlet_completed",
+            new_callable=AsyncMock,
+        ) as notify:
+            subscriber._handle_gauntlet_complete_to_notification(event)
+
+        notify.assert_awaited_once_with(
+            gauntlet_id="gauntlet-123",
+            verdict="pass",
+            confidence=0.91,
+            total_findings=4,
+            critical_count=1,
+        )
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ImportError("missing"),
+            RuntimeError("runtime"),
+            TypeError("type"),
+            ValueError("value"),
+            OSError("os"),
+        ],
+    )
+    def test_gauntlet_notification_expected_failures_are_non_fatal(self, error: Exception):
+        subscriber = ServerEventSubscriber()
+        event = make_stream_event(StreamEventType.GAUNTLET_COMPLETE)
+
+        with patch(
+            "aragora.notifications.service.notify_gauntlet_completed",
+            new_callable=AsyncMock,
+            side_effect=error,
+        ):
+            subscriber._handle_gauntlet_complete_to_notification(event)
 
     def test_staleness_to_debate_handler_executes_without_error(self):
         subscriber = ServerEventSubscriber()
@@ -99,7 +146,7 @@ class TestServerEventSubscriberHandlers:
 
         with (
             patch(
-                "aragora.server.handlers.webhooks.get_webhook_store",
+                "aragora.server.handlers.webhook_management.get_webhook_store",
                 return_value=mock_store,
             ),
             patch(
@@ -119,6 +166,7 @@ class TestServerEventSubscriberRegistration:
     def test_handler_names_frozenset(self):
         assert SERVER_EVENT_SUBSCRIBER_HANDLER_NAMES == frozenset(
             {
+                "gauntlet_to_notification",
                 "staleness_to_debate",
                 "webhook_memory_stored",
                 "webhook_memory_retrieved",
@@ -163,6 +211,46 @@ class TestServerEventSubscriberRegistration:
         stats = manager.get_stats()
         assert stats["webhook_evidence_found"]["events_processed"] == 1
 
+    @pytest.mark.asyncio
+    async def test_superset_bootstrap_registers_gauntlet_notification_exactly_once(self):
+        from aragora.server.startup.event_subscribers import bootstrap_event_subscribers
+
+        first = bootstrap_event_subscribers()
+        second = bootstrap_event_subscribers()
+        assert first is second
+
+        registered = [
+            name
+            for name, _handler in first._subscribers[StreamEventType.GAUNTLET_COMPLETE]
+            if name == "gauntlet_to_notification"
+        ]
+        assert registered == ["gauntlet_to_notification"]
+
+        event = make_stream_event(
+            StreamEventType.GAUNTLET_COMPLETE,
+            data={
+                "gauntlet_id": "gauntlet-456",
+                "verdict": "review",
+                "confidence": 0.75,
+                "total_findings": 6,
+                "critical_count": 2,
+            },
+        )
+        with patch(
+            "aragora.notifications.service.notify_gauntlet_completed",
+            new_callable=AsyncMock,
+        ) as notify:
+            first._dispatch_event(event)
+            await asyncio.sleep(0)
+
+        notify.assert_awaited_once_with(
+            gauntlet_id="gauntlet-456",
+            verdict="review",
+            confidence=0.75,
+            total_findings=6,
+            critical_count=2,
+        )
+
     def test_get_server_event_subscriber_returns_singleton(self):
         first = get_server_event_subscriber()
         second = get_server_event_subscriber()
@@ -176,10 +264,49 @@ class TestServerEventSubscriberRegistration:
         second = get_registered_subscribers()["server"]
         assert first is second
 
+    def test_lightweight_bootstrap_registers_webhook_store_provider(self):
+        """Durable webhook storage can be wired without subscriber imports."""
+        from aragora.server.startup.event_subscribers import register_webhook_store
+
+        with (
+            patch("aragora.events.dispatcher.register_webhook_store_provider") as register_provider,
+            patch(
+                "aragora.storage.webhook_config_store.get_webhook_config_store"
+            ) as get_webhook_config_store,
+        ):
+            register_webhook_store()
+
+        register_provider.assert_called_once_with(get_webhook_config_store)
+
+    def test_superset_bootstrap_uses_lightweight_webhook_store_registration(self):
+        """Direct subscriber bootstrap must include durable store wiring."""
+        from aragora.server.startup.event_subscribers import bootstrap_event_subscribers
+
+        with patch(
+            "aragora.server.startup.event_subscribers.register_webhook_store"
+        ) as register_store:
+            bootstrap_event_subscribers()
+
+        register_store.assert_called_once_with()
+
+    def test_superset_bootstrap_registers_webhook_store_provider(self):
+        """Server composition wires durable webhook storage into events."""
+        from aragora.server.startup.event_subscribers import bootstrap_event_subscribers
+
+        with (
+            patch("aragora.events.dispatcher.register_webhook_store_provider") as register_provider,
+            patch(
+                "aragora.storage.webhook_config_store.get_webhook_config_store"
+            ) as get_webhook_config_store,
+        ):
+            bootstrap_event_subscribers()
+
+        register_provider.assert_called_once_with(get_webhook_config_store)
+
 
 class TestLegacyDelegatingSitesRemoved:
-    """Structural regression guard: both pre-inversion handler methods are
-    gone entirely from their old infrastructure mixins, not merely
+    """Structural regression guard: relocated handler methods are gone
+    entirely from their old infrastructure homes, not merely
     unregistered (docs/architecture/P4A_EVENTS_QUEUE_INVERSION.md §5.3).
 
     P4a Batch E7b dissolved ``BasicHandlersMixin``/``CultureHandlersMixin``
@@ -192,6 +319,12 @@ class TestLegacyDelegatingSitesRemoved:
 
     def test_cross_subscriber_manager_has_no_staleness_to_debate(self):
         assert not hasattr(CrossSubscriberManager, "_handle_staleness_to_debate")
+
+    def test_cross_subscriber_manager_has_no_gauntlet_notification_delivery(self):
+        assert not hasattr(
+            CrossSubscriberManager,
+            "_handle_gauntlet_complete_to_notification",
+        )
 
     def test_manager_no_longer_registers_relocated_names_directly(self):
         """A bare, non-bootstrapped manager must not carry the relocated

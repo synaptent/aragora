@@ -14,6 +14,8 @@ Tests cover:
 
 from __future__ import annotations
 
+import importlib
+import warnings
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -438,15 +440,75 @@ class TestTypeAliases:
 class TestModuleExports:
     """Tests for aragora.types module exports."""
 
+    def test_legacy_protocol_paths_preserve_canonical_identity(self):
+        """Existing protocol shims should return canonical objects unchanged."""
+        from aragora.core_protocols import StorageBackend as CoreStorageBackend
+        from aragora.protocols import AgentProtocol as CanonicalAgentProtocol
+        from aragora.protocols import StorageBackend as CanonicalStorageBackend
+        from aragora.type_protocols import AgentProtocol as TypeAgentProtocol
+
+        assert CoreStorageBackend is CanonicalStorageBackend
+        assert TypeAgentProtocol is CanonicalAgentProtocol
+
+    def test_types_protocols_warns_with_legacy_path(self):
+        """Reloading the legacy types module should emit its deprecation warning."""
+        legacy = importlib.import_module("aragora.types.protocols")
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            importlib.reload(legacy)
+
+        assert any(
+            issubclass(item.category, DeprecationWarning) and "types.protocols" in str(item.message)
+            for item in caught
+        )
+
+    def test_types_protocols_shared_exports_preserve_identity(self):
+        """Non-conflicting legacy contracts should be canonical package exports."""
+        import aragora.protocols as canonical
+        import aragora.types.protocols as legacy
+
+        shared = (
+            "CacheProtocol",
+            "StorageProtocol",
+            "EventData",
+            "EventHandlerProtocol",
+            "SyncEventHandlerProtocol",
+        )
+
+        assert all(getattr(canonical, name) is getattr(legacy, name) for name in shared)
+
+    def test_types_protocols_incompatible_contracts_remain_distinct(self):
+        """Legacy contracts with incompatible methods must not replace newer ones."""
+        import aragora.protocols as canonical
+        import aragora.types.protocols as legacy
+
+        incompatible = ("AgentProtocol", "MemoryProtocol", "EventEmitterProtocol")
+        assert all(
+            getattr(legacy, name).__module__.startswith("aragora.protocols.")
+            for name in incompatible
+        )
+        assert all(getattr(canonical, name) is not getattr(legacy, name) for name in incompatible)
+        assert hasattr(legacy.AgentProtocol, "generate")
+        assert hasattr(legacy.MemoryProtocol, "retrieve")
+        assert hasattr(legacy.EventEmitterProtocol, "subscribe")
+        assert hasattr(canonical.AgentProtocol, "respond")
+        assert not hasattr(canonical.AgentProtocol, "generate")
+        assert hasattr(canonical.MemoryProtocol, "query")
+        assert not hasattr(canonical.MemoryProtocol, "retrieve")
+        assert hasattr(canonical.EventEmitterProtocol, "on")
+        assert not hasattr(canonical.EventEmitterProtocol, "subscribe")
+
     def test_import_from_package(self):
         """Test importing from aragora.types package."""
+        from aragora.protocols import LegacyEventEmitterProtocol
         from aragora.types import (
             EventEmitterProtocol,
             EventHandlerProtocol,
             SyncEventHandlerProtocol,
         )
 
-        assert EventEmitterProtocol is not None
+        assert EventEmitterProtocol is LegacyEventEmitterProtocol
         assert EventHandlerProtocol is not None
         assert SyncEventHandlerProtocol is not None
 

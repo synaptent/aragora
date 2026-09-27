@@ -28,7 +28,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from aragora.core import Agent
@@ -106,7 +106,7 @@ async def record_debate_tokens(
                     input_tokens=agent_input,
                     output_tokens=agent_output,
                     model=model,
-                    provider=provider,
+                    provider=cast(str, provider),
                     user_id=user_id,
                     debate_id=debate_id,
                     metadata={

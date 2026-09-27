@@ -43,7 +43,7 @@ from aragora.debate.phases.feedback_knowledge import KnowledgeFeedback
 from aragora.debate.phases.feedback_memory import MemoryFeedback
 from aragora.debate.phases.feedback_persona import PersonaFeedback
 from aragora.debate.phases.training_emitter import TrainingEmitter
-from aragora.type_protocols import (
+from aragora.protocols import (
     BroadcastPipelineProtocol,
     CalibrationTrackerProtocol,
     ConsensusMemoryProtocol,
@@ -781,7 +781,7 @@ class FeedbackPhase:
             # Emit event for real-time clients
             if self.event_emitter:
                 try:
-                    from aragora.server.stream.events import StreamEvent, StreamEventType
+                    from aragora.events.types import StreamEvent, StreamEventType
 
                     self.event_emitter.emit(
                         StreamEvent(
@@ -1240,6 +1240,10 @@ class FeedbackPhase:
         This is a fire-and-forget task so it doesn't block debate completion.
         Failures are logged but don't affect the debate result.
         """
+        pipeline = self.broadcast_pipeline
+        if pipeline is None:
+            return
+
         try:
             from aragora.broadcast.pipeline import BroadcastOptions
 
@@ -1248,7 +1252,7 @@ class FeedbackPhase:
                 generate_rss_episode=True,
             )
 
-            pipeline_result = await self.broadcast_pipeline.run(
+            pipeline_result = await pipeline.run(
                 ctx.debate_id,
                 options,
             )

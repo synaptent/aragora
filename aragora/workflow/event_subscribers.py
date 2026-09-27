@@ -11,9 +11,10 @@ self-registers via the domain-free registry
 infrastructure, downward = legal); the interface-superset bootstrap
 (``aragora.server.startup.event_subscribers.bootstrap_event_subscribers``)
 imports this module so ``CrossSubscriberManager.apply_registered_subscribers``
-wires ``alert_escalated_to_workflow_brake`` in. A pure-domain debate with no
-workflow engine simply has no such reaction: this module is NOT imported by
-the domain-subset bootstrap
+wires both ``debate_end_to_workflow`` and
+``alert_escalated_to_workflow_brake`` in. A pure-domain debate with no workflow
+engine simply has no such reactions: this module is NOT imported by the
+domain-subset bootstrap
 (``aragora.debate.event_subscribers.bootstrap_debate_event_subscribers``).
 
 Per the relocate-UP no-shim exemption (AGENTS.md "P4a Contracts-Thread Shared
@@ -23,33 +24,22 @@ re-export shim at the old paths; every consumer is repointed instead.
 The former ``cross_subscribers.handlers.basic._handle_debate_end_to_workflow``
 delegate (an unregistered, dead runtime path that instantiated a throwaway
 ``PostDebateWorkflowSubscriber`` on every call - see
-docs/architecture/P4A_EVENTS_QUEUE_INVERSION.md §5.3) is removed rather than
-relocated. ``PostDebateWorkflowSubscriber`` itself IS relocated here (verbatim)
-so the workflow-coupled code lives in its application home, but
-``WorkflowEventSubscriber.register`` deliberately does NOT wire its
-``_handle_debate_end_to_workflow`` wrapper into the manager: on origin/main
-this reaction had NO live invocation path at all (its only caller was the
-dead ``basic.py`` delegate above, which was itself never registered against
-any event type - confirmed by the absence of ``debate_end_to_workflow`` from
-the pre-inversion ``GOLDEN_SUBSCRIBER_NAMES`` baseline in
-``tests/events/test_cross_subscriber_registry.py``). ``_trigger_workflow``'s
-body is also a known no-op stub (it constructs and discards a
-``WorkflowDefinition``/``WorkflowEngine`` without executing or queuing
-anything). Wiring it now would activate that no-op, for the first time ever,
-on every production ``DEBATE_END`` - a behavior change with no test coverage
-of real execution, not a mechanical relocation. Per the batch's own
-open-product-question guidance, the dead edge is removed rather than
-resurrected; the handler and its backing subscriber stay relocated and
-directly callable/testable so a future batch can wire them once
-``_trigger_workflow`` does real work. Only the alert-escalation brake -
-already live via the manager's built-in registration on origin/main - is
-wired here, preserving its existing production behavior across the move.
+docs/architecture/P4A_EVENTS_QUEUE_INVERSION.md §5.3) remains removed rather
+than relocated. The application home owns the single production route:
+``WorkflowEventSubscriber.register`` registers one keyed
+``debate_end_to_workflow`` reaction that delegates to the persistent
+``PostDebateWorkflowSubscriber`` instance. The interface-superset bootstrap is
+idempotent, so repeating it does not duplicate that reaction.
+
+``_trigger_workflow`` remains a construction-only seam: it builds the workflow
+definition without creating an engine or executing or queuing the definition.
+Production dispatch still invokes ``handle_debate_end`` exactly once so outcome
+classification and the existing fail-soft behavior remain observable while
+workflow execution is implemented separately.
 
 Handles:
+- Debate end -> Post-debate workflow outcome classification
 - Alert escalated -> Workflow emergency brake (pause/stop active workflows)
-
-Relocated but NOT wired (see above):
-- Debate end -> Post-debate workflow automation (outcome-based template trigger)
 """
 
 from __future__ import annotations
@@ -69,6 +59,7 @@ logger = logging.getLogger(__name__)
 WORKFLOW_EVENT_SUBSCRIBER_HANDLER_NAMES = frozenset(
     {
         "alert_escalated_to_workflow_brake",
+        "debate_end_to_workflow",
     }
 )
 
@@ -99,16 +90,11 @@ class PostDebateWorkflowSubscriber:
             "errors": 0,
         }
 
-    def _get_workflow_runtime(self) -> tuple[Any, Any, Any, Any]:
-        """Load workflow runtime classes behind a unit-testable seam."""
-        from aragora.workflow.engine import WorkflowEngine
-        from aragora.workflow.types import (
-            StepDefinition,
-            WorkflowConfig,
-            WorkflowDefinition,
-        )
+    def _get_workflow_runtime(self) -> tuple[Any, Any]:
+        """Load workflow definition classes behind a unit-testable seam."""
+        from aragora.workflow.types import StepDefinition, WorkflowDefinition
 
-        return WorkflowEngine, StepDefinition, WorkflowConfig, WorkflowDefinition
+        return StepDefinition, WorkflowDefinition
 
     def handle_debate_end(self, event: Any) -> None:
         """Handle a DEBATE_END event and trigger appropriate workflow."""
@@ -168,16 +154,10 @@ class PostDebateWorkflowSubscriber:
         Stub: constructs ``WorkflowDefinition``/``WorkflowEngine`` but never
         submits either for execution (no queue/execute call is made).
         ``stats["workflows_triggered"]`` counts these construction attempts,
-        not completed workflow runs - do not wire a caller of this method
-        into production event dispatch until it actually queues or executes.
+        not completed workflow runs.
         """
         try:
-            (
-                WorkflowEngine,
-                StepDefinition,
-                WorkflowConfig,
-                WorkflowDefinition,
-            ) = self._get_workflow_runtime()
+            StepDefinition, WorkflowDefinition = self._get_workflow_runtime()
 
             # Create a minimal workflow definition
             debate_id_short = context.get("debate_id", "unknown")[:8]
@@ -197,7 +177,6 @@ class PostDebateWorkflowSubscriber:
                 ],
             )
 
-            WorkflowEngine(config=WorkflowConfig())
             logger.debug(
                 "Built post-debate workflow definition (stub, not queued or "
                 "executed): template=%s debate=%s outcome=%s",
@@ -235,29 +214,29 @@ class WorkflowEventSubscriber:
 
         Delegates to the persistent ``PostDebateWorkflowSubscriber`` instance
         to classify the debate outcome and trigger the appropriate workflow
-        template. NOT wired by :meth:`register` (see the module docstring):
-        kept relocated and directly callable/testable for a future batch to
-        wire once ``_trigger_workflow`` does real work, without reintroducing
-        the dead no-op reaction into production dispatch in the meantime.
+        template.
         """
         self.post_debate_workflow.handle_debate_end(event)
 
-    def _handle_alert_escalated_to_workflow_brake(self, event: "StreamEvent") -> None:
+    def _handle_alert_escalated_to_workflow_brake(self, event: "StreamEvent") -> bool:
         """Alert escalated → Workflow emergency brake.
 
         When an alert escalates to critical severity, pause all
         active workflows to prevent cascading failures. This is
         the safety valve that stops automated processes when
         something goes seriously wrong.
+
+        Returns:
+            True only when the workflow engine confirms a brake method ran.
         """
         data = event.data
-        severity = data.get("severity", data.get("new_severity", ""))
+        severity = data.get("new_severity", data.get("severity", ""))
         alert_id = data.get("alert_id", "")
-        reason = data.get("reason", data.get("message", ""))[:200]
+        reason = str(data.get("reason", data.get("message", "")) or "")[:200]
 
         # Only brake on critical/emergency escalations
         if severity not in ("critical", "emergency", "fatal"):
-            return
+            return False
 
         logger.warning(
             "Alert escalated → workflow brake: alert=%s severity=%s reason=%s",
@@ -267,32 +246,30 @@ class WorkflowEventSubscriber:
         )
 
         try:
-            from aragora.workflow.engine import get_workflow_engine
+            from aragora.workflow.engine import WorkflowEngine
 
-            engine = get_workflow_engine()
-            if engine is None:
-                return
-
-            if hasattr(engine, "pause_all"):
-                engine.pause_all(
-                    reason=f"Emergency brake: {reason}",
-                )
-                logger.warning("Paused all workflows due to critical alert %s", alert_id)
-            elif hasattr(engine, "emergency_stop"):
-                engine.emergency_stop(reason=f"Alert escalation: {reason}")
-                logger.warning("Emergency stopped workflows due to critical alert %s", alert_id)
+            WorkflowEngine.pause_all(
+                reason=f"Emergency brake: {reason}",
+            )
+            logger.warning("Paused all workflows due to critical alert %s", alert_id)
+            return True
         except ImportError:
-            pass  # Workflow engine not available
+            return False
         except (RuntimeError, TypeError, AttributeError, ValueError) as e:
-            logger.debug("Workflow emergency brake failed: %s", e)
+            logger.error("Workflow emergency brake failed: %s", e, exc_info=True)
+            return False
 
     def register(self, manager: "CrossSubscriberManager") -> None:
         """Wire the workflow-domain reactions into ``manager`` (keyed/idempotent).
 
-        Only ``alert_escalated_to_workflow_brake`` is wired here - see the
-        module docstring for why ``_handle_debate_end_to_workflow`` is
-        relocated but deliberately left unregistered.
+        Registry application is tracked per manager, so repeated production
+        bootstrap calls apply this subscriber only once.
         """
+        manager.register(
+            "debate_end_to_workflow",
+            StreamEventType.DEBATE_END,
+            self._handle_debate_end_to_workflow,
+        )
         manager.register(
             "alert_escalated_to_workflow_brake",
             StreamEventType.ALERT_ESCALATED,

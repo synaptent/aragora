@@ -5,8 +5,49 @@ Tests local ML capabilities including embeddings, quality scoring,
 consensus prediction, agent routing, and fine-tuning.
 """
 
-import pytest
+from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+class TestMLPackageImports:
+    """Test optional dependency isolation at the package boundary."""
+
+    def test_consensus_predictor_imports_without_numpy(self):
+        """Pure-Python consensus fallback must not import NumPy-only modules."""
+        script = """
+import importlib.abc
+import sys
+
+
+class BlockNumpy(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "numpy" or fullname.startswith("numpy."):
+            raise ModuleNotFoundError("numpy intentionally unavailable")
+        return None
+
+
+sys.meta_path.insert(0, BlockNumpy())
+from aragora.ml import ConsensusPredictor
+
+predictor = ConsensusPredictor()
+assert predictor.config is not None
+assert "aragora.ml.embeddings" not in sys.modules
+assert "aragora.ml.agent_router" not in sys.modules
+"""
+        repo_root = Path(__file__).resolve().parents[2]
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
 
 
 class TestQualityScorer:

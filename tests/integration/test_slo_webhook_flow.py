@@ -17,6 +17,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _register_webhook_sink_provider():
+    """Route patched dispatchers through the inward registration hook."""
+    from aragora.observability.metrics.slo import register_slo_event_sink_provider
+
+    def provider():
+        from aragora.integrations import webhooks
+
+        return webhooks.get_dispatcher()
+
+    register_slo_event_sink_provider(provider)
+    yield
+    register_slo_event_sink_provider(None)
+
+
 class TestSLOWebhookIntegrationFlow:
     """Integration tests for SLO webhook end-to-end flow."""
 
@@ -25,8 +40,15 @@ class TestSLOWebhookIntegrationFlow:
         """Reset SLO state before each test."""
         from aragora.observability.metrics import slo as slo_module
 
+        def provider():
+            from aragora.integrations import webhooks
+
+            return webhooks.get_dispatcher()
+
+        slo_module.register_slo_event_sink_provider(provider)
         # Reset all module state
         slo_module._webhook_callback = None
+        slo_module._webhook_sink = None
         slo_module._webhook_config = None
         slo_module._last_notification = {}
         slo_module._violation_state = {}
@@ -34,7 +56,7 @@ class TestSLOWebhookIntegrationFlow:
         slo_module._recovery_count = 0
         yield
         # Cleanup after test
-        slo_module._webhook_callback = None
+        slo_module.register_slo_event_sink_provider(None)
         slo_module._webhook_config = None
         slo_module._last_notification = {}
         slo_module._violation_state = {}
@@ -226,7 +248,7 @@ class TestSLOWebhookIntegrationFlow:
 
     def test_webhook_handler_endpoints(self):
         """Test the webhook handler SLO endpoints."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx: dict[str, Any] = {}
         handler = WebhookHandler(ctx)
@@ -253,7 +275,7 @@ class TestSLOWebhookIntegrationFlow:
             SLOWebhookConfig,
             init_slo_webhooks,
         )
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         notifications: list[dict[str, Any]] = []
 

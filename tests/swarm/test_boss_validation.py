@@ -24,7 +24,7 @@ from aragora.swarm.boss_validation import (
     _ordered_unique_strings,
     _extract_task_block,
 )
-from aragora.utils.semantic_extraction import ExtractionResult
+from aragora.agents.semantic_extraction import ExtractionResult
 
 
 # -- assess_issue_body_sanitation --

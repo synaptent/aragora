@@ -5,9 +5,9 @@ Provides structural typing via protocols to enable
 duck typing while maintaining type safety.
 """
 
-from aragora.types.protocols import (
-    EventEmitterProtocol,
+from aragora.protocols import (
     EventHandlerProtocol,
+    LegacyEventEmitterProtocol as EventEmitterProtocol,
     SyncEventHandlerProtocol,
 )
 

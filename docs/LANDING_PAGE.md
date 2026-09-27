@@ -61,7 +61,7 @@ Every debate produces a cryptographic decision receipt -- an auditable artifact 
 
 Not just agreement -- calibrated trust. Aragora tracks each agent's ELO rating and Brier calibration score per domain. It detects hollow consensus (models agreeing without evidence) and automatically injects adversarial challenges. The result is not "what the AI said" -- it is "what survived structured adversarial scrutiny from multiple independent models."
 
-**Key stat:** 43 agent types across 6 LLM providers (Anthropic, OpenAI, Google, xAI, Mistral, OpenRouter).
+**Key stat:** 46 agent types across 6 LLM providers (Anthropic, OpenAI, Google, xAI, Mistral, OpenRouter).
 
 ---
 
@@ -149,7 +149,7 @@ Zero required dependencies. The debate engine runs anywhere Python runs -- your 
 pip install aragora
 ```
 
-3,100+ API operations. SDKs in Python (184 namespaces) and TypeScript (183 namespaces). Slack, Teams, Discord, and Telegram connectors. WebSocket streaming with 190+ event types. Workflow engine with 50+ pre-built templates.
+3,205 API operations. SDKs in Python (184 namespaces) and TypeScript (183 namespaces). Slack, Teams, Discord, and Telegram connectors. WebSocket streaming with 190+ event types. Workflow engine with 50+ pre-built templates.
 
 ### CLI for every workflow
 
@@ -202,7 +202,7 @@ Multi-agent debate is not a marketing claim -- it is a research-validated approa
 
 ## Open Source, No Lock-In
 
-Aragora is MIT-licensed. The full debate engine, all 43 agents, the CLI, the SDKs, and the API are open source. You bring your own API keys from any supported provider -- Aragora never marks up LLM costs.
+Aragora is MIT-licensed. The full debate engine, all 46 agent types, the CLI, the SDKs, and the API are open source. You bring your own API keys from any supported provider -- Aragora never marks up LLM costs.
 
 Commercial tiers add managed infrastructure, enterprise security, and compliance tooling for teams that need it.
 

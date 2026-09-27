@@ -295,11 +295,8 @@ class StubHandler(RoutingMixin):
         self.record_confidence_event = AsyncMock(return_value=self._ok)
         self.get_confidence_history = AsyncMock(return_value=self._ok)
         # Curation stubs
-        self._handle_create_curation_policy = MagicMock(
-            name="_handle_create_curation_policy", return_value=self._ok
-        )
-        self._handle_update_curation_policy = MagicMock(
-            name="_handle_update_curation_policy", return_value=self._ok
+        self._handle_set_curation_policy = MagicMock(
+            name="_handle_set_curation_policy", return_value=self._ok
         )
         self._handle_get_curation_policy = MagicMock(
             name="_handle_get_curation_policy", return_value=self._ok
@@ -307,15 +304,15 @@ class StubHandler(RoutingMixin):
         self._handle_curation_status = MagicMock(
             name="_handle_curation_status", return_value=self._ok
         )
-        self._handle_curation_run = MagicMock(name="_handle_curation_run", return_value=self._ok)
+        self._handle_run_curation = MagicMock(name="_handle_run_curation", return_value=self._ok)
         self._handle_curation_history = MagicMock(
             name="_handle_curation_history", return_value=self._ok
         )
-        self._handle_curation_scores = MagicMock(
-            name="_handle_curation_scores", return_value=self._ok
+        self._handle_quality_scores = MagicMock(
+            name="_handle_quality_scores", return_value=self._ok
         )
-        self._handle_curation_tiers = MagicMock(
-            name="_handle_curation_tiers", return_value=self._ok
+        self._handle_tier_distribution = MagicMock(
+            name="_handle_tier_distribution", return_value=self._ok
         )
 
     def _get_mound(self):
@@ -1108,11 +1105,11 @@ class TestRouteCurationPolicy:
 
     def test_post_creates_policy(self, handler, http_post):
         handler._route_curation_policy("/api/v1/knowledge/mound/curation/policy", {}, http_post)
-        handler._handle_create_curation_policy.assert_called_once_with(http_post)
+        handler._handle_set_curation_policy.assert_called_once_with(http_post)
 
     def test_put_updates_policy(self, handler, http_put):
         handler._route_curation_policy("/api/v1/knowledge/mound/curation/policy", {}, http_put)
-        handler._handle_update_curation_policy.assert_called_once_with(http_put)
+        handler._handle_set_curation_policy.assert_called_once_with(http_put)
 
 
 # ===========================================================================

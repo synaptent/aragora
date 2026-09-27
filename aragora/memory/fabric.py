@@ -15,7 +15,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 from aragora.memory.surprise import ContentSurpriseScorer
 
@@ -243,7 +243,7 @@ class MemoryFabric:
             for item in raw or []:
                 if isinstance(item, dict):
                     content = item.get("content", "")
-                    relevance = float(item.get("relevance", item.get("score", 0.5)))
+                    relevance = float(cast(Any, item.get("relevance", item.get("score", 0.5))))
                     created = float(item.get("created_at", now))
                     age_days = max(0.0, (now - created) / 86400.0)
                     recency = 0.5 ** (age_days / 30.0)

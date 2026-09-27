@@ -1,0 +1,127 @@
+name: CI Shard Saturation Guard
+
+# Early warning for test-fast shard saturation. The test-fast matrix in
+# test.yml runs on GitHub-hosted runners with a 30-minute cap; shards
+# grow organically and historically saturation was only noticed when
+# jobs started getting killed at the cap (debate-am: rebalanced in
+# PR #9280, re-saturated within days, re-split in PR #9307).
+#
+# This workflow runs scripts/ci_shard_saturation_guard.py once a day:
+# it pulls recent test-fast job durations from the Actions API
+# (read-only), computes per-shard p95 over the lookback window, and
+# when any shard's p95 exceeds 20 minutes it emits a warning
+# annotation and opens (or updates) a tracking issue labeled
+# `ci-shard-saturation`.
+
+on:
+  schedule:
+    # Every day at 13:00 UTC (08:00 America/Chicago).
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      threshold_minutes:
+        description: "p95 warning threshold in minutes (default 20)"
+        required: false
+        type: number
+      max_runs:
+        description: "Max recent runs to analyze (default 80)"
+        required: false
+        type: number
+
+permissions:
+  actions: read
+  issues: write
+  contents: read
+
+concurrency:
+  group: ci-shard-saturation-guard
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Shard saturation audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Analyze shard durations
+        id: analyze
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          THRESHOLD: ${{ inputs.threshold_minutes || 20 }}
+          MAX_RUNS: ${{ inputs.max_runs || 80 }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_shard_saturation_guard.py \
+            --repo "$REPO" \
+            --threshold-minutes "$THRESHOLD" \
+            --max-runs "$MAX_RUNS"
+
+      - name: Open or update saturation issue (breach detected)
+        if: steps.analyze.outputs.breach == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BREACH_SHARDS: ${{ steps.analyze.outputs.breach_shards }}
+          REPORT: ${{ steps.analyze.outputs.report }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh label create ci-shard-saturation \
+            --description "test-fast shard p95 approaching the 30-min runner cap" \
+            --color D93F0B --force
+
+          TITLE="ci: test-fast shard saturation warning ($BREACH_SHARDS)"
+
+          BODY=$(cat <<BODY_END
+          ## Shard saturation warning
+
+          Shard(s) **$BREACH_SHARDS** have a p95 duration above the warning
+          threshold. Left alone, they will hit the 30-minute runner cap and
+          jobs will start getting killed (as debate-am did before PR #9280
+          and PR #9307).
+
+          $REPORT
+
+          ### What to do
+
+          Rebalance the hot shard(s) before they saturate:
+          - Sizing methodology: per-file pytest test counts x measured
+            seconds-per-test; boundaries live in
+            \`scripts/ci_resolve_test_shard.py\`.
+          - Update the corresponding matrix entries in
+            \`.github/workflows/test.yml\` (Tier-4 change — draft PR for
+            founder settlement per \`docs/AGENT_OPERATING_CONTRACT.md\`).
+
+          ### Audit run
+
+          [Workflow run $RUN_ID]($SERVER_URL/$REPO/actions/runs/$RUN_ID)
+          BODY_END
+          )
+
+          # Reuse an open saturation issue if present; otherwise create.
+          EXISTING=$(gh issue list --label ci-shard-saturation --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Updating open saturation issue #$EXISTING"
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            echo "Opening new saturation issue"
+            gh issue create --title "$TITLE" --body "$BODY" --label ci-shard-saturation
+          fi
+
+      - name: Report green
+        if: steps.analyze.outputs.breach != '1'
+        env:
+          STATUS: ${{ steps.analyze.outputs.status }}
+          REPORT: ${{ steps.analyze.outputs.report }}
+        run: |
+          if [ "$STATUS" = "no_data" ]; then
+            echo "::notice::Shard guard measured nothing this run: $REPORT"
+          else
+            echo "::notice::All test-fast shard p95 durations under threshold."
+          fi

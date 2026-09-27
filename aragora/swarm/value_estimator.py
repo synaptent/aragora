@@ -384,7 +384,7 @@ async def estimate_with_llm(
     body: str,
     *,
     heuristic_estimate: ValueEstimate | None = None,
-    model: str = "claude-opus-4-8",
+    model: str = "claude-opus-5",
 ) -> ValueEstimate:
     """Refine a value estimate using a frontier LLM.
 
@@ -408,10 +408,20 @@ async def estimate_with_llm(
         )
         response = await client.messages.create(
             model=model,
-            max_tokens=256,
+            # Opus 5 thinks by default; max_tokens covers thinking + response.
+            max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = response.content[0].text.strip()
+        # Opus 5 thinks by default, so content[0] is a thinking block, not text.
+        # Scan for the text block instead of indexing blindly.
+        text = next(
+            (
+                getattr(b, "text", "")
+                for b in response.content
+                if getattr(b, "type", None) == "text"
+            ),
+            "",
+        ).strip()
         # Strip markdown fences if present
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()

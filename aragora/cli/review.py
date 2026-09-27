@@ -865,8 +865,106 @@ def _persist_review_to_km(
         return False
 
 
+def _write_review_odr(
+    findings: dict[str, Any],
+    *,
+    pr_url: str | None,
+    output_dir: Path | None,
+    output_path: str,
+    demo: bool = False,
+) -> Path:
+    """Export review findings as an Open Decision Receipt."""
+    from aragora.gauntlet.odr_export import (
+        decision_receipt_to_odr,
+        resolve_odr_version,
+        sign_odr_if_configured,
+    )
+    from aragora.gauntlet.receipt_models import DecisionReceipt
+
+    if demo:
+        # Mark demo receipts before hashing so the marker is tamper-evident and
+        # the artifact can never pass for a real review's receipt.
+        findings = {
+            **findings,
+            "final_summary": "[DEMO MODE] Fabricated sample findings, not a real review. "
+            + str(findings.get("final_summary", "")),
+        }
+
+    agents_used = list(findings.get("agents_used", []))
+    receipt = DecisionReceipt.from_review_result(
+        findings,
+        pr_url=pr_url,
+        reviewer_agents=agents_used or None,
+    )
+    # ARAGORA_ODR_PROFILE_VERSION selects the profile, as for `aragora receipt export`;
+    # unset means the library default (0.2). An invalid value raises ValueError.
+    odr = decision_receipt_to_odr(receipt, odr_version=resolve_odr_version(None))
+    if not demo:
+        # Never sign fabricated demo findings; demo receipts stay explicitly unsigned.
+        odr = sign_odr_if_configured(odr)
+
+    path = Path(output_path) if output_path else (output_dir or Path.cwd()) / "review.odr.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(odr, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _emit_requested_odr(
+    args: argparse.Namespace,
+    findings: dict[str, Any],
+    output_dir: Path | None,
+) -> bool:
+    """Write the requested ODR artifact and report failures to the CLI caller."""
+    output_path = getattr(args, "emit_odr", None)
+    if output_path is None:
+        return True
+
+    from aragora.gauntlet.odr_signing import OdrSigningError
+
+    try:
+        path = _write_review_odr(
+            findings,
+            pr_url=getattr(args, "pr_url", None),
+            output_dir=output_dir,
+            output_path=output_path,
+            demo=getattr(args, "demo", False),
+        )
+    except (
+        AttributeError,
+        ImportError,
+        KeyError,
+        OdrSigningError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as e:
+        logger.warning("ODR export failed: %s", e)
+        print(f"Error: Could not emit review ODR: {e}", file=sys.stderr)
+        return False
+
+    print(f"ODR receipt written to: {path}", file=sys.stderr)
+    return True
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     """Handle 'review' command."""
+
+    # Fail fast if --emit-odr swallowed the PR URL positional (nargs="?" footgun):
+    # otherwise the receipt would be written under a literal "https:/..." directory.
+    emit_odr_path = getattr(args, "emit_odr", None)
+    if emit_odr_path and (
+        emit_odr_path.lower().startswith(("http://", "https://", "git@"))
+        or emit_odr_path.lower().lstrip("/").startswith(("github.com/", "www.github.com/"))
+    ):
+        print(
+            f"Error: --emit-odr received a URL ({emit_odr_path}) instead of a file path. "
+            "Place --emit-odr after the PR URL, or pass an explicit PATH.",
+            file=sys.stderr,
+        )
+        return 1
 
     # Demo mode - show sample output without API keys
     if getattr(args, "demo", False):
@@ -915,11 +1013,13 @@ def cmd_review(args: argparse.Namespace) -> int:
             except (OSError, ValueError, KeyError) as e:
                 print(f"Warning: SARIF export failed: {e}", file=sys.stderr)
 
+        odr_ok = _emit_requested_odr(args, findings, output_dir)
+
         print("\n---", file=sys.stderr)
         print("This was a demo. To run a real review, configure API keys:", file=sys.stderr)
         print("  export ANTHROPIC_API_KEY=sk-ant-...", file=sys.stderr)
         print("  export OPENAI_API_KEY=sk-...", file=sys.stderr)
-        return 0
+        return 0 if odr_ok else 3
 
     # Get diff content
     diff = ""
@@ -1185,7 +1285,11 @@ def cmd_review(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
 
-    # CI mode exit codes
+    # Emit the receipt after the other artifact steps so an emit failure cannot
+    # suppress SARIF/comment output.
+    odr_ok = _emit_requested_odr(args, findings, output_dir)
+
+    # CI mode exit codes — findings verdicts take priority over artifact-IO errors
     if getattr(args, "ci", False):
         critical = len(findings.get("critical_issues", []))
         high = len(findings.get("high_issues", []))
@@ -1196,7 +1300,8 @@ def cmd_review(args: argparse.Namespace) -> int:
             print(f"CI: {high} high severity issues found", file=sys.stderr)
             return 2
 
-    return 0
+    # Exit 3 keeps emit failure distinct from the --ci findings verdicts (1=critical, 2=high).
+    return 0 if odr_ok else 3
 
 
 def create_review_parser(subparsers) -> None:
@@ -1250,6 +1355,17 @@ def create_review_parser(subparsers) -> None:
     )
 
     parser.add_argument(
+        "--emit-odr",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="PATH",
+        help="Emit a verifiable Open Decision Receipt (default: review.odr.json, "
+        "or inside --output-dir when set); place after the PR URL or pass an explicit "
+        "PATH; a failed receipt write exits 3",
+    )
+
+    parser.add_argument(
         "--sarif",
         nargs="?",
         const="review-results.sarif",
@@ -1272,7 +1388,8 @@ def create_review_parser(subparsers) -> None:
         action="store_true",
         default=False,
         help="CI mode: exit with non-zero code based on findings severity. "
-        "Exit 1 if critical issues, exit 2 if high issues found.",
+        "Exit 1 if critical issues, exit 2 if high issues found "
+        "(exit 3 = --emit-odr write failure, not a findings verdict).",
     )
 
     parser.add_argument(

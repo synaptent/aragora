@@ -14,6 +14,7 @@ import pytest
 from aragora.server.handlers.base import error_response, json_response
 from aragora.server.handlers.openclaw.models import ActionStatus, SessionStatus
 from aragora.server.handlers.openclaw.orchestrator import SessionOrchestrationMixin
+from aragora.server.handlers.openclaw.runtime import OpenClawExecutionRuntime
 
 
 class MockStore:
@@ -447,3 +448,19 @@ class TestAuditLogging:
 
         assert len(self.handler.store.audit_entries) == 1
         assert self.handler.store.audit_entries[0]["action"] == "action.execute"
+
+
+class TestExecutionRuntimeFailClosed:
+    """Characterize inconsistent normalization results as execution failures."""
+
+    def test_dispatch_rejects_missing_normalized_action(self):
+        runtime = OpenClawExecutionRuntime()
+        runtime._normalize_action = MagicMock(return_value=(None, None))
+        session = MagicMock(id="session-1", user_id="user-1", tenant_id="tenant-1")
+        action = MagicMock(id="action-1", action_type="click")
+
+        result = runtime.dispatch_action(session, action)
+
+        assert result.status == ActionStatus.FAILED
+        assert result.executed is False
+        assert result.error == "action_normalization_failed: click"

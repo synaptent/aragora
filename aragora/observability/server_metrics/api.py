@@ -38,6 +38,7 @@ ACTIVE_DEBATES = Gauge(
     help="Currently running debates",
     label_names=[],
 )
+ACTIVE_DEBATES.set(0)
 
 WEBSOCKET_CONNECTIONS = Gauge(
     name="aragora_websocket_connections",

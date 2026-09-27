@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 # Persistent storage
 try:
-    from aragora.connectors.enterprise.sync_store import (
+    from aragora.storage.sync_store import (
         SyncStore,
         get_sync_store,
     )
@@ -60,7 +60,7 @@ except ImportError:
     logger.warning(
         "ENTERPRISE CONNECTORS: sync_store module not available - using in-memory fallback. "
         "CONNECTOR CONFIGURATIONS WILL BE LOST ON RESTART! "
-        "To fix: ensure aragora.connectors.enterprise.sync_store is importable."
+        "To fix: ensure aragora.storage.sync_store is importable."
     )
 
 # In-memory fallback storage (used when sync_store not available)
@@ -367,6 +367,7 @@ class ConnectorsHandler(SecureHandler):
     async def _get_connector(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Get details for a specific connector."""
         store = await _get_store()
+        connector: dict[str, Any] | None
 
         if store:
             config = await store.get_connector(connector_id)
@@ -852,11 +853,15 @@ class ConnectorsHandler(SecureHandler):
                 from datetime import timedelta
 
                 one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
-                syncs_24h = sum(1 for h in history if h.started_at and h.started_at >= one_day_ago)
-                failures_24h = sum(
-                    1
-                    for h in history
-                    if h.started_at and h.started_at >= one_day_ago and h.status == "failed"
+                syncs_24h = len(
+                    [h for h in history if h.started_at and h.started_at >= one_day_ago]
+                )
+                failures_24h = len(
+                    [
+                        h
+                        for h in history
+                        if (h.started_at and h.started_at >= one_day_ago and h.status == "failed")
+                    ]
                 )
 
                 connectors_health.append(

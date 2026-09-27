@@ -329,11 +329,11 @@ def create_lifecycle_manager(handler: Any) -> RequestLifecycleManager:
     Returns:
         Configured RequestLifecycleManager
     """
-    from aragora.server.prometheus import record_http_request
+    from aragora.observability.prometheus import record_http_request
 
     _record_endpoint_request: Callable[[str, str, int, float], None] | None = None
     try:
-        from aragora.server.handlers.endpoint_analytics import record_endpoint_request
+        from aragora.server.handlers.observability.endpoint_analytics import record_endpoint_request
 
         _record_endpoint_request = record_endpoint_request
     except ImportError:

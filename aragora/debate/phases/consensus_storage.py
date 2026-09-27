@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from aragora.debate.phases._phase_invariant import require_phase_result
+
 if TYPE_CHECKING:
     from aragora.debate.context import DebateContext
     from aragora.memory.consensus import ConsensusStrength
@@ -149,7 +151,10 @@ class ConsensusStorage:
         """Store dissenting agent views as DissentRecords."""
         from aragora.memory.consensus import DissentType
 
-        result = ctx.result
+        result = require_phase_result(ctx)
+        consensus_memory = self.consensus_memory
+        if consensus_memory is None:
+            return
 
         # Find dissenting votes and their reasoning
         for vote in result.votes:
@@ -162,7 +167,7 @@ class ConsensusStorage:
                 reasoning = f"Voted for {vote.choice} instead of {result.winner}"
 
             try:
-                self.consensus_memory.store_dissent(
+                consensus_memory.store_dissent(
                     debate_id=consensus_id,
                     agent_id=vote.agent,
                     dissent_type=DissentType.ALTERNATIVE_APPROACH,

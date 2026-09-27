@@ -163,7 +163,7 @@ class ComputerUseConfig:
     """Configuration for the orchestrator."""
 
     # Model settings
-    model: str = "claude-opus-4-8"
+    model: str = "claude-opus-5"
     max_tokens: int = 4096
     temperature: float = 0.0
 

@@ -286,7 +286,7 @@ class TestDebateHistoryWorkflow:
 
     def test_debates_list_returns_debates(self, handler_context, temp_dir):
         """Test debates list endpoint."""
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         storage = DebateStorage(str(temp_dir / "debates.db"))
         handler_context["storage"] = storage
@@ -302,7 +302,7 @@ class TestDebateHistoryWorkflow:
 
     def test_debates_pagination(self, handler_context, temp_dir):
         """Test debates pagination."""
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         storage = DebateStorage(str(temp_dir / "debates.db"))
         handler_context["storage"] = storage
@@ -450,7 +450,7 @@ class TestErrorHandling:
 
     def test_missing_resource_handled_gracefully(self, handler_context, temp_dir):
         """Test missing resource is handled gracefully."""
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         storage = DebateStorage(str(temp_dir / "debates.db"))
         handler_context["storage"] = storage

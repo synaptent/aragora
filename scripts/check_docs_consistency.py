@@ -22,6 +22,7 @@ ARCHIVE_REFERENCE_WHITELIST = {
     "docs/OMNIVOROUS_ROADMAP.md": "redirect stub to the archived roadmap snapshot",
     "docs/STRATEGY_INDEX.md": "canonical map from retired docs to live replacements",
     "docs/archive/README.md": "archive policy and inventory",
+    "docs/reference/ROOT_ALLOWLIST.md": "root-clutter inventory documents archived former-root files",
 }
 # Files/patterns where metric numbers are intentionally historical, local-suite scoped,
 # generated from live measurements, or not repo-wide canonical marketing/product claims.
@@ -33,6 +34,9 @@ METRIC_DRIFT_WHITELIST = {
     "docs/debate/**": "debate transcripts preserve prompt-time metric claims", "docs/research/**": "research notes cite exploratory subsystem-local counts", "docs/observability/**": "observability docs cite live suite measurements",
     "docs/workflow/**": "workflow docs cite older local validation counts", "docs/governance/subsystem-ledger.md": "subsystem ledger is explicitly module-local", "docs/PACKAGING.md": "packaging guide cites package-local tests and adapter surfaces",
     "docs/PYTHON_SDK_CONSOLIDATION.md": "SDK consolidation guide cites namespace-local modules", "docs/STRANDED_FEATURES_AUDIT.md": "audit entries cite feature-local test counts",
+    "docs/strategy/POSITIONING_AND_MESSAGING.md": "positioning guide quotes '43 agent types' as an anti-pattern to avoid, not a factual claim",
+    "docs/outreach/DESIGN_PARTNER_QUALIFICATION.md": "qualifies '43 agent types' as anti-pattern messaging, not a factual claim",
+    "docs/STRATEGIC_ANALYSIS.md": "point-in-time (March 2026) documentation-drift snapshot; historical counts preserved for the audit narrative",
 }
 LINK_RE = re.compile(r"(?<!!)\[[^\]\n]+\]\(([^)\n]+)\)")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
@@ -70,19 +74,38 @@ def is_relative_to(path: Path, parent: Path) -> bool:
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 def markdown_files(root: Path) -> list[Path]:
+    # NOTE: `docs/**/*.md` in git pathspec misses top-level `docs/*.md`
+    # (e.g. `docs/COMMERCIAL_OVERVIEW.md`, `docs/WHY_ARAGORA.md`), so we scan
+    # `docs/*.md` (which git expands recursively across the tree) and also
+    # include top-level positioning docs like `CLAUDE.md` and `AGENTS.md`.
     result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--", "README.md", "docs/**/*.md"],
+        [
+            "git", "-C", str(root), "ls-files", "--",
+            "README.md", "CLAUDE.md", "AGENTS.md", "docs/*.md",
+        ],
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode == 0:
-        return [root / line for line in result.stdout.splitlines() if line.strip()]
+        seen: set[Path] = set()
+        files: list[Path] = []
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            path = root / stripped
+            if path in seen:
+                continue
+            seen.add(path)
+            files.append(path)
+        return files
 
     files: list[Path] = []
-    readme = root / "README.md"
-    if readme.exists():
-        files.append(readme)
+    for top in ("README.md", "CLAUDE.md", "AGENTS.md"):
+        candidate = root / top
+        if candidate.exists():
+            files.append(candidate)
     docs = root / "docs"
     if docs.exists():
         files.extend(sorted(docs.rglob("*.md")))
@@ -256,7 +279,7 @@ def check_archive_references(root: Path) -> list[Finding]:
 def parse_canonical_metrics(root: Path) -> dict[str, tuple[int, str]]:
     path = root / "docs" / "CANONICAL_GOALS.md"
     metrics: dict[str, tuple[int, str]] = {}
-    key_for = {"python modules": "modules", "automated tests": "tests", "api operations": "api operations", "knowledge mound adapters": "adapters", "agent types": "agent types"}
+    key_for = {"python modules": "modules", "automated tests": "tests", "api operations": "api operations", "knowledge mound adapters": "adapters", "agent types": "agent types", "agent types (registered)": "agent types"}
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.startswith("|"):
             continue

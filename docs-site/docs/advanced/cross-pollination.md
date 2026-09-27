@@ -108,7 +108,7 @@ manager.register("my_handler", StreamEventType.AGENT_ELO_UPDATED, my_handler_fn)
 Connects Arena's internal EventBus to the CrossSubscriberManager.
 
 ```python
-from aragora.events.arena_bridge import ArenaEventBridge, create_arena_bridge
+from aragora.debate.arena_bridge import ArenaEventBridge, create_arena_bridge
 
 # Automatic - enabled by default via ArenaBuilder
 arena = ArenaBuilder(env, agents).build()

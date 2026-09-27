@@ -26,7 +26,6 @@ from .interface import (
     SyncBackendWrapper,
     sync_backend,
 )
-from .adapters import DebateStorageAdapter
 from .share_store import ShareLinkStore
 from .webhook_store import (
     InMemoryWebhookStore,
@@ -148,6 +147,7 @@ from typing import Any
 # Global debate storage singleton (set during server startup)
 _debate_storage: Any = None
 _LAZY_STORE_EXPORTS = {
+    "DebateStorageAdapter": ("aragora.export.storage_adapter", "DebateStorageAdapter"),
     "OrganizationStore": (".organization_store", "OrganizationStore"),
     "UserStore": (".user_store", "UserStore"),
 }

@@ -30,7 +30,7 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from aragora.storage.generic_store import (
     GenericInMemoryStore,
@@ -210,7 +210,7 @@ class InMemoryApprovalRequestStore(GenericInMemoryStore, ApprovalRequestStoreBac
                 if (
                     r.get("status") == "pending"
                     and r.get("expires_at")
-                    and r.get("expires_at") < now
+                    and cast(str, r.get("expires_at")) < now
                 )
             ]
 

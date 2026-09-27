@@ -22,7 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 from collections.abc import Callable, Awaitable
 
 from aragora.memory.surprise import (
@@ -906,6 +906,7 @@ class MemoryCoordinator:
     ) -> None:
         """Execute a single write operation with retries."""
         for attempt in range(opts.max_retries + 1):
+            result: str | None
             try:
                 if op.target == "continuum":
                     result = await self._write_continuum(op.data)
@@ -1349,7 +1350,10 @@ class MemoryCoordinator:
 
         # Query KM for items matching the content keywords
         query_text = " ".join(list(content_keywords)[:10])
-        result = await self.knowledge_mound.query(query=query_text, limit=max_targets * 2)
+        result = await cast(Any, self.knowledge_mound).query(
+            query=query_text,
+            limit=max_targets * 2,
+        )
         items = result.items if hasattr(result, "items") else []
 
         affected_ids: list[str] = []
@@ -1377,7 +1381,10 @@ class MemoryCoordinator:
 
             try:
                 if hasattr(self.knowledge_mound, "update_confidence"):
-                    await self.knowledge_mound.update_confidence(item.id, new_confidence)
+                    await cast(Any, self.knowledge_mound).update_confidence(
+                        item.id,
+                        new_confidence,
+                    )
                     affected_ids.append(item.id)
             except (RuntimeError, ValueError, AttributeError) as e:
                 logger.warning("Failed to apply contradiction penalty to KM %s: %s", item.id, e)
@@ -1396,7 +1403,10 @@ class MemoryCoordinator:
         query = " ".join(list(content_keywords)[:10])
 
         try:
-            results = self.continuum_memory.retrieve(query=query, limit=max_targets * 2)
+            results = cast(Any, self.continuum_memory).retrieve(
+                query=query,
+                limit=max_targets * 2,
+            )
         except (TypeError, AttributeError):
             return []
 
@@ -1428,7 +1438,10 @@ class MemoryCoordinator:
             try:
                 entry_id = getattr(entry, "id", None)
                 if entry_id and hasattr(self.continuum_memory, "update_importance"):
-                    self.continuum_memory.update_importance(entry_id, new_importance)
+                    cast(Any, self.continuum_memory).update_importance(
+                        entry_id,
+                        new_importance,
+                    )
                     affected_ids.append(entry_id)
             except (RuntimeError, ValueError, AttributeError) as e:
                 logger.warning(

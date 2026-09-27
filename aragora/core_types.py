@@ -835,7 +835,7 @@ REASONING: <brief explanation>"""
 
 def __getattr__(name: str) -> Any:
     if name == "DebateProtocol":
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         return DebateProtocol
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

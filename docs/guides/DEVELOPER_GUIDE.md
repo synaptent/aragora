@@ -173,27 +173,24 @@ for await (const event of stream) {
 
 ### Multi-Tenant Setup
 
-Configure tenant isolation for enterprise deployments:
+Membership and quota administration are served by the organization and quota
+namespaces, not by `client.tenants`. `sdk/python/BREAKING_CHANGES.md` carries the
+route-by-route mapping, including the tenant routes the default server does not
+dispatch.
 
 ```python
-# Create a tenant
-tenant = await client.tenants.create(
-    name="Acme Corp",
-    settings={"max_debates_per_day": 100}
-)
+org_id = "org_acme"
 
-# Add members
-await client.tenants.add_member(
-    tenant.id,
-    email="user@acme.com",
-    role="admin"
-)
+# Sync client; AragoraAsyncClient exposes the same methods with await.
+members = client.organizations.list_members(org_id)
+client.organizations.invite_member(org_id, email="user@acme.com", role="admin")
 
-# Set quotas
-await client.tenants.update_quotas(
-    tenant.id,
-    debates_limit=500,
-    agents_limit=20
+quotas = client.quotas.list()
+usage = client.quotas.get_usage(period="30d")
+client.quotas.request_increase(
+    "debates",
+    requested_limit=500,
+    justification="Q3 rollout",
 )
 ```
 

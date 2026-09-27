@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -88,7 +88,7 @@ class UniversalGraphHandler(BaseHandler):
             graph_id = parts[4]
             ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
 
             if len(parts) == 5:
                 return self._get_graph(graph_id)
@@ -108,7 +108,7 @@ class UniversalGraphHandler(BaseHandler):
                 node_id = parts[6]
                 ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
                 if not ok2:
-                    return error_response(err2, 400)
+                    return error_response(cast(str, err2), 400)
                 return self._provenance_chain(graph_id, node_id)
 
         return None
@@ -125,7 +125,7 @@ class UniversalGraphHandler(BaseHandler):
                 return error_response("Authentication required", 401)
 
             auth_ctx = AuthorizationContext(
-                user_id=user_ctx.user_id,
+                user_id=cast(str, user_ctx.user_id),
                 user_email=user_ctx.email,
                 org_id=user_ctx.org_id,
                 workspace_id=None,
@@ -162,7 +162,7 @@ class UniversalGraphHandler(BaseHandler):
             graph_id = parts[4]
             ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
 
             sub = parts[5]
             if sub == "nodes":
@@ -175,7 +175,7 @@ class UniversalGraphHandler(BaseHandler):
                 node_id = parts[6]
                 ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
                 if not ok2:
-                    return error_response(err2, 400)
+                    return error_response(cast(str, err2), 400)
                 return self._execute_node(graph_id, node_id, body)
 
         return None
@@ -194,7 +194,7 @@ class UniversalGraphHandler(BaseHandler):
             graph_id = parts[4]
             ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
             return self._update_graph(graph_id, body)
 
         return None
@@ -215,10 +215,10 @@ class UniversalGraphHandler(BaseHandler):
             node_id = parts[6]
             ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
             ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
             if not ok2:
-                return error_response(err2, 400)
+                return error_response(cast(str, err2), 400)
             return self._update_node(graph_id, node_id, body)
 
         return None
@@ -239,7 +239,7 @@ class UniversalGraphHandler(BaseHandler):
             graph_id = parts[4]
             ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
 
             if len(parts) == 5:
                 return self._delete_graph(graph_id)
@@ -250,14 +250,14 @@ class UniversalGraphHandler(BaseHandler):
                 node_id = parts[6]
                 ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
                 if not ok2:
-                    return error_response(err2, 400)
+                    return error_response(cast(str, err2), 400)
                 return self._remove_node(graph_id, node_id)
 
             if sub == "edges" and len(parts) >= 7:
                 edge_id = parts[6]
                 ok3, err3 = validate_path_segment(edge_id, "edge_id", SAFE_ID_PATTERN)
                 if not ok3:
-                    return error_response(err3, 400)
+                    return error_response(cast(str, err3), 400)
                 return self._remove_edge(graph_id, edge_id)
 
         return None

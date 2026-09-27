@@ -342,7 +342,7 @@ def check_sync_store(handler: _HealthHandlerProtocol) -> dict[str, Any]:
     Returns:
         Dict with healthy status and store type
     """
-    from aragora.connectors.enterprise.sync_store import SyncStore  # noqa: F401
+    from aragora.storage.sync_store import SyncStore  # noqa: F401
 
     sync_store = handler.ctx.get("sync_store")
     if sync_store is not None:

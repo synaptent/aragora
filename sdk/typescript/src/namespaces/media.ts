@@ -4,9 +4,8 @@
  * Provides access to media assets including audio files and podcast episodes.
  *
  * Features:
- * - Audio file metadata retrieval and management
  * - Direct audio URL generation
- * - Audio upload, conversion, and transcription
+ * - Audio file listing and upload
  * - Podcast episode management
  * - RSS feed access
  *
@@ -14,8 +13,8 @@
  * ```typescript
  * const client = createClient({ baseUrl: 'https://api.aragora.ai', apiKey: 'your-key' });
  *
- * // Get audio metadata
- * const audio = await client.media.getAudio('audio_123');
+ * // Build a direct playback URL for a debate's audio
+ * const url = client.media.getAudioUrl('debate_456');
  *
  * // List podcast episodes
  * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
@@ -25,17 +24,11 @@
  *   filePath: '/path/to/audio.mp3',
  *   debateId: 'debate_456'
  * });
- *
- * // Convert audio format
- * const converted = await client.media.convertAudio('audio_123', {
- *   targetFormat: 'aac',
- *   bitrate: 128
- * });
  * ```
  */
 
 /**
- * Supported audio formats for upload and conversion.
+ * Supported audio formats for upload.
  */
 export type AudioFormat = 'mp3' | 'aac' | 'm4a' | 'wav' | 'ogg';
 
@@ -169,8 +162,7 @@ interface MediaClientInterface {
  * Media API namespace.
  *
  * Provides methods for media asset management:
- * - Get, list, upload, and delete audio files
- * - Audio format conversion and transcription
+ * - Direct audio URLs, audio listing and upload
  * - Podcast episode management
  * - RSS feed access
  *
@@ -178,14 +170,11 @@ interface MediaClientInterface {
  * ```typescript
  * const client = createClient({ baseUrl: 'https://api.aragora.ai', apiKey: 'your-key' });
  *
- * // Get audio metadata
- * const audio = await client.media.getAudio('audio_123');
+ * // Build a direct playback URL for a debate's audio
+ * const url = client.media.getAudioUrl('debate_456');
  *
- * // List audio files for a debate
- * const { audio_files } = await client.media.listAudio({ debateId: 'debate_456' });
- *
- * // Get transcription
- * const transcription = await client.media.getTranscription('audio_123');
+ * // Browse podcast episodes
+ * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
  * ```
  */
 export class MediaAPI {
@@ -194,22 +183,6 @@ export class MediaAPI {
   // =========================================================================
   // Audio Files
   // =========================================================================
-
-  /**
-   * Get audio file metadata by ID.
-   *
-   * @param audioId - The audio file identifier
-   * @returns Audio file metadata including format, duration, size, and URL
-   *
-   * @example
-   * ```typescript
-   * const audio = await client.media.getAudio('audio_123');
-   * console.log(`Duration: ${audio.duration_seconds}s, Format: ${audio.format}`);
-   * ```
-   */
-  async getAudio(audioId: string): Promise<AudioFile> {
-    return this.client.request('GET', `/api/v1/media/audio/${audioId}`);
-  }
 
   /**
    * Get the direct audio file URL for a debate or audio file.
@@ -293,22 +266,6 @@ export class MediaAPI {
     return this.client.request('POST', '/api/v1/media/audio', { json });
   }
 
-  /**
-   * Delete an audio file.
-   *
-   * @param audioId - The audio file identifier
-   * @returns Confirmation of deletion
-   *
-   * @example
-   * ```typescript
-   * const result = await client.media.deleteAudio('audio_123');
-   * console.log(result.message); // "Audio file deleted"
-   * ```
-   */
-  async deleteAudio(audioId: string): Promise<{ deleted: boolean; message: string }> {
-    return this.client.request('DELETE', `/api/v1/media/audio/${audioId}`);
-  }
-
   // =========================================================================
   // Podcast Episodes
   // =========================================================================
@@ -389,60 +346,36 @@ export class MediaAPI {
   }
 
   // =========================================================================
-  // Media Conversions
+  // Unsupported Media Operations
   // =========================================================================
 
   /**
-   * Convert an audio file to a different format.
+   * Guard unsupported conversion access until the API publishes this route.
    *
    * @param audioId - The source audio file identifier
    * @param options - Conversion options
    * @param options.targetFormat - Target format (mp3, aac, m4a, wav, ogg)
    * @param options.bitrate - Optional target bitrate in kbps
-   * @returns Converted audio file details
-   *
-   * @example
-   * ```typescript
-   * // Convert MP3 to AAC
-   * const converted = await client.media.convertAudio('audio_123', {
-   *   targetFormat: 'aac',
-   *   bitrate: 128
-   * });
-   *
-   * // Convert to WAV (lossless)
-   * const lossless = await client.media.convertAudio('audio_123', {
-   *   targetFormat: 'wav'
-   * });
-   * ```
+   * @throws Error because the public API does not expose this route
    */
   async convertAudio(
-    audioId: string,
-    options: AudioConversionParams
+    _audioId: string,
+    _options: AudioConversionParams
   ): Promise<AudioFile> {
-    const json: Record<string, unknown> = {
-      target_format: options.targetFormat,
-    };
-    if (options.bitrate !== undefined) json.bitrate = options.bitrate;
-
-    return this.client.request('POST', `/api/v1/media/audio/${audioId}/convert`, {
-      json,
-    });
+    throw new Error(
+      'POST /api/v1/media/audio/{audioId}/convert is not part of the current Aragora API contract.'
+    );
   }
 
   /**
-   * Get transcription for an audio file.
+   * Guard unsupported transcription access until the API publishes this route.
    *
    * @param audioId - The audio file identifier
-   * @returns Transcription text and metadata
-   *
-   * @example
-   * ```typescript
-   * const transcription = await client.media.getTranscription('audio_123');
-   * console.log(`Language: ${transcription.language}`);
-   * console.log(`Text: ${transcription.text}`);
-   * ```
+   * @throws Error because the public API does not expose this route
    */
-  async getTranscription(audioId: string): Promise<Transcription> {
-    return this.client.request('GET', `/api/v1/media/audio/${audioId}/transcription`);
+  async getTranscription(_audioId: string): Promise<Transcription> {
+    throw new Error(
+      'GET /api/v1/media/audio/{audioId}/transcription is not part of the current Aragora API contract.'
+    );
   }
 }

@@ -793,7 +793,7 @@ def prioritized_probe_candidates(
         else:
             _append_unique(other_unverified_ids, runner_id)
 
-    ordered_ids = [*raw_failed_ids, *selected_unverified_ids, *other_unverified_ids]
+    ordered_ids = [*selected_unverified_ids, *raw_failed_ids, *other_unverified_ids]
     return [inspection_by_id[item] for item in ordered_ids]
 
 

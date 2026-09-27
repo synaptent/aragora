@@ -443,7 +443,7 @@ class MultiInboxManager:
                     for label in labels:
                         query_parts.append(f"label:{label}")
 
-                query = " ".join(query_parts) if query_parts else None
+                query = " ".join(query_parts)
 
                 # Fetch message IDs
                 message_ids, _ = await connector.list_messages(

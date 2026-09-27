@@ -12,6 +12,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from aragora.utils.request_ip import extract_client_ip
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,8 +71,6 @@ def extract_user_from_request(handler: Any, user_store=None) -> UserAuthContext:
     Returns:
         UserAuthContext with authentication info
     """
-    from aragora.server.middleware.auth import extract_client_ip
-
     from .tokens import validate_access_token
 
     context = UserAuthContext(

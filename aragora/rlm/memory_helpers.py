@@ -129,12 +129,24 @@ def load_memory_context(
 def _to_memory_entry(raw: Any, tier: str) -> MemoryEntry:
     """Convert raw memory data to MemoryEntry."""
     if isinstance(raw, dict):
+        content = raw.get("content")
+        if content is None:
+            content = raw.get("text")
+        if content is None:
+            content = str(raw)
+
+        surprise_score = raw.get("surprise_score")
+        if surprise_score is None:
+            surprise_score = raw.get("surprise")
+        if surprise_score is None:
+            surprise_score = 0.0
+
         return MemoryEntry(
             id=raw.get("id", str(hash(str(raw)))),
             tier=raw.get("tier", tier),
-            content=raw.get("content", raw.get("text", str(raw))),
+            content=content,
             importance=raw.get("importance", 0.5),
-            surprise_score=raw.get("surprise_score", raw.get("surprise", 0.0)),
+            surprise_score=surprise_score,
             success_rate=raw.get("success_rate", 0.5),
             metadata=raw.get("metadata", {}),
             red_line=raw.get("red_line", False),

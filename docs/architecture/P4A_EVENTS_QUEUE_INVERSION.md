@@ -1,14 +1,15 @@
 # P4a EventBus / Job-Queue Registry Inversion (events + queue relocate-UP)
 
-> **Status:** Design (Tier 1-2 doc). **Milestone:** `p4a-layering-foundation`.
+> **Status:** Implemented; final-main seal reconciliation (2026-07-13).
+> **Milestone:** `p4a-layering-foundation`.
 > **Supersedes:** the cancelled relocate batches `p4a-events-subscribers-relocate` (2a)
 > and `p4a-queue-workers-relocate` (2b).
 > **Scope:** resolves the layering inversion for BOTH `aragora.events`
 > (`cross_subscribers` + `subscribers` + `security_events`/`security_dispatcher`/`arena_bridge`)
 > AND the sibling `aragora.queue` (`worker` + `workers.*`), with grimp evidence.
-> **Does NOT** implement the moves; it specifies homes, the domain-free registry,
-> the bootstrap, the relocate-UP no-shim exemption, the batch breakdown, and the
-> exact AGENTS.md / shims.md policy text.
+> This document originally specified the homes, domain-free registry, bootstrap,
+> relocate-UP no-shim exemption, batch breakdown, and exact AGENTS.md / shims.md
+> policy text. The final-main reconciliation below records the landed result.
 
 ## 0. TL;DR
 
@@ -39,9 +40,10 @@ Grimp proves (§7) that after the inversion,
 `check_import_contracts.py --layers foundation,infrastructure` clears
 `events -> {agents,debate,knowledge,memory,nomic,ranking,reasoning,workflow}` and
 `queue -> {agents,debate,gauntlet,integrations,memory,nomic,ranking,server}` plus
-the subscriber-side `events -> server`, **with zero new un-baselined edge**. The
-residual `events -> server` is owned by Batch 1b-sweep + Batch 2c (core
-dispatcher), not this batch.
+the subscriber-side `events -> server`, **with zero new un-baselined edge**. At
+that batch boundary, the residual `events -> server` was owned by Batch 1b-sweep
+and Batch 2c (core dispatcher), not E1-E7b. Those direct contributors subsequently
+cleared; §3 and §7 record the sealed final-main result.
 
 ## 1. Why relocate-UP + a re-export shim is impossible (the 5f92db63 result)
 
@@ -97,8 +99,9 @@ aragora.events -> aragora.server   (10 route(s))
 ```
 
 **Implication (the batch's core enabler):** cutting the *direct* subscriber/handler
-imports clears `events -> domain` even though the dispatcher-side `events -> server`
-persists (that is Batch 1b-sweep + Batch 2c, §7). Likewise for `queue`.
+imports clears `events -> domain`. The dispatcher-side `events -> server` persisted
+at the E1-E7b boundary and was assigned to Batch 1b-sweep + Batch 2c (§7); it has
+since cleared on final main. Likewise for `queue`.
 
 Two attribution nuances captured for accuracy:
 - **Unlayered pass-through.** `subscribers.notification_handlers` shows up under
@@ -111,24 +114,26 @@ Two attribution nuances captured for accuracy:
   regardless because `dispatcher`/`async_dispatcher` import `server.middleware.tracing`
   directly, and that edge is baselined + owned by Batch 1b-sweep/2c.
 
-## 3. Current coupling map (per-edge direct contributors)
+## 3. Pre-inversion coupling map and final disposition
 
-From grimp (`find_illegal_dependencies_for_layers`, layers = the 5 `.importlinter`
-layers, container `aragora`). Heads are relative to `aragora.events.` / `aragora.queue.`.
+The original grimp census used `find_illegal_dependencies_for_layers` with the five
+`.importlinter` layers and container `aragora`. The events rows below are reconciled
+to final main after E2c-E7b and the later dispatcher/notification boundary work.
+Queue rows remain the design-time source census for the Q batches.
 
-### 3.1 `aragora.events` (baseline: 9 edges)
+### 3.1 `aragora.events` (pre-inversion: 9 edges; final: zero contract edges)
 
-| Edge | Direct contributor modules (heads) |
+| Original edge | Final-main disposition |
 |---|---|
-| events -> agents | `security_events` |
-| events -> debate | `arena_bridge`, `cross_subscribers.handlers.basic`, `cross_subscribers.handlers.strategic`, `security_dispatcher`, `security_events`, `subscribers.debate_handlers` |
-| events -> knowledge | `cross_subscribers.handlers.{basic,culture,knowledge_mound,strategic,validation}`, `subscribers.{debate_handlers,execution_handlers,mound_handlers,testfixer_handlers}` |
-| events -> memory | `cross_subscribers.handlers.{basic,knowledge_mound,validation}`, `subscribers.mound_handlers` |
-| events -> nomic | `subscribers.testfixer_handlers` |
-| events -> ranking | `subscribers.execution_handlers` |
-| events -> reasoning | `cross_subscribers.handlers.basic` |
-| events -> server | subscriber-side (THIS batch): `cross_subscribers.handlers.{basic,culture}`, `subscribers.{execution_handlers,notification_handlers}`; core-side (Batch 1b-sweep/2c): `dispatcher`, `async_dispatcher`, `registry` |
-| events -> workflow | `cross_subscribers.handlers.strategic`, `subscribers.workflow_automation` |
+| events -> agents | Cleared by E7a: the security-debate runner moved to `aragora.debate.security_response` behind the domain-free callback seam. |
+| events -> debate | Cleared by E4/E7a/E7b: reactions moved to `aragora.debate.event_subscribers`, security composition moved to `aragora.debate.security_response`, and `arena_bridge` moved to `aragora.debate.arena_bridge`. |
+| events -> knowledge | Cleared by E2a-E2c: live KM reactions moved to `aragora.knowledge.event_subscribers`; obsolete subscriber modules were deleted. |
+| events -> memory | Cleared by E3: the three live `handlers.basic` reactions moved to `aragora.memory.event_subscribers`. |
+| events -> nomic | No-code stale edge after E2c deleted `subscribers.testfixer_handlers`; its baseline entry was hand-shrunk by E5. |
+| events -> ranking | No-code stale edge after E2c deleted `subscribers.execution_handlers`; its baseline entry was hand-shrunk by E3. No ranking home was created. |
+| events -> reasoning | Cleared by E3: `vote_to_belief` moved to `aragora.reasoning.event_subscribers`. |
+| events -> server | Subscriber reactions moved to `aragora.server.event_subscribers`; dispatcher and notification/channel boundaries were inverted by their owning features. The final aggregate exception route terminates at the exact authorized `aragora.exceptions -> aragora.server.handlers.exceptions` ignore. |
+| events -> workflow | Cleared by E5: the live workflow brake and callable post-debate subscriber moved to `aragora.workflow.event_subscribers`; the unregistered legacy delegate was removed. |
 
 ### 3.2 `aragora.queue` (baseline: 8 edges)
 
@@ -215,21 +220,24 @@ the source edges clear; this rule proves the destination introduces none).
 
 ### 4.3 Home assignments (prefer the coupled domain; existing app/interface homes)
 
-Handlers are currently multi-reaction classes; the inversion **splits each class by
-reaction** and files each reaction under the home matching its target layer. No new
-top-level package is introduced (no `aragora/orchestration`); every home already
-exists, so **no `module_tiers.yaml` drift** results (§9).
+The original handlers were multi-reaction classes; the inversion **split each class
+by reaction** and filed each reaction under the home matching its target layer. No
+new top-level package was introduced (no `aragora/orchestration`), so this work
+created **no `module_tiers.yaml` drift** (§9).
 
 | New home (self-registering module) | Layer | Reactions relocated here (source) |
 |---|---|---|
-| `aragora/knowledge/event_subscribers.py` | domain | KM ingest/validation/mound reactions from `handlers.{knowledge_mound,validation,basic,culture,strategic}`, `subscribers.{mound_handlers,debate_handlers,execution_handlers,testfixer_handlers}` (the knowledge-writing parts) |
-| `aragora/memory/event_subscribers.py` | domain | memory/continuum reactions from `handlers.{basic,knowledge_mound,validation}`, `subscribers.mound_handlers` |
-| `aragora/debate/event_subscribers.py` | domain | debate reactions from `subscribers.debate_handlers`, `handlers.{basic,strategic}`; `arena_bridge` relocation (§5.1) |
-| `aragora/reasoning/event_subscribers.py` | domain | belief reaction from `handlers.basic` (`reasoning.belief`) |
-| `aragora/ranking/event_subscribers.py` | domain | elo reaction from `subscribers.execution_handlers` (`ranking.elo`) |
-| `aragora/workflow/event_subscribers.py` | application | `subscribers.workflow_automation` (PostDebateWorkflowSubscriber) + `handlers.strategic` workflow reaction (`workflow.engine.get_workflow_engine`) + `handlers.basic._handle_debate_end_to_workflow` |
-| `aragora/nomic/testfixer/event_subscribers.py` | application | `subscribers.testfixer_handlers` (`nomic.testfixer.http_api`, `nomic.improvement_queue`). **Distinct file** from the Q4 queue-worker home `aragora/nomic/testfixer/queue_worker.py` (neither exists today; no collision) |
-| `aragora/server/event_subscribers.py` | interface | server-coupled reactions: `handlers.basic` webhook delivery (`server.handlers.webhooks.get_webhook_store`), `handlers.culture` (`server.stream.state_manager`), `subscribers.execution_handlers` emitter (`server.stream.emitter`), `subscribers.notification_handlers` (delivery via `aragora.notifications`) |
+| `aragora/knowledge/event_subscribers.py` | domain | KM ingest, validation, mound, provenance, consensus, workflow-outcome, tier-transition, and approval-reinforcement reactions consolidated by E2a-E2c. |
+| `aragora/memory/event_subscribers.py` | domain | The three live memory reactions from `handlers.basic`: `knowledge_to_memory`, `evidence_to_insight`, and `mound_to_memory`. |
+| `aragora/debate/event_subscribers.py` | domain | The six live debate reactions from `handlers.{basic,strategic}`: ELO, calibration, consensus learning, rhetorical analysis, budget alert, and meta-learning. Security composition and `arena_bridge` moved to separate debate modules (§5.1). |
+| `aragora/reasoning/event_subscribers.py` | domain | `vote_to_belief` from `handlers.basic`. |
+| `aragora/workflow/event_subscribers.py` | application | The live alert-escalation workflow brake plus one keyed `debate_end_to_workflow` reaction backed by the persistent `PostDebateWorkflowSubscriber`. The obsolete unregistered `basic._handle_debate_end_to_workflow` delegate was deleted rather than re-wired. |
+| `aragora/server/event_subscribers.py` | interface | Webhook delivery, knowledge-staleness-to-debate, and gauntlet-notification reactions. The deleted `execution_handlers` and `notification_handlers` modules are not final-main contributors. |
+
+No `aragora/ranking/event_subscribers.py` or
+`aragora/nomic/testfixer/event_subscribers.py` was created: E2c had already
+deleted their sole source modules, so those two edges required only shrink-only
+baseline cleanup.
 
 Queue worker homes (derived the same way; home layer >= each worker's highest
 import, counting lazy imports):
@@ -434,35 +442,30 @@ surface STAYS in `events`/`queue` and only the domain-coupled functions relocate
 
 ### 5.3 Cross-handler coupling must invert to event emission (not direct import)
 
-`handlers.basic._handle_debate_end_to_workflow` and
-`subscribers.debate_handlers` currently **lazily import**
-`PostDebateWorkflowSubscriber` (application-tier) to trigger post-debate workflows.
-If a domain-home handler kept that import it would create a NEW `domain -> workflow`
-edge. The inversion removes the direct call: `PostDebateWorkflowSubscriber` is
-itself a subscriber that independently reacts to the `debate_end` event via the
-domain-free registry. So domain-home handlers **emit/participate**, and the
-application-home workflow subscriber reacts **in parallel** - no cross-layer import.
-This is the general pattern: **handlers communicate through the domain-free event
-bus, never by importing each other across layers.**
+The design-time census found two lazy delegates to
+`PostDebateWorkflowSubscriber`, but E2c deleted
+`subscribers.debate_handlers.py` before E5 landed. The sole remaining delegate,
+`handlers.basic._handle_debate_end_to_workflow`, was unregistered dead code. E5
+therefore removed that delegate and relocated `PostDebateWorkflowSubscriber` to
+`aragora.workflow.event_subscribers`. The application home registers exactly one
+keyed `debate_end_to_workflow` reaction. The interface-superset
+`bootstrap_event_subscribers()` applies that home once per manager, so one
+`DEBATE_END` dispatch invokes `PostDebateWorkflowSubscriber.handle_debate_end`
+exactly once even after repeated bootstrap calls.
 
-> **Invocation-count hazard (drives an E5 acceptance criterion, §10).**
-> `PostDebateWorkflowSubscriber` is instantiated+invoked at **TWO** sites today -
-> `subscribers/debate_handlers.py:457-460` AND
-> `cross_subscribers/handlers/basic.py:577-580` (both lazily construct it and call it
-> on `debate_end`) - in addition to being registerable as a subscriber
-> (`subscribers/workflow_automation.py:30`). After the inversion it must run as the
-> SINGLE registered application-home subscriber, firing **exactly once per
-> `debate_end` event**. A registration-COUNT parity test (the §4.4 / E1 safeguard)
-> would NOT catch a regression here: it counts *registered subscribers*, not
-> *invocations*, so a residual second delegating call would double-fire the workflow
-> while the registered count stays identical. E5 therefore carries an explicit
-> **invocation-count** acceptance criterion (§10), not just a registration-count check.
+This preserves the general rule: **handlers communicate through the domain-free
+event bus, never by importing each other across layers.** The
+`PostDebateWorkflowSubscriber._trigger_workflow` method remains a
+definition-construction-only seam and deliberately avoids creating a workflow
+engine or probing checkpoint infrastructure. Outcome classification and fail-soft
+handling are now reached through the production composition root. Invocation-count
+tests patch the handler itself because registration-count parity alone cannot detect a
+double-fire.
 
-> Note: `handlers.strategic` also imports `control_plane.registry` (unlayered) and
-> `handlers.notification_handlers` imports `aragora.notifications` (unlayered).
-> Unlayered targets impose no layer constraint, but the reaction still moves to the
-> home matching its *highest layered* target (workflow=application for strategic's
-> workflow reaction; delivery/interface for notification_handlers).
+> Note: the design-time `handlers.strategic` control-plane import and
+> `notification_handlers` notification import were unlayered. Final main moved the
+> live workflow reaction to its application home and removed the obsolete
+> notification handler module through the notification/channel boundary work.
 
 ## 6. Consumer census (proves no-shim safety) + repoint list
 
@@ -603,7 +606,20 @@ enumerated above.
 
 ## 7. Grimp evidence: the edges clear with zero new un-baselined edge
 
-We simulated the end state in-memory with grimp (`/tmp/sx_grimp_sim.py`): FULL-MOVE
+### 7.1 Final-main seal
+
+The design-time simulation below predicted that only `events -> server` would
+remain after E1-E7b. Subsequent dispatcher, notification, and channel boundary
+features removed the real direct contributors. At seal time the only remaining
+aggregate routes terminate at the exact authorized exception fallback edges. The
+three bounded `.importlinter` ignores therefore make the scoped
+foundation/infrastructure checker pass with an empty scoped baseline and zero new
+violations. The raw single combined layers contract may still report higher-layer
+violations, as allowed by VAL-P4A-006.
+
+### 7.2 Design-time simulation
+
+We simulated the E1-E7b end state in-memory with grimp (`/tmp/sx_grimp_sim.py`): FULL-MOVE
 modules are removed from the events/queue subtree (they relocate with no re-export),
 and SPLIT modules keep their surface but lose their domain imports. Then we re-ran
 `find_illegal_dependencies_for_layers` (the import-linter primitive) and diffed the
@@ -751,14 +767,14 @@ reactions, which need the interface layer). If a future implementer decides a ne
 package is warranted, they MUST add it to `module_tiers.yaml` + `.importlinter` and
 record the drift per VAL-P0-006.
 
-## 10. Batch breakdown (<=800 LOC coherent impl sub-features)
+## 10. Batch breakdown (implemented sub-features)
 
 Ordered; each is Tier 1-2 (touches only `aragora/events`, `aragora/queue`, and the
 domain/application/interface home packages + their tests) unless noted. LOC is an
 estimate of code touched (moved + edited + repointed + tests); a couple sit near the
 cap and carry a noted split point. **`events.dispatcher`/`async_dispatcher` ->
 `server` (webhook signing + tracing) is OUT OF SCOPE** here - that is Batch 1b-sweep
-+ Batch 2c (2c is Tier-3, `aragora/server/handlers/webhooks.py`).
++ Batch 2c (2c is Tier-3, `aragora/server/handlers/webhook_management.py`).
 
 ### Events (supersedes cancelled Batch 2a)
 
@@ -766,17 +782,19 @@ cap and carry a noted split point. **`events.dispatcher`/`async_dispatcher` ->
 |---|---|---|---|---|
 | E1 | Domain-free cross-subscriber registry core | `cross_subscribers/{__init__,manager}.py` -> registry-backed dispatch; add `register_subscriber`/`register_factory`/`get`/`reset`/`SubscriberStats`; keep `get_cross_subscriber_manager` stable; add interface superset + domain-subset bootstrap skeletons. Handlers still in place (register via new API). | none (enabler; no new edge) | ~600 |
 | E2 | knowledge-domain home | Move KM reactions from `handlers.{knowledge_mound,validation}` (+ knowledge bits of `basic`/`culture`/`strategic`, `subscribers.mound_handlers`) -> `aragora/knowledge/event_subscribers.py`; self-register; NO shim; repoint `test_e2e_debate_km_flow`, `test_consensus_ingestion`. **Split E2a(knowledge_mound)/E2b(validation) if >800.** | contributes `events->{knowledge,memory}` | ~750 |
-| E3 | memory + reasoning + ranking homes | Move memory reactions (`mound_handlers`, `knowledge_mound`/`validation` memory bits), `basic` reasoning (`reasoning.belief`), `execution_handlers` ranking (`ranking.elo`) -> `aragora/{memory,reasoning,ranking}/event_subscribers.py`; repoint tests. | `events->{reasoning,ranking}`; contributes `events->memory` | ~600 |
-| E4 | debate-domain home | Move debate reactions from `subscribers.debate_handlers` + `handlers.{basic,strategic}` debate bits -> `aragora/debate/event_subscribers.py`; repoint `test_strategic_handlers`, `test_tier_transition_events`. | contributes `events->debate` | ~700 |
-| E5 | application homes (workflow + nomic) + coupling inversion | Move `subscribers.workflow_automation` + `handlers.strategic` workflow reaction + `basic._handle_debate_end_to_workflow` -> `aragora/workflow/event_subscribers.py`; move `subscribers.testfixer_handlers` -> `aragora/nomic/...`; **invert `basic`/`debate_handlers` -> workflow to event emission** (§5.3); repoint `test_post_debate_workflow`, `test_event_integration`. | `events->{workflow,nomic}` | ~700 |
-| E6 | interface home (server-coupled reactions) | Move `basic` webhook delivery, `culture` state_manager, `execution_handlers` emitter, `notification_handlers` -> `aragora/server/event_subscribers.py`; register at server startup; repoint `test_workflow_to_supermemory`. | subscriber-side `events->server` | ~700 |
+| E3 | memory + reasoning homes; ranking cleanup | Move the three live `handlers.basic` memory reactions to `aragora/memory/event_subscribers.py` and `vote_to_belief` to `aragora/reasoning/event_subscribers.py`. Ranking was already a no-code stale edge after E2c, so no ranking home was created. | clears `events->{memory,reasoning,ranking}` | ~600 |
+| E4 | debate-domain home | Move the six live debate reactions from `handlers.{basic,strategic}` to `aragora/debate/event_subscribers.py`. `subscribers.debate_handlers` had already been deleted by E2c. | removes the handler share of `events->debate` | ~700 |
+| E5 | workflow application home + stale nomic cleanup | Move `subscribers.workflow_automation` and the live strategic workflow brake to `aragora/workflow/event_subscribers.py`; register one keyed `debate_end_to_workflow` reaction in that application home; remove the unregistered `basic._handle_debate_end_to_workflow` delegate. Nomic was already a no-code stale edge after E2c, so no nomic event-subscriber home was created. | clears `events->{workflow,nomic}` | ~700 |
+| E6 | interface home (server-coupled reactions) | Move the live basic webhook and culture state-manager reactions to `aragora/server/event_subscribers.py`; relocate gauntlet notification for interface cohesion. `execution_handlers` was already deleted, and later notification/channel plus dispatcher-boundary features removed the remaining real `events->server` contributors. | removes the subscriber-side share of `events->server` | ~700 |
 | E7a | security split (events + dispatcher) + emitter callback inversion | SPLIT `security_events`: move `trigger_security_debate` + `_get_security_debate_agents` + `build_security_debate_question` -> `aragora/debate/security_response.py`; add the domain-free `register_security_debate_runner`/`get_security_debate_runner` hook and INVERT `SecurityEventEmitter._trigger_security_debate` to the callback (§5.1); KEEP the domain-free results store in events. SPLIT `security_dispatcher` (move the single Arena-runner fn). DROP `trigger_security_debate` + `build_security_debate_question` from `events/__init__.py` (§6.3 table). Repoint `debate/security_debate.py`, `tests/debate/test_security_debate.py` (8 `@patch`), `tests/events/test_security_events.py`, `tests/events/test_security_dispatcher.py`. | `events->agents` + `security_events`/`security_dispatcher` share of `events->debate` | ~650 |
 | E7b | arena_bridge relocate + manager de-mixin | Relocate `arena_bridge` -> `aragora/debate/arena_bridge.py` (preferred option (a); or the drop-TYPE_CHECKING fallback (b), §5.1); DROP the `arena_bridge` trio from `events/__init__.py` (§6.3 table); finalize `manager.py` domain-free (remove the last mixin imports). Repoint `server/handlers/cross_pollination.py:156` (`EVENT_TYPE_MAP`), `debate/orchestrator_memory.py:306` (`ArenaEventBridge`), `tests/events/test_arena_bridge.py`. | `arena_bridge` share of `events->debate` | ~400 |
 
-After E1-E7b: `events -> {agents,debate,knowledge,memory,nomic,ranking,reasoning,workflow}`
-cleared; `events -> server` remains (Batch 1b-sweep/2c). (E7 was split into E7a/E7b
-because the §5.1 emitter-inversion scope pushed the combined batch past the <=800 LOC
-cap.)
+After E1-E7b, `events ->
+{agents,debate,knowledge,memory,nomic,ranking,reasoning,workflow}` was cleared.
+Later notification/channel and dispatcher-boundary features removed the real
+`events -> server` contributors; the seal closes the final transitive exception
+route with the authorized exact-edge ignore. E7 was split into E7a/E7b because
+the §5.1 emitter-inversion scope pushed the combined batch past the <=800 LOC cap.
 
 ### Queue (supersedes cancelled Batch 2b)
 
@@ -799,13 +817,11 @@ edge** (guards the §5.3 coupling inversion: no domain-home module may retain a
 cross-layer import of an application/interface home, e.g. `debate -> workflow`, and
 guards that each worker's new home is at/above its highest import); (3) NO re-export
 shim at any moved path; (4) all repointed consumers/tests pass; (5)
-`get_cross_subscriber_manager()` import path unchanged; (6) **E5-specific
-(invocation count, not registration count):** an invocation-count test proves
-`PostDebateWorkflowSubscriber` fires **exactly once** per `debate_end` event after
-the coupling inversion (§5.3). A registration-count parity check is insufficient - it
-would miss a residual double-fire from the two legacy delegating sites
-(`subscribers/debate_handlers.py:457`, `cross_subscribers/handlers/basic.py:577`),
-both of which must be removed so only the single registered subscriber remains.
+`get_cross_subscriber_manager()` import path unchanged; (6) **E5-specific:** both
+legacy delegates are absent, the application home registers one keyed
+`debate_end_to_workflow` reaction, and production invocation-count tests prove
+one `PostDebateWorkflowSubscriber.handle_debate_end` call per event before and
+after repeated idempotent bootstrap. Registration-count parity is insufficient.
 
 ## 11. References
 

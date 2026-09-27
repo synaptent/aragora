@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,7 @@ from aragora.storage.backends import (
     PostgreSQLBackend,
     SQLiteBackend,
 )
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 
 from .metrics import (
     record_governance_approval,
@@ -45,7 +46,7 @@ def _parse_datetime(val: Any) -> datetime:
             return datetime.fromisoformat(val)
         except ValueError as e:
             logger.warning("Failed to parse datetime value: %s", e)
-    return datetime.now()
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class GovernanceStore:
@@ -209,7 +210,7 @@ class GovernanceStore:
         Returns:
             The approval_id
         """
-        now = datetime.now().isoformat()
+        now = utc_now_iso_naive()
 
         if self.backend_type == "postgresql":
             sql = """
@@ -277,7 +278,7 @@ class GovernanceStore:
         Returns:
             True if updated
         """
-        now = datetime.now().isoformat()
+        now = utc_now_iso_naive()
 
         updates = ["status = ?"]
         params: list = [status]
@@ -428,7 +429,7 @@ class GovernanceStore:
         Returns:
             The verification_id
         """
-        now = datetime.now().isoformat()
+        now = utc_now_iso_naive()
 
         if self.backend_type == "postgresql":
             sql = """
@@ -580,7 +581,7 @@ class GovernanceStore:
         Returns:
             The decision_id
         """
-        now = datetime.now().isoformat()
+        now = utc_now_iso_naive()
 
         if self.backend_type == "postgresql":
             sql = """

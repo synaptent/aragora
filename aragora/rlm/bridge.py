@@ -75,12 +75,17 @@ def _secret_configured(name: str) -> bool:
     return get_secret_presence(name).source in {"aws", "env"}
 
 
-# Check if official RLM is available
-try:
-    from rlm import RLM as OfficialRLM
+# Check if official RLM is available.
+# import_rlm_guarded: importing rlm triggers a load_dotenv() side effect that
+# can inject a repository .env into os.environ process-wide (#8277); the
+# helper serializes the one real import so no concurrent caller can
+# interleave environ snapshots/restores.
+from aragora.utils.env import import_rlm_guarded
 
+try:
+    OfficialRLM = import_rlm_guarded().RLM
     HAS_OFFICIAL_RLM = True
-except ImportError:
+except (ImportError, AttributeError):
     HAS_OFFICIAL_RLM = False
     OfficialRLM = None
 
@@ -341,7 +346,7 @@ class AragoraRLM(RLMStreamingMixin):
                     # anthropic backend; use the repo's canonical default
                     # (see aragora/agents/api_agents/anthropic.py).
                     self.backend_config.model_name = os.environ.get(
-                        "ARAGORA_RLM_ANTHROPIC_MODEL", "claude-opus-4-8"
+                        "ARAGORA_RLM_ANTHROPIC_MODEL", "claude-opus-5"
                     )
                 logger.info(
                     "[AragoraRLM] OPENAI_API_KEY not configured; routing RLM backend to anthropic"

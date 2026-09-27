@@ -8,6 +8,7 @@ cache performance, adapter syncs, and health status.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from aragora.observability.metrics.base import NoOpMetric, get_metrics_enabled
@@ -46,6 +47,13 @@ KM_CALIBRATION_AGREEMENT_RATIO: Any = None
 KM_CALIBRATION_OUTLIERS_DETECTED: Any = None
 
 _initialized = False
+_km_health_provider: Callable[[], int] | None = None
+
+
+def register_km_health_provider(provider: Callable[[], int] | None) -> None:
+    """Register the knowledge-side provider for the current KM health gauge."""
+    global _km_health_provider
+    _km_health_provider = provider
 
 
 def init_km_metrics() -> None:
@@ -522,26 +530,12 @@ def sync_km_metrics_to_prometheus() -> None:
     """
     _ensure_init()
 
+    if _km_health_provider is None:
+        logger.debug("KM health provider not available for Prometheus sync")
+        return
+
     try:
-        from aragora.knowledge.mound.metrics import get_metrics, HealthStatus
-
-        km_metrics = get_metrics()
-        health = km_metrics.get_health()
-
-        # Map health status to numeric value
-        health_map = {
-            HealthStatus.UNKNOWN: 0,
-            HealthStatus.UNHEALTHY: 1,
-            HealthStatus.DEGRADED: 2,
-            HealthStatus.HEALTHY: 3,
-        }
-        set_km_health_status(health_map.get(health.status, 0))
-
-        # Note: Adapter count is set by BidirectionalCoordinator.sync_all()
-        # No need to update here - adapters self-report their status
-
-    except ImportError:
-        logger.debug("KMMetrics not available for Prometheus sync")
+        set_km_health_status(_km_health_provider())
     except Exception as e:  # noqa: BLE001 - fire-and-forget telemetry sync
         logger.warning("Failed to sync KM metrics to Prometheus: %s", e)
 
@@ -581,6 +575,7 @@ __all__ = [
     "record_km_federated_query",
     "record_km_event_emitted",
     "set_km_active_adapters",
+    "register_km_health_provider",
     "sync_km_metrics_to_prometheus",
     "init_km_metrics",
     # Control Plane Recording Functions

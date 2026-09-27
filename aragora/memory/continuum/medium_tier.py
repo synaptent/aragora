@@ -16,11 +16,11 @@ import asyncio
 import json
 import logging
 import sqlite3
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 
 if TYPE_CHECKING:
     from aragora.memory.continuum.base import ContinuumMemoryEntry
@@ -86,7 +86,7 @@ class MediumTierMixin:
         """
         from aragora.memory.continuum.base import ContinuumMemoryEntry
 
-        now: str = datetime.now().isoformat()
+        now: str = utc_now_iso_naive()
 
         with self.connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()

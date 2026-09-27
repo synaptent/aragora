@@ -52,6 +52,23 @@ class TestAcquisitionRecord:
 
         assert held == pytest.approx(5.0, abs=0.1)
 
+    def test_held_seconds_tolerates_missing_release_timestamp(self):
+        """An inconsistent released record still reports elapsed hold time."""
+        now = time.time()
+        record = AcquisitionRecord(
+            pool_name="postgres",
+            conn_id="pg-1",
+            acquired_at=now - 10,
+            caller="test.py:42",
+            released=True,
+            released_at=None,
+        )
+
+        held = record.held_seconds
+
+        assert held >= 10
+        assert held < 12
+
     def test_to_dict(self):
         """Test serialization to dictionary."""
         now = time.time()

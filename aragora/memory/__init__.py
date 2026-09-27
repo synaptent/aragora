@@ -36,20 +36,14 @@ from aragora.memory.capture import (
     ToolMemoryCapture,
 )
 
-try:
-    from aragora.memory.embeddings import (
-        GeminiEmbedding,
-        OllamaEmbedding,
-        OpenAIEmbedding,
-        SemanticRetriever,
-    )
-except ImportError:
-    # aiohttp is optional in lean CI environments. Keep the memory package
-    # importable when only the transport-backed embedding providers are absent.
-    GeminiEmbedding = None  # type: ignore[assignment]
-    OllamaEmbedding = None  # type: ignore[assignment]
-    OpenAIEmbedding = None  # type: ignore[assignment]
-    SemanticRetriever = None  # type: ignore[assignment]
+# No ImportError guard: embeddings defers the optional aiohttp dependency to
+# the first remote embedding fetch, so a failure here is a real defect.
+from aragora.memory.embeddings import (
+    GeminiEmbedding,
+    OllamaEmbedding,
+    OpenAIEmbedding,
+    SemanticRetriever,
+)
 from aragora.memory.hybrid_search import (
     HybridMemoryConfig,
     HybridMemorySearch,

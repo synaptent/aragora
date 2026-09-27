@@ -492,7 +492,7 @@ class DebateSession:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                logger.debug("session_task_cancelled id=%s", self.id)
 
         self._transition_state(DebateSessionState.CANCELLED)
         self._emit_event(

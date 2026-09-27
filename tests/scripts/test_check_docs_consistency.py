@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import textwrap
 from pathlib import Path
 
@@ -189,3 +190,65 @@ def test_check_5_tracks_duplicate_tw_issue_codes(monkeypatch, tmp_path: Path) ->
     assert [finding.message for finding in findings] == [
         "potential duplicate tracked code TW-03: issues #101, #102"
     ]
+
+
+def test_dormant_capabilities_have_activation_contracts() -> None:
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "docs" / "FEATURE_GAP_LIST.md").read_text(encoding="utf-8")
+    section = text.split("## Built But Dormant", 1)[1].split(
+        "### Dormant-Module Disposition Policy", 1
+    )[0]
+    table_lines = [line for line in section.splitlines() if line.startswith("|")]
+    header = [cell.strip() for cell in table_lines[0].strip("|").split("|")]
+    assert header == [
+        "Capability",
+        "Where it lives",
+        "Verified state (2026-07-11)",
+        "Activation trigger",
+        "Minimum first exposure",
+        "Owner issue",
+    ]
+
+    rows: dict[str, list[str]] = {}
+    for line in table_lines[2:]:
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        assert len(cells) == 6
+        rows[cells[0]] = cells
+
+    assert set(rows) == {
+        "Crux detector",
+        "Blockchain / ERC-8004",
+        "Marketplace + skills",
+        "Verticals",
+        "Genesis",
+        "Broadcast",
+        "Tournaments",
+        "Inbox trust wedge",
+        "Pareto provider router",
+        "Tamper-evident audit trail",
+    }
+    owner_issues: dict[str, str] = {}
+    for capability, cells in rows.items():
+        assert cells[3], capability
+        assert cells[4], capability
+        issue_links = re.findall(r"https://github\.com/synaptent/aragora/issues/(\d+)", cells[5])
+        assert len(issue_links) == 1, capability
+        owner_issues[capability] = issue_links[0]
+
+    assert {capability for capability, issue in owner_issues.items() if issue == "9046"} == {
+        "Blockchain / ERC-8004",
+        "Marketplace + skills",
+        "Verticals",
+        "Genesis",
+        "Broadcast",
+        "Tournaments",
+        "Inbox trust wedge",
+        "Tamper-evident audit trail",
+    }
+
+    policy = text.split("### Dormant-Module Disposition Policy", 1)[1]
+    assert "Integrate or park by default; do not archive for tidiness" in policy
+    assert "One activation path and one open owner issue per row" in policy
+    assert "#9046](https://github.com/synaptent/aragora/issues/9046) is the standing-open" in policy
+    assert "It must remain\n   open while any row names it" in policy
+    assert "Activation requires external evidence" in policy

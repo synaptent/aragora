@@ -9,7 +9,7 @@ description: Aragora Feature Gap List
 > **For current execution sequencing** (what to work on right now, what is gated, what is delayed), defer to [docs/status/NEXT_STEPS_CANONICAL.md](./next-steps-canonical). Active execution status is tracked in [docs/status/ACTIVE_EXECUTION_ISSUES.md](./active-execution-issues) and linked GitHub issues. **This file is the long-horizon capability and productization backlog** — the P0–P4 tiering expresses intended ordering, not dispatch readiness.
 > **For the unified finish-line vision and stage model**, see [docs/CANONICAL_GOALS.md](./canonical-goals). The Decision Integrity Core tranche (crux engine, executable claims, proof-carrying code) is gated on Foreman reliability per [docs/plans/EPISTEMIC_CI_AND_CRUX_ENGINE.md](plans/EPISTEMIC_CI_AND_CRUX_ENGINE.md).
 > **For concrete 30/90/365-day timing**, the [3-Horizon Execution Roadmap](plans/2026-04-18-3-horizon-roadmap.md) provides the sprint-level overlay. P0/P1 items map to H1/H2 deliverables; P2/P3 items map to H3; P4 items are the deferred maximalist backlog.
-> Last updated: June 11, 2026
+> Last updated: July 11, 2026 (dormant-module activation criteria and disposition policy, [#9046](https://github.com/synaptent/aragora/issues/9046))
 > March 2026 priority reframe: product cohesion and PMF proof come before certification. Pentest / SOC 2 stay tracked, but they are no longer the first blocker lane.
 
 ## Revision 2026-06-11 — ODR direction (epic [#8223](https://github.com/synaptent/aragora/issues/8223))
@@ -17,8 +17,35 @@ description: Aragora Feature Gap List
 This revision reconciles the list against the June 11, 2026 strategy/market/capability investigation (recorded in epic #8223). Three changes:
 
 1. **Active direction:** the [Open Decision Receipt (ODR) tranche](#active-direction--open-decision-receipt-odr-june-2026) is now the priority spine — own the decision-semantics layer (rationale + adversarial quorum + calibrated confidence + crux + human attestation) above action-level agent governance, where Microsoft's Agent Governance Toolkit stops.
-2. **Built-but-dormant honesty:** a [dormant-capability table](#built-but-dormant--june-11-2026-capability-map) marks engines that exist in the codebase but have little or no productized surface, so future agents stop re-planning them from scratch.
+2. **Built-but-dormant honesty:** a [dormant-capability table](#built-but-dormant--july-11-2026-capability-map) marks engines that exist in the codebase but have little or no productized surface, so future agents stop re-planning them from scratch.
 3. **De-scope annotations:** entries the proof-first shift and the steering-leverage selection filter deliberately excluded (breadth without steering value) are annotated in place, not deleted — the history stays legible.
+
+## Revision 2026-07-11 — Dormant-module activation policy ([#9046](https://github.com/synaptent/aragora/issues/9046))
+
+The dormant-capability map now names the evidence gate, minimum external
+exposure, and single open owner issue for every row. These are activation
+criteria, not dispatch instructions: a row stays parked until its trigger is
+observed and its owning issue authorizes a bounded implementation slice.
+
+The founder decision recorded in [#9046](https://github.com/synaptent/aragora/issues/9046)
+on July 8 supersedes removal as the disposition for two June de-scopes without
+activating either module: Blockchain expansion remains parked behind CP-4,
+with Rekor serving receipt anchoring, and Marketplace remains P3/de-scoped
+until an external design partner supplies the activation evidence.
+
+## Revision 2026-08-26 — External research intake (X bookmarks + likes)
+
+Founder bookmark triage ([`docs/research/2026-08-26-x-bookmarks-triage.md`](research/2026-08-26-x-bookmarks-triage.md))
+established a standing intake pipeline for externally sourced ideas. These rows are capability
+backlog, **not** dispatch priority — the ODR tranche remains the execution spine. Dogfooding rule:
+intake candidates are ranked by an Aragora debate and every filed issue links the DecisionReceipt.
+
+| Item | Status | Notes |
+|------|--------|-------|
+| X bookmarks/likes live ingestion | In progress (this revision) | OAuth2 user-context (`bookmark.read` + `like.read`, owned reads ~$0.001) on the existing `aragora/ideacloud/ingestion/twitter_bookmarks.py` / `twitter_likes.py`; data-export `--file` mode already shipped and remains the zero-auth bridge. |
+| MetaPlanner `candidate_goals` | In progress (this revision) | First-class externally supplied candidate list for debate ranking with receipts; removes the 5-item `recent_issues` cap in `build_debate_topic`. |
+| Recurring X-intake digest | Planned | Clone of the codex-insights digest pattern: fetch since-cursor → ideacloud ingest/dedup → digest artifact + SHA-256 receipt; creates nothing (issue filing stays human-triggered). |
+| Grok Agent-Tools x_search enrichment | Investigation | xAI deprecated Live Search (the 410 fallback in `grok.py` already routes around it); investigate the Agent Tools API before implementing via `_build_extra_payload`. |
 
 ## Active Direction — Open Decision Receipt (ODR, June 2026)
 
@@ -36,18 +63,46 @@ Epic: [#8223](https://github.com/synaptent/aragora/issues/8223). Sequencing: ODR
 | Decision-stakes model routing (wire dormant Pareto optimizer, record rationale in receipts) | [#8233](https://github.com/synaptent/aragora/issues/8233) | "Why was this model trusted with this decision, at what cost" is itself decision-semantics; cost-per-settled-PR becomes a measurable claim. |
 | Jury composition optimizer (min-cost heterogeneous quorum for target reliability) | [#8234](https://github.com/synaptent/aragora/issues/8234) | Turns ELO + calibration + outcome data into cheaper quorums with provable reliability targets. |
 
-## Built But Dormant — June 11, 2026 capability map
+## Built But Dormant — July 11, 2026 capability map
 
-Engines that exist and substantially work, but have little or no productized surface. Statuses below were re-verified against the codebase on 2026-06-11 (module paths listed). Honesty rule: "dormant" means *unexposed or unused*, not *unbuilt*.
+Engines that exist and substantially work, but have little or no productized surface. Statuses below were re-verified against the codebase on 2026-07-11 (module paths listed). Honesty rule: "dormant" means *unexposed or unused*, not *unbuilt*.
 
-| Capability | Where it lives | Verified state (2026-06-11) | Path out of dormancy |
-|------------|----------------|------------------------------|----------------------|
-| Crux detector | `aragora/reasoning/crux_detector.py`, `aragora/debate/crux_mode.py` | Engine complete; internal operator CLI surfaces exist (`aragora crux`/`cruxset`/`crux-arbitrate`/`crux-garden`, DIC tranche) but there is no public API endpoint, no SDK method, and no crux set in receipts — zero external exposure. | [#8227](https://github.com/synaptent/aragora/issues/8227) (ODR-4) |
-| Blockchain / ERC-8004 | `aragora/blockchain/` (registries, staking, receipt anchor, wallet) | Module + `/api/v1/blockchain/*` handler exist in-tree, but contracts are deployed to no network, staking/slashing is not wired into debate outcomes, and nothing in the product loop uses it — no operative public surface. | De-scoped by the steering-leverage filter ("blockchain expansion: breadth, no steering"). Receipt anchoring need is served by [#8231](https://github.com/synaptent/aragora/issues/8231) (Rekor) instead. |
-| Marketplace | `aragora/marketplace/` (~2.5k LOC: catalog, registry, installer, service) + browse/pilot handlers | Code and seed catalog exist; no public marketplace deployment, no published third-party content, no users. | Stays parked (P3, de-scoped) until PMF proof; no ODR issue. |
-| Inbox trust wedge | `aragora/inbox/` + `aragora triage` CLI (auth, run, --dry-run) | CLI-complete and receipt-gated end-to-end; founder feedback (May 14, 2026) found the CLI surface unpleasant and classification quality "so-so" — will only be retested as a polished web GUI. | Web GUI before any retest; not currently scheduled. |
-| Pareto provider router | `aragora/routing/cost_quality_optimizer.py` + pricing DB | Optimizer shipped (PR #724) and runtime wiring landed (#1167), but the loop's own pipeline does not route by decision stakes and no routing rationale is recorded — dormant in practice. | [#8233](https://github.com/synaptent/aragora/issues/8233) |
-| Tamper-evident audit trail | Audit-trail API (`aragora/server/handlers/audit_trail.py`) + `/audit-trail` UI page exist and are wired | Existing trail verifies checksums but is not tamper-evident under a compromised-operator threat model (no external witness, no append-only anchoring). TET is building that backend now: spec at `docs/specs/TAMPER_EVIDENT_TRAIL.md` (Tier-2 build, operator-requested 2026-06-11). | TET build phases; public anchoring via [#8231](https://github.com/synaptent/aragora/issues/8231). |
+| Capability | Where it lives | Verified state (2026-07-11) | Activation trigger | Minimum first exposure | Owner issue |
+|------------|----------------|-----------------------------|--------------------|------------------------|-------------|
+| Crux detector | `aragora/reasoning/crux_detector.py`, `aragora/debate/crux_mode.py` | Engine and internal operator CLI surfaces exist; public API, SDK, and receipt exposure remain absent. | ODR-4 is approved to expose decisive disagreement after the receipt spine is stable. | Embed one crux set in an ODR and expose the same read-only result through one external route before adding broader SDK coverage. | [#8227](https://github.com/synaptent/aragora/issues/8227) |
+| Blockchain / ERC-8004 | `aragora/blockchain/` | Registries, staking, receipt anchoring, and wallet primitives exist, but no network deployment affects the product loop. | CP-4: a settled reputation delta is ready to change real dispatch eligibility; Rekor remains the anchoring path before then. | Produce one non-production, receipt-linked stake → resolution → reputation-delta proof without making blockchain the default anchor. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Marketplace + skills | `aragora/marketplace/`, `aragora/skills/`, `aragora/server/handlers/marketplace_browse.py`, `aragora/server/handlers/marketplace_pilot.py` | Catalog, registry, installer, service, seed content, and browse/pilot handlers are shipped but unadopted; there is no public marketplace deployment, published third-party content, or external consumer. | The first external design partner commits to consume or distribute an Aragora template/protocol. | Run one partner-scoped publish → discover → install path with provenance and a Decision Receipt. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Verticals | `aragora/verticals/` | Domain modules exist, but no vertical has a signed pilot or a receipt-backed external journey. | The first vertical pilot is signed; activate only that pilot's vertical. | Add one pilot-specific receipt profile and one domain-specialist path behind the existing decision interface. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Genesis | `aragora/genesis/` | Evolution primitives exist outside the default product path. | The AGT CP-2→CP-5 progression reaches a governed experiment that needs an evolution candidate. | Run one opt-in experiment that emits a reviewable receipt and cannot alter default runtime selection. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Broadcast | `aragora/broadcast/` | Post-decision communication primitives exist without a paying-user demand signal. | A paying user requests an audio or broadcast form of an accepted decision. | Export one receipt-linked decision summary through one opt-in broadcast channel. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Tournaments | `aragora/tournaments/`, `aragora/ranking/` | Competition primitives overlap the live ELO/ranking authority. | A concrete ranking change needs a tournament-derived comparison that ELO alone cannot express. | Fold only the required comparison into `aragora/ranking` and emit one deterministic ranking report; do not launch a parallel tournament product. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Inbox trust wedge | `aragora/inbox/`, `aragora triage` | The CLI is receipt-gated end-to-end, but founder testing found the interaction and classification quality below the retest bar. | A design partner agrees to retest a polished web journey with an explicit classification-quality bar. | Deliver one web-only message → proposed action → receipt flow without widening the CLI. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+| Pareto provider router | `aragora/routing/cost_quality_optimizer.py` | The optimizer and runtime hooks exist, but decisions do not expose stakes-based routing rationale. | Decision-stakes routing work is accepted with measurable reliability and cost targets. | Record one model-selection rationale in a receipt before changing default routing behavior. | [#8233](https://github.com/synaptent/aragora/issues/8233) |
+| Tamper-evident audit trail | `aragora/server/handlers/audit_trail.py`, `aragora/trail/rekor.py`, `aragora/trail/intent_chain.py`, `/audit-trail`, `docs/specs/TAMPER_EVIDENT_TRAIL.md` | The live trail verifies checksums, and the TET spec, append-only intent chain, and Rekor anchoring client exist; the audit-trail surface still lacks a governed external-witness proof under a compromised-operator threat model. | A governed TET phase requires an external witness after the receipt-verification path is stable. | Anchor one receipt or intent-chain head through an approved transparency service and verify it independently. | [#9046](https://github.com/synaptent/aragora/issues/9046) |
+
+### Dormant-Module Disposition Policy
+
+1. **Integrate or park by default; do not archive for tidiness.** The founder
+   decision preserved in
+   [`MAXIMALIST_VISION.md`](https://github.com/synaptent/aragora/blob/main/docs/vision/MAXIMALIST_VISION.md) permits removal only
+   when a module is actively harmful **and** has no credible integration path.
+2. **One activation path and one open owner issue per row.** The owner keeps the
+   trigger, minimum exposure, and proof current; the table does not make the
+   row dispatch-ready.
+   [#9046](https://github.com/synaptent/aragora/issues/9046) is the standing-open
+   umbrella owner for rows without dedicated activation issues. It must remain
+   open while any row names it; closing or replacing it requires updating every
+   affected row in the same change.
+3. **Archive, delete, or rebuild proposals must update this table first.** The
+   proposal must cite #9046, show why the activation gate is permanently
+   unreachable, and explain why composition with the existing module is worse
+   than replacement.
+4. **Activation requires external evidence.** Name the user or operator need,
+   the first API/CLI/SDK/receipt or UI exposure, the owning issue, and a
+   measurable proof before implementation starts.
+
+Changing a row to "trigger observed" is still report-only. Normal tiering,
+ownership, exact-head review, and settlement rules govern every implementation.
 
 ## How to Read This List
 

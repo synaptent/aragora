@@ -37,7 +37,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from aragora.core.embeddings.service import UnifiedEmbeddingService
@@ -779,6 +779,7 @@ class EmbeddingSurpriseScorer(ContentSurpriseScorer):
         if cache_key in self._embedding_cache:
             return self._embedding_cache[cache_key]
 
+        embedding_service = cast(Any, self._embedding_service)
         try:
             # Sync wrapper — run the async embed in a new event loop if needed
             loop: asyncio.AbstractEventLoop | None = None
@@ -792,10 +793,10 @@ class EmbeddingSurpriseScorer(ContentSurpriseScorer):
                 import concurrent.futures
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, self._embedding_service.embed(text))
+                    future = pool.submit(asyncio.run, embedding_service.embed(text))
                     result = future.result(timeout=10)
             else:
-                result = asyncio.run(self._embedding_service.embed(text))
+                result = asyncio.run(embedding_service.embed(text))
 
             embedding = result.embedding
 

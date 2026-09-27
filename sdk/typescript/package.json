@@ -1,6 +1,6 @@
 {
   "name": "@aragora/sdk",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "Official TypeScript SDK for Aragora multi-agent debate platform",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -75,6 +75,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "overrides": {
-    "brace-expansion": "^2.0.3"
+    "brace-expansion": "^5.0.8",
+    "postcss": "^8.5.22"
   }
 }

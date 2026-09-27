@@ -571,7 +571,7 @@ class InvoiceProcessor:
         return result
 
     def _parse_invoice_text(
-        self, text: str, tables: list[list[list[str]]] = None
+        self, text: str, tables: list[list[list[str]]] | None = None
     ) -> dict[str, Any]:
         """Parse extracted text to find invoice fields."""
         import re

@@ -17,7 +17,7 @@ import logging
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -730,7 +730,7 @@ class PipelineTransitionsHandler(SecureHandler):
                     SAFE_ID_PATTERN,
                 )
                 if not is_valid:
-                    return error_response(err, 400)
+                    return error_response(cast(str, err), 400)
                 return self._get_provenance(node_id)
 
         return None

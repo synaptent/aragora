@@ -1,0 +1,49 @@
+{
+  "action": "prepare",
+  "action_reason": "offline replay of committed live reviewer output collection canonical sha256:8c675aa9f61d9962fcbe71f5e8265f68f9e334358d04dd5365f4fd4e59e603a9; golden mappings are manual adjudication",
+  "counting_families": [
+    "grok",
+    "mistral"
+  ],
+  "dissenting_families": [
+    "grok",
+    "mistral"
+  ],
+  "failures": [],
+  "has_supportive_quorum": false,
+  "head_committed_at": "",
+  "head_sha": "cb7212e11dbdbc1813237ad129c7bc108f944e3d",
+  "items": [
+    {
+      "body": "Provider: grok; model: grok-4-latest\nVerdict: CHANGES-REQUESTED\nCritical runtime bugs: undefined variable and unsupported negative queryset slicing\n- [P0] src/sentry/api/endpoints/organization_auditlogs.py: Undefined variable organization_context causes NameError: In organization_auditlogs.py:70, enable_advanced references organization_context which is not defined or imported in the shown diff (or the original function scope). This will raise NameError on every request when the optimized path is taken.\n- [P0] src/sentry/api/paginator.py: Negative queryset slicing is unsupported and crashes: OptimizedCursorPaginator.get_result (paginator.py:850) does start_offset = cursor.offset when offset < 0 and then executes queryset[start_offset:stop]. Django ORM does not support negative slice start indices; this raises AssertionError or produces incorrect results. The comment claiming 'Django ORM properly handles negative slicing automatically' is false. [adjudicated golden_comment_id=2743651586]\n- [P0] src/sentry/api/paginator.py: Same negative-offset slicing bug in DateTimePaginator modification: The change to DateTimePaginator.get_result (paginator.py:182) introduces start_offset = max(0, offset) only in one branch but still allows the prev-cursor path to pass negative offsets into queryset slicing in related logic paths.",
+      "counted_reviewer_ids": [],
+      "family": "grok",
+      "problems": [],
+      "severity_gated": false,
+      "verdict": "changes_requested",
+      "would_count": true
+    },
+    {
+      "body": "Provider: mistral-api; model: mistral-large-2512\nVerdict: CHANGES-REQUESTED\nPotential security and correctness issues in pagination optimization\n- [P0] src/sentry/api/paginator.py: Insecure Direct Object Reference (IDOR) Risk in Negative Offset Pagination: The `OptimizedCursorPaginator` introduces negative offset support (`start_offset = cursor.offset` when `enable_advanced_features` is true), which could allow users to access data beyond their authorized bounds. While the comment mentions permissions are checked at the queryset level, there's no explicit validation in the paginator itself to ensure the negative offset doesn't bypass authorization. This creates a potential IDOR vulnerability where users could access audit logs they shouldn't see by manipulating pagination parameters.\n- [P1] src/sentry/api/endpoints/organization_auditlogs.py: Missing Input Validation for Pagination Parameters: The `optimized_pagination` parameter is directly used from `request.GET` without validation. While the feature is gated behind admin checks, this still represents a missing security layer. The parameter should be validated to ensure it's either 'true' or 'false' to prevent potential injection or unexpected behavior.\n- [P1] src/sentry/api/paginator.py: Inconsistent Boundary Handling in Negative Offset Logic: The negative offset logic in `OptimizedCursorPaginator.get_result()` has inconsistent boundary checks. When `enable_advanced_features` is true, negative offsets are allowed without proper validation of how far negative they can go. This could lead to incorrect results or performance issues when accessing very large negative offsets.\n- [P1] src/sentry/api/paginator.py: Missing Test Coverage for Security-Critical Pagination Features: The diff shows no test coverage for the new negative offset functionality or the security boundaries of the optimized pagination. Given this is a security-sensitive feature (audit logs), there should be explicit tests for: 1) Negative offset behavior, 2) Permission boundaries, 3) Parameter validation, and 4) Edge cases in large datasets.",
+      "counted_reviewer_ids": [],
+      "family": "mistral",
+      "problems": [],
+      "severity_gated": false,
+      "verdict": "changes_requested",
+      "would_count": true
+    }
+  ],
+  "mode": "collect_evidence",
+  "orchestration_timeout": false,
+  "overall_timeout_seconds": null,
+  "policy_version": 1,
+  "post_errors": [],
+  "posted_families": [],
+  "pr_number": 6,
+  "quorum_rerun": null,
+  "repo": "droid-code-review-evals/droid-sentry",
+  "supportive_families": [],
+  "tier": null,
+  "tiered_gate": false,
+  "timed_out_families": []
+}

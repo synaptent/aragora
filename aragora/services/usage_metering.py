@@ -106,9 +106,16 @@ class UsageMeter:
         self._initialized = True
         logger.info("Usage metering initialized: %s", self.db_path)
 
+    def _require_connection(self) -> sqlite3.Connection:
+        """Return the initialized database connection."""
+        if self._conn is None:
+            raise RuntimeError("Usage metering database is not initialized")
+        return self._conn
+
     async def _init_schema(self) -> None:
         """Initialize database schema."""
-        cursor = self._conn.cursor()
+        connection = self._require_connection()
+        cursor = connection.cursor()
 
         # Token usage records
         cursor.execute("""
@@ -206,7 +213,7 @@ class UsageMeter:
             ON hourly_aggregates(org_id, hour)
         """)
 
-        self._conn.commit()
+        connection.commit()
 
     def _calculate_token_cost(
         self,
@@ -451,11 +458,12 @@ class UsageMeter:
         api_call_count: int = 0,
     ) -> None:
         """Update hourly aggregate with new usage."""
+        connection = self._require_connection()
         now = datetime.now(timezone.utc)
         hour = now.replace(minute=0, second=0, microsecond=0)
         hour_str = hour.isoformat()
 
-        cursor = self._conn.cursor()
+        cursor = connection.cursor()
 
         # Get existing aggregate
         cursor.execute(
@@ -537,7 +545,7 @@ class UsageMeter:
                 ),
             )
 
-        self._conn.commit()
+        connection.commit()
 
     async def _flush_token_buffer(self) -> None:
         """Flush token usage buffer to database."""
@@ -547,7 +555,8 @@ class UsageMeter:
         records = self._token_buffer.copy()
         self._token_buffer.clear()
 
-        cursor = self._conn.cursor()
+        connection = self._require_connection()
+        cursor = connection.cursor()
         for record in records:
             cursor.execute(
                 """
@@ -575,7 +584,7 @@ class UsageMeter:
                     record.timestamp.isoformat(),
                 ),
             )
-        self._conn.commit()
+        connection.commit()
         logger.debug("Flushed %s token usage records", len(records))
 
     async def _flush_debate_buffer(self) -> None:
@@ -586,7 +595,8 @@ class UsageMeter:
         records = self._debate_buffer.copy()
         self._debate_buffer.clear()
 
-        cursor = self._conn.cursor()
+        connection = self._require_connection()
+        cursor = connection.cursor()
         for record in records:
             cursor.execute(
                 """
@@ -609,7 +619,7 @@ class UsageMeter:
                     record.timestamp.isoformat(),
                 ),
             )
-        self._conn.commit()
+        connection.commit()
         logger.debug("Flushed %s debate usage records", len(records))
 
     async def _flush_api_buffer(self) -> None:
@@ -620,7 +630,8 @@ class UsageMeter:
         records = self._api_buffer.copy()
         self._api_buffer.clear()
 
-        cursor = self._conn.cursor()
+        connection = self._require_connection()
+        cursor = connection.cursor()
         for record in records:
             cursor.execute(
                 """
@@ -641,7 +652,7 @@ class UsageMeter:
                     record.timestamp.isoformat(),
                 ),
             )
-        self._conn.commit()
+        connection.commit()
         logger.debug("Flushed %s API call records", len(records))
 
     async def flush_all(self) -> None:
@@ -733,6 +744,7 @@ class UsageMeter:
         """
         if not self._initialized:
             await self.initialize()
+        connection = self._require_connection()
 
         # Get period dates
         if start_date is None or end_date is None:
@@ -749,7 +761,7 @@ class UsageMeter:
             ),
         )
 
-        cursor = self._conn.cursor()
+        cursor = connection.cursor()
 
         # Query hourly aggregates for the period
         cursor.execute(
@@ -868,6 +880,7 @@ class UsageMeter:
         """
         if not self._initialized:
             await self.initialize()
+        connection = self._require_connection()
 
         if start_date is None or end_date is None:
             start_date, end_date = self._get_period_dates("month")
@@ -878,7 +891,7 @@ class UsageMeter:
             period_end=end_date,
         )
 
-        cursor = self._conn.cursor()
+        cursor = connection.cursor()
 
         # Get totals
         cursor.execute(
@@ -1041,6 +1054,7 @@ class UsageMeter:
         """
         if not self._initialized:
             await self.initialize()
+        connection = self._require_connection()
 
         # Get current month's usage
         start_date, end_date = self._get_period_dates("month")
@@ -1057,7 +1071,7 @@ class UsageMeter:
         limits.max_api_calls = caps["max_api_calls"]
 
         # Get current usage from aggregates
-        cursor = self._conn.cursor()
+        cursor = connection.cursor()
         cursor.execute(
             """
             SELECT

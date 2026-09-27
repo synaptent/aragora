@@ -42,9 +42,20 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 logger = logging.getLogger(__name__)
+
+NotificationEventContributor = Callable[[], Iterable[str]]
+_notification_event_contributor: NotificationEventContributor | None = None
+
+
+def register_notification_event_contributor(
+    contributor: NotificationEventContributor | None,
+) -> None:
+    """Register the application-owned source of notification event names."""
+    global _notification_event_contributor
+    _notification_event_contributor = contributor
 
 
 class EventCategory(str, Enum):
@@ -354,12 +365,11 @@ class EventRegistry:
         except ImportError:
             logger.debug("StreamEventType not available")
 
-        try:
-            from aragora.control_plane.channels import NotificationEventType
-
-            self._register_notification_events(NotificationEventType)
-        except ImportError:
-            logger.debug("NotificationEventType not available")
+        if _notification_event_contributor is not None:
+            try:
+                self._register_notification_events(_notification_event_contributor())
+            except (ImportError, RuntimeError, TypeError, ValueError) as e:
+                logger.debug("Notification event contributor not available: %s", e)
 
         try:
             from aragora.control_plane.deliberation_events import DeliberationEventType
@@ -423,8 +433,8 @@ class EventRegistry:
                 description=f"Stream event: {name}",
             )
 
-    def _register_notification_events(self, enum_class: type[Enum]) -> None:
-        """Register NotificationEventType events."""
+    def _register_notification_events(self, event_names: Iterable[str]) -> None:
+        """Register application-contributed notification event names."""
         category_map = {
             "task_": EventCategory.CONTROL_PLANE,
             "deliberation_": EventCategory.CONTROL_PLANE,
@@ -435,8 +445,7 @@ class EventRegistry:
             "connector_": EventCategory.WEBHOOK,
         }
 
-        for member in enum_class:
-            name = member.value
+        for name in event_names:
             category = EventCategory.CONTROL_PLANE
 
             for prefix, cat in category_map.items():

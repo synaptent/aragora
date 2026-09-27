@@ -19,7 +19,7 @@ import sqlite3
 import tempfile
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -38,6 +38,13 @@ from aragora.memory.tier_manager import (
     TierManager,
     reset_tier_manager,
 )
+
+
+def _utc_naive_now() -> datetime:
+    """Naive-UTC now, matching how continuum rows are stamped (see PR #9311)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 from aragora.memory import continuum_consolidation
 
 
@@ -234,7 +241,7 @@ class TestPromoteBatch:
 
     def test_promote_batch_respects_cooldown(self, memory: ContinuumMemory) -> None:
         """Test batch promote respects cooldown period."""
-        now = datetime.now().isoformat()
+        now = _utc_naive_now().isoformat()
 
         memory.add("no_cooldown", "Content", tier=MemoryTier.MEDIUM)
         memory.add("with_cooldown", "Content", tier=MemoryTier.MEDIUM)
@@ -258,7 +265,7 @@ class TestPromoteBatch:
 
     def test_promote_batch_old_cooldown_allowed(self, memory: ContinuumMemory) -> None:
         """Test batch promote allows entries with expired cooldown."""
-        old_time = (datetime.now() - timedelta(hours=48)).isoformat()
+        old_time = (_utc_naive_now() - timedelta(hours=48)).isoformat()
 
         memory.add("old_cooldown", "Content", tier=MemoryTier.MEDIUM)
 
@@ -296,7 +303,7 @@ class TestPromoteBatch:
         assert last_promotion is not None
         # Should be recent (within last second)
         promotion_dt = datetime.fromisoformat(last_promotion)
-        assert (datetime.now() - promotion_dt).total_seconds() < 2
+        assert (_utc_naive_now() - promotion_dt).total_seconds() < 2
 
     def test_promote_batch_records_transitions(self, memory: ContinuumMemory) -> None:
         """Test batch promote records transitions in database."""

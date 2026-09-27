@@ -1,0 +1,8 @@
+{
+  "comment": "Shrink-only full-codebase mypy debt baseline (issue #9045). check_mypy_baseline.py fails only when the live count EXCEEDS error_count; it never rewrites this file. Tighten deliberately with --update-baseline in a reviewed change.",
+  "command": "mypy aragora/ --ignore-missing-imports",
+  "error_count": 1869,
+  "file_count": 505,
+  "generated_at": "2026-07-22T00:00:00+00:00",
+  "measured_on": "pristine origin/main cea33a630123d237433909db278fe093b85ad748, mypy 2.1.0"
+}

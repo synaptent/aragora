@@ -447,13 +447,13 @@ DEBATE_REQUEST_SCHEMAS: dict[str, Any] = {
                 "type": "array",
                 "description": "Model types to use",
                 "items": {"type": "string"},
-                "example": ["claude-opus-4-8", "gpt-4o", "gemini-pro"],
+                "example": ["claude-opus-5", "gpt-4o", "gemini-pro"],
             },
         },
         "example": {
             "num_agents": 3,
             "num_rounds": 9,
-            "model_types": ["claude-opus-4-8", "gpt-4o", "gemini-pro"],
+            "model_types": ["claude-opus-5", "gpt-4o", "gemini-pro"],
         },
     },
     "DebateCostEstimateResponse": {

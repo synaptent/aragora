@@ -143,6 +143,12 @@ jobs:
       - name: Enforce workflow pip install policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_workflow_pip_install_policy.py
 
+      - name: Enforce aragora-verify dependency policy
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_aragora_verify_dependency_policy.py
+
+      - name: Enforce Boundary 2 module-edge policy
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/ci/check_boundary_edges.py
+
       - name: Enforce self-hosted checkout integrity policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_workflow_checkout_integrity_policy.py
 
@@ -173,12 +179,36 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Evaluate lint result
+        env:
+          CLASSIFIER_RESULT: ${{ needs.changes.result }}
+          WORKER_RESULT: ${{ needs.lint-run.result }}
+          IN_SCOPE: ${{ needs.changes.outputs.python }}
         run: |
-          if [[ "${{ needs.lint-run.result }}" == "failure" ]]; then
-            echo "::error::Lint checks failed"
+          set -euo pipefail
+          if [[ "$CLASSIFIER_RESULT" != "success" ]]; then
+            echo "::error::Change classification concluded '$CLASSIFIER_RESULT'; its scope verdict cannot be trusted. Failing closed."
             exit 1
           fi
-          echo "Lint passed (or skipped — no Python-relevant changes)"
+          case "$IN_SCOPE" in
+            true)
+              if [[ "$WORKER_RESULT" != "success" ]]; then
+                echo "::error::Lint concluded '$WORKER_RESULT' (expected 'success'). Failing closed."
+                exit 1
+              fi
+              echo "Lint passed."
+              ;;
+            false)
+              if [[ "$WORKER_RESULT" != "skipped" ]]; then
+                echo "::error::Lint was out of scope but concluded '$WORKER_RESULT'. Failing closed."
+                exit 1
+              fi
+              echo "Lint not required — no Python-relevant changes."
+              ;;
+            *)
+              echo "::error::Change classification produced invalid IN_SCOPE value '$IN_SCOPE' (expected exactly 'true' or 'false'). Failing closed."
+              exit 1
+              ;;
+          esac
 
   connector-exception-hygiene:
     runs-on: ubuntu-latest
@@ -456,12 +486,36 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Evaluate typecheck result
+        env:
+          CLASSIFIER_RESULT: ${{ needs.changes.result }}
+          WORKER_RESULT: ${{ needs.typecheck-run.result }}
+          IN_SCOPE: ${{ needs.changes.outputs.python }}
         run: |
-          if [[ "${{ needs.typecheck-run.result }}" == "failure" ]]; then
-            echo "::error::Type check failed"
+          set -euo pipefail
+          if [[ "$CLASSIFIER_RESULT" != "success" ]]; then
+            echo "::error::Change classification concluded '$CLASSIFIER_RESULT'; its scope verdict cannot be trusted. Failing closed."
             exit 1
           fi
-          echo "Type check passed (or skipped — no Python-relevant changes)"
+          case "$IN_SCOPE" in
+            true)
+              if [[ "$WORKER_RESULT" != "success" ]]; then
+                echo "::error::Type check concluded '$WORKER_RESULT' (expected 'success'). Failing closed."
+                exit 1
+              fi
+              echo "Type check passed."
+              ;;
+            false)
+              if [[ "$WORKER_RESULT" != "skipped" ]]; then
+                echo "::error::Type check was out of scope but concluded '$WORKER_RESULT'. Failing closed."
+                exit 1
+              fi
+              echo "Type check not required — no Python-relevant changes."
+              ;;
+            *)
+              echo "::error::Change classification produced invalid IN_SCOPE value '$IN_SCOPE' (expected exactly 'true' or 'false'). Failing closed."
+              exit 1
+              ;;
+          esac
 
   typecheck-core:
     runs-on: ubuntu-latest
@@ -522,7 +576,7 @@ jobs:
           python -m mypy \
             aragora/ranking/elo.py \
             aragora/server/stream/servers.py \
-            aragora/server/handlers/training.py \
+            aragora/server/handlers/evolution/training.py \
             aragora/cli/main.py \
             aragora/config/secrets.py \
             aragora/storage/repository.py \
@@ -623,7 +677,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.18.0"
           cache: "npm"
           cache-dependency-path: aragora/live/package-lock.json
 

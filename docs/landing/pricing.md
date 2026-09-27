@@ -25,7 +25,7 @@ For developers exploring adversarial validation.
 For teams shipping high-stakes software.
 
 - **Unlimited debates**
-- All 43 agent types across 6+ LLM providers
+- All 46 agent types across 6+ LLM providers
 - 10 agents per debate
 - All attack personas (Security, Logic, Scaling, Compliance)
 - Decision Receipts (JSON, Markdown, HTML, PDF, SARIF, CSV)

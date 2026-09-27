@@ -243,10 +243,13 @@ def test_register_routes_adds_swarm_status_endpoints() -> None:
 
     swarm_status.register_routes(app)
 
-    route_paths = {route.path for route in app.routes}
-    assert "/api/v1/swarm/status" in route_paths
-    assert "/api/v1/swarm/preflight" in route_paths
-    assert "/api/v1/swarm/preflight/receipts" in route_paths
+    # FastAPI 0.138+ stores included routers behind an internal wrapper, so
+    # direct app.routes path inspection is version- and import-order-dependent
+    # (the '_IncludedRouter has no attribute path' shard failure). Assert the
+    # supported route-lookup contract instead.
+    assert str(app.url_path_for("get_swarm_status")) == "/api/v1/swarm/status"
+    assert str(app.url_path_for("run_swarm_preflight")) == "/api/v1/swarm/preflight"
+    assert str(app.url_path_for("get_preflight_receipts")) == "/api/v1/swarm/preflight/receipts"
 
 
 # ---------------------------------------------------------------------------

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import get_type_hints
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from aragora.agents.base import AgentType
 from aragora.ralph.classifier import BlockerKind
 from aragora.ralph.llm_classifier import (
     CapacityVerdict,
@@ -56,6 +58,11 @@ class TestMergeVerdict:
 
 
 class TestLLMClassifyBlocker:
+    def test_constructor_type_hints_resolve(self) -> None:
+        hints = get_type_hints(LLMBlockerClassifier.__init__)
+
+        assert hints["model"] == AgentType
+
     @pytest.mark.asyncio
     async def test_classify_scope_false_positive(self) -> None:
         llm_response = json.dumps(

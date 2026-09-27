@@ -29,7 +29,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -58,10 +58,11 @@ class DebateOutcome:
     final_answer: str = ""
     num_rounds: int = 0
     num_messages: int = 0
-    agents: list[str] = None
+    agents: list[str] = field(default_factory=list)
     domain: str = "general"
 
     def __post_init__(self) -> None:
+        # Preserve normalization for deserializers that explicitly pass null.
         if self.agents is None:
             self.agents = []
 

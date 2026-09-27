@@ -395,6 +395,13 @@ class LocalFineTuner:
             self._load_base_model()
             self._prepare_peft_model()
 
+            tokenizer = self._tokenizer
+            peft_model = self._peft_model
+            if tokenizer is None or peft_model is None:
+                raise RuntimeError(
+                    "Model initialization did not produce a tokenizer and PEFT model"
+                )
+
             # Prepare dataset
             dataset = self._prepare_dataset(data)
 
@@ -406,7 +413,7 @@ class LocalFineTuner:
 
             # Tokenize dataset
             def tokenize_function(examples):
-                return self._tokenizer(
+                return tokenizer(
                     examples["text"],
                     truncation=True,
                     max_length=self.config.max_seq_length,
@@ -435,13 +442,13 @@ class LocalFineTuner:
 
             # Data collator
             data_collator = DataCollatorForLanguageModeling(
-                tokenizer=self._tokenizer,
+                tokenizer=tokenizer,
                 mlm=False,
             )
 
             # Create trainer
             trainer = Trainer(
-                model=self._peft_model,
+                model=peft_model,
                 args=training_args,
                 train_dataset=tokenized_dataset,
                 data_collator=data_collator,
@@ -452,8 +459,8 @@ class LocalFineTuner:
             train_result = trainer.train()
 
             # Save model
-            self._peft_model.save_pretrained(self.config.output_dir)
-            self._tokenizer.save_pretrained(self.config.output_dir)
+            peft_model.save_pretrained(self.config.output_dir)
+            tokenizer.save_pretrained(self.config.output_dir)
 
             training_time = time.time() - start_time
 
@@ -553,11 +560,14 @@ class LocalFineTuner:
             raise RuntimeError("Model not loaded. Call train() or load_trained_model() first.")
 
         model = self._peft_model if self._peft_model else self._model
+        tokenizer = self._tokenizer
+        if model is None or tokenizer is None:
+            raise RuntimeError("Loaded model is missing its model or tokenizer")
 
         # Format prompt
         formatted_prompt = f"### Instruction:\n{prompt}\n\n### Response:\n"
 
-        inputs = self._tokenizer(
+        inputs = tokenizer(
             formatted_prompt,
             return_tensors="pt",
             truncation=True,
@@ -568,7 +578,7 @@ class LocalFineTuner:
             inputs = inputs.to(device)
 
         with __import__("torch").no_grad():
-            pad_token_id = getattr(self._tokenizer, "pad_token_id", None)
+            pad_token_id = getattr(tokenizer, "pad_token_id", None)
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
@@ -578,7 +588,7 @@ class LocalFineTuner:
                 pad_token_id=pad_token_id,
             )
 
-        generated = self._tokenizer.decode(
+        generated = tokenizer.decode(
             outputs[0][inputs["input_ids"].shape[1] :],
             skip_special_tokens=True,
         )
@@ -646,6 +656,13 @@ class DPOFineTuner(LocalFineTuner):
             self._load_base_model()
             self._prepare_peft_model()
 
+            tokenizer = self._tokenizer
+            peft_model = self._peft_model
+            if tokenizer is None or peft_model is None:
+                raise RuntimeError(
+                    "Model initialization did not produce a tokenizer and PEFT model"
+                )
+
             from trl import DPOTrainer
             from transformers import TrainingArguments
 
@@ -681,10 +698,10 @@ class DPOFineTuner(LocalFineTuner):
             # Create DPO trainer
             dpo_config = getattr(self.config, "beta", 0.1)
             trainer = DPOTrainer(
-                model=self._peft_model,
+                model=peft_model,
                 args=training_args,
                 train_dataset=dataset,
-                tokenizer=self._tokenizer,
+                tokenizer=tokenizer,
                 beta=dpo_config,
             )
 
@@ -693,8 +710,8 @@ class DPOFineTuner(LocalFineTuner):
             train_result = trainer.train()
 
             # Save
-            self._peft_model.save_pretrained(self.config.output_dir)
-            self._tokenizer.save_pretrained(self.config.output_dir)
+            peft_model.save_pretrained(self.config.output_dir)
+            tokenizer.save_pretrained(self.config.output_dir)
 
             training_time = time.time() - start_time
 

@@ -34,10 +34,13 @@ import json
 import logging
 import os
 import time
+import warnings
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Protocol, cast
 from collections.abc import Callable
+
+from aragora.utils.request_ip import extract_client_ip as _extract_client_ip
 
 if TYPE_CHECKING:
     pass
@@ -349,9 +352,10 @@ class SupabaseAuthValidator:
                     "This should NEVER be used in production! "
                     "Install PyJWT and set SUPABASE_JWT_SECRET."
                 )
-                payload = self._decode_jwt_unsafe(token)
-                if not payload:
+                unsafe_payload = self._decode_jwt_unsafe(token)
+                if not unsafe_payload:
                     return None
+                payload = unsafe_payload
                 # Audit log the insecure decode event
                 try:
                     from aragora.audit.unified import audit_security
@@ -635,86 +639,15 @@ def extract_token(handler: Any) -> str | None:
     return None
 
 
-def _get_trusted_proxy_cidrs() -> list[str]:
-    """Return the list of trusted proxy CIDRs from configuration.
-
-    Reads ``TRUSTED_PROXY_CIDRS`` (comma-separated).  When empty (the
-    default), X-Forwarded-For is never trusted and the direct connection
-    IP is used instead.
-    """
-    raw = os.getenv("TRUSTED_PROXY_CIDRS", "").strip()
-    if not raw:
-        return []
-    return [cidr.strip() for cidr in raw.split(",") if cidr.strip()]
-
-
-def _ip_in_cidrs(ip_str: str, cidrs: list[str]) -> bool:
-    """Check whether *ip_str* falls within any of the given CIDRs.
-
-    Uses ``ipaddress`` from the standard library.  Returns ``False`` on
-    any parse error so we fail closed.
-    """
-    import ipaddress
-
-    try:
-        addr = ipaddress.ip_address(ip_str)
-    except ValueError:
-        return False
-    for cidr in cidrs:
-        try:
-            if addr in ipaddress.ip_network(cidr, strict=False):
-                return True
-        except ValueError:
-            continue
-    return False
-
-
 def extract_client_ip(handler: Any) -> str | None:
-    """
-    Extract client IP from request handler.
-
-    Only trusts X-Forwarded-For when the direct connection IP comes from
-    a network listed in ``TRUSTED_PROXY_CIDRS``.  When the env var is
-    empty (the default), X-Forwarded-For is ignored and the direct
-    connection IP is returned.
-
-    If the direct connection IP cannot be determined, the rightmost
-    (nearest-proxy) value in X-Forwarded-For is used as a conservative
-    fallback.
-
-    Args:
-        handler: HTTP request handler.
-
-    Returns:
-        Client IP string or None.
-    """
-    if handler is None:
-        return None
-
-    # Determine direct connection IP
-    direct_ip: str | None = None
-    if hasattr(handler, "client_address"):
-        addr = handler.client_address
-        if isinstance(addr, tuple) and len(addr) >= 1:
-            direct_ip = str(addr[0])
-
-    trusted_cidrs = _get_trusted_proxy_cidrs()
-
-    # Check for forwarded IP (behind proxy)
-    if hasattr(handler, "headers"):
-        forwarded = handler.headers.get("X-Forwarded-For", "")
-        if forwarded:
-            parts = [p.strip() for p in forwarded.split(",") if p.strip()]
-            if direct_ip and trusted_cidrs and _ip_in_cidrs(direct_ip, trusted_cidrs):
-                # Trusted proxy: use leftmost (original client) IP
-                return parts[0]
-            elif direct_ip is None and parts:
-                # Cannot determine connection IP -- use the rightmost
-                # value which was set by the nearest proxy.
-                return parts[-1]
-
-    # Fall back to direct connection IP
-    return direct_ip
+    """Compatibility wrapper for the foundation request-IP utility."""
+    warnings.warn(
+        "aragora.server.middleware.user_auth.extract_client_ip is deprecated; "
+        "import aragora.utils.request_ip.extract_client_ip instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _extract_client_ip(handler)
 
 
 async def authenticate_request(handler: Any) -> User | None:
@@ -735,7 +668,7 @@ async def authenticate_request(handler: Any) -> User | None:
     if not token:
         return None
 
-    client_ip = extract_client_ip(handler)
+    client_ip = _extract_client_ip(handler)
     user_agent: str | None = None
     if hasattr(handler, "headers"):
         user_agent = handler.headers.get("User-Agent")

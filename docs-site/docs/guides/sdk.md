@@ -25,6 +25,17 @@ Canonical migration path: [Python SDK migration](./python-sdk-migration).
 pip install aragora-sdk
 ```
 
+### Release cadence (recorded operator policy, 2026-07-16)
+
+`aragora-sdk` on PyPI follows a **decoupled release cadence**: the repository's
+`sdk/python/` may be ahead of the latest published wheel between releases
+(e.g. the repo can declare 2.10.0 while PyPI serves 2.8.0). This is intentional —
+releases are operator-gated and cut deliberately, not on every merge.
+Compatibility expectation: the published PyPI version always targets the
+`/api/v1` surface of the same or newer server release, and published versions
+never regress. If you need repo-tip SDK behavior before it is published,
+install from source (below). Tracking issue for this policy: #9234.
+
 Or install the full control plane package (includes the SDK and server):
 
 ```bash
@@ -43,20 +54,28 @@ pip install -e .
 
 ### Standalone SDK (aragora-sdk)
 
+This example is pinned to the public 2.8.0 surface and runs offline. Omit
+`demo=True` and provide `base_url` to call a running deployment.
+
 ```python
 import asyncio
-from aragora_sdk import AragoraClient
+from aragora_sdk import AragoraAsyncClient
 
 async def main():
-    client = AragoraClient("http://localhost:8080")
-    debate = await client.debates.run(
-        task="Should we use microservices?",
-        agents=["anthropic-api", "openai-api"],
-    )
-    print(f"Consensus: {debate.consensus.conclusion}")
+    async with AragoraAsyncClient(demo=True) as client:
+        debate = await client.debates.create(
+            task="Should we use microservices?",
+            agents=["demo"],
+        )
+        print(f"Consensus: {debate['consensus']['conclusion']}")
 
 asyncio.run(main())
 ```
+
+The public quickstart is mechanically checked against the committed
+[`aragora-sdk` 2.8.0 surface](https://github.com/synaptent/aragora/blob/main/docs/reference/sdk_released_surface_2.8.0.json).
+Later sections cover the broader repository API and may require installing
+`./sdk/python` when they use methods added after the published release.
 
 ### Full SDK (aragora) - Synchronous Usage
 
@@ -336,9 +355,6 @@ replays = client.replays.list(limit=10)
 replay = client.replays.get(replays[0].replay_id)
 for event in replay.events:
     print(f"[{event.timestamp}] {event.event_type}: {event.content[:50]}...")
-
-# Export to JSON/CSV
-data = client.replays.export(replay.replay_id, format="json")
 
 # Delete replay
 client.replays.delete(replay.replay_id)

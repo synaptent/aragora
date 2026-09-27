@@ -4,10 +4,23 @@ name: Runner Headcount Monitor
 # the baseline in docs/runners/FLEET.md. Runs daily (scheduled) and on
 # manual dispatch for ad-hoc audits.
 #
-# Failure mode: job fails + opens a targeted issue titled "runners:
-# headcount drift" (or updates the most recent open one). This is
-# deliberately lightweight — no Slack/PagerDuty wiring in this
-# workflow; the GitHub-native issue path is the canonical alert.
+# Token requirement: listing self-hosted runners needs the repository
+# "Administration: read" permission, which the default GITHUB_TOKEN can
+# NEVER be granted (it is not in the workflow `permissions:` vocabulary
+# — this is why every run 403'd between 2026-07-02 and 2026-07-16).
+# The query step therefore uses the RUNNER_INVENTORY_TOKEN secret: a
+# fine-grained PAT (or GitHub App token) scoped to this repository with
+# ONLY "Administration: read". See docs/runners/FLEET.md ("Monitoring")
+# for setup steps.
+#
+# Failure modes (both alert via GitHub-native issues — deliberately no
+# Slack/PagerDuty wiring here):
+#   - Headcount drift  -> job fails + opens/updates a "runner-drift"
+#     issue with the roster diff.
+#   - Monitor itself broken (bad/missing token, API failure) -> the
+#     monitor-down job opens/updates a "runner-monitor-down" issue, so
+#     a dead monitor can no longer silently mask a fleet outage (as
+#     happened 2026-07-02 → 2026-07-16).
 
 on:
   schedule:
@@ -21,7 +34,6 @@ on:
         type: number
 
 permissions:
-  actions: read
   issues: write
   contents: read
 
@@ -40,11 +52,27 @@ jobs:
   audit:
     name: Runner headcount audit
     runs-on: ubuntu-latest
+    outputs:
+      # Empty iff the runner API query never succeeded — the
+      # monitor-down job keys off this to distinguish "monitor broken"
+      # from "drift detected".
+      total: ${{ steps.runners.outputs.total }}
     steps:
+      - name: Preflight token check
+        env:
+          RUNNER_INVENTORY_TOKEN: ${{ secrets.RUNNER_INVENTORY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RUNNER_INVENTORY_TOKEN" ]; then
+            echo "::error::RUNNER_INVENTORY_TOKEN secret is not set. The default GITHUB_TOKEN cannot list self-hosted runners (requires Administration: read, which is not grantable via workflow permissions). Create a fine-grained PAT scoped to this repo with ONLY 'Administration: read' and store it as the RUNNER_INVENTORY_TOKEN repo secret — see docs/runners/FLEET.md (Monitoring)."
+            exit 1
+          fi
+          echo "RUNNER_INVENTORY_TOKEN is set."
+
       - name: Query runner API
         id: runners
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNNER_INVENTORY_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -71,6 +99,20 @@ jobs:
           echo "$ROSTER"
           echo ""
           echo "Totals: total=$TOTAL online=$ONLINE offline=$OFFLINE"
+
+      - name: Close monitor-down issues (monitor healthy)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # The query succeeded, so the monitor itself is healthy —
+          # resolve any open monitor-down alerts.
+          gh issue list --repo "$REPO" --label runner-monitor-down --state open --json number --jq '.[].number' |
+          while read -r NUM; do
+            echo "Closing resolved monitor-down issue #$NUM"
+            gh issue close "$NUM" --repo "$REPO" --comment "Monitor recovered: runner API query succeeded in run ${{ github.server_url }}/$REPO/actions/runs/${{ github.run_id }}."
+          done
 
       - name: Compare against baseline
         id: check
@@ -162,15 +204,26 @@ jobs:
           BODY_END
           )
 
+          # Label must exist before gh issue create can apply it.
+          gh label create runner-drift \
+            --repo "$REPO" \
+            --description "Self-hosted runner headcount drifted from FLEET.md baseline" \
+            --color D93F0B --force 2>/dev/null || true
+
           # Reuse an open drift issue if present; otherwise create.
-          EXISTING=$(gh issue list --label runner-drift --state open --json number --jq '.[0].number // empty')
+          EXISTING=$(gh issue list --repo "$REPO" --label runner-drift --state open --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Reusing open drift issue #$EXISTING"
-            gh issue comment "$EXISTING" --body "$BODY"
+            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
           else
             echo "Opening new drift issue"
-            gh issue create --title "$TITLE" --body "$BODY" --label runner-drift
+            gh issue create --repo "$REPO" --title "$TITLE" --body "$BODY" --label runner-drift
           fi
+
+          # Drift is a failure condition (see header): fail the run so
+          # the workflow status reflects fleet state.
+          echo "::error::$REASON"
+          exit 1
 
       - name: Report green
         if: steps.check.outputs.drift != '1'
@@ -178,3 +231,64 @@ jobs:
           ONLINE: ${{ steps.runners.outputs.online }}
         run: |
           echo "::notice::Runner headcount audit clean — $ONLINE online, matches baseline."
+
+  monitor-down:
+    name: Alert on broken monitor
+    runs-on: ubuntu-latest
+    needs: audit
+    # Fires only when the audit failed BEFORE the runner API query
+    # succeeded (missing/revoked token, API error) — i.e. the monitor
+    # itself is dead, not merely reporting drift. A dead monitor
+    # previously masked a real fleet outage (2026-07-02 → 2026-07-16),
+    # so this path alerts loudly via an issue that gets a comment on
+    # every consecutive failing run and is auto-closed on recovery.
+    if: always() && needs.audit.result == 'failure' && needs.audit.outputs.total == ''
+    steps:
+      - name: Open or update monitor-down issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+
+          TITLE="runners: headcount monitor is DOWN (cannot query runner API)"
+
+          BODY=$(cat <<BODY_END
+          ## Monitor failure
+
+          The runner headcount audit failed **before it could query the
+          runner API** — the monitor itself is broken, and fleet outages
+          are currently invisible.
+
+          Most likely causes:
+
+          - \`RUNNER_INVENTORY_TOKEN\` repo secret is missing, expired, or
+            was revoked. It must be a fine-grained PAT scoped to this repo
+            with **Administration: read** — see \`docs/runners/FLEET.md\`
+            (Monitoring) for setup steps.
+          - GitHub API outage (rare; check https://www.githubstatus.com).
+
+          This issue receives a comment for every consecutive failing run
+          and is closed automatically once the monitor recovers.
+
+          ### Failing run
+
+          [Workflow run $RUN_ID]($SERVER_URL/$REPO/actions/runs/$RUN_ID)
+          BODY_END
+          )
+
+          gh label create runner-monitor-down \
+            --repo "$REPO" \
+            --description "The runner headcount monitor cannot query the runner API" \
+            --color B60205 --force 2>/dev/null || true
+
+          EXISTING=$(gh issue list --repo "$REPO" --label runner-monitor-down --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Monitor still down — commenting on open issue #$EXISTING"
+            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+          else
+            echo "Opening new monitor-down issue"
+            gh issue create --repo "$REPO" --title "$TITLE" --body "$BODY" --label runner-monitor-down
+          fi

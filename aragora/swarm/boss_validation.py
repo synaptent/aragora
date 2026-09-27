@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from aragora.swarm.mission import GateEvaluation, GateType, GateVerdict
-from aragora.utils.semantic_extraction import ExtractionProvider, extract_json_object_llm_first
+from aragora.agents.semantic_extraction import ExtractionProvider, extract_json_object_llm_first
 
 logger = logging.getLogger(__name__)
 
@@ -488,7 +488,7 @@ Issue body:
 {issue_body}
 """
 
-_ISSUE_PARSE_OPENROUTER_MODEL = "anthropic/claude-opus-4.8"
+_ISSUE_PARSE_OPENROUTER_MODEL = "anthropic/claude-opus-5"
 
 
 def _issue_parse_providers(model: str) -> tuple[ExtractionProvider, ...]:
@@ -518,7 +518,7 @@ def _normalize_issue_parse_payload(parsed: dict[str, Any]) -> dict[str, Any] | N
 async def parse_issue_with_llm(
     issue_body: str,
     *,
-    model: str = "claude-opus-4-8",
+    model: str = "claude-opus-5",
     timeout: float = 15.0,
 ) -> dict[str, Any] | None:
     """Parse an issue body using a fast LLM call.

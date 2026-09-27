@@ -829,6 +829,27 @@ class TestResets:
 class TestGlobalSingleton:
     """Tests for get_cost_tracker and record_usage."""
 
+    def test_get_cost_tracker_does_not_import_knowledge(self, monkeypatch):
+        """Billing singleton creation must not auto-import the KM adapter."""
+        import builtins
+        import aragora.billing.cost_tracker as ct
+
+        real_import = builtins.__import__
+
+        def reject_knowledge(name, *args, **kwargs):
+            if name.startswith("aragora.knowledge"):
+                raise AssertionError(f"unexpected upward import: {name}")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(ct, "_cost_tracker", None)
+        with (
+            patch.object(ct, "UsageTracker", side_effect=ImportError),
+            patch("builtins.__import__", side_effect=reject_knowledge),
+        ):
+            tracker = get_cost_tracker()
+
+        assert isinstance(tracker, CostTracker)
+
     def test_get_cost_tracker_creates_instance(self):
         import aragora.billing.cost_tracker as ct
 

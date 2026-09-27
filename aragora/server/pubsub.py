@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Callable, Coroutine
 
-from aragora.server.redis_config import get_redis_client, is_redis_available
+from aragora.utils.redis_config import get_redis_client, is_redis_available
 
 logger = logging.getLogger(__name__)
 

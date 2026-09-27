@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from aragora.connectors.enterprise.sync_store import (
+from aragora.storage.sync_store import (
     SyncStore,
     ConnectorConfig,
     SyncJob,
@@ -77,8 +77,8 @@ class TestConfigEncryption:
         # Without crypto available, returns unchanged
         assert result == config
 
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     def test_encrypt_with_crypto(self, mock_get_service):
         """Should encrypt sensitive fields when crypto available."""
         mock_service = MagicMock()
@@ -110,8 +110,8 @@ class TestConfigEncryption:
         # No _encrypted markers, returns as-is
         assert result == config
 
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     def test_decrypt_with_crypto(self, mock_get_service):
         """Should decrypt fields when crypto available."""
         mock_service = MagicMock()
@@ -134,7 +134,7 @@ class TestSyncStoreBasics:
         """Default database URL should resolve under DATA_DIR."""
         expected_db = str(tmp_path / "connectors.db")
         monkeypatch.setattr(
-            "aragora.connectors.enterprise.sync_store.resolve_db_path",
+            "aragora.storage.sync_store.resolve_db_path",
             lambda p: expected_db,
         )
         monkeypatch.delenv("ARAGORA_SYNC_DATABASE_URL", raising=False)
@@ -206,8 +206,8 @@ class TestSyncStoreEncryption:
     """Tests for SyncStore with encryption enabled."""
 
     @pytest.mark.asyncio
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     async def test_encrypt_config_uses_aad(self, mock_get_service):
         """Should encrypt credentials with connector_id as AAD."""
         mock_service = MagicMock()
@@ -230,8 +230,8 @@ class TestSyncStoreEncryption:
         assert call_args[0][2] == "secure-1"  # AAD = connector_id
 
     @pytest.mark.asyncio
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     async def test_decrypt_config_uses_aad(self, mock_get_service):
         """Should decrypt credentials with connector_id as AAD."""
         mock_service = MagicMock()

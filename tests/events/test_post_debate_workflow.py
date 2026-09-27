@@ -14,7 +14,7 @@ Tests cover:
 - Workflow template mapping and triggering
 - Custom workflow map overrides
 - Stats tracking (events_processed, workflows_triggered, errors)
-- Graceful degradation when WorkflowEngine import fails
+- Graceful degradation when workflow definition types are unavailable
 - Handling of malformed event data without crashing
 """
 
@@ -205,32 +205,18 @@ class TestPostDebateWorkflowSubscriber:
     def test_stats_workflows_triggered_increments(self):
         """workflows_triggered should increment when a workflow is triggered."""
         sub = PostDebateWorkflowSubscriber()
-        event = make_debate_end_event(
-            {
-                "debate_id": "d4",
-                "consensus_reached": True,
-                "confidence": 0.9,
-            }
-        )
+        sub._trigger_workflow("test_template", {"debate_id": "d4", "outcome": "test"})
 
-        # Patch the workflow engine import to succeed without side effects
-        with patch(
-            "aragora.workflow.event_subscribers.PostDebateWorkflowSubscriber._trigger_workflow",
-            wraps=sub._trigger_workflow,
-        ):
-            # We need to mock the actual import inside _trigger_workflow
-            pass
+        assert sub.stats["workflows_triggered"] == 1
 
-        # Call directly and patch the import chain
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.workflow.engine": MagicMock(),
-                "aragora.workflow.types": MagicMock(),
-            },
-        ):
+    def test_construction_stub_does_not_create_workflow_engine(self):
+        """Production dispatch must not probe workflow infrastructure in the stub."""
+        sub = PostDebateWorkflowSubscriber()
+
+        with patch("aragora.workflow.engine.WorkflowEngine") as mock_engine:
             sub._trigger_workflow("test_template", {"debate_id": "d4", "outcome": "test"})
 
+        mock_engine.assert_not_called()
         assert sub.stats["workflows_triggered"] == 1
 
     def test_stats_errors_on_malformed_data(self):
@@ -260,11 +246,11 @@ class TestPostDebateWorkflowSubscriber:
         mock_trigger.assert_called_once()
         assert mock_trigger.call_args[0][1]["outcome"] == "no_consensus"
 
-    def test_graceful_degradation_workflow_engine_unavailable(self):
-        """Should not crash when WorkflowEngine is not importable."""
+    def test_graceful_degradation_workflow_types_unavailable(self):
+        """Should not crash when workflow definition types are not importable."""
         sub = PostDebateWorkflowSubscriber()
 
-        with patch.dict("sys.modules", {"aragora.workflow.engine": None}):
+        with patch.dict("sys.modules", {"aragora.workflow.types": None}):
             # This will cause ImportError inside _trigger_workflow
             sub._trigger_workflow("test_template", {"debate_id": "x", "outcome": "test"})
 

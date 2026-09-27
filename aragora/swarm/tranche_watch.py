@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aragora.nomic.dev_coordination import (
     DevCoordinationStore,
@@ -957,7 +957,8 @@ def _apply_dispatch_payload(state: TrancheRunState, payload: Any) -> None:
             lane_state.worktree_path,
             item.get("worktree_path"),
         )
-        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        raw_metadata = item.get("metadata")
+        metadata = cast(dict[str, Any], raw_metadata) if isinstance(raw_metadata, dict) else {}
         lane_state.receipt_id = _prefer_text(lane_state.receipt_id, metadata.get("receipt_id"))
         lane_state.lease_id = _prefer_text(lane_state.lease_id, metadata.get("lease_id"))
         lane_state.pr_url = _prefer_text(lane_state.pr_url, metadata.get("pr_url"))

@@ -20,6 +20,8 @@ interface MockClient {
   storeMemory: Mock;
   retrieveMemory: Mock;
   deleteMemory: Mock;
+  storeMemoryEntry: Mock;
+  deleteMemoryEntry: Mock;
   getMemoryStats: Mock;
   searchMemory: Mock;
   getMemoryTiers: Mock;
@@ -40,6 +42,8 @@ describe('MemoryAPI Namespace', () => {
       storeMemory: vi.fn(),
       retrieveMemory: vi.fn(),
       deleteMemory: vi.fn(),
+      storeMemoryEntry: vi.fn(),
+      deleteMemoryEntry: vi.fn(),
       getMemoryStats: vi.fn(),
       searchMemory: vi.fn(),
       getMemoryTiers: vi.fn(),
@@ -134,6 +138,36 @@ describe('MemoryAPI Namespace', () => {
 
       expect(mockClient.deleteMemory).toHaveBeenCalledWith('key', 'glacial');
       expect(result.deleted).toBe(true);
+    });
+
+    it('should store a continuum entry', async () => {
+      mockClient.request.mockResolvedValue({ id: 'mem-123', tier: 'fast' });
+
+      const result = await api.storeEntry('User prefers dark theme', {
+        tier: 'fast',
+        importance: 0.8,
+      });
+
+      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/v1/memory/store', {
+        body: { content: 'User prefers dark theme', tier: 'fast', importance: 0.8 },
+      });
+      expect(result.id).toBe('mem-123');
+      expect(result.tier).toBe('fast');
+    });
+
+    it('should delete a continuum entry by ID', async () => {
+      mockClient.request.mockResolvedValue({
+        success: true,
+        message: 'Memory mem-123 deleted successfully',
+      });
+
+      const result = await api.deleteEntry('mem-123');
+
+      expect(mockClient.request).toHaveBeenCalledWith(
+        'DELETE',
+        '/api/v1/memory/continuum/mem-123'
+      );
+      expect(result.success).toBe(true);
     });
 
     it('should update an existing memory entry', async () => {
@@ -416,19 +450,21 @@ describe('MemoryAPI Namespace', () => {
 
     it('should retrieve from continuum', async () => {
       mockClient.retrieveFromContinuum.mockResolvedValue({
-        entries: [{ key: 'e1', value: 'context data', tier: 'medium' }],
+        memories: [{ id: 'e1', content: 'context data', tier: 'medium' }],
+        count: 1,
       });
 
       const result = await api.retrieveFromContinuum('context');
 
       expect(mockClient.retrieveFromContinuum).toHaveBeenCalledWith('context', undefined);
-      expect(result.entries).toHaveLength(1);
+      expect(result.memories).toHaveLength(1);
+      expect(result.count).toBe(1);
     });
 
     it('should retrieve continuum with options', async () => {
       mockClient.request.mockResolvedValue({
-        entries: [{ key: 'e1', value: 'data' }],
-        total: 5,
+        memories: [{ id: 'e1', content: 'data' }],
+        count: 5,
       });
 
       const result = await api.retrieveContinuum('user preferences', {
@@ -589,6 +625,72 @@ describe('MemoryAPI Namespace', () => {
 
       expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/memory/tier/glacial', {
         params: { limit: 10, offset: 100 },
+      });
+    });
+
+    it('should promote a continuum entry to a target tier', async () => {
+      mockClient.request.mockResolvedValue({
+        success: true,
+        previous_tier: 'fast',
+      });
+
+      const result = await api.promoteEntry('mem-123', 'slow');
+
+      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/v1/memory/mem-123/promote', {
+        body: { target_tier: 'slow' },
+      });
+      expect(result.success).toBe(true);
+      expect(result.previous_tier).toBe('fast');
+    });
+
+    it('should URL-encode the memory ID when promoting', async () => {
+      mockClient.request.mockResolvedValue({ success: false, previous_tier: null });
+
+      await api.promoteEntry('id/with/slashes', 'medium');
+
+      expect(mockClient.request).toHaveBeenCalledWith(
+        'POST',
+        '/api/v1/memory/id%2Fwith%2Fslashes/promote',
+        { body: { target_tier: 'medium' } }
+      );
+    });
+
+    it('should get tier analytics via GET with a days window', async () => {
+      mockClient.request.mockResolvedValue({
+        tier_stats: {},
+        promotion_effectiveness: 0.8,
+        learning_velocity: 0.2,
+        total_entries: 42,
+        total_hits: 100,
+        overall_quality_impact: 0.1,
+        recommendations: [],
+        generated_at: '2026-07-16T00:00:00Z',
+      });
+
+      const result = await api.getTierAnalytics({ days: 7 });
+
+      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/memory/analytics', {
+        params: { days: 7 },
+      });
+      expect(result.promotion_effectiveness).toBe(0.8);
+    });
+
+    it('should get tier analytics with server-default window', async () => {
+      mockClient.request.mockResolvedValue({
+        tier_stats: {},
+        promotion_effectiveness: 0,
+        learning_velocity: 0,
+        total_entries: 0,
+        total_hits: 0,
+        overall_quality_impact: 0,
+        recommendations: [],
+        generated_at: '2026-07-16T00:00:00Z',
+      });
+
+      await api.getTierAnalytics();
+
+      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/memory/analytics', {
+        params: {},
       });
     });
 

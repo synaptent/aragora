@@ -1,6 +1,6 @@
 """Tests for ContinuumMemory tier TTL expiration with mocked time."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -17,6 +17,11 @@ from aragora.memory.tier_manager import (
     TierManager,
     reset_tier_manager,
 )
+
+
+def _utc_naive_now() -> datetime:
+    """Naive-UTC now, matching how rows are stamped and cutoffs computed."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 @pytest.fixture
@@ -46,7 +51,7 @@ class TestFastTierExpiration:
 
     def test_not_expired_before_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(hours=1, minutes=59)
+        future = _utc_naive_now() + timedelta(hours=1, minutes=59)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -55,7 +60,7 @@ class TestFastTierExpiration:
 
     def test_expired_after_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(hours=3)
+        future = _utc_naive_now() + timedelta(hours=3)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -68,7 +73,7 @@ class TestMediumTierExpiration:
 
     def test_not_expired_before_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(hours=47)
+        future = _utc_naive_now() + timedelta(hours=47)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -77,7 +82,7 @@ class TestMediumTierExpiration:
 
     def test_expired_after_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(hours=49)
+        future = _utc_naive_now() + timedelta(hours=49)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -90,7 +95,7 @@ class TestSlowTierExpiration:
 
     def test_not_expired_before_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(days=13)
+        future = _utc_naive_now() + timedelta(days=13)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -99,7 +104,7 @@ class TestSlowTierExpiration:
 
     def test_expired_after_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(days=15)
+        future = _utc_naive_now() + timedelta(days=15)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -112,7 +117,7 @@ class TestGlacialTierExpiration:
 
     def test_not_expired_before_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(days=59)
+        future = _utc_naive_now() + timedelta(days=59)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -121,7 +126,7 @@ class TestGlacialTierExpiration:
 
     def test_expired_after_ttl(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(days=61)
+        future = _utc_naive_now() + timedelta(days=61)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -134,7 +139,7 @@ class TestCrosssTierExpiration:
 
     def test_only_fast_expires_at_3h(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(hours=3)
+        future = _utc_naive_now() + timedelta(hours=3)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -146,7 +151,7 @@ class TestCrosssTierExpiration:
 
     def test_fast_and_medium_expire_at_49h(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(hours=49)
+        future = _utc_naive_now() + timedelta(hours=49)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -157,7 +162,7 @@ class TestCrosssTierExpiration:
 
     def test_all_tiers_expire_at_61d(self, memory):
         _add_entries(memory)
-        future = datetime.now() + timedelta(days=61)
+        future = _utc_naive_now() + timedelta(days=61)
         with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
             mock_dt.now.return_value = future
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -176,7 +181,7 @@ class TestCrosssTierExpiration:
 def test_delete_mode_reports_expected_cutoff_hours(memory, tier, future):
     _add_entries(memory)
     with patch("aragora.memory.continuum_stats.datetime") as mock_dt:
-        mock_dt.now.return_value = datetime.now() + future
+        mock_dt.now.return_value = _utc_naive_now() + future
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
         result = cleanup_expired_memories(memory, tier=tier, archive=False)
 

@@ -1,0 +1,79 @@
+name: Contract Drift Boundary
+
+# Operator-authorized Tier-4 signer workflow (validation-contract review-history
+# entry 30; operator ledger decision 2026-08-01; seal blocker B1). Produces the
+# actions/attest@v4 Sigstore provenance over the three immutable boundary
+# capsule assets (manifest.json, payload.json, checksums.txt) so that the
+# pinned verification argv in scripts/check_contract_drift_ratchet.py
+# (_attestation_verify_argv) succeeds:
+#
+#   gh attestation verify <asset> -R <owner>/<repo>
+#     --signer-workflow <owner>/<repo>/.github/workflows/contract-drift-boundary.yml
+#     --source-digest <end_sha> --format json
+#
+# Dispatch this workflow AT the capsule tag. Boundary tags use
+# cdg-<boundary>-<end_sha> and require the tag target to equal end_sha.
+# Historical successor tags use backfill-v2-<merge_sha>, but target the exact
+# merged implementation SHA that contains this signer workflow. Their separate
+# source_digest input binds the Sigstore certificate to that implementation
+# SHA, while the tag suffix and capsule payload bind the historical merge SHA.
+# No other trigger surface, jobs, or repository mutations are authorized.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          Boundary capsule tag (cdg-<boundary>-<end_sha>) or historical
+          successor tag (backfill-v2-<merge_sha>). Must equal the tag ref this
+          run is dispatched on.
+        required: true
+        type: string
+      source_digest:
+        description: >-
+          Exact commit SHA supplying the signer workflow and attested source.
+          Equals the tag suffix for boundary capsules and the implementation
+          SHA for a historical successor capsule.
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  attestations: write
+  contents: read
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: ${{ inputs.tag }}
+      SOURCE_DIGEST: ${{ inputs.source_digest }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download and authenticate the capsule assets at the boundary tag
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^(cdg-(corrective_bootstrap|route_truth|core_sdk|extended_sdk|final_seal)|backfill-v2)-[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_DIGEST" =~ ^[0-9a-f]{40}$ ]]
+          test "refs/tags/$TAG" = "$GITHUB_REF"
+          test "$SOURCE_DIGEST" = "$GITHUB_SHA"
+          if [[ "$TAG" == backfill-v2-* ]]; then
+            test "${TAG##*-}" != "$GITHUB_SHA"
+          else
+            test "${TAG##*-}" = "$GITHUB_SHA"
+          fi
+          mkdir assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          test "$(find assets -mindepth 1 | wc -l)" -eq 3
+          test -s assets/manifest.json
+          test -s assets/payload.json
+          test -s assets/checksums.txt
+          (cd assets && sha256sum --check --strict checksums.txt)
+      - name: Attest the capsule assets
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            assets/manifest.json
+            assets/payload.json
+            assets/checksums.txt

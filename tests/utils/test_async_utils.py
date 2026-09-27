@@ -13,11 +13,24 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, AsyncMock, MagicMock
 
+from aragora.utils import async_utils
 from aragora.utils.async_utils import (
     run_async,
     run_command,
     run_git_command,
 )
+
+
+def test_pool_event_loop_provider_registration():
+    """Storage can register a pool-loop provider without an upward utils import."""
+    previous = async_utils._pool_event_loop_provider
+    loop = asyncio.new_event_loop()
+    try:
+        async_utils.register_pool_event_loop_provider(lambda: loop)
+        assert async_utils.get_pool_event_loop() is loop
+    finally:
+        async_utils.register_pool_event_loop_provider(previous)
+        loop.close()
 
 
 class TestRunAsync:

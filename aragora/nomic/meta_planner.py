@@ -23,21 +23,30 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+import hashlib
+import json
+import os
+import tempfile
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from aragora.nomic.types import Track  # noqa: F401 — re-exported for backward compat
 from aragora.nomic.meta_planner_utils import (  # noqa: F401 — re-exported
     build_debate_topic,
     build_goal,
+    build_repository_planning_topic,
     gather_file_excerpts,
     infer_track,
     parse_goals_from_debate,
+    proposal_failure_provenance,
 )
 from aragora.config.feature_flags import get_flag, is_enabled
 
 if TYPE_CHECKING:
-    pass
+    from aragora.core_types import DebateResult
+    from aragora.gauntlet.receipt_models import DecisionReceipt
+    from aragora.nomic.repository_profile import ContextPack
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +78,62 @@ class PrioritizedGoal:
     priority: int  # 1 = highest
     focus_areas: list[str] = field(default_factory=list)
     file_hints: list[str] = field(default_factory=list)
+    criterion_scores: dict[str, float] = field(default_factory=dict)
+    evidence_refs: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the additive planning-goal shape."""
+        return {
+            "id": self.id,
+            "track": self.track.value,
+            "description": self.description,
+            "rationale": self.rationale,
+            "estimated_impact": self.estimated_impact,
+            "priority": self.priority,
+            "focus_areas": list(self.focus_areas),
+            "file_hints": list(self.file_hints),
+            "criterion_scores": dict(sorted(self.criterion_scores.items())),
+            "evidence_refs": sorted(self.evidence_refs),
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass
+class MetaPlanningResult:
+    """Evidence-bearing result from generic repository planning."""
+
+    objective: str
+    context_pack: ContextPack
+    goals: list[PrioritizedGoal]
+    receipt: DecisionReceipt
+    evidence_coverage: float
+    substantive_debate: bool
+    receipt_json_path: Path
+    receipt_markdown_path: Path
+    debate_result: DebateResult = field(repr=False)
+
+    @property
+    def status(self) -> str:
+        return "planned" if self.receipt.verdict != "NO_EVIDENCE" else "no_evidence"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "objective": self.objective,
+            "repository_id": self.context_pack.repository.repository_id,
+            "commit_sha": self.context_pack.revision.commit_sha,
+            "profile_hash": self.context_pack.profile_hash,
+            "pack_id": self.context_pack.pack_id,
+            "pack_reference": self.context_pack.reference,
+            "goals": [goal.to_dict() for goal in self.goals],
+            "evidence_coverage": self.evidence_coverage,
+            "substantive_debate": self.substantive_debate,
+            "verdict": self.receipt.verdict,
+            "receipt": self.receipt.to_dict(),
+            "receipt_json_path": str(self.receipt_json_path),
+            "receipt_markdown_path": str(self.receipt_markdown_path),
+        }
 
 
 @dataclass
@@ -90,6 +155,10 @@ class PlanningContext:
     test_failures: list[str] = field(default_factory=list)
     user_feedback: list[str] = field(default_factory=list)
     recent_changes: list[str] = field(default_factory=list)
+    # Externally supplied candidate goals the debate must evaluate and rank.
+    # Unlike recent_issues (background context, capped at 5 in the topic),
+    # every candidate is rendered into the debate topic.
+    candidate_goals: list[str] = field(default_factory=list)
     # Cross-cycle learning
     historical_learnings: list[HistoricalLearning] = field(default_factory=list)
     past_failures_to_avoid: list[str] = field(default_factory=list)
@@ -111,6 +180,8 @@ class MetaPlannerConfig:
     debate_rounds: int = 2
     max_goals: int = 5
     consensus_threshold: float = 0.6
+    # Optional proposal-only timeout; None preserves the Arena default.
+    proposal_timeout_seconds: float | None = None
     # Cross-cycle learning
     enable_cross_cycle_learning: bool = True
     max_similar_cycles: int = 5
@@ -146,6 +217,8 @@ class MetaPlannerConfig:
     # gated globally by the enable_fusion feature flag and a positive
     # fusion_cost_budget_per_debate (set the budget to 0 to hard-disable).
     enable_fusion: bool = False
+    # Repository root used by every local scan and by generic planning publication.
+    repo_path: str = "."
 
 
 class MetaPlanner:
@@ -158,6 +231,9 @@ class MetaPlanner:
     def __init__(self, config: MetaPlannerConfig | None = None) -> None:
         self.config = config or MetaPlannerConfig()
         self._agent: Any | None = None
+        # Receipt from the most recent planning debate, for callers that
+        # persist it as a file artifact (KM ingestion is fire-and-forget).
+        self.last_receipt: Any | None = None
         self._feedback_loop = None
         try:
             from aragora.debate.selection_feedback import SelectionFeedbackLoop
@@ -170,12 +246,336 @@ class MetaPlanner:
         self._goal_proposer = None
         try:
             from aragora.nomic.goal_proposer import GoalProposer
-            from aragora.nomic.cycle_telemetry import CycleTelemetryCollector
 
-            telemetry = CycleTelemetryCollector()
-            self._goal_proposer = GoalProposer(telemetry=telemetry)
+            # Defer the SQLite telemetry collector until propose_goals() is
+            # actually used. Generic plan() must not dirty a clean repository
+            # merely by constructing a planner.
+            self._goal_proposer = GoalProposer()
         except ImportError:
             pass
+
+    async def plan(
+        self,
+        objective: str,
+        context_pack: ContextPack,
+        *,
+        constraints: list[str] | None = None,
+    ) -> MetaPlanningResult:
+        """Run the repository-neutral planning debate and persist its receipt.
+
+        This API is deliberately evidence-bearing: heuristic or single-model
+        fallback output is never promoted into settled goals.
+        """
+        from aragora.gauntlet.receipt_models import DecisionReceipt
+        from aragora.nomic.repository_profile import assert_clean_revision
+
+        if not objective.strip():
+            raise ValueError("planning objective must be non-empty")
+        root = Path(self.config.repo_path).resolve()
+        expected_pack_path = (
+            root
+            / ".nomic"
+            / "context"
+            / "packs"
+            / context_pack.revision.commit_sha
+            / context_pack.pack_id
+        )
+        if context_pack.pack_path.resolve() != expected_pack_path:
+            raise ValueError("context pack does not belong to the configured repository root")
+
+        context_markdown = (context_pack.pack_path / "context.md").read_text(encoding="utf-8")
+        prompt = build_repository_planning_topic(
+            objective=objective,
+            repository_name=context_pack.repository.repository_name,
+            repository_id=context_pack.repository.repository_id,
+            commit_sha=context_pack.revision.commit_sha,
+            pack_reference=context_pack.reference,
+            roadmap_paths=list(context_pack.repository.roadmap_paths),
+            context_entry_files=list(context_pack.repository.context_entry_files),
+            evaluation_criteria=[
+                (criterion.id, criterion.description)
+                for criterion in context_pack.repository.evaluation_criteria
+            ],
+            context_markdown=context_markdown,
+            max_goals=self.config.max_goals,
+        )
+        if constraints:
+            prompt += "\nADDITIONAL CONSTRAINTS:\n" + "\n".join(
+                f"- {constraint}" for constraint in constraints
+            )
+
+        debate_result = await self._run_repository_planning_debate(prompt, context_pack)
+        metadata = getattr(debate_result, "metadata", None)
+        if not isinstance(metadata, dict):
+            metadata = {}
+            debate_result.metadata = metadata
+        metadata.update(
+            {
+                "nomic_context_pack": context_pack.reference,
+                "nomic_pack_id": context_pack.pack_id,
+                "nomic_commit_sha": context_pack.revision.commit_sha,
+                "nomic_profile_hash": context_pack.profile_hash,
+            }
+        )
+
+        substantive = self._has_substantive_multimodel_debate(debate_result)
+        goals = self._parse_repository_goals(debate_result.final_answer, context_pack)
+        if not substantive:
+            goals = []
+        evidence_coverage = (
+            sum(bool(goal.evidence_refs) for goal in goals) / len(goals) if goals else 0.0
+        )
+        evidence_by_id = {item.evidence_id: item for item in context_pack.evidence}
+        referenced_ids = sorted(
+            {evidence_id for goal in goals for evidence_id in goal.evidence_refs}
+        )
+        evidence_references = [evidence_by_id[item].to_dict() for item in referenced_ids]
+        decision_payload = {
+            "objective": objective,
+            "repository_id": context_pack.repository.repository_id,
+            "commit_sha": context_pack.revision.commit_sha,
+            "profile_hash": context_pack.profile_hash,
+            "pack_id": context_pack.pack_id,
+            "evidence_coverage": evidence_coverage,
+            "goals": [goal.to_dict() for goal in goals],
+        }
+        input_hash = self._planning_input_hash(objective, context_pack)
+        receipt = DecisionReceipt.from_debate_result(
+            debate_result,
+            input_hash=input_hash,
+            evidence_references=evidence_references,
+            decision_payload=decision_payload,
+        )
+        verdict = receipt.verdict
+        reasoning = receipt.verdict_reasoning
+        if not substantive:
+            verdict = "NO_EVIDENCE"
+            reasoning = "NO EVIDENCE: fewer than two models produced substantive planning input."
+        elif evidence_coverage == 0.0:
+            verdict = "NO_EVIDENCE"
+            reasoning = "NO EVIDENCE: no selected goal resolved to context-pack evidence."
+        elif evidence_coverage < 1.0 and verdict == "PASS":
+            verdict = "CONDITIONAL"
+            reasoning = (
+                f"Evidence coverage is partial ({evidence_coverage:.1%}); "
+                "the planning decision cannot receive a PASS verdict."
+            )
+        receipt = replace(
+            receipt,
+            verdict=verdict,
+            confidence=0.0 if verdict == "NO_EVIDENCE" else receipt.confidence,
+            robustness_score=0.0 if verdict == "NO_EVIDENCE" else receipt.robustness_score,
+            verdict_reasoning=reasoning,
+            artifact_hash="",
+        )
+
+        # The debate may be long-running. Bind publication to the same clean HEAD.
+        assert_clean_revision(root, context_pack.revision)
+        json_path = context_pack.pack_path / f"decision-receipt-{receipt.receipt_id}.json"
+        markdown_path = context_pack.pack_path / f"decision-receipt-{receipt.receipt_id}.md"
+        self._persist_planning_receipt(receipt, json_path, markdown_path)
+        self._ingest_receipt_to_km(receipt)
+        return MetaPlanningResult(
+            objective=objective,
+            context_pack=context_pack,
+            goals=goals,
+            receipt=receipt,
+            evidence_coverage=evidence_coverage,
+            substantive_debate=substantive,
+            receipt_json_path=json_path,
+            receipt_markdown_path=markdown_path,
+            debate_result=debate_result,
+        )
+
+    async def _run_repository_planning_debate(
+        self,
+        prompt: str,
+        context_pack: ContextPack,
+    ) -> DebateResult:
+        """Run a real multi-model debate, returning zero evidence if unavailable."""
+        from aragora.core import Environment
+        from aragora.core_types import DebateResult
+        from aragora.debate.orchestrator import Arena, DebateProtocol
+
+        configured = self._maybe_add_fusion(list(dict.fromkeys(self.config.agents)))
+        agents: list[Any] = []
+        identities: list[str] = []
+        for agent_type in configured:
+            try:
+                agent = self._create_agent(agent_type)
+            except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError) as exc:
+                logger.warning("Could not create planning agent %s: %s", agent_type, exc)
+                continue
+            if agent is None:
+                continue
+            agents.append(agent)
+            model = str(getattr(agent, "model", "") or agent_type)
+            identities.append(model)
+
+        metadata = {
+            "nomic_planning_models": sorted(set(identities)),
+            "nomic_context_pack": context_pack.reference,
+        }
+        if len(set(identities)) < 2:
+            return DebateResult(task=prompt, participants=[], metadata=metadata)
+
+        protocol = DebateProtocol(
+            rounds=self.config.debate_rounds,
+            consensus="weighted",
+            enable_trickster=self.config.enable_trickster,
+            trickster_sensitivity=self.config.trickster_sensitivity,
+            convergence_detection=self.config.enable_convergence,
+        )
+        result = await Arena(Environment(task=prompt), agents, protocol).run()
+        result.metadata = dict(getattr(result, "metadata", {}) or {})
+        result.metadata.update(metadata)
+        return result
+
+    def _parse_repository_goals(
+        self,
+        response: str,
+        context_pack: ContextPack,
+    ) -> list[PrioritizedGoal]:
+        """Parse strict structured goals and resolve their paths to evidence IDs."""
+        payload = self._extract_json_object(response)
+        raw_goals = payload.get("goals") if payload else None
+        if not isinstance(raw_goals, list):
+            return []
+        criterion_ids = [item.id for item in context_pack.repository.evaluation_criteria]
+        evidence_by_path = {item.path: item.evidence_id for item in context_pack.evidence}
+        goals: list[PrioritizedGoal] = []
+        for raw_goal in raw_goals[: self.config.max_goals]:
+            if not isinstance(raw_goal, dict):
+                continue
+            description = str(raw_goal.get("description") or "").strip()
+            rationale = str(raw_goal.get("rationale") or "").strip()
+            raw_scores = raw_goal.get("criterion_scores")
+            raw_paths = raw_goal.get("evidence_paths")
+            if (
+                not description
+                or not isinstance(raw_scores, dict)
+                or not isinstance(raw_paths, list)
+            ):
+                continue
+            scores: dict[str, float] = {}
+            for criterion_id in criterion_ids:
+                value = raw_scores.get(criterion_id)
+                if isinstance(value, bool) or not isinstance(value, int | float):
+                    scores = {}
+                    break
+                numeric = float(value)
+                if not 0.0 <= numeric <= 1.0:
+                    scores = {}
+                    break
+                scores[criterion_id] = numeric
+            if len(scores) != len(criterion_ids):
+                continue
+            evidence_refs: list[str] = []
+            file_hints: list[str] = []
+            for raw_path in raw_paths:
+                if not isinstance(raw_path, str):
+                    continue
+                path = raw_path.strip().removeprefix("./").split("#L", 1)[0]
+                evidence_id = evidence_by_path.get(path)
+                if evidence_id and evidence_id not in evidence_refs:
+                    evidence_refs.append(evidence_id)
+                    file_hints.append(path)
+            impact = str(raw_goal.get("estimated_impact") or "medium").lower()
+            if impact not in {"high", "medium", "low"}:
+                impact = "medium"
+            goals.append(
+                PrioritizedGoal(
+                    id=f"goal_{len(goals)}",
+                    track=Track.CORE,
+                    description=description,
+                    rationale=rationale,
+                    estimated_impact=impact,
+                    priority=len(goals) + 1,
+                    file_hints=file_hints,
+                    criterion_scores=scores,
+                    evidence_refs=evidence_refs,
+                )
+            )
+        return goals
+
+    @staticmethod
+    def _extract_json_object(response: str) -> dict[str, Any] | None:
+        decoder = json.JSONDecoder()
+        for index, character in enumerate(response or ""):
+            if character != "{":
+                continue
+            try:
+                value, _ = decoder.raw_decode(response[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                return value
+        return None
+
+    @staticmethod
+    def _has_substantive_multimodel_debate(result: DebateResult) -> bool:
+        from aragora.agents.failure_semantics import looks_like_agent_failure_response
+
+        metadata = getattr(result, "metadata", {}) or {}
+        models = {str(item) for item in metadata.get("nomic_planning_models", []) if item}
+        response_agents: set[str] = set()
+        proposals = getattr(result, "proposals", {}) or {}
+        if isinstance(proposals, dict):
+            response_agents.update(
+                str(agent)
+                for agent, text in proposals.items()
+                if not looks_like_agent_failure_response(text)
+            )
+        for item in getattr(result, "agent_responses", []) or []:
+            if isinstance(item, dict):
+                agent = item.get("agent") or item.get("name")
+                text = item.get("response") or item.get("content")
+            else:
+                agent = getattr(item, "agent", None)
+                text = getattr(item, "response", None) or getattr(item, "content", None)
+            if agent and not looks_like_agent_failure_response(text):
+                response_agents.add(str(agent))
+        for message in getattr(result, "messages", []) or []:
+            agent = getattr(message, "agent", None)
+            text = getattr(message, "content", None)
+            if agent and not looks_like_agent_failure_response(text):
+                response_agents.add(str(agent))
+        return len(models) >= 2 and len(response_agents) >= 2
+
+    @staticmethod
+    def _planning_input_hash(objective: str, context_pack: ContextPack) -> str:
+        payload = {
+            "objective": objective,
+            "repository_id": context_pack.repository.repository_id,
+            "commit_sha": context_pack.revision.commit_sha,
+            "profile_hash": context_pack.profile_hash,
+            "pack_id": context_pack.pack_id,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    @staticmethod
+    def _persist_planning_receipt(
+        receipt: DecisionReceipt,
+        json_path: Path,
+        markdown_path: Path,
+    ) -> None:
+        """Synchronously publish both native receipt artifacts."""
+        json_bytes = (receipt.to_json() + "\n").encode()
+        markdown_bytes = (receipt.to_markdown().rstrip() + "\n").encode()
+        temporary = Path(tempfile.mkdtemp(prefix=".decision-receipt-", dir=json_path.parent))
+        try:
+            temp_json = temporary / json_path.name
+            temp_markdown = temporary / markdown_path.name
+            temp_json.write_bytes(json_bytes)
+            temp_markdown.write_bytes(markdown_bytes)
+            os.replace(temp_json, json_path)
+            os.replace(temp_markdown, markdown_path)
+        finally:
+            for remaining in temporary.iterdir():
+                remaining.unlink()
+            temporary.rmdir()
 
     async def prioritize_work(
         self,
@@ -260,7 +660,7 @@ class MetaPlanner:
             from aragora.compat.openclaw.next_steps_runner import NextStepsRunner
 
             runner = NextStepsRunner(
-                repo_path=".",
+                repo_path=self.config.repo_path,
                 scan_code=True,
                 scan_issues=False,  # Skip GitHub API calls
                 scan_prs=False,
@@ -332,13 +732,21 @@ class MetaPlanner:
             )
 
             arena = Arena(env, agents, protocol)
+            if self.config.proposal_timeout_seconds is not None:
+                arena.proposal_phase.proposal_timeout_seconds = self.config.proposal_timeout_seconds
             result = await arena.run()
 
             # Generate DecisionReceipt for audit trail
             self._generate_receipt(result)
 
             # Parse goals from debate result
-            goals = self._parse_goals_from_debate(result, available_tracks, objective)
+            expected_proposers = [agent.name for agent in agents]
+            goals = self._parse_goals_from_debate(
+                result,
+                available_tracks,
+                objective,
+                expected_proposers=expected_proposers,
+            )
 
             # Re-rank goals using business context
             if self.config.use_business_context:
@@ -428,12 +836,21 @@ class MetaPlanner:
     ) -> list[PrioritizedGoal]:
         if not objective or not goals or not self.config.enforce_objective_fidelity:
             return goals[: self.config.max_goals]
+        # A surviving substantive proposal must not be silently replaced by an
+        # unrelated heuristic after the degradation-aware parser preserved it.
+        if any(goal.metadata.get("decision_source") == "surviving_proposals" for goal in goals):
+            return goals[: self.config.max_goals]
 
         threshold = max(0.0, min(1.0, float(self.config.objective_fidelity_threshold)))
         scored = [(self._goal_fidelity_score(objective, goal.description), goal) for goal in goals]
         top_score = max(score for score, _goal in scored)
         if top_score >= threshold:
             return goals[: self.config.max_goals]
+
+        degradation_metadata = next(
+            (dict(goal.metadata) for goal in goals if goal.metadata.get("degraded")),
+            {},
+        )
 
         constrained_objective = (
             "Maintain strict objective fidelity. "
@@ -451,7 +868,10 @@ class MetaPlanner:
                 top_score,
                 recovered_top,
             )
-            return recovered[: self.config.max_goals]
+            recovered = recovered[: self.config.max_goals]
+            for goal in recovered:
+                goal.metadata = dict(degradation_metadata)
+            return recovered
 
         best_track = self._infer_track(objective, available_tracks)
         fallback_goal = PrioritizedGoal(
@@ -464,6 +884,7 @@ class MetaPlanner:
             ),
             estimated_impact="high",
             priority=1,
+            metadata=degradation_metadata,
         )
         logger.warning(
             "meta_planner_objective_fidelity_low score=%.2f threshold=%.2f objective=%s",
@@ -501,6 +922,10 @@ class MetaPlanner:
         # Source 1: GoalProposer — telemetry-driven signals
         if self._goal_proposer is not None:
             try:
+                if getattr(self._goal_proposer, "_telemetry", None) is None:
+                    from aragora.nomic.cycle_telemetry import CycleTelemetryCollector
+
+                    self._goal_proposer._telemetry = CycleTelemetryCollector()
                 candidates = self._goal_proposer.propose_goals(
                     max_goals=self.config.max_goals,
                     min_confidence=min_confidence,
@@ -1045,9 +1470,19 @@ class MetaPlanner:
             return
 
         try:
-            from aragora.export.decision_receipt import DecisionReceipt
+            from aragora.gauntlet.receipt_models import DecisionReceipt
 
             receipt = DecisionReceipt.from_debate_result(result)
+            failures = proposal_failure_provenance(result)
+            if failures:
+                details = "; ".join(
+                    f"{failure['agent']} {failure['error_type']}: {failure['message']}"
+                    for failure in failures
+                )
+                receipt.verdict_reasoning = (
+                    f"{receipt.verdict_reasoning}. Degraded proposal roster: {details}"
+                ).strip(". ")
+            self.last_receipt = receipt
             logger.info(
                 "meta_planner_receipt_generated receipt_id=%s verdict=%s",
                 receipt.receipt_id,
@@ -1388,6 +1823,7 @@ class MetaPlanner:
         debate_result: Any,
         available_tracks: list[Track],
         objective: str,
+        expected_proposers: list[str] | None = None,
     ) -> list[PrioritizedGoal]:
         """Parse prioritized goals from debate consensus."""
         return parse_goals_from_debate(
@@ -1396,6 +1832,7 @@ class MetaPlanner:
             objective,
             self.config.max_goals,
             self._heuristic_prioritize,
+            expected_proposers,
         )
 
     def _build_goal(
@@ -1457,7 +1894,7 @@ class MetaPlanner:
                 capture_output=True,
                 text=True,
                 timeout=10,
-                cwd=".",
+                cwd=self.config.repo_path,
             )
             if git_result.returncode == 0:
                 for line in git_result.stdout.splitlines():
@@ -1479,7 +1916,7 @@ class MetaPlanner:
 
             from aragora.nomic.codebase_indexer import CodebaseIndexer
 
-            indexer = CodebaseIndexer(repo_path=".", max_modules=50)
+            indexer = CodebaseIndexer(repo_path=self.config.repo_path, max_modules=50)
             await indexer.index()
             for module in indexer._modules:
                 test_paths = indexer._test_map.get(str(module.path), [])
@@ -1512,7 +1949,7 @@ class MetaPlanner:
             import json as _json
             from pathlib import Path as _P
 
-            lastfailed_path = _P(".pytest_cache/v/cache/lastfailed")
+            lastfailed_path = _P(self.config.repo_path) / ".pytest_cache/v/cache/lastfailed"
             if lastfailed_path.exists():
                 failed = _json.loads(lastfailed_path.read_text())
                 for node_id in list(failed.keys())[:20]:
@@ -1531,7 +1968,7 @@ class MetaPlanner:
                 capture_output=True,
                 text=True,
                 timeout=15,
-                cwd=".",
+                cwd=self.config.repo_path,
             )
             if ruff_result.stdout:
                 for i, line in enumerate(ruff_result.stdout.splitlines()):
@@ -1549,11 +1986,11 @@ class MetaPlanner:
         # Signal 6: TODO/FIXME/HACK comments
         try:
             todo_result = subprocess.run(
-                ["grep", "-rn", r"TODO\|FIXME\|HACK", "aragora/", "--include=*.py", "-l"],  # noqa: S607 -- fixed command
+                ["grep", "-rn", r"TODO\|FIXME\|HACK", ".", "--include=*.py", "-l"],  # noqa: S607 -- fixed command
                 capture_output=True,
                 text=True,
                 timeout=10,
-                cwd=".",
+                cwd=self.config.repo_path,
             )
             if todo_result.returncode == 0 and todo_result.stdout:
                 for i, filepath in enumerate(todo_result.stdout.splitlines()):
@@ -1569,7 +2006,7 @@ class MetaPlanner:
 
         # Signal 7: User feedback (NPS score from FeedbackStore)
         try:
-            from aragora.server.handlers.feedback import FeedbackStore
+            from aragora.server.handlers.sme.feedback import FeedbackStore
 
             fb_store = FeedbackStore()
             nps = fb_store.get_nps_summary(days=30)
@@ -1689,7 +2126,7 @@ class MetaPlanner:
         try:
             from aragora.compat.openclaw.next_steps_runner import NextStepsRunner
 
-            runner = NextStepsRunner(repo_path=".")
+            runner = NextStepsRunner(repo_path=self.config.repo_path)
             scan_result = runner.scan() if hasattr(runner, "scan") else None
             if scan_result and hasattr(scan_result, "steps"):
                 for step in scan_result.steps[:10]:
@@ -1797,15 +2234,21 @@ class MetaPlanner:
                 return track
         return available_tracks[0] if available_tracks else None
 
-    @staticmethod
     def _gather_file_excerpts(
+        self,
         signals: list[str],
         max_files: int = 3,
         max_chars_per_file: int = 1500,
         max_total_chars: int = 5000,
     ) -> dict[str, str]:
         """Extract file paths from signal strings and read excerpts."""
-        return gather_file_excerpts(signals, max_files, max_chars_per_file, max_total_chars)
+        return gather_file_excerpts(
+            signals,
+            max_files,
+            max_chars_per_file,
+            max_total_chars,
+            Path(self.config.repo_path),
+        )
 
     def _gather_codebase_hints(
         self,
@@ -1823,7 +2266,7 @@ class MetaPlanner:
         try:
             from aragora.nomic.codebase_indexer import CodebaseIndexer
 
-            indexer = CodebaseIndexer(repo_path=".", max_modules=50)
+            indexer = CodebaseIndexer(repo_path=self.config.repo_path, max_modules=50)
             # Synchronous scan of already-indexed modules (lightweight)
             for source_dir in indexer.source_dirs:
                 source_path = indexer.repo_path / source_dir
@@ -2601,6 +3044,7 @@ class MetaPlanner:
 __all__ = [
     "MetaPlanner",
     "MetaPlannerConfig",
+    "MetaPlanningResult",
     "PrioritizedGoal",
     "PlanningContext",
     "HistoricalLearning",

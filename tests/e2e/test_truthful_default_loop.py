@@ -97,7 +97,7 @@ def test_truthful_default_loop_provider_block_and_receipt_surface(
     assert saved["artifact_hash"] == saved["receipt"]["artifact_hash"]
 
     output = capsys.readouterr().out
-    assert "Live provider path is blocked" in output
+    assert "Live provider preflight could not verify reachability" in output
     assert "Simulation: mock/simulated" in output
     assert "Next:" in output
     assert f"Receipt:    {saved['receipt_id']}" in output

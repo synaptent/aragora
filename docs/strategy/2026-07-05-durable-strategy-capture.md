@@ -63,9 +63,10 @@ These are the remaining wave-4 seeds that need durable execution tracking:
 1. **One real outsider (#8858).** A human with no repo context must run the install/demo/
    verify path and every friction must be filed. A simulated agent run does not
    count.
-2. **Data-window arming scoreboard (#8859).** Replace the stale Jul 29 agenda with live
-   arming data: adjudicator stalls, lease-rule warnings, executor history,
-   issue-close discipline, and cancelled-run concurrency.
+2. **Data-window arming scoreboard (#8859).** The report-only
+   [scoreboard](../status/DATA_WINDOW_ARMING_SCOREBOARD.md) replaces the stale
+   Jul 29 agenda with live arming data: adjudicator stalls, lease-rule warnings,
+   executor history, issue-close discipline, and cancelled-run concurrency.
 3. **Reviewer-failure taxonomy (#8860).** Turn naturalistic merge-gate review failures
    into a receipted artifact and adjudicator eval fixtures.
 4. **Live dogfood dashboard (#8861).** Regenerate the July dogfooding proof on a schedule
@@ -125,6 +126,9 @@ decision afterlife.
 
 ## Operator Question Guide
 
+For a reusable live-session version with artifact and stop contracts, see
+[Operator Guide: Questions That Produce Action](OPERATOR_ACTION_PROMPTS.md).
+
 Use these prompts when the goal is investigation plus action:
 
 - **Outsider falsification:** "Take our strongest public claim, test it from a
@@ -149,7 +153,7 @@ than rebuilt here.
 are:
 
 - #8858 - one real outsider verification run
-- #8859 - data-window arming scoreboard
+- #8859 - [data-window arming scoreboard](../status/DATA_WINDOW_ARMING_SCOREBOARD.md)
 - #8860 - Disagreement Atlas artifact and eval fixtures
 - #8861 - live dogfood dashboard
 - #8862 - skip-audit redesign

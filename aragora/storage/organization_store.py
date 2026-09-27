@@ -26,7 +26,7 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from collections.abc import Callable, Iterator
 
 from aragora.config import resolve_db_path
@@ -772,7 +772,10 @@ class OrganizationStore:
             invited_by=row["invited_by"],
             status=row["status"],
             created_at=datetime.fromisoformat(row["created_at"]),
-            expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
+            expires_at=cast(
+                datetime,
+                datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
+            ),
             accepted_by=row["accepted_by"] if has_accepted_by else None,
             accepted_at=(
                 datetime.fromisoformat(row["accepted_at"])

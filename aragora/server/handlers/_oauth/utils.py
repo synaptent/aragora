@@ -195,7 +195,7 @@ class OAuthRateLimiterWrapper:
 _oauth_limiter = OAuthRateLimiterWrapper()
 
 # Module path constant for the backward-compat shim that tests patch against.
-_IMPL_MODULE = "aragora.server.handlers._oauth_impl"
+_IMPL_MODULE = "aragora.server.handlers.oauth._oauth_impl"
 
 
 def _impl() -> ModuleType:

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 from aragora.utils.json_helpers import safe_json_loads
 
 from .entry import ContinuumMemoryEntry
@@ -52,7 +52,7 @@ class TierOpsMixin:
         Returns:
             True if the entry was marked, False if entry not found
         """
-        now: str = datetime.now().isoformat()
+        now: str = utc_now_iso_naive()
 
         with self.connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
@@ -180,7 +180,7 @@ class TierOpsMixin:
                 return None
 
             new_tier: MemoryTier = MemoryTier(tm_new.value)
-            now: str = datetime.now().isoformat()
+            now: str = utc_now_iso_naive()
 
             logger.info(
                 f"[memory] Promoting {id}: {current_tier.value} -> {new_tier.value} "
@@ -262,7 +262,7 @@ class TierOpsMixin:
                 return None
 
             new_tier: MemoryTier = MemoryTier(tm_new.value)
-            now: str = datetime.now().isoformat()
+            now: str = utc_now_iso_naive()
 
             logger.info(
                 f"[memory] Demoting {id}: {current_tier.value} -> {new_tier.value} "

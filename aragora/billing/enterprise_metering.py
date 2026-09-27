@@ -41,7 +41,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from .usage import PROVIDER_PRICING
@@ -345,6 +345,10 @@ class EnterpriseMeter:
         self._buffer_size = 50
         self._flush_task: asyncio.Task | None = None
 
+    @property
+    def _connection(self) -> sqlite3.Connection:
+        return cast(sqlite3.Connection, self._conn)
+
     async def initialize(self) -> None:
         """Initialize database and start background tasks."""
         if self._initialized:
@@ -360,7 +364,7 @@ class EnterpriseMeter:
 
     async def _init_schema(self) -> None:
         """Initialize database schema."""
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
 
         # Token usage records
         cursor.execute("""
@@ -458,7 +462,7 @@ class EnterpriseMeter:
             ON invoices(tenant_id, period_start)
         """)
 
-        self._conn.commit()
+        self._connection.commit()
 
     async def record_token_usage(
         self,
@@ -577,7 +581,7 @@ class EnterpriseMeter:
         records = self._usage_buffer.copy()
         self._usage_buffer.clear()
 
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
         for record in records:
             cursor.execute(
                 """
@@ -616,7 +620,7 @@ class EnterpriseMeter:
                     record.timestamp.isoformat(),
                 ),
             )
-        self._conn.commit()
+        self._connection.commit()
         logger.debug("Flushed %s token usage records", len(records))
 
     async def get_cost_breakdown(
@@ -651,7 +655,7 @@ class EnterpriseMeter:
             period_end=end_date,
         )
 
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
 
         # Get totals and breakdowns
         cursor.execute(
@@ -811,7 +815,7 @@ class EnterpriseMeter:
             auto_suspend_on_exceed=auto_suspend,
         )
 
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
         cursor.execute(
             """
             INSERT OR REPLACE INTO budget_configs
@@ -828,7 +832,7 @@ class EnterpriseMeter:
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
-        self._conn.commit()
+        self._connection.commit()
 
         logger.info("Set budget for tenant %s: $%s", tenant_id, monthly_budget)
         return config
@@ -838,7 +842,7 @@ class EnterpriseMeter:
         if not self._initialized:
             await self.initialize()
 
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
         cursor.execute(
             "SELECT * FROM budget_configs WHERE tenant_id = ?",
             (tenant_id,),
@@ -887,7 +891,7 @@ class EnterpriseMeter:
 
         if alert_level:
             # Check if we've already sent this alert
-            cursor = self._conn.cursor()
+            cursor = self._connection.cursor()
             cursor.execute(
                 """
                 SELECT id FROM budget_alerts
@@ -914,7 +918,7 @@ class EnterpriseMeter:
                         str(config.monthly_budget),
                     ),
                 )
-                self._conn.commit()
+                self._connection.commit()
 
                 logger.warning(
                     f"Budget alert for tenant {tenant_id}: {alert_level.value} ({percent:.1f}%)"
@@ -1115,7 +1119,7 @@ class EnterpriseMeter:
         )
 
         # Save invoice
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
         cursor.execute(
             """
             INSERT INTO invoices
@@ -1137,7 +1141,7 @@ class EnterpriseMeter:
                 invoice.due_date.isoformat() if invoice.due_date else None,
             ),
         )
-        self._conn.commit()
+        self._connection.commit()
 
         logger.info("Generated invoice %s for tenant %s: $%s", invoice.id, tenant_id, total)
         return invoice
@@ -1152,7 +1156,7 @@ class EnterpriseMeter:
         if not self._initialized:
             await self.initialize()
 
-        cursor = self._conn.cursor()
+        cursor = self._connection.cursor()
         query = "SELECT * FROM invoices WHERE tenant_id = ?"
         params: list[Any] = [tenant_id]
 

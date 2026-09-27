@@ -274,17 +274,31 @@ class TestChecksumPerformance:
             _ = trace_with_events.checksum
             access_times.append(time.perf_counter() - start)
 
-        # Calculate statistics
-        avg_time = sum(access_times) / len(access_times)
-        max_time = max(access_times)
-
-        # All accesses should be roughly constant (allow for some variance).
-        # Sub-microsecond property lookups have high relative jitter from cache
-        # misses, GC, and scheduler noise, so allow a wider ratio plus a small
-        # absolute ceiling.
-        assert max_time < max(avg_time * 100, 5e-5), (
+        # Sub-microsecond property lookups have high relative jitter: on a
+        # loaded shared runner a single scheduler preemption can cost ~0.5ms,
+        # so comparing the raw max against the average is inherently flaky.
+        # Use robust statistics instead — the bulk of accesses (p95) must stay
+        # near the typical (median) cost, with a generous absolute ceiling.
+        sorted_times = sorted(access_times)
+        median_time = sorted_times[len(sorted_times) // 2]
+        p95_time = sorted_times[int(len(sorted_times) * 0.95)]
+        assert p95_time < max(median_time * 100, 1e-3), (
             f"Access times should be relatively constant. "
-            f"Avg: {avg_time:.6f}s, Max: {max_time:.6f}s"
+            f"Median: {median_time:.6f}s, p95: {p95_time:.6f}s"
+        )
+
+        # The actual O(1) guarantee: per-access cost must not grow with the
+        # number of prior accesses. Compare first-half vs second-half medians,
+        # which isolated hiccups cannot skew.
+        half = len(access_times) // 2
+        first_half = sorted(access_times[:half])
+        second_half = sorted(access_times[half:])
+        first_median = first_half[len(first_half) // 2]
+        second_median = second_half[len(second_half) // 2]
+        assert second_median < max(first_median * 10, 5e-5), (
+            f"Access times should not grow with access count. "
+            f"First-half median: {first_median:.6f}s, "
+            f"second-half median: {second_median:.6f}s"
         )
 
     def test_large_trace_caching_benefits(self):

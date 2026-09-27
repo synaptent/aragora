@@ -371,8 +371,11 @@ class CVBuilder:
 
     def _populate_from_elo(self, cv: AgentCV) -> None:
         """Populate CV with ELO system data."""
+        elo_system = self.elo_system
+        if elo_system is None:
+            return
         try:
-            rating = self.elo_system.get_rating(cv.agent_id)
+            rating = elo_system.get_rating(cv.agent_id)
 
             cv.overall_elo = rating.elo
             cv.overall_win_rate = rating.win_rate
@@ -388,7 +391,7 @@ class CVBuilder:
 
             # Get learning efficiency
             try:
-                efficiency = self.elo_system.get_learning_efficiency(cv.agent_id)
+                efficiency = elo_system.get_learning_efficiency(cv.agent_id)
                 cv.learning_category = efficiency.get("learning_category", "unknown")
                 cv.elo_gain_rate = efficiency.get("elo_gain_rate", 0.0)
             except (KeyError, AttributeError, TypeError) as e:
@@ -399,8 +402,11 @@ class CVBuilder:
 
     def _populate_from_calibration(self, cv: AgentCV) -> None:
         """Populate CV with calibration data."""
+        calibration_tracker = self.calibration_tracker
+        if calibration_tracker is None:
+            return
         try:
-            summary = self.calibration_tracker.get_calibration_summary(cv.agent_id)
+            summary = calibration_tracker.get_calibration_summary(cv.agent_id)
 
             cv.calibration_accuracy = summary.accuracy
             cv.brier_score = summary.brier_score
@@ -409,7 +415,7 @@ class CVBuilder:
 
             # Get domain-specific calibration
             try:
-                domain_breakdown = self.calibration_tracker.get_domain_breakdown(cv.agent_id)
+                domain_breakdown = calibration_tracker.get_domain_breakdown(cv.agent_id)
                 for domain, domain_summary in domain_breakdown.items():
                     if domain in cv.domain_performance:
                         cv.domain_performance[domain].calibration_accuracy = domain_summary.accuracy
@@ -428,9 +434,12 @@ class CVBuilder:
 
     def _populate_from_performance(self, cv: AgentCV) -> None:
         """Populate CV with performance monitor data."""
+        performance_monitor = self.performance_monitor
+        if performance_monitor is None:
+            return
         try:
-            if hasattr(self.performance_monitor, "agent_stats"):
-                stats = self.performance_monitor.agent_stats.get(cv.agent_id)
+            if hasattr(performance_monitor, "agent_stats"):
+                stats = performance_monitor.agent_stats.get(cv.agent_id)
                 if stats:
                     cv.reliability = ReliabilityMetrics(
                         success_rate=stats.success_rate / 100,  # Convert from %

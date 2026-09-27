@@ -84,7 +84,7 @@ async def run_security_debate(
     from aragora.core_types import DebateResult, Environment
     from aragora.debate.orchestrator import Arena
     from aragora.debate.protocol import DebateProtocol
-    from aragora.debate.security_response import build_security_debate_question
+    from aragora.debate.security_question import build_security_debate_question
 
     # Build the debate question from security findings
     question = build_security_debate_question(event)
@@ -200,7 +200,7 @@ async def get_security_debate_agents() -> list[Agent]:
         agents.append(
             AnthropicAPIAgent(
                 name="security-auditor",
-                model="claude-opus-4-8",
+                model="claude-opus-5",
             )
         )
     except (ImportError, Exception) as e:

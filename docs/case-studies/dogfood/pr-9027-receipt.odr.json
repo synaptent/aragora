@@ -1,0 +1,87 @@
+{
+  "odr_version": "0.1",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "receipt_id": "pr-9027-363bde32f58c",
+  "issued_at": null,
+  "subject": {
+    "identifier": "merge-quorum/synaptent/aragora#9027",
+    "digest": {
+      "status": "present",
+      "alg": "sha-256",
+      "value": "cc7f680589ea919a658eae7b0f6b8fa4ab3c871768833d319f420d4958e75e16"
+    },
+    "summary": "Merge synaptent/aragora#9027 @ 363bde32f58c"
+  },
+  "claim": {
+    "verdict": "PASS",
+    "statement": "Merge synaptent/aragora#9027 @ 363bde32f58c"
+  },
+  "reasoning": {
+    "status": "present",
+    "summary": "All 2 reviewer(s) passed"
+  },
+  "quorum": {
+    "status": "present",
+    "method": "merge-quorum",
+    "reached": true,
+    "supporting_agents": [
+      "grok",
+      "mistral"
+    ],
+    "participants": [
+      {
+        "agent": "grok",
+        "model_family": "xai",
+        "model_id": "undisclosed"
+      },
+      {
+        "agent": "mistral",
+        "model_family": "mistral",
+        "model_id": "undisclosed"
+      }
+    ],
+    "independence": {
+      "disclosed": true,
+      "distinct_model_families": 2,
+      "model_families": [
+        "mistral",
+        "xai"
+      ]
+    },
+    "dissent": {
+      "present": false,
+      "dissenting_agents": [],
+      "views": []
+    }
+  },
+  "confidence": {
+    "status": "present",
+    "value": 1.0,
+    "scale": "unit_interval",
+    "calibration": {
+      "status": "present",
+      "provenance_ref": {
+        "type": "aragora.settlement_metadata",
+        "receipt_id": "pr-9027-363bde32f58c"
+      }
+    }
+  },
+  "cruxes": {
+    "status": "absent",
+    "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+  },
+  "attestation": {
+    "disposition": "autonomous"
+  },
+  "routing": {
+    "status": "reserved"
+  },
+  "signatures": [],
+  "source": {
+    "system": "aragora",
+    "schema": "aragora.gauntlet.DecisionReceipt",
+    "schema_version": "1.1",
+    "receipt_id": "pr-9027-363bde32f58c",
+    "artifact_hash": "36721f75c47ab1ddbbe0bf68b2d4be1b4b0e7ea31fc66a8072e3744cd5d7d424"
+  }
+}

@@ -27,9 +27,11 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from aragora.server.metrics import Counter, Gauge, Histogram
+from aragora.observability.server_metrics import Counter, Gauge, Histogram
 
 if TYPE_CHECKING:
+    from aragora.observability.server_metrics.export import NomicMetricCollection
+
     from .events import Event
     from .states import NomicState
 
@@ -355,6 +357,42 @@ def check_stuck_phases(
     return stuck_info
 
 
+def get_prometheus_metrics() -> NomicMetricCollection:
+    """Return the live Nomic metric objects through the observability contract."""
+    from aragora.observability.server_metrics.export import NomicMetricCollection
+
+    return NomicMetricCollection(
+        counters=(
+            NOMIC_PHASE_TRANSITIONS,
+            NOMIC_CYCLES_TOTAL,
+            NOMIC_ERRORS,
+            NOMIC_RECOVERY_DECISIONS,
+            NOMIC_RETRIES,
+        ),
+        gauges=(
+            NOMIC_CURRENT_PHASE,
+            NOMIC_CYCLES_IN_PROGRESS,
+            NOMIC_PHASE_LAST_TRANSITION,
+            NOMIC_CIRCUIT_BREAKERS_OPEN,
+        ),
+        histograms=(NOMIC_PHASE_DURATION,),
+    )
+
+
+def register_prometheus_metrics_provider() -> bool:
+    """Register Nomic metrics at an application composition root."""
+    try:
+        from aragora.observability.server_metrics.export import (
+            register_nomic_metrics_provider,
+        )
+    except ImportError as exc:
+        logger.debug("Nomic Prometheus metrics provider is unavailable: %s", exc)
+        return False
+
+    register_nomic_metrics_provider(get_prometheus_metrics)
+    return True
+
+
 __all__ = [
     # Metrics
     "NOMIC_PHASE_TRANSITIONS",
@@ -381,5 +419,7 @@ __all__ = [
     # Utilities
     "get_nomic_metrics_summary",
     "check_stuck_phases",
+    "get_prometheus_metrics",
+    "register_prometheus_metrics_provider",
     "PHASE_ENCODING",
 ]

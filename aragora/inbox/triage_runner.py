@@ -42,7 +42,7 @@ from aragora.inbox.triage_diagnostics import (
     TriageRunDiagnostics,
     record_triage_diagnostic,
 )
-from aragora.utils.semantic_extraction import ExtractionProvider, extract_json_object_llm_first
+from aragora.agents.semantic_extraction import ExtractionProvider, extract_json_object_llm_first
 
 logger = logging.getLogger(__name__)
 

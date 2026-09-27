@@ -26,12 +26,42 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from aragora.billing.budget_manager import BudgetAlert, BudgetManager
 
 logger = logging.getLogger(__name__)
+
+
+class BudgetAlertSink(Protocol):
+    """External channel delivery capability registered from a higher layer."""
+
+    async def deliver(
+        self,
+        *,
+        workspace_id: str,
+        channel_id: str,
+        message: dict[str, Any],
+        config: dict[str, Any],
+    ) -> None: ...
+
+
+_budget_alert_sinks: dict[str, BudgetAlertSink] = {}
+
+
+def register_budget_alert_sink(channel_type: str, sink: BudgetAlertSink) -> None:
+    """Register an external delivery sink for a channel type."""
+    _budget_alert_sinks[channel_type] = sink
+
+
+def clear_budget_alert_sinks() -> None:
+    """Clear registered sinks, primarily for isolated tests."""
+    _budget_alert_sinks.clear()
+
+
+def _get_budget_alert_sink(channel_type: str) -> BudgetAlertSink | None:
+    return _budget_alert_sinks.get(channel_type)
 
 
 class NotificationStatus(str, Enum):
@@ -345,25 +375,15 @@ class BudgetAlertNotifier:
                 blocks=message.get("blocks"),
             )
         else:
-            # Try to import and use connector
-            try:
-                from aragora.connectors.chat.slack import SlackConnector
-                from aragora.storage.slack_workspace_store import get_slack_workspace_store
-
-                store = get_slack_workspace_store()
-                workspace = store.get(workspace_id)
-                if workspace and workspace.access_token:
-                    connector = SlackConnector(bot_token=workspace.access_token)
-                    await connector.send_message(
-                        channel_id=channel_id,
-                        text=message["text"],
-                        blocks=message.get("blocks"),
-                    )
-                else:
-                    raise ValueError(f"No Slack workspace found: {workspace_id}")
-            except ImportError:
-                logger.warning("Slack connector not available")
-                raise
+            sink = _get_budget_alert_sink("slack")
+            if sink is None:
+                raise RuntimeError("Slack budget alert sink is not registered")
+            await sink.deliver(
+                workspace_id=workspace_id,
+                channel_id=channel_id,
+                message=message,
+                config=config,
+            )
 
     async def _send_to_teams(
         self,
@@ -387,24 +407,15 @@ class BudgetAlertNotifier:
                 text=message["text"],
             )
         else:
-            # Try to import and use connector
-            try:
-                from aragora.connectors.chat.teams import TeamsConnector
-                from aragora.storage.teams_workspace_store import get_teams_workspace_store
-
-                store = get_teams_workspace_store()
-                workspace = store.get(tenant_id)
-                if workspace and workspace.access_token:
-                    connector = TeamsConnector(app_password=workspace.access_token)
-                    await connector.send_message(
-                        channel_id=channel_id,
-                        text=message["text"],
-                    )
-                else:
-                    raise ValueError(f"No Teams workspace found: {tenant_id}")
-            except ImportError:
-                logger.warning("Teams connector not available")
-                raise
+            sink = _get_budget_alert_sink("teams")
+            if sink is None:
+                raise RuntimeError("Teams budget alert sink is not registered")
+            await sink.deliver(
+                workspace_id=tenant_id,
+                channel_id=channel_id,
+                message=message,
+                config=config,
+            )
 
     async def _send_to_webhook(
         self,

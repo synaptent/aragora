@@ -22,7 +22,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +219,7 @@ class WorkspacePipelineBridge:
 
         if not await self._ensure_bead_manager():
             return ctx
+        bead_manager = cast(Any, self._bead_manager)
 
         max_age = staleness_days if staleness_days is not None else self._staleness_days
         cutoff = time.time() - (max_age * 86400)
@@ -228,7 +229,7 @@ class WorkspacePipelineBridge:
             return ctx
 
         try:
-            all_beads = await self._bead_manager.list_beads()
+            all_beads = await bead_manager.list_beads()
         except (RuntimeError, ValueError, TypeError, OSError, AttributeError, KeyError) as exc:
             logger.debug("Failed to list beads from workspace store: %s", exc)
             return ctx
@@ -252,7 +253,9 @@ class WorkspacePipelineBridge:
                 continue
 
             status_raw = getattr(bead, "status", None)
-            status_str = status_raw.value if hasattr(status_raw, "value") else str(status_raw)
+            status_str = (
+                cast(Any, status_raw).value if hasattr(status_raw, "value") else str(status_raw)
+            )
 
             completed_at = getattr(bead, "completed_at", None)
             now = time.time()

@@ -102,6 +102,29 @@ variable "enable_deletion_protection" {
   default     = true
 }
 
+variable "noncurrent_version_retention_days" {
+  description = "Days to retain noncurrent (superseded) S3 object versions before expiration"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.noncurrent_version_retention_days >= 1
+    error_message = "noncurrent_version_retention_days must be >= 1."
+  }
+}
+
+variable "monthly_budget_limit" {
+  description = "Monthly AWS cost budget in USD; alerts fire at 50/80/100% actual and 100% forecasted"
+  type        = number
+  default     = 2500
+}
+
+variable "budget_alert_emails" {
+  description = "Email addresses to notify when budget thresholds are crossed (empty list disables the budget)"
+  type        = list(string)
+  default     = []
+}
+
 # ============================================================================
 # Locals
 # ============================================================================
@@ -418,6 +441,29 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup" {
     expiration {
       days = var.environment == "production" ? 365 : 90
     }
+
+    # With versioning enabled, `expiration` above only creates delete markers;
+    # noncurrent versions otherwise accumulate in STANDARD forever (the Feb-Apr
+    # 2026 TimedStorage-ByteHrs runaway). No noncurrent transition tier: at the
+    # default 30-day retention it would coincide with expiration (S3 requires
+    # expiration strictly after transition) and IA minimum-storage charges
+    # would negate the savings for such short-lived versions.
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_retention_days
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  rule {
+    id     = "purge-expired-delete-markers"
+    status = "Enabled"
+
+    expiration {
+      expired_object_delete_marker = true
+    }
   }
 }
 
@@ -438,6 +484,41 @@ resource "aws_s3_bucket_public_access_block" "backup" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# ============================================================================
+# Cost Guardrails — AWS Budgets
+# ============================================================================
+# Alerting-only (does not stop resources). Root-caused from the Feb-Apr 2026
+# S3 storage runaway that went unnoticed until the invoices arrived.
+
+resource "aws_budgets_budget" "monthly_cost" {
+  count = length(var.budget_alert_emails) > 0 ? 1 : 0
+
+  name         = "${local.name}-monthly-cost-guardrail"
+  budget_type  = "COST"
+  limit_amount = tostring(var.monthly_budget_limit)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  dynamic "notification" {
+    for_each = [50, 80, 100]
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = var.budget_alert_emails
+    }
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = var.budget_alert_emails
+  }
 }
 
 # ============================================================================

@@ -3030,9 +3030,7 @@ class DebateCostEstimateRequest(BaseModel):
     num_rounds: Annotated[int | None, Field(description="Number of debate rounds", ge=1, le=12)] = 9
     model_types: Annotated[
         list[str] | None,
-        Field(
-            description="Model types to use", example=["claude-opus-4-8", "gpt-4o", "gemini-pro"]
-        ),
+        Field(description="Model types to use", example=["claude-opus-5", "gpt-4o", "gemini-pro"]),
     ] = None
 
 

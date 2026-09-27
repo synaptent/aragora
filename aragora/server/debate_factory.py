@@ -39,28 +39,33 @@ except ImportError:
     VERTICALS_AVAILABLE = False
 
 # Import credential validator for auto-trim
+filter_available_agents: Callable[..., Any] | None = None
+get_credential_status: Callable[..., Any] | None = None
+log_credential_status: Callable[..., Any] | None = None
 try:
     from aragora.agents.credential_validator import (
-        filter_available_agents,
-        get_credential_status,
-        log_credential_status,
+        filter_available_agents as _filter_available_agents,
+        get_credential_status as _get_credential_status,
+        log_credential_status as _log_credential_status,
     )
 
+    filter_available_agents = _filter_available_agents
+    get_credential_status = _get_credential_status
+    log_credential_status = _log_credential_status
     CREDENTIAL_VALIDATOR_AVAILABLE = True
 except ImportError:
     CREDENTIAL_VALIDATOR_AVAILABLE = False
-    filter_available_agents = None
-    get_credential_status = None
-    log_credential_status = None
 
 logger = logging.getLogger(__name__)
 
 # Import create_agent for agent creation
-create_agent: Any
+create_agent: Any = None
 try:
-    from aragora.agents.base import create_agent
+    from aragora.agents.base import create_agent as _create_agent
+
+    create_agent = _create_agent
 except ImportError:
-    create_agent = None
+    pass
 
 if TYPE_CHECKING:
     from aragora.agents.base import AgentType
@@ -163,9 +168,10 @@ class DebateConfig:
             specs = AgentSpec.coerce_list(DEFAULT_AGENTS, warn=False)
 
         # Auto-trim unavailable agents if enabled and validator is available
-        if self.auto_trim_unavailable and CREDENTIAL_VALIDATOR_AVAILABLE:
+        filter_agents = filter_available_agents
+        if self.auto_trim_unavailable and CREDENTIAL_VALIDATOR_AVAILABLE and filter_agents:
             try:
-                specs, filtered = filter_available_agents(
+                specs, filtered = filter_agents(
                     specs,
                     log_filtered=True,
                     min_agents=2,
@@ -366,10 +372,13 @@ class DebateFactory:
 
     def _emit_agent_error(self, agent_type: str, error: str, debate_id: str) -> None:
         """Emit an error event for agent creation failure."""
+        stream_emitter = self.stream_emitter
+        if stream_emitter is None:
+            return
         try:
-            from aragora.server.stream.events import StreamEvent, StreamEventType
+            from aragora.events.types import StreamEvent, StreamEventType
 
-            self.stream_emitter.emit(
+            stream_emitter.emit(
                 StreamEvent(
                     type=StreamEventType.ERROR,
                     data={

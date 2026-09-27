@@ -12,7 +12,9 @@ Covers:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
+import logging
 
 import pytest
 
@@ -24,7 +26,14 @@ from aragora.gauntlet.odr_export import (
     jcs_canonicalize,
     load_odr_schema,
     odr_content_digest,
+    sign_odr_if_configured,
 )
+from aragora.gauntlet.odr_signing import (
+    OdrSigningError,
+    OdrSigningUnconfiguredError,
+    generate_signing_key,
+)
+from aragora.gauntlet.odr_verify import verify_odr_document
 from aragora.gauntlet.receipt_models import (
     AgentResponseRecord,
     ConsensusProof,
@@ -327,6 +336,108 @@ class TestAbsentMarkerHonesty:
         assert "note" in independence
         for participant in odr["quorum"]["participants"]:
             assert participant["model_family"] == "undisclosed"
+
+
+class TestConfiguredSigning:
+    def test_configured_key_signs_and_verifies_export(self) -> None:
+        key = generate_signing_key()
+
+        signed = sign_odr_if_configured(
+            decision_receipt_to_odr(_full_receipt()),
+            key_loader=lambda: key,
+        )
+
+        assert len(signed["signatures"]) == 1
+        result = verify_odr_document(signed, public_key=key.public_key())
+        signature = next(check for check in result.checks if check.name == "signature")
+        assert signature.status == "pass", signature.detail
+        assert result.ok is True
+
+    def test_tampering_after_configured_signing_fails_verification(self) -> None:
+        key = generate_signing_key()
+        signed = sign_odr_if_configured(
+            decision_receipt_to_odr(_full_receipt()),
+            key_loader=lambda: key,
+        )
+        tampered = copy.deepcopy(signed)
+        tampered["claim"]["verdict"] = "FAIL"
+
+        result = verify_odr_document(tampered, public_key=key.public_key())
+        signature = next(check for check in result.checks if check.name == "signature")
+        assert signature.status == "fail"
+        assert result.ok is False
+
+    def test_unconfigured_key_warns_and_preserves_unsigned_export(self, caplog) -> None:
+        def missing_key():
+            raise OdrSigningUnconfiguredError("signing key is not configured")
+
+        unsigned = decision_receipt_to_odr(_full_receipt())
+        with caplog.at_level(logging.WARNING):
+            exported = sign_odr_if_configured(unsigned, key_loader=missing_key)
+
+        assert exported is unsigned
+        assert exported["signatures"] == []
+        assert "exporting unsigned ODR receipt" in caplog.text
+
+    def test_configured_but_broken_key_fails_closed(self) -> None:
+        """A CONFIGURED key that cannot be loaded must never silently
+        downgrade a deployment expected to sign into unsigned exports."""
+
+        def broken_key():
+            raise OdrSigningError("secret exists but key material is invalid")
+
+        with pytest.raises(OdrSigningError):
+            sign_odr_if_configured(
+                decision_receipt_to_odr(_full_receipt()),
+                key_loader=broken_key,
+            )
+
+    def test_cli_odr_export_uses_configured_signing_key(self, monkeypatch) -> None:
+        from aragora.cli.commands.receipt import _export_odr
+        from aragora.gauntlet import odr_signing
+
+        key = generate_signing_key()
+        monkeypatch.setattr(odr_signing, "load_signing_key_from_secrets", lambda: key)
+
+        exported = json.loads(_export_odr(_full_receipt().to_dict()))
+
+        assert len(exported["signatures"]) == 1
+        result = verify_odr_document(exported, public_key=key.public_key())
+        signature = next(check for check in result.checks if check.name == "signature")
+        assert signature.status == "pass", signature.detail
+
+    def test_cli_export_reports_broken_configured_key_cleanly(
+        self, monkeypatch, tmp_path, capsys
+    ) -> None:
+        """A configured-but-unusable key exits 1 with a clean CLI error, not a
+        traceback, and never writes an unsigned export."""
+        import argparse
+
+        from aragora.cli.commands.receipt import cmd_receipt_export
+        from aragora.gauntlet import odr_signing
+
+        def broken_loader():
+            raise OdrSigningError("secret exists but key material is invalid")
+
+        monkeypatch.setattr(odr_signing, "load_signing_key_from_secrets", broken_loader)
+
+        receipt_file = tmp_path / "receipt.json"
+        receipt_file.write_text(json.dumps(_full_receipt().to_dict()), encoding="utf-8")
+        output_file = tmp_path / "out.json"
+        args = argparse.Namespace(
+            receipt=str(receipt_file),
+            format="odr",
+            output=str(output_file),
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            cmd_receipt_export(args)
+
+        assert exc.value.code == 1
+        assert not output_file.exists()
+        stderr = capsys.readouterr().err
+        assert "signing key is configured but could not be used" in stderr
+        assert "Traceback" not in stderr
 
 
 # ---------------------------------------------------------------------------

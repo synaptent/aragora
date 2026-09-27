@@ -11,14 +11,17 @@ marker after verifying main is green. Results append to the throughput ledger.
 Read-only vs GitHub. Intended to run nightly under launchd (installation of
 the LaunchAgent is an operator action); safe to run by hand:
 
-    python3 scripts/pristine_main_health.py --suite required   # fast lane
-    python3 scripts/pristine_main_health.py --suite full       # full shards
+    python3 scripts/pristine_main_health.py --suite required   # fast lane (default)
+    python3 scripts/pristine_main_health.py --suite full       # full shards (manual)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+import signal
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -32,12 +35,89 @@ from aragora.nomic.throughput import LedgerRecord, ThroughputLedger  # noqa: E40
 DEFAULT_PRISTINE_DIR = Path.home() / ".aragora" / "pristine-main"
 DEFAULT_HALT_FILE = _REPO_ROOT / ".aragora" / "merge_executor.halt"
 OWNER_MARKER_PURPOSE = "aragora.pristine_main_health"
+EVIDENCE_TAIL_LINES = 15
+EVIDENCE_TAIL_CHARS = 4_000
+INFRA_ERROR_EXIT = 2
+SUITE_TERMINATION_GRACE_SECONDS = 30.0
+LOCKED_DEV_RUN = ("uv", "run", "--locked", "--extra", "dev", "--extra", "test")
 
 # Suite commands run INSIDE the pristine worktree. "required" mirrors the
-# required-check lane; "full" runs the whole suite including path-gated shards
-# (the ones that go silently red) minus the known-broken collection module.
+# steps of `make ci-required` — NOT the make target itself — with ONE swap for
+# CI parity (issue #9045): the make target's raw full-codebase mypy carries
+# ~1.9k errors of frozen debt and can never go green, while the actual required
+# CI `typecheck` check gates touched files only. The instrument instead runs
+# mypy through the shrink-only baseline checker (fails only when the count
+# EXCEEDS scripts/baselines/mypy_full_baseline.json). `make ci-required` stays
+# unchanged as the strict local developer contract. The checker and baseline
+# are taken from THIS checkout (the instrument's own, versioned tooling) while
+# every other step uses the pristine checkout's scripts, mirroring make.
+# "full" runs the whole suite including path-gated shards (the ones that go
+# silently red) minus the known-broken collection module.
+_OPENAPI_SPEC_PATH = "/tmp/openapi_pristine_health.json"
 SUITES: dict[str, list[list[str]]] = {
-    "required": [["make", "ci-required"]],
+    "required": [
+        ["ruff", "check", "aragora/", "tests/", "scripts/"],
+        [
+            sys.executable,
+            str(_REPO_ROOT / "scripts" / "check_mypy_baseline.py"),
+            "--baseline",
+            str(_REPO_ROOT / "scripts" / "baselines" / "mypy_full_baseline.json"),
+        ],
+        [sys.executable, "scripts/check_version_alignment.py"],
+        [
+            sys.executable,
+            "scripts/check_sdk_parity.py",
+            "--strict",
+            "--baseline",
+            "scripts/baselines/check_sdk_parity.json",
+            "--budget",
+            "scripts/baselines/check_sdk_parity_budget.json",
+        ],
+        [
+            sys.executable,
+            "scripts/check_sdk_namespace_parity.py",
+            "--strict",
+            "--baseline",
+            "scripts/baselines/check_sdk_namespace_parity.json",
+        ],
+        [
+            sys.executable,
+            "scripts/check_cross_sdk_parity.py",
+            "--strict",
+            "--baseline",
+            "scripts/baselines/cross_sdk_parity.json",
+        ],
+        [
+            sys.executable,
+            "scripts/generate_openapi.py",
+            "--output",
+            _OPENAPI_SPEC_PATH,
+            "--format",
+            "json",
+            "--quiet",
+        ],
+        [sys.executable, "scripts/add_openapi_operation_ids.py", "--spec", _OPENAPI_SPEC_PATH],
+        [sys.executable, "scripts/add_openapi_param_descriptions.py", "--spec", _OPENAPI_SPEC_PATH],
+        [sys.executable, "scripts/add_openapi_descriptions.py", "--spec", _OPENAPI_SPEC_PATH],
+        [
+            sys.executable,
+            "scripts/verify_sdk_contracts.py",
+            "--strict",
+            "--baseline",
+            "scripts/baselines/verify_sdk_contracts.json",
+            "--extra-spec",
+            _OPENAPI_SPEC_PATH,
+        ],
+        [
+            sys.executable,
+            "scripts/validate_openapi_routes.py",
+            "--spec",
+            _OPENAPI_SPEC_PATH,
+            "--fail-on-missing",
+            "--baseline",
+            "scripts/baselines/validate_openapi_routes.json",
+        ],
+    ],
     "full": [
         [
             sys.executable,
@@ -59,6 +139,196 @@ def _now_iso() -> str:
 
 def _run(cmd: list[str], *, cwd: Path, timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+
+
+def _locked_dev_command(cmd: list[str]) -> list[str]:
+    """Run suite tools from the checkout's locked development environment."""
+    normalized = ["python", *cmd[1:]] if cmd and cmd[0] == sys.executable else cmd
+    return [*LOCKED_DEV_RUN, *normalized]
+
+
+def _run_suite(
+    cmd: list[str],
+    *,
+    cwd: Path,
+    timeout: float,
+) -> subprocess.CompletedProcess:
+    """Run a suite in its own session and reap the whole group on timeout."""
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        termination = f"sent SIGTERM to suite process group {proc.pid}"
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = proc.communicate(timeout=SUITE_TERMINATION_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            termination += (
+                f"; still running after {SUITE_TERMINATION_GRACE_SECONDS:g}s grace; sent SIGKILL"
+            )
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = proc.communicate()
+        stderr_text = _stream_text(stderr)
+        stderr_with_termination = "\n".join(
+            part for part in (stderr_text.rstrip(), termination) if part
+        )
+        raise subprocess.TimeoutExpired(
+            cmd,
+            timeout,
+            output=_stream_text(stdout),
+            stderr=stderr_with_termination,
+        )
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
+def _stream_text(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value or ""
+
+
+def _bounded_tail(value: str | bytes | None, *, lines: int = EVIDENCE_TAIL_LINES) -> str:
+    tail = "\n".join(_stream_text(value).strip().splitlines()[-lines:])
+    return tail[-EVIDENCE_TAIL_CHARS:]
+
+
+def _format_stream_evidence(
+    *,
+    stdout: str | bytes | None,
+    stderr: str | bytes | None,
+) -> str:
+    sections: list[str] = []
+    stdout_tail = _bounded_tail(stdout)
+    stderr_tail = _bounded_tail(stderr)
+    if stdout_tail:
+        sections.append(
+            f"stdout (last {EVIDENCE_TAIL_LINES} lines, <= {EVIDENCE_TAIL_CHARS} chars):\n"
+            f"{stdout_tail}"
+        )
+    if stderr_tail:
+        sections.append(
+            f"stderr (last {EVIDENCE_TAIL_LINES} lines, <= {EVIDENCE_TAIL_CHARS} chars):\n"
+            f"{stderr_tail}"
+        )
+    return "\n".join(sections) or "stdout/stderr: (empty)"
+
+
+def _format_process_failure(cmd: list[str], proc: subprocess.CompletedProcess) -> str:
+    evidence = _format_stream_evidence(stdout=proc.stdout, stderr=proc.stderr)
+    return f"exit {proc.returncode}: {' '.join(cmd)}\n{evidence}"
+
+
+# A failing suite command whose output shows the RUNNER environment is broken
+# (a tool missing from PATH, a third-party dependency missing from the
+# interpreter) is inconclusive about main, exactly like a timeout. A missing
+# first-party module stays main_red: an unimportable ``aragora.*``/``tests``
+# module on pristine main IS the red this script exists to catch, so the
+# module-name check below fails closed on first-party imports.
+_INFRA_OUTPUT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?m)^make(\[\d+\])?: .*(command not found|No such file or directory)"),
+    re.compile(r"(?m)command not found"),
+    re.compile(r"(?m)^error: Failed to spawn: .+"),
+    # check_mypy_baseline.py could not produce a verdict (mypy crashed, output
+    # unparsable, baseline file missing) — inconclusive, exactly like a timeout.
+    re.compile(r"(?m)^MYPY_BASELINE_INFRA: .*"),
+)
+_MISSING_MODULE_PATTERN = re.compile(
+    r"(?m)^(?:ModuleNotFoundError|ImportError): No module named ['\"]?(?P<module>[A-Za-z0-9_.]+)"
+)
+_FIRST_PARTY_MODULE_PREFIXES = ("aragora", "tests", "scripts")
+
+
+def _infra_failure_signature(proc: subprocess.CompletedProcess) -> str | None:
+    """Return the matched runner-environment signature, or None for real red."""
+    output = f"{_stream_text(proc.stdout)}\n{_stream_text(proc.stderr)}"
+    for pattern in _INFRA_OUTPUT_PATTERNS:
+        match = pattern.search(output)
+        if match:
+            return match.group(0).strip()
+    for match in _MISSING_MODULE_PATTERN.finditer(output):
+        module = match.group("module")
+        if module.split(".")[0] not in _FIRST_PARTY_MODULE_PREFIXES:
+            return match.group(0).strip()
+    return None
+
+
+def _check_test_runtime(repo: Path) -> str | None:
+    """Return bounded evidence when the locked development runtime cannot run pytest."""
+    cmd = _locked_dev_command(["python", "-c", "import pytest"])
+    try:
+        proc = _run(cmd, cwd=repo, timeout=60)
+    except subprocess.TimeoutExpired as exc:
+        evidence = _format_stream_evidence(stdout=exc.stdout, stderr=exc.stderr)
+        return f"TIMEOUT after 60s: {' '.join(cmd)}\n{evidence}"
+    except OSError as exc:
+        return f"runtime launch failed: {' '.join(cmd)}\n{type(exc).__name__}: {exc}"
+    if proc.returncode != 0:
+        return _format_process_failure(cmd, proc)
+    return None
+
+
+def _check_required_toolchain(pristine: Path) -> str | None:
+    """Return bounded evidence when locked mypy cannot start."""
+    cmd = _locked_dev_command(["mypy", "--version"])
+    try:
+        proc = _run(cmd, cwd=pristine, timeout=60)
+    except subprocess.TimeoutExpired as exc:
+        evidence = _format_stream_evidence(stdout=exc.stdout, stderr=exc.stderr)
+        return f"TIMEOUT after 60s: {' '.join(cmd)}\n{evidence}"
+    except OSError as exc:
+        return f"toolchain launch failed: {' '.join(cmd)}\n{type(exc).__name__}: {exc}"
+    if proc.returncode != 0:
+        return _format_process_failure(cmd, proc)
+
+    output = f"{_stream_text(proc.stdout)}\n{_stream_text(proc.stderr)}"
+    version_match = re.search(r"\bmypy\s+(?P<version>\d+(?:\.\d+){1,2})\b", output, re.IGNORECASE)
+    if version_match is None:
+        evidence = _format_stream_evidence(stdout=proc.stdout, stderr=proc.stderr)
+        return f"could not parse locked mypy version from {' '.join(cmd)}\n{evidence}"
+    return None
+
+
+def _record_health(
+    repo: Path,
+    *,
+    sha: str | None,
+    suite: str,
+    status: str,
+    failures: list[str],
+    infra_errors: list[str],
+) -> None:
+    try:
+        ledger = ThroughputLedger(repo)
+        ledger.append(
+            LedgerRecord(
+                kind="note",
+                timestamp=_now_iso(),
+                data={
+                    "event": "pristine_main_health",
+                    "sha": sha,
+                    "suite": suite,
+                    "green": status == "green",
+                    "status": status,
+                    "failures": [failure.splitlines()[0] for failure in failures],
+                    "infra_errors": infra_errors,
+                },
+            )
+        )
+    except OSError as exc:
+        print(f"warning: ledger append failed: {exc}", file=sys.stderr)
 
 
 def _canon(path: Path) -> str:
@@ -173,8 +443,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=_REPO_ROOT)
     parser.add_argument("--pristine-dir", type=Path, default=DEFAULT_PRISTINE_DIR)
     parser.add_argument("--halt-file", type=Path, default=DEFAULT_HALT_FILE)
-    parser.add_argument("--suite", choices=sorted(SUITES), default="full")
-    parser.add_argument("--timeout-minutes", type=int, default=180, help="per-command timeout")
+    # Default is the CI-parity required lane: the full suite cannot finish
+    # inside the nightly timeout budget on the launchd host (every run since
+    # Jul 11 ended TIMEOUT/infra_error — issue #9045), so "full" is reserved
+    # for manual or sharded use.
+    parser.add_argument("--suite", choices=sorted(SUITES), default="required")
+    parser.add_argument("--timeout-minutes", type=float, default=180, help="per-command timeout")
     parser.add_argument(
         "--no-halt-file",
         action="store_true",
@@ -185,46 +459,100 @@ def main(argv: list[str] | None = None) -> int:
     sha = refresh_pristine_worktree(args.repo_root, args.pristine_dir)
     print(f"pristine origin/main at {sha[:12]} in {args.pristine_dir}")
 
-    failures: list[str] = []
-    for cmd in SUITES[args.suite]:
-        print(f"running: {' '.join(cmd)}")
-        try:
-            proc = _run(cmd, cwd=args.pristine_dir, timeout=args.timeout_minutes * 60)
-        except subprocess.TimeoutExpired:
-            failures.append(f"TIMEOUT after {args.timeout_minutes}m: {' '.join(cmd)}")
-            continue
-        if proc.returncode != 0:
-            tail = "\n".join(proc.stdout.strip().splitlines()[-15:])
-            failures.append(f"exit {proc.returncode}: {' '.join(cmd)}\n{tail}")
+    runtime_error = _check_test_runtime(args.pristine_dir)
+    if runtime_error:
+        _record_health(
+            args.repo_root,
+            sha=sha,
+            suite=args.suite,
+            status="infra_error",
+            failures=[],
+            infra_errors=[runtime_error],
+        )
+        print("INFRA_ERROR: pristine-main test runtime is unavailable:", file=sys.stderr)
+        print(f"  {runtime_error}", file=sys.stderr)
+        print("halt marker NOT written (infrastructure failure)", file=sys.stderr)
+        return INFRA_ERROR_EXIT
 
-    green = not failures
+    failures: list[str] = []
+    infra_errors: list[str] = []
+    if args.suite == "required":
+        try:
+            toolchain_error = _check_required_toolchain(args.pristine_dir)
+        except (OSError, UnicodeError, ValueError) as exc:
+            # A broken toolchain *contract* (unreadable/malformed pyproject) is
+            # inconclusive about main, exactly like a missing runtime: it must
+            # never masquerade as a main-red test result (#9113).
+            infra_errors.append(f"required-suite toolchain contract invalid: {exc}")
+        else:
+            if toolchain_error:
+                infra_errors.append(toolchain_error)
+
+    commands = [] if failures or infra_errors else SUITES[args.suite]
+    for cmd in commands:
+        locked_cmd = _locked_dev_command(cmd)
+        print(f"running: {' '.join(locked_cmd)}")
+        try:
+            proc = _run_suite(
+                locked_cmd,
+                cwd=args.pristine_dir,
+                timeout=args.timeout_minutes * 60,
+            )
+        except subprocess.TimeoutExpired as exc:
+            evidence = _format_stream_evidence(stdout=exc.stdout, stderr=exc.stderr)
+            infra_errors.append(
+                f"TIMEOUT after {args.timeout_minutes:g}m: {' '.join(locked_cmd)}\n{evidence}"
+            )
+            break
+        except OSError as exc:
+            infra_errors.append(
+                f"command launch failed: {' '.join(locked_cmd)}\n{type(exc).__name__}: {exc}"
+            )
+            break
+        if proc.returncode < 0:
+            infra_errors.append(
+                f"suite terminated by signal {-proc.returncode}: {' '.join(locked_cmd)}\n"
+                f"{_format_stream_evidence(stdout=proc.stdout, stderr=proc.stderr)}"
+            )
+        elif proc.returncode != 0:
+            signature = _infra_failure_signature(proc)
+            if signature:
+                infra_errors.append(
+                    f"runner environment failure ({signature}): "
+                    f"{_format_process_failure(locked_cmd, proc)}"
+                )
+            else:
+                failures.append(_format_process_failure(locked_cmd, proc))
+
+    status = "infra_error" if infra_errors else "main_red" if failures else "green"
+    green = status == "green"
 
     # SAFETY ORDER: on red, write the halt marker BEFORE any bookkeeping so an
     # unwritable ledger can never fail open (#9058 openai [P2] round 2).
-    if not green and not args.no_halt_file:
+    # Infrastructure failures are inconclusive about main and must never create
+    # or replace a main-red marker (#9113).
+    if status == "main_red" and not args.no_halt_file:
         write_halt_marker(args.halt_file, sha=sha, failures=failures)
 
-    try:
-        ledger = ThroughputLedger(args.repo_root)
-        ledger.append(
-            LedgerRecord(
-                kind="note",
-                timestamp=_now_iso(),
-                data={
-                    "event": "pristine_main_health",
-                    "sha": sha,
-                    "suite": args.suite,
-                    "green": green,
-                    "failures": [f.splitlines()[0] for f in failures],
-                },
-            )
-        )
-    except OSError as exc:
-        print(f"warning: ledger append failed: {exc}", file=sys.stderr)
+    _record_health(
+        args.repo_root,
+        sha=sha,
+        suite=args.suite,
+        status=status,
+        failures=failures,
+        infra_errors=infra_errors,
+    )
 
     if green:
         print(f"GREEN: pristine main {sha[:12]} passed suite '{args.suite}'")
         return 0
+
+    if infra_errors:
+        print(f"INFRA_ERROR: pristine main {sha[:12]} was not classified:", file=sys.stderr)
+        for error in infra_errors:
+            print(f"  {error}", file=sys.stderr)
+        print("halt marker NOT written (infrastructure failure)", file=sys.stderr)
+        return INFRA_ERROR_EXIT
 
     print(f"RED: pristine main {sha[:12]} failed suite '{args.suite}':", file=sys.stderr)
     for failure in failures:

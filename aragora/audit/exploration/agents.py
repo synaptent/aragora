@@ -221,7 +221,7 @@ Return JSON:
         self,
         chunk: DocumentChunk,
         objective: str,
-        prior_context: list[Insight] = None,
+        prior_context: list[Insight] | None = None,
         mode: ExplorationMode = ExplorationMode.DEEP_READ,
     ) -> ChunkUnderstanding:
         """Read a document chunk and extract understanding.
@@ -299,7 +299,7 @@ Return JSON:
         self,
         understanding: ChunkUnderstanding,
         objective: str,
-        asked_questions: list[Question] = None,
+        asked_questions: list[Question] | None = None,
     ) -> list[Question]:
         """Generate follow-up questions based on current understanding.
 

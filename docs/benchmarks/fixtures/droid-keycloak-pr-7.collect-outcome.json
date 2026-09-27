@@ -1,0 +1,49 @@
+{
+  "action": "prepare",
+  "action_reason": "offline replay of committed live reviewer output collection canonical sha256:8c675aa9f61d9962fcbe71f5e8265f68f9e334358d04dd5365f4fd4e59e603a9; golden mappings are manual adjudication",
+  "counting_families": [
+    "grok",
+    "mistral"
+  ],
+  "dissenting_families": [
+    "grok",
+    "mistral"
+  ],
+  "failures": [],
+  "has_supportive_quorum": false,
+  "head_committed_at": "",
+  "head_sha": "5d77e7ea7d431aa0a6b65904457b7471bd050e81",
+  "items": [
+    {
+      "body": "Provider: grok; model: grok-4-latest\nVerdict: CHANGES-REQUESTED\nHTML sanitizer added with verifier enforcement; multiple translation regressions, broken link removal, and logic issues in sanitizer.\n- [P1] themes/src/main/resources-community/theme/base/account/messages/messages_fi.properties: Regression: hyperlinks stripped from non-English messages: POLICY_SOME_HTML allows only br/p/strong/b (no 'a'). santizeAnchors + sanitize removes <a> even when English source has them. Results in loss of links (e.g. FreeOTP, Play Store) in fi/lt/sk/sv/zh_CN account messages and many email/login files.\n- [P0] themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties: Incorrect translation introduced: lt.properties totpStep1 changed from Lithuanian to Italian text ('Installa una delle seguenti...'). Similar accuracy issues likely in other mass edits. [adjudicated golden_comment_id=2743702342]\n- [P1] misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: Verifier logic bugs: English file path replacement assumes 'resources-community'->'resources' and _<lang>.properties; fragile for admin-ui paths. Anchor removal and normalizeValue special-cases are incomplete. Unescaped entities + choice patterns can cause false positives.\n- [P2] misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java: Missing coverage for allowed HTML: No test exercising English strings containing <a> or <b> that should be preserved (or explicitly stripped) after sanitization.",
+      "counted_reviewer_ids": [],
+      "family": "grok",
+      "problems": [],
+      "severity_gated": false,
+      "verdict": "changes_requested",
+      "would_count": true
+    },
+    {
+      "body": "Provider: mistral-api; model: mistral-large-2512\nVerdict: CHANGES-REQUESTED\nHTML sanitizer implementation has security and correctness issues that need addressing before merging.\n- [P0] misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: Inconsistent HTML sanitization policy enforcement: The sanitizer allows different HTML tags (`br`, `p`, `strong`, `b`) in translations when the English source contains HTML, but this creates inconsistency in what HTML is permitted across different message keys. Some keys like `templateHelp` and `optimizeLookupHelp` have special handling that could be bypassed. The policy should be consistent and explicitly documented.\n- [P0] misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: Anchor tag validation is incomplete: The `santizeAnchors` method only checks if anchor tags in translations match those in the English source, but does not validate the `href` attribute values. This could allow malicious URLs in translations even if the anchor tag structure matches the source. All attributes of allowed tags should be sanitized.\n- [P1] misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: HTML entity handling is error-prone: The code unescapes HTML entities after sanitization, which could re-introduce XSS vectors if the sanitizer missed any malicious content. The unescaping should be done before sanitization, or the sanitizer should be configured to handle entities directly.\n- [P1] misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java: Missing test coverage for edge cases: The test cases do not cover several critical scenarios: 1) Nested HTML tags, 2) Malformed HTML, 3) JavaScript in attributes, 4) Different but semantically equivalent HTML in translations. The test suite should be expanded to include these cases.\n- [P2] misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: Potential resource exhaustion in property file processing: The `verifySafeHtml` method loads entire property files into memory and processes them with regex patterns. For large property files, this could lead to high memory usage or ReDoS vulnerabilities. Consider streaming processing for large files.\n- [P2] themes/src/main/resources-community/theme/base/email/messages/messages_*.properties: Inconsistent error messages in translations: Several translations in the diff show inconsistent HTML tag usage (e.g., `<br/>` vs `<br />`) and malformed HTML (e.g., missing closing tags). While these are caught by the sanitizer, they indicate poor quality control in translations that should be addressed at the source.\n- [P1] misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java: No validation of message format placeholders: The sanitizer does not validate that message format placeholders (e.g., `{0}`, `{1}`) in translations match those in the English source. This could lead to runtime errors or incorrect messages if placeholders are missing or misordered.",
+      "counted_reviewer_ids": [],
+      "family": "mistral",
+      "problems": [],
+      "severity_gated": false,
+      "verdict": "changes_requested",
+      "would_count": true
+    }
+  ],
+  "mode": "collect_evidence",
+  "orchestration_timeout": false,
+  "overall_timeout_seconds": null,
+  "policy_version": 1,
+  "post_errors": [],
+  "posted_families": [],
+  "pr_number": 7,
+  "quorum_rerun": null,
+  "repo": "droid-code-review-evals/droid-keycloak",
+  "supportive_families": [],
+  "tier": null,
+  "tiered_gate": false,
+  "timed_out_families": []
+}

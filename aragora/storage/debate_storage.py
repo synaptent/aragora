@@ -16,14 +16,29 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 from aragora.storage.base_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from aragora.export.artifact import DebateArtifact
+
+class _ConsensusProofLike(Protocol):
+    reached: bool
+    confidence: float
+
+
+class DebateArtifactLike(Protocol):
+    """Structural input accepted by :meth:`DebateStorage.save`."""
+
+    artifact_id: str
+    task: str
+    agents: list[str]
+
+    @property
+    def consensus_proof(self) -> _ConsensusProofLike | None: ...
+
+    def to_json(self) -> str: ...
 
 
 def _validate_sql_identifier(name: str, max_length: int = 64) -> bool:
@@ -228,12 +243,12 @@ class DebateStorage(SQLiteStore):
 
         return f"{slug}-{count + 1}" if count > 0 else slug
 
-    def save(self, artifact: DebateArtifact) -> str:
+    def save(self, artifact: DebateArtifactLike) -> str:
         """
         Save artifact and return permalink slug.
 
         Args:
-            artifact: DebateArtifact to store
+            artifact: Debate artifact to store
 
         Returns:
             Generated slug for the debate

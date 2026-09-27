@@ -8,7 +8,7 @@
 
 Aragora is a **1.5M LOC Decision Integrity Platform** with genuine technical depth in areas no well-funded competitor covers. The adversarial multi-agent debate engine, calibrated trust system, and self-improvement loop are novel and defensible. Enterprise features (auth, RBAC, encryption, multi-tenancy) are production-ready. The integration surface is massive (200+ connectors, 184 Python / 183 TypeScript SDK namespaces). Code quality is strong (8/10).
 
-**The core thesis**: LLMs are unreliable. No single model should make high-stakes decisions alone. Aragora orchestrates 43 agent types to adversarially vet decisions, producing cryptographic audit receipts.
+**The core thesis**: LLMs are unreliable. No single model should make high-stakes decisions alone. Aragora orchestrates 46 agent types to adversarially vet decisions, producing cryptographic audit receipts.
 
 **The competitive reality**: No well-funded competitor (LangChain $260M, CrewAI $25M, Microsoft AutoGen, OpenAI Agents SDK) implements adversarial multi-agent decision vetting. They all build *cooperative* agent orchestration. Aragora occupies an uncontested category.
 

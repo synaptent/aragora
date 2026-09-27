@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from aragora.type_protocols import RedisClientProtocol
@@ -65,7 +65,7 @@ def get_redis_client(redis_url: str | None = None) -> RedisClientProtocol | None
     cluster_nodes = os.getenv("ARAGORA_REDIS_CLUSTER_NODES", "")
     if cluster_nodes:
         try:
-            from aragora.server.redis_cluster import get_cluster_client
+            from aragora.storage.redis_cluster import get_cluster_client
 
             client = get_cluster_client()
             if client and client.is_available:
@@ -80,17 +80,17 @@ def get_redis_client(redis_url: str | None = None) -> RedisClientProtocol | None
             logger.warning("Failed to initialize Redis cluster: %s", e)
 
     # Fall back to standalone Redis
-    url = redis_url or os.getenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+    url = cast(str, redis_url or os.getenv("ARAGORA_REDIS_URL", "redis://localhost:6379"))
     try:
         import redis
 
-        client = redis.from_url(url, encoding="utf-8", decode_responses=True)
-        client.ping()
+        standalone_client = redis.from_url(url, encoding="utf-8", decode_responses=True)
+        standalone_client.ping()
         logger.info("Using standalone Redis client at %s", url)
         if redis_url is None:
-            _cached_client = client
+            _cached_client = standalone_client
             _initialized = True
-        return client
+        return cast(Any, standalone_client)
     except ImportError:
         logger.debug("redis package not installed")
         return None
@@ -117,7 +117,7 @@ def reset_redis_client() -> None:
 def is_cluster_mode() -> bool:
     """Check if running in Redis Cluster mode."""
     try:
-        from aragora.server.redis_cluster import get_cluster_client
+        from aragora.storage.redis_cluster import get_cluster_client
 
         client = get_cluster_client()
         return client is not None and client.is_cluster

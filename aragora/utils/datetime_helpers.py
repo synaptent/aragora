@@ -45,6 +45,19 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def utc_now_iso_naive() -> str:
+    """Current UTC time as a naive ISO-8601 string (no ``+00:00`` suffix).
+
+    For SQLite TEXT timestamp columns that are aged with UTC
+    ``julianday('now')`` comparisons (decay ranking, TTL pruning, cooldown
+    checks): SQLite treats naive strings as UTC, so Python-side stamps must
+    be UTC too. Kept naive to match the format of legacy local-time rows and
+    SQLite's own ``CURRENT_TIMESTAMP`` defaults, and so
+    ``datetime.fromisoformat`` consumers keep receiving naive datetimes.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+
+
 def to_iso_timestamp(dt: datetime) -> str:
     """Convert a datetime to ISO8601 string format.
 
@@ -223,6 +236,7 @@ def timestamp_s() -> int:
 
 __all__ = [
     "utc_now",
+    "utc_now_iso_naive",
     "to_iso_timestamp",
     "from_iso_timestamp",
     "ensure_timezone_aware",

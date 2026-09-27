@@ -1,0 +1,90 @@
+{
+  "attestation": {
+    "disposition": "autonomous"
+  },
+  "claim": {
+    "statement": "Merge droid-code-review-evals/droid-grafana#1 @ 3647ba7360b8",
+    "verdict": "CHANGES_REQUESTED"
+  },
+  "confidence": {
+    "calibration": {
+      "provenance_ref": {
+        "receipt_id": "pr-1-3647ba7360b8",
+        "type": "aragora.settlement_metadata"
+      },
+      "status": "present"
+    },
+    "scale": "unit_interval",
+    "status": "present",
+    "value": 0.0
+  },
+  "cruxes": {
+    "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)",
+    "status": "absent"
+  },
+  "issued_at": null,
+  "odr_version": "0.1",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "quorum": {
+    "dissent": {
+      "dissenting_agents": [
+        "grok",
+        "mistral"
+      ],
+      "present": true,
+      "views": [
+        "grok: Provider: grok; model: grok-4-latest\nVerdict: CHANGES-REQUESTED\nLogic error in device limit enforcement causes incorrect errors and potential auth failures; misused error value; sync change in auth path.\n- [P1] pkg/services/anonymous/anonimpl/anonstore/database.go: Misused error return in updateDevice: updateDevice returns ErrDeviceLimitReached whenever rowsAffected==0 (e.g., new device_id outside the narrow time window), but this error is also used to signal the actual limit. Callers cannot distinguish the cases.\n- [P0] pkg/services/anonymous/anonimpl/client.go: Beyond-limit new devices fail authentication: When count >= deviceLimit, a new DeviceID causes updateDevice to fail and Authenticate returns the error, rejecting anonymous auth entirely instead of allowing access without tracking.\n- [P1] pkg/services/anonymous/anonimpl/client.go: Synchronous TagDevice in auth path: Removing the goroutine makes device tagging block Authenticate (including DB calls and possible errors), a regression from the prior fire-and-forget design.\n- [P1] pkg/services/anonymous/anonimpl/anonstore/database.go: Count + update is racy: No transaction between CountDevices and subsequent insert/update allows exceeding the configured deviceLimit under concurrent anonymous requests. [adjudicated golden_comment_id=2743652887]",
+        "mistral: Provider: mistral-api; model: mistral-large-2512\nVerdict: CHANGES-REQUESTED\nThe PR introduces a configurable device limit for anonymous access with several implementation concerns that need addressing.\n- [P0] pkg/services/anonymous/anonimpl/anonstore/database.go: Inconsistent Error Handling in Device Limit Enforcement: The `updateDevice` method in `database.go` returns `ErrDeviceLimitReached` when no rows are affected by the update, but this could also happen if the device doesn't exist or the time window doesn't match. This creates ambiguity in error handling. The error should distinguish between 'device not found' and 'limit reached' scenarios.\n- [P0] pkg/services/anonymous/anonimpl/anonstore/database.go: Race Condition in Device Counting: The `CreateOrUpdateDevice` method checks the device count before creating a new device, which introduces a race condition. Between checking the count and creating the device, another request could create a device, potentially exceeding the limit. This should use database-level constraints or transactions. [adjudicated golden_comment_id=2743652887]\n- [P1] pkg/setting/setting.go: Missing Validation for Device Limit Configuration: The configuration accepts negative values for `AnonymousDeviceLimit` (via `MustInt64(0)`), which could lead to unexpected behavior. The setting should validate that the limit is >= 0.\n- [P1] pkg/services/anonymous/anonimpl/client.go: Inconsistent Error Propagation in Client: The `Authenticate` method in `client.go` logs but doesn't propagate `ErrDeviceLimitReached` to the caller, while other errors are propagated. This inconsistency could lead to missed error handling in upstream code.\n- [P2] pkg/services/anonymous/anonimpl/anonstore/database_test.go: Missing Test Coverage for Edge Cases: The test coverage lacks scenarios for: 1) Zero device limit configuration, 2) Negative device limit values, 3) Concurrent device creation attempts, and 4) Device update scenarios under limit conditions.\n- [P2] pkg/services/anonymous/anonimpl/anonstore/database.go: Hardcoded Expiration Period: The `anonymousDeviceExpiration` constant (30 days) is used in multiple places but isn't configurable. This should either be made configurable or clearly documented as a fixed policy."
+      ]
+    },
+    "independence": {
+      "disclosed": true,
+      "distinct_model_families": 2,
+      "model_families": [
+        "mistral",
+        "xai"
+      ]
+    },
+    "method": "merge-quorum",
+    "participants": [
+      {
+        "agent": "grok",
+        "model_family": "xai",
+        "model_id": "undisclosed"
+      },
+      {
+        "agent": "mistral",
+        "model_family": "mistral",
+        "model_id": "undisclosed"
+      }
+    ],
+    "reached": false,
+    "status": "present",
+    "supporting_agents": []
+  },
+  "reasoning": {
+    "status": "present",
+    "summary": "offline replay of committed live reviewer output collection canonical sha256:8c675aa9f61d9962fcbe71f5e8265f68f9e334358d04dd5365f4fd4e59e603a9; golden mappings are manual adjudication"
+  },
+  "receipt_id": "pr-1-3647ba7360b8",
+  "routing": {
+    "status": "reserved"
+  },
+  "signatures": [],
+  "source": {
+    "artifact_hash": "79db7f39f21844666398c6a951a3d9f94634afd0b255ed0fcf3cd459c7b0c80d",
+    "receipt_id": "pr-1-3647ba7360b8",
+    "schema": "aragora.gauntlet.DecisionReceipt",
+    "schema_version": "1.1",
+    "system": "aragora"
+  },
+  "subject": {
+    "digest": {
+      "alg": "sha-256",
+      "status": "present",
+      "value": "6f6d626bb0ec93627c1cd44b7165a4493393a7ac1b1cf07a8152d32b3e1893a2"
+    },
+    "identifier": "merge-quorum/droid-code-review-evals/droid-grafana#1",
+    "summary": "Merge droid-code-review-evals/droid-grafana#1 @ 3647ba7360b8"
+  }
+}

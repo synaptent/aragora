@@ -21,11 +21,12 @@ import json
 import logging
 import math
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 
 if TYPE_CHECKING:
     from aragora.memory.continuum.base import ContinuumMemoryEntry
@@ -96,7 +97,7 @@ class GlacialTierMixin:
         """
         from aragora.memory.continuum.base import ContinuumMemoryEntry
 
-        now: str = datetime.now().isoformat()
+        now: str = utc_now_iso_naive()
 
         with self.connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
@@ -277,10 +278,10 @@ class GlacialTierMixin:
         else:
             updated_dt = updated_at
 
-        now = datetime.now()
-        if updated_dt.tzinfo is not None and now.tzinfo is None:
-            # Make both naive for comparison
-            updated_dt = updated_dt.replace(tzinfo=None)
+        # Rows are stamped with naive-UTC strings, so age against naive-UTC now
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if updated_dt.tzinfo is not None:
+            updated_dt = updated_dt.astimezone(timezone.utc).replace(tzinfo=None)
 
         days_elapsed = (now - updated_dt).total_seconds() / 86400
         if days_elapsed <= 0:

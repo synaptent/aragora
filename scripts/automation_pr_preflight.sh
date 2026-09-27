@@ -31,7 +31,7 @@ Checks:
   - branch has a non-empty diff versus the base
   - diff has no whitespace errors
   - session/log/coordination artifacts are not committed
-  - rescue productization publish artifacts are not committed
+  - non-canonical rescue productization publish artifacts are not committed
   - synthetic preflight validation commits/scratch diffs are not published
   - source changes without test changes are called out for operator review
 EOF
@@ -185,8 +185,9 @@ if [[ -n "${forbidden_files}" ]]; then
     exit 1
 fi
 
-rescue_publish_regex='(^|/)rescue-productization-[0-9]{8}T[0-9]{6}Z\.json$|(^|/)(rescue_productization|rescue-productization)(/.*)?/(latest\.json|rescue-productization-[0-9]{8}T[0-9]{6}Z\.json)$'
-rescue_publish_files="$(printf '%s\n' "${changed_files}" | grep -E "${rescue_publish_regex}" || true)"
+rescue_publish_regex='(^|/)rescue-productization-[^/]*\.json$|(^|/)(rescue_productization|rescue-productization)(/.*)?/(latest\.json|rescue-productization-[^/]*\.json)$|^docs/status/generated/rescue_productization/.*$'
+canonical_rescue_status_regex='^docs/status/generated/rescue_productization/(latest\.json|rescue-productization-[0-9]{8}T[0-9]{6}Z\.json)$'
+rescue_publish_files="$(printf '%s\n' "${changed_files}" | grep -E "${rescue_publish_regex}" | grep -Ev "${canonical_rescue_status_regex}" || true)"
 if [[ -n "${rescue_publish_files}" ]]; then
     if [[ "${JSON_MODE}" == "true" ]]; then
         fail_preflight 1 "rescue productization publish artifacts must not be committed"

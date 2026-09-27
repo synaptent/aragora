@@ -24,7 +24,7 @@ def _has_permission(role: Any, permission: str) -> bool:
     try:
         import sys
 
-        gateway_module = sys.modules.get("aragora.server.handlers.openclaw_gateway")
+        gateway_module = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
         override = getattr(gateway_module, "has_permission", None) if gateway_module else None
         if override is not None and override is not has_permission:
             return override(role, permission)

@@ -2,23 +2,51 @@
 # Multi-stage build for optimized production image
 
 # Build stage
-FROM node:20.11-alpine AS builder
+FROM node:24.18-alpine AS builder
 
-WORKDIR /app
+# The build tree mirrors the repo layout on purpose. package.json depends on the
+# SDK as "@aragora/sdk": "file:../../sdk/typescript", and package-lock.json keys
+# that link by its *relative* path. npm's arborist resolves the key against the
+# project directory, so flattening the app to /app makes it look for
+# "../sdk/typescript", find no such entry, and abort `npm ci` with a misleading
+# EUSAGE ("can only install with an existing package-lock.json") even though the
+# lockfile is present and valid. Keeping the app two levels below /app makes
+# "../../sdk/typescript" resolve to /app/sdk/typescript and the key match.
+WORKDIR /app/aragora/live
 
-# Build-time public env (injected into Next.js build)
+# Build-time public env (injected into Next.js build).
+#
+# These defaults must stay pointed at localhost, and the images published from
+# this Dockerfile are deliberately built WITHOUT overriding them.
+#
+# Next.js inlines NEXT_PUBLIC_* into the client bundle at build time, so a baked
+# value is a permanent property of the image. src/config.ts honours a non-local
+# baked URL verbatim but recognises a localhost one as unusable and derives
+# api.<serving-host> instead. That makes a localhost-defaulted image
+# host-agnostic: it works on aragora.ai, on a self-hoster's domain, and locally.
+#
+# Do NOT "fix" these to https://api.aragora.ai, and do not add production
+# build-args to the publishing workflows. This image is pulled by self-hosters
+# (deploy/helm/aragora/values.yaml), who serve it from their own domain and
+# cannot change an inlined value — their NEXT_PUBLIC_* runtime env does not
+# reach an already-built bundle. A vendor default would silently route their
+# browser API and WebSocket traffic to Aragora's own backend.
+#
+# aragora.ai itself does not run this image: deploy-frontend.yml's Vercel lane
+# builds it directly with explicit production values.
+#
+# The compose files here pass localhost explicitly for local development.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080
 ARG NEXT_PUBLIC_WS_URL=ws://localhost:8765/ws
 
-# Copy TypeScript SDK (local file: dependency in package.json)
-COPY sdk/typescript/ /sdk/typescript/
+COPY sdk/typescript/ /app/sdk/typescript/
 
-# Copy package files and fix local SDK path for Docker context
-COPY aragora/live/package.json ./
-RUN sed -i 's|file:../../sdk/typescript|file:/sdk/typescript|g' package.json
-
-# Install dependencies (fresh lockfile to avoid version mismatch)
-RUN npm install --legacy-peer-deps
+# Lockfile-pinned install. Do not flatten the WORKDIR and do not rewrite the
+# file: path in package.json -- either one desynchronizes package-lock.json and
+# forces a non-reproducible install that can drift to unreviewed transitive
+# versions in published images.
+COPY aragora/live/package.json aragora/live/package-lock.json ./
+RUN npm ci
 
 # Copy source code
 COPY aragora/live/ ./
@@ -31,7 +59,7 @@ ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 RUN npm run build:local
 
 # Production stage
-FROM node:20.11-alpine
+FROM node:24.18-alpine
 
 WORKDIR /app
 
@@ -43,13 +71,21 @@ ARG NEXT_PUBLIC_WS_URL=ws://localhost:8765/ws
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+# Next.js standalone server.js binds to $HOSTNAME, and Docker sets HOSTNAME to the
+# container ID. Without this override the server binds only to the container's eth0
+# address, so the HEALTHCHECK below (and the identical one in deploy/docker-compose.yml)
+# can never reach it and the container reports unhealthy forever.
+ENV HOSTNAME=0.0.0.0
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 
 # Copy standalone build
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Source paths track the builder's WORKDIR (/app/aragora/live), which mirrors the
+# repo layout so the lockfile's relative SDK link resolves. The standalone output
+# itself is not nested: server.js stays at the root of .next/standalone.
+COPY --from=builder /app/aragora/live/.next/standalone ./
+COPY --from=builder /app/aragora/live/.next/static ./.next/static
+COPY --from=builder /app/aragora/live/public ./public
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs \
@@ -60,9 +96,11 @@ USER nextjs
 # Expose port
 EXPOSE 3000
 
-# Health check
+# Health check.
+# Uses 127.0.0.1 rather than localhost: busybox wget resolves localhost to ::1 first,
+# and the standalone server binds IPv4 only, so a localhost probe is always refused.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1
 
 # Start application
 CMD ["node", "server.js"]

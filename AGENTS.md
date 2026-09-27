@@ -96,7 +96,7 @@ Aragora currently registers 46 agent types across CLI, direct API, OpenRouter, l
 
 | Agent Type | CLI Tool | Default Model | Notes |
 |------------|----------|---------------|-------|
-| `claude` | `claude` (claude-code) | claude-opus-4-8 | Opus 4.8, 1M context, 128K output |
+| `claude` | `claude` (claude-code) | claude-fable-5 | Fable 5, 1M context, 128K output (subscription-priced on this surface) |
 | `codex` | `codex` | gpt-4.1-codex | GPT-4.1 Codex, 1M context |
 | `openai` | `openai` | gpt-4.1 | GPT-4.1, 1M context |
 | `gemini-cli` | `gemini` | gemini-3.1-pro-preview | Gemini 3.1 Pro, 1M context |
@@ -111,7 +111,7 @@ Aragora currently registers 46 agent types across CLI, direct API, OpenRouter, l
 
 | Agent Type | Provider | Default Model | Env Var | Allowlist |
 |------------|----------|---------------|---------|-----------|
-| `anthropic-api` | Anthropic | claude-opus-4-8 | `ANTHROPIC_API_KEY` | allowlisted |
+| `anthropic-api` | Anthropic | claude-opus-5 | `ANTHROPIC_API_KEY` | allowlisted |
 | `openai-api` | OpenAI | gpt-4.1 | `OPENAI_API_KEY` | allowlisted |
 | `gemini` | Google | gemini-3.1-pro-preview | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | allowlisted |
 | `grok` | xAI | grok-4-latest | `XAI_API_KEY` or `GROK_API_KEY` | allowlisted |
@@ -138,8 +138,8 @@ All OpenRouter agents require `OPENROUTER_API_KEY`.
 | `llama4-maverick` | meta-llama/llama-4-maverick | Llama 4 Maverick |
 | `llama4-scout` | meta-llama/llama-4-scout | Llama 4 Scout |
 | `mistral` | mistralai/mistral-large-2411 | Mistral Large |
-| `qwen` | qwen/qwen3-max | Qwen3 Max |
-| `qwen-max` | qwen/qwen3-max | Qwen3 Max |
+| `qwen` | qwen/qwen3.8-max | Qwen 3.8 Max |
+| `qwen-max` | qwen/qwen3.8-max | Qwen 3.8 Max |
 | `qwen-3.5` | qwen/qwen3.5-plus-02-15 | Qwen 3.5 Plus |
 | `yi` | 01-ai/yi-large | Yi Large |
 | `kimi` | moonshotai/kimi-k2-0905 | Kimi K2 |

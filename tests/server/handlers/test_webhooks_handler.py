@@ -1,5 +1,5 @@
 """
-Tests for aragora.server.handlers.webhooks - Webhook management API.
+Tests for aragora.server.handlers.webhook_management - Webhook management API.
 
 Tests cover:
 - WebhookConfig dataclass
@@ -72,7 +72,7 @@ def server_context():
 @pytest.fixture
 def webhook_handler(server_context):
     """Create webhook handler instance."""
-    from aragora.server.handlers.webhooks import WebhookHandler
+    from aragora.server.handlers.webhook_management import WebhookHandler
 
     handler = WebhookHandler(server_context)
     handler.get_current_user = MagicMock(
@@ -95,7 +95,7 @@ class TestWebhookConfig:
 
     def test_default_values(self):
         """WebhookConfig should have sensible defaults."""
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         config = WebhookConfig(
             id="test-id",
@@ -111,7 +111,7 @@ class TestWebhookConfig:
 
     def test_to_dict_excludes_secret(self):
         """to_dict should exclude secret by default."""
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         config = WebhookConfig(
             id="test-id",
@@ -125,7 +125,7 @@ class TestWebhookConfig:
 
     def test_to_dict_includes_secret_when_requested(self):
         """to_dict should include secret when explicitly requested."""
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         config = WebhookConfig(
             id="test-id",
@@ -139,7 +139,7 @@ class TestWebhookConfig:
 
     def test_matches_event_when_active(self):
         """matches_event should return True for subscribed events."""
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         config = WebhookConfig(
             id="test-id",
@@ -155,7 +155,7 @@ class TestWebhookConfig:
 
     def test_matches_event_when_inactive(self):
         """matches_event should return False when webhook is inactive."""
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         config = WebhookConfig(
             id="test-id",
@@ -169,7 +169,7 @@ class TestWebhookConfig:
 
     def test_matches_event_wildcard(self):
         """matches_event should accept any valid event with '*' subscription."""
-        from aragora.server.handlers.webhooks import WebhookConfig, WEBHOOK_EVENTS
+        from aragora.server.handlers.webhook_management import WebhookConfig, WEBHOOK_EVENTS
 
         config = WebhookConfig(
             id="test-id",
@@ -332,7 +332,7 @@ class TestSignatureUtilities:
 
     def test_generate_signature_format(self):
         """generate_signature should return sha256= prefixed hex string."""
-        from aragora.server.handlers.webhooks import generate_signature
+        from aragora.server.handlers.webhook_management import generate_signature
 
         signature = generate_signature('{"test": "data"}', "secret-key")
 
@@ -341,7 +341,7 @@ class TestSignatureUtilities:
 
     def test_generate_signature_deterministic(self):
         """generate_signature should be deterministic."""
-        from aragora.server.handlers.webhooks import generate_signature
+        from aragora.server.handlers.webhook_management import generate_signature
 
         sig1 = generate_signature("test payload", "secret")
         sig2 = generate_signature("test payload", "secret")
@@ -350,7 +350,7 @@ class TestSignatureUtilities:
 
     def test_generate_signature_different_for_different_secrets(self):
         """generate_signature should differ for different secrets."""
-        from aragora.server.handlers.webhooks import generate_signature
+        from aragora.server.handlers.webhook_management import generate_signature
 
         sig1 = generate_signature("test payload", "secret1")
         sig2 = generate_signature("test payload", "secret2")
@@ -359,7 +359,7 @@ class TestSignatureUtilities:
 
     def test_verify_signature_valid(self):
         """verify_signature should return True for valid signature."""
-        from aragora.server.handlers.webhooks import generate_signature, verify_signature
+        from aragora.server.handlers.webhook_management import generate_signature, verify_signature
 
         payload = '{"event": "test"}'
         secret = "webhook-secret"
@@ -369,7 +369,7 @@ class TestSignatureUtilities:
 
     def test_verify_signature_invalid(self):
         """verify_signature should return False for invalid signature."""
-        from aragora.server.handlers.webhooks import verify_signature
+        from aragora.server.handlers.webhook_management import verify_signature
 
         payload = '{"event": "test"}'
         secret = "webhook-secret"
@@ -379,7 +379,7 @@ class TestSignatureUtilities:
 
     def test_verify_signature_tampered_payload(self):
         """verify_signature should return False for tampered payload."""
-        from aragora.server.handlers.webhooks import generate_signature, verify_signature
+        from aragora.server.handlers.webhook_management import generate_signature, verify_signature
 
         original_payload = '{"event": "test"}'
         tampered_payload = '{"event": "tampered"}'
@@ -400,7 +400,7 @@ class TestWebhookHandlerListEvents:
     @pytest.mark.asyncio
     async def test_list_events_returns_all_event_types(self, webhook_handler):
         """Should return all available webhook event types."""
-        from aragora.server.handlers.webhooks import WEBHOOK_EVENTS
+        from aragora.server.handlers.webhook_management import WEBHOOK_EVENTS
 
         handler = MockHandler(headers={})
         result = await webhook_handler.handle("/api/v1/webhooks/events", {}, handler)
@@ -573,7 +573,7 @@ class TestWebhookHandlerList:
     @pytest.mark.no_auto_auth
     async def test_list_webhooks_requires_authentication(self, server_context):
         """Unauthenticated callers should not be able to enumerate webhooks."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         handler_obj = WebhookHandler(server_context)
         handler = MockHandler(headers={})
@@ -709,7 +709,7 @@ class TestWebhookHandlerGet:
     @pytest.mark.asyncio
     async def test_get_webhook_denies_workspace_mismatch(self, server_context):
         """Workspace-scoped records should not leak across orgs."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         store = server_context["webhook_store"]
         webhook = store.register(
@@ -734,7 +734,7 @@ class TestWebhookHandlerGet:
     @pytest.mark.asyncio
     async def test_get_webhook_denies_missing_workspace_context(self, server_context):
         """Workspace-scoped records should fail closed when requester has no org scope."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         store = server_context["webhook_store"]
         webhook = store.register(
@@ -806,7 +806,7 @@ class TestWebhookHandlerDelete:
 
     @pytest.mark.asyncio
     async def test_delete_webhook_hides_workspace_mismatch(self, server_context):
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         store = server_context["webhook_store"]
         webhook = store.register(
@@ -988,7 +988,7 @@ class TestWebhookHandlerUpdate:
         assert b"description must be a string" in result.body.lower()
 
     def test_update_webhook_hides_workspace_mismatch(self, server_context):
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         store = server_context["webhook_store"]
         webhook = store.register(
@@ -1073,7 +1073,7 @@ class TestWebhookHandlerTest:
 
     @pytest.mark.asyncio
     async def test_test_webhook_hides_workspace_mismatch(self, server_context):
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         store = server_context["webhook_store"]
         webhook = store.register(
@@ -1106,18 +1106,12 @@ class TestGetWebhookStore:
 
     def test_returns_singleton(self):
         """get_webhook_store should return the same instance."""
-        import aragora.server.handlers.webhooks as webhooks_module
-
-        # Reset the global store
-        webhooks_module._webhook_store = None
+        import aragora.server.handlers.webhook_management as webhooks_module
 
         store1 = webhooks_module.get_webhook_store()
         store2 = webhooks_module.get_webhook_store()
 
         assert store1 is store2
-
-        # Clean up
-        webhooks_module._webhook_store = None
 
 
 # ===========================================================================
@@ -1166,7 +1160,7 @@ class TestWebhookRBAC:
 
     @pytest.fixture
     def handler(self, server_context):
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         handler = WebhookHandler(server_context)
         handler.get_current_user = MagicMock(
@@ -1195,7 +1189,7 @@ class TestWebhookRBAC:
     @pytest.mark.no_auto_auth
     def test_permission_check_requires_authentication(self, server_context):
         """Permission helper should fail closed when no user is attached."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         handler = WebhookHandler(server_context)
         mock_http = MockHandler(headers={})

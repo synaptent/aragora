@@ -130,13 +130,42 @@ function resolveApiBaseUrl(): string {
   return 'http://localhost:8080';
 }
 
+function isLocalWsEndpoint(value: string): boolean {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 function resolveWsUrl(
   envValue: string | undefined,
   prodDefault: (host: string) => string,
   devDefault: string,
 ): string {
-  if (envValue) return envValue;
-  if (typeof window === 'undefined') {
+  const inBrowser = typeof window !== 'undefined';
+  const isProd = inBrowser && isProductionEnvironment();
+
+  // A localhost WebSocket URL baked in at build time cannot work once the bundle
+  // is served from a real hostname. Images published from deploy/Dockerfile.frontend
+  // are host-agnostic by design, so they carry its localhost ARG defaults inlined.
+  // Mirror resolveApiBaseUrl and prefer the serving host over an unusable baked
+  // value — unlike HTTP there is no same-origin rewrite to fall back on, so
+  // without this every WebSocket feature silently dials localhost.
+  //
+  // Keyed on the serving hostname rather than isProductionEnvironment(): a
+  // localhost endpoint is correct whenever the browser itself is on localhost,
+  // even for a bundle whose NEXT_PUBLIC_API_URL made _isProductionBuild true.
+  const rescueBakedLocalhost =
+    inBrowser &&
+    !isLocalDevHostname(window.location.hostname) &&
+    !!envValue &&
+    isLocalWsEndpoint(envValue);
+
+  if (envValue && !rescueBakedLocalhost) return envValue;
+
+  if (!inBrowser) {
     // SSR: use production default when build is production to match client render
     if (_isProductionBuild) {
       try {
@@ -148,8 +177,7 @@ function resolveWsUrl(
     }
     return devDefault;
   }
-  const host = window.location.hostname;
-  return isProductionEnvironment() ? prodDefault(host) : devDefault;
+  return isProd ? prodDefault(window.location.hostname) : devDefault;
 }
 
 // In production, prefer api.<host> unless explicitly configured.
@@ -196,9 +224,9 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   'deepseek': 'DeepSeek V3',
   'mistral': 'Mistral Large 3',
   'gemini': 'Gemini 3.1 Pro',
-  'qwen': 'Qwen3 Max',
-  'qwen-max': 'Qwen3 Max',
-  'kimi': 'Kimi K2.6',
+  'qwen': 'Qwen 3.8 Max',
+  'qwen-max': 'Qwen 3.8 Max',
+  'kimi': 'Kimi K3',
   'kimi-thinking': 'Kimi K2 Thinking',
   'llama': 'Llama 3.3',
   'llama4-maverick': 'Llama 4 Maverick',

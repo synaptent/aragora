@@ -4,6 +4,11 @@ This directory holds dated snapshots of documents that were retired or supersede
 
 **Naming convention:** `YYYY-MM[-DD]-<ORIGINAL_FILENAME>.md` — the date reflects the last meaningful update of the archived doc, not the date it was archived.
 
+**Recorded exception:** non-Markdown binary assets retain their original
+basenames. The date-prefix convention applies to document snapshots;
+`aragora_logo.png` and `favicon.png` remain byte-for-byte under their source
+names so the root-relocation provenance stays explicit.
+
 ## What lives here and why
 
 | Archived file | Superseded by | Why archived |
@@ -15,6 +20,11 @@ This directory holds dated snapshots of documents that were retired or supersede
 | `2026-02-25-COMMERCIAL_POSITIONING.md` | [../COMMERCIAL_OVERVIEW.md](../COMMERCIAL_OVERVIEW.md) (current commercial positioning) | Dated February 2026 snapshot (pricing tiers, competitive comparison) pinned to distribution v2.8.0; superseded by the canonical commercial-positioning doc. No live doc links to it (only bare-text path mentions in other `docs/status/`, `docs/plans/`, and `docs/deprecated/` snapshots), so no redirect stub was needed at the old `docs/status/` path. |
 | `2026-06-10-EU_AI_ACT_WALKTHROUGH.md` | [../compliance/EU_AI_ACT_GUIDE.md](../compliance/EU_AI_ACT_GUIDE.md) (article mappings and artifact schemas) | Self-declared "dated proof artifact" — a real CLI run transcript captured 2026-06-10 against `aragora 2.8.0`. Freezing the transcript preserves an accurate historical record instead of rewriting a completed run to claim a version it was never executed against. Had zero inbound references, so no redirect stub was needed. |
 | `2026-02-03-ARCHITECTURE_REVIEW_RESPONSE.md` | [../architecture/ARCHITECTURE_REVIEW_RESPONSE.md](../architecture/ARCHITECTURE_REVIEW_RESPONSE.md) (identical content, canonical location) | Exact duplicate of the doc already living under `docs/architecture/`; the top-level copy had zero inbound references, so consolidating it here removes redundant top-level sprawl with no content loss and no dangling links. |
+| `2026-03-18-Idea-to-Execution-Pipeline-Research.md` | Historical research snapshot | Relocated from the repository root after confirming zero inbound references and no Markdown links whose relative targets could change. The prefix records its last pre-archive content commit. |
+| `2026-02-11-NEXT_STEPS.md` | [../status/NEXT_STEPS_CANONICAL.md](../status/NEXT_STEPS_CANONICAL.md) | Redundant legacy root pointer; the canonical next-steps document and existing compatibility pointers under `docs/` remain live. The prefix records its last pre-archive content commit. |
+| `2026-06-04-SECURITY_AUDIT_INPUT_VALIDATION.md` | Historical security-audit snapshot | Relocated from the repository root after confirming zero inbound references and no Markdown links whose relative targets could change. The prefix records its last pre-archive content commit. |
+| `aragora_logo.png` | Docusaurus-owned SVG logo asset | Unreferenced legacy root PNG; tracked-file scans found no product or documentation consumer. It retains its basename under the recorded non-Markdown exception above. |
+| `favicon.png` | Docusaurus-owned favicon asset | Unreferenced legacy root PNG; tracked-file scans found no product or documentation consumer. It retains its basename under the recorded non-Markdown exception above. |
 
 ## Policy
 

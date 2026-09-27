@@ -1,0 +1,40 @@
+{
+  "schema_version": 1, "boundary": {"id": 2, "name": "receipts+verifier", "provenance": "docs/architecture/MODULE_QUARANTINE_PROPOSAL.md#boundary-2--receiptsverifier"},
+  "module_roots": [
+    {"path": "aragora", "package": "aragora"},
+    {"path": "aragora-verify/src/aragora_verify", "package": "aragora_verify"}
+  ],
+  "sources": [
+    "aragora/gauntlet/receipt_models.py",
+    "aragora/gauntlet/receipt.py",
+    "aragora/receipts",
+    "aragora/gauntlet/odr_jcs.py",
+    "aragora/gauntlet/odr_export.py",
+    "aragora/gauntlet/odr_signing.py",
+    "aragora/gauntlet/odr_verify.py",
+    "aragora-verify/src/aragora_verify"
+  ],
+  "allowed_internal_prefixes": [
+    "aragora.core",
+    "aragora.core_types",
+    "aragora.errors",
+    "aragora.exceptions",
+    "aragora.agents",
+    "aragora.memory",
+    "aragora.knowledge",
+    "aragora.config",
+    "aragora.storage",
+    "aragora.db",
+    "aragora.persistence",
+    "aragora.observability",
+    "aragora.telemetry",
+    "aragora.gauntlet.receipt_models",
+    "aragora.gauntlet.receipt",
+    "aragora.receipts",
+    "aragora.gauntlet.odr_jcs",
+    "aragora.gauntlet.odr_export",
+    "aragora.gauntlet.odr_signing",
+    "aragora.gauntlet.odr_verify"
+  ],
+  "hook": {"id": "boundary2-edges", "files": "^(?:\\.pre-commit-config\\.yaml|aragora/.*|aragora-verify/src/aragora_verify/.*|scripts/baselines/boundary2_edges_baseline\\.json|scripts/ci/boundary_maps/receipts_verifier\\.json|scripts/ci/check_boundary_edges\\.py)$"}
+}

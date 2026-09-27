@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import importlib
 import logging
 import threading
 from dataclasses import dataclass, field
@@ -28,10 +29,8 @@ from typing import Any
 from collections.abc import Sequence
 from collections import defaultdict
 
-np: ModuleType | None
 try:
-    import numpy as np
-
+    np: ModuleType | None = importlib.import_module("numpy")
     HAS_NUMPY = True
 except ImportError:
     np = None
@@ -243,16 +242,20 @@ class ConsensusPredictor:
         if len(embeddings) < 2:
             return 0.5  # Default when embeddings unavailable
 
+        numpy = np
+        if numpy is None:
+            return 0.5
+
         # Calculate pairwise cosine similarities
         similarities = []
         for i in range(len(embeddings)):
             for j in range(i + 1, len(embeddings)):
-                a = np.array(embeddings[i])
-                b = np.array(embeddings[j])
-                sim = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+                a = numpy.array(embeddings[i])
+                b = numpy.array(embeddings[j])
+                sim = float(numpy.dot(a, b) / (numpy.linalg.norm(a) * numpy.linalg.norm(b)))
                 similarities.append(sim)
 
-        return float(np.mean(similarities)) if similarities else 0.5
+        return float(numpy.mean(similarities)) if similarities else 0.5
 
     def _calculate_stance_alignment(
         self,
@@ -262,7 +265,7 @@ class ConsensusPredictor:
         if not features:
             return 0.5
 
-        stances = [f.stance for f in features]
+        stances = [f.stance or "neutral" for f in features]
         stance_counts: dict[str, int] = defaultdict(int)
         for s in stances:
             stance_counts[s] += 1
@@ -290,7 +293,12 @@ class ConsensusPredictor:
         if len(scores) < 2:
             return 0.0
 
-        variance = float(np.var(scores))
+        numpy = np
+        if numpy is not None:
+            variance = float(numpy.var(scores))
+        else:
+            mean = sum(scores) / len(scores)
+            variance = sum((score - mean) ** 2 for score in scores) / len(scores)
         # Normalize to 0-1 (assuming max variance of 0.25)
         normalized = min(1.0, variance / 0.25)
         return normalized
@@ -308,8 +316,15 @@ class ConsensusPredictor:
         history = previous_similarities + [current_similarity]
 
         # Calculate trend
-        recent = np.mean(history[-3:]) if len(history) >= 3 else history[-1]
-        older = np.mean(history[:-3]) if len(history) > 3 else history[0]
+        recent_values = history[-3:] if len(history) >= 3 else history[-1:]
+        older_values = history[:-3] if len(history) > 3 else history[:1]
+        numpy = np
+        if numpy is not None:
+            recent = float(numpy.mean(recent_values))
+            older = float(numpy.mean(older_values))
+        else:
+            recent = sum(recent_values) / len(recent_values)
+            older = sum(older_values) / len(older_values)
 
         delta = recent - older
 

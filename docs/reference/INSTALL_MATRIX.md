@@ -16,22 +16,23 @@ Each distribution ships its own `pyproject.toml` and its own version number.
 **They are independent — do not assume one tracks another.** Versions below
 are read directly from each package's `pyproject.toml` and cross-checked live
 against the public PyPI index (`curl -s https://pypi.org/pypi/<name>/json`,
-re-verified 2026-07-07):
+re-verified 2026-07-21):
 
 | Distribution | PyPI name | Declared in | Current version | PyPI status (live-checked) |
 |---|---|---|---|---|
-| Root platform | `aragora` | `pyproject.toml` | **2.9.0** | Published; latest on PyPI = 2.9.0 |
+| Root platform | `aragora` | `pyproject.toml` | **2.10.0** | Latest on PyPI = 2.9.0 (2026-07-06); the 2.10.0 build ships when the operator tags `v2.10.0` and dispatches `publish-aragora.yml` |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
-| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.9.0** | Published; latest on PyPI = **2.8.0** (2026-02-25) — the repo's in-tree version has moved to 2.9.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.8.0, not 2.9.0 |
-| Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.1.1** | Published; latest on PyPI = **0.1.1** (0.1.0 released 2026-06-29T23:32Z, GitHub release [`aragora-verify-v0.1.0`](https://github.com/synaptent/aragora/releases/tag/aragora-verify-v0.1.0); 0.1.1 released 2026-07-04T03:28Z) |
+| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.10.0** | Published; latest on PyPI = **2.8.0** (2026-02-25) — the repo's in-tree version has moved to 2.10.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.8.0, not 2.10.0 |
+| Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.1.2** (unreleased) | Latest on PyPI = **0.1.1** (released 2026-07-04T03:28Z); main's 0.1.2 source metadata raises the cryptography floor to `>=48.0.1`, but that stronger published requirement awaits an operator-gated 0.1.2 release |
 
-<!-- FACT (live-verified 2026-07-07T17:42Z): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
+<!-- FACT (live-verified 2026-07-21): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
 
-`aragora-verify` is **live and installable from PyPI today**, not merely
-staged or forthcoming — `pip install aragora-verify` installs the real
-published package, currently 0.1.1 — matching this branch's in-tree version,
-no lag between the two as of this check. Self-verify anytime with the `curl`
-command above.
+`aragora-verify` is **live and installable from PyPI today**. The plain install
+currently provides published 0.1.1, while this checkout contains unreleased
+0.1.2. A pristine 2026-07-21 install resolved `cryptography==49.0.0`, but the
+0.1.1 wheel metadata still permits `cryptography>=41.0`; only a later 0.1.2
+publication will make the stronger `>=48.0.1` floor mandatory for PyPI users.
+Self-verify the published version anytime with the `curl` command above.
 
 ## Install path per audience
 
@@ -52,18 +53,21 @@ full exit-code contract and disambiguation from the in-tree `aragora verify`).
 **PyPI install (floor-pinned, recommended):** 0.1.1 adds the `key_id`-equality
 check that closes a signer-label-tampering gap present in 0.1.0 (a relabeled
 `key_id` on an otherwise-valid signature silently passes verification on
-0.1.0 but correctly fails it on 0.1.1). Pin the floor so an install always
-gets that protection:
+0.1.0 but correctly fails it on 0.1.1). Until verifier 0.1.2 is published,
+pin both the verifier and cryptography floors so constrained environments get
+the tamper fix and the security floor already present on main:
 
-<!-- FACT (live-verified 2026-07-07T17:42Z): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
+<!-- FACT (live-verified 2026-07-21): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
 
 ```bash
-pip install "aragora-verify>=0.1.1"
+pip install -U "aragora-verify>=0.1.1" "cryptography>=48.0.1"
 ```
 
-**Unpinned (also correct today):** PyPI's latest already resolves to 0.1.1,
-so the plain form installs the same secure version — the floor pin is what
-protects you if that ever stops being true:
+**Unpinned verifier (functional, but does not enforce the cryptography
+floor):** PyPI's latest currently resolves to verifier 0.1.1 and a pristine
+2026-07-21 install selected cryptography 49.0.0. Existing constraints may still
+select an older allowed cryptography release, so use the command above for the
+no-trust path:
 
 ```bash
 pip install aragora-verify
@@ -88,7 +92,19 @@ aragora-verify <receipt>.odr.json
 pip install aragora-sdk   # PyPI; currently ships 2.8.0
 ```
 
-Or, to exercise this checkout's in-tree version (2.9.0, not yet released to
+Use the [public Python SDK quickstart](../SDK_QUICKSTART_PYTHON.md) for examples
+checked against that released wheel. The release-to-tree relationship is:
+
+| Install source | Version represented here | Compatibility check |
+|---|---|---|
+| PyPI (`pip install aragora-sdk`) | 2.8.0 | `python scripts/check_quickstart_surface.py --installed` in a fresh PyPI-only virtual environment |
+| This checkout (`pip install ./sdk/python`) | 2.10.0 | `python scripts/verify_sdk_contracts.py --strict` against the committed OpenAPI specs |
+
+The public 2.8.0 quickstart intentionally uses only methods present in that
+wheel. Repository-tip references can move ahead under the decoupled release
+cadence and belong on the source-install path below.
+
+Or, to exercise this checkout's in-tree version (2.10.0, not yet released to
 PyPI):
 
 ```bash
@@ -113,7 +129,7 @@ pip install -e ".[test]" numpy
 ## Fresh-venv smoke tests
 
 Reproducible from a clean checkout; each was re-run against this repository
-state on 2026-07-07 and produced the exit code shown.
+state on 2026-07-21 and produced the exit code shown.
 
 **1. End-user — local install, `--help` runs:**
 
@@ -131,7 +147,19 @@ python -m venv /tmp/av-verify && /tmp/av-verify/bin/pip install ./aragora-verify
 echo "exit: $?"   # 0
 ```
 
-**3. SDK — local install, package imports:**
+**3. SDK — public 2.8.0 quickstart surface matches the installed wheel:**
+
+```bash
+python -m venv /tmp/av-sdk-pypi
+/tmp/av-sdk-pypi/bin/pip install aragora-sdk==2.8.0
+/tmp/av-sdk-pypi/bin/python scripts/check_quickstart_surface.py --installed
+echo "exit: $?"   # 0
+```
+
+The checker reads the self-contained `aragora_sdk` Python blocks in the public
+quickstart docs and resolves their client calls against the importable package.
+
+**4. SDK — local install, package imports:**
 
 ```bash
 python -m venv /tmp/av-sdk && /tmp/av-sdk/bin/pip install ./sdk/python

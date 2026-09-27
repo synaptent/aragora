@@ -9,6 +9,7 @@ Usage:
     python scripts/regenerate_metrics.py              # rewrite docs/METRICS.md
     python scripts/regenerate_metrics.py --check      # fail if drift > 0.5%
     python scripts/regenerate_metrics.py --json       # emit JSON only
+    python scripts/regenerate_metrics.py snapshot --ref HEAD --output metrics.json
 
 Drift threshold is intentionally tight: claim-drift is a thesis-commitment
 violation (Commitment 4: respect the limits). A drifted metric should
@@ -25,6 +26,11 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    from scripts import repository_metrics
+except ModuleNotFoundError:  # Direct execution puts scripts/ on sys.path.
+    import repository_metrics  # type: ignore[no-redef]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 METRICS_DOC = REPO_ROOT / "docs" / "METRICS.md"
@@ -281,7 +287,10 @@ def gather_metrics() -> MetricsSnapshot:
             key="rbac_permission_calls",
             label="@require_permission decorator calls",
             value=permission_calls,
-            command="git grep -E '@require_permission\\(' -- aragora | wc -l",
+            # The pathspec must stay restricted to .py files: the generator
+            # counts decorator calls, and non-.py hits (README/YAML prose
+            # mentions) would inflate a reproduction over all tracked files.
+            command="git grep -E '@require_permission\\(' -- 'aragora/*.py' | wc -l",
             source="aragora/",
         )
     )
@@ -529,8 +538,13 @@ def render_markdown(snapshot: MetricsSnapshot) -> str:
         "that touches counted surfaces (`aragora/`, `tests/`, `sdk/`, "
         "`docs/api/openapi.json`, `.mypy-baseline`), and on a weekly Monday "
         "schedule. It invokes `--check` and fails the job if drift exceeds "
-        "the threshold. The job does **not** auto-open a refresh PR; it "
-        "fails loud and a human or follow-up automation decides whether "
+        "the threshold. On PR runs the check also snapshots the metrics at "
+        "the merge commit's mainline parent (`--base-json`/`--base-doc`) so "
+        "drift that pre-exists on `main` is reported as `INHERITED:` and "
+        "does not fail the PR — only drift the PR itself introduces blocks. "
+        "The weekly scheduled run stays strict and polices accumulated "
+        "main-side staleness. The job does **not** auto-open a refresh PR; "
+        "it fails loud and a human or follow-up automation decides whether "
         "to regenerate."
     )
     lines.append(
@@ -569,12 +583,81 @@ def parse_current_metrics(doc_path: Path) -> dict[str, int | str]:
     return result
 
 
-def check_drift(snapshot: MetricsSnapshot) -> tuple[bool, list[str]]:
+def load_base_snapshot(path: Path) -> dict[str, int | str]:
+    """Load a --json snapshot (metric key -> value) for base attribution."""
+    data = json.loads(path.read_text())
+    return {m["key"]: m["value"] for m in data["metrics"]}
+
+
+def _drift_is_inherited(
+    metric: Metric,
+    doc_value: int | str,
+    base_live: dict[str, int | str],
+    base_doc: dict[str, int | str],
+) -> bool:
+    """Return True when a doc-vs-truth drift is fully inherited from the base ref.
+
+    Attribution model (PR runs): the check executes on the synthetic merge
+    commit, so ``metric.value`` includes everything already merged to main
+    since docs/METRICS.md was last refreshed. The PR is only accountable for
+    the delta *it* introduces:
+
+        pr_code_delta = value(merge commit) - value(base)
+        pr_doc_delta  = doc(merge commit)   - doc(base)
+
+    If the PR's unaccounted residual ``|pr_code_delta - pr_doc_delta|`` is
+    within DRIFT_THRESHOLD, the remaining drift pre-exists on the base branch
+    and must not block this PR (the weekly scheduled run polices it).
+    """
+    base_value = base_live.get(metric.key)
+    base_doc_value = base_doc.get(metric.label)
+    if base_value is None or base_doc_value is None:
+        return False
+    if (
+        isinstance(metric.value, int)
+        and isinstance(doc_value, int)
+        and isinstance(base_value, int)
+        and isinstance(base_doc_value, int)
+    ):
+        pr_code_delta = metric.value - base_value
+        pr_doc_delta = doc_value - base_doc_value
+        residual = abs(pr_code_delta - pr_doc_delta) / max(abs(doc_value), 1)
+        return residual <= DRIFT_THRESHOLD
+    # String-valued metrics: inherited only if the PR changed neither the
+    # live value nor the documented value relative to the base.
+    return str(metric.value) == str(base_value) and str(doc_value) == str(base_doc_value)
+
+
+def check_drift(
+    snapshot: MetricsSnapshot,
+    base_live: dict[str, int | str] | None = None,
+    base_doc: dict[str, int | str] | None = None,
+) -> tuple[bool, list[str]]:
+    """Compare snapshot against the committed doc.
+
+    Returns (drifted, messages). Messages prefixed with ``INHERITED:`` are
+    informational (drift pre-existing on the base ref, when base attribution
+    data is supplied) and do not set ``drifted``.
+    """
     current = parse_current_metrics(METRICS_DOC)
+    attribute = base_live is not None and base_doc is not None
+    blocking = 0
     drifts: list[str] = []
+
+    def _record(message: str, metric: Metric, doc_value: int | str) -> None:
+        nonlocal blocking
+        if attribute and _drift_is_inherited(metric, doc_value, base_live or {}, base_doc or {}):
+            drifts.append(f"INHERITED: {message}")
+        else:
+            blocking += 1
+            drifts.append(message)
+
     for m in snapshot.metrics:
         prev = current.get(m.label)
         if prev is None:
+            # A metric missing from the doc means the counter set itself
+            # changed; that always requires a refresh (never attributed).
+            blocking += 1
             drifts.append(f"NEW: {m.label} = {m.value}")
             continue
         if isinstance(prev, int) and isinstance(m.value, int):
@@ -583,26 +666,84 @@ def check_drift(snapshot: MetricsSnapshot) -> tuple[bool, list[str]]:
             else:
                 delta_pct = abs(m.value - prev) / prev
             if delta_pct > DRIFT_THRESHOLD:
-                drifts.append(f"DRIFT: {m.label} {prev} -> {m.value} ({delta_pct * 100:.1f}%)")
+                _record(
+                    f"DRIFT: {m.label} {prev} -> {m.value} ({delta_pct * 100:.1f}%)",
+                    m,
+                    prev,
+                )
         else:
             if str(prev) != str(m.value):
-                drifts.append(f"CHANGED: {m.label} {prev!r} -> {m.value!r}")
-    return (len(drifts) > 0), drifts
+                _record(f"CHANGED: {m.label} {prev!r} -> {m.value!r}", m, prev)
+    return (blocking > 0), drifts
 
 
-def main() -> int:
+def _write_repository_snapshot(ref: str, output: Path) -> int:
+    try:
+        snapshot = repository_metrics.collect_ref_snapshot(REPO_ROOT, ref)
+        payload = snapshot.as_dict()
+    except (OSError, RuntimeError, ValueError) as exc:
+        payload = {
+            "schema_version": repository_metrics.SCHEMA_VERSION,
+            "collector_version": repository_metrics.COLLECTOR_VERSION,
+            "catalog_digest": "",
+            "git_sha": "",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "status": "partial",
+            "errors": [{"collector": "snapshot", "detail": str(exc)}],
+            "metrics": [],
+        }
+
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"Could not write snapshot to {output}: {exc}", file=sys.stderr)
+        return 2
+
+    return 2 if payload["errors"] else 0
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if any metric drifted more than 0.5% from current doc.",
+        help="Exit non-zero if any metric drifted more than 0.5%% from current doc.",
     )
     parser.add_argument(
         "--json",
         action="store_true",
         help="Print JSON snapshot to stdout instead of writing docs/METRICS.md.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--base-json",
+        type=Path,
+        help=(
+            "With --check: --json snapshot taken at the PR base ref. Drift "
+            "fully explained by the base (pre-existing on main) is reported "
+            "as INHERITED and does not fail the check."
+        ),
+    )
+    parser.add_argument(
+        "--base-doc",
+        type=Path,
+        help="With --check: docs/METRICS.md as committed at the PR base ref.",
+    )
+    subparsers = parser.add_subparsers(dest="command")
+    snapshot_parser = subparsers.add_parser(
+        "snapshot", help="Write an exact, SHA-bound repository snapshot."
+    )
+    snapshot_parser.add_argument("--ref", required=True, help="Git ref to collect.")
+    snapshot_parser.add_argument("--output", required=True, type=Path, help="Output JSON path.")
+    args = parser.parse_args(argv)
+
+    if args.command == "snapshot":
+        if args.check or args.json:
+            parser.error("snapshot cannot be combined with --check or --json")
+        return _write_repository_snapshot(args.ref, args.output)
+
+    if (args.base_json or args.base_doc) and not args.check:
+        parser.error("--base-json/--base-doc are only valid with --check")
 
     snapshot = gather_metrics()
 
@@ -611,10 +752,36 @@ def main() -> int:
         return 0
 
     if args.check:
-        drifted, drifts = check_drift(snapshot)
+        base_live: dict[str, int | str] | None = None
+        base_doc_values: dict[str, int | str] | None = None
+        if args.base_json or args.base_doc:
+            if not (args.base_json and args.base_doc):
+                parser.error("--base-json and --base-doc must be provided together")
+            try:
+                base_live = load_base_snapshot(args.base_json)
+                base_doc_values = parse_current_metrics(args.base_doc)
+            except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+                print(
+                    f"WARNING: could not load base attribution data ({exc}); "
+                    "falling back to strict check.",
+                    file=sys.stderr,
+                )
+                base_live = None
+                base_doc_values = None
+        if base_live is not None and base_doc_values is not None:
+            drifted, drifts = check_drift(snapshot, base_live=base_live, base_doc=base_doc_values)
+        else:
+            drifted, drifts = check_drift(snapshot)
+        inherited = [d for d in drifts if d.startswith("INHERITED:")]
+        blocking = [d for d in drifts if not d.startswith("INHERITED:")]
+        if inherited:
+            print("Inherited drift (pre-existing on base branch; not blocking):")
+            for d in inherited:
+                print(f"  {d}")
+            print()
         if drifted:
             print("Metrics drifted:")
-            for d in drifts:
+            for d in blocking:
                 print(f"  {d}")
             print()
             print(

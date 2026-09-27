@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aragora-sdk"
-version = "2.9.0"
+version = "2.10.0"
 description = "Python SDK for the Aragora multi-agent debate platform"
 readme = "README.md"
 license = "MIT"

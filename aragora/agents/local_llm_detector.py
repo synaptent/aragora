@@ -16,8 +16,11 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
+from typing import cast
 
-from aragora.server.http_client_pool import get_http_pool
+import httpx
+
+from aragora.observability.http_client_pool import get_http_pool
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +164,8 @@ class LocalLLMDetector:
             pool = get_http_pool()
             health_url = base_url.rstrip("/") + config["health_endpoint"]
 
-            async with pool.get_session("local_llm") as client:
+            async with pool.get_session("local_llm") as pooled_client:
+                client = cast(httpx.AsyncClient, pooled_client)
                 response = await client.get(health_url, timeout=self.timeout)
                 if response.status_code != 200:
                     return server

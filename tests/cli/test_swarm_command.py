@@ -625,6 +625,7 @@ class TestSwarmParser:
                 "pull_request_closed": False,
                 "cleanup_worktree_removed": True,
                 "cleanup_branch_removed": True,
+                "passed": True,
                 "worker": {"worker_contract_checksum": "abc123", "commit_shas": ["deadbeef"]},
             }
         )
@@ -643,6 +644,37 @@ class TestSwarmParser:
         out = capsys.readouterr().out
         assert '"mode": "swarm-preflight"' in out
         assert '"worker_contract_checksum": "abc123"' in out
+
+    def test_cmd_swarm_preflight_without_contract_fails_closed(self, capsys):
+        args = _swarm_args(
+            swarm_action_or_goal="preflight",
+            worker_model="codex",
+            target_branch="origin/main",
+            contract=None,
+            skip_publication=True,
+            json=False,
+        )
+        fake_result = SimpleNamespace(
+            to_dict=lambda: {
+                "repo_root": "/tmp/aragora",
+                "base_ref": "origin/main",
+                "branch": "preflight/failed-push",
+                "agent": "codex",
+                "passed": False,
+                "checks": [{"name": "git_push", "passed": False}],
+                "worker": {},
+            }
+        )
+
+        with (
+            patch("aragora.swarm.preflight.run_preflight", return_value=fake_result),
+            pytest.raises(SystemExit, match="2"),
+        ):
+            cmd_swarm(args)
+
+        out = capsys.readouterr().out
+        assert "swarm preflight: blocked" in out
+        assert "swarm preflight: ok" not in out
 
     def test_cmd_swarm_preflight_contract_path_emits_receipt_and_gate(self, capsys):
         args = _swarm_args(
@@ -2345,6 +2377,10 @@ class TestSwarmCommand:
         assert '"failed": 1' in out
         assert '"selected_before": 1' in out
         assert '"selected_after": 0' in out
+        assert '"execution_verified_after": 0' in out
+        assert '"heartbeat_readiness"' in out
+        assert '"ready": false' in out
+        assert '"blocked_reason": "no_execution_verified_runner"' in out
 
     def test_cmd_swarm_audit_issues_json(self, capsys):
         args = _swarm_args(

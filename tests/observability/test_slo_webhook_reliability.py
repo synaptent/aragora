@@ -21,6 +21,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _register_webhook_sink_provider():
+    """Route patched integration dispatchers through the observability hook."""
+    from aragora.observability.metrics.slo import register_slo_event_sink_provider
+
+    def provider():
+        from aragora.integrations import webhooks
+
+        return webhooks.get_dispatcher()
+
+    register_slo_event_sink_provider(provider)
+    yield
+    register_slo_event_sink_provider(None)
+
+
 class TestSLOWebhookRetryExhaustion:
     """Test retry exhaustion and DLQ handling."""
 
@@ -473,6 +488,37 @@ class TestSLORecoveryWebhookReliability:
         slo_module._violation_state = {}
         slo_module._notification_count = 0
         slo_module._recovery_count = 0
+
+    def test_recovery_path_survives_global_noop_initialization(self):
+        """Global no-op initialization leaves SLO collectors coherent."""
+        from aragora.observability.metrics.initialization import _init_noop_metrics_all
+        from aragora.observability.metrics import slo as slo_module
+
+        slo_module._initialized = False
+        slo_module.SLO_CHECKS_TOTAL = None
+        slo_module.SLO_VIOLATIONS_TOTAL = None
+        slo_module.SLO_LATENCY_HISTOGRAM = None
+        slo_module.SLO_VIOLATION_MARGIN = None
+
+        _init_noop_metrics_all()
+
+        passed, _ = slo_module.check_and_record_slo_with_recovery(
+            "km_query",
+            100.0,
+            "p99",
+        )
+
+        assert passed is True
+        assert slo_module._initialized is True
+        assert all(
+            metric is not None
+            for metric in (
+                slo_module.SLO_CHECKS_TOTAL,
+                slo_module.SLO_VIOLATIONS_TOTAL,
+                slo_module.SLO_LATENCY_HISTOGRAM,
+                slo_module.SLO_VIOLATION_MARGIN,
+            )
+        )
 
     def test_recovery_notification_includes_duration(self):
         """Recovery notification includes violation duration."""

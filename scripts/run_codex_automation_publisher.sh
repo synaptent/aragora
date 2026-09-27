@@ -16,6 +16,7 @@ VALUE_DRAIN="${ARAGORA_AUTOMATION_VALUE_DRAIN:-0}"
 VALUE_DRAIN_BRANCH_LIMIT="${ARAGORA_AUTOMATION_VALUE_BRANCH_LIMIT:-2}"
 VALUE_DRAIN_ISSUE_LIMIT="${ARAGORA_AUTOMATION_VALUE_ISSUE_LIMIT:-4}"
 VALUE_DRAIN_MERGE_LIMIT="${ARAGORA_AUTOMATION_VALUE_MERGE_LIMIT:-1}"
+CACHE_ONLY="${ARAGORA_AUTOMATION_CACHE_ONLY:-0}"
 export ARAGORA_AUTOMATION_MIN_FREE_GIB="${ARAGORA_AUTOMATION_MIN_FREE_GIB:-50}"
 export ARAGORA_AUTOMATION_CODEX_RSS_MAX_GIB="${ARAGORA_AUTOMATION_CODEX_RSS_MAX_GIB:-25}"
 export ARAGORA_AUTOMATION_SPEND_DAILY_CAP_USD="${ARAGORA_AUTOMATION_SPEND_DAILY_CAP_USD:-200}"
@@ -100,6 +101,13 @@ if [[ "${HEALTH_READY}" != "true" ]]; then
   fi
   exit 0
 fi
+
+case "${CACHE_ONLY}" in
+  1|true|TRUE|yes|YES)
+    echo "$(STAMP) [codex-automation-publisher] cache-only mode: skipping value drain, branch publish, and handoff publish"
+    exit 0
+    ;;
+esac
 
 if ! git fetch --no-write-fetch-head --prune origin '+refs/heads/*:refs/remotes/origin/*' >/dev/null 2>&1; then
   echo "$(STAMP) [codex-automation-publisher] origin refresh failed; continuing with cached refs"

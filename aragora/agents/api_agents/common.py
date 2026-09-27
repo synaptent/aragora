@@ -17,14 +17,17 @@ import threading
 import time
 from dataclasses import dataclass, field
 from collections.abc import AsyncGenerator, Callable
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import aiohttp
 
-try:
+if TYPE_CHECKING:
     import certifi
-except ImportError:  # pragma: no cover - optional dependency
-    certifi = None
+else:
+    try:
+        import certifi
+    except ImportError:  # pragma: no cover - optional dependency
+        certifi = None
 
 from aragora.agents.base import CritiqueMixin
 from aragora.agents.errors import (
@@ -238,7 +241,10 @@ def get_shared_connector() -> aiohttp.TCPConnector:
                 per_host,
                 current_loop_id,
             )
-        return _pool_state.connector
+        connector = _pool_state.connector
+        if connector is None:
+            raise RuntimeError("Failed to initialize shared TCP connector")
+        return connector
 
 
 def create_client_session(

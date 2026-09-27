@@ -101,7 +101,9 @@ jobs:
       - name: Test backend image
         run: |
           docker build -f deploy/Dockerfile.backend -t test-backend:latest .
-          docker run --rm test-backend:latest python -c "import aragora; print('Aragora imported successfully')"
+          docker image inspect test-backend:latest --format '{{.Architecture}}'
+          docker run --rm test-backend:latest python -c "import pydantic, psycopg2, aragora.config; print('ok')"
+          docker run --rm test-backend:latest python -c "import asyncpg, redis, prometheus_client; print('ok2')"
 
       - name: Run Trivy vulnerability scanner (backend)
         uses: aquasecurity/trivy-action@0.35.0
@@ -186,6 +188,15 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
 
+      # Deliberately passes no NEXT_PUBLIC_* build-args. This is a general-purpose
+      # published image: self-hosters pull it (see deploy/helm values.yaml) and
+      # serve it from their own domain, and NEXT_PUBLIC_* is inlined at build
+      # time, so baking https://api.aragora.ai here would make every self-hosted
+      # deployment send browser API and WebSocket traffic to Aragora's backend.
+      # The image is host-agnostic instead: it inherits the Dockerfile's localhost
+      # defaults, which src/config.ts recognises as unusable and replaces with a
+      # derivation from the serving host. aragora.ai itself is built with explicit
+      # production values by deploy-frontend.yml's Vercel lane, not from this image.
       - name: Build and push frontend
         uses: docker/build-push-action@v5
         with:

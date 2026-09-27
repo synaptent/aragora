@@ -72,7 +72,7 @@ def _normalize_string_list(value: Any) -> list[str]:
 
 
 def _extract_files(node: dict[str, Any]) -> list[str]:
-    candidates = [
+    candidates: list[Any] = [
         node.get("files"),
         node.get("file_scope"),
         node.get("paths"),

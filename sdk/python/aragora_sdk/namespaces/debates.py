@@ -2,10 +2,23 @@
 Debates Namespace API
 
 Provides methods for creating, managing, and analyzing debates.
+
+Note: A number of methods below (get_rounds, get_agents, get_votes,
+get_metadata, get_timeline, get_tags, ...) target routes that no server
+handler dispatches. Because ``DebatesHandler.can_handle`` claims all of
+``/api/debates/*``, such requests do not 404 cleanly at the router: the
+dispatcher matches DebatesHandler, finds no route branch, and falls
+through to the debate slug lookup -- returning 404 "debate not found"
+for the literal path suffix (or, for bare ``/api/debates/{id}`` verbs
+without a handler branch, HTTP 200 with the debate GET representation).
+These methods are kept for backward compatibility, emit
+:class:`DeprecationWarning` at runtime, and are marked DEPRECATED in
+their docstrings; prefer the documented working methods named in each.
 """
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +29,11 @@ if TYPE_CHECKING:
 
 
 _List = list  # Preserve builtin list for type annotations
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class DebatesAPI:
@@ -152,21 +170,30 @@ class DebatesAPI:
         self,
         debate_id: str,
         format: str = "json",
+        table: str | None = None,
     ) -> dict[str, Any]:
         """
         Export a debate.
 
+        Calls GET /api/v1/debates/{id}/export/{format} (the documented
+        contract; the format is a path segment, not a query parameter).
+
         Args:
             debate_id: The debate ID
-            format: Export format (json, pdf, etc.)
+            format: Export format (json, csv, html, txt, md)
+            table: Optional data table to export (summary, messages,
+                critiques, votes; server default: summary)
 
         Returns:
             Exported debate data
         """
+        params: dict[str, Any] = {}
+        if table is not None:
+            params["table"] = table
         return self._client.request(
             "GET",
-            f"/api/v1/debates/{debate_id}/export",
-            params={"format": format},
+            f"/api/v1/debates/{debate_id}/export/{format}",
+            params=params or None,
         )
 
     def cancel(self, debate_id: str) -> dict[str, Any]:
@@ -287,7 +314,19 @@ class DebatesAPI:
         source: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Add evidence to a debate."""
+        """Add evidence to a debate.
+
+        DEPRECATED: this is a silent no-op that LOOKS successful. POST
+        /api/v1/debates/{id}/evidence is captured by the explainability
+        handler's GET evidence route, which returns HTTP 200 with the
+        evidence *explanation* -- nothing is stored. The server has no
+        evidence-submission endpoint for debates; evidence is collected
+        server-side during the debate. Use get_evidence() for reads.
+        """
+        _warn_deprecated(
+            "debates.add_evidence() is a silent no-op: the POST is answered "
+            "by the GET evidence explanation and stores nothing."
+        )
         payload: dict[str, Any] = {"evidence": evidence}
         if source:
             payload["source"] = source
@@ -372,13 +411,19 @@ class DebatesAPI:
     def get_context_level(self, debate_id: str, level: str) -> dict[str, Any]:
         """Get debate content at a specific abstraction level.
 
+        DEPRECATED: GET /api/v1/debates/{id}/context/{level} is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use query_rlm() (or compress() to
+        generate abstraction levels) instead.
+
         Args:
             debate_id: The debate ID
             level: Abstraction level (ABSTRACT, SUMMARY, DETAILED, or RAW)
-
-        Returns:
-            Context at the requested level with content, token_count, and nodes
         """
+        _warn_deprecated(
+            "debates.get_context_level() targets an unserved route (404 via "
+            "slug fallback); use query_rlm() or compress()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/context/{level}")
 
     def query_rlm(
@@ -415,29 +460,46 @@ class DebatesAPI:
     def get_refinement_status(self, debate_id: str) -> dict[str, Any]:
         """Get the status of an ongoing RLM refinement process.
 
+        DEPRECATED: the RLM feature handler that implements this route is
+        shadowed by DebatesHandler in the route index and never receives
+        the request, which falls into the debate slug lookup and returns
+        404 (wire-or-remove candidate). query_rlm() responses include
+        refinement_history.
+
         Args:
             debate_id: The debate ID
-
-        Returns:
-            Refinement status with active_queries, cached_contexts, and status
         """
+        _warn_deprecated(
+            "debates.get_refinement_status() targets a shadowed, unserved "
+            "route (404 via slug fallback); use query_rlm()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/refinement-status")
 
     # ========== Decision Integrity ==========
 
-    def get_decision_integrity(self, debate_id: str) -> dict[str, Any]:
-        """Get the decision integrity package for a debate.
+    def get_decision_integrity(
+        self, debate_id: str, options: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Generate the decision integrity package for a debate.
 
-        Generates a decision receipt and implementation plan bundle
-        containing audit-ready documentation of the debate outcome.
+        Calls POST /api/v1/debates/{id}/decision-integrity (the documented
+        contract; the server rejects GET with 405). Generates a decision
+        receipt and implementation plan bundle containing audit-ready
+        documentation of the debate outcome.
 
         Args:
             debate_id: The debate ID
+            options: Optional request configuration (execution mode,
+                workflow mode, notification settings)
 
         Returns:
             Decision integrity package with receipt and implementation plan
         """
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/decision-integrity")
+        return self._client.request(
+            "POST",
+            f"/api/v1/debates/{debate_id}/decision-integrity",
+            json=options or {},
+        )
 
     # ========== Cost Estimation ==========
 
@@ -475,11 +537,31 @@ class DebatesAPI:
     # ========== Analytics ==========
 
     def get_consensus_analytics(self) -> dict[str, Any]:
-        """Get consensus analytics across debates."""
+        """Get consensus analytics across debates.
+
+        DEPRECATED: /api/v1/debates/analytics/consensus is declared in the
+        handler's ROUTES list but never dispatched; the request falls into
+        the debate slug lookup and returns 404. Use get_statistics() or the
+        analytics endpoints (/api/v1/analytics/debates/*).
+        """
+        _warn_deprecated(
+            "debates.get_consensus_analytics() targets an unserved route "
+            "(404 via slug fallback); use get_statistics()."
+        )
         return self._client.request("GET", "/api/v1/debates/analytics/consensus")
 
     def get_trend_analytics(self) -> dict[str, Any]:
-        """Get debate trend analytics."""
+        """Get debate trend analytics.
+
+        DEPRECATED: /api/v1/debates/analytics/trends is declared in the
+        handler's ROUTES list but never dispatched; the request falls into
+        the debate slug lookup and returns 404. Use the documented
+        GET /api/v1/analytics/debates/trends endpoint instead.
+        """
+        _warn_deprecated(
+            "debates.get_trend_analytics() targets an unserved route (404 "
+            "via slug fallback); use GET /api/v1/analytics/debates/trends."
+        )
         return self._client.request("GET", "/api/v1/debates/analytics/trends")
 
     # ========== Archive ==========
@@ -491,7 +573,16 @@ class DebatesAPI:
         )
 
     def list_archived(self, limit: int = 20, offset: int = 0) -> dict[str, Any]:
-        """List archived debates."""
+        """List archived debates.
+
+        DEPRECATED: /api/v1/debates/archived is declared in the handler's
+        ROUTES list but never dispatched; the request falls into the debate
+        slug lookup and returns 404. Use list() and filter by status.
+        """
+        _warn_deprecated(
+            "debates.list_archived() targets an unserved route (404 via "
+            "slug fallback); use list() and filter by status."
+        )
         return self._client.request(
             "GET", "/api/v1/debates/archived", params={"limit": limit, "offset": offset}
         )
@@ -656,12 +747,20 @@ class DebatesAPI:
         """
         Get the public spectate view for a debate.
 
+        DEPRECATED: the share handler that implements this route is
+        shadowed by DebatesHandler in the route index and never receives
+        the request, which falls into the debate slug lookup and returns
+        404 (wire-or-remove candidate). Use the spectate WebSocket
+        (/ws/spectate/{debate_id}) or get_shared() with a share token.
+
         Args:
             debate_id: The debate ID.
-
-        Returns:
-            Dict with public spectate data (no auth required).
         """
+        _warn_deprecated(
+            "debates.get_public_spectate() targets a shadowed, unserved "
+            "route (404 via slug fallback); use the spectate WebSocket or "
+            "get_shared()."
+        )
         return self._client.request("GET", f"/api/debates/{debate_id}/spectate/public")
 
     def get_public_debate(self, debate_id: str) -> dict[str, Any]:
@@ -751,15 +850,20 @@ class DebatesAPI:
     def get_reasoning(self, debate_id: str) -> dict[str, Any]:
         """Get per-agent reasoning summary for a debate.
 
-        Returns agent reasoning chains, key cruxes, and unresolved
-        disagreements.
+        DEPRECATED: the intervention handler that implements this route is
+        shadowed by DebatesHandler in the route index and never receives
+        the request, which falls into the debate slug lookup and returns
+        404 (wire-or-remove candidate). Use get_explainability() or
+        get_summary() instead.
 
         Args:
             debate_id: The debate ID
-
-        Returns:
-            Dict with agents, cruxes, unresolved_disagreements, and interventions
         """
+        _warn_deprecated(
+            "debates.get_reasoning() targets a shadowed, unserved route "
+            "(404 via slug fallback); use get_explainability() or "
+            "get_summary()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/reasoning")
 
     # ========== CRUD & Lifecycle ==========
@@ -777,11 +881,24 @@ class DebatesAPI:
         return self._client.request("DELETE", f"/api/v1/debates/{debate_id}")
 
     def update(self, debate_id: str, **updates: Any) -> dict[str, Any]:
-        """Update an existing debate."""
-        return self._client.request("PUT", f"/api/v1/debates/{debate_id}", json=updates)
+        """Update debate metadata (title, tags, status, custom metadata).
+
+        Calls PATCH /api/v1/debates/{id} (the dispatched contract; the
+        previous PUT verb had no server branch and silently returned the
+        unmodified debate).
+        """
+        return self._client.request("PATCH", f"/api/v1/debates/{debate_id}", json=updates)
 
     def get_metadata(self, debate_id: str) -> dict[str, Any]:
-        """Get debate metadata."""
+        """Get debate metadata.
+
+        DEPRECATED: GET /api/v1/debates/{id}/metadata is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get() -- the debate detail includes metadata.
+        """
+        _warn_deprecated(
+            "debates.get_metadata() targets an unserved route (404 via slug fallback); use get()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/metadata")
 
     def start(self, debate_id: str) -> dict[str, Any]:
@@ -800,14 +917,6 @@ class DebatesAPI:
         """Resume a paused debate."""
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/resume")
 
-    def restore(self, debate_id: str) -> dict[str, Any]:
-        """Restore an archived debate."""
-        return self._client.request("POST", f"/api/v1/debates/{debate_id}/restore")
-
-    def make_permanent(self, debate_id: str) -> dict[str, Any]:
-        """Make a debate permanent."""
-        return self._client.request("POST", f"/api/v1/debates/{debate_id}/make-permanent")
-
     def clone(self, debate_id: str, **options: Any) -> dict[str, Any]:
         """Clone a debate with fresh state."""
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/clone", json=options)
@@ -817,23 +926,51 @@ class DebatesAPI:
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/archive")
 
     def export_format(self, debate_id: str, format: str = "json") -> dict[str, Any]:
-        """Export a debate in a specific format."""
-        return self._client.request(
-            "GET", f"/api/v1/debates/{debate_id}/export", params={"format": format}
-        )
+        """Export a debate in a specific format (json, csv, html, txt, md).
+
+        Calls GET /api/v1/debates/{id}/export/{format} (the documented
+        contract; the format is a path segment, not a query parameter).
+        """
+        return self._client.request("GET", f"/api/v1/debates/{debate_id}/export/{format}")
 
     # ========== Rounds, Agents, Votes ==========
 
     def get_rounds(self, debate_id: str) -> dict[str, Any]:
-        """Get rounds from a debate."""
+        """Get rounds from a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/rounds is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get_messages() for the round-by-round record.
+        """
+        _warn_deprecated(
+            "debates.get_rounds() targets an unserved route (404 via slug "
+            "fallback); use get_messages()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/rounds")
 
     def get_agents(self, debate_id: str) -> dict[str, Any]:
-        """Get agents participating in a debate."""
+        """Get agents participating in a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/agents is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get() -- the debate detail includes agents.
+        """
+        _warn_deprecated(
+            "debates.get_agents() targets an unserved route (404 via slug fallback); use get()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/agents")
 
     def get_votes(self, debate_id: str) -> dict[str, Any]:
-        """Get votes from a debate."""
+        """Get votes from a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/votes is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get_consensus() for vote outcomes.
+        """
+        _warn_deprecated(
+            "debates.get_votes() targets an unserved route (404 via slug "
+            "fallback); use get_consensus()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/votes")
 
     def get_consensus(self, debate_id: str) -> dict[str, Any]:
@@ -851,18 +988,30 @@ class DebatesAPI:
         )
 
     def get_timeline(self, debate_id: str) -> dict[str, Any]:
-        """Get the timeline of events in a debate."""
+        """Get the timeline of events in a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/timeline is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get_messages() for the chronological record.
+        """
+        _warn_deprecated(
+            "debates.get_timeline() targets an unserved route (404 via "
+            "slug fallback); use get_messages()."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/timeline")
 
     def get_tags(self, debate_id: str) -> dict[str, Any]:
-        """Get tags for a debate."""
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
+        """Get tags for a debate.
 
-    def find_similar(self, debate_id: str, limit: int = 5) -> dict[str, Any]:
-        """Find debates similar to this one."""
-        return self._client.request(
-            "GET", f"/api/v1/debates/{debate_id}/similar", params={"limit": limit}
+        DEPRECATED: GET /api/v1/debates/{id}/tags is not dispatched by any
+        server handler; the request falls into the debate slug lookup and
+        returns 404. Use get() -- the debate detail includes tags; update
+        tags via update().
+        """
+        _warn_deprecated(
+            "debates.get_tags() targets an unserved route (404 via slug fallback); use get()."
         )
+        return self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
 
     # ========== Graph & Matrix ==========
 
@@ -926,10 +1075,6 @@ class DebatesAPI:
         """Get meta-level critique of the debate."""
         return self._client.request("GET", f"/api/v1/debate/{debate_id}/meta-critique")
 
-    def get_quality(self, debate_id: str) -> dict[str, Any]:
-        """Get argument quality analysis."""
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/quality")
-
     def verify_claim(
         self, debate_id: str, claim_id: str, evidence: str | None = None
     ) -> dict[str, Any]:
@@ -938,46 +1083,6 @@ class DebatesAPI:
         if evidence is not None:
             data["evidence"] = evidence
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/verify", json=data)
-
-    # ========== Notes ==========
-
-    def get_notes(self, debate_id: str) -> dict[str, Any]:
-        """Get notes attached to a debate."""
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/notes")
-
-    def add_note(self, debate_id: str, content: str) -> dict[str, Any]:
-        """Add a note to a debate."""
-        return self._client.request(
-            "POST", f"/api/v1/debates/{debate_id}/notes", json={"content": content}
-        )
-
-    def delete_note(self, debate_id: str, note_id: str) -> dict[str, Any]:
-        """Delete a note from a debate."""
-        return self._client.request("DELETE", f"/api/v1/debates/{debate_id}/notes/{note_id}")
-
-    # ========== Batch Results ==========
-
-    def get_batch_results(self, batch_id: str) -> dict[str, Any]:
-        """Get results of a batch job."""
-        return self._client.request("GET", f"/api/v1/debates/batch/{batch_id}/results")
-
-    def cancel_batch(self, batch_id: str) -> dict[str, Any]:
-        """Cancel a batch job."""
-        return self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/cancel")
-
-    def retry_batch(self, batch_id: str) -> dict[str, Any]:
-        """Retry failed jobs in a batch."""
-        return self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/retry")
-
-    # ========== Agent & Debate Health ==========
-
-    def get_agent_statistics(self, debate_id: str) -> dict[str, Any]:
-        """Get per-agent statistics for a debate."""
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/agent-statistics")
-
-    def get_debate_health(self, debate_id: str) -> dict[str, Any]:
-        """Get health status for a specific debate."""
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/health")
 
     # ========== Intervention ==========
 
@@ -1006,21 +1111,71 @@ class DebatesAPI:
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/intervention/state")
 
     def set_intervention_threshold(self, debate_id: str, threshold: float) -> dict[str, Any]:
-        """Set the intervention threshold for a debate."""
+        """Set the consensus threshold for a debate.
+
+        Calls POST /api/v1/debates/{id}/intervention/threshold (the
+        documented contract; the previous PUT verb is not routed).
+
+        Args:
+            debate_id: The debate ID
+            threshold: Consensus threshold (0.5=majority, 1.0=unanimous)
+        """
         return self._client.request(
-            "PUT",
+            "POST",
             f"/api/v1/debates/{debate_id}/intervention/threshold",
             json={"threshold": threshold},
         )
 
+    def set_intervention_weight(
+        self, debate_id: str, agent: str, weight: float, user_id: str | None = None
+    ) -> dict[str, Any]:
+        """Set one agent's influence weight in a debate.
+
+        Calls POST /api/v1/debates/{id}/intervention/weights with the
+        documented body shape ``{"agent": ..., "weight": ...}``.
+
+        Args:
+            debate_id: The debate ID
+            agent: Agent name or ID
+            weight: Influence weight (0.0=muted, 1.0=normal, 2.0=double)
+            user_id: Optional user ID for the audit trail
+        """
+        body: dict[str, Any] = {"agent": agent, "weight": weight}
+        if user_id:
+            body["user_id"] = user_id
+        return self._client.request(
+            "POST", f"/api/v1/debates/{debate_id}/intervention/weights", json=body
+        )
+
     def set_intervention_weights(self, debate_id: str, weights: dict[str, float]) -> dict[str, Any]:
-        """Set intervention weights for a debate."""
+        """Set intervention weights for a debate.
+
+        DEPRECATED: this call is mis-shaped twice over -- the documented
+        endpoint is POST (not PUT) and takes a single
+        ``{"agent": ..., "weight": ...}`` body, not a ``weights`` mapping.
+        Use set_intervention_weight() per agent instead.
+        """
+        _warn_deprecated(
+            "debates.set_intervention_weights() uses an unrouted verb and a "
+            "mis-shaped body; use set_intervention_weight(debate_id, agent, "
+            "weight) per agent."
+        )
         return self._client.request(
             "PUT", f"/api/v1/debates/{debate_id}/intervention/weights", json={"weights": weights}
         )
 
     def get_youtube_publish_status(self, debate_id: str) -> dict[str, Any]:
-        """Get YouTube publish status for a debate."""
+        """Get YouTube publish status for a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/publish/youtube/status is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use the global GET /api/v1/youtube/status
+        endpoint (openapi namespace) for connector status.
+        """
+        _warn_deprecated(
+            "debates.get_youtube_publish_status() targets an unserved route "
+            "(404 via slug fallback); use GET /api/v1/youtube/status."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/publish/youtube/status")
 
 
@@ -1153,12 +1308,21 @@ class AsyncDebatesAPI:
         self,
         debate_id: str,
         format: str = "json",
+        table: str | None = None,
     ) -> dict[str, Any]:
-        """Export a debate."""
+        """Export a debate.
+
+        Calls GET /api/v1/debates/{id}/export/{format} (the documented
+        contract; the format is a path segment, not a query parameter).
+        Formats: json, csv, html, txt, md.
+        """
+        params: dict[str, Any] = {}
+        if table is not None:
+            params["table"] = table
         return await self._client.request(
             "GET",
-            f"/api/v1/debates/{debate_id}/export",
-            params={"format": format},
+            f"/api/v1/debates/{debate_id}/export/{format}",
+            params=params or None,
         )
 
     async def cancel(self, debate_id: str) -> dict[str, Any]:
@@ -1277,7 +1441,18 @@ class AsyncDebatesAPI:
         source: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Add evidence to a debate."""
+        """Add evidence to a debate.
+
+        DEPRECATED: this is a silent no-op that LOOKS successful. POST
+        /api/v1/debates/{id}/evidence is captured by the explainability
+        handler's GET evidence route, which returns HTTP 200 with the
+        evidence *explanation* -- nothing is stored. Use get_evidence()
+        for reads.
+        """
+        _warn_deprecated(
+            "debates.add_evidence() is a silent no-op: the POST is answered "
+            "by the GET evidence explanation and stores nothing."
+        )
         payload: dict[str, Any] = {"evidence": evidence}
         if source:
             payload["source"] = source
@@ -1368,13 +1543,14 @@ class AsyncDebatesAPI:
     async def get_context_level(self, debate_id: str, level: str) -> dict[str, Any]:
         """Get debate content at a specific abstraction level.
 
-        Args:
-            debate_id: The debate ID
-            level: Abstraction level (ABSTRACT, SUMMARY, DETAILED, or RAW)
-
-        Returns:
-            Context at the requested level with content, token_count, and nodes
+        DEPRECATED: GET /api/v1/debates/{id}/context/{level} is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use query_rlm() or compress() instead.
         """
+        _warn_deprecated(
+            "debates.get_context_level() targets an unserved route (404 via "
+            "slug fallback); use query_rlm() or compress()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/context/{level}")
 
     async def query_rlm(
@@ -1411,29 +1587,43 @@ class AsyncDebatesAPI:
     async def get_refinement_status(self, debate_id: str) -> dict[str, Any]:
         """Get the status of an ongoing RLM refinement process.
 
-        Args:
-            debate_id: The debate ID
-
-        Returns:
-            Refinement status with active_queries, cached_contexts, and status
+        DEPRECATED: the RLM feature handler that implements this route is
+        shadowed by DebatesHandler in the route index and never receives
+        the request, which falls into the debate slug lookup and returns
+        404 (wire-or-remove candidate). query_rlm() responses include
+        refinement_history.
         """
+        _warn_deprecated(
+            "debates.get_refinement_status() targets a shadowed, unserved "
+            "route (404 via slug fallback); use query_rlm()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/refinement-status")
 
     # ========== Decision Integrity ==========
 
-    async def get_decision_integrity(self, debate_id: str) -> dict[str, Any]:
-        """Get the decision integrity package for a debate.
+    async def get_decision_integrity(
+        self, debate_id: str, options: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Generate the decision integrity package for a debate.
 
-        Generates a decision receipt and implementation plan bundle
-        containing audit-ready documentation of the debate outcome.
+        Calls POST /api/v1/debates/{id}/decision-integrity (the documented
+        contract; the server rejects GET with 405). Generates a decision
+        receipt and implementation plan bundle containing audit-ready
+        documentation of the debate outcome.
 
         Args:
             debate_id: The debate ID
+            options: Optional request configuration (execution mode,
+                workflow mode, notification settings)
 
         Returns:
             Decision integrity package with receipt and implementation plan
         """
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/decision-integrity")
+        return await self._client.request(
+            "POST",
+            f"/api/v1/debates/{debate_id}/decision-integrity",
+            json=options or {},
+        )
 
     # ========== Cost Estimation ==========
 
@@ -1471,11 +1661,31 @@ class AsyncDebatesAPI:
     # ========== Analytics ==========
 
     async def get_consensus_analytics(self) -> dict[str, Any]:
-        """Get consensus analytics across debates."""
+        """Get consensus analytics across debates.
+
+        DEPRECATED: /api/v1/debates/analytics/consensus is declared in the
+        handler's ROUTES list but never dispatched; the request falls into
+        the debate slug lookup and returns 404. Use get_statistics() or the
+        analytics endpoints (/api/v1/analytics/debates/*).
+        """
+        _warn_deprecated(
+            "debates.get_consensus_analytics() targets an unserved route "
+            "(404 via slug fallback); use get_statistics()."
+        )
         return await self._client.request("GET", "/api/v1/debates/analytics/consensus")
 
     async def get_trend_analytics(self) -> dict[str, Any]:
-        """Get debate trend analytics."""
+        """Get debate trend analytics.
+
+        DEPRECATED: /api/v1/debates/analytics/trends is declared in the
+        handler's ROUTES list but never dispatched; the request falls into
+        the debate slug lookup and returns 404. Use the documented
+        GET /api/v1/analytics/debates/trends endpoint instead.
+        """
+        _warn_deprecated(
+            "debates.get_trend_analytics() targets an unserved route (404 "
+            "via slug fallback); use GET /api/v1/analytics/debates/trends."
+        )
         return await self._client.request("GET", "/api/v1/debates/analytics/trends")
 
     # ========== Archive ==========
@@ -1487,7 +1697,16 @@ class AsyncDebatesAPI:
         )
 
     async def list_archived(self, limit: int = 20, offset: int = 0) -> dict[str, Any]:
-        """List archived debates."""
+        """List archived debates.
+
+        DEPRECATED: /api/v1/debates/archived is declared in the handler's
+        ROUTES list but never dispatched; the request falls into the debate
+        slug lookup and returns 404. Use list() and filter by status.
+        """
+        _warn_deprecated(
+            "debates.list_archived() targets an unserved route (404 via "
+            "slug fallback); use list() and filter by status."
+        )
         return await self._client.request(
             "GET", "/api/v1/debates/archived", params={"limit": limit, "offset": offset}
         )
@@ -1576,7 +1795,19 @@ class AsyncDebatesAPI:
         return await self._client.request("GET", f"/api/v1/shared/{share_token}")
 
     async def get_public_spectate(self, debate_id: str) -> dict[str, Any]:
-        """Get the public spectate view for a debate."""
+        """Get the public spectate view for a debate.
+
+        DEPRECATED: the share handler that implements this route is
+        shadowed by DebatesHandler in the route index and never receives
+        the request, which falls into the debate slug lookup and returns
+        404 (wire-or-remove candidate). Use the spectate WebSocket
+        (/ws/spectate/{debate_id}) or get_shared() with a share token.
+        """
+        _warn_deprecated(
+            "debates.get_public_spectate() targets a shadowed, unserved "
+            "route (404 via slug fallback); use the spectate WebSocket or "
+            "get_shared()."
+        )
         return await self._client.request("GET", f"/api/debates/{debate_id}/spectate/public")
 
     async def get_public_debate(self, debate_id: str) -> dict[str, Any]:
@@ -1639,15 +1870,17 @@ class AsyncDebatesAPI:
     async def get_reasoning(self, debate_id: str) -> dict[str, Any]:
         """Get per-agent reasoning summary for a debate.
 
-        Returns agent reasoning chains, key cruxes, and unresolved
-        disagreements.
-
-        Args:
-            debate_id: The debate ID
-
-        Returns:
-            Dict with agents, cruxes, unresolved_disagreements, and interventions
+        DEPRECATED: the intervention handler that implements this route is
+        shadowed by DebatesHandler in the route index and never receives
+        the request, which falls into the debate slug lookup and returns
+        404 (wire-or-remove candidate). Use get_explainability() or
+        get_summary() instead.
         """
+        _warn_deprecated(
+            "debates.get_reasoning() targets a shadowed, unserved route "
+            "(404 via slug fallback); use get_explainability() or "
+            "get_summary()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/reasoning")
 
     # ========== CRUD & Lifecycle ==========
@@ -1665,11 +1898,24 @@ class AsyncDebatesAPI:
         return await self._client.request("DELETE", f"/api/v1/debates/{debate_id}")
 
     async def update(self, debate_id: str, **updates: Any) -> dict[str, Any]:
-        """Update an existing debate."""
-        return await self._client.request("PUT", f"/api/v1/debates/{debate_id}", json=updates)
+        """Update debate metadata (title, tags, status, custom metadata).
+
+        Calls PATCH /api/v1/debates/{id} (the dispatched contract; the
+        previous PUT verb had no server branch and silently returned the
+        unmodified debate).
+        """
+        return await self._client.request("PATCH", f"/api/v1/debates/{debate_id}", json=updates)
 
     async def get_metadata(self, debate_id: str) -> dict[str, Any]:
-        """Get debate metadata."""
+        """Get debate metadata.
+
+        DEPRECATED: GET /api/v1/debates/{id}/metadata is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get() -- the debate detail includes metadata.
+        """
+        _warn_deprecated(
+            "debates.get_metadata() targets an unserved route (404 via slug fallback); use get()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/metadata")
 
     async def start(self, debate_id: str) -> dict[str, Any]:
@@ -1688,14 +1934,6 @@ class AsyncDebatesAPI:
         """Resume a paused debate."""
         return await self._client.request("POST", f"/api/v1/debates/{debate_id}/resume")
 
-    async def restore(self, debate_id: str) -> dict[str, Any]:
-        """Restore an archived debate."""
-        return await self._client.request("POST", f"/api/v1/debates/{debate_id}/restore")
-
-    async def make_permanent(self, debate_id: str) -> dict[str, Any]:
-        """Make a debate permanent."""
-        return await self._client.request("POST", f"/api/v1/debates/{debate_id}/make-permanent")
-
     async def clone(self, debate_id: str, **options: Any) -> dict[str, Any]:
         """Clone a debate with fresh state."""
         return await self._client.request(
@@ -1707,23 +1945,51 @@ class AsyncDebatesAPI:
         return await self._client.request("POST", f"/api/v1/debates/{debate_id}/archive")
 
     async def export_format(self, debate_id: str, format: str = "json") -> dict[str, Any]:
-        """Export a debate in a specific format."""
-        return await self._client.request(
-            "GET", f"/api/v1/debates/{debate_id}/export", params={"format": format}
-        )
+        """Export a debate in a specific format (json, csv, html, txt, md).
+
+        Calls GET /api/v1/debates/{id}/export/{format} (the documented
+        contract; the format is a path segment, not a query parameter).
+        """
+        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/export/{format}")
 
     # ========== Rounds, Agents, Votes ==========
 
     async def get_rounds(self, debate_id: str) -> dict[str, Any]:
-        """Get rounds from a debate."""
+        """Get rounds from a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/rounds is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get_messages() for the round-by-round record.
+        """
+        _warn_deprecated(
+            "debates.get_rounds() targets an unserved route (404 via slug "
+            "fallback); use get_messages()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/rounds")
 
     async def get_agents(self, debate_id: str) -> dict[str, Any]:
-        """Get agents participating in a debate."""
+        """Get agents participating in a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/agents is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get() -- the debate detail includes agents.
+        """
+        _warn_deprecated(
+            "debates.get_agents() targets an unserved route (404 via slug fallback); use get()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/agents")
 
     async def get_votes(self, debate_id: str) -> dict[str, Any]:
-        """Get votes from a debate."""
+        """Get votes from a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/votes is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get_consensus() for vote outcomes.
+        """
+        _warn_deprecated(
+            "debates.get_votes() targets an unserved route (404 via slug "
+            "fallback); use get_consensus()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/votes")
 
     async def get_consensus(self, debate_id: str) -> dict[str, Any]:
@@ -1741,18 +2007,30 @@ class AsyncDebatesAPI:
         )
 
     async def get_timeline(self, debate_id: str) -> dict[str, Any]:
-        """Get the timeline of events in a debate."""
+        """Get the timeline of events in a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/timeline is not dispatched by
+        any server handler; the request falls into the debate slug lookup
+        and returns 404. Use get_messages() for the chronological record.
+        """
+        _warn_deprecated(
+            "debates.get_timeline() targets an unserved route (404 via "
+            "slug fallback); use get_messages()."
+        )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/timeline")
 
     async def get_tags(self, debate_id: str) -> dict[str, Any]:
-        """Get tags for a debate."""
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
+        """Get tags for a debate.
 
-    async def find_similar(self, debate_id: str, limit: int = 5) -> dict[str, Any]:
-        """Find debates similar to this one."""
-        return await self._client.request(
-            "GET", f"/api/v1/debates/{debate_id}/similar", params={"limit": limit}
+        DEPRECATED: GET /api/v1/debates/{id}/tags is not dispatched by any
+        server handler; the request falls into the debate slug lookup and
+        returns 404. Use get() -- the debate detail includes tags; update
+        tags via update().
+        """
+        _warn_deprecated(
+            "debates.get_tags() targets an unserved route (404 via slug fallback); use get()."
         )
+        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
 
     # ========== Graph & Matrix ==========
 
@@ -1824,10 +2102,6 @@ class AsyncDebatesAPI:
         """Get meta-level critique of the debate."""
         return await self._client.request("GET", f"/api/v1/debate/{debate_id}/meta-critique")
 
-    async def get_quality(self, debate_id: str) -> dict[str, Any]:
-        """Get argument quality analysis."""
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/quality")
-
     async def verify_claim(
         self, debate_id: str, claim_id: str, evidence: str | None = None
     ) -> dict[str, Any]:
@@ -1836,46 +2110,6 @@ class AsyncDebatesAPI:
         if evidence is not None:
             data["evidence"] = evidence
         return await self._client.request("POST", f"/api/v1/debates/{debate_id}/verify", json=data)
-
-    # ========== Notes ==========
-
-    async def get_notes(self, debate_id: str) -> dict[str, Any]:
-        """Get notes attached to a debate."""
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/notes")
-
-    async def add_note(self, debate_id: str, content: str) -> dict[str, Any]:
-        """Add a note to a debate."""
-        return await self._client.request(
-            "POST", f"/api/v1/debates/{debate_id}/notes", json={"content": content}
-        )
-
-    async def delete_note(self, debate_id: str, note_id: str) -> dict[str, Any]:
-        """Delete a note from a debate."""
-        return await self._client.request("DELETE", f"/api/v1/debates/{debate_id}/notes/{note_id}")
-
-    # ========== Batch Results ==========
-
-    async def get_batch_results(self, batch_id: str) -> dict[str, Any]:
-        """Get results of a batch job."""
-        return await self._client.request("GET", f"/api/v1/debates/batch/{batch_id}/results")
-
-    async def cancel_batch(self, batch_id: str) -> dict[str, Any]:
-        """Cancel a batch job."""
-        return await self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/cancel")
-
-    async def retry_batch(self, batch_id: str) -> dict[str, Any]:
-        """Retry failed jobs in a batch."""
-        return await self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/retry")
-
-    # ========== Agent & Debate Health ==========
-
-    async def get_agent_statistics(self, debate_id: str) -> dict[str, Any]:
-        """Get per-agent statistics for a debate."""
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/agent-statistics")
-
-    async def get_debate_health(self, debate_id: str) -> dict[str, Any]:
-        """Get health status for a specific debate."""
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/health")
 
     # ========== Intervention ==========
 
@@ -1908,23 +2142,73 @@ class AsyncDebatesAPI:
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/intervention/state")
 
     async def set_intervention_threshold(self, debate_id: str, threshold: float) -> dict[str, Any]:
-        """Set the intervention threshold for a debate."""
+        """Set the consensus threshold for a debate.
+
+        Calls POST /api/v1/debates/{id}/intervention/threshold (the
+        documented contract; the previous PUT verb is not routed).
+
+        Args:
+            debate_id: The debate ID
+            threshold: Consensus threshold (0.5=majority, 1.0=unanimous)
+        """
         return await self._client.request(
-            "PUT",
+            "POST",
             f"/api/v1/debates/{debate_id}/intervention/threshold",
             json={"threshold": threshold},
+        )
+
+    async def set_intervention_weight(
+        self, debate_id: str, agent: str, weight: float, user_id: str | None = None
+    ) -> dict[str, Any]:
+        """Set one agent's influence weight in a debate.
+
+        Calls POST /api/v1/debates/{id}/intervention/weights with the
+        documented body shape ``{"agent": ..., "weight": ...}``.
+
+        Args:
+            debate_id: The debate ID
+            agent: Agent name or ID
+            weight: Influence weight (0.0=muted, 1.0=normal, 2.0=double)
+            user_id: Optional user ID for the audit trail
+        """
+        body: dict[str, Any] = {"agent": agent, "weight": weight}
+        if user_id:
+            body["user_id"] = user_id
+        return await self._client.request(
+            "POST", f"/api/v1/debates/{debate_id}/intervention/weights", json=body
         )
 
     async def set_intervention_weights(
         self, debate_id: str, weights: dict[str, float]
     ) -> dict[str, Any]:
-        """Set intervention weights for a debate."""
+        """Set intervention weights for a debate.
+
+        DEPRECATED: this call is mis-shaped twice over -- the documented
+        endpoint is POST (not PUT) and takes a single
+        ``{"agent": ..., "weight": ...}`` body, not a ``weights`` mapping.
+        Use set_intervention_weight() per agent instead.
+        """
+        _warn_deprecated(
+            "debates.set_intervention_weights() uses an unrouted verb and a "
+            "mis-shaped body; use set_intervention_weight(debate_id, agent, "
+            "weight) per agent."
+        )
         return await self._client.request(
             "PUT", f"/api/v1/debates/{debate_id}/intervention/weights", json={"weights": weights}
         )
 
     async def get_youtube_publish_status(self, debate_id: str) -> dict[str, Any]:
-        """Get YouTube publish status for a debate."""
+        """Get YouTube publish status for a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/publish/youtube/status is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use the global GET /api/v1/youtube/status
+        endpoint (openapi namespace) for connector status.
+        """
+        _warn_deprecated(
+            "debates.get_youtube_publish_status() targets an unserved route "
+            "(404 via slug fallback); use GET /api/v1/youtube/status."
+        )
         return await self._client.request(
             "GET", f"/api/v1/debates/{debate_id}/publish/youtube/status"
         )

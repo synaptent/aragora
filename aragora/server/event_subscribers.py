@@ -1,16 +1,16 @@
 """Server-domain (interface) event-subscriber home (P4a EventBus inversion, Batch E6).
 
-The webhook-delivery and knowledge-staleness-to-debate reactions, relocated here
-from infrastructure ``aragora.events.cross_subscribers.handlers.{basic,culture}``
-(P4a Batch E6 relocate-UP) so the server-coupled reactions live in their
-INTERFACE home. ``ServerEventSubscriber`` self-registers via the domain-free
-registry (``aragora.events.cross_subscribers.register_subscriber`` - interface ->
+The webhook-delivery, knowledge-staleness-to-debate, and gauntlet-notification
+reactions are relocated here from infrastructure ``aragora.events`` so
+server-coupled reactions live in their INTERFACE home. ``ServerEventSubscriber``
+self-registers via the domain-free registry
+(``aragora.events.cross_subscribers.register_subscriber`` - interface ->
 infrastructure, downward = legal); the interface-superset bootstrap
 (``aragora.server.startup.event_subscribers.bootstrap_event_subscribers``)
 imports this module so ``CrossSubscriberManager.apply_registered_subscribers``
-wires the reactions in. A pure-domain/pure-library debate with no HTTP server has
-no webhook store or WebSocket state manager to react through, so this module is
-NOT imported by the domain-subset bootstrap
+wires the reactions in. A pure-domain/pure-library debate with no HTTP server or
+notification delivery has no interface reaction to run, so this module is NOT
+imported by the domain-subset bootstrap
 (``aragora.debate.event_subscribers.bootstrap_debate_event_subscribers``) -
 importing an interface-tier module from that domain-tier bootstrap would
 recreate the very upward edge this inversion removes.
@@ -19,17 +19,16 @@ Per the relocate-UP no-shim exemption (AGENTS.md "P4a Contracts-Thread Shared
 Rules" and docs/architecture/P4A_EVENTS_QUEUE_INVERSION.md §8) there is NO
 re-export shim at the old paths; every consumer is repointed instead.
 
-This batch clears only the SUBSCRIBER-SIDE ``aragora.events -> aragora.server``
-contributors. The baseline string itself is NOT hand-shrunk here: core-side
-contributors remain in ``aragora/events/dispatcher.py`` (module-level
-``server.middleware.tracing.get_trace_id``; ``server.handlers.webhooks``) and
-``aragora/events/async_dispatcher.py`` (``webhooks.generate_signature``,
-``middleware.tracing``), owned by the webhook-signing extraction and the
-shim-caller sweep batches.
+This home clears the subscriber-side ``aragora.events -> aragora.server``
+contributors, including the corrective gauntlet-notification boundary. The
+aggregate baseline string is intentionally NOT hand-shrunk here: tracing-shim,
+control-plane channel, and seal-authorized exception routes remain under their
+separately assigned P4a features.
 
 Handles:
 - Any subscribable event -> Webhook delivery (registered under 8 ``webhook_<event>`` names)
 - Knowledge stale -> Debate warning (active-debate citation check)
+- Gauntlet complete -> Notification delivery
 """
 
 from __future__ import annotations
@@ -77,6 +76,7 @@ logger = logging.getLogger(__name__)
 
 SERVER_EVENT_SUBSCRIBER_HANDLER_NAMES = frozenset(
     {
+        "gauntlet_to_notification",
         "staleness_to_debate",
         "webhook_memory_stored",
         "webhook_memory_retrieved",
@@ -91,7 +91,7 @@ SERVER_EVENT_SUBSCRIBER_HANDLER_NAMES = frozenset(
 
 
 class ServerEventSubscriber:
-    """Server-domain (interface) cross-subscriber: webhook delivery + staleness reactions."""
+    """Interface cross-subscriber: webhook, staleness, and notification reactions."""
 
     def __init__(self) -> None:
         self._settings = get_settings() if _SETTINGS_AVAILABLE else None
@@ -106,6 +106,43 @@ class ServerEventSubscriber:
         except (AttributeError, TypeError):
             return True
 
+    def _handle_gauntlet_complete_to_notification(self, event: "StreamEvent") -> None:
+        """Gauntlet complete → Notification dispatch.
+
+        When a gauntlet stress-test finishes, notify stakeholders with
+        the verdict and finding counts.
+        """
+        data = event.data
+        gauntlet_id = data.get("gauntlet_id", "")
+        verdict = data.get("verdict", "unknown")
+        confidence = data.get("confidence", 0.0)
+        total_findings = data.get("total_findings", 0)
+        critical_count = data.get("critical_count", 0)
+
+        logger.debug("Gauntlet complete: %s verdict=%s", gauntlet_id, verdict)
+
+        try:
+            import asyncio
+
+            from aragora.notifications.service import notify_gauntlet_completed
+
+            coro = notify_gauntlet_completed(
+                gauntlet_id=gauntlet_id,
+                verdict=verdict,
+                confidence=confidence,
+                total_findings=total_findings,
+                critical_count=critical_count,
+            )
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(coro)
+            except RuntimeError:
+                asyncio.run(coro)
+        except ImportError:
+            pass  # Notification service not available
+        except (RuntimeError, TypeError, ValueError, OSError) as e:
+            logger.debug("Gauntlet notification failed: %s", e)
+
     def _handle_webhook_delivery(self, event: "StreamEvent") -> None:
         """
         Event → Webhook delivery.
@@ -114,7 +151,7 @@ class ServerEventSubscriber:
         This enables external systems to receive real-time notifications.
         """
         try:
-            from aragora.server.handlers.webhooks import get_webhook_store
+            from aragora.server.handlers.webhook_management import get_webhook_store
             from aragora.events.dispatcher import dispatch_webhook_with_retry
 
             # Get registered webhooks for this event type
@@ -190,6 +227,11 @@ class ServerEventSubscriber:
 
     def register(self, manager: "CrossSubscriberManager") -> None:
         """Wire the server-domain reactions into ``manager`` (keyed/idempotent)."""
+        manager.register(
+            "gauntlet_to_notification",
+            StreamEventType.GAUNTLET_COMPLETE,
+            self._handle_gauntlet_complete_to_notification,
+        )
         manager.register(
             "staleness_to_debate",
             StreamEventType.KNOWLEDGE_STALE,

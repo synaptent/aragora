@@ -203,7 +203,6 @@ class TournamentsAPI:
         """
         return self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/advance")
 
-
     # =========================================================================
     # Lifecycle
     # =========================================================================
@@ -217,31 +216,53 @@ class TournamentsAPI:
         data: dict[str, Any] = {}
         if reason:
             data["reason"] = reason
-        return self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/cancel", json=data)
+        return self._client.request(
+            "POST", f"/api/v1/tournaments/{tournament_id}/cancel", json=data
+        )
 
     def get_match(self, tournament_id: str, match_id: str) -> dict[str, Any]:
         """Get a specific match."""
-        return self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/matches/{match_id}")
+        return self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/matches/{match_id}"
+        )
 
-    def schedule_match(self, tournament_id: str, match_id: str, scheduled_at: str) -> dict[str, Any]:
+    def schedule_match(
+        self, tournament_id: str, match_id: str, scheduled_at: str
+    ) -> dict[str, Any]:
         """Schedule a match."""
-        return self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/matches/{match_id}/schedule", json={"scheduled_at": scheduled_at})
+        return self._client.request(
+            "POST",
+            f"/api/v1/tournaments/{tournament_id}/matches/{match_id}/schedule",
+            json={"scheduled_at": scheduled_at},
+        )
 
-    def register(self, tournament_id: str, participant: str, seed: int | None = None, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    def register(
+        self,
+        tournament_id: str,
+        participant: str,
+        seed: int | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Register a participant for a tournament."""
         data: dict[str, Any] = {"participant": participant}
         if seed is not None:
             data["seed"] = seed
         if metadata is not None:
             data["metadata"] = metadata
-        return self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/register", json=data)
+        return self._client.request(
+            "POST", f"/api/v1/tournaments/{tournament_id}/register", json=data
+        )
 
-    def withdraw(self, tournament_id: str, participant: str, reason: str | None = None) -> dict[str, Any]:
+    def withdraw(
+        self, tournament_id: str, participant: str, reason: str | None = None
+    ) -> dict[str, Any]:
         """Withdraw a participant from a tournament."""
         data: dict[str, Any] = {"participant": participant}
         if reason:
             data["reason"] = reason
-        return self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/withdraw", json=data)
+        return self._client.request(
+            "POST", f"/api/v1/tournaments/{tournament_id}/withdraw", json=data
+        )
 
     def list_participants(self, tournament_id: str) -> dict[str, Any]:
         """List participants in a tournament."""
@@ -249,7 +270,9 @@ class TournamentsAPI:
 
     def get_participant_history(self, tournament_id: str, participant: str) -> dict[str, Any]:
         """Get a participant's tournament history."""
-        return self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/participants/{participant}/history")
+        return self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/participants/{participant}/history"
+        )
 
     def get_seeding(self, tournament_id: str) -> dict[str, Any]:
         """Get tournament seeding."""
@@ -257,7 +280,9 @@ class TournamentsAPI:
 
     def set_seeding(self, tournament_id: str, **seeding: Any) -> dict[str, Any]:
         """Set tournament seeding."""
-        return self._client.request("PUT", f"/api/v1/tournaments/{tournament_id}/seeding", json=seeding)
+        return self._client.request(
+            "PUT", f"/api/v1/tournaments/{tournament_id}/seeding", json=seeding
+        )
 
     def get_stats(self, tournament_id: str) -> dict[str, Any]:
         """Get tournament statistics."""
@@ -269,7 +294,9 @@ class TournamentsAPI:
 
     def export(self, tournament_id: str, format: str = "json") -> dict[str, Any]:
         """Export tournament data."""
-        return self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/export", params={"format": format})
+        return self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/export", params={"format": format}
+        )
 
     def generate_report(self, tournament_id: str) -> dict[str, Any]:
         """Generate tournament report."""
@@ -386,39 +413,65 @@ class AsyncTournamentsAPI:
         data: dict[str, Any] = {}
         if reason:
             data["reason"] = reason
-        return await self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/cancel", json=data)
+        return await self._client.request(
+            "POST", f"/api/v1/tournaments/{tournament_id}/cancel", json=data
+        )
 
     async def get_match(self, tournament_id: str, match_id: str) -> dict[str, Any]:
         """Get a specific match."""
-        return await self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/matches/{match_id}")
+        return await self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/matches/{match_id}"
+        )
 
-    async def schedule_match(self, tournament_id: str, match_id: str, scheduled_at: str) -> dict[str, Any]:
+    async def schedule_match(
+        self, tournament_id: str, match_id: str, scheduled_at: str
+    ) -> dict[str, Any]:
         """Schedule a match."""
-        return await self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/matches/{match_id}/schedule", json={"scheduled_at": scheduled_at})
+        return await self._client.request(
+            "POST",
+            f"/api/v1/tournaments/{tournament_id}/matches/{match_id}/schedule",
+            json={"scheduled_at": scheduled_at},
+        )
 
-    async def register(self, tournament_id: str, participant: str, seed: int | None = None, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def register(
+        self,
+        tournament_id: str,
+        participant: str,
+        seed: int | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Register a participant for a tournament."""
         data: dict[str, Any] = {"participant": participant}
         if seed is not None:
             data["seed"] = seed
         if metadata is not None:
             data["metadata"] = metadata
-        return await self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/register", json=data)
+        return await self._client.request(
+            "POST", f"/api/v1/tournaments/{tournament_id}/register", json=data
+        )
 
-    async def withdraw(self, tournament_id: str, participant: str, reason: str | None = None) -> dict[str, Any]:
+    async def withdraw(
+        self, tournament_id: str, participant: str, reason: str | None = None
+    ) -> dict[str, Any]:
         """Withdraw a participant from a tournament."""
         data: dict[str, Any] = {"participant": participant}
         if reason:
             data["reason"] = reason
-        return await self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/withdraw", json=data)
+        return await self._client.request(
+            "POST", f"/api/v1/tournaments/{tournament_id}/withdraw", json=data
+        )
 
     async def list_participants(self, tournament_id: str) -> dict[str, Any]:
         """List participants in a tournament."""
-        return await self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/participants")
+        return await self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/participants"
+        )
 
     async def get_participant_history(self, tournament_id: str, participant: str) -> dict[str, Any]:
         """Get a participant's tournament history."""
-        return await self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/participants/{participant}/history")
+        return await self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/participants/{participant}/history"
+        )
 
     async def get_seeding(self, tournament_id: str) -> dict[str, Any]:
         """Get tournament seeding."""
@@ -426,7 +479,9 @@ class AsyncTournamentsAPI:
 
     async def set_seeding(self, tournament_id: str, **seeding: Any) -> dict[str, Any]:
         """Set tournament seeding."""
-        return await self._client.request("PUT", f"/api/v1/tournaments/{tournament_id}/seeding", json=seeding)
+        return await self._client.request(
+            "PUT", f"/api/v1/tournaments/{tournament_id}/seeding", json=seeding
+        )
 
     async def get_stats(self, tournament_id: str) -> dict[str, Any]:
         """Get tournament statistics."""
@@ -438,10 +493,10 @@ class AsyncTournamentsAPI:
 
     async def export(self, tournament_id: str, format: str = "json") -> dict[str, Any]:
         """Export tournament data."""
-        return await self._client.request("GET", f"/api/v1/tournaments/{tournament_id}/export", params={"format": format})
+        return await self._client.request(
+            "GET", f"/api/v1/tournaments/{tournament_id}/export", params={"format": format}
+        )
 
     async def generate_report(self, tournament_id: str) -> dict[str, Any]:
         """Generate tournament report."""
         return await self._client.request("POST", f"/api/v1/tournaments/{tournament_id}/report")
-
-

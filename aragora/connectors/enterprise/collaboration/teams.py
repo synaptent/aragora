@@ -234,7 +234,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         use_beta: bool = False,
     ) -> dict[str, Any]:
         """Make a request to Microsoft Graph API."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         token = await self._get_access_token()
         headers = {
@@ -265,7 +265,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         max_items: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Paginate through Graph API results."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         items_yielded = 0
         next_link = None
@@ -677,7 +677,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
     ) -> list:
         """Search Teams messages using Microsoft Search API."""
         from aragora.connectors.base import Evidence
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         # Build search request
         search_request = {

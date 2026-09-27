@@ -128,7 +128,7 @@ class TestVerticalRegistry:
             name="legal-analyst",
         )
         assert specialist is not None
-        assert specialist.model == "claude-opus-4-8"  # Default from config
+        assert specialist.model == "claude-opus-5"  # Default from config
 
     def test_create_specialist_unknown_vertical(self):
         """Test that creating unknown vertical raises error."""

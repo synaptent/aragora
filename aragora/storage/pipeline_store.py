@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from aragora.storage.base_store import SQLiteStore
 from aragora.storage.schema import SchemaManager
@@ -54,11 +54,14 @@ class PipelineResultStore(SQLiteStore):
         manager.register_migration(
             from_version=1,
             to_version=2,
-            function=lambda conn: safe_add_column(
-                conn,
-                "pipeline_results",
-                "execution_json",
-                "TEXT",
+            function=cast(
+                Any,
+                lambda conn: safe_add_column(
+                    conn,
+                    "pipeline_results",
+                    "execution_json",
+                    "TEXT",
+                ),
             ),
             description="Persist canonical execution metadata",
         )

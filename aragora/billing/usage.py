@@ -33,6 +33,10 @@ class UsageEventType(Enum):
 # Provider pricing per 1M tokens.
 PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
     "anthropic": {
+        "claude-fable-5": Decimal("10.00"),  # live catalog 2026-07-16
+        "claude-fable-5-output": Decimal("50.00"),
+        "claude-opus-5": Decimal("5.00"),  # Input — live catalog 2026-07-24
+        "claude-opus-5-output": Decimal("25.00"),
         "claude-opus-4-8": Decimal("5.00"),  # Input
         "claude-opus-4-8-output": Decimal("25.00"),
         "claude-opus-4-7": Decimal("5.00"),  # Input
@@ -57,8 +61,10 @@ PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
         "claude-haiku-4.5-output": Decimal("5.00"),
     },
     "openai": {
-        "gpt-5.5": Decimal("2.50"),
-        "gpt-5.5-output": Decimal("10.00"),
+        "gpt-5.6-sol": Decimal("5.00"),  # live catalog 2026-07-16
+        "gpt-5.6-sol-output": Decimal("30.00"),
+        "gpt-5.5": Decimal("5.00"),  # repriced by provider ~2026-07-14
+        "gpt-5.5-output": Decimal("30.00"),
         "gpt-4.1": Decimal("2.00"),
         "gpt-4.1-output": Decimal("8.00"),
         "gpt-4.1-mini": Decimal("0.40"),
@@ -91,6 +97,10 @@ PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
         "deepseek-r1-output": Decimal("0.42"),
     },
     "xai": {
+        "grok-4.5": Decimal("2.00"),  # live catalog 2026-07-16
+        "grok-4.5-output": Decimal("6.00"),
+        "grok-4.3": Decimal("1.25"),
+        "grok-4.3-output": Decimal("2.50"),
         "grok-4": Decimal("3.00"),
         "grok-4-output": Decimal("15.00"),
     },
@@ -101,10 +111,34 @@ PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
     "openrouter": {
         "default": Decimal("2.00"),
         "default-output": Decimal("8.00"),
-        "openai/gpt-5.5": Decimal("2.50"),
-        "openai/gpt-5.5-output": Decimal("10.00"),
+        "anthropic/claude-fable-5": Decimal("10.00"),
+        "anthropic/claude-fable-5-output": Decimal("50.00"),
+        "openai/gpt-5.6-sol": Decimal("5.00"),
+        "openai/gpt-5.6-sol-output": Decimal("30.00"),
+        "qwen/qwen3.8-max": Decimal("2.00"),
+        "qwen/qwen3.8-max-output": Decimal("6.00"),
+        "qwen/qwen3.7-max": Decimal("1.475"),
+        "qwen/qwen3.7-max-output": Decimal("4.425"),
+        "moonshotai/kimi-k3": Decimal("3.00"),
+        "moonshotai/kimi-k3-output": Decimal("15.00"),
+        "moonshotai/kimi-k2.7-code": Decimal("0.71"),
+        "moonshotai/kimi-k2.7-code-output": Decimal("3.50"),
+        "x-ai/grok-4.5": Decimal("2.00"),
+        "x-ai/grok-4.5-output": Decimal("6.00"),
+        "x-ai/grok-4.3": Decimal("1.25"),
+        "x-ai/grok-4.3-output": Decimal("2.50"),
+        "perplexity/sonar-reasoning-pro": Decimal("2.00"),
+        "perplexity/sonar-reasoning-pro-output": Decimal("8.00"),
+        "cohere/command-a": Decimal("2.50"),
+        "cohere/command-a-output": Decimal("10.00"),
+        "ai21/jamba-large-1.7": Decimal("2.00"),
+        "ai21/jamba-large-1.7-output": Decimal("8.00"),
+        "openai/gpt-5.5": Decimal("5.00"),
+        "openai/gpt-5.5-output": Decimal("30.00"),
         "google/gemini-3.5-flash": Decimal("1.50"),
         "google/gemini-3.5-flash-output": Decimal("9.00"),
+        "anthropic/claude-opus-5": Decimal("5.00"),
+        "anthropic/claude-opus-5-output": Decimal("25.00"),
         "anthropic/claude-opus-4-8": Decimal("5.00"),
         "anthropic/claude-opus-4-8-output": Decimal("25.00"),
         "anthropic/claude-opus-4.8": Decimal("5.00"),

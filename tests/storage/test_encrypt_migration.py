@@ -10,8 +10,11 @@ Tests cover:
 
 from __future__ import annotations
 
-import pytest
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from aragora.storage.migrations.encrypt_existing_data import (
     MigrationResult,
@@ -151,6 +154,44 @@ class TestMigrateSyncStore:
 
         assert result.store_name == "SyncStore"
         assert result.dry_run is True
+
+    @pytest.mark.asyncio
+    async def test_resaves_connector_through_storage_sync_store(self, monkeypatch):
+        connector = SimpleNamespace(
+            id="connector-1",
+            connector_type="github",
+            name="GitHub",
+            config={"api_key": "plaintext-secret"},
+        )
+        store = MagicMock()
+        store.initialize = AsyncMock()
+        store.list_connectors = AsyncMock(return_value=[connector])
+        store.save_connector = AsyncMock(return_value=connector)
+        sync_store_type = MagicMock(return_value=store)
+        sync_store_module = ModuleType("aragora.storage.sync_store")
+        sync_store_module.SyncStore = sync_store_type
+        sync_store_module.CREDENTIAL_KEYWORDS = frozenset({"api_key", "token"})
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+        monkeypatch.setitem(sys.modules, "aragora.connectors.enterprise.sync_store", None)
+
+        with patch(
+            "aragora.storage.migrations.encrypt_existing_data.CRYPTO_AVAILABLE",
+            True,
+        ):
+            result = await migrate_sync_store(dry_run=False)
+
+        assert result.success is True
+        assert result.total_records == 1
+        assert result.migrated == 1
+        sync_store_type.assert_called_once_with(use_encryption=True)
+        store.initialize.assert_awaited_once_with()
+        store.list_connectors.assert_awaited_once_with()
+        store.save_connector.assert_awaited_once_with(
+            "connector-1",
+            "github",
+            "GitHub",
+            {"api_key": "plaintext-secret"},
+        )
 
 
 class TestMigrateIntegrationStore:
@@ -352,11 +393,11 @@ class TestMetricsIntegration:
                     mock_store.initialize = AsyncMock()
 
                     with patch(
-                        "aragora.connectors.enterprise.sync_store.SyncStore",
+                        "aragora.storage.sync_store.SyncStore",
                         return_value=mock_store,
                     ):
                         with patch(
-                            "aragora.connectors.enterprise.sync_store.CREDENTIAL_KEYWORDS",
+                            "aragora.storage.sync_store.CREDENTIAL_KEYWORDS",
                             {"password"},
                         ):
                             result = await migrate_sync_store(dry_run=False)

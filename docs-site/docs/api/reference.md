@@ -5,7 +5,7 @@ description: Aragora API Reference
 
 # Aragora API Reference
 
-> **Last Updated:** 2026-04-25 (v2.9.0 alignment with repo versions)
+> **Last Updated:** 2026-09-04 (v2.10.0 alignment with repo versions)
 
 This document describes the HTTP and WebSocket APIs for Aragora's control plane
 for multi-agent AI debate across organizational knowledge and channels.
@@ -14,8 +14,8 @@ for multi-agent AI debate across organizational knowledge and channels.
 
 | SDK | Version | Methods | Coverage |
 |-----|---------|---------|----------|
-| TypeScript (`@aragora/sdk`) | 2.9.0 | 380 async | Full API (79 namespaces) |
-| Python (`aragora`) | 2.9.0 | 220 async + 420 sync | Full API |
+| TypeScript (`@aragora/sdk`) | 2.10.0 | 380 async | Full API (79 namespaces) |
+| Python (`aragora`) | 2.10.0 | 220 async + 420 sync | Full API |
 
 Versions reflect the current repo tags (see `pyproject.toml` and
 `aragora/__version__.py`). If versions drift, run
@@ -1532,8 +1532,8 @@ OpenRouter:
 | `deepseek-r1` | deepseek/deepseek-v4-pro | DeepSeek V4 Pro compatibility alias |
 | `llama` | meta-llama/llama-3.3-70b-instruct | Llama 3.3 70B |
 | `mistral` | mistralai/mistral-large-2411 | Mistral Large |
-| `qwen` | qwen/qwen3-max | Qwen3 Max |
-| `qwen-max` | qwen/qwen3-max | Qwen3 Max |
+| `qwen` | qwen/qwen3.8-max | Qwen 3.8 Max |
+| `qwen-max` | qwen/qwen3.8-max | Qwen 3.8 Max |
 | `yi` | 01-ai/yi-large | Yi Large |
 
 CLI:

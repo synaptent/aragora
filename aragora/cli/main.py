@@ -185,6 +185,10 @@ def main() -> int:
     if fast_result is not None:
         return fast_result
 
+    from aragora.server.startup.event_subscribers import register_webhook_store
+
+    register_webhook_store()
+
     # Register built-in modes here (not at module level) to avoid import-time cost
     from aragora.modes import register_all_builtins
     from aragora.cli.parser import build_parser

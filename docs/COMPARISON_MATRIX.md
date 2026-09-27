@@ -1,6 +1,6 @@
 # Comparison Matrix: Aragora vs. Agent Frameworks
 
-Last updated: February 2026
+Last updated: August 2026 (QM section; core tables February 2026)
 
 This comparison is based on public documentation, source code analysis, and published capabilities. We aim to be accurate and fair. Where competitors excel, we say so.
 
@@ -130,6 +130,14 @@ This comparison is based on public documentation, source code analysis, and publ
 - **Tool integration**: Native function calling with OpenAI's tool infrastructure.
 - **Adoption**: OpenAI's developer reach means rapid adoption.
 - **Guardrails**: Built-in input/output validation.
+
+### YC QM (Quartermaster) — added August 2026
+
+Company-wide "multiplayer agent harness" (Slack + web), MIT, open-sourced by Y Combinator Jul 2026; wraps external agent harnesses (Claude Code, Codex, OpenCode, Pi) rather than providing its own agent brain. See the full analysis in [docs/research/2026-08-26-yc-qm-brief.md](research/2026-08-26-yc-qm-brief.md).
+
+- **Stronger**: Slack-native everyday UX (turn detection, approval cards), single "scope" org primitive, breadth of mundane org work, momentum (14k+ stars in a month).
+- **Structural gap (verified in source)**: audit log is unsigned rows — no hash chain, no tamper evidence, no decision receipts; zero multi-agent cross-checking, debate, or dissent capture; SECURITY.md disclaims certification. QM approves *commands*; Aragora vets *decisions*.
+- **Positioning**: complementary — run QM for the daily grind, route consequential decisions through Aragora for a receipt.
 
 ## The Bottom Line
 

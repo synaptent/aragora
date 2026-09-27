@@ -763,6 +763,24 @@ class TestExecute:
             await phase.execute(ctx)
 
     @pytest.mark.asyncio
+    async def test_execute_uses_default_cancellation_reason(self):
+        """Cancelled contexts without a reason still raise a useful exception."""
+        from aragora.debate.cancellation import DebateCancelled
+
+        ctx, protocol = make_context()
+        token = MagicMock()
+        token.is_cancelled = True
+        token.reason = None
+        ctx.cancellation_token = token
+        deps = ConsensusDependencies(protocol=protocol)
+        phase = ConsensusPhase(deps=deps, callbacks=ConsensusCallbacks())
+
+        with pytest.raises(DebateCancelled, match="Debate cancelled") as exc_info:
+            await phase.execute(ctx)
+
+        assert exc_info.value.reason == "Debate cancelled"
+
+    @pytest.mark.asyncio
     async def test_execute_triggers_pre_consensus_hook(self):
         """Execute triggers PRE_CONSENSUS hook when hook_manager is present."""
         ctx, protocol = make_context(consensus_mode="none")

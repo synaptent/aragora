@@ -466,7 +466,7 @@ class TestProductionRequirements:
 
     def test_connector_sync_store_requires_db_in_production(self):
         """Test connector sync store requires database in production."""
-        from aragora.connectors.enterprise.sync_store import SyncStore
+        from aragora.storage.sync_store import SyncStore
         from aragora.control_plane.leader import DistributedStateError
 
         # Use patch.dict for proper isolation - automatically restores on exit

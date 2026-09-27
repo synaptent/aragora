@@ -167,7 +167,7 @@ print(f"Events processed: {stats.events_processed}")
 Connect Arena debates to the event system:
 
 ```python
-from aragora.events import ArenaEventBridge, create_arena_bridge
+from aragora.debate.arena_bridge import ArenaEventBridge, create_arena_bridge
 
 # Create bridge for an arena
 bridge = create_arena_bridge(arena)

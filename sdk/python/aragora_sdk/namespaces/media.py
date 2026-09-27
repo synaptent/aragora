@@ -25,14 +25,14 @@ class MediaAPI:
     Synchronous Media API.
 
     Provides methods for media asset access:
-    - Get audio file metadata and URLs
+    - Build direct audio URLs
     - List and browse podcast episodes
     - Access RSS feed for subscription
     - Media format conversions
 
     Example:
         >>> client = AragoraClient(base_url="https://api.aragora.ai")
-        >>> audio = client.media.get_audio("audio_123")
+        >>> audio_url = client.media.get_audio_url("debate_123")
         >>> episodes = client.media.list_podcast_episodes()
         >>> feed_url = client.media.get_feed_url()
     """
@@ -43,18 +43,6 @@ class MediaAPI:
     # =========================================================================
     # Audio Files
     # =========================================================================
-
-    def get_audio(self, audio_id: str) -> dict[str, Any]:
-        """
-        Get audio file metadata by ID.
-
-        Args:
-            audio_id: The audio file identifier.
-
-        Returns:
-            Audio file metadata including format, duration, size, and URL.
-        """
-        return self._client._request("GET", f"/api/v1/media/audio/{audio_id}")
 
     def get_audio_url(self, audio_id: str) -> str:
         """
@@ -131,18 +119,6 @@ class MediaAPI:
 
         return self._client._request("POST", "/api/v1/media/audio", json=data)
 
-    def delete_audio(self, audio_id: str) -> dict[str, Any]:
-        """
-        Delete an audio file.
-
-        Args:
-            audio_id: The audio file identifier.
-
-        Returns:
-            Dict confirming deletion.
-        """
-        return self._client._request("DELETE", f"/api/v1/media/audio/{audio_id}")
-
     # =========================================================================
     # Podcast Episodes
     # =========================================================================
@@ -208,7 +184,7 @@ class MediaAPI:
         return self._client._request("GET", "/api/v1/podcast/feed")
 
     # =========================================================================
-    # Media Conversions
+    # Unsupported Media Operations
     # =========================================================================
 
     def convert_audio(
@@ -218,39 +194,35 @@ class MediaAPI:
         bitrate: int | None = None,
     ) -> dict[str, Any]:
         """
-        Convert an audio file to a different format.
+        Guard unsupported conversion access until the API publishes this route.
 
         Args:
             audio_id: The source audio file identifier.
             target_format: Target format (mp3, aac, m4a, wav, ogg).
             bitrate: Optional target bitrate in kbps.
 
-        Returns:
-            Dict with converted audio file details.
+        Raises:
+            NotImplementedError: The public API does not expose this route.
         """
-        data: dict[str, Any] = {
-            "target_format": target_format,
-        }
-        if bitrate is not None:
-            data["bitrate"] = bitrate
-
-        return self._client._request(
-            "POST",
-            f"/api/v1/media/audio/{audio_id}/convert",
-            json=data,
+        raise NotImplementedError(
+            "POST /api/v1/media/audio/{audio_id}/convert is not part of the current "
+            "Aragora API contract."
         )
 
     def get_transcription(self, audio_id: str) -> dict[str, Any]:
         """
-        Get transcription for an audio file.
+        Guard unsupported transcription access until the API publishes this route.
 
         Args:
             audio_id: The audio file identifier.
 
-        Returns:
-            Dict with transcription text and metadata.
+        Raises:
+            NotImplementedError: The public API does not expose this route.
         """
-        return self._client._request("GET", f"/api/v1/media/audio/{audio_id}/transcription")
+        raise NotImplementedError(
+            "GET /api/v1/media/audio/{audio_id}/transcription is not part of the current "
+            "Aragora API contract."
+        )
 
 
 class AsyncMediaAPI:
@@ -269,10 +241,6 @@ class AsyncMediaAPI:
     # =========================================================================
     # Audio Files
     # =========================================================================
-
-    async def get_audio(self, audio_id: str) -> dict[str, Any]:
-        """Get audio file metadata by ID."""
-        return await self._client._request("GET", f"/api/v1/media/audio/{audio_id}")
 
     def get_audio_url(self, audio_id: str) -> str:
         """Get the direct audio file URL."""
@@ -318,10 +286,6 @@ class AsyncMediaAPI:
 
         return await self._client._request("POST", "/api/v1/media/audio", json=data)
 
-    async def delete_audio(self, audio_id: str) -> dict[str, Any]:
-        """Delete an audio file."""
-        return await self._client._request("DELETE", f"/api/v1/media/audio/{audio_id}")
-
     # =========================================================================
     # Podcast Episodes
     # =========================================================================
@@ -358,7 +322,7 @@ class AsyncMediaAPI:
         return await self._client._request("GET", "/api/v1/podcast/feed")
 
     # =========================================================================
-    # Media Conversions
+    # Unsupported Media Operations
     # =========================================================================
 
     async def convert_audio(
@@ -367,19 +331,15 @@ class AsyncMediaAPI:
         target_format: AudioFormat,
         bitrate: int | None = None,
     ) -> dict[str, Any]:
-        """Convert an audio file to a different format."""
-        data: dict[str, Any] = {
-            "target_format": target_format,
-        }
-        if bitrate is not None:
-            data["bitrate"] = bitrate
-
-        return await self._client._request(
-            "POST",
-            f"/api/v1/media/audio/{audio_id}/convert",
-            json=data,
+        """Guard unsupported conversion access until the API publishes this route."""
+        raise NotImplementedError(
+            "POST /api/v1/media/audio/{audio_id}/convert is not part of the current "
+            "Aragora API contract."
         )
 
     async def get_transcription(self, audio_id: str) -> dict[str, Any]:
-        """Get transcription for an audio file."""
-        return await self._client._request("GET", f"/api/v1/media/audio/{audio_id}/transcription")
+        """Guard unsupported transcription access until the API publishes this route."""
+        raise NotImplementedError(
+            "GET /api/v1/media/audio/{audio_id}/transcription is not part of the current "
+            "Aragora API contract."
+        )

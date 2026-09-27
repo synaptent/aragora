@@ -16,12 +16,11 @@ Performance optimizations:
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 from re import Pattern
-from collections.abc import Awaitable
 
 if TYPE_CHECKING:
-    from aragora.server.handlers.base import BaseHandler, HandlerResult
+    from aragora.server.handlers.base import BaseHandler, MaybeAsyncHandlerResult
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +157,7 @@ class RequestRouter:
         path: str,
         query_params: dict,
         http_handler: Any = None,
-    ) -> Union["HandlerResult", Awaitable["HandlerResult"], None]:
+    ) -> "MaybeAsyncHandlerResult":
         """Dispatch a request to the appropriate handler.
 
         Uses cached results when available for O(1) lookup on frequently
@@ -177,9 +176,9 @@ class RequestRouter:
         cache_key = (method, path)
         if cache_key in self._dispatch_cache:
             self._cache_hits += 1
-            handler, path_params = self._dispatch_cache[cache_key]
+            cached_handler, path_params = self._dispatch_cache[cache_key]
             return self._invoke_handler(
-                handler,
+                cached_handler,
                 method,
                 path,
                 query_params,
@@ -249,7 +248,7 @@ class RequestRouter:
         query_params: dict,
         path_params: dict,
         http_handler: Any,
-    ) -> Union["HandlerResult", Awaitable["HandlerResult"], None]:
+    ) -> "MaybeAsyncHandlerResult":
         """Invoke the appropriate method on a handler.
 
         Args:

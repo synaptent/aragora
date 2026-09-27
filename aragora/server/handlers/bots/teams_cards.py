@@ -307,13 +307,15 @@ def create_voting_card(
 
     # Default or custom options
     if options is None:
-        options = [
+        effective_options: list[dict[str, Any]] = [
             {"value": "approve", "label": "Approve", "style": "positive"},
             {"value": "reject", "label": "Reject", "style": "destructive"},
             {"value": "abstain", "label": "Abstain", "style": None},
         ]
+    else:
+        effective_options = options
 
-    for opt in options:
+    for opt in effective_options:
         card["actions"].append(
             _submit_action(
                 opt.get("label", opt["value"].title()),

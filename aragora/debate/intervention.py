@@ -145,6 +145,19 @@ class InterventionManager:
     # Intervention Operations
     # ------------------------------------------------------------------
 
+    def restore_paused(self) -> None:
+        """Mark a freshly reconstructed manager as paused without logging.
+
+        Used when a manager is recreated for a debate whose durable status
+        is "paused" (the in-memory manager was lost, e.g. across a restart):
+        a new manager starts RUNNING, which would make resume() fail. This
+        restores the paused state silently — no intervention entry and no
+        event, because no pause happened now. No-op unless currently RUNNING.
+        """
+        with self._lock:
+            if self._state == DebateInterventionState.RUNNING:
+                self._state = DebateInterventionState.PAUSED
+
     def pause(self, user_id: str | None = None) -> InterventionEntry:
         """Pause a running debate.
 
@@ -366,7 +379,7 @@ class InterventionManager:
             return
 
         try:
-            from aragora.server.stream.events import StreamEvent, StreamEventType
+            from aragora.events.types import StreamEvent, StreamEventType
 
             self._emitter.emit(
                 StreamEvent(

@@ -71,7 +71,7 @@ This checklist tracks all items required before declaring Aragora self-hosted GA
 
 ## Testing
 
-- [x] **Test suite** - 210,000+ tests across 5,000+ files
+- [x] **Test suite** - extensive coverage (canonical counts in `docs/METRICS.md`)
 - [x] **Handler tests** - 19,776 tests, 0 failures across randomized seeds
 - [x] **CI pipeline** - GitHub Actions with path-based triggers
 - [x] **Randomized ordering** - Seeds 12345, 54321, 99999 all pass

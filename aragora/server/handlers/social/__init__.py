@@ -15,7 +15,9 @@ from .relationship import (
     compute_rivalry_score,
     determine_relationship_type,
 )
-from .sharing import DebateVisibility, ShareSettings, SharingHandler
+from aragora.storage.share_models import DebateVisibility, ShareSettings
+
+from .sharing import SharingHandler
 from .slack import SlackHandler
 from .telegram import TelegramHandler, get_telegram_handler
 from .teams import TeamsIntegrationHandler

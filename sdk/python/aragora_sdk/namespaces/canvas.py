@@ -493,9 +493,7 @@ class CanvasAPI:
             f"/api/v1/pipeline/{pipeline_id}/agents",
         )
 
-    def approve_pipeline_agent(
-        self, pipeline_id: str, agent_id: str
-    ) -> dict[str, Any]:
+    def approve_pipeline_agent(self, pipeline_id: str, agent_id: str) -> dict[str, Any]:
         """Approve an agent's assignment to a pipeline."""
         return self._client.request(
             "POST",
@@ -852,9 +850,7 @@ class AsyncCanvasAPI:
             f"/api/v1/pipeline/{pipeline_id}/agents",
         )
 
-    async def approve_pipeline_agent(
-        self, pipeline_id: str, agent_id: str
-    ) -> dict[str, Any]:
+    async def approve_pipeline_agent(self, pipeline_id: str, agent_id: str) -> dict[str, Any]:
         """Approve an agent's assignment to a pipeline."""
         return await self._client.request(
             "POST",

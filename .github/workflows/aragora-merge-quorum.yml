@@ -128,6 +128,18 @@ jobs:
           # blocking findings remain — surfacing advisory_findings for follow-up. Tier 3-4
           # unaffected (human settlement). Reverting is a single env flip back OFF.
           ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE: "1"
+          # Activate the operator-advisory-settlement relief valve (default OFF;
+          # docs/specs/OPERATOR_ADVISORY_SETTLEMENT.md, #8933 incident). At Tier 3-4,
+          # when model quorum is UNREACHABLE because every review is severity-gated
+          # advisory (zero countable signals across rounds), the trusted settlement
+          # operator may settle over advisory-only dissent: requires >=2 validated
+          # model families heard at head, a validated western-frontier review, ZERO
+          # [P0]/[P1] findings anywhere, no unresolved dissent, a trusted-creator
+          # 'aragora/human-settlement' success status at the exact head, AND a
+          # trusted-author settlement marker comment naming the exact head. Blocking
+          # model dissent still stops everyone, including the operator. Reverting is
+          # a single env flip back OFF.
+          ARAGORA_ENABLE_OPERATOR_ADVISORY_SETTLEMENT: "1"
         shell: bash
         run: |
           set -euo pipefail
@@ -216,8 +228,28 @@ jobs:
               # The statuses API returns most-recent first.
               return bool(states) and states[0] == "success"
 
+          # Already merged ('settled' additionally has a settlement receipt recorded).
+          # Checked FIRST: nothing about a merged PR is gateable, and the producer does
+          # not clear `unresolved_dissent` on settle — so any later placement is
+          # unreachable for a merged-and-settled PR that still carries that flag
+          # (#9650 openai [P2]).
+          if status in ("settled", "already_merged"):
+              print(f"PR #{pr_number} is already merged (status={status}); nothing left to gate.")
+              sys.exit(0)
+
           # Tier 0-2: model quorum alone authorizes the merge.
           if status == "satisfied":
+              if verdict == "operator_advisory_settlement":
+                  families = entry.get("validated_review_families") or []
+                  print(
+                      f"::notice::OPERATOR-SETTLED-OVER-ADVISORY: Tier {tier} PR "
+                      f"#{pr_number} at {head_sha[:12]} — model quorum unreachable "
+                      f"(severity-gated advisory reviews from {families}); zero "
+                      "blocking findings; trusted-operator settlement status and "
+                      "marker comment verified at exact head. See "
+                      "docs/specs/OPERATOR_ADVISORY_SETTLEMENT.md."
+                  )
+                  sys.exit(0)
               print("Model quorum satisfied; Tier 0-2 settlement authorized.")
               sys.exit(0)
 
@@ -240,6 +272,23 @@ jobs:
                   f"settlement signal is recorded for head {head_sha[:12]}. The operator "
                   "must record settlement and set the 'aragora/human-settlement' commit "
                   "status. See docs/governance/MERGE_GATE_RECONCILIATION.md."
+              )
+
+          # The live gate withheld admin-squash authorization even though the model
+          # quorum itself is satisfied — e.g. an 'operator-review-required' label, or
+          # a mergeStateStatus outside {CLEAN, BLOCKED}. Failing closed is correct: an
+          # operator hold must never be merged away. Only the reason needs surfacing,
+          # and the packet already carries it.
+          if status == "blocked_by_live_gate":
+              gate_blockers = entry.get("admin_squash_gate_blockers") or []
+              for blocker in gate_blockers:
+                  print(f"  - {blocker}")
+              detail = "; ".join(str(b) for b in gate_blockers) or "no blocker detail in packet"
+              fail(
+                  f"Tier {tier}: model quorum is satisfied, but the live gate withheld "
+                  f"admin-squash authorization ({detail}). Clear the blockers above — for "
+                  "an 'operator-review-required' label, that means an operator removing it "
+                  "— then re-run this check."
               )
 
           fail(f"Unrecognized merge-quorum status '{status}' — failing closed.")
@@ -274,7 +323,14 @@ jobs:
     # keeps the workflow-level read-only permissions unchanged.
     permissions:
       actions: write
+      # Read-only: check out the default-branch shared selection helper
+      # (scripts/quorum_evidence_retrigger_select.sh). Nothing in this job
+      # can write repository contents.
+      contents: read
       pull-requests: read
+      # Read-only: the draft-run partition in Guard 3 reads the PR's
+      # ready_for_review transitions from the issue-events timeline.
+      issues: read
     # Debounce comment floods: a newer evidence comment for the same PR
     # cancels an older still-pending retrigger. cancel-in-progress here is
     # safe precisely because this job is NOT the required check — the
@@ -285,69 +341,58 @@ jobs:
       group: quorum-evidence-retrigger-${{ github.event.issue.number }}
       cancel-in-progress: true
     steps:
-      - name: Guard and re-trigger stale quorum evaluation
+      # Guard 1: the comment's FIRST markdown heading must name a known
+      # reviewer family — the same convention the quorum evidence parsers
+      # key on (review_queue.py heading inference + canonical model-family
+      # markers). Anything else no-ops successfully.
+      - name: Evidence-heading guard
+        id: heading
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.issue.number }}
           # Attacker-controlled content enters ONLY via env (never inline
           # ${{ }} inside run:), so comment markdown cannot inject shell.
           COMMENT_BODY: ${{ github.event.comment.body }}
         shell: bash
         run: |
           set -euo pipefail
-
-          # Guard 1: the comment's FIRST markdown heading must name a known
-          # reviewer family — the same convention the quorum evidence
-          # parsers key on (review_queue.py heading inference + canonical
-          # model-family markers). Anything else no-ops successfully.
           heading="$(printf '%s\n' "$COMMENT_BODY" | grep -m1 -E '^[[:space:]]{0,3}#{1,6}[[:space:]]' || true)"
           if [[ -z "$heading" ]]; then
+            echo "match=false" >> "$GITHUB_OUTPUT"
             echo "No markdown heading in comment — not evidence-shaped; no-op."
             exit 0
           fi
           families='claude|anthropic|codex|tesla|harvey|factory|grok|xai|gemini|openai|gpt|mistral|codestral|deepseek|qwen|kimi|moonshot|yi|glm|zhipu|minimax|hermes'
           heading_lower="$(printf '%s' "$heading" | tr '[:upper:]' '[:lower:]')"
           if ! printf '%s' "$heading_lower" | grep -qE "(^|[^a-z0-9])(${families})([^a-z0-9]|$)"; then
+            echo "match=false" >> "$GITHUB_OUTPUT"
             echo "First heading names no known reviewer family — no-op."
             exit 0
           fi
+          echo "match=true" >> "$GITHUB_OUTPUT"
 
-          # Guard 2: PR must be open and non-draft (drafts defer the gate).
-          pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}")"
-          pr_state="$(jq -r '.state' <<<"$pr_json")"
-          pr_draft="$(jq -r '.draft' <<<"$pr_json")"
-          head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
-          if [[ "$pr_state" != "open" || "$pr_draft" != "false" ]]; then
-            echo "PR #${PR_NUMBER} state=${pr_state} draft=${pr_draft} — gate not active; no-op."
-            exit 0
-          fi
+      - name: Check out the shared selection helper (default branch)
+        if: steps.heading.outputs.match == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Always run the BASE repo's default-branch copy of the helper —
+          # never PR code (the enforcing evaluation job's same ref pin).
+          ref: ${{ github.event.repository.default_branch }}
+          # This checkout exists solely to fetch the helper; a non-cone
+          # sparse checkout materializes that single file instead of the
+          # full tree on every evidence comment.
+          sparse-checkout: scripts/quorum_evidence_retrigger_select.sh
+          sparse-checkout-cone-mode: false
 
-          # Guard 3: only re-run a COMPLETED, non-success evaluation bound to
-          # the CURRENT head SHA. In-flight runs will already see the new
-          # comment; a green gate needs no recount; runs for old heads are
-          # correctly superseded by the next pull_request event.
-          run_json="$(gh api "repos/${GH_REPO}/actions/workflows/aragora-merge-quorum.yml/runs?event=pull_request&head_sha=${head_sha}&per_page=1" \
-            --jq '.workflow_runs[0] // empty')"
-          if [[ -z "$run_json" ]]; then
-            echo "No prior head-bound evaluation run for ${head_sha} — no-op."
-            exit 0
-          fi
-          run_id="$(jq -r '.id' <<<"$run_json")"
-          run_status="$(jq -r '.status' <<<"$run_json")"
-          run_conclusion="$(jq -r '.conclusion' <<<"$run_json")"
-          if [[ "$run_status" != "completed" ]]; then
-            echo "Latest evaluation run ${run_id} is ${run_status} — it will see this comment; no-op."
-            exit 0
-          fi
-          if [[ "$run_conclusion" == "success" ]]; then
-            echo "Latest evaluation run ${run_id} already succeeded — no-op."
-            exit 0
-          fi
-
-          echo "Re-running stale evaluation run ${run_id} (conclusion=${run_conclusion}) for PR #${PR_NUMBER} head ${head_sha}."
-          # Tolerate rerun races (e.g. a manual rerun already in progress):
-          # failure to request a rerun must not turn comment activity into
-          # red noise. The A1 reconciler remains the safety net.
-          gh run rerun "$run_id" --repo "$GH_REPO" \
-            || echo "::warning::rerun request for run ${run_id} failed (possibly already re-running); no-op."
+      # Guards 2-3: gate-deferral check + deterministic newest-survivor
+      # selection + burst dedup live in the shared helper so this job and
+      # the standalone aragora-merge-quorum-retrigger.yml helper cannot
+      # drift apart (docs/specs/QUORUM_EVIDENCE_RETRIGGER.md, PR #9754).
+      - name: Guard and re-trigger stale quorum evaluation
+        if: steps.heading.outputs.match == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/quorum_evidence_retrigger_select.sh

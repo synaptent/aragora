@@ -102,6 +102,31 @@ def test_metric_above_lower_bound(snapshot, metric_key, min_value):
     )
 
 
+def test_rbac_permission_calls_command_reproduces_value(snapshot):
+    """The printed reproduction command must count the generator's file set.
+
+    Every METRICS.md row promises a cold auditor can reproduce the value by
+    running the row's command. For rbac_permission_calls the generator counts
+    tracked ``.py`` files only (decorator calls cannot exist elsewhere; README
+    and YAML mentions are not calls), so the printed command must apply the
+    same restriction or the auditor gets a different number.
+    """
+    metric = snapshot["rbac_permission_calls"]
+    result = subprocess.run(
+        ["bash", "-c", metric.command],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    reproduced = int(result.stdout.strip())
+    assert reproduced == metric.value, (
+        f"printed command reproduces {reproduced} but the generator computed "
+        f"{metric.value}; the command's file set must match "
+        f"_count_line_matches' file set"
+    )
+
+
 def test_markdown_has_no_timestamp_or_sha(snapshot):
     """Canonical doc must not embed generation timestamp or git SHA.
 
@@ -194,3 +219,196 @@ def test_check_mode_is_idempotent(tmp_path, monkeypatch):
     snapshot_b = mod.gather_metrics()
     drifted, drifts = mod.check_drift(snapshot_b)
     assert not drifted, f"drift detected between two back-to-back regenerations: {drifts}"
+
+
+# ---------------------------------------------------------------------------
+# Base attribution (merge-commit-accurate PR drift check)
+#
+# PR runs of the Metrics Drift workflow execute on the synthetic merge
+# commit, so live counts include main-side changes the PR did not make.
+# check_drift accepts base_live (metric key -> live value at the base ref)
+# and base_doc (metric label -> doc value at the base ref); drift fully
+# explained by the base is reported as INHERITED and must not block.
+# ---------------------------------------------------------------------------
+
+PARAM_LABEL = "@pytest.mark.parametrize decorators"
+
+
+def _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value: int):
+    """Load the module with METRICS_DOC pointing at a one-metric doc."""
+    mod = _load_module()
+    doc_metric = mod.Metric(
+        key="parametrize_decorators",
+        label=PARAM_LABEL,
+        value=doc_value,
+        command="cmd",
+        source="tests/",
+    )
+    doc = mod.render_markdown(
+        mod.MetricsSnapshot(generated_at="t", git_sha="s", metrics=[doc_metric])
+    )
+    doc_path = tmp_path / "METRICS.md"
+    doc_path.write_text(doc)
+    monkeypatch.setattr(mod, "METRICS_DOC", doc_path)
+    return mod
+
+
+def _snapshot_with_value(mod, value: int):
+    return mod.MetricsSnapshot(
+        generated_at="t",
+        git_sha="s",
+        metrics=[
+            mod.Metric(
+                key="parametrize_decorators",
+                label=PARAM_LABEL,
+                value=value,
+                command="cmd",
+                source="tests/",
+            )
+        ],
+    )
+
+
+def test_main_side_drift_is_inherited_not_blocking(tmp_path, monkeypatch):
+    """Reproduces run 29947133317: doc=901, merge truth=909, all main-side.
+
+    The PR added nothing; the 8 extra decorators were already on main at the
+    base ref. The check must warn (INHERITED) but pass.
+    """
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = _snapshot_with_value(mod, 909)
+    drifted, drifts = mod.check_drift(
+        snapshot,
+        base_live={"parametrize_decorators": 909},
+        base_doc={PARAM_LABEL: 901},
+    )
+    assert not drifted, f"main-side drift wrongly blocked the PR: {drifts}"
+    assert any(d.startswith("INHERITED:") for d in drifts)
+
+
+def test_pr_attributable_drift_still_fails(tmp_path, monkeypatch):
+    """A PR that adds >threshold to a metric without regenerating must fail."""
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = _snapshot_with_value(mod, 909)
+    drifted, drifts = mod.check_drift(
+        snapshot,
+        base_live={"parametrize_decorators": 901},  # base == doc: PR added all 8
+        base_doc={PARAM_LABEL: 901},
+    )
+    assert drifted, "PR-attributable drift (0.9%) must block"
+    assert any(d.startswith("DRIFT:") for d in drifts)
+
+
+def test_sub_threshold_pr_contribution_on_stale_main_passes(tmp_path, monkeypatch):
+    """Reproduces PR #9439: doc=879, merge=895; PR added only 4 (0.46%).
+
+    Combined drift is 1.8% but the PR's own contribution is under the
+    threshold; the pre-existing 12 belong to main.
+    """
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=879)
+    snapshot = _snapshot_with_value(mod, 895)
+    drifted, drifts = mod.check_drift(
+        snapshot,
+        base_live={"parametrize_decorators": 891},  # main already at 891
+        base_doc={PARAM_LABEL: 879},
+    )
+    assert not drifted, f"sub-threshold PR contribution wrongly blocked: {drifts}"
+
+
+def test_pr_that_regenerated_stays_green_as_main_advances(tmp_path, monkeypatch):
+    """A PR that regenerated for its own changes must not fail when main
+    later adds more (that was the restack treadmill in #9317)."""
+    # PR branched when the count was 901, added 8, regenerated doc to 909.
+    # Main meanwhile moved to 906 (doc on main still 901); merge truth 914.
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=909)
+    snapshot = _snapshot_with_value(mod, 914)
+    drifted, drifts = mod.check_drift(
+        snapshot,
+        base_live={"parametrize_decorators": 906},
+        base_doc={PARAM_LABEL: 901},
+    )
+    assert not drifted, f"regenerated PR wrongly blocked by main advance: {drifts}"
+
+
+def test_strict_mode_without_base_data_unchanged(tmp_path, monkeypatch):
+    """Scheduled/dispatch runs pass no base data and must stay strict."""
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = _snapshot_with_value(mod, 909)
+    drifted, drifts = mod.check_drift(snapshot)
+    assert drifted
+    assert any(d.startswith("DRIFT:") for d in drifts)
+
+
+def test_new_metric_always_blocks_even_with_base_data(tmp_path, monkeypatch):
+    """A metric absent from the doc means the counter set changed; never
+    attributed to the base."""
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = mod.MetricsSnapshot(
+        generated_at="t",
+        git_sha="s",
+        metrics=[
+            mod.Metric(
+                key="parametrize_decorators",
+                label=PARAM_LABEL,
+                value=901,
+                command="cmd",
+                source="tests/",
+            ),
+            mod.Metric(
+                key="brand_new",
+                label="Brand new metric",
+                value=42,
+                command="cmd",
+                source="x/",
+            ),
+        ],
+    )
+    drifted, drifts = mod.check_drift(
+        snapshot,
+        base_live={"parametrize_decorators": 901, "brand_new": 42},
+        base_doc={PARAM_LABEL: 901},
+    )
+    assert drifted
+    assert any(d.startswith("NEW:") for d in drifts)
+
+
+def test_missing_base_entry_falls_back_to_strict(tmp_path, monkeypatch):
+    """If the base snapshot lacks the metric, do not attribute — fail closed."""
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = _snapshot_with_value(mod, 909)
+    drifted, _ = mod.check_drift(snapshot, base_live={}, base_doc={})
+    assert drifted
+
+
+def test_check_cli_with_base_attribution_files(tmp_path, monkeypatch):
+    """End-to-end: main(['--check', '--base-json', ..., '--base-doc', ...])
+    passes on inherited drift and fails without the base files."""
+    import json as _json
+
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = _snapshot_with_value(mod, 909)
+    monkeypatch.setattr(mod, "gather_metrics", lambda: snapshot)
+
+    base_json = tmp_path / "base-live.json"
+    base_json.write_text(
+        _json.dumps({"metrics": [{"key": "parametrize_decorators", "value": 909}]})
+    )
+    base_doc = tmp_path / "base-doc.md"
+    base_doc.write_text((tmp_path / "METRICS.md").read_text())
+
+    assert mod.main(["--check"]) == 1
+    assert mod.main(["--check", "--base-json", str(base_json), "--base-doc", str(base_doc)]) == 0
+
+
+def test_check_cli_unreadable_base_files_fall_back_to_strict(tmp_path, monkeypatch):
+    """Corrupt/missing base data must degrade to the strict check, not crash."""
+    mod = _synthetic_module_with_doc(tmp_path, monkeypatch, doc_value=901)
+    snapshot = _snapshot_with_value(mod, 909)
+    monkeypatch.setattr(mod, "gather_metrics", lambda: snapshot)
+
+    bad_json = tmp_path / "bad.json"
+    bad_json.write_text("{not json")
+    base_doc = tmp_path / "base-doc.md"
+    base_doc.write_text((tmp_path / "METRICS.md").read_text())
+
+    assert mod.main(["--check", "--base-json", str(bad_json), "--base-doc", str(base_doc)]) == 1

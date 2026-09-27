@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 from aragora.approvals.tokens import encode_approval_action
 
@@ -162,7 +162,7 @@ async def send_chat_approval_request(
             blocks = connector.format_blocks(
                 title=title,
                 body=body,
-                fields=fields,
+                fields=cast(list[tuple[str, str] | None], fields),
                 actions=buttons if buttons else None,
             )
         except (AttributeError, TypeError, ValueError):
@@ -179,7 +179,7 @@ async def send_chat_approval_request(
                 response = await connector.send_message(
                     channel_id=channel_id,
                     text=f"{title}\n{body}".strip(),
-                    blocks=blocks,
+                    blocks=cast(list[dict[str, Any] | None], blocks),
                     thread_id=platform_thread_id,
                 )
                 results.append(

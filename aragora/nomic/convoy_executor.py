@@ -166,6 +166,11 @@ class GastownConvoyExecutor:
         stop_on_failure: bool = False,
     ) -> list[TaskResult]:
         await self._ensure_initialized()
+        bead_store = self.bead_store
+        convoy_manager = self.convoy_manager
+        coordinator = self.coordinator
+        if bead_store is None or convoy_manager is None or coordinator is None:
+            raise RuntimeError("Convoy executor components failed to initialize")
         if not self.implementers:
             raise RuntimeError("No implementer agents available for convoy execution")
 
@@ -185,20 +190,20 @@ class GastownConvoyExecutor:
             bead.dependencies = []
             bead_ids[task.id] = bead.id
             try:
-                await self.bead_store.create(bead)
+                await bead_store.create(bead)
             except ValueError:
                 # Already exists; ignore
                 pass
 
         # Map dependencies to bead IDs
         for task in tasks:
-            bead = await self.bead_store.get(bead_ids[task.id])
-            if bead:
-                bead.dependencies = [bead_ids[d] for d in task.dependencies if d in bead_ids]
-                await self.bead_store.update(bead)
+            stored_bead = await bead_store.get(bead_ids[task.id])
+            if stored_bead:
+                stored_bead.dependencies = [bead_ids[d] for d in task.dependencies if d in bead_ids]
+                await bead_store.update(stored_bead)
 
         # Create convoy
-        convoy = await self.convoy_manager.create_convoy(
+        convoy = await convoy_manager.create_convoy(
             title="Nomic Implement Plan",
             description=f"{len(tasks)} tasks",
             bead_ids=[bead_ids[t.id] for t in tasks],
@@ -208,7 +213,7 @@ class GastownConvoyExecutor:
         )
 
         # Distribute beads to implementers
-        assignments = await self.coordinator.distribute_convoy(
+        assignments = await coordinator.distribute_convoy(
             convoy_id=convoy.id,
             agent_ids=[a.name for a in self.implementers],
         )
@@ -230,12 +235,12 @@ class GastownConvoyExecutor:
 
         async def run_task(task: ImplementTask) -> TaskResult:
             bead_id = bead_ids[task.id]
-            assignment = await self.coordinator.get_assignment(bead_id)
+            assignment = await coordinator.get_assignment(bead_id)
             agent = self._select_agent_for_assignment(assignment.agent_id if assignment else None)
 
-            await self.coordinator.update_assignment_status(bead_id, AssignmentStatus.ACTIVE)
-            await self.bead_store.claim(bead_id, agent.name)
-            await self.bead_store.update_status(bead_id, BeadStatus.RUNNING)
+            await coordinator.update_assignment_status(bead_id, AssignmentStatus.ACTIVE)
+            await bead_store.claim(bead_id, agent.name)
+            await bead_store.update_status(bead_id, BeadStatus.RUNNING)
 
             result = await self._execute_task_with_agent(task, agent)
             review = await self._review_task(task, agent, result.diff)
@@ -254,10 +259,8 @@ class GastownConvoyExecutor:
                 else:
                     async with completion_lock:
                         completed.add(task.id)
-                    await self.bead_store.update_status(bead_id, BeadStatus.COMPLETED)
-                    await self.coordinator.update_assignment_status(
-                        bead_id, AssignmentStatus.COMPLETED
-                    )
+                    await bead_store.update_status(bead_id, BeadStatus.COMPLETED)
+                    await coordinator.update_assignment_status(bead_id, AssignmentStatus.COMPLETED)
                     hook = self._hook_queues.get(agent.name)
                     if hook:
                         await hook.complete(bead_id)
@@ -274,8 +277,8 @@ class GastownConvoyExecutor:
                     model_used=result.model_used,
                     duration_seconds=result.duration_seconds,
                 )
-                await self.bead_store.update_status(bead_id, BeadStatus.FAILED)
-                await self.coordinator.update_assignment_status(
+                await bead_store.update_status(bead_id, BeadStatus.FAILED)
+                await coordinator.update_assignment_status(
                     bead_id, AssignmentStatus.FAILED, error_message=reason
                 )
                 hook = self._hook_queues.get(agent.name)

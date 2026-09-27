@@ -90,6 +90,16 @@ def reset_global_emitter():
     module._autonomous_emitter = original
 
 
+@pytest.fixture
+def clean_cross_subscriber_manager():
+    """Provide isolated production cross-subscriber wiring."""
+    from aragora.events.cross_subscribers import reset_cross_subscriber_manager
+
+    reset_cross_subscriber_manager()
+    yield
+    reset_cross_subscriber_manager()
+
+
 # ===========================================================================
 # Test AutonomousStreamClient
 # ===========================================================================
@@ -611,18 +621,102 @@ class TestEmitAlertEvent:
         set_autonomous_emitter(emitter)
 
         async def check():
-            emit_alert_event(
-                event_type="escalated",
-                alert_id="alert-004",
-                severity="critical",
-                title="Escalated",
-                new_severity="critical",
-            )
+            with patch("aragora.workflow.engine.WorkflowEngine.pause_all"):
+                emit_alert_event(
+                    event_type="escalated",
+                    alert_id="alert-004",
+                    severity="critical",
+                    title="Escalated",
+                    new_severity="critical",
+                )
             await asyncio.sleep(0.1)
             event = emitter._event_history[0]
             assert event.type == StreamEventType.ALERT_ESCALATED
 
         asyncio.run(check())
+
+    def test_emit_alert_escalated_reaches_workflow_brake_exactly_once(
+        self,
+        clean_cross_subscriber_manager,
+    ):
+        """Critical production escalations brake once before broadcast."""
+        delivery_order = []
+        emitter = MagicMock(spec=AutonomousStreamEmitter)
+        emitter.emit_sync.side_effect = lambda event: delivery_order.append("broadcast")
+        set_autonomous_emitter(emitter)
+
+        with patch(
+            "aragora.workflow.engine.WorkflowEngine.pause_all",
+            side_effect=lambda **kwargs: delivery_order.append("brake"),
+        ) as pause_all:
+            emit_alert_event(
+                event_type="escalated",
+                alert_id="alert-critical",
+                severity="high",
+                title="Critical production alert",
+                new_severity="critical",
+                reason="Database connection pool exhausted",
+            )
+
+        pause_all.assert_called_once_with(
+            reason="Emergency brake: Database connection pool exhausted"
+        )
+        emitter.emit_sync.assert_called_once()
+        event = emitter.emit_sync.call_args.args[0]
+        assert event.type == StreamEventType.ALERT_ESCALATED
+        assert event.data == {
+            "alert_id": "alert-critical",
+            "severity": "high",
+            "title": "Critical production alert",
+            "new_severity": "critical",
+            "reason": "Database connection pool exhausted",
+        }
+        assert delivery_order == ["brake", "broadcast"]
+
+    def test_emit_alert_escalated_noncritical_preserves_broadcast_behavior(self):
+        """Noncritical escalation remains a broadcast-only alert event."""
+        emitter = MagicMock(spec=AutonomousStreamEmitter)
+        set_autonomous_emitter(emitter)
+
+        with patch(
+            "aragora.server.startup.event_subscribers.bootstrap_event_subscribers"
+        ) as bootstrap:
+            emit_alert_event(
+                event_type="escalated",
+                alert_id="alert-warning",
+                severity="warning",
+                title="Warning escalation",
+            )
+
+        bootstrap.assert_not_called()
+        emitter.emit_sync.assert_called_once()
+        assert emitter.emit_sync.call_args.args[0].type == StreamEventType.ALERT_ESCALATED
+
+    def test_emit_alert_escalated_fails_closed_without_production_wiring(
+        self,
+        clean_cross_subscriber_manager,
+    ):
+        """Critical escalation cannot broadcast without its production brake wiring."""
+        from aragora.events.cross_subscribers import CrossSubscriberManager
+
+        emitter = MagicMock(spec=AutonomousStreamEmitter)
+        set_autonomous_emitter(emitter)
+
+        with (
+            patch(
+                "aragora.server.startup.event_subscribers.bootstrap_event_subscribers",
+                return_value=CrossSubscriberManager(),
+            ),
+            pytest.raises(RuntimeError, match="alert_escalated_to_workflow_brake"),
+        ):
+            emit_alert_event(
+                event_type="escalated",
+                alert_id="alert-unwired",
+                severity="critical",
+                title="Unwired production alert",
+            )
+
+        emitter.emit_sync.assert_not_called()
 
 
 class TestEmitTriggerEvent:

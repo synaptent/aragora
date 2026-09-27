@@ -279,6 +279,32 @@ def test_extract_checks_keeps_latest_run_per_name() -> None:
     assert psc.extract_checks(payload) == {"ci": "success", "lint": "in_progress"}
 
 
+def test_extract_checks_does_not_hide_newer_queued_attempt() -> None:
+    payload = {
+        "check_runs": [
+            {
+                "id": 102,
+                "name": "ci",
+                "status": "queued",
+                "created_at": "2026-06-13T11:00:00Z",
+                "started_at": None,
+                "completed_at": None,
+            },
+            {
+                "id": 101,
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "created_at": "2026-06-13T10:00:00Z",
+                "started_at": "2026-06-13T10:00:00Z",
+                "completed_at": "2026-06-13T11:05:00Z",
+            },
+        ]
+    }
+
+    assert psc.extract_checks(payload) == {"ci": "queued"}
+
+
 # --- poll: budget guard and breaker -------------------------------------------------
 
 

@@ -362,7 +362,11 @@ class TestGetPoolEventLoop:
     def test_returns_none_when_not_initialized(self):
         """get_pool_event_loop returns None when pool not initialized."""
         reset_shared_pool()
-        result = get_pool_event_loop()
+        with pytest.warns(
+            DeprecationWarning,
+            match=r"aragora\.storage\.pool_manager\.get_pool_event_loop",
+        ):
+            result = get_pool_event_loop()
         assert result is None
 
     @pytest.mark.asyncio
@@ -391,7 +395,11 @@ class TestGetPoolEventLoop:
             ),
         ):
             await initialize_shared_pool()
-            result = get_pool_event_loop()
+            with pytest.warns(
+                DeprecationWarning,
+                match=r"aragora\.storage\.pool_manager\.get_pool_event_loop",
+            ):
+                result = get_pool_event_loop()
 
             assert result is not None
             assert result is asyncio.get_running_loop()

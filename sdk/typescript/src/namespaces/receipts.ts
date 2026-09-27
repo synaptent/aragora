@@ -103,6 +103,30 @@ export class ReceiptsAPI {
   }
 
   /**
+   * Get the deployment's ODR signing public key (trust anchor).
+   *
+   * Public endpoint (no auth required). Also served as raw PEM at
+   * `/.well-known/aragora-odr-signing-key`.
+   *
+   * @returns Object with `algorithm`, `key_id`, and `public_key_pem`
+   */
+  async signingKey(): Promise<Record<string, unknown>> {
+    return this.client.request('GET', '/api/v2/receipts/signing-key');
+  }
+
+  /**
+   * Get the ODR signing public key as raw PEM from the well-known path.
+   *
+   * @returns PEM-encoded Ed25519 public key
+   */
+  async signingKeyPem(): Promise<string> {
+    return this.client.request<string>('GET', '/.well-known/aragora-odr-signing-key', {
+      headers: { Accept: 'application/x-pem-file' },
+      responseType: 'text',
+    });
+  }
+
+  /**
    * Export a receipt in various formats (v2 API).
    *
    * @param receiptId - Receipt identifier
@@ -117,6 +141,47 @@ export class ReceiptsAPI {
     return this.client.request('GET', `/api/v2/receipts/${encodeURIComponent(receiptId)}/export`, {
       params: { format: formatValue },
     });
+  }
+
+  /**
+   * Export a receipt as an Open Decision Receipt (ODR) document.
+   *
+   * Public endpoint (no auth required). Signed when the deployment configures a
+   * signing key, `signatures: []` otherwise.
+   *
+   * @param receiptId - Receipt identifier
+   * @param options - `odrVersion` selects the ODR profile ('0.1' or '0.2');
+   *   omitted means the deployment's default
+   * @returns The ODR document as JSON
+   */
+  async exportOdr(
+    receiptId: string,
+    options?: { odrVersion?: string }
+  ): Promise<Record<string, unknown>> {
+    const params: Record<string, unknown> = { format: 'odr' };
+    if (options?.odrVersion) {
+      params.odr_version = options.odrVersion;
+    }
+    return this.client.request('GET', `/api/v2/receipts/${encodeURIComponent(receiptId)}/export`, {
+      params,
+    });
+  }
+
+  /**
+   * Verify an ODR document statelessly against the deployment's signing key.
+   *
+   * Public endpoint (no auth required). The document is not persisted.
+   *
+   * On a deployment that serves no signing key `verified` is always false and
+   * `key_id` is null, with the signature entry in `checks` reported as `skip`
+   * or `warn` rather than `fail`. A false verdict alone is not evidence of
+   * tampering: read `checks`.
+   *
+   * @param document - An ODR document carrying `odr_version`
+   * @returns Object with `verified`, `checks`, `warnings`, `dissent_trail`, `key_id`
+   */
+  async verifyDocument(document: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.client.request('POST', '/api/v2/receipts/verify', { body: document });
   }
 
   /**

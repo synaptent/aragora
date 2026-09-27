@@ -99,7 +99,7 @@ class TestGeminiAgentInitialization:
         assert hasattr(GeminiAgent, "OPENROUTER_MODEL_MAP")
         assert "gemini-3.1-pro-preview" in GeminiAgent.OPENROUTER_MODEL_MAP
         assert "gemini-2.0-flash" in GeminiAgent.OPENROUTER_MODEL_MAP
-        assert GeminiAgent.DEFAULT_FALLBACK_MODEL == "google/gemini-3.1-pro"
+        assert GeminiAgent.DEFAULT_FALLBACK_MODEL == "google/gemini-3.1-pro-preview"
 
 
 class TestGeminiWebSearchDetection:

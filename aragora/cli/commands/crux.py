@@ -36,6 +36,10 @@ async def _run_crux_debate(
     counterfactual_validation: bool,
 ) -> Any:
     """Run a crux-finder debate and return the Arena ``DebateResult``."""
+    from aragora.debate.crux_mode import require_crux_finder_enabled
+
+    require_crux_finder_enabled()
+
     from aragora import Arena, Environment
     from aragora.agents import get_agents_by_names
     from aragora.debate.protocol import DebateProtocol
@@ -195,6 +199,14 @@ def cmd_crux(args: argparse.Namespace) -> None:
             "then emit a signed CruxReceipt."
         )
         return
+
+    from aragora.debate.crux_mode import CruxFinderDisabledError, require_crux_finder_enabled
+
+    try:
+        require_crux_finder_enabled()
+    except CruxFinderDisabledError as exc:
+        print(f"crux: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     try:
         result = asyncio.run(

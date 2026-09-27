@@ -25,6 +25,7 @@ import logging
 import os
 from typing import Any, Callable
 
+from aragora.models import CATALOG
 from aragora.pdb.panel_config import PDBPanelConfig, load_panel_config
 from aragora.pdb.protocol import ProviderInvoker
 from aragora.pdb.real_invoker import (
@@ -84,8 +85,8 @@ GEMINI_MODEL_DEFAULT = "gemini-3.1-pro-preview"
 GROK_MODEL_DEFAULT = "grok-4.20-0309-reasoning"
 # The mission brief anchors these to specific provider model ids.
 DEEPSEEK_MODEL_DEFAULT = "deepseek/deepseek-v4-pro"
-KIMI_MODEL_DEFAULT = "moonshotai/kimi-k2.6"
-QWEN_MODEL_DEFAULT = "qwen/qwen3-235b-a22b"
+KIMI_MODEL_DEFAULT = CATALOG["kimi-k3"].openrouter_id
+QWEN_MODEL_DEFAULT = CATALOG["qwen3.8-max"].openrouter_id
 MISTRAL_MODEL_DEFAULT = "mistral-large-2512"
 
 

@@ -23,6 +23,15 @@ SHIMS = [
 MODS = [mod for mod, _ in SHIMS]
 
 
+def _import_legacy_cache():
+    sys.modules.pop("aragora.cache", None)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        module = importlib.import_module("aragora.cache")
+    deprecations = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
+    return module, deprecations
+
+
 @pytest.fixture(autouse=True)
 def _restore_cache_modules():
     saved = {name: sys.modules.get(name) for name in MODS}
@@ -89,3 +98,68 @@ def test_distinct_cachestats_apis_preserved():
     assert DecoratorStats is not RegistryStats
     assert DecoratorStats is not AdaptiveStats
     assert RegistryStats is not AdaptiveStats
+
+
+def test_cache_warning_names_valid_cached_replacement():
+    legacy_cache, deprecations = _import_legacy_cache()
+    from aragora.caching.ttl import ttl_cache
+
+    message = "\n".join(deprecations)
+    assert "aragora.caching.ttl.ttl_cache" in message
+    assert "aragora.caching.ttl.cached" not in message
+    assert legacy_cache.cached is ttl_cache
+
+
+def test_cache_warning_names_valid_async_cached_replacement():
+    legacy_cache, deprecations = _import_legacy_cache()
+    from aragora.caching.ttl import async_ttl_cache
+
+    message = "\n".join(deprecations)
+    assert "aragora.caching.ttl.async_ttl_cache" in message
+    assert "aragora.caching.ttl.async_cached" not in message
+    assert legacy_cache.async_cached is async_ttl_cache
+
+
+@pytest.mark.asyncio
+async def test_cache_decorator_replacements_preserve_identity_and_behavior():
+    legacy_cache, _ = _import_legacy_cache()
+    from aragora.caching.ttl import async_ttl_cache, get_handler_cache, ttl_cache
+
+    assert legacy_cache.cached is ttl_cache
+    assert legacy_cache.async_cached is async_ttl_cache
+
+    handler_cache = get_handler_cache()
+    handler_cache.clear()
+    sync_calls = 0
+    async_calls = 0
+
+    @legacy_cache.cached(
+        ttl_seconds=60,
+        key_prefix="val_p4a_021_sync",
+        skip_first=False,
+    )
+    def sync_value(value: int) -> int:
+        nonlocal sync_calls
+        sync_calls += 1
+        return value * 2
+
+    @legacy_cache.async_cached(
+        ttl_seconds=60,
+        key_prefix="val_p4a_021_async",
+        skip_first=False,
+    )
+    async def async_value(value: int) -> int:
+        nonlocal async_calls
+        async_calls += 1
+        return value * 3
+
+    try:
+        assert sync_value(7) == 14
+        assert sync_value(7) == 14
+        assert sync_calls == 1
+
+        assert await async_value(7) == 21
+        assert await async_value(7) == 21
+        assert async_calls == 1
+    finally:
+        handler_cache.clear()

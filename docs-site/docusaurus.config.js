@@ -116,6 +116,12 @@ const config = {
             label: 'API Reference',
           },
           {
+            type: 'docSidebar',
+            sidebarId: 'referenceSidebar',
+            position: 'left',
+            label: 'Reference',
+          },
+          {
             href: 'https://aragora.ai',
             label: 'aragora.ai',
             position: 'right',

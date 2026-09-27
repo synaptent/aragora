@@ -15,7 +15,7 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from aragora.swarm.env_utils import git_safe_env
 from aragora.swarm.worker_process import is_ignored_changed_path
@@ -195,7 +195,7 @@ class DebateGate:
             try:
                 from aragora.agents.base import create_agent
 
-                agent = create_agent(
+                agent = cast(Any, create_agent)(
                     agent_type,
                     name="debate-publish-gate",
                     role="critic",

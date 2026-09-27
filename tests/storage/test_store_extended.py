@@ -571,6 +571,22 @@ class TestDebateStorageExtended:
 # =============================================================================
 
 
+def _backdate_patterns(store, days: int = 10) -> None:
+    """Age all stored patterns using SQLite's own UTC clock.
+
+    Patterns are stamped with local-time ``datetime.now()`` while
+    ``prune_stale_patterns`` compares against UTC ``julianday('now')``, so a
+    freshly written pattern can appear up to a millisecond (or, east of UTC,
+    hours) in the future and dodge ``max_age_days=0`` pruning.
+    """
+    with store.connection() as conn:
+        conn.execute(
+            "UPDATE patterns SET updated_at = datetime('now', ?)",
+            (f"-{days} days",),
+        )
+        conn.commit()
+
+
 class TestPatternPruningExtended:
     """Extended tests for pattern pruning."""
 
@@ -589,6 +605,8 @@ class TestPatternPruningExtended:
         # Store many times (100% success rate)
         for _ in range(10):
             store.store_pattern(critique, "fix")
+
+        _backdate_patterns(store)
 
         # Prune with high min_success_rate
         pruned = store.prune_stale_patterns(max_age_days=0, min_success_rate=0.5)
@@ -615,8 +633,11 @@ class TestPatternPruningExtended:
         store.fail_pattern("archive test pattern")
         store.fail_pattern("archive test pattern")
 
+        _backdate_patterns(store)
+
         # Prune (success_rate = 1/4 = 0.25 < 0.5)
-        store.prune_stale_patterns(max_age_days=0, min_success_rate=0.5, archive=True)
+        pruned = store.prune_stale_patterns(max_age_days=0, min_success_rate=0.5, archive=True)
+        assert pruned == 1
 
         archive_stats = store.get_archive_stats()
         assert archive_stats["total_archived"] >= 1
@@ -637,9 +658,12 @@ class TestPatternPruningExtended:
         store.fail_pattern("no archive pattern")
         store.fail_pattern("no archive pattern")
 
+        _backdate_patterns(store)
+
         initial_archive = store.get_archive_stats()["total_archived"]
 
-        store.prune_stale_patterns(max_age_days=0, min_success_rate=0.5, archive=False)
+        pruned = store.prune_stale_patterns(max_age_days=0, min_success_rate=0.5, archive=False)
+        assert pruned == 1
 
         final_archive = store.get_archive_stats()["total_archived"]
         assert final_archive == initial_archive  # No new archives

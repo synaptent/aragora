@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from collections.abc import Generator
-from typing import Any
+from typing import Any, cast
 
 from aragora.agents.base import create_agent
 from aragora.agents.errors import AgentConnectionError, CLISubprocessError
@@ -908,7 +908,11 @@ class CampaignPlanner:
                 ]
             }
             try:
-                agent = create_agent(self.review_model, name="campaign-crosscheck", role="critic")
+                agent = cast(Any, create_agent)(
+                    self.review_model,
+                    name="campaign-crosscheck",
+                    role="critic",
+                )
                 response = asyncio.run(agent.generate(json.dumps(prompt, sort_keys=True)))
                 for finding in _extract_json_list(response):
                     findings.append(f"crosscheck: {finding}")
@@ -2092,7 +2096,7 @@ class CampaignExecutor:
             outcome = self._resolve_dispatch_outcome(
                 {"run": run_dict},
                 run_dict=run_dict,
-                deliverable=_extract_deliverable(run_dict),
+                deliverable=cast(dict[str, Any], _extract_deliverable(run_dict)),
             )
             if outcome in {
                 CampaignRunOutcome.DELIVERABLE_CREATED.value,

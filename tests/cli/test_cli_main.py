@@ -21,6 +21,34 @@ from aragora.cli.main import (
 )
 
 
+def test_ask_cleanup_drains_dispatcher_before_closing_webhook_store_dependencies():
+    """In-flight webhook workers finish before their store dependencies close."""
+    from aragora.cli.commands import debate as debate_cmd
+
+    order: list[str] = []
+    with (
+        patch(
+            "aragora.events.dispatcher.shutdown_dispatcher",
+            side_effect=lambda *, wait: order.append(f"dispatcher:{wait}"),
+        ),
+        patch(
+            "aragora.server.startup.database.close_postgres_pool",
+            new=AsyncMock(side_effect=lambda: order.append("postgres")),
+        ),
+        patch(
+            "aragora.storage.connection_factory.close_all_pools",
+            new=AsyncMock(side_effect=lambda: order.append("connection-pools")),
+        ),
+        patch(
+            "aragora.storage.webhook_config_store.reset_webhook_config_store",
+            side_effect=lambda: order.append("store"),
+        ),
+    ):
+        asyncio.run(debate_cmd._shutdown_cmd_ask_resources())
+
+    assert order == ["dispatcher:True", "postgres", "connection-pools", "store"]
+
+
 # =============================================================================
 # Parse Agents Tests
 # =============================================================================
@@ -258,6 +286,16 @@ class TestArgumentParser:
         assert args.command == "demo"
         assert args.offline is True
         assert args.receipt == "aragora-demo-receipt.json"
+
+    def test_real_parser_accepts_ask_crux_cards(self):
+        """--crux-cards must stay wired on the real ask parser (default off)."""
+        parser = cli_parser.build_parser()
+
+        args = parser.parse_args(["ask", "Task", "--crux-cards"])
+        assert args.crux_cards is True
+
+        args = parser.parse_args(["ask", "Task"])
+        assert args.crux_cards is False
 
     def test_parse_serve_command(self, parser):
         """Should parse serve command with defaults."""
@@ -548,6 +586,44 @@ class TestDemoTasks:
 class TestMain:
     """Tests for main entry point."""
 
+    def test_main_registers_webhook_store_before_normal_cli_initialization(self, monkeypatch):
+        """Normal CLI startup should register durable webhook storage first."""
+        order: list[str] = []
+        fake_args = argparse.Namespace(
+            command="status",
+            verbose=False,
+            func=lambda _args: order.append("command"),
+        )
+        fake_parser = Mock()
+        fake_parser.parse_args.return_value = fake_args
+
+        monkeypatch.setattr("aragora.cli.main._try_review_queue_fast_path", lambda _argv: None)
+        monkeypatch.setattr(
+            "aragora.server.startup.event_subscribers.register_webhook_store",
+            lambda: order.append("webhook_store"),
+        )
+        monkeypatch.setattr(
+            "aragora.modes.register_all_builtins",
+            lambda: order.append("modes"),
+        )
+        monkeypatch.setattr("aragora.cli.parser.build_parser", lambda: fake_parser)
+        monkeypatch.setattr("aragora.cli.main._hydrate_startup_secrets", lambda: None)
+
+        assert main() == 0
+        assert order == ["webhook_store", "modes", "command"]
+
+    def test_main_review_queue_fast_path_skips_webhook_store_registration(self, monkeypatch):
+        """The lightweight review-queue path should remain registration-free."""
+        register_webhook_store = Mock()
+        monkeypatch.setattr(
+            "aragora.server.startup.event_subscribers.register_webhook_store",
+            register_webhook_store,
+        )
+        monkeypatch.setattr("aragora.cli.main._try_review_queue_fast_path", lambda _argv: 17)
+
+        assert main() == 17
+        register_webhook_store.assert_not_called()
+
     def test_review_queue_build_accepts_repo_override(self):
         parser = cli_parser.build_parser()
         args = parser.parse_args(
@@ -599,7 +675,12 @@ class TestMain:
         def _unexpected_hydration(*_args, **_kwargs):
             raise AssertionError("record-settlement should not hydrate startup secrets")
 
-        monkeypatch.setattr("aragora.cli.main.build_parser", lambda: fake_parser)
+        monkeypatch.setattr("aragora.cli.main._try_review_queue_fast_path", lambda _argv: None)
+        monkeypatch.setattr(
+            "aragora.server.startup.event_subscribers.register_webhook_store",
+            lambda: None,
+        )
+        monkeypatch.setattr("aragora.cli.parser.build_parser", lambda: fake_parser)
         monkeypatch.setattr("aragora.modes.register_all_builtins", lambda: None)
         monkeypatch.setattr(
             "aragora.config.secrets.hydrate_env_from_secrets",

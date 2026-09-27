@@ -259,12 +259,12 @@ class SessionOrchestrationMixin(OpenClawMixinBase):
             # Validate config
             is_valid, error = validate_session_config(config)
             if not is_valid:
-                return error_response(error, 400)
+                return error_response(error or "Invalid session config", 400)
 
             # Validate metadata
             is_valid, error = validate_metadata(metadata, MAX_SESSION_METADATA_SIZE)
             if not is_valid:
-                return error_response(error, 400)
+                return error_response(error or "Invalid session metadata", 400)
 
             session = store.create_session(
                 user_id=user_id,
@@ -426,8 +426,8 @@ class SessionOrchestrationMixin(OpenClawMixinBase):
 
             # Validate action_type
             is_valid, error = validate_action_type(action_type)
-            if not is_valid:
-                return error_response(error, 400)
+            if not is_valid or not isinstance(action_type, str):
+                return error_response(error or "Invalid action type", 400)
 
             # Verify session exists and is owned by user
             session = store.get_session(session_id)
@@ -453,12 +453,12 @@ class SessionOrchestrationMixin(OpenClawMixinBase):
             # Validate input data
             is_valid, error = validate_action_input(input_data)
             if not is_valid:
-                return error_response(error, 400)
+                return error_response(error or "Invalid action input", 400)
 
             # Validate metadata
             is_valid, error = validate_metadata(metadata)
             if not is_valid:
-                return error_response(error, 400)
+                return error_response(error or "Invalid action metadata", 400)
 
             # Receipt enforcement gate (Phase 2 — Decision Integrity Kernel)
             receipt_id = body.get("receipt_id")

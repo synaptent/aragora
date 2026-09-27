@@ -372,7 +372,7 @@ Aragora verification provides:
 
 | Feature | Description |
 |---------|-------------|
-| **Multi-agent adversarial testing** | 43 agent types probe for weaknesses |
+| **Multi-agent adversarial testing** | 46 agent types probe for weaknesses |
 | **Cryptographic receipts** | SHA-256 signed, tamper-proof audit trail |
 | **Formal verification** | Z3/Lean mathematical proofs of decision properties |
 | **RBAC governance** | 360+ permissions, role hierarchy, tenant isolation |

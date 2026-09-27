@@ -435,11 +435,11 @@ class TestTokenCostCalculation:
             ("anthropic", "claude-opus-4-7", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-opus-4", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-haiku-4.5", Decimal("1.00"), Decimal("5.00")),
-            ("openai", "gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openai", "gpt-5.5", Decimal("5.00"), Decimal("30.00")),  # live 2026-07-16
             ("google", "gemini-3.5-flash", Decimal("1.50"), Decimal("9.00")),
             ("google", "gemini-3.1-pro", Decimal("2.00"), Decimal("12.00")),
             ("google", "gemini-3.1-pro-preview", Decimal("2.00"), Decimal("12.00")),
-            ("openrouter", "openai/gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openrouter", "openai/gpt-5.5", Decimal("5.00"), Decimal("30.00")),
             (
                 "openrouter",
                 "anthropic/claude-opus-4-8",
@@ -888,11 +888,11 @@ class TestRecordTokenUsage:
             ("anthropic", "claude-opus-4-8", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-opus-4", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-haiku-4.5", Decimal("1.00"), Decimal("5.00")),
-            ("openai", "gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openai", "gpt-5.5", Decimal("5.00"), Decimal("30.00")),  # live 2026-07-16
             ("google", "gemini-3.5-flash", Decimal("1.50"), Decimal("9.00")),
             ("google", "gemini-3.1-pro", Decimal("2.00"), Decimal("12.00")),
             ("google", "gemini-3.1-pro-preview", Decimal("2.00"), Decimal("12.00")),
-            ("openrouter", "openai/gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openrouter", "openai/gpt-5.5", Decimal("5.00"), Decimal("30.00")),
             (
                 "openrouter",
                 "anthropic/claude-opus-4-8",
