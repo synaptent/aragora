@@ -303,14 +303,25 @@ def is_critical_secret(name: str) -> bool:
     return name in CRITICAL_SECRETS
 
 
-def managed_custody_configured() -> bool:
-    """Whether a managed custody backend (mounted directory or AWS) is configured.
+def managed_custody_problem() -> str | None:
+    """Why managed custody cannot serve secrets at startup, or ``None`` when it can.
 
-    Reads the same environment rules as ``SecretsConfig.from_env()``; it never
-    touches the mounted directory or AWS.
+    Reads the same environment rules as ``SecretsConfig.from_env()``. A configured
+    ``ARAGORA_SECRETS_DIR`` is opened with the secret manager's own no-follow
+    validation, so a relative, missing or unsafe directory is reported here rather
+    than on the first secret read. AWS custody is not probed (that needs the
+    network) and counts as configured.
     """
     config = SecretsConfig.from_env()
-    return bool(config.secrets_dir) or config.use_aws
+    if not config.secrets_dir and not config.use_aws:
+        return "no managed secret custody is configured"
+    if config.secrets_dir:
+        try:
+            directory_fd = SecretManager(config)._open_secrets_directory()
+        except SecretSourceError as exc:
+            return f"ARAGORA_SECRETS_DIR is not usable ({exc})"
+        os.close(directory_fd)
+    return None
 
 
 @dataclass
