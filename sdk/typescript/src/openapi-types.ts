@@ -183254,9 +183254,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": {
+                    /** @enum {string} */
+                    odr_version: "0.1" | "0.2";
+                } & {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
@@ -183265,7 +183270,22 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        verified: boolean;
+                        receipt_id: string;
+                        odr_digest: string;
+                        checks: {
+                            name: string;
+                            /** @enum {string} */
+                            status: "pass" | "fail" | "warn" | "skip";
+                            detail: string;
+                        }[];
+                        warnings: string[];
+                        dissent_trail: unknown[];
+                        key_id: string | null;
+                    };
+                };
             };
             /** @description Body is not a JSON object carrying odr_version */
             400: {
