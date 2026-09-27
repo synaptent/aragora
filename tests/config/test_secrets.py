@@ -815,9 +815,61 @@ class TestSecretManagerAWS:
                     }[response_kind]
                 }
             manager.refresh()
+            if response_kind == "missing" and earlier_transient_failure:
+                # A NotFound is inconclusive while another region failed transiently.
+                assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {
+                    "OPENAI_API_KEY": "revoked-value"
+                }
+                return
             assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {}
             assert "OPENAI_API_KEY" not in manager._cached_secrets
             assert "OPENAI_API_KEY" not in os.environ
+
+    @pytest.mark.parametrize("not_found_first", [True, False])
+    def test_not_found_with_transient_region_keeps_last_known_cache(self, not_found_first):
+        regions = ["east", "west"]
+        manager = SecretManager(SecretsConfig(use_aws=True, aws_regions=regions))
+        manager._cached_secrets = {"OPENAI_API_KEY": "last-known-value"}
+        manager._cached_secret_sources = {"OPENAI_API_KEY": "aws"}
+        manager._cache_timestamp = time.time()
+        manager._initialized = True
+        not_found, down = MagicMock(), MagicMock()
+        not_found.get_secret_value.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException", "Message": "missing"}},
+            "GetSecretValue",
+        )
+        down.get_secret_value.side_effect = ClientError(
+            {"Error": {"Code": "ServiceUnavailable", "Message": "regional outage"}},
+            "GetSecretValue",
+        )
+        first, second = (not_found, down) if not_found_first else (down, not_found)
+
+        with patch.object(
+            manager,
+            "_get_aws_client",
+            side_effect=lambda region: first if region == "east" else second,
+        ):
+            manager.refresh()
+
+        assert manager._last_aws_load_authoritative_failure is False
+        assert manager.get("OPENAI_API_KEY", strict=False) == "last-known-value"
+
+    def test_not_found_in_every_region_still_clears_cache(self):
+        manager = SecretManager(SecretsConfig(use_aws=True, aws_regions=["east", "west"]))
+        manager._cached_secrets = {"OPENAI_API_KEY": "revoked-value"}
+        manager._cached_secret_sources = {"OPENAI_API_KEY": "aws"}
+        manager._cache_timestamp = time.time()
+        manager._initialized = True
+        client = MagicMock()
+        client.get_secret_value.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException", "Message": "missing"}},
+            "GetSecretValue",
+        )
+
+        with patch.object(manager, "_get_aws_client", return_value=client):
+            manager.refresh()
+
+        assert manager.get("OPENAI_API_KEY", strict=False) is None
 
     def test_transient_refresh_retains_hydrated_credentials(self):
         manager = SecretManager(SecretsConfig(use_aws=True))
