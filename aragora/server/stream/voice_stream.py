@@ -41,7 +41,7 @@ from aragora.connectors.whisper import (
     TranscriptionSegment,
 )
 from aragora.connectors.exceptions import ConnectorConfigError, ConnectorRateLimitError
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 
 # TTS backend imports - lazy loaded for optional dependency
 _tts_backend = None

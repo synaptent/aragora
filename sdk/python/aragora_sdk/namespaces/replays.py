@@ -7,18 +7,10 @@ and review agent interactions over time.
 
 from __future__ import annotations
 
-import warnings
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
-
-ReplayFormat = Literal["json", "markdown", "html"]
-
-
-def _warn_deprecated(message: str) -> None:
-    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
-    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class ReplaysAPI:
@@ -91,25 +83,6 @@ class ReplaysAPI:
         """
         return self._client.request("GET", f"/api/v1/replays/{replay_id}")
 
-    def get_from_debate(self, debate_id: str) -> dict[str, Any]:
-        """
-        Get the replay for a debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/replay is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use list() / search() to locate the replay for a
-        debate, then get(replay_id) -- the documented /api/v1/replays
-        contract.
-
-        Args:
-            debate_id: Debate identifier
-        """
-        _warn_deprecated(
-            "replays.get_from_debate() targets an unserved route (404 via "
-            "slug fallback); use list()/search() then get(replay_id)."
-        )
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/replay")
-
     def get_events(
         self,
         replay_id: str,
@@ -134,36 +107,6 @@ class ReplaysAPI:
             params["event_type"] = event_type
 
         return self._client.request("GET", f"/api/v1/replays/{replay_id}/events", params=params)
-
-    def export(
-        self,
-        replay_id: str,
-        format: ReplayFormat = "json",
-    ) -> dict[str, Any]:
-        """
-        Export a replay.
-
-        Args:
-            replay_id: Replay identifier
-            format: Export format
-
-        Returns:
-            Exported replay data or download URL
-        """
-        params: dict[str, Any] = {"format": format}
-        return self._client.request("GET", f"/api/v1/replays/{replay_id}/export", params=params)
-
-    def get_summary(self, replay_id: str) -> dict[str, Any]:
-        """
-        Get replay summary with key moments.
-
-        Args:
-            replay_id: Replay identifier
-
-        Returns:
-            Summary with key moments and statistics
-        """
-        return self._client.request("GET", f"/api/v1/replays/{replay_id}/summary")
 
     def get_evolution(self, replay_id: str) -> dict[str, Any]:
         """
@@ -274,20 +217,6 @@ class AsyncReplaysAPI:
         """Get a replay by ID."""
         return await self._client.request("GET", f"/api/v1/replays/{replay_id}")
 
-    async def get_from_debate(self, debate_id: str) -> dict[str, Any]:
-        """Get the replay for a debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/replay is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use list() / search() to locate the replay for a
-        debate, then get(replay_id).
-        """
-        _warn_deprecated(
-            "replays.get_from_debate() targets an unserved route (404 via "
-            "slug fallback); use list()/search() then get(replay_id)."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/replay")
-
     async def get_events(
         self,
         replay_id: str,
@@ -303,21 +232,6 @@ class AsyncReplaysAPI:
         return await self._client.request(
             "GET", f"/api/v1/replays/{replay_id}/events", params=params
         )
-
-    async def export(
-        self,
-        replay_id: str,
-        format: ReplayFormat = "json",
-    ) -> dict[str, Any]:
-        """Export a replay."""
-        params: dict[str, Any] = {"format": format}
-        return await self._client.request(
-            "GET", f"/api/v1/replays/{replay_id}/export", params=params
-        )
-
-    async def get_summary(self, replay_id: str) -> dict[str, Any]:
-        """Get replay summary with key moments."""
-        return await self._client.request("GET", f"/api/v1/replays/{replay_id}/summary")
 
     async def get_evolution(self, replay_id: str) -> dict[str, Any]:
         """Get the evolution of positions throughout the debate."""

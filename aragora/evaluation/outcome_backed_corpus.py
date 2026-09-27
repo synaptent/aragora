@@ -67,6 +67,17 @@ class _DuplicateKeyError(ValueError):
     pass
 
 
+class VisibleCorpusError(ValueError):
+    """Raised when the model-visible corpus cannot be loaded safely."""
+
+    def __init__(self, issues: tuple[ValidationIssue, ...]) -> None:
+        self.issues = issues
+        detail = "; ".join(f"{issue.code}: {issue.path}: {issue.message}" for issue in issues[:5])
+        if len(issues) > 5:
+            detail += f"; ... and {len(issues) - 5} more"
+        super().__init__(detail)
+
+
 @dataclass(frozen=True)
 class ValidationIssue:
     code: str
@@ -330,6 +341,81 @@ def _outcome(
 def _count(issues: list[ValidationIssue], code: str, path: str, actual: int, expected: int) -> None:
     if actual != expected:
         _add(issues, code, path, f"expected {expected}, found {actual}")
+
+
+def load_visible_cases(directory: Path | str) -> tuple[Mapping[str, Any], ...]:
+    """Load and validate only model-visible corpus files.
+
+    This intentionally never opens ``*.outcomes.json``.  Callers that build
+    inference packets can therefore prove that outcome sidecars were not part
+    of the packet-construction path.
+    """
+
+    root = Path(directory)
+    issues: list[ValidationIssue] = []
+    corpus_paths = sorted(root.glob("*.corpus.json"))
+    _count(issues, "corpus_file_count", str(root), len(corpus_paths), EXPECTED_PAIRS)
+
+    benchmark_ids: set[str] = set()
+    frozen_times: set[str] = set()
+    cases: dict[str, Mapping[str, Any]] = {}
+    split_counts: Counter[str] = Counter()
+    domain_counts: Counter[str] = Counter()
+    domain_splits: Counter[tuple[str, str]] = Counter()
+
+    for corpus_path in corpus_paths:
+        corpus = _load(corpus_path, issues)
+        if corpus is None:
+            continue
+        corpus_name = str(corpus_path)
+        _keys(corpus, _CORPUS_KEYS, corpus_name, issues)
+        _leakage(corpus, corpus_name, issues)
+        if corpus.get("schema_version") != CORPUS_SCHEMA:
+            _add(issues, "schema_version", f"{corpus_name}.schema_version", CORPUS_SCHEMA)
+        benchmark = _text(corpus.get("benchmark_id"), f"{corpus_name}.benchmark_id", issues)
+        if benchmark is not None:
+            benchmark_ids.add(benchmark)
+        _text(corpus.get("revision"), f"{corpus_name}.revision", issues)
+        frozen = corpus.get("frozen_at")
+        if _time(frozen, f"{corpus_name}.frozen_at", issues) is not None:
+            frozen_times.add(str(frozen))
+        corpus_cases = _list(corpus.get("cases"), f"{corpus_name}.cases", "invalid_cases", issues)
+        for index, value in enumerate(corpus_cases):
+            case_path = f"{corpus_name}.cases[{index}]"
+            case_id, domain, split, _, _ = _case(value, case_path, issues)
+            if case_id is not None:
+                if case_id in cases:
+                    _add(issues, "duplicate_case_id", f"{case_path}.case_id", case_id)
+                elif isinstance(value, dict):
+                    cases[case_id] = value
+            if domain is not None:
+                domain_counts[domain] += 1
+            if split is not None:
+                split_counts[split] += 1
+            if domain is not None and split is not None:
+                domain_splits[(domain, split)] += 1
+
+    if benchmark_ids != {BENCHMARK_ID}:
+        _add(issues, "benchmark_id_set", str(root), f"found {sorted(benchmark_ids)}")
+    if len(frozen_times) != 1:
+        _add(issues, "freeze_timestamp_set", str(root), f"found {sorted(frozen_times)}")
+    _count(issues, "case_count", str(root), len(cases), EXPECTED_CASES)
+    for split, expected in SPLIT_COUNTS.items():
+        _count(issues, "split_count", f"{root}:{split}", split_counts[split], expected)
+    for domain in DOMAINS:
+        _count(issues, "domain_count", f"{root}:{domain}", domain_counts[domain], 6)
+        for split, expected in DOMAIN_SPLIT_COUNTS.items():
+            _count(
+                issues,
+                "domain_split_count",
+                f"{root}:{domain}:{split}",
+                domain_splits[(domain, split)],
+                expected,
+            )
+
+    if issues:
+        raise VisibleCorpusError(tuple(issues))
+    return tuple(cases[case_id] for case_id in sorted(cases))
 
 
 def validate_corpus_directory(directory: Path | str) -> CorpusIntegrityReport:

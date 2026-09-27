@@ -14,7 +14,7 @@ from aragora.server.stream.arena_hooks import (
     wrap_agent_for_streaming,
 )
 from aragora.server.stream.emitter import SyncEventEmitter
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 
 
 # =============================================================================

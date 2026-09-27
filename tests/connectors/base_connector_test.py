@@ -101,7 +101,7 @@ class ConnectorTestMixin:
         with patch("aiohttp.ClientSession") as mock:
             session_instance = MagicMock()
             mock.return_value.__aenter__ = AsyncMock(return_value=session_instance)
-            mock.return_value.__aexit__ = AsyncMock()
+            mock.return_value.__aexit__ = AsyncMock(return_value=False)
             yield session_instance
 
     @pytest.fixture

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .orchestrator import Handoff
+from .handoff import Handoff
 from .reconcile import write_operator_receipt
 from .state import PARK_KIND_MATERIALIZATION, PARK_KIND_MISSING_BRANCH, Feature
 

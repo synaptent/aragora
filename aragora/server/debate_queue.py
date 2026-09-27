@@ -604,7 +604,7 @@ class DebateQueue:
     async def _send_webhook(self, batch: BatchRequest) -> None:
         """Send webhook notification for completed batch."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             is_valid, error_msg = validate_webhook_url(batch.webhook_url or "")
             if not is_valid:

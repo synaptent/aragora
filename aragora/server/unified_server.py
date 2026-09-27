@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from aragora.memory.consensus import ConsensusMemory, DissentRetriever
     from aragora.persistence.supabase import SupabaseClient
     from aragora.ranking.elo import EloSystem
-    from aragora.server.documents import DocumentStore
+    from aragora.documents.parsing import DocumentStore
     from aragora.server.stream.canvas_stream import CanvasStreamServer
     from aragora.storage import UserStore
 import logging
@@ -538,7 +538,7 @@ class UnifiedHandler(  # type: ignore[misc]
 
     def _serve_live_spectate_stream(self, query: dict[str, Any]) -> bool:
         """Write a live SSE response for the public spectate stream endpoint."""
-        from aragora.server.handlers.spectate_ws import (
+        from aragora.server.handlers.streaming.spectate_ws import (
             _can_view_live_debates,
             _get_optional_user_from_request,
             iter_live_spectate_sse_frames,

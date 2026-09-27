@@ -58,7 +58,7 @@ def _status(result: object) -> int:
 
 def _make_impl(**overrides: Any) -> ModuleType:
     """Build a fake _oauth_impl module with sensible defaults."""
-    mod = ModuleType("aragora.server.handlers._oauth_impl")
+    mod = ModuleType("aragora.server.handlers.oauth._oauth_impl")
     mod.GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
     mod.GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
     mod.GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -172,10 +172,10 @@ class _MockTokenPair:
 def impl():
     """Return a default mock _oauth_impl module and register it in sys.modules."""
     mod = _make_impl()
-    sys.modules["aragora.server.handlers._oauth_impl"] = mod
+    sys.modules["aragora.server.handlers.oauth._oauth_impl"] = mod
     yield mod
     # Restore original if present, else remove
-    sys.modules.pop("aragora.server.handlers._oauth_impl", None)
+    sys.modules.pop("aragora.server.handlers.oauth._oauth_impl", None)
 
 
 @pytest.fixture()
@@ -229,14 +229,14 @@ class TestGoogleAuthStart:
     def test_google_not_configured_returns_503(self, handler, mock_http_handler):
         """Returns 503 when Google client ID is not configured."""
         mod = _make_impl(**{"_get_google_client_id": lambda: None})
-        sys.modules["aragora.server.handlers._oauth_impl"] = mod
+        sys.modules["aragora.server.handlers.oauth._oauth_impl"] = mod
         try:
             result = handler._handle_google_auth_start(mock_http_handler, {})
             assert _status(result) == 503
             body = _body(result)
             assert "not configured" in body.get("error", body.get("raw", "")).lower()
         finally:
-            sys.modules.pop("aragora.server.handlers._oauth_impl", None)
+            sys.modules.pop("aragora.server.handlers.oauth._oauth_impl", None)
 
     def test_invalid_redirect_url_returns_400(self, handler, impl, mock_http_handler):
         """Returns 400 when redirect_url fails validation."""

@@ -1,0 +1,13 @@
+{
+  "verifier": {
+    "verified": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify": {
+    "ok": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "description": "A v0.1 receipt signed over the 32-byte v0.1 message with the three-member entry, so no unauthenticated-metadata warning is raised."
+}

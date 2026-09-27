@@ -363,17 +363,6 @@ class DecisionsAPI:
         """
         return self._client._request("GET", f"/api/v1/decisions/plans/{plan_id}/outcome")
 
-    def get_outcome(self, decision_id: str) -> dict[str, Any]:
-        """Get the outcome for a decision.
-
-        Args:
-            decision_id: Decision identifier.
-
-        Returns:
-            Dict with decision outcome details.
-        """
-        return self._client._request("GET", f"/api/v1/decisions/{decision_id}/outcome")
-
     def list_outcomes(self, decision_id: str) -> dict[str, Any]:
         """List all outcomes for a decision.
 
@@ -582,10 +571,6 @@ class AsyncDecisionsAPI:
     async def get_plan_outcome(self, plan_id: str) -> dict[str, Any]:
         """Get the execution outcome for a completed plan."""
         return await self._client._request("GET", f"/api/v1/decisions/plans/{plan_id}/outcome")
-
-    async def get_outcome(self, decision_id: str) -> dict[str, Any]:
-        """Get the outcome for a decision."""
-        return await self._client._request("GET", f"/api/v1/decisions/{decision_id}/outcome")
 
     async def list_outcomes(self, decision_id: str) -> dict[str, Any]:
         """List all outcomes for a decision."""

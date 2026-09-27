@@ -5,14 +5,14 @@ Extracted from prometheus.py for maintainability.
 Provides metrics for task scheduling, agent registry, and queue management.
 """
 
-from aragora.server.prometheus import (
+from aragora.observability.prometheus import (
     PROMETHEUS_AVAILABLE,
     _simple_metrics,
 )
 
 # Import metric definitions when prometheus is available
 if PROMETHEUS_AVAILABLE:
-    from aragora.server.prometheus import (
+    from aragora.observability.prometheus import (
         CONTROL_PLANE_AGENT_HEALTH,
         CONTROL_PLANE_AGENT_LATENCY,
         CONTROL_PLANE_AGENTS_REGISTERED,

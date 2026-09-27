@@ -101,7 +101,9 @@ jobs:
       - name: Test backend image
         run: |
           docker build -f deploy/Dockerfile.backend -t test-backend:latest .
-          docker run --rm test-backend:latest python -c "import aragora; print('Aragora imported successfully')"
+          docker image inspect test-backend:latest --format '{{.Architecture}}'
+          docker run --rm test-backend:latest python -c "import pydantic, psycopg2, aragora.config; print('ok')"
+          docker run --rm test-backend:latest python -c "import asyncpg, redis, prometheus_client; print('ok2')"
 
       - name: Run Trivy vulnerability scanner (backend)
         uses: aquasecurity/trivy-action@0.35.0

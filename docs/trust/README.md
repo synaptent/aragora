@@ -18,7 +18,7 @@ appear in the repository (see `aragora/gauntlet/odr_signing.py`).
 Verify a production receipt offline:
 
 ```bash
-pip install 'aragora-verify>=0.1.1'
+pip install 'aragora-verify>=0.2.0'
 aragora-verify receipt.json --pubkey docs/trust/production-odr-signing-key.pem
 ```
 

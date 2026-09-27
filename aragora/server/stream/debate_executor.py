@@ -60,7 +60,7 @@ from aragora.pulse.ingestor import (
     RedditIngestor,
     TwitterIngestor,
 )
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 from aragora.server.stream.state_manager import (
     get_active_debates,
     get_active_debates_lock,

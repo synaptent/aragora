@@ -402,7 +402,7 @@ class LeanBackend:
         2. Claude (fallback, good reasoning)
         3. GPT-4 (fallback)
         """
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         # Try DeepSeek-Prover first if configured
         if self._translation_model in (TranslationModel.AUTO, TranslationModel.DEEPSEEK_PROVER):
@@ -683,7 +683,7 @@ theorem claim_1 : ∀ n : Nat, n + 0 = n := by simp
             - confidence: 0.0-1.0 confidence in the match
             - explanation: Why it matches or doesn't match
         """
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         api_key = get_api_key("ANTHROPIC_API_KEY", "OPENAI_API_KEY", required=False)
         if not api_key:
