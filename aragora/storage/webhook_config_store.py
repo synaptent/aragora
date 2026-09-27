@@ -20,12 +20,14 @@ Usage:
 from __future__ import annotations
 
 import atexit
+import base64
 import contextvars
 import json
 import logging
 import os
 import secrets
 import sqlite3
+import struct
 import threading
 import time
 import uuid
@@ -78,6 +80,7 @@ try:
     from aragora.security.encryption import (
         get_encryption_service as _get_encryption_service,
         CRYPTO_AVAILABLE,
+        EncryptedData as _EncryptedData,
         is_encryption_required as _is_encryption_required,
         EncryptionError as _EncryptionError,
     )
@@ -157,15 +160,31 @@ def _store_unencrypted_or_raise(
     return secret
 
 
+_GCM_TAG_BYTES = 16
+
+
+def _looks_like_encrypted_secret(value: str) -> bool:
+    """Return True when ``value`` has the layout of ``EncryptedData.to_base64()``.
+
+    Only called when ``CRYPTO_AVAILABLE`` is true, which implies the security
+    module (and ``_EncryptedData``) imported successfully.
+    """
+    try:
+        payload = _EncryptedData.from_bytes(base64.b64decode(value, validate=True))
+    except (struct.error, ValueError):
+        return False
+    return (
+        bool(payload.key_id) and bool(payload.nonce) and len(payload.ciphertext) >= _GCM_TAG_BYTES
+    )
+
+
 def _decrypt_secret(encrypted_secret: str) -> str:
     """Decrypt webhook secret, handling legacy unencrypted data."""
     if not CRYPTO_AVAILABLE or not encrypted_secret:
         return encrypted_secret
 
-    # Check if it looks like encrypted data (base64 with specific structure)
-    # Legacy secrets are 43-char base64 (32 bytes urlsafe)
-    if len(encrypted_secret) < 50 or not encrypted_secret.startswith("AAAA"):
-        # Likely legacy unencrypted secret
+    if not _looks_like_encrypted_secret(encrypted_secret):
+        # Legacy plaintext secret stored before encryption was enabled
         return encrypted_secret
 
     try:
@@ -174,7 +193,7 @@ def _decrypt_secret(encrypted_secret: str) -> str:
             logger.debug("Secret decryption skipped: encryption service not available")
             return encrypted_secret
         return service.decrypt_string(encrypted_secret)
-    except (EncryptionError, ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
+    except Exception as e:  # noqa: BLE001 - cryptography.exceptions.InvalidTag inherits directly from Exception
         logger.debug("Secret decryption failed (may be legacy unencrypted): %s", e)
         return encrypted_secret  # Return as-is if decryption fails
 
