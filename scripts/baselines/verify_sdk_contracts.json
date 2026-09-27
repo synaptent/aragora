@@ -304,7 +304,6 @@
     "GET /api/debates/{param}/rounds",
     "GET /api/debates/{param}/similar",
     "GET /api/debates/{param}/spectate/public",
-    "GET /api/debates/{param}/tags",
     "GET /api/debates/{param}/timeline",
     "GET /api/debates/{param}/votes",
     "GET /api/debug/test",
