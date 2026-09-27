@@ -206,7 +206,12 @@ the normal review and:
    anything, regardless of merge tier.
 2. Bridges that outcome into a native `DecisionReceipt` and exports it as an ODR
    document (`scripts/emit_pr_receipt.py`, calling
-   `aragora.gauntlet.odr_export.decision_receipt_to_odr`).
+   `aragora.gauntlet.odr_export.decision_receipt_to_odr`). Because step 1 never
+   posts evidence, the receipt is decided on the reviewer verdicts themselves
+   (`--decision-basis reviews`). The verdict is `PASS` when the counted, passing
+   reviewers satisfy the PR's tier quorum rule and no reviewer dissents, and
+   `CHANGES_REQUESTED` otherwise. The signed receipt records
+   `attestation.mechanism.decision_basis: reviews`.
 3. Signs the receipt when `odr-signing-key` is set. The key is written to a
    runner-private file for this one command, so it never reaches the quorum step's
    model CLIs, and the file is removed when the step ends.
