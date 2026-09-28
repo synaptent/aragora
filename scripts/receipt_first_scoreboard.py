@@ -37,6 +37,7 @@ MANIFEST = "docs/atlas/manifest.json"
 PIN_RE = re.compile(r"synaptent/aragora@([0-9a-f]{7,40})")
 STATUS_LINE_RE = re.compile(r"^\*\*Status:\*\* (\w+) (v[0-9.]+)")
 LEDGER_RE = re.compile(r"^- \[metric (\d+)\] .*#(\d+) head ([0-9a-f]{40}|n/a)\s*$")
+LEDGER_HISTORY_RE = re.compile(r"^- \[metric \d+\] (?:settled|merged) ")
 METRIC_ROW_RE = re.compile(r"^\| *(10|[1-9]) *\|")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
@@ -391,19 +392,15 @@ def metric_8(ctx: Any) -> Row:
         since = commit_date(target if HEX40.match(target) else tag, newest.get("publishedAt") or "")
     argv = f"gh run list -R {REPO} --workflow metrics-drift.yml --status success".split()
     argv += ["--limit", "30", "--json", "databaseId,createdAt,url,event"]
-    c = run_cmd(argv) if total >= 3 else None
-    # receipt-first-hour only runs on the weekly schedule and manual dispatch;
-    # pull-request runs skip it, so they must not crowd a green run out of view.
-    events = ("schedule", "workflow_dispatch")
-    runs = (
-        [
-            x
-            for x in json.loads(c.out or "[]")
-            if x.get("createdAt", "") >= since and x.get("event") in events
-        ]
-        if c
-        else []
-    )
+    # receipt-first-hour only runs on the weekly schedule and manual dispatch, and pull-request
+    # runs skip it. gh applies --limit before any client-side filter, so the event filter must be
+    # part of each query or newer pull-request runs crowd the green run out of the window.
+    found: dict[Any, Row] = {}
+    for event in ("schedule", "workflow_dispatch") if total >= 3 else ():
+        for x in json.loads(run_cmd(argv + ["--event", event]).out or "[]"):
+            if x.get("createdAt", "") >= since and x.get("event") == event:
+                found.setdefault(x.get("databaseId"), x)
+    runs = sorted(found.values(), key=lambda x: x.get("createdAt", ""), reverse=True)
     jq = '[.jobs[]|select(.name=="receipt-first-hour" and .conclusion=="success")]|length'
     for run in runs[:3]:
         url = f"repos/{REPO}/actions/runs/{run['databaseId']}/jobs"
@@ -500,14 +497,19 @@ def guardrail_rows(values: Row, main: Row) -> list[Row]:
 
 
 def read_parked(path: Path | None) -> tuple[dict[int, str], str]:
-    """Return {metric: '#N'} from the settlement ledger and the verbatim ``## Parked`` block."""
+    """Return {metric: '#N'} from the settlement ledger and the verbatim ``## Parked`` block.
+
+    The first unsettled line per metric wins; a line whose free text starts with ``settled `` or
+    ``merged `` stays in the ledger as history and never yields a pending ref.
+    """
     pending: dict[int, str] = {}
     parked, section = [], None
     for line in read_text(path).splitlines() if path else []:
         if line.startswith("## "):
             section = line[3:].strip()
         elif section == "Awaiting operator settlement" and (m := LEDGER_RE.match(line)):
-            pending.setdefault(int(m.group(1)), f"#{m.group(2)}")
+            if not LEDGER_HISTORY_RE.match(line):
+                pending.setdefault(int(m.group(1)), f"#{m.group(2)}")
         elif section == "Parked":
             parked.append(line)
     return pending, "\n".join(parked).strip("\n")
