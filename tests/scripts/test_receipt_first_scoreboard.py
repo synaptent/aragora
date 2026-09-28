@@ -247,6 +247,36 @@ def test_parked_file_pending_operator_grammar(fake, capsys, tmp_path):
     assert not any("pending_ref" in m for m in doc2["metrics"])
 
 
+HISTORY_LEDGER = "\n".join(
+    [
+        "## Awaiting operator settlement",
+        f"- [metric 8] settled 2026-09-23 merge {'1' * 40} — first-hour packet — PR #118 head "
+        + "2" * 40,
+        f"- [metric 8] merged 2026-09-22T07:51:02Z merge {'3' * 40} — PR #141 head " + "4" * 40,
+        "- [metric 8] receipts re-publish packet — PR #200 head n/a",
+        f"- [metric 10] settled 2026-09-27 merge {'5' * 40} — batch 4 — PR #138 head " + "6" * 40,
+        f"- [metric 10] merged externally 2026-09-14 merge {'7' * 40} — PR #13 head " + "8" * 40,
+        "- [metric 7] cutover packet — issue #9391 head n/a",
+        f"- [metric 7] settled 2026-09-12 merge {'9' * 40} — deploy pack — PR #9882 head "
+        + "a" * 40,
+        "",
+        "## Parked",
+        "(none yet)",
+        "",
+    ]
+)
+
+
+def test_read_parked_skips_settled_and_merged_ledger_lines(fake, capsys, tmp_path):
+    parked = tmp_path / "parked.md"
+    parked.write_text(HISTORY_LEDGER)
+    pending, text = sb.read_parked(parked)
+    assert pending == {8: "#200", 7: "#9391"} and text == "(none yet)"
+    _, r = rows(capsys, "--parked-file", str(parked))
+    assert r[8]["status"] == "pending-operator" and r[8]["pending_ref"] == "#200"
+    assert r[10]["status"] == "fail" and "pending_ref" not in r[10]
+
+
 def test_markdown_tables_and_parked_block(fake, capsys, tmp_path):
     parked = tmp_path / "parked.md"
     parked.write_text(LEDGER.replace("(none yet)", "- park A: next action `cmd`\n\n## Other\nx"))
@@ -709,3 +739,31 @@ def test_row8_pull_request_runs_do_not_hide_a_green_first_hour_run(fake, capsys)
     _, r = rows(capsys)
     assert r[8]["first_hour_run_url"] == url and r[8]["status"] == "ok"
     assert fake.matching("gh api repos/synaptent/aragora/actions/runs/20/jobs") == []
+
+
+def test_row8_event_filter_runs_before_the_run_list_limit(fake, capsys):
+    """gh applies --limit before any client-side filter, so 30 newer pull_request runs
+    must not push the only green dispatch run out of the listed window."""
+    tag, sha, url = "receipts-2026-10-01", "f" * 40, "https://github.com/synaptent/aragora/runs/5"
+    fake.on(
+        "gh release list", out=json.dumps([{"tagName": tag, "publishedAt": "2026-10-01T12:00:00Z"}])
+    )
+    assets = [{"name": f"pr{i}.odr.json"} for i in range(3)]
+    fake.on(f"gh release view {tag}", out=json.dumps({"assets": assets, "targetCommitish": sha}))
+    fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", out="2026-10-01T10:00:00Z\n")
+    pr_runs = [
+        {"databaseId": 100 + i, "createdAt": f"2026-10-03T{i % 24:02d}:00:00Z", "url": "u"}
+        | {"event": "pull_request"}
+        for i in range(30)
+    ]
+    dispatch = {"databaseId": 5, "createdAt": "2026-10-01T11:00:00Z", "url": url}
+    dispatch["event"] = "workflow_dispatch"
+    fake.on("gh run list", out=json.dumps(pr_runs))
+    fake.on("gh run list", "--event workflow_dispatch", out=json.dumps([dispatch]))
+    fake.on("gh run list", "--event schedule", out="[]")
+    fake.on("gh api repos/synaptent/aragora/actions/runs/5/jobs", out="1\n")
+    _, r = rows(capsys)
+    assert r[8]["first_hour_run_ok"] is True and r[8]["first_hour_run_url"] == url
+    assert r[8]["status"] == "ok"
+    listed = fake.matching("gh run list")
+    assert listed and all("--event" in call for call in listed)
