@@ -378,6 +378,20 @@ export class AnalyticsAPI {
   }
 
   /**
+   * Get workspace-level usage metrics.
+   */
+  async getWorkspaceUsage(
+    workspaceId: string,
+    options?: { time_range?: string }
+  ): Promise<unknown> {
+    return this.client.request(
+      'GET',
+      `/api/v1/analytics/workspace/${workspaceId}/usage`,
+      { params: options }
+    );
+  }
+
+  /**
    * Get agent performance trends over time.
    */
   async getAgentTrends(options?: {
@@ -556,6 +570,20 @@ export class AnalyticsAPI {
   }
 
   /**
+   * Connect a new analytics platform.
+   */
+  async connectPlatform(platform: string, credentials: Record<string, unknown>): Promise<{ connected: boolean }> {
+    return this.client.request('POST', '/api/v1/analytics/connect', { json: { platform, credentials } });
+  }
+
+  /**
+   * Disconnect an analytics platform.
+   */
+  async disconnectPlatform(platform: string): Promise<{ disconnected: boolean }> {
+    return this.client.request('DELETE', `/api/v1/analytics/${platform}`);
+  }
+
+  /**
    * List dashboards from all platforms.
    */
   async listDashboards(): Promise<{ dashboards: unknown[] }> {
@@ -577,10 +605,24 @@ export class AnalyticsAPI {
   }
 
   /**
+   * Execute unified query across platforms.
+   */
+  async executeQuery(query: string, options?: { platform?: string; params?: Record<string, unknown> }): Promise<unknown> {
+    return this.client.request('POST', '/api/v1/analytics/query', { json: { query, ...options } });
+  }
+
+  /**
    * List available pre-built reports.
    */
   async listReports(): Promise<{ reports: unknown[] }> {
     return this.client.request('GET', '/api/v1/analytics/reports');
+  }
+
+  /**
+   * Generate custom analytics report.
+   */
+  async generateReport(reportType: string, options?: Record<string, unknown>): Promise<unknown> {
+    return this.client.request('POST', '/api/v1/analytics/reports/generate', { json: { type: reportType, ...options } });
   }
 
   /**

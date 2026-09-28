@@ -529,6 +529,32 @@ describe('FactsAPI', () => {
       });
     });
 
+    describe('updateRelationship', () => {
+      it('should update a relationship', async () => {
+        const mockRel: Relationship = {
+          id: 'rel-123',
+          source_fact_id: 'fact-1',
+          target_fact_id: 'fact-2',
+          relationship_type: 'elaborates',
+          weight: 0.8,
+          created_at: '2024-01-01T00:00:00Z',
+        };
+        mockClient.request.mockResolvedValueOnce(mockRel);
+
+        const result = await factsApi.updateRelationship('rel-123', {
+          relationship_type: 'elaborates',
+          weight: 0.8,
+        });
+
+        expect(mockClient.request).toHaveBeenCalledWith(
+          'PATCH',
+          '/api/v1/facts/relationships/rel-123',
+          { json: { relationship_type: 'elaborates', weight: 0.8 } }
+        );
+        expect(result.weight).toBe(0.8);
+      });
+    });
+
     describe('deleteRelationship', () => {
       it('should delete a relationship', async () => {
         mockClient.request.mockResolvedValueOnce(undefined);

@@ -603,6 +603,26 @@ describe('AnalyticsAPI', () => {
       expect(result.platforms).toHaveLength(1);
     });
 
+    it('should connect a platform', async () => {
+      mockClient.request.mockResolvedValue({ connected: true });
+
+      const result = await api.connectPlatform('mixpanel', { api_key: 'key123' });
+
+      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/v1/analytics/connect', {
+        json: { platform: 'mixpanel', credentials: { api_key: 'key123' } },
+      });
+      expect(result.connected).toBe(true);
+    });
+
+    it('should disconnect a platform', async () => {
+      mockClient.request.mockResolvedValue({ disconnected: true });
+
+      const result = await api.disconnectPlatform('mixpanel');
+
+      expect(mockClient.request).toHaveBeenCalledWith('DELETE', '/api/v1/analytics/mixpanel');
+      expect(result.disconnected).toBe(true);
+    });
+
     it('should list dashboards', async () => {
       const mockDashboards = { dashboards: [{ id: 'd1', name: 'Overview' }] };
       mockClient.request.mockResolvedValue(mockDashboards);
@@ -611,6 +631,30 @@ describe('AnalyticsAPI', () => {
 
       expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/analytics/dashboards');
       expect(result.dashboards).toHaveLength(1);
+    });
+
+    it('should execute a query', async () => {
+      const mockResult = { rows: [{ metric: 'pageviews', value: 1000 }] };
+      mockClient.request.mockResolvedValue(mockResult);
+
+      const result = await api.executeQuery('SELECT * FROM events', { platform: 'mixpanel' });
+
+      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/v1/analytics/query', {
+        json: { query: 'SELECT * FROM events', platform: 'mixpanel' },
+      });
+      expect(result.rows).toHaveLength(1);
+    });
+
+    it('should generate a report', async () => {
+      const mockReport = { report_id: 'rpt_1', status: 'generating' };
+      mockClient.request.mockResolvedValue(mockReport);
+
+      const result = await api.generateReport('monthly_summary', { format: 'pdf' });
+
+      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/v1/analytics/reports/generate', {
+        json: { type: 'monthly_summary', format: 'pdf' },
+      });
+      expect(result.report_id).toBe('rpt_1');
     });
 
     it('should get real-time metrics', async () => {

@@ -53,6 +53,7 @@ describe('Facts API', () => {
       const client = createClient({ baseUrl: 'https://api.example.com' });
       expect(typeof client.facts.createRelationship).toBe('function');
       expect(typeof client.facts.getRelationships).toBe('function');
+      expect(typeof client.facts.updateRelationship).toBe('function');
       expect(typeof client.facts.deleteRelationship).toBe('function');
     });
 
@@ -370,6 +371,34 @@ describe('Facts API', () => {
       const result = await client.facts.getRelationships('f1', { relationship_type: 'supports' });
       expect(result).toHaveLength(1);
       expect(result[0].relationship_type).toBe('supports');
+    });
+  });
+
+  describe('updateRelationship', () => {
+    it('should update a relationship', async () => {
+      const client = createClient({ baseUrl: 'https://api.example.com' });
+
+      const mockRel: Relationship = {
+        id: 'rel-123',
+        source_fact_id: 'fact-1',
+        target_fact_id: 'fact-2',
+        relationship_type: 'elaborates',
+        weight: 0.8,
+        created_at: '2024-01-01T00:00:00Z',
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(mockRel)),
+      });
+
+      const result = await client.facts.updateRelationship('rel-123', {
+        relationship_type: 'elaborates',
+        weight: 0.8,
+      });
+
+      expect(result.relationship_type).toBe('elaborates');
+      expect(result.weight).toBe(0.8);
     });
   });
 

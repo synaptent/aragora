@@ -253,6 +253,12 @@ interface EmailServicesClientInterface {
  *   thread_id: 'thread_456',
  *   expected_reply_days: 3,
  * });
+ *
+ * // Get snooze suggestions
+ * const suggestions = await client.emailServices.getSnoozeSuggestions('msg_123', {
+ *   subject: 'Q4 Report',
+ *   sender: 'boss@company.com',
+ * });
  * ```
  */
 export class EmailServicesAPI {
@@ -312,6 +318,18 @@ export class EmailServicesAPI {
   // =========================================================================
   // Snooze Management
   // =========================================================================
+
+  /**
+   * Get snooze suggestions for an email.
+   */
+  async getSnoozeSuggestions(
+    emailId: string,
+    options: SnoozeSuggestionsOptions
+  ): Promise<SnoozeSuggestionsResponse> {
+    return this.client.request('GET', `/api/v1/email/${emailId}/snooze-suggestions`, {
+      params: options as unknown as Record<string, unknown>,
+    });
+  }
 
   /**
    * Snooze an email.

@@ -131,9 +131,36 @@ async function demonstrateBasicOperations(): Promise<void> {
   }
 
   // -------------------------------------------------------------------------
+  // Update Existing Entry
+  // -------------------------------------------------------------------------
+  console.log('\n4. Update Existing Entry');
+  console.log('-'.repeat(40));
+
+  try {
+    const updateResult = await client.memory.update(
+      'demo-key-medium',
+      {
+        message: 'Updated medium tier data',
+        timestamp: new Date().toISOString(),
+        version: 2,
+      },
+      {
+        tier: 'medium',
+        merge: true, // Merge with existing data
+        tags: ['demo', 'tier-medium', 'updated'],
+      }
+    );
+
+    console.log(`  Updated: ${updateResult.updated ? 'success' : 'failed'}`);
+    console.log(`  Tier: ${updateResult.tier}`);
+  } catch (error) {
+    handleError('Update', error);
+  }
+
+  // -------------------------------------------------------------------------
   // Delete Entry
   // -------------------------------------------------------------------------
-  console.log('\n4. Delete Entry');
+  console.log('\n5. Delete Entry');
   console.log('-'.repeat(40));
 
   try {
@@ -390,9 +417,24 @@ async function demonstrateContextManagement(): Promise<void> {
   }
 
   // -------------------------------------------------------------------------
+  // Get Current Context
+  // -------------------------------------------------------------------------
+  console.log('\n2. Get Current Context');
+  console.log('-'.repeat(40));
+
+  try {
+    const context = await client.memory.getContext();
+
+    console.log(`  Context ID: ${context.context_id}`);
+    console.log(`  Data: ${JSON.stringify(context.data, null, 2)}`);
+  } catch (error) {
+    handleError('Get context', error);
+  }
+
+  // -------------------------------------------------------------------------
   // Update Context
   // -------------------------------------------------------------------------
-  console.log('\n2. Update Context');
+  console.log('\n3. Update Context');
   console.log('-'.repeat(40));
 
   try {

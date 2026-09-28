@@ -188,6 +188,29 @@ export interface SemanticSearchResult {
 }
 
 /**
+ * Cross-debate memory entry.
+ */
+export interface CrossDebateEntry {
+  id: string;
+  content: string;
+  debate_id: string;
+  topic?: string;
+  conclusion?: string;
+  confidence: number;
+  relevance?: number;
+  created_at: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Cross-debate memory response.
+ */
+export interface CrossDebateResponse {
+  entries: CrossDebateEntry[];
+  total: number;
+}
+
+/**
  * Memory export options.
  */
 export interface MemoryExportOptions {
@@ -536,6 +559,36 @@ export class MemoryAPI {
   }
 
   // ===========================================================================
+  // Update Operations
+  // ===========================================================================
+
+  /**
+   * Update an existing memory entry.
+   *
+   * @deprecated No memory handler implements PUT, but MemoryHandler still
+   * matches the path, so PUT /api/v1/memory/{key} always rejects with an
+   * HTTP 500 (`handler_no_result`). The server has no key/value update API;
+   * store a new entry via POST /api/v1/memory/store instead.
+   *
+   * @param key - The key of the entry to update
+   * @param value - The new value
+   * @param options - Update options
+   */
+  async update(
+    key: string,
+    value: unknown,
+    options?: {
+      tier?: 'fast' | 'medium' | 'slow' | 'glacial';
+      merge?: boolean;
+      tags?: string[];
+    }
+  ): Promise<{ updated: boolean; tier: string }> {
+    return this.client.request('PUT', `/api/v1/memory/${encodeURIComponent(key)}`, {
+      body: { value, ...options },
+    });
+  }
+
+  // ===========================================================================
   // Query Operations
   // ===========================================================================
 
@@ -558,6 +611,30 @@ export class MemoryAPI {
   // ===========================================================================
   // Context Management
   // ===========================================================================
+
+  /**
+   * Get the current memory context.
+   *
+   * @deprecated GET /api/v1/memory/context is declared in the memory
+   * handler's ROUTES list but never dispatched, so this method always fails
+   * against a live server (HTTP 500 handler_no_result). The server has no
+   * memory-context store; there is no replacement endpoint.
+   *
+   * @param contextId - Optional context ID (defaults to current session)
+   *
+   * @example
+   * ```typescript
+   * const context = await client.memory.getContext();
+   * console.log(`Context data:`, context.data);
+   * ```
+   */
+  async getContext(contextId?: string): Promise<MemoryContext> {
+    const params: Record<string, unknown> = {};
+    if (contextId) {
+      params.context_id = contextId;
+    }
+    return this.client.request('GET', '/api/v1/memory/context', { params });
+  }
 
   /**
    * Set or update the memory context.
@@ -919,6 +996,46 @@ export class MemoryAPI {
   // ===========================================================================
 
   /**
+   * Get cross-debate institutional knowledge.
+   *
+   * Matches Python SDK's `get_cross_debate()` method.
+   *
+   * @deprecated GET /api/v1/memory/cross-debate is declared in the memory
+   * handler's ROUTES list but never dispatched, so this method always fails
+   * against a live server (HTTP 500 handler_no_result). Cross-debate memory
+   * is injected automatically during debates (`enable_cross_debate_memory`);
+   * there is no HTTP endpoint.
+   *
+   * @param options - Retrieval options
+   *
+   * @example
+   * ```typescript
+   * const result = await client.memory.getCrossDebate({
+   *   topic: 'pricing strategy',
+   *   limit: 10,
+   *   min_relevance: 0.5,
+   * });
+   * for (const entry of result.entries) {
+   *   console.log(`From debate ${entry.debate_id}: ${entry.content}`);
+   * }
+   * ```
+   */
+  async getCrossDebate(options?: {
+    topic?: string;
+    limit?: number;
+    min_relevance?: number;
+  }): Promise<CrossDebateResponse> {
+    const params: Record<string, unknown> = {
+      limit: options?.limit ?? 10,
+      min_relevance: options?.min_relevance ?? 0.5,
+    };
+    if (options?.topic) {
+      params.topic = options.topic;
+    }
+    return this.client.request('GET', '/api/v1/memory/cross-debate', { params });
+  }
+
+  /**
    * Store cross-debate knowledge from a debate outcome.
    *
    * Matches Python SDK's `store_cross_debate()` method.
@@ -1107,6 +1224,37 @@ export class MemoryAPI {
     if (options?.name) body.name = options.name;
     if (options?.description) body.description = options.description;
     return this.client.request('POST', '/api/v1/memory/snapshots', { body });
+  }
+
+  /**
+   * List available memory snapshots.
+   *
+   * Matches Python SDK's `list_snapshots()` method.
+   *
+   * @deprecated GET /api/v1/memory/snapshots is declared in the memory
+   * handler's ROUTES list but never dispatched, so this method always fails
+   * against a live server (HTTP 500 handler_no_result). There is no
+   * replacement endpoint.
+   *
+   * @param options - Pagination options
+   *
+   * @example
+   * ```typescript
+   * const result = await client.memory.listSnapshots({ limit: 10 });
+   * for (const snapshot of result.snapshots) {
+   *   console.log(`${snapshot.name}: ${snapshot.entries_count} entries`);
+   * }
+   * ```
+   */
+  async listSnapshots(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ snapshots: MemorySnapshot[]; total: number }> {
+    const params: Record<string, unknown> = {
+      limit: options?.limit ?? 20,
+      offset: options?.offset ?? 0,
+    };
+    return this.client.request('GET', '/api/v1/memory/snapshots', { params });
   }
 
   /**

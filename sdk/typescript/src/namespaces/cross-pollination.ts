@@ -533,6 +533,40 @@ export class CrossPollinationAPI {
     return this.client.request('GET', '/api/v1/cross-pollination/conflicts', { params });
   }
 
+  /**
+   * Resolve a cross-pollination conflict.
+   *
+   * @param conflictId - Conflict ID to resolve
+   * @param resolution - Resolution details
+   * @param resolution.action - Resolution action to take
+   * @param resolution.reason - Reason for the resolution
+   * @returns Resolution result
+   *
+   * @example
+   * ```typescript
+   * const result = await client.crossPollination.resolveConflict('conflict-123', {
+   *   action: 'keep_source',
+   *   reason: 'Source has higher confidence and more recent evidence'
+   * });
+   * ```
+   */
+  async resolveConflict(
+    conflictId: string,
+    resolution: {
+      action: 'keep_source' | 'keep_target' | 'merge' | 'dismiss';
+      reason?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    conflict_id: string;
+    resolution: string;
+    resolved_at: string;
+  }> {
+    return this.client.request('POST', `/api/v1/cross-pollination/conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+      json: resolution,
+    });
+  }
+
   // ===========================================================================
   // Federation Operations
   // ===========================================================================

@@ -10,42 +10,20 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 #### Breaking Changes
 
-Contract-drift batch 5 removes 26 TypeScript operations on unserved routes. Each
-SDK path, with its `/api/v1` and legacy twin, was dispatched through the real
-`HANDLER_REGISTRY` as an owner and as an admin: each answered a route-level 404,
-the handler's own "Unknown endpoint" 404 or `handler_no_result`, and no FastAPI
-route matches it. The Python SDK is unchanged; its methods that call nine of these
-routes are left for a later batch. A Migration cell names an alternative only
-where that route was dispatched and served. Interfaces only the removed methods
-used are deleted unless `src/namespaces/index.ts` re-exports them.
+Contract-drift batch 5 removes 3 TypeScript operations whose routes no server
+handler implements. Each SDK path, with its `/api/v1` and legacy twin, was
+dispatched through the real `HANDLER_REGISTRY` as an owner and as an admin: each
+answered `handler_no_result`, and no FastAPI route matches it. The Python SDK is
+unchanged; its `ap_automation.add_invoice()` (sync and async) still calls
+`POST /api/v1/ap/invoices` and is left for a later change. A Migration cell names
+an alternative only where that route was dispatched and served.
+`UnsubscriptionResult`, used only by `crossPollination.unsubscribe` and not
+re-exported from `src/namespaces/index.ts`, is deleted with it.
 
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
-| `analytics.getWorkspaceUsage` | `GET /api/v1/analytics/workspace/{id}/usage` | No replacement |
-| `analytics.connectPlatform` | `POST /api/v1/analytics/connect` | No replacement |
-| `analytics.disconnectPlatform` | `DELETE /api/v1/analytics/{platform}` | No replacement |
-| `analytics.executeQuery` | `POST /api/v1/analytics/query` | No replacement |
-| `analytics.generateReport` | `POST /api/v1/analytics/reports/generate` | No replacement |
-| `connectors.create` | `POST /api/v1/connectors` | No replacement |
-| `connectors.update` | `PATCH /api/v1/connectors/{id}` | No replacement |
-| `connectors.delete` | `DELETE /api/v1/connectors/{id}` | No replacement |
-| `connectors.triggerSync` | `POST /api/v1/connectors/{id}/sync` | No replacement |
-| `connectors.getSyncStatus` | `GET /api/v1/connectors/{id}/syncs/{id}` | No replacement |
-| `connectors.listSyncs` | `GET /api/v1/connectors/{id}/syncs` | No replacement |
-| `connectors.cancelSync` | `POST /api/v1/connectors/{id}/syncs/{id}/cancel` | No replacement |
-| `connectors.testConnection` | `POST /api/v1/connectors/{id}/test` | No replacement |
-| `connectors.getHealth` | `GET /api/v1/connectors/{id}/health` | No replacement |
 | `crossPollination.unsubscribe` | `DELETE /api/v1/cross-pollination/subscribers/{id}` | No replacement |
-| `crossPollination.resolveConflict` | `POST /api/v1/cross-pollination/conflicts/{id}/resolve` | No replacement |
-| `batch.list` | `GET /api/v1/batch` | No replacement |
-| `emailServices.getSnoozeSuggestions` | `GET /api/v1/email/{id}/snooze-suggestions` | No replacement |
-| `memory.update` | `PUT /api/v1/memory/{key}` | No replacement |
-| `memory.getContext` | `GET /api/v1/memory/context` | No replacement |
-| `memory.getCrossDebate` | `GET /api/v1/memory/cross-debate` | No replacement |
-| `memory.listSnapshots` | `GET /api/v1/memory/snapshots` | No replacement |
-| `teams.listTeams` | `GET /api/v1/teams` | No replacement |
-| `facts.updateRelationship` | `PATCH /api/v1/facts/relationships/{id}` | No replacement |
-| `apAutomation.addAPInvoice` | `POST /api/v1/ap/invoices` | No replacement |
+| `apAutomation.addAPInvoice` | `POST /api/v1/ap/invoices` | No replacement: `apAutomation.addInvoice()` calls `POST /api/v1/accounting/ap/invoices`, which answers `handler_no_result` too |
 | `policies.resolveViolation` | `POST /api/policies/violations/{id}/resolve` | No typed TypeScript call. Send `{ "status": "resolved", "resolution_notes": "..." }` with `PATCH /api/v1/compliance/violations/{id}` (Python: `policies.update_violation(violation_id, "resolved")`). `compliance.updateViolation()` sends `PUT`, which that route does not dispatch |
 
 ### Unreleased (2026-09-21)

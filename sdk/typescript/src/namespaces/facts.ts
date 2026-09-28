@@ -507,6 +507,24 @@ export class FactsAPI {
   }
 
   /**
+   * Update a relationship.
+   *
+   * @param id - The relationship ID to update
+   * @param updates - The fields to update
+   * @returns The updated relationship
+   *
+   * @example
+   * ```typescript
+   * const updated = await client.facts.updateRelationship('rel-123', {
+   *   weight: 0.7,
+   * });
+   * ```
+   */
+  async updateRelationship(id: string, updates: UpdateRelationshipRequest): Promise<Relationship> {
+    return this.client.request('PATCH', `/api/v1/facts/relationships/${id}`, { json: updates });
+  }
+
+  /**
    * Delete a relationship by ID.
    *
    * @param id - The relationship ID to delete
