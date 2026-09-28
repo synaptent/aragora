@@ -101,6 +101,7 @@ def test_secret_template_is_empty_and_required_keys_are_checked() -> None:
             "POSTGRES_PASSWORD",
             "ARAGORA_API_TOKEN",
             "DATABASE_URL",
+            "ARAGORA_RECEIPT_SIGNING_KEY",
         ),
         "",
     )
@@ -111,6 +112,29 @@ def test_secret_template_is_empty_and_required_keys_are_checked() -> None:
     assert required is not None
     assert set(values) <= set(required[1].split())
     assert "secrets.env" in (ROOT / "deploy/hetzner/.gitignore").read_text().splitlines()
+
+
+def test_app_mounts_the_odr_signing_key_and_persists_its_data_dir() -> None:
+    compose = yaml.safe_load((ROOT / "deploy/hetzner/docker-compose.yml").read_text())
+    app = compose["services"]["app"]
+    key_path = app["environment"]["ARAGORA_ODR_SIGNING_KEY_FILE"]
+    assert f"./odr/odr-signing-key.pem:{key_path}:ro" in app["volumes"]
+    assert "appdata:/app/data" in app["volumes"]
+    assert "appdata" in compose["volumes"]
+    assert "odr/" in (ROOT / "deploy/hetzner/.gitignore").read_text().splitlines()
+
+
+def test_bring_up_requires_a_private_key_owned_by_the_container_user() -> None:
+    bring_up = (ROOT / "deploy/hetzner/bring-up.sh").read_text()
+    assert "key=odr/odr-signing-key.pem" in bring_up
+    assert '[[ -f "$key" ]] || fail' in bring_up
+    assert '== "400" ]]' in bring_up
+    # The key's owner is fixed after the image exists and before the app starts.
+    build = bring_up.index("docker compose build")
+    uid = bring_up.index("docker compose run --rm --no-deps --entrypoint id app -u")
+    chown = bring_up.index('chown "$uid" "$key"')
+    start = bring_up.index("docker compose up -d")
+    assert build < uid < chown < start
 
 
 def test_ci_probes_backend_dependencies_and_both_migration_systems() -> None:
@@ -125,3 +149,24 @@ def test_ci_probes_backend_dependencies_and_both_migration_systems() -> None:
     assert "alembic upgrade head" in runs
     assert 'python -m aragora.migrations upgrade --database-url "$DATABASE_URL"' in runs
     assert "python -m aragora.migrations status" in runs
+
+
+def test_backend_image_carries_its_build_identity() -> None:
+    dockerfile = (ROOT / "deploy/Dockerfile.backend").read_text()
+    runtime = dockerfile[dockerfile.rindex("FROM ") :]
+    for name in ("ARAGORA_BUILD_SHA", "ARAGORA_BUILD_TIME", "ARAGORA_DEPLOY_VERSION"):
+        assert f'ARG {name}=""' in runtime
+        assert f"{name}=${{{name}}}" in runtime
+    # Declared after the dependency layers so a new SHA only rebuilds the last layers.
+    assert runtime.index("ARG ARAGORA_BUILD_SHA") > runtime.index("COPY aragora/ ./aragora/")
+
+    docker = yaml.safe_load((ROOT / ".github/workflows/docker.yml").read_text())
+    steps = docker["jobs"]["build-backend"]["steps"]
+    push = next(step for step in steps if step.get("name") == "Build and push backend")
+    build_args = push["with"]["build-args"]
+    assert "ARAGORA_BUILD_SHA=${{ github.sha }}" in build_args
+    assert "ARAGORA_DEPLOY_VERSION=${{ steps.version.outputs.version }}" in build_args
+    assert "ARAGORA_BUILD_TIME=${{ steps.version.outputs.build_time }}" in build_args
+    smoke = next(step for step in steps if step.get("name") == "Test backend image")["run"]
+    assert "--build-arg ARAGORA_BUILD_SHA=${{ github.sha }}" in smoke
+    assert "get_build_info()['sha']" in smoke

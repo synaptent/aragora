@@ -55,7 +55,7 @@ jobs:
     steps:
       - name: Run Aragora Review
         id: review
-        uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
+        uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -162,7 +162,7 @@ jobs:
 
       - name: Run Aragora Review
         id: review
-        uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
+        uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -180,7 +180,7 @@ jobs:
       - name: Verify the receipt offline (optional)
         if: steps.review.outputs.receipt-verified == 'true'
         run: |
-          pip install "aragora-verify>=0.1.1"
+          pip install "aragora-verify>=0.2.0"
           aragora-verify "${{ steps.review.outputs.receipt-path }}"
 ```
 
@@ -201,7 +201,12 @@ the normal review and:
    anything, regardless of merge tier.
 2. Bridges that outcome into a native `DecisionReceipt` and exports it as an ODR
    document (`scripts/emit_pr_receipt.py`, calling
-   `aragora.gauntlet.odr_export.decision_receipt_to_odr`).
+   `aragora.gauntlet.odr_export.decision_receipt_to_odr`). Because step 1 never
+   posts evidence, the receipt is decided on the reviewer verdicts themselves
+   (`--decision-basis reviews`). The verdict is `PASS` when the counted, passing
+   reviewers satisfy the PR's tier quorum rule and no reviewer dissents, and
+   `CHANGES_REQUESTED` otherwise. The signed receipt records
+   `attestation.mechanism.decision_basis: reviews`.
 3. Signs the receipt when `odr-signing-key` is set. The key is written to a
    runner-private file for this one command, so it never reaches the quorum step's
    model CLIs, and the file is removed when the step ends.
@@ -274,7 +279,7 @@ repository ships a real example built by the same merge-quorum pipeline
 (`aragora/swarm/quorum_receipt.py`):
 
 ```bash
-pip install "aragora-verify>=0.1.1"
+pip install "aragora-verify>=0.2.0"
 aragora-verify docs/specs/examples/example-merge-quorum-receipt.odr.json
 ```
 
@@ -330,7 +335,7 @@ on:
 Focus the review on security concerns:
 
 ```yaml
-- uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
+- uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
   with:
     focus: 'security'
     rounds: '3'
@@ -342,7 +347,7 @@ Focus the review on security concerns:
 The `max-diff-size` input prevents excessive API costs on large PRs. The default of 50KB handles most PRs. For monorepo or generated code, increase it:
 
 ```yaml
-- uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
+- uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
   with:
     max-diff-size: '200000'
 ```

@@ -30,7 +30,7 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from aragora.storage.generic_store import (
     GenericInMemoryStore,
@@ -38,6 +38,7 @@ from aragora.storage.generic_store import (
     GenericSQLiteStore,
     GenericStoreBackend,
 )
+from aragora.storage.timestamps import canonical_utc_timestamp, timestamp_before
 
 if TYPE_CHECKING:
     pass
@@ -187,10 +188,23 @@ class InMemoryApprovalRequestStore(GenericInMemoryStore, ApprovalRequestStoreBac
     """
     In-memory approval request store for testing.
 
-    Data is lost on restart.
+    Data is lost on restart. ``expires_at`` is stored as canonical UTC
+    ISO-8601 text; see :mod:`aragora.storage.timestamps` for accepted inputs.
     """
 
     PRIMARY_KEY = "request_id"
+
+    async def save(self, data: dict[str, Any]) -> None:
+        """Store a copy of ``data`` with ``expires_at`` in canonical UTC form.
+
+        Raises:
+            ValueError: If ``request_id`` is missing or ``expires_at`` is not a
+                supported timestamp. The stored record is left unchanged.
+        """
+        record = dict(data)
+        if "expires_at" in record:
+            record["expires_at"] = canonical_utc_timestamp(record["expires_at"], field="expires_at")
+        await super().save(record)
 
     async def list_by_status(self, status: str) -> list[dict[str, Any]]:
         return self._filter_by("status", status)
@@ -202,16 +216,13 @@ class InMemoryApprovalRequestStore(GenericInMemoryStore, ApprovalRequestStoreBac
         return self._filter_by("status", "pending")
 
     async def list_expired(self) -> list[dict[str, Any]]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
         with self._lock:
             return [
                 r
                 for r in self._data.values()
-                if (
-                    r.get("status") == "pending"
-                    and r.get("expires_at")
-                    and cast(str, r.get("expires_at")) < now
-                )
+                if r.get("status") == "pending"
+                and timestamp_before(r.get("expires_at"), now, field="expires_at")
             ]
 
     async def respond(
