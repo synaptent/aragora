@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -151,10 +152,16 @@ class TestBatch:
             asyncio.run(ExecutableClaimAdapter(mound=bad).ingest_claim_results([_r()]))
 
 
-def test_no_mound_returns_generated_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_mound_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", raising=False)
-    r = asyncio.run(ExecutableClaimAdapter().ingest_claim_result(_r(), require_enabled=False))
-    assert r.claims_ingested == 1 and r.knowledge_item_ids[0].startswith("claim_km_")
+    r = asyncio.run(
+        ExecutableClaimAdapter().ingest_claim_result(_r(cid="c.nomound"), require_enabled=False)
+    )
+    assert r.claims_ingested == 0
+    assert r.knowledge_item_ids == []
+    assert r.success is False
+    assert len(r.errors) == 1
+    assert "c.nomound" in r.errors[0] and "not configured" in r.errors[0]
 
 
 # ── real-mound ingestion contract ─────────────────────────────────────────────
@@ -301,18 +308,25 @@ class TestRealMound:
     speaks the mound's actual ingestion contract.
     """
 
-    def test_claims_persist_into_a_real_sqlite_mound(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        from aragora.knowledge.mound.facade import KnowledgeMound
-        from aragora.knowledge.mound.types import MoundConfig
-
-        # Semantic indexing reaches the embedding service; with no provider
-        # credentials present it uses the offline hash fallback.
+    @pytest.fixture(autouse=True)
+    def _offline_embeddings(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Semantic indexing picks an embedding provider from the credentials it
+        # finds; with none present it uses the offline hash fallback.
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
 
+    @staticmethod
+    async def _sqlite_mound(tmp_path: Path) -> Any:
+        from aragora.knowledge.mound.facade import KnowledgeMound
+        from aragora.knowledge.mound.types import MoundConfig
+
+        mound = KnowledgeMound(config=MoundConfig(sqlite_path=str(tmp_path / "mound.db")))
+        await mound.initialize()
+        return mound
+
+    def test_claims_persist_into_a_real_sqlite_mound(self, tmp_path: Path) -> None:
         results = [
             _r(ClaimStatus.PASS, cid="real.pass"),
             _r(ClaimStatus.FAIL, cid="real.fail"),
@@ -320,10 +334,33 @@ class TestRealMound:
         ]
 
         async def _ingest() -> None:
-            mound = KnowledgeMound(config=MoundConfig(sqlite_path=str(tmp_path / "mound.db")))
-            await mound.initialize()
+            mound = await self._sqlite_mound(tmp_path)
 
             r = await ExecutableClaimAdapter(mound=mound).ingest_claim_results(results)
+
+            assert r.errors == []
+            assert r.claims_ingested == len(results)
+            assert len(r.knowledge_item_ids) == len(results)
+            for node_id in r.knowledge_item_ids:
+                stored = await mound.get(node_id)
+                assert stored is not None, f"mound.get({node_id!r}) found nothing"
+
+        asyncio.run(_ingest())
+
+    def test_factory_lookup_persists_into_the_real_mound_it_is_given(self, tmp_path: Path) -> None:
+        from aragora.knowledge.mound.adapters.factory import get_adapter
+
+        results = [
+            _r(ClaimStatus.PASS, cid="factory.pass"),
+            _r(ClaimStatus.FAIL, cid="factory.fail"),
+        ]
+
+        async def _ingest() -> None:
+            mound = await self._sqlite_mound(tmp_path)
+            adapter = get_adapter("executable_claim", mound=mound)
+            assert isinstance(adapter, ExecutableClaimAdapter)
+
+            r = await adapter.ingest_claim_results(results)
 
             assert r.errors == []
             assert r.claims_ingested == len(results)
@@ -346,6 +383,14 @@ class TestAdapterRegistration:
         assert "ExecutableClaimAdapter" in adapters_pkg.__all__
         assert "ClaimIngestionResult" in adapters_pkg.__all__
 
+    def test_module_exports_only_its_public_names(self) -> None:
+        from aragora.knowledge.mound.adapters import executable_claim_adapter
+
+        assert executable_claim_adapter.__all__ == [
+            "ClaimIngestionResult",
+            "ExecutableClaimAdapter",
+        ]
+
     def test_factory_spec_is_registered_and_names_a_real_method(self) -> None:
         from aragora.knowledge.mound.adapters.factory import ADAPTER_SPECS
 
@@ -362,6 +407,27 @@ class TestAdapterRegistration:
 
         assert "executable_claim" in created
         assert isinstance(created["executable_claim"].adapter, ExecutableClaimAdapter)
+
+    @pytest.mark.parametrize("construction", ["get_adapter", "create_from_subsystems"])
+    def test_factory_built_adapter_without_a_mound_fails_closed(
+        self, monkeypatch: pytest.MonkeyPatch, construction: str
+    ) -> None:
+        from aragora.knowledge.mound.adapters.factory import AdapterFactory, get_adapter
+
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        if construction == "get_adapter":
+            adapter = get_adapter("executable_claim", mound=None)
+        else:
+            adapter = AdapterFactory().create_from_subsystems()["executable_claim"].adapter
+        assert isinstance(adapter, ExecutableClaimAdapter)
+
+        r = asyncio.run(adapter.ingest_claim_results([_r(cid="c1"), _r(cid="c2")]))
+
+        assert r.claims_ingested == 0
+        assert r.knowledge_item_ids == []
+        assert r.success is False
+        assert len(r.errors) == 2
+        assert "c1" in r.errors[0] and "c2" in r.errors[1]
 
     def test_factory_created_adapter_stores_nothing_while_the_flag_is_off(
         self, monkeypatch: pytest.MonkeyPatch

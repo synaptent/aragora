@@ -1198,7 +1198,9 @@ _ADAPTER_NAME_ALIASES: dict[str, str] = {
     "insight": "insights",
 }
 
-_MOUND_AWARE_ADAPTERS = frozenset({"culture", "receipt", "outcome", "pipeline", "codebase"})
+_MOUND_AWARE_ADAPTERS = frozenset(
+    {"culture", "receipt", "outcome", "pipeline", "codebase", "executable_claim"}
+)
 
 
 def _extract_mound_dependencies(mound: Any) -> dict[str, Any]:

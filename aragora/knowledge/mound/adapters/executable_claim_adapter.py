@@ -78,8 +78,9 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
         """Bind the adapter to a mound.
 
         Args:
-            mound: Knowledge Mound to write claim results into. When omitted the
-                adapter runs in schema-only mode and persists nothing.
+            mound: Knowledge Mound to write claim results into. Without one the
+                adapter persists nothing, so ingestion records every claim as an
+                error instead of counting it as ingested.
             workspace_id: Workspace the claim items are written into. When
                 omitted the mound's own default is used.
         """
@@ -106,8 +107,7 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
         for result in results:
             try:
                 item = self._build_item(result, now)
-                stored = await self._store(item)
-                item_ids.append(stored if stored else item.id)
+                item_ids.append(await self._store(item))
             # A mound whose store() disagrees with the KnowledgeItem shape surfaces
             # the mismatch as AttributeError from inside the mound, which is an
             # ingestion failure for this claim rather than a reason to drop the rest.
@@ -172,12 +172,9 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
             },
         )
 
-    async def _store(self, item: KnowledgeItem) -> str | None:
-        # Returning None means schema-only mode, which the caller records as a
-        # generated id; a configured mound that cannot ingest must not take that
-        # path or the batch would report items it never persisted.
+    async def _store(self, item: KnowledgeItem) -> str:
         if not self._mound:
-            return None
+            raise RuntimeError("Knowledge Mound not configured")
         if hasattr(self._mound, "store"):
             return _persisted_id(await self._mound.store(self._build_request(item)), self._mound)
         if hasattr(self._mound, "ingest"):
@@ -207,4 +204,4 @@ def _stable_id(claim_id: str, status: str) -> str:
     return hashlib.sha256(f"{claim_id}:{status}".encode()).hexdigest()[:16]
 
 
-__all__ = ["ClaimIngestionResult", "ExecutableClaimAdapter", "_stable_id"]
+__all__ = ["ClaimIngestionResult", "ExecutableClaimAdapter"]
