@@ -25,7 +25,14 @@ NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")
 ROOT_ACTION_PATH = Path("action.yml")
 EXAMPLE_RECEIPT_PATH = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
 RECEIPT_WORKFLOW_EXAMPLE_PATH = Path("examples/github-action/receipt.yml")
-PINNED_ROOT_ACTION_REF = "synaptent/aragora@272a7ef2f672bce4d7c79bdeb916053e95840bc5"
+EXAMPLE_WORKFLOW_PATHS = (
+    Path("examples/github-action/advanced.yml"),
+    Path("examples/github-action/aragora-review-strict.yml"),
+    Path("examples/github-action/aragora-review.yml"),
+    Path("examples/github-action/basic.yml"),
+)
+INIT_SCAFFOLD_PATH = Path("aragora/cli/init.py")
+PINNED_ROOT_ACTION_REF = "synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10"
 
 _BACKTICK_TABLE_FIELD_RE = re.compile(r"^\|\s*`([a-zA-Z0-9_-]+)`\s*\|", re.MULTILINE)
 _PINNED_ACTION_REF_RE = re.compile(r"synaptent/aragora@[0-9a-f]{40}(?![0-9a-f])")
@@ -207,8 +214,15 @@ def test_receipt_workflow_example_is_valid_yaml_and_wires_emit_receipt() -> None
 
 
 def test_docs_do_not_recommend_mutable_main_action_ref() -> None:
-    for path in (README_PATH, DOC_PATH):
-        assert "synaptent/aragora@main" not in path.read_text(encoding="utf-8")
+    for path in (
+        README_PATH,
+        DOC_PATH,
+        DOCS_SITE_DOC_PATH,
+        RECEIPT_WORKFLOW_EXAMPLE_PATH,
+        *EXAMPLE_WORKFLOW_PATHS,
+        INIT_SCAFFOLD_PATH,
+    ):
+        assert "synaptent/aragora@main" not in path.read_text(encoding="utf-8"), path
 
 
 def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> None:
@@ -230,7 +244,14 @@ def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> Non
 
 @pytest.mark.parametrize(
     "path",
-    [README_PATH, DOC_PATH, DOCS_SITE_DOC_PATH, RECEIPT_WORKFLOW_EXAMPLE_PATH],
+    [
+        README_PATH,
+        DOC_PATH,
+        DOCS_SITE_DOC_PATH,
+        RECEIPT_WORKFLOW_EXAMPLE_PATH,
+        *EXAMPLE_WORKFLOW_PATHS,
+        INIT_SCAFFOLD_PATH,
+    ],
     ids=str,
 )
 def test_every_pinned_root_action_ref_matches_the_tested_pin(path: Path) -> None:
