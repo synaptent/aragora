@@ -185,8 +185,8 @@ migration = Migration(
     name="Knowledge Mound composite indexes for query optimization",
     up_fn=up_fn,
     down_fn=down_fn,
-    # Checksum of up_fn/down_fn before the column guards, so databases that
-    # applied that version still verify. The guards only skip indexes naming a
-    # column the table lacks, which failed to apply.
-    checksum="4fff064b3fc0e4a8280fe9739e2cf094ba03d112b4c61bcc6899cd084c074671",
+    # Recorded by databases that applied the revision before the column guards.
+    # The guards only skip indexes naming a column the table lacks, which
+    # failed to apply.
+    previous_checksums=("4fff064b3fc0e4a8280fe9739e2cf094ba03d112b4c61bcc6899cd084c074671",),
 )

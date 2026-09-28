@@ -139,6 +139,22 @@ def test_upgrade_indexes_job_queue_that_has_scheduled_at(isolated_database):
     assert "idx_job_queue_pending_priority" in _public_indexes(dsn)
 
 
+def test_get_missing_columns_against_real_postgres(isolated_database):
+    from aragora.migrations.patterns import get_missing_columns
+    from aragora.storage.backends import PostgreSQLBackend
+
+    with closing(PostgreSQLBackend(isolated_database, pool_size=1, pool_max_overflow=0)) as backend:
+        backend.execute_write("CREATE TABLE job_queue (id TEXT, status TEXT, dropped TEXT)")
+        backend.execute_write("ALTER TABLE job_queue DROP COLUMN dropped")
+        backend.execute_write("CREATE SCHEMA off_path")
+        backend.execute_write("CREATE TABLE off_path.hidden (id TEXT)")
+
+        missing = get_missing_columns(backend, "job_queue", ["status", "dropped", "scheduled_at"])
+        assert missing == ["dropped", "scheduled_at"]
+        with pytest.raises(ValueError, match="search_path"):
+            get_missing_columns(backend, "hidden", ["id"])
+
+
 def test_concurrent_index_failure_leaves_pool_usable(isolated_database):
     import psycopg2
     from aragora.migrations.patterns import safe_create_index, safe_drop_index

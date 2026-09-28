@@ -255,9 +255,10 @@ def test_full_migration_cycle(runner, backend):
 ### DON'T
 
 - Modify existing migrations that have been applied. The one exception is a fix
-  that changes the outcome only where the old version failed to apply; pin
-  `checksum=` on its `Migration` to the old value so databases that applied
-  it still pass checksum verification
+  that changes the outcome only where the old version could not apply
+  correctly (it failed, or built something meaningless). Add the old checksum
+  to `previous_checksums` on its `Migration`: databases that applied the old
+  version still verify, and later edits are still detected
 - Add NOT NULL columns without defaults to tables with data
 - Drop columns that might still be referenced
 - Create indexes without CONCURRENTLY on large tables

@@ -221,8 +221,8 @@ migration = Migration(
     name="Knowledge Mound visibility and access grants",
     up_fn=up_fn,
     down_fn=down_fn,
-    # Checksum of up_fn/down_fn before the column guards, so databases that
-    # applied that version (the Hetzner canary did) still verify. The guards
-    # only skip indexes naming a column the table lacks, which failed to apply.
-    checksum="4410a1ca05214b011cdff23c8cfaae986c3145223cc8d2a57ea2c2a4a00fc172",
+    # Recorded by databases that applied the revision before the column guards
+    # (the Hetzner canary did). The guards only skip indexes naming a column the
+    # table lacks, which failed to apply.
+    previous_checksums=("4410a1ca05214b011cdff23c8cfaae986c3145223cc8d2a57ea2c2a4a00fc172",),
 )

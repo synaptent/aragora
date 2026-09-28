@@ -645,10 +645,18 @@ class TestGetMissingColumns:
 
         assert missing == ["scheduled_at", "priority"]
 
-    def test_absent_table_has_no_columns(self, sqlite_backend):
+    def test_absent_table_raises(self, sqlite_backend):
         from aragora.migrations.patterns import get_missing_columns
 
-        assert get_missing_columns(sqlite_backend, "no_such_table", ["id"]) == ["id"]
+        with pytest.raises(ValueError, match="not found"):
+            get_missing_columns(sqlite_backend, "no_such_table", ["id"])
+
+    def test_sqlite_matches_column_names_case_insensitively(self, sqlite_backend):
+        from aragora.migrations.patterns import get_missing_columns
+
+        sqlite_backend.execute_write("CREATE TABLE mixed (Status TEXT)")
+
+        assert get_missing_columns(sqlite_backend, "mixed", ["status", "STATUS"]) == []
 
     def test_rejects_invalid_identifiers(self, sqlite_backend_with_table):
         from aragora.migrations.patterns import get_missing_columns
@@ -665,6 +673,10 @@ class TestGetMissingColumns:
         calls: list[tuple[str, tuple]] = []
 
         class PostgreSQLBackend:
+            def fetch_one(self, sql: str, params: tuple = ()) -> tuple | None:
+                calls.append((sql, params))
+                return ("job_queue",)
+
             def fetch_all(self, sql: str, params: tuple = ()) -> list[tuple]:
                 calls.append((sql, params))
                 return [("status",), ("priority",)]
@@ -674,10 +686,19 @@ class TestGetMissingColumns:
         )
 
         assert missing == ["scheduled_at"]
-        [(sql, params)] = calls
-        assert "to_regclass(%s)" in sql
-        assert "attisdropped" in sql
-        assert params == ('"job_queue"',)
+        assert all("to_regclass(%s)" in sql for sql, _ in calls)
+        assert "attisdropped" in calls[-1][0]
+        assert {params for _, params in calls} == {('"job_queue"',)}
+
+    def test_postgresql_table_off_search_path_raises(self):
+        from aragora.migrations.patterns import get_missing_columns
+
+        class PostgreSQLBackend:
+            def fetch_one(self, sql: str, params: tuple = ()) -> tuple | None:
+                return (None,)
+
+        with pytest.raises(ValueError, match="search_path"):
+            get_missing_columns(PostgreSQLBackend(), "job_queue", ["status"])
 
 
 class TestCreateIndexIfColumnsExist:

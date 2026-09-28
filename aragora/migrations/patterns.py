@@ -140,8 +140,12 @@ def get_missing_columns(backend: DatabaseBackend, table: str, columns: list[str]
 
     The app's stores create tables at startup with ``CREATE TABLE IF NOT
     EXISTS``, so a migration can meet a table it did not create, in a shape
-    that lacks columns it assumes. A table that does not exist has none of the
-    columns. Introspection errors propagate rather than reading as "missing".
+    that lacks columns it assumes. Introspection errors propagate rather than
+    reading as "missing".
+
+    Raises:
+        ValueError: If the table does not exist (on PostgreSQL, if it is not
+            found through search_path, which is where the DDL will look).
     """
     qt = quote_identifier(table, "table")
     for column in columns:
@@ -149,6 +153,9 @@ def get_missing_columns(backend: DatabaseBackend, table: str, columns: list[str]
 
     if is_postgresql(backend):
         # to_regclass resolves the name through search_path, as the DDL will
+        found = backend.fetch_one("SELECT to_regclass(%s)", (qt,))
+        if not found or found[0] is None:
+            raise ValueError(f"Table {table} not found on the search_path")
         rows = backend.fetch_all(
             """
             SELECT attname FROM pg_attribute
@@ -157,10 +164,14 @@ def get_missing_columns(backend: DatabaseBackend, table: str, columns: list[str]
             (qt,),
         )
         existing = {row[0] for row in rows}
-    else:
-        existing = {row[1] for row in backend.fetch_all(f"PRAGMA table_info({qt})")}
+        return [column for column in columns if column not in existing]
 
-    return [column for column in columns if column not in existing]
+    rows = backend.fetch_all(f"PRAGMA table_info({qt})")
+    if not rows:
+        raise ValueError(f"Table {table} not found")
+    # SQLite matches column names case-insensitively
+    existing = {row[1].lower() for row in rows}
+    return [column for column in columns if column.lower() not in existing]
 
 
 def safe_add_column(

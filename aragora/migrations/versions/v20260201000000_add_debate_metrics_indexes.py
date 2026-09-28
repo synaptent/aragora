@@ -125,9 +125,8 @@ migration = Migration(
     name="Add debate metrics performance indexes",
     up_fn=up_fn,
     down_fn=down_fn,
-    # Checksum of up_fn/down_fn before the column guards, so databases that
-    # applied that version still verify. The guards only skip indexes naming a
-    # column the table lacks, which PostgreSQL rejected (SQLite indexed the
-    # quoted name as a string constant).
-    checksum="1750a3d82adbb6420727f27dcc0f502cdeab0b02147b3bf13978532e8913049e",
+    # Recorded by databases that applied the revision before the column guards.
+    # The guards only skip indexes naming a column the table lacks, which
+    # PostgreSQL rejected (SQLite indexed the quoted name as a string constant).
+    previous_checksums=("1750a3d82adbb6420727f27dcc0f502cdeab0b02147b3bf13978532e8913049e",),
 )

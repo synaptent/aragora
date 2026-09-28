@@ -758,6 +758,97 @@ class TestColumnGuardChecksumContinuity:
 
         assert runner.verify_checksums() == []
 
+    def test_later_edits_to_the_guarded_migrations_are_still_detected(self, runner, backend):
+        from aragora.migrations.runner import _load_migrations
+
+        _load_migrations(runner)
+        for version in self.PRE_GUARD_CHECKSUMS:
+            backend.execute_write(
+                "INSERT INTO _aragora_migrations (version, name, checksum) VALUES (?, ?, ?)",
+                (version, f"v{version}", "0" * 64),
+            )
+
+        mismatched = {version for version, _, _ in runner.verify_checksums()}
+        assert mismatched == set(self.PRE_GUARD_CHECKSUMS)
+
+
+class TestGuardedIndexesOnCompleteTables:
+    """With every column present, no guarded index is skipped (catches column-name typos)."""
+
+    def test_debate_metrics_indexes(self, backend, caplog):
+        from aragora.migrations.versions.v20260201000000_add_debate_metrics_indexes import up_fn
+
+        backend.execute_write("""
+            CREATE TABLE gauntlet_results (
+                gauntlet_id TEXT PRIMARY KEY, verdict TEXT, confidence REAL,
+                robustness_score REAL, created_at TIMESTAMP
+            )
+        """)
+        backend.execute_write("""
+            CREATE TABLE job_queue (
+                id TEXT PRIMARY KEY, status TEXT, priority INTEGER, scheduled_at TIMESTAMP
+            )
+        """)
+        backend.execute_write("""
+            CREATE TABLE audit_log (
+                id TEXT PRIMARY KEY, timestamp TEXT, resource_type TEXT, resource_id TEXT
+            )
+        """)
+
+        with caplog.at_level("WARNING"):
+            up_fn(backend)
+
+        assert "Skipping index" not in caplog.text
+        for index in (
+            "idx_gauntlet_results_verdict_created",
+            "idx_gauntlet_results_confidence",
+            "idx_gauntlet_results_robustness",
+            "idx_job_queue_pending_priority",
+            "idx_audit_log_resource_time",
+        ):
+            assert backend.index_exists(index), index
+
+    def test_km_visibility_indexes(self, backend, caplog):
+        from aragora.migrations.versions.v20260119000000_knowledge_mound_visibility import up_fn
+
+        with caplog.at_level("WARNING"):
+            up_fn(backend)
+
+        assert "Skipping index" not in caplog.text
+        for index in (
+            "idx_grants_item_id",
+            "idx_grants_grantee",
+            "idx_grants_workspace",
+            "idx_grants_expires",
+            "idx_federation_enabled",
+        ):
+            assert backend.index_exists(index), index
+
+    def test_km_composite_indexes(self, backend, caplog):
+        from aragora.migrations.versions.v20260202000000_knowledge_mound_composite_indexes import (
+            up_fn,
+        )
+
+        backend.execute_write(RUNTIME_KNOWLEDGE_NODES)
+        backend.execute_write("ALTER TABLE knowledge_nodes ADD COLUMN staleness_score REAL")
+        backend.execute_write("""
+            CREATE TABLE knowledge_relationships (
+                id TEXT PRIMARY KEY, from_node_id TEXT, to_node_id TEXT, relationship_type TEXT
+            )
+        """)
+
+        with caplog.at_level("WARNING"):
+            up_fn(backend)
+
+        assert "Skipping index" not in caplog.text
+        for index in (
+            "idx_km_workspace_type_confidence",
+            "idx_km_updated_workspace",
+            "idx_km_validation_staleness",
+            "idx_km_rel_path",
+        ):
+            assert backend.index_exists(index), index
+
 
 # ---------------------------------------------------------------------------
 # Edge Cases and Error Handling
