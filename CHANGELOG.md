@@ -8,7 +8,7 @@ _Post-v2.11.1 changes land here until the next stable tag._
 
 ## [2.11.1] - 2026-09-28
 
-_A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, every receipt the Action emitted read `CHANGES_REQUESTED`, even when every reviewer passed. It covers the commits on `main` after the v2.11.0 tag commit `272a7ef2` (#10161). The version was fanned out by `scripts/check_version_alignment.py --fix`. No server routes or SDK methods are removed._
+_A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, every receipt the Action emitted read `CHANGES_REQUESTED`, even when every reviewer passed. It covers the commits on `main` after the v2.11.0 tag commit `272a7ef2` (#10161). The version was fanned out by `scripts/check_version_alignment.py --fix`. No server routes are removed. The in-repo SDKs do remove operations on unserved routes (#10138): nine from the Python SDK and 16 from the TypeScript SDK; see **Removed**._
 
 ### Fixed
 - **GitHub Action receipts decide on the reviewer verdicts** (#10185). The Action runs the review prepare-only and never posts merge-gate evidence, so v2.11.0 receipts always read `CHANGES_REQUESTED`. `scripts/emit_pr_receipt.py --decision-basis reviews` (which `action.yml` now passes) reaches the decision when the counted, supportive verdicts satisfy the tier's quorum rule with no dissent. It records `decision_basis` in the signed ODR mechanism. The `posted` basis stays the default for aragora's own merge-quorum receipts, which keep their exact bytes.
@@ -23,8 +23,11 @@ _A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, ev
 - **Backend image build identity:** `deploy/Dockerfile.backend` takes `ARAGORA_BUILD_SHA`, `ARAGORA_BUILD_TIME` and `ARAGORA_DEPLOY_VERSION` build args. The Docker workflow passes them, and its smoke test asserts the image reports its own commit (#10189).
 - **Receipt-first scoreboard:** row 6 derives its denominator from the newest Atlas release. The denominator is the receipt-first review rounds since #10016, and the numerator counts the rounds that carry an advisory summary. `--quorum-runs` overrides the denominator (#10191).
 
+### Removed
+- **SDK operations on unserved routes** (#10138, contract-drift batch 4): nine operations are removed from the synchronous and asynchronous Python clients, and 16 from the TypeScript SDK. Each targeted a route that no server handler dispatched, so the call could only fail with a route-level 404 or `handler_no_result`; no server route is removed. The operations and their replacements, where one exists, are listed under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`. SDK users get the change when those packages publish at 2.11.1; this release publishes only the core `aragora` package.
+
 ### Changed
-- **Contract drift:** batch 4 retires 25 cohort items (#10138).
+- **Contract drift:** batch 4 retires 25 cohort items (#10138); its SDK removals are listed under **Removed**.
 - **Docs:** the Action pin moves to v2.11.0 (#10182), with v2.11.0 pin follow-ups (#10184). ODR v0.2-default doc follow-ups (#10160). `docs/METRICS.md` regenerated (#10173).
 - **CI:** the TypeScript SDK publish runs its checkout check from the repository root (#10183). The receipt-first-hour step gets a `GH_TOKEN` (#10179).
 - **Tests and review tooling:** the event-subscriber tests use their own webhook store (#10190). The inference-site allowlist classifies the agent-surface token counter (#10193). The VibeProxy burn-in cohort is restarted (#9576).

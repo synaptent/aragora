@@ -57,13 +57,13 @@ print(__version__)  # "2.11.1"
 
 **Python support:** 3.10, 3.11, 3.12, 3.13
 
-**PyPI availability:** the `2.11.1` wheel ships when the operator pushes the `v2.11.1` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.10.0 and the `==2.11.0` commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
+**PyPI availability:** the `2.11.1` wheel ships when the operator pushes the `v2.11.1` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.11.0 and the `==2.11.1` commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
 
 ---
 
 ## Upgrade Paths
 
-### v2.x.x -> v2.11.1 (Minor Upgrade)
+### v2.x.x -> v2.11.1 (Minor Upgrade; Patch from v2.11.0)
 
 No server API breaking changes between v2.x releases. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 reached PyPI on 2026-09-25, so an upgrade from 2.9.x picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
 
