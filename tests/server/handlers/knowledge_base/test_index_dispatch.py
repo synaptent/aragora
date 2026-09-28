@@ -18,10 +18,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.billing.jwt_auth import create_access_token
 from aragora.core.embeddings.service import UnifiedEmbeddingService
 from aragora.core.embeddings.types import EmbeddingConfig
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.base import error_response
+from aragora.server.handlers.knowledge_base import handler as handler_module
 from aragora.server.handlers.knowledge_base.handler import (
     KnowledgeHandler,
     _knowledge_limiter,
@@ -87,11 +89,13 @@ def _dispatch(
     method: str,
     path: str,
     body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     instance: Any = registry_cls()
     raw = json.dumps(body).encode("utf-8") if body is not None else b""
     instance.command = method
     instance.headers = {"Content-Length": str(len(raw)), "Content-Type": "application/json"}
+    instance.headers.update(headers or {})
     instance.rfile = io.BytesIO(raw)
     instance.wfile = io.BytesIO()
     instance.send_response = MagicMock()
@@ -172,6 +176,47 @@ def test_embed_batch_reports_backend_failure_as_503(registry_cls) -> None:
     assert status == 503, body
 
 
+def test_embed_batch_stops_at_the_overall_time_budget(registry_cls, monkeypatch) -> None:
+    monkeypatch.setattr(handler_module, "_EMBED_BATCH_BUDGET_SECONDS", 0.2, raising=False)
+    calls: list[list[str]] = []
+
+    class _SlowService:
+        model = "slow-model"
+        provider = "slow"
+
+        async def embed_batch_raw(self, batch: list[str]) -> list[list[float]]:
+            calls.append(batch)
+            await asyncio.sleep(0.05)
+            return [[0.0] for _ in batch]
+
+    texts = [f"t{i}" for i in range(40)]
+    with patch(
+        "aragora.core.embeddings.service.get_embedding_service", return_value=_SlowService()
+    ):
+        status, body = _dispatch(
+            registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": texts, "batch_size": 1}
+        )
+    assert status == 503, body
+    assert len(calls) < len(texts)
+
+
+def test_embed_batch_short_backend_reply_answers_503(registry_cls, hash_service) -> None:
+    backend = hash_service._backend
+    real_embed_batch = backend.embed_batch
+
+    async def _short_reply(texts: list[str]) -> list[list[float]]:
+        return (await real_embed_batch(texts))[:-1]
+
+    with (
+        patch.object(backend, "embed_batch", _short_reply),
+        patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service),
+    ):
+        status, body = _dispatch(
+            registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha", "beta"]}
+        )
+    assert status == 503, body
+
+
 def test_list_indexes_returns_empty_list(registry_cls) -> None:
     status, body = _dispatch(registry_cls, "GET", "/api/v1/index")
     assert status == 200, body
@@ -192,8 +237,15 @@ def test_create_and_search_answer_501_not_implemented(
     monkeypatch.setenv("ARAGORA_ENV", "production")
     status, body = _dispatch(registry_cls, "POST", path, payload)
     assert status == 501, body
-    assert body["code"] == "not_implemented"
-    assert "not implemented" in body["error"].lower()
+    assert set(body) == {"error"}, body
+    assert body["error"]["code"] == "not_implemented"
+    message = body["error"]["message"]
+    assert "not implemented" in message.lower()
+
+    # Same nested envelope that error_response(..., code=...) builds outside production.
+    monkeypatch.delenv("ARAGORA_ENV")
+    envelope = error_response(message, 501, code="not_implemented")
+    assert body == json.loads(envelope.body)
 
 
 @pytest.mark.parametrize(
@@ -262,3 +314,34 @@ def test_list_requires_authentication(registry_cls) -> None:
     ):
         status, body = _dispatch(registry_cls, "GET", "/api/v1/index")
     assert status == 401, body
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("role", ["owner", "admin", "member"])
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [("GET", "/api/v1/index", None), ("POST", "/api/v1/index/embed-batch", {"texts": ["a"]})],
+)
+def test_real_jwt_callers_get_403_known_pre_existing_defect(
+    registry_cls, hash_service, role: str, method: str, path: str, payload: dict | None
+) -> None:
+    """Documents a KNOWN PRE-EXISTING defect; this test pins today's behavior, not the goal.
+
+    ``KnowledgeHandler._check_permission`` reads ``user.permissions`` and
+    ``user.roles``, but the ``UserAuthContext`` built from a real JWT carries
+    only ``role``, so every JWT caller (owner and admin included) gets 403 on
+    every knowledge route, the index family among them. The fix belongs to the
+    separate feature ``m4-knowledge-auth-fix``; when it lands, this test must be
+    replaced by the permission matrix that feature defines.
+    """
+    token = create_access_token(user_id=f"jwt-{role}", email=f"{role}@example.com", role=role)
+    # Keep token validation off whatever revocation database the host environment points at.
+    with (
+        patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False),
+        patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service),
+    ):
+        status, body = _dispatch(
+            registry_cls, method, path, payload, headers={"Authorization": f"Bearer {token}"}
+        )
+    assert status == 403, body
+    assert body == {"error": "Permission denied"}

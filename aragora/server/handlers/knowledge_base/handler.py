@@ -26,6 +26,7 @@ Index API (no named-index registry exists yet):
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from aragora.core.embeddings.types import EmbeddingError
@@ -68,6 +69,10 @@ _INDEX_ROUTE_METHODS = {
 }
 _MAX_EMBED_BATCH_TEXTS = 1000
 _MAX_EMBED_BATCH_SIZE = 100
+# Shared by every backend call of one embed-batch request, so small batch sizes
+# cannot turn one request into many sequential 30 s waits.
+_EMBED_BATCH_BUDGET_SECONDS = 30.0
+_NOT_IMPLEMENTED_MESSAGE = "Named vector indexes are not implemented on this server"
 
 
 class KnowledgeHandler(
@@ -274,9 +279,10 @@ class KnowledgeHandler(
             return self._handle_embed_batch(handler)
         if method == "GET":
             return json_response({"indexes": [], "count": 0})
-        # Built directly: error_response rewrites 5xx messages in production.
+        # The error_response(..., code=...) envelope, built directly because
+        # error_response replaces every 5xx message in production.
         return json_response(
-            {"error": "Named vector indexes are not implemented", "code": "not_implemented"},
+            {"error": {"message": _NOT_IMPLEMENTED_MESSAGE, "code": "not_implemented"}},
             status=501,
         )
 
@@ -312,9 +318,28 @@ class KnowledgeHandler(
                 )
             batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
             embeddings: list[list[float]] = []
+            deadline = time.monotonic() + _EMBED_BATCH_BUDGET_SECONDS
             for batch in batches:
-                embeddings.extend(_run_async(service.embed_batch_raw(batch)))
-        except (EmbeddingError, RuntimeError, OSError, TimeoutError, ValueError) as e:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"embed-batch exceeded its {_EMBED_BATCH_BUDGET_SECONDS:g}s budget"
+                    )
+                vectors = _run_async(service.embed_batch_raw(batch), timeout=remaining)
+                if len(vectors) != len(batch):
+                    raise ValueError(f"backend returned {len(vectors)} vectors for {len(batch)}")
+                embeddings.extend(vectors)
+        # AttributeError/TypeError: UnifiedEmbeddingService.embed_batch leaves None
+        # placeholders when a backend returns fewer vectors than it was given.
+        except (
+            EmbeddingError,
+            RuntimeError,
+            OSError,
+            TimeoutError,
+            ValueError,
+            AttributeError,
+            TypeError,
+        ) as e:
             logger.warning("Index embed-batch failed: %s", e)
             return error_response("Embedding service unavailable", 503)
 
