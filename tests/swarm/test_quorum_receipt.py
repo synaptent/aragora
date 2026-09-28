@@ -326,3 +326,94 @@ def test_v02_bridge_omits_out_of_profile_severities(caplog):
     assert len(warnings) == 2
     assert "P4" in warnings[0] and "P9" in warnings[1]
     jsonschema.validate(doc, load_odr_schema())
+
+
+# --- decision_basis="reviews": for callers that never post evidence (the Action) ---
+
+
+def _single_family_outcome() -> CollectOutcome:
+    """Tier 3 needs two distinct western families; only claude answered."""
+    from aragora.swarm.quorum_evidence import ReviewerResult
+
+    return CollectOutcome(
+        repo="synaptent/aragora",
+        pr=8667,
+        head_sha="c" * 40,
+        head_committed_at="2026-06-27T10:00:00+00:00",
+        tier=3,
+        action="prepare",
+        action_reason="supportive quorum incomplete; prepared evidence only",
+        tiered_gate=False,
+        items=[
+            EvidenceItem(family="claude", body="PASS: fine", would_count=True, verdict="pass"),
+        ],
+        failures=[ReviewerResult(family="openai", text="", ok=False, error="timed out")],
+    )
+
+
+def test_reviews_basis_passes_a_unanimous_prepare_only_outcome():
+    receipt = collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="reviews")
+
+    assert receipt.verdict == "PASS"
+    assert receipt.consensus_proof is not None
+    assert receipt.consensus_proof.reached is True
+    assert receipt.consensus_proof.supporting_agents == ["claude", "openai"]
+    assert "decision_basis=reviews" in receipt.verdict_reasoning
+    assert receipt.settlement_metadata["decision_basis"] == "reviews"
+
+
+def test_posted_basis_is_still_the_default_for_prepare_only_outcomes():
+    default = collect_outcome_to_decision_receipt(_supportive_outcome())
+    explicit = collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="posted")
+
+    for receipt in (default, explicit):
+        assert receipt.verdict == "CHANGES_REQUESTED"
+        assert receipt.consensus_proof is not None
+        assert receipt.consensus_proof.reached is False
+        assert "decision_basis" not in receipt.settlement_metadata
+    assert default.to_dict() == explicit.to_dict()
+
+
+def test_reviews_basis_keeps_reviewer_dissent_blocking():
+    receipt = collect_outcome_to_decision_receipt(_outcome(), decision_basis="reviews")
+
+    assert receipt.verdict == "CHANGES_REQUESTED"
+    assert receipt.consensus_proof is not None
+    assert receipt.consensus_proof.reached is False
+    assert "grok" in receipt.consensus_proof.dissenting_agents
+
+
+def test_reviews_basis_requires_the_tier_quorum_when_a_reviewer_failed():
+    receipt = collect_outcome_to_decision_receipt(
+        _single_family_outcome(), decision_basis="reviews"
+    )
+
+    assert receipt.verdict == "CHANGES_REQUESTED"
+    assert receipt.consensus_proof is not None
+    assert receipt.consensus_proof.reached is False
+    assert "quorum rule not satisfied" in receipt.verdict_reasoning
+
+
+def test_reviews_basis_is_recorded_in_the_signed_odr_mechanism():
+    reviews = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="reviews"),
+        odr_version="0.2",
+    )
+    posted = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_supportive_outcome()), odr_version="0.2"
+    )
+    schema = load_odr_schema()
+    jsonschema.validate(reviews, schema)
+    jsonschema.validate(posted, schema)
+
+    assert reviews["claim"]["verdict"] == "PASS"
+    assert reviews["attestation"]["mechanism"]["decision_basis"] == "reviews"
+    assert posted["claim"]["verdict"] == "CHANGES_REQUESTED"
+    assert "decision_basis" not in posted["attestation"]["mechanism"]
+
+
+def test_unknown_decision_basis_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError, match="decision_basis"):
+        collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="assumed")
