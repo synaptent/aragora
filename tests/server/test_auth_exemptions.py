@@ -34,6 +34,9 @@ class TestAuthExemptPaths:
             "/api/health/detailed",
             "/api/health/deep",
             "/api/health/stores",
+            "/health/build",
+            "/api/health/build",
+            "/api/v1/health/build",
         ]
         for endpoint in health_endpoints:
             assert endpoint in exempt_paths, f"Health endpoint {endpoint} should be exempt"

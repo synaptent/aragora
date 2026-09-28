@@ -267,3 +267,58 @@ def test_action_hands_the_signing_key_only_to_the_emit_step():
     assert "ODR_SIGNING_KEY" not in script[unset_at + len("unset ODR_SIGNING_KEY") :].replace(
         "ARAGORA_ODR_SIGNING_KEY_FILE", ""
     )
+
+
+def _prepare_only_outcome_dict() -> dict:
+    """What the GitHub Action collects: two passing reviewers, nothing posted."""
+    outcome = CollectOutcome(
+        repo="example/demo",
+        pr=1,
+        head_sha="d" * 40,
+        head_committed_at="2026-09-27T08:00:00+00:00",
+        tier=1,
+        action="prepare",
+        action_reason="head is not settlement-stable; prepared only",
+        items=[
+            EvidenceItem(family="claude", body="PASS", would_count=True, verdict="pass"),
+            EvidenceItem(family="openai", body="PASS", would_count=True, verdict="pass"),
+        ],
+    )
+    return outcome.to_dict()
+
+
+@pytest.mark.parametrize(
+    ("basis", "verdict"), [("posted", "CHANGES_REQUESTED"), ("reviews", "PASS")]
+)
+def test_main_decision_basis_controls_a_prepare_only_verdict(tmp_path: Path, basis, verdict):
+    outcome_path = tmp_path / "outcome.json"
+    outcome_path.write_text(json.dumps(_prepare_only_outcome_dict()), encoding="utf-8")
+    out_path = tmp_path / "receipt.odr.json"
+    gh_out = tmp_path / "gh_output"
+
+    rc = main(
+        [
+            "--outcome",
+            str(outcome_path),
+            "--out",
+            str(out_path),
+            "--verify",
+            "--decision-basis",
+            basis,
+            "--github-output",
+            str(gh_out),
+        ]
+    )
+
+    assert rc == 0
+    odr = json.loads(out_path.read_text(encoding="utf-8"))
+    jsonschema.validate(odr, load_odr_schema())
+    assert odr["claim"]["verdict"] == verdict
+    assert f"receipt_verdict={verdict}" in gh_out.read_text(encoding="utf-8")
+
+
+def test_action_emits_its_receipt_on_the_reviews_basis():
+    action = (Path(__file__).resolve().parents[2] / "action.yml").read_text(encoding="utf-8")
+    emit = action[action.index("scripts/emit_pr_receipt.py") :]
+    emit = emit[: emit.index('>> "$LOG"')]
+    assert "--decision-basis reviews" in emit

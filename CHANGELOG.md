@@ -3,7 +3,42 @@
 
 ## [Unreleased]
 
-_Post-v2.11.0 changes land here until the next stable tag._
+_Post-v2.11.1 changes land here until the next stable tag._
+
+### Changed
+- **Budget guard ledger location** (`aragora/billing/budget_guard.py`): the monthly spend ledger is chosen in this order, and the first match wins: `ARAGORA_BUDGET_GUARD_STORE` (the exact file path, used as given); `<ARAGORA_DATA_DIR>/budget_guard.json`; `<ARAGORA_NOMIC_DIR>/budget_guard.json`; otherwise the machine-global `~/.aragora/budget_guard.json`. The two data-directory variables have been honored since v2.10.0 (#9161); v2.9.x and earlier always used `~/.aragora/budget_guard.json` unless `ARAGORA_BUDGET_GUARD_STORE` was set. New: a whitespace-only data-directory value counts as unset, surrounding whitespace is stripped, `~` is expanded, and a relative data directory is anchored under the home directory (`ARAGORA_DATA_DIR=.nomic` resolves to `~/.nomic/budget_guard.json`). The ledger path no longer depends on the process working directory.
+- **Budget guard migration:** a data directory set to an absolute path keeps the same ledger. A relative data directory moves the ledger from `<working directory>/<dir>/budget_guard.json` to `~/<dir>/budget_guard.json`; copy the old file there, or set `ARAGORA_BUDGET_GUARD_STORE` to its absolute path, before upgrading mid-month, or this month's recorded spend restarts at zero. To keep the legacy home ledger while a data directory is configured, set `ARAGORA_BUDGET_GUARD_STORE="$HOME/.aragora/budget_guard.json"`. The override is used literally, so give an absolute path, not one that starts with `~`.
+
+### Fixed
+- **Billing metering:** `record_debate_tokens` records a missing or `None` agent provider as `"unknown"` instead of passing `None` through a type cast. `EnterpriseMeter` raises `RuntimeError("metering store not initialized")` when its connection is used before `initialize()`, instead of failing later on `None`.
+
+
+## [2.11.1] - 2026-09-28
+
+_A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, every receipt the Action emitted read `CHANGES_REQUESTED`, even when every reviewer passed. It covers the commits on `main` after the v2.11.0 tag commit `272a7ef2` (#10161). The version was fanned out by `scripts/check_version_alignment.py --fix`. No server routes are removed. Both in-repo SDKs drop methods for routes that no server dispatched (#10138); see **Removed**._
+
+### Fixed
+- **GitHub Action receipts decide on the reviewer verdicts** (#10185). The Action runs the review prepare-only and never posts merge-gate evidence, so v2.11.0 receipts always read `CHANGES_REQUESTED`. `scripts/emit_pr_receipt.py --decision-basis reviews` (which `action.yml` now passes) reaches the decision when the counted, supportive verdicts satisfy the tier's quorum rule with no dissent. It records `decision_basis` in the signed ODR mechanism. The `posted` basis stays the default for aragora's own merge-quorum receipts, which keep their exact bytes.
+- **Build health and release header** (#10187): `/health/build`, `/api/health/build` and `/api/v1/health/build` answer without credentials, and `X-API-Release` reports the package version instead of the stale `2.0.3`.
+- **Webhook secrets:** secrets written by `EncryptionService` are decrypted on read (#10186). The webhook store's encryption provider is typed through a narrow protocol (#10180).
+- **Storage:** in-memory expiry and due-date timestamps are normalized to UTC (#10194). `StorageGuardConfig` sets use default factories (#10192).
+- **CLI:** the triage webhook dispatcher is drained before its pools close (#10176).
+
+### Added
+- **Hosted-API tooling:** `scripts/check_hosted_api.sh`, an external curl-only check of the hosted API, and a corrected tunnel cutover step in `deploy/hetzner/README.md` (#10181).
+- **Hetzner deploy pack:** the app mounts the ODR signing key read-only and persists `/app/data`. `ARAGORA_RECEIPT_SIGNING_KEY` is a required secret, and `bring-up.sh` refuses to start without a mode-0400 key owned by the container user (#10188).
+- **Backend image build identity:** `deploy/Dockerfile.backend` takes `ARAGORA_BUILD_SHA`, `ARAGORA_BUILD_TIME` and `ARAGORA_DEPLOY_VERSION` build args. The Docker workflow passes them, and its smoke test asserts the image reports its own commit (#10189).
+- **Receipt-first scoreboard:** row 6 derives its denominator from the newest Atlas release. The denominator is the receipt-first review rounds since #10016, and the numerator counts the rounds that carry an advisory summary. `--quorum-runs` overrides the denominator (#10191).
+
+### Removed
+- **SDK methods for unserved routes** (#10138, contract-drift batch 4): both SDKs drop the methods whose routes no server handler dispatched. Those calls could only fail with a route-level 404 or `handler_no_result`, and no server route is removed. The full list, with replacements where they exist, is under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`. The Python removals already shipped in `aragora-sdk` 2.11.0 (PyPI, 2026-09-27). The TypeScript removals reach npm users with the next `@aragora/sdk` publish; npm's latest is 2.7.4.
+
+### Changed
+- **Contract drift:** batch 4 retires 25 cohort items (#10138); its SDK removals are listed under **Removed**.
+- **Docs:** the Action pin moves to v2.11.0 (#10182), with v2.11.0 pin follow-ups (#10184). ODR v0.2-default doc follow-ups (#10160). `docs/METRICS.md` regenerated (#10173).
+- **CI:** the TypeScript SDK publish runs its checkout check from the repository root (#10183). The receipt-first-hour step gets a `GH_TOKEN` (#10179).
+- **Tests and review tooling:** the event-subscriber tests use their own webhook store (#10190). The inference-site allowlist classifies the agent-surface token counter (#10193). The VibeProxy burn-in cohort is restarted (#9576).
+- **Dependencies:** `tailwind-merge` 3.7.0 (#10131), `eslint-config-next` (#10130) and `@testing-library/dom` (#10127) in `aragora/live`.
 
 
 ## [2.11.0] - 2026-09-25
