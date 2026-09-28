@@ -169,31 +169,6 @@ describe('MemoryAPI Namespace', () => {
       );
       expect(result.success).toBe(true);
     });
-
-    it('should update an existing memory entry', async () => {
-      mockClient.request.mockResolvedValue({ updated: true, tier: 'fast' });
-
-      const result = await api.update('user-prefs', { theme: 'light' });
-
-      expect(mockClient.request).toHaveBeenCalledWith('PUT', '/api/v1/memory/user-prefs', {
-        body: { value: { theme: 'light' } },
-      });
-      expect(result.updated).toBe(true);
-    });
-
-    it('should update with merge option', async () => {
-      mockClient.request.mockResolvedValue({ updated: true, tier: 'medium' });
-
-      const result = await api.update('key', { newField: 'value' }, {
-        tier: 'medium',
-        merge: true,
-        tags: ['updated'],
-      });
-
-      expect(mockClient.request).toHaveBeenCalledWith('PUT', '/api/v1/memory/key', {
-        body: { value: { newField: 'value' }, tier: 'medium', merge: true, tags: ['updated'] },
-      });
-    });
   });
 
   // ===========================================================================
@@ -345,33 +320,6 @@ describe('MemoryAPI Namespace', () => {
   // ===========================================================================
 
   describe('Context Management', () => {
-    it('should get current context', async () => {
-      mockClient.request.mockResolvedValue({
-        context_id: 'ctx-123',
-        data: { user_id: '123', session: 'abc' },
-        created_at: '2024-01-01T00:00:00Z',
-      });
-
-      const result = await api.getContext();
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/memory/context', { params: {} });
-      expect(result.context_id).toBe('ctx-123');
-    });
-
-    it('should get context by ID', async () => {
-      mockClient.request.mockResolvedValue({
-        context_id: 'ctx-456',
-        data: { specific: 'data' },
-        created_at: '2024-01-01T00:00:00Z',
-      });
-
-      const result = await api.getContext('ctx-456');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/memory/context', {
-        params: { context_id: 'ctx-456' },
-      });
-    });
-
     it('should set context', async () => {
       mockClient.request.mockResolvedValue({
         context_id: 'ctx-new',

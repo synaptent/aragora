@@ -48,15 +48,6 @@ export interface SubscriptionResult {
 }
 
 /**
- * Unsubscription result
- */
-export interface UnsubscriptionResult {
-  success: boolean;
-  debate_id: string;
-  message?: string;
-}
-
-/**
  * Cross-pollination bridge status
  */
 export interface CrossPollinationBridge {
@@ -294,26 +285,6 @@ export class CrossPollinationAPI {
       json.min_confidence = options.minConfidence;
     }
     return this.client.request('POST', '/api/v1/cross-pollination/subscribe', { json });
-  }
-
-  /**
-   * Unsubscribe a debate from cross-pollination.
-   *
-   * Removes a debate's subscription, stopping it from receiving cross-pollinated insights.
-   *
-   * @param debateId - Debate ID to unsubscribe
-   * @returns Unsubscription result
-   *
-   * @example
-   * ```typescript
-   * const result = await client.crossPollination.unsubscribe('debate-123');
-   * if (result.success) {
-   *   console.log('Successfully unsubscribed');
-   * }
-   * ```
-   */
-  async unsubscribe(debateId: string): Promise<UnsubscriptionResult> {
-    return this.client.delete(`/api/v1/cross-pollination/subscribers/${encodeURIComponent(debateId)}`);
   }
 
   // ===========================================================================
@@ -560,40 +531,6 @@ export class CrossPollinationAPI {
       params.limit = options.limit;
     }
     return this.client.request('GET', '/api/v1/cross-pollination/conflicts', { params });
-  }
-
-  /**
-   * Resolve a cross-pollination conflict.
-   *
-   * @param conflictId - Conflict ID to resolve
-   * @param resolution - Resolution details
-   * @param resolution.action - Resolution action to take
-   * @param resolution.reason - Reason for the resolution
-   * @returns Resolution result
-   *
-   * @example
-   * ```typescript
-   * const result = await client.crossPollination.resolveConflict('conflict-123', {
-   *   action: 'keep_source',
-   *   reason: 'Source has higher confidence and more recent evidence'
-   * });
-   * ```
-   */
-  async resolveConflict(
-    conflictId: string,
-    resolution: {
-      action: 'keep_source' | 'keep_target' | 'merge' | 'dismiss';
-      reason?: string;
-    }
-  ): Promise<{
-    success: boolean;
-    conflict_id: string;
-    resolution: string;
-    resolved_at: string;
-  }> {
-    return this.client.request('POST', `/api/v1/cross-pollination/conflicts/${encodeURIComponent(conflictId)}/resolve`, {
-      json: resolution,
-    });
   }
 
   // ===========================================================================

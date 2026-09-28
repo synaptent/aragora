@@ -140,12 +140,6 @@ interface BatchClientInterface {
  * });
  * console.log(`Batch ${response.batch_id} submitted`);
  *
- * // List all batches
- * const batches = await client.batch.list({ limit: 10 });
- * for (const batch of batches.batches) {
- *   console.log(`${batch.batch_id}: ${batch.status}`);
- * }
- *
  * // Get queue health
  * const queue = await client.batch.getQueueStatus();
  * console.log(`${queue.active_count} debates processing`);
@@ -160,15 +154,6 @@ export class BatchAPI {
   async submit(request: BatchSubmitRequest): Promise<BatchSubmitResponse> {
     return this.client.request('POST', '/api/v1/batch', {
       json: request as unknown as Record<string, unknown>,
-    });
-  }
-
-  /**
-   * List batch requests.
-   */
-  async list(options?: ListBatchesOptions): Promise<{ batches: BatchSummary[]; count: number }> {
-    return this.client.request('GET', '/api/v1/batch', {
-      params: options as Record<string, unknown>,
     });
   }
 

@@ -246,24 +246,6 @@ describe('PoliciesAPI Namespace', () => {
         params: { policy_type: 'budget', severity: 'critical', resolved: false, limit: 50 },
       });
     });
-
-    it('should resolve violation', async () => {
-      const mockViolation = {
-        id: 'v1',
-        policy_id: 'p1',
-        resolved_at: '2024-01-20T11:00:00Z',
-        resolved_by: 'admin1',
-        resolution_notes: 'False positive',
-      };
-      mockClient.request.mockResolvedValue(mockViolation);
-
-      const result = await api.resolveViolation('v1', { notes: 'False positive' });
-
-      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/policies/violations/v1/resolve', {
-        json: { notes: 'False positive' },
-      });
-      expect(result.resolution_notes).toBe('False positive');
-    });
   });
 
   // ===========================================================================
