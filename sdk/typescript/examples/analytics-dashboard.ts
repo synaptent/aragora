@@ -728,39 +728,6 @@ async function demonstrateUsageReports(): Promise<void> {
   } catch (error) {
     handleError('Get deliberation summary', error);
   }
-
-  // -------------------------------------------------------------------------
-  // Generate Custom Report
-  // -------------------------------------------------------------------------
-  console.log('\n5. Generate Custom Report');
-  console.log('-'.repeat(40));
-
-  try {
-    const report = await client.analytics.generateReport('monthly_summary', {
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
-      include_trends: true,
-      include_recommendations: true,
-    }) as {
-      report_id: string;
-      generated_at: string;
-      summary: string;
-      recommendations: string[];
-    };
-
-    console.log(`  Report ID: ${report.report_id}`);
-    console.log(`  Generated: ${report.generated_at}`);
-    console.log(`\n  Summary: ${report.summary.substring(0, 200)}...`);
-
-    if (report.recommendations?.length) {
-      console.log('\n  Recommendations:');
-      for (const rec of report.recommendations.slice(0, 3)) {
-        console.log(`    - ${rec}`);
-      }
-    }
-  } catch (error) {
-    handleError('Generate report', error);
-  }
 }
 
 // =============================================================================

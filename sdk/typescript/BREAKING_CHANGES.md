@@ -14,11 +14,10 @@ Contract-drift batch 5 removes 26 TypeScript operations on unserved routes. Each
 SDK path, with its `/api/v1` and legacy twin, was dispatched through the real
 `HANDLER_REGISTRY` as an owner and as an admin: each answered a route-level 404,
 the handler's own "Unknown endpoint" 404 or `handler_no_result`, and no FastAPI
-route matches it. The Python SDK is unchanged: its methods that call nine of
-these routes (in `connectors`, `teams`, `memory` and `ap_automation`) are left
-for a later batch. The Migration column names no alternative route, because
-none was dispatched for this batch. The now-orphaned `CrossDebateEntry`,
-`CrossDebateResponse` and `UnsubscriptionResult` interfaces are removed as well.
+route matches it. The Python SDK is unchanged; its methods that call nine of these
+routes are left for a later batch. A Migration cell names an alternative only
+where that route was dispatched and served. Interfaces only the removed methods
+used are deleted unless `src/namespaces/index.ts` re-exports them.
 
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
@@ -47,7 +46,7 @@ none was dispatched for this batch. The now-orphaned `CrossDebateEntry`,
 | `teams.listTeams` | `GET /api/v1/teams` | No replacement |
 | `facts.updateRelationship` | `PATCH /api/v1/facts/relationships/{id}` | No replacement |
 | `apAutomation.addAPInvoice` | `POST /api/v1/ap/invoices` | No replacement |
-| `policies.resolveViolation` | `POST /api/policies/violations/{id}/resolve` | No replacement |
+| `policies.resolveViolation` | `POST /api/policies/violations/{id}/resolve` | No typed TypeScript call. Send `{ "status": "resolved", "resolution_notes": "..." }` with `PATCH /api/v1/compliance/violations/{id}` (Python: `policies.update_violation(violation_id, "resolved")`). `compliance.updateViolation()` sends `PUT`, which that route does not dispatch |
 
 ### Unreleased (2026-09-21)
 
