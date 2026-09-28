@@ -21,7 +21,6 @@ import datetime as dt
 import json
 import os
 import re
-import stat
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -161,22 +160,25 @@ def test_corrupt_waiver_keeps_the_halt(halt: Path, waiver_path: Path) -> None:
 
 
 def test_uninspectable_halt_marker_is_not_treated_as_absent(
-    tmp_path: Path, waiver_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, waiver_path: Path
 ) -> None:
-    """``Path.exists()`` returns False on any OSError; the guard must not."""
-    parent = tmp_path / "locked"
-    parent.mkdir()
-    marker = parent / "merge_executor.halt"
-    marker.write_text('{"reason": "main_red"}', encoding="utf-8")
-    os.chmod(parent, 0)
-    try:
-        if os.access(parent, os.X_OK):
-            pytest.skip("cannot revoke directory access as this user")
-        decision = _evaluate(marker, waiver_path)
-        assert not decision.allowed
-        assert "no halt marker present" not in decision.reason
-    finally:
-        os.chmod(parent, stat.S_IRWXU)
+    """``Path.exists()`` returns False on any OSError; the guard must not.
+
+    A stat failure other than "not found" (for example an unsearchable parent
+    directory) must fail closed rather than read as "no halt marker present".
+    """
+    marker = tmp_path / "locked" / "merge_executor.halt"
+    real_stat = os.stat
+
+    def stat(path: Any, *args: Any, **kwargs: Any) -> os.stat_result:
+        if Path(path) == marker:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(guard.os, "stat", stat)
+    decision = _evaluate(marker, waiver_path)
+    assert not decision.allowed
+    assert "could not be inspected" in decision.reason
 
 
 def test_unresolved_shared_checkout_fails_closed_for_the_default_marker(
@@ -217,26 +219,26 @@ def test_malformed_linked_worktree_metadata_raises(tmp_path: Path) -> None:
         guard._shared_checkout_root(worker)
 
 
-@pytest.mark.parametrize("path", ["scripts/merge_executor.py", "scripts/pristine_main_health.py"])
-def test_halt_writer_and_executor_default_to_the_guard_marker(path: str) -> None:
+def test_halt_writer_and_executor_default_to_the_guard_marker() -> None:
     """The arming lane, merge_executor and the guard must default to one marker.
 
     Checked in the source because the autouse isolation fixture patches the
     guard's constant, so a runtime comparison depends on import order.
     """
-    tree = ast.parse((PROJECT_ROOT / path).read_text(encoding="utf-8"))
-    imported = any(
-        isinstance(node, ast.ImportFrom)
-        and node.module == "aragora.swarm.merge_halt"
-        and any(alias.name == "DEFAULT_HALT_FILE" and not alias.asname for alias in node.names)
-        for node in tree.body
-    )
-    assigned = any(
-        isinstance(node, ast.Assign)
-        and any(getattr(target, "id", None) == "DEFAULT_HALT_FILE" for target in node.targets)
-        for node in tree.body
-    )
-    assert imported and not assigned, f"{path} must take DEFAULT_HALT_FILE from the guard"
+    for path in ("scripts/merge_executor.py", "scripts/pristine_main_health.py"):
+        tree = ast.parse((PROJECT_ROOT / path).read_text(encoding="utf-8"))
+        imported = any(
+            isinstance(node, ast.ImportFrom)
+            and node.module == "aragora.swarm.merge_halt"
+            and any(a.name == "DEFAULT_HALT_FILE" and not a.asname for a in node.names)
+            for node in tree.body
+        )
+        assigned = any(
+            isinstance(node, ast.Assign)
+            and any(getattr(target, "id", None) == "DEFAULT_HALT_FILE" for target in node.targets)
+            for node in tree.body
+        )
+        assert imported and not assigned, f"{path} must take DEFAULT_HALT_FILE from the guard"
 
 
 def test_disarm_file_resolves_beside_the_shared_halt() -> None:
@@ -379,17 +381,17 @@ def test_every_merge_path_calls_the_guard(path: str, qualname: str) -> None:
     )
 
 
-@pytest.mark.parametrize("path", sorted(NON_MERGE_MENTIONS))
-def test_non_merge_mentions_really_do_not_merge(path: str) -> None:
-    text = (PROJECT_ROOT / path).read_text(encoding="utf-8")
-    assert NON_MERGE_MENTIONS[path] in text, (
-        f"{path} is excluded because of {NON_MERGE_MENTIONS[path]!r}, which is gone. "
-        "Re-check whether it now merges."
-    )
-    stripped = _DOCSTRING_RE.sub("", text)
-    assert not any(rx.search(stripped) for rx in _EXECUTION_SHAPED), (
-        f"{path} is excluded as non-merging but now builds an executable merge argv."
-    )
+def test_non_merge_mentions_really_do_not_merge() -> None:
+    for path, evidence in sorted(NON_MERGE_MENTIONS.items()):
+        text = (PROJECT_ROOT / path).read_text(encoding="utf-8")
+        assert evidence in text, (
+            f"{path} is excluded because of {evidence!r}, which is gone. "
+            "Re-check whether it now merges."
+        )
+        stripped = _DOCSTRING_RE.sub("", text)
+        assert not any(rx.search(stripped) for rx in _EXECUTION_SHAPED), (
+            f"{path} is excluded as non-merging but now builds an executable merge argv."
+        )
 
 
 def test_merge_executor_merges_only_through_the_guarded_merge_fn() -> None:
@@ -529,20 +531,17 @@ def test_bucket_a_merges_when_not_halted(tmp_path, monkeypatch) -> None:
     assert len(spy.merges()) == 1
 
 
-@pytest.mark.parametrize(
-    "module_name", ["scripts.auto_merge_quorum_green", "scripts.merge_executor"]
-)
-def test_quorum_green_merge_fn_refuses_while_halted(armed, monkeypatch, module_name) -> None:
+def test_quorum_green_merge_fn_refuses_while_halted(armed, monkeypatch) -> None:
     """merge_executor merges through auto_merge_quorum_green's merge_fn."""
-    import importlib
+    import scripts.auto_merge_quorum_green as quorum_green
+    import scripts.merge_executor as merge_executor
 
-    module = importlib.import_module(module_name)
-    make = getattr(module, "make_merge_fn", None) or module._make_merge_fn
     spy = _Spy()
     monkeypatch.setattr(subprocess, "run", lambda args, **_: spy.record(args))
-    ok, reason = make(REPO)(PR, HEAD)
-    assert ok is False
-    assert "halt armed" in reason
+    for make in (quorum_green._make_merge_fn, merge_executor.make_merge_fn):
+        ok, reason = make(REPO)(PR, HEAD)
+        assert ok is False
+        assert "halt armed" in reason
     assert spy.merges() == []
 
 
