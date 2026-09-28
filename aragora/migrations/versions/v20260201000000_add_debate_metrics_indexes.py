@@ -19,7 +19,7 @@ Zero-Downtime Strategy:
 import logging
 
 from aragora.migrations.runner import Migration
-from aragora.migrations.patterns import safe_create_index, safe_drop_index
+from aragora.migrations.patterns import create_index_if_columns_exist, safe_drop_index
 from aragora.storage.backends import DatabaseBackend, PostgreSQLBackend
 
 logger = logging.getLogger(__name__)
@@ -47,12 +47,17 @@ def _table_exists(backend: DatabaseBackend, table: str) -> bool:
 
 
 def up_fn(backend: DatabaseBackend) -> None:
-    """Create performance indexes for debate queries."""
+    """Create performance indexes for debate queries.
+
+    These tables are created at runtime by the app's stores, possibly without
+    columns an index names (JobQueueStore's job_queue has no scheduled_at), so
+    such an index is skipped with a warning instead of failing the migration.
+    """
     logger.info("Creating performance indexes for debate metrics")
 
     # Index for gauntlet_results queries by status and time
     if _table_exists(backend, "gauntlet_results"):
-        safe_create_index(
+        create_index_if_columns_exist(
             backend,
             "idx_gauntlet_results_verdict_created",
             "gauntlet_results",
@@ -60,7 +65,7 @@ def up_fn(backend: DatabaseBackend) -> None:
             concurrently=True,
         )
         # Index for confidence score queries
-        safe_create_index(
+        create_index_if_columns_exist(
             backend,
             "idx_gauntlet_results_confidence",
             "gauntlet_results",
@@ -68,38 +73,35 @@ def up_fn(backend: DatabaseBackend) -> None:
             concurrently=True,
         )
         # Index for robustness score analysis
-        safe_create_index(
+        create_index_if_columns_exist(
             backend,
             "idx_gauntlet_results_robustness",
             "gauntlet_results",
             ["robustness_score"],
             concurrently=True,
         )
-        logger.info("Created indexes on gauntlet_results")
 
     # Index for job_queue performance
     if _table_exists(backend, "job_queue"):
         # Composite index for job scheduling queries
-        safe_create_index(
+        create_index_if_columns_exist(
             backend,
             "idx_job_queue_pending_priority",
             "job_queue",
             ["status", "priority", "scheduled_at"],
             concurrently=True,
         )
-        logger.info("Created indexes on job_queue")
 
     # Index for audit_log queries
     if _table_exists(backend, "audit_log"):
         # Index for resource-specific audit lookups
-        safe_create_index(
+        create_index_if_columns_exist(
             backend,
             "idx_audit_log_resource_time",
             "audit_log",
             ["resource_type", "resource_id", "timestamp"],
             concurrently=True,
         )
-        logger.info("Created indexes on audit_log")
 
     logger.info("Migration 20260201000000 applied successfully")
 
@@ -123,4 +125,9 @@ migration = Migration(
     name="Add debate metrics performance indexes",
     up_fn=up_fn,
     down_fn=down_fn,
+    # Checksum of up_fn/down_fn before the column guards, so databases that
+    # applied that version still verify. The guards only skip indexes naming a
+    # column the table lacks, which PostgreSQL rejected (SQLite indexed the
+    # quoted name as a string constant).
+    checksum="1750a3d82adbb6420727f27dcc0f502cdeab0b02147b3bf13978532e8913049e",
 )

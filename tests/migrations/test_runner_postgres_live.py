@@ -84,6 +84,61 @@ def test_upgrade_and_status_against_real_postgres(isolated_database):
     assert repeated.stdout == "No pending migrations.\n"
 
 
+def _public_indexes(dsn):
+    import psycopg2
+
+    with closing(psycopg2.connect(dsn)) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname = 'public'")
+            return {row[0] for row in cursor.fetchall()}
+
+
+def test_upgrade_tolerates_tables_created_by_runtime_stores(isolated_database):
+    import psycopg2
+
+    dsn = isolated_database
+    with closing(psycopg2.connect(dsn)) as conn:
+        with conn.cursor() as cursor:
+            # PostgresJobQueueStore shape: no scheduled_at
+            cursor.execute(
+                "CREATE TABLE job_queue (id TEXT PRIMARY KEY, job_type TEXT NOT NULL, "
+                "status TEXT NOT NULL DEFAULT 'pending', priority INTEGER DEFAULT 0, "
+                "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+            )
+            # Knowledge Mound PostgreSQL store shape: no workspace_id
+            cursor.execute(
+                "CREATE TABLE access_grants (id TEXT PRIMARY KEY, item_id TEXT NOT NULL, "
+                "grantee_type TEXT NOT NULL, grantee_id TEXT NOT NULL, expires_at TIMESTAMP)"
+            )
+        conn.commit()
+
+    upgraded = run_cli("upgrade", dsn)
+    assert upgraded.returncode == 0, upgraded.stderr
+    assert "scheduled_at" in upgraded.stderr
+    assert "workspace_id" in upgraded.stderr
+    indexes = _public_indexes(dsn)
+    assert "idx_job_queue_pending_priority" not in indexes
+    assert "idx_grants_workspace" not in indexes
+    assert {"idx_grants_item_id", "idx_gauntlet_results_verdict_created"} <= indexes
+
+
+def test_upgrade_indexes_job_queue_that_has_scheduled_at(isolated_database):
+    import psycopg2
+
+    dsn = isolated_database
+    with closing(psycopg2.connect(dsn)) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "CREATE TABLE job_queue (id TEXT PRIMARY KEY, status TEXT DEFAULT 'pending', "
+                "priority INTEGER DEFAULT 0, scheduled_at TIMESTAMPTZ DEFAULT NOW())"
+            )
+        conn.commit()
+
+    upgraded = run_cli("upgrade", dsn)
+    assert upgraded.returncode == 0, upgraded.stderr
+    assert "idx_job_queue_pending_priority" in _public_indexes(dsn)
+
+
 def test_concurrent_index_failure_leaves_pool_usable(isolated_database):
     import psycopg2
     from aragora.migrations.patterns import safe_create_index, safe_drop_index

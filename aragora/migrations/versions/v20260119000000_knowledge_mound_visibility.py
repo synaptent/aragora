@@ -12,6 +12,7 @@ Knowledge Mound system:
 
 import logging
 
+from aragora.migrations.patterns import create_index_if_columns_exist
 from aragora.migrations.runner import Migration
 from aragora.storage.backends import DatabaseBackend, PostgreSQLBackend
 
@@ -119,17 +120,18 @@ def up_fn(backend: DatabaseBackend) -> None:
             )
         """)
 
-    # Create indexes for access_grants
-    backend.execute_write("CREATE INDEX IF NOT EXISTS idx_grants_item_id ON access_grants(item_id)")
-    backend.execute_write(
-        "CREATE INDEX IF NOT EXISTS idx_grants_grantee ON access_grants(grantee_type, grantee_id)"
-    )
-    backend.execute_write(
-        "CREATE INDEX IF NOT EXISTS idx_grants_workspace ON access_grants(workspace_id)"
-    )
-    backend.execute_write(
-        "CREATE INDEX IF NOT EXISTS idx_grants_expires ON access_grants(expires_at)"
-    )
+    # Create indexes for access_grants. The table may predate this migration in
+    # a runtime shape (the Knowledge Mound store creates it without
+    # workspace_id), so an index on a missing column is skipped with a warning.
+    for index_name, columns in (
+        ("idx_grants_item_id", ["item_id"]),
+        ("idx_grants_grantee", ["grantee_type", "grantee_id"]),
+        ("idx_grants_workspace", ["workspace_id"]),
+        ("idx_grants_expires", ["expires_at"]),
+    ):
+        create_index_if_columns_exist(
+            backend, index_name, "access_grants", columns, concurrently=False
+        )
 
     # Create federated_regions table
     if is_postgres:
@@ -165,9 +167,10 @@ def up_fn(backend: DatabaseBackend) -> None:
             )
         """)
 
-    # Create index for federation status queries
-    backend.execute_write(
-        "CREATE INDEX IF NOT EXISTS idx_federation_enabled ON federated_regions(enabled)"
+    # Create index for federation status queries (federated_regions may also
+    # predate this migration)
+    create_index_if_columns_exist(
+        backend, "idx_federation_enabled", "federated_regions", ["enabled"], concurrently=False
     )
 
     # Create visibility indexes on knowledge_nodes if table exists
@@ -218,4 +221,8 @@ migration = Migration(
     name="Knowledge Mound visibility and access grants",
     up_fn=up_fn,
     down_fn=down_fn,
+    # Checksum of up_fn/down_fn before the column guards, so databases that
+    # applied that version (the Hetzner canary did) still verify. The guards
+    # only skip indexes naming a column the table lacks, which failed to apply.
+    checksum="4410a1ca05214b011cdff23c8cfaae986c3145223cc8d2a57ea2c2a4a00fc172",
 )

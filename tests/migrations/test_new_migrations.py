@@ -188,6 +188,46 @@ class TestDebateMetricsIndexesMigration:
         # Run without creating tables - should not raise
         up_fn(backend)
 
+    def test_job_queue_without_scheduled_at_skips_index(self, backend, caplog):
+        """A job_queue created by the job queue stores has no scheduled_at column."""
+        from aragora.migrations.versions.v20260201000000_add_debate_metrics_indexes import up_fn
+
+        # Shape created at runtime by JobQueueStore / PostgresJobQueueStore
+        backend.execute_write("""
+            CREATE TABLE job_queue (
+                id TEXT PRIMARY KEY,
+                job_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                priority INTEGER DEFAULT 0,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+        """)
+
+        with caplog.at_level("WARNING"):
+            up_fn(backend)
+
+        assert not backend.index_exists("idx_job_queue_pending_priority")
+        assert "idx_job_queue_pending_priority" in caplog.text
+        assert "scheduled_at" in caplog.text
+
+    def test_job_queue_with_scheduled_at_creates_index(self, backend):
+        """A job_queue in the postgres_schema.sql shape gets the scheduling index."""
+        from aragora.migrations.versions.v20260201000000_add_debate_metrics_indexes import up_fn
+
+        backend.execute_write("""
+            CREATE TABLE job_queue (
+                id TEXT PRIMARY KEY,
+                status TEXT DEFAULT 'pending',
+                priority INTEGER DEFAULT 0,
+                scheduled_at TIMESTAMP
+            )
+        """)
+
+        up_fn(backend)
+
+        assert backend.index_exists("idx_job_queue_pending_priority")
+
 
 # ---------------------------------------------------------------------------
 # Test Agent Performance Tracking Migration
@@ -579,6 +619,144 @@ class TestMigrationRunnerIntegration:
 
         # Tables should still exist
         assert backend.table_exists("agent_performance")
+
+
+# ---------------------------------------------------------------------------
+# Tables created at runtime by the app's stores
+# ---------------------------------------------------------------------------
+
+# Shapes the app's stores create on startup with CREATE TABLE IF NOT EXISTS.
+# A database can hold these before the migrations that index them run.
+RUNTIME_JOB_QUEUE = """
+    CREATE TABLE job_queue (
+        id TEXT PRIMARY KEY,
+        job_type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        priority INTEGER DEFAULT 0,
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL
+    )
+"""
+# Knowledge Mound PostgreSQL store: no workspace_id column
+RUNTIME_ACCESS_GRANTS = """
+    CREATE TABLE access_grants (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        grantee_type TEXT NOT NULL,
+        grantee_id TEXT NOT NULL,
+        permissions TEXT,
+        granted_by TEXT,
+        granted_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        UNIQUE(item_id, grantee_type, grantee_id)
+    )
+"""
+# SQLite KnowledgeMoundMetaStore: no staleness_score column
+RUNTIME_KNOWLEDGE_NODES = """
+    CREATE TABLE knowledge_nodes (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        node_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        confidence REAL DEFAULT 0.5,
+        validation_status TEXT DEFAULT 'unverified',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+"""
+
+
+class TestRuntimeCreatedTablesMissingColumns:
+    """Migrations skip indexes whose columns a runtime-created table lacks."""
+
+    def test_km_visibility_skips_workspace_index_on_runtime_access_grants(self, backend, caplog):
+        from aragora.migrations.versions.v20260119000000_knowledge_mound_visibility import up_fn
+
+        backend.execute_write(RUNTIME_ACCESS_GRANTS)
+
+        with caplog.at_level("WARNING"):
+            up_fn(backend)
+
+        assert backend.index_exists("idx_grants_item_id")
+        assert backend.index_exists("idx_grants_grantee")
+        assert backend.index_exists("idx_grants_expires")
+        assert not backend.index_exists("idx_grants_workspace")
+        assert "workspace_id" in caplog.text
+
+    def test_km_visibility_indexes_access_grants_it_creates(self, backend):
+        from aragora.migrations.versions.v20260119000000_knowledge_mound_visibility import up_fn
+
+        up_fn(backend)
+
+        assert "workspace_id" in backend.get_columns("access_grants")
+        assert backend.index_exists("idx_grants_workspace")
+        assert backend.index_exists("idx_federation_enabled")
+
+    def test_km_composite_skips_staleness_index_without_staleness_score(self, backend, caplog):
+        from aragora.migrations.versions.v20260202000000_knowledge_mound_composite_indexes import (
+            up_fn,
+        )
+
+        backend.execute_write(RUNTIME_KNOWLEDGE_NODES)
+
+        with caplog.at_level("WARNING"):
+            up_fn(backend)
+
+        assert backend.index_exists("idx_km_workspace_type_confidence")
+        assert backend.index_exists("idx_km_updated_workspace")
+        assert not backend.index_exists("idx_km_validation_staleness")
+        assert "staleness_score" in caplog.text
+
+    def test_km_composite_creates_staleness_index_with_staleness_score(self, backend):
+        from aragora.migrations.versions.v20260202000000_knowledge_mound_composite_indexes import (
+            up_fn,
+        )
+
+        backend.execute_write(RUNTIME_KNOWLEDGE_NODES)
+        backend.execute_write("ALTER TABLE knowledge_nodes ADD COLUMN staleness_score REAL")
+
+        up_fn(backend)
+
+        assert backend.index_exists("idx_km_validation_staleness")
+
+    def test_full_upgrade_over_runtime_created_tables(self, runner, backend):
+        from aragora.migrations.runner import _load_migrations
+
+        backend.execute_write(RUNTIME_JOB_QUEUE)
+        backend.execute_write(RUNTIME_ACCESS_GRANTS)
+        backend.execute_write(RUNTIME_KNOWLEDGE_NODES)
+        _load_migrations(runner)
+
+        runner.upgrade()
+
+        assert runner.get_pending_migrations() == []
+        assert not backend.index_exists("idx_job_queue_pending_priority")
+        assert not backend.index_exists("idx_grants_workspace")
+        assert not backend.index_exists("idx_km_validation_staleness")
+
+
+class TestColumnGuardChecksumContinuity:
+    """Adding the column guards must not fail checksum verification on applied databases."""
+
+    # Checksums these migrations had before the column guards; databases that
+    # applied them (the Hetzner canary applied 20260119000000) store these.
+    PRE_GUARD_CHECKSUMS = {
+        20260119000000: "4410a1ca05214b011cdff23c8cfaae986c3145223cc8d2a57ea2c2a4a00fc172",
+        20260201000000: "1750a3d82adbb6420727f27dcc0f502cdeab0b02147b3bf13978532e8913049e",
+        20260202000000: "4fff064b3fc0e4a8280fe9739e2cf094ba03d112b4c61bcc6899cd084c074671",
+    }
+
+    def test_databases_that_applied_the_unguarded_migrations_still_verify(self, runner, backend):
+        from aragora.migrations.runner import _load_migrations
+
+        _load_migrations(runner)
+        for version, checksum in self.PRE_GUARD_CHECKSUMS.items():
+            backend.execute_write(
+                "INSERT INTO _aragora_migrations (version, name, checksum) VALUES (?, ?, ?)",
+                (version, f"v{version}", checksum),
+            )
+
+        assert runner.verify_checksums() == []
 
 
 # ---------------------------------------------------------------------------
