@@ -6,7 +6,7 @@
 _Post-v2.11.1 changes land here until the next stable tag._
 
 
-## [2.11.1] - 2026-09-27
+## [2.11.1] - 2026-09-28
 
 _A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, every receipt the Action emitted read `CHANGES_REQUESTED`, even when every reviewer passed. It covers the commits on `main` after the v2.11.0 tag commit `272a7ef2` (#10161). The version was fanned out by `scripts/check_version_alignment.py --fix`. No server routes or SDK methods are removed._
 

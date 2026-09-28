@@ -1,7 +1,7 @@
 # Aragora Self-Hosted Complete Guide
 
 **Version:** 2.11.1
-**Last Updated:** 2026-09-27
+**Last Updated:** 2026-09-28
 
 The definitive guide for deploying Aragora on your own infrastructure—from 5-minute quick starts to enterprise-grade high availability.
 
@@ -1781,4 +1781,4 @@ See `docs/ENVIRONMENT.md` for the complete reference (70+ variables).
 
 ---
 
-*Version: 2.11.1 | Updated: 2026-09-27*
+*Version: 2.11.1 | Updated: 2026-09-28*

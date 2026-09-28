@@ -1,6 +1,6 @@
 # Aragora API Reference
 
-> **Last Updated:** 2026-09-27 (v2.11.1 alignment with repo versions)
+> **Last Updated:** 2026-09-28 (v2.11.1 alignment with repo versions)
 
 This document describes the HTTP and WebSocket APIs for Aragora's control plane
 for multi-agent AI debate across organizational knowledge and channels.

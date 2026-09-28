@@ -47,7 +47,7 @@ For detailed migration instructions, see:
 
 ## Current Version
 
-**Aragora v2.11.1** (released 2026-09-27)
+**Aragora v2.11.1** (released 2026-09-28)
 
 ```python
 # Check your version

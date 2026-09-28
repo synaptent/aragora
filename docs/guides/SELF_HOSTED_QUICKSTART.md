@@ -507,5 +507,5 @@ ufw deny 6379/tcp   # Block Redis
 
 ---
 
-*Updated: 2026-09-27*
+*Updated: 2026-09-28*
 *Version: 2.11.1*
