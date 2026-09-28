@@ -68,20 +68,35 @@ chmod 600 secrets.env
 nano secrets.env
 ```
 
-Generate four independent secrets:
+Generate five independent secrets:
 
 ```bash
 openssl rand -hex 32      # POSTGRES_PASSWORD (URL-safe)
 openssl rand -hex 32      # ARAGORA_API_TOKEN
 openssl rand -hex 32      # ARAGORA_ENCRYPTION_KEY
 openssl rand -hex 32      # ARAGORA_JWT_SECRET
+openssl rand -hex 32      # ARAGORA_RECEIPT_SIGNING_KEY
 ```
+
+Then create the ODR signing key that signs every exported receipt. Keep an
+offline copy of the private key; publish only the public half:
+
+```bash
+install -d -m 0700 odr
+openssl genpkey -algorithm ed25519 -out odr/odr-signing-key.pem
+chmod 0400 odr/odr-signing-key.pem
+openssl pkey -in odr/odr-signing-key.pem -pubout > odr-signing-key.pub.pem
+```
+
+`odr/` is git-ignored. `bring-up.sh` refuses to start without the key, and gives
+it to the container's unprivileged user. After start-up, the key is served at
+`/.well-known/aragora-odr-signing-key`, and it should match `odr-signing-key.pub.pem`.
 
 Set `DATABASE_URL` to `postgresql://aragora:<POSTGRES_PASSWORD>@postgres:5432/aragora`,
 using the same password as `POSTGRES_PASSWORD`. Compose loads this literal DSN
 through `env_file`; it does not interpolate values from `secrets.env`.
 Do not add a competing `ARAGORA_POSTGRES_DSN`.
-`bring-up.sh` refuses to start if any of these five values is blank.
+`bring-up.sh` refuses to start if any of these six values is blank.
 For live debates, the operator also adds freshly issued provider keys such as
 `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `secrets.env`. Provider setup, canary
 bring-up and monitoring require separate operator authorization.
@@ -138,12 +153,17 @@ sudo cp cloudflared-config.yml /etc/cloudflared/config.yml
 Route the hostname and start the service:
 
 ```bash
-cloudflared tunnel route dns aragora-prod api.aragora.ai
+cloudflared tunnel route dns --overwrite-dns aragora-prod api.aragora.ai
 sudo cloudflared service install
 sudo systemctl enable --now cloudflared
 ```
 
-`route dns` updates the existing Cloudflare record in place. No registrar change.
+`api.aragora.ai` already has a Cloudflare record, and without `--overwrite-dns`
+`route dns` refuses to replace it. No registrar change is needed: Cloudflare
+hosts the zone. Check Traffic → Load Balancing first. A load balancer named
+`api.aragora.ai` (for example the one `scripts/setup_cloudflare_lb.sh` created
+for the old EC2 origins) takes priority over the DNS record, so disable it or
+point it at the tunnel.
 
 ## Step 7 — Verify from outside
 
@@ -154,7 +174,10 @@ curl -sS https://api.aragora.ai/readyz
 curl -s -o /dev/null -w '%{http_code}\n' https://api.aragora.ai/readyz
 ```
 
-You want `{"status": "ready"}` and `200`. Then confirm it survives a restart:
+You want `{"status": "ready"}` and `200`. For the full external check (build
+identity, ODR signing key, public verify endpoint and WebSocket), run
+`scripts/check_hosted_api.sh https://api.aragora.ai --pubkey <odr-signing-key.pub.pem>`
+from a repository checkout. Then confirm it survives a restart:
 
 ```bash
 ssh <hetzner-host> 'cd ~/aragora/deploy/hetzner && docker compose restart app'
@@ -169,7 +192,7 @@ sleep 30 && curl -sS https://api.aragora.ai/readyz
 |---|---|---|
 | `502` from Cloudflare | tunnel up, origin down | `docker compose ps`, `docker compose logs app` |
 | `1033` | tunnel not connected | `systemctl status cloudflared` |
-| Still times out | DNS route not applied | re-run `cloudflared tunnel route dns` |
+| Still times out, or `522` | DNS route not applied, or an old load balancer still wins | re-run `cloudflared tunnel route dns --overwrite-dns`; disable the stale load balancer |
 | `bring-up.sh` refuses | blank required secret | fill it in — this guard is deliberate |
 | migrate exits non-zero | schema failure | read its logs; the app is held back on purpose |
 
