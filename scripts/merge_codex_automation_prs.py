@@ -20,6 +20,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from aragora.swarm.merge_halt import assert_merge_allowed  # noqa: E402
+
 SAFE_CHECK_CONCLUSIONS = {"success", "neutral", "skipped"}
 SENSITIVE_PATH_TOKENS = (
     "/auth/",
@@ -277,6 +283,7 @@ def select_mergeable_prs(
 def _merge_pr(repo_root: Path, repo: str, number: int, head_sha: str) -> None:
     if not _is_full_head_sha(head_sha):
         raise RuntimeError(f"refusing to merge PR #{number}: missing or malformed head SHA")
+    assert_merge_allowed(number, head_sha)  # #9216: raises MergeHalted
     proc = _run(
         [
             "gh",
