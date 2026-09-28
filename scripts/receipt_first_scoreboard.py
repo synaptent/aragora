@@ -342,7 +342,7 @@ def metric_6(ctx: Any) -> Row:
             (r["marker_comments"], heads), live = marker_comments(), True
         except (RuntimeError, ValueError, KeyError, TypeError) as exc:
             r["reason"] = f"{type(exc).__name__}: {exc}"
-    rounds = r.get("summary_rounds")
+    rounds: Any = r.get("summary_rounds")
     if heads is not None and is_number(rounds):
         r["rounds_with_summary"] = summarised(ctx.summary_rounds, heads)
     old = ctx.cached.get("6") or {}
@@ -350,6 +350,7 @@ def metric_6(ctx: Any) -> Row:
         r.update(marker_comments=old["marker_comments"], cached_at=old.get("cached_at"))
         if old.get("rounds_with_summary") is not None:
             r["rounds_with_summary"] = old["rounds_with_summary"]
+    covered: Any
     count, bound, covered = r["marker_comments"], r.get("upper_bound"), r.get("rounds_with_summary")
     if n is not None:
         if is_number(count) and is_number(n) and n > 0:
