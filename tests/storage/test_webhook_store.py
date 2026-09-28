@@ -386,6 +386,43 @@ class TestConcurrentProcessing:
         assert len(errors) == 0
         store.close()
 
+    def test_sqlite_simultaneous_first_connections(self, tmp_path):
+        """Threads opening their first connection at the same instant must not lock."""
+        rounds = 25
+        thread_count = 8
+        errors: list[Exception] = []
+        seen: list[bool] = []
+        sizes: list[int] = []
+
+        # Each round uses a fresh database so every thread's first connection
+        # races against the others; a single round only hits the race sometimes.
+        for round_idx in range(rounds):
+            store = SQLiteWebhookStore(db_path=tmp_path / f"first_conn_{round_idx}.db")
+            barrier = threading.Barrier(thread_count, timeout=30)
+
+            def first_ops(thread_id, store=store, barrier=barrier, round_idx=round_idx):
+                try:
+                    barrier.wait()
+                    event_id = f"evt_first_{round_idx}_{thread_id}"
+                    store.mark_processed(event_id)
+                    seen.append(store.is_processed(event_id))
+                except Exception as e:
+                    errors.append(e)
+
+            threads = [threading.Thread(target=first_ops, args=(i,)) for i in range(thread_count)]
+            try:
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+                sizes.append(store.size())
+            finally:
+                store.close()
+
+        assert errors == []
+        assert seen == [True] * (rounds * thread_count)
+        assert sizes == [thread_count] * rounds
+
 
 # =============================================================================
 # Test: SQLite backend initialization
@@ -454,6 +491,21 @@ class TestSQLiteBackendInitialization:
         assert journal_mode == "wal"
 
         store.close()
+
+    def test_database_file_is_wal_before_first_store_connection(self, tmp_path):
+        """Construction should leave the file in WAL mode before any store connection opens."""
+        db_path = tmp_path / "wal_at_init.db"
+        store = SQLiteWebhookStore(db_path=db_path)
+        try:
+            assert store._connections == set()
+            conn = sqlite3.connect(str(db_path))
+            try:
+                journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+            finally:
+                conn.close()
+            assert journal_mode == "wal"
+        finally:
+            store.close()
 
     def test_reopens_existing_database(self, tmp_path):
         """Should work with existing database."""
