@@ -34,9 +34,10 @@ const REDACTION_RULES: Array<[RegExp, string]> = [
     `$1$2$1$3$4${REDACTED}$4`,
   ],
   // Unquoted values, including an auth scheme: token=abc, Authorization: Bearer x.
+  // Skips values already redacted, also when JSON-escaped (apiKey: \"[REDACTED]\").
   [
     new RegExp(
-      String.raw`(${KEY})(${SEPARATOR})(?!\[REDACTED\])(?:(?:Bearer|Basic|Token|Digest)\s+)?[^\s"',;&}\]]+`,
+      String.raw`(${KEY})(${SEPARATOR})(?!\\?["']?\[REDACTED\])(?:(?:Bearer|Basic|Token|Digest)\s+)?[^\s"',;&}\]]+`,
       'gi',
     ),
     `$1$2${REDACTED}`,
@@ -58,6 +59,10 @@ function serialize(value: object): string {
     if (key && SECRET_KEY.test(key) && item !== null && item !== undefined && item !== '') {
       return REDACTED;
     }
+    // Redact before JSON escaping: in the escaped text a backslash precedes each
+    // quote, so the quoted-value rule no longer matches. This also covers the
+    // message of a nested Error, which is walked as the object returned below.
+    if (typeof item === 'string') return redact(item);
     if (item instanceof Error) {
       return { name: item.name, message: item.message };
     }

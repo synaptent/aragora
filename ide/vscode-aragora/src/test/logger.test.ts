@@ -152,6 +152,45 @@ describe('Logger', () => {
       expect(line).not.toContain('token=abc');
     });
 
+    describe('double-quoted secrets inside structured arguments', () => {
+      // The appended line without its leading ISO timestamp.
+      function onlyLineBody(): string {
+        const line = onlyChannel().lines[0];
+        expect(line).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z /);
+        return line.replace(/^\S+ /, '');
+      }
+
+      it('redacts apiKey: "k" in a string field', () => {
+        logger.info('x', { detail: 'apiKey: "k"' });
+
+        const body = onlyLineBody();
+        expect(body).not.toContain('"k"');
+        expect(body).not.toContain('k\\"');
+        expect(body).not.toContain(`${REDACTED}"${REDACTED}`);
+        expect(body).toBe(`[info] x {"detail":"apiKey: \\"${REDACTED}\\""}`);
+      });
+
+      it('redacts password: "hunter2" in a string field', () => {
+        logger.info('x', { note: 'password: "hunter2"' });
+
+        const body = onlyLineBody();
+        expect(body).not.toContain('hunter2');
+        expect(body).not.toContain(`${REDACTED}"${REDACTED}`);
+        expect(body).toBe(`[info] x {"note":"password: \\"${REDACTED}\\""}`);
+      });
+
+      it('redacts token="abc" in a nested Error message', () => {
+        logger.info('x', { cause: new Error('token="abc"') });
+
+        const body = onlyLineBody();
+        expect(body).not.toMatch(/\babc\b/);
+        expect(body).not.toContain(`${REDACTED}"${REDACTED}`);
+        expect(body).toBe(
+          `[info] x {"cause":{"name":"Error","message":"token=\\"${REDACTED}\\""}}`,
+        );
+      });
+    });
+
     it('formats primitives and circular objects without throwing', () => {
       const circular: Record<string, unknown> = { name: 'loop' };
       circular.self = circular;
