@@ -13,19 +13,29 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from aragora.gauntlet.odr_verify import verify_odr_document
 
 DOC_PATH = Path("docs/GITHUB_ACTION_SETUP.md")
+DOCS_SITE_DOC_PATH = Path("docs-site/docs/guides/github-action-setup.md")
 README_PATH = Path("README.md")
 NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")
 ROOT_ACTION_PATH = Path("action.yml")
 EXAMPLE_RECEIPT_PATH = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
 RECEIPT_WORKFLOW_EXAMPLE_PATH = Path("examples/github-action/receipt.yml")
-PINNED_ROOT_ACTION_REF = "synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d"
+EXAMPLE_WORKFLOW_PATHS = (
+    Path("examples/github-action/advanced.yml"),
+    Path("examples/github-action/aragora-review-strict.yml"),
+    Path("examples/github-action/aragora-review.yml"),
+    Path("examples/github-action/basic.yml"),
+)
+INIT_SCAFFOLD_PATH = Path("aragora/cli/init.py")
+PINNED_ROOT_ACTION_REF = "synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10"
 
 _BACKTICK_TABLE_FIELD_RE = re.compile(r"^\|\s*`([a-zA-Z0-9_-]+)`\s*\|", re.MULTILINE)
+_PINNED_ACTION_REF_RE = re.compile(r"synaptent/aragora@[0-9a-f]{40}(?![0-9a-f])")
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -204,8 +214,15 @@ def test_receipt_workflow_example_is_valid_yaml_and_wires_emit_receipt() -> None
 
 
 def test_docs_do_not_recommend_mutable_main_action_ref() -> None:
-    for path in (README_PATH, DOC_PATH):
-        assert "synaptent/aragora@main" not in path.read_text(encoding="utf-8")
+    for path in (
+        README_PATH,
+        DOC_PATH,
+        DOCS_SITE_DOC_PATH,
+        RECEIPT_WORKFLOW_EXAMPLE_PATH,
+        *EXAMPLE_WORKFLOW_PATHS,
+        INIT_SCAFFOLD_PATH,
+    ):
+        assert "synaptent/aragora@main" not in path.read_text(encoding="utf-8"), path
 
 
 def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> None:
@@ -223,6 +240,30 @@ def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> Non
         "includes newer action.yml capabilities like emit-receipt"
     )
     assert aragora_step["with"]["emit-receipt"] == "true"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        README_PATH,
+        DOC_PATH,
+        DOCS_SITE_DOC_PATH,
+        RECEIPT_WORKFLOW_EXAMPLE_PATH,
+        *EXAMPLE_WORKFLOW_PATHS,
+        INIT_SCAFFOLD_PATH,
+    ],
+    ids=str,
+)
+def test_every_pinned_root_action_ref_matches_the_tested_pin(path: Path) -> None:
+    """A pin bump must move every copy at once: a copy left on an older SHA sends
+    readers of that file to an Action that may lack the inputs the docs describe."""
+    refs = _PINNED_ACTION_REF_RE.findall(path.read_text(encoding="utf-8"))
+    assert refs, f"expected at least one synaptent/aragora@<40-hex> pin in {path}"
+    stale = sorted(set(refs) - {PINNED_ROOT_ACTION_REF})
+    assert not stale, (
+        f"{path} pins {stale} instead of {PINNED_ROOT_ACTION_REF}; "
+        "bump every pin and PINNED_ROOT_ACTION_REF together"
+    )
 
 
 def test_example_merge_quorum_receipt_verifies_with_sufficient_diversity() -> None:

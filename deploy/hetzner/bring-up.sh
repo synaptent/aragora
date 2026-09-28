@@ -11,7 +11,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 
 # Refuse to start with an unset critical value rather than booting a server that
 # silently has no auth token — the failure mode this whole migration exists to remove.
-for k in ARAGORA_ENCRYPTION_KEY ARAGORA_JWT_SECRET POSTGRES_PASSWORD ARAGORA_API_TOKEN DATABASE_URL; do
+for k in ARAGORA_ENCRYPTION_KEY ARAGORA_JWT_SECRET POSTGRES_PASSWORD ARAGORA_API_TOKEN DATABASE_URL ARAGORA_RECEIPT_SIGNING_KEY; do
   v="$(grep -E "^${k}=" secrets.env | cut -d= -f2- || true)"
   [[ -n "${v// /}" ]] || fail "$k is empty in secrets.env"
 done
@@ -19,9 +19,26 @@ done
 command -v docker >/dev/null || fail "docker not installed on this host"
 docker compose version >/dev/null 2>&1 || fail "docker compose v2 plugin not installed"
 
+# The ODR signing key signs every exported receipt; the app mounts it read-only.
+key=odr/odr-signing-key.pem
+[[ -f "$key" ]] || fail "$key missing. Create it once and keep an offline copy:
+  install -d -m 0700 odr && openssl genpkey -algorithm ed25519 -out $key && chmod 0400 $key"
+[[ "$(stat -c '%a' "$key" 2>/dev/null || stat -f '%Lp' "$key")" == "400" ]] \
+  || fail "$key must be chmod 400 (the loader rejects keys other users can write)."
+
 mkdir -p backups
-echo "==> building and starting (migrations run first, as a gate)"
-docker compose up -d --build
+echo "==> building (migrations run first, as a gate)"
+docker compose build
+
+# The app runs as the image's unprivileged user, so that user must own the key.
+uid="$(docker compose run --rm --no-deps --entrypoint id app -u)"
+if [[ "$(stat -c '%u' "$key" 2>/dev/null || stat -f '%u' "$key")" != "$uid" ]]; then
+  [[ "$(id -u)" == "0" ]] || fail "$key must be owned by the container user (uid $uid): sudo chown $uid $key"
+  chown "$uid" "$key"
+fi
+
+echo "==> starting"
+docker compose up -d
 
 echo "==> waiting for the app to report healthy"
 for i in $(seq 1 40); do

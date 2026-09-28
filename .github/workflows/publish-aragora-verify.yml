@@ -152,4 +152,6 @@ jobs:
       - name: Verify a receipt from the published packages
         env:
           VERIFY_SPEC: aragora-verify==${{ github.event.inputs.version }}
+          # gh lists the receipts-* releases; without a token the published-receipt leg is skipped.
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/receipt_first_hour.sh "$VERIFY_SPEC"
