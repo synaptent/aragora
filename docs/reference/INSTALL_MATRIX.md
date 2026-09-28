@@ -22,7 +22,7 @@ re-verified 2026-09-27):
 |---|---|---|---|---|
 | Root platform | `aragora` | `pyproject.toml` | **2.11.1** | Latest on PyPI = 2.11.0 (2026-09-27; the 2.11.1 build ships when the operator tags `v2.11.1` and dispatches `publish-aragora.yml`) |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
-| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.11.1** | Published; latest on PyPI = **2.8.0** (2026-02-25) — the repo's in-tree version has moved to 2.11.1 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.8.0, not 2.11.1 |
+| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.11.1** | Published; latest on PyPI = **2.11.0** (2026-09-27) — the repo's in-tree version has moved to 2.11.1 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.11.0, not 2.11.1 |
 | Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.2.0** | Published; latest on PyPI = **0.2.0** (released 2026-09-25T00:08Z). It is the first line that accepts ODR v0.2, the default output since 2.11.0; 0.1.x rejects v0.2 documents at `schema_conformance`. Its published metadata requires `cryptography>=48.0.1` |
 
 <!-- FACT (live-verified 2026-09-27): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0, requires_dist cryptography>=48.0.1). Before changing this, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
@@ -83,7 +83,7 @@ aragora-verify <receipt>.odr.json
 ### SDK — build a Python integration against a running Aragora server
 
 ```bash
-pip install aragora-sdk   # PyPI; currently ships 2.8.0
+pip install aragora-sdk   # PyPI; currently ships 2.11.0
 ```
 
 Use the [public Python SDK quickstart](../SDK_QUICKSTART_PYTHON.md) for examples
@@ -91,7 +91,7 @@ checked against that released wheel. The release-to-tree relationship is:
 
 | Install source | Version represented here | Compatibility check |
 |---|---|---|
-| PyPI (`pip install aragora-sdk`) | 2.8.0 | `python scripts/check_quickstart_surface.py --installed` in a fresh PyPI-only virtual environment |
+| PyPI (`pip install aragora-sdk`) | 2.11.0 | `python scripts/check_quickstart_surface.py --installed` in a fresh PyPI-only virtual environment |
 | This checkout (`pip install ./sdk/python`) | 2.11.1 | `python scripts/verify_sdk_contracts.py --strict` against the committed OpenAPI specs |
 
 The public 2.8.0 quickstart intentionally uses only methods present in that

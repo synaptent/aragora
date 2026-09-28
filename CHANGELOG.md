@@ -8,7 +8,7 @@ _Post-v2.11.1 changes land here until the next stable tag._
 
 ## [2.11.1] - 2026-09-28
 
-_A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, every receipt the Action emitted read `CHANGES_REQUESTED`, even when every reviewer passed. It covers the commits on `main` after the v2.11.0 tag commit `272a7ef2` (#10161). The version was fanned out by `scripts/check_version_alignment.py --fix`. No server routes are removed. The in-repo SDKs do remove operations on unserved routes (#10138): nine from the Python SDK and 16 from the TypeScript SDK; see **Removed**._
+_A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, every receipt the Action emitted read `CHANGES_REQUESTED`, even when every reviewer passed. It covers the commits on `main` after the v2.11.0 tag commit `272a7ef2` (#10161). The version was fanned out by `scripts/check_version_alignment.py --fix`. No server routes are removed. Both in-repo SDKs drop methods for routes that no server dispatched (#10138); see **Removed**._
 
 ### Fixed
 - **GitHub Action receipts decide on the reviewer verdicts** (#10185). The Action runs the review prepare-only and never posts merge-gate evidence, so v2.11.0 receipts always read `CHANGES_REQUESTED`. `scripts/emit_pr_receipt.py --decision-basis reviews` (which `action.yml` now passes) reaches the decision when the counted, supportive verdicts satisfy the tier's quorum rule with no dissent. It records `decision_basis` in the signed ODR mechanism. The `posted` basis stays the default for aragora's own merge-quorum receipts, which keep their exact bytes.
@@ -24,7 +24,7 @@ _A patch release, cut mainly for the GitHub Action receipt fix: with v2.11.0, ev
 - **Receipt-first scoreboard:** row 6 derives its denominator from the newest Atlas release. The denominator is the receipt-first review rounds since #10016, and the numerator counts the rounds that carry an advisory summary. `--quorum-runs` overrides the denominator (#10191).
 
 ### Removed
-- **SDK operations on unserved routes** (#10138, contract-drift batch 4): nine operations are removed from the synchronous and asynchronous Python clients, and 16 from the TypeScript SDK. Each targeted a route that no server handler dispatched, so the call could only fail with a route-level 404 or `handler_no_result`; no server route is removed. The operations and their replacements, where one exists, are listed under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`. SDK users get the change when those packages publish at 2.11.1; this release publishes only the core `aragora` package.
+- **SDK methods for unserved routes** (#10138, contract-drift batch 4): both SDKs drop the methods whose routes no server handler dispatched. Those calls could only fail with a route-level 404 or `handler_no_result`, and no server route is removed. The full list, with replacements where they exist, is under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`. The Python removals already shipped in `aragora-sdk` 2.11.0 (PyPI, 2026-09-27). The TypeScript removals reach npm users with the next `@aragora/sdk` publish; npm's latest is 2.7.4.
 
 ### Changed
 - **Contract drift:** batch 4 retires 25 cohort items (#10138); its SDK removals are listed under **Removed**.
