@@ -406,6 +406,82 @@ describe('CircuitBreaker', () => {
     expect((error as CircuitOpenError).retryAfterMs).toBe(3_000);
   });
 
+  describe('a call admitted before the circuit opened', () => {
+    /**
+     * Admits one call that stays pending, then opens the circuit with failMax
+     * failures. A 404 from the pending call is not a failure.
+     */
+    async function openWhileCallPending() {
+      const clock = { now: 0 };
+      const breaker = new CircuitBreaker({
+        failMax: 2,
+        resetTimeoutMs: 30_000,
+        now: () => clock.now,
+      });
+      const finish: { resolve: (value: string) => void; reject: (error: Error) => void } = {
+        resolve: () => undefined,
+        reject: () => undefined,
+      };
+      const pending = breaker.execute(
+        () =>
+          new Promise<string>((resolve, reject) => {
+            finish.resolve = resolve;
+            finish.reject = reject;
+          }),
+        (error) => !(error instanceof AragoraHttpError && error.status === 404),
+      );
+      for (let i = 0; i < 2; i++) {
+        await expect(breaker.execute(() => Promise.reject(new Error('down')))).rejects.toThrow(
+          'down',
+        );
+      }
+      expect(breaker.state).toBe('open');
+      return { clock, breaker, pending, finish };
+    }
+
+    it('does not close the circuit when it succeeds late; only a trial after resetTimeoutMs does', async () => {
+      const { clock, breaker, pending, finish } = await openWhileCallPending();
+
+      clock.now = 5_000;
+      finish.resolve('late');
+      await expect(pending).resolves.toBe('late');
+      expect(breaker.state).toBe('open');
+
+      const operation = jest.fn(() => Promise.resolve('sent'));
+      const error = await breaker.execute(operation).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CircuitOpenError);
+      expect((error as CircuitOpenError).retryAfterMs).toBe(25_000);
+      expect(operation).not.toHaveBeenCalled();
+
+      clock.now = 30_000;
+      expect(breaker.state).toBe('half-open');
+      await expect(breaker.execute(operation)).resolves.toBe('sent');
+      expect(operation).toHaveBeenCalledTimes(1);
+      expect(breaker.state).toBe('closed');
+    });
+
+    it('does not close the circuit when it fails late with an error that is not a failure', async () => {
+      const { clock, breaker, pending, finish } = await openWhileCallPending();
+
+      clock.now = 5_000;
+      finish.reject(new AragoraHttpError(404, 'missing'));
+      await expect(pending).rejects.toBeInstanceOf(AragoraHttpError);
+      expect(breaker.state).toBe('open');
+    });
+
+    it('does not extend the open window when it fails late', async () => {
+      const { clock, breaker, pending, finish } = await openWhileCallPending();
+
+      clock.now = 29_000;
+      finish.reject(new Error('late failure'));
+      await expect(pending).rejects.toThrow('late failure');
+      expect(breaker.state).toBe('open');
+
+      clock.now = 30_000;
+      expect(breaker.state).toBe('half-open');
+    });
+  });
+
   it('rejects invalid options', () => {
     expect(() => new CircuitBreaker({ failMax: 0, resetTimeoutMs: 1 })).toThrow(RangeError);
     expect(() => new CircuitBreaker({ failMax: 1, resetTimeoutMs: -1 })).toThrow(RangeError);

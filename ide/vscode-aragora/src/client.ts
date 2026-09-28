@@ -90,6 +90,8 @@ export class CircuitBreaker {
   private failures = 0;
   private openedAt: number | undefined;
   private trialInFlight = false;
+  /** Advances whenever the circuit opens or a trial closes it. */
+  private generation = 0;
 
   constructor(options: CircuitBreakerOptions) {
     if (!Number.isInteger(options.failMax) || options.failMax < 1) {
@@ -110,7 +112,10 @@ export class CircuitBreaker {
 
   /**
    * Runs `operation` unless the circuit is open. Errors for which `isFailure`
-   * returns false (e.g. a 404) count as a healthy answer.
+   * returns false (e.g. a 404) count as a healthy answer. The outcome of a call
+   * admitted before the circuit last opened or closed is ignored, so a slow
+   * request that started while the circuit was closed can neither close an
+   * open circuit early nor extend its open period.
    */
   async execute<T>(
     operation: () => Promise<T>,
@@ -122,15 +127,19 @@ export class CircuitBreaker {
     }
     const isTrial = state === 'half-open';
     if (isTrial) this.trialInFlight = true;
+    const admittedIn = this.generation;
+    const isCurrent = () => isTrial || admittedIn === this.generation;
     try {
       const result = await operation();
-      this.recordSuccess();
+      if (isCurrent()) this.recordSuccess();
       return result;
     } catch (error) {
-      if (isFailure(error)) {
-        this.recordFailure();
-      } else {
-        this.recordSuccess();
+      if (isCurrent()) {
+        if (isFailure(error)) {
+          this.recordFailure();
+        } else {
+          this.recordSuccess();
+        }
       }
       throw error;
     } finally {
@@ -139,6 +148,7 @@ export class CircuitBreaker {
   }
 
   private recordSuccess(): void {
+    if (this.openedAt !== undefined) this.generation += 1;
     this.failures = 0;
     this.openedAt = undefined;
   }
@@ -148,6 +158,7 @@ export class CircuitBreaker {
     // A failed half-open trial re-opens the circuit for another full reset period.
     if (this.openedAt !== undefined || this.failures >= this.failMax) {
       this.openedAt = this.now();
+      this.generation += 1;
     }
   }
 
