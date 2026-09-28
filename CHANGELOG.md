@@ -5,6 +5,13 @@
 
 _Post-v2.11.1 changes land here until the next stable tag._
 
+### Changed
+- **Budget guard ledger location** (`aragora/billing/budget_guard.py`): the monthly spend ledger is chosen in this order, and the first match wins: `ARAGORA_BUDGET_GUARD_STORE` (the exact file path, used as given); `<ARAGORA_DATA_DIR>/budget_guard.json`; `<ARAGORA_NOMIC_DIR>/budget_guard.json`; otherwise the machine-global `~/.aragora/budget_guard.json`. The two data-directory variables have been honored since v2.10.0 (#9161); v2.9.x and earlier always used `~/.aragora/budget_guard.json` unless `ARAGORA_BUDGET_GUARD_STORE` was set. New: a whitespace-only data-directory value counts as unset, surrounding whitespace is stripped, `~` is expanded, and a relative data directory is anchored under the home directory (`ARAGORA_DATA_DIR=.nomic` resolves to `~/.nomic/budget_guard.json`). The ledger path no longer depends on the process working directory.
+- **Budget guard migration:** a data directory set to an absolute path keeps the same ledger. A relative data directory moves the ledger from `<working directory>/<dir>/budget_guard.json` to `~/<dir>/budget_guard.json`; copy the old file there, or set `ARAGORA_BUDGET_GUARD_STORE` to its absolute path, before upgrading mid-month, or this month's recorded spend restarts at zero. To keep the legacy home ledger while a data directory is configured, set `ARAGORA_BUDGET_GUARD_STORE="$HOME/.aragora/budget_guard.json"`. The override is used literally, so give an absolute path, not one that starts with `~`.
+
+### Fixed
+- **Billing metering:** `record_debate_tokens` records a missing or `None` agent provider as `"unknown"` instead of passing `None` through a type cast. `EnterpriseMeter` raises `RuntimeError("metering store not initialized")` when its connection is used before `initialize()`, instead of failing later on `None`.
+
 
 ## [2.11.1] - 2026-09-28
 
