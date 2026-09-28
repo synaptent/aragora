@@ -398,11 +398,17 @@ that wants to add a subdir must check its name against every basename in
 AMENDMENT 3 permits a retirement alias only for a pure re-export twin.
 The `status_page` alias was removed at PR #10000 H3, then restored at H4
 and accepted under AMENDMENT 6; the merged H6 retains that exception.
-Do not remove it in later batches. `connectors` cannot be
-shimmed (the package of the same name wins the import lookup, §3.4) and has
-no old-path behaviour to preserve; if VAL-P4B-007 samples it, the PR body
-records the deletion and the validator substitutes the next alphabetical
-entry as the contract allows.
+Do not remove that `status_page` alias in later batches. `connectors`
+cannot be shimmed (the package of the same name wins the import lookup,
+§3.4) and has no old-path behaviour to preserve; if VAL-P4B-007 samples
+it, the PR body records the deletion and the validator substitutes the
+next alphabetical entry as the contract allows.
+
+The `connectors.py` retirement did not land with batch 4 (PR #10113).
+Deleting 952 lines would have carried that PR from 617 to 1475 changed
+lines against its 800-line cap, so the deletion was carved out and landed
+separately as a non-batch PR that consumes no batch-PR allowance. The
+`slack.py` retirement did land in batch 4.
 
 ### 4.5 Renames on landing (1)
 
@@ -708,9 +714,10 @@ into the PR body. `$ENV` below means
    retired ones other than `connectors`. Then for every basename that is
    also a directory name after the move,
    `ls aragora/server/handlers/ | sed 's/\.py$//' | sort | uniq -d`
-   must print only `connectors` (the pre-existing flat/package pair from
-   §4.4, retired in batch 4); any other line names a `MOVED_MODULES` key
-   that a same-named package shadows, i.e. a dead shim entry (§3.4). The
+   must print nothing. It printed the single line `connectors` until that
+   pre-existing flat/package pair from §4.4 was retired; any line it prints
+   now names a `MOVED_MODULES` key that a same-named package shadows, i.e.
+   a dead shim entry (§3.4). The
    `sed` is what makes the check fire: without stripping `.py`, a file and
    a directory never compare equal and the list is always empty.
 7. **Handler-specific tests.** For every target dir touched:
@@ -772,10 +779,10 @@ directory-scoped pytest tails.
 
 | Batch | Files | LOC | Target dirs | Theme | Settlement note |
 |---|---|---|---|---|---|
-| 1 | 45 | 19,170 | admin, analytics, analytics_dashboard, auth, compliance, metrics, oauth, observability, public, security | ops, health, compliance, auth | Owns `admin/health/`, so it carries the k8s readiness fix (§8). Includes the three batch-1 retirements from §4.4 (`analytics_metrics`, `compliance_handler`, `status_page`); `slack` and `connectors` retire with batch 4 (§5). |
+| 1 | 45 | 19,170 | admin, analytics, analytics_dashboard, auth, compliance, metrics, oauth, observability, public, security | ops, health, compliance, auth | Owns `admin/health/`, so it carries the k8s readiness fix (§8). Includes the three batch-1 retirements from §4.4 (`analytics_metrics`, `compliance_handler`, `status_page`); `slack` retires with batch 4 (§5), and `connectors` was deferred out of batch 4 and retired in a separate non-batch PR (§4.4). |
 | 2 | 41 | 21,276 | agents, debates, decisions, evolution, memory, tasks, verification | core debate loop | Debates has 15 movers; update the module inventories in the agents, debates and memory package docstrings without expanding eager exports. |
 | 3 | 45 | 30,292 | canvas, catalog (new), email, finance (new), gateway, inbox, integrations, openclaw, pipeline, shared_inbox, workflows | pipeline, integrations, SME verticals | Creates the two new subdirs; rewrites `stream/servers_route_registration.py:42` (`accounting`); `canvas_pipeline.py` (2600 LOC) carries its size-baseline row. |
-| 4 | 42 | 33,760 | autonomous, billing, codebase, control_plane, demo, gauntlet, governance, knowledge, notifications, orchestration, sme, streaming, voice, webhooks, workspace | governance, autonomy, remaining verticals | Holds the two path-frozen files (`platform_config.py` PR #9989, `webhook_management.py` PR #9853) and `connectors.py`; re-census before opening. Rewrites the six `workspace_module` runtime imports (§3.2). `playground.py` (4256 LOC) carries its size and bandit baseline rows. |
+| 4 | 42 | 33,760 | autonomous, billing, codebase, control_plane, demo, gauntlet, governance, knowledge, notifications, orchestration, sme, streaming, voice, webhooks, workspace | governance, autonomy, remaining verticals | Holds the two path-frozen files (`platform_config.py` PR #9989, `webhook_management.py` PR #9853) and `connectors.py`, whose 952-line deletion was deferred to a separate non-batch PR to stay under the batch LOC cap; re-census before opening. Rewrites the six `workspace_module` runtime imports (§3.2). `playground.py` (4256 LOC) carries its size and bandit baseline rows. |
 
 Ordering rationale: batch 1 first because it is the smallest by LOC, has
 the fewest relative imports to rewrite after batch 3, and lands the shim
@@ -787,7 +794,10 @@ Implementation status: batch 1 merged as PR #10000 (42 moves and three
 retirements). Batch 2 relocates all 41 files in its table, reducing the
 flat root from 141 to 100 modules (excluding `__init__.py`) and extending
 `MOVED_MODULES` from 45 to 86 entries, including the accepted `status_page`
-alias. Batches 3 and 4 remain planned.
+alias. Batch 3 merged as PR #10104 (45 moves) and batch 4 as PR #10113
+(38 moves plus the `slack` retirement), bringing the flat root to 16
+modules. The `connectors.py` retirement deferred out of batch 4 landed
+afterwards as a separate non-batch PR, bringing the flat root to 15.
 
 The k8s readiness fix (§8) rides batch 1 because that batch owns `admin/`;
 if the operator prefers a separately revertable change, it can be split

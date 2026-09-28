@@ -45,39 +45,6 @@ class TenantsAPI:
 
         return self._client._request("GET", "/api/v1/tenants", params=params)
 
-    def create(
-        self,
-        name: str,
-        slug: str,
-        plan: str = "free",
-        settings: dict[str, Any] | None = None,
-        quotas: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Create a new tenant.
-
-        Args:
-            name: Tenant display name
-            slug: Unique tenant slug
-            plan: Subscription plan
-            settings: Tenant settings
-            quotas: Resource quotas
-
-        Returns:
-            Created tenant record
-        """
-        data: dict[str, Any] = {
-            "name": name,
-            "slug": slug,
-            "plan": plan,
-        }
-        if settings:
-            data["settings"] = settings
-        if quotas:
-            data["quotas"] = quotas
-
-        return self._client._request("POST", "/api/v1/tenants", json=data)
-
 
 class AsyncTenantsAPI:
     """Asynchronous tenants API."""
@@ -97,24 +64,3 @@ class AsyncTenantsAPI:
             params["status"] = status
 
         return await self._client._request("GET", "/api/v1/tenants", params=params)
-
-    async def create(
-        self,
-        name: str,
-        slug: str,
-        plan: str = "free",
-        settings: dict[str, Any] | None = None,
-        quotas: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Create a new tenant."""
-        data: dict[str, Any] = {
-            "name": name,
-            "slug": slug,
-            "plan": plan,
-        }
-        if settings:
-            data["settings"] = settings
-        if quotas:
-            data["quotas"] = quotas
-
-        return await self._client._request("POST", "/api/v1/tenants", json=data)
