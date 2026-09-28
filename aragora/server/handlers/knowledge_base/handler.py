@@ -16,6 +16,11 @@ Facts API (FactStore):
 - POST /api/knowledge/facts/relations - Add relation between facts
 - GET /api/knowledge/search - Search chunks via embeddings
 - GET /api/knowledge/stats - Get knowledge base statistics
+
+Index API (no named-index registry exists yet):
+- POST /api/v1/index/embed-batch - Embed texts with the unified embedding service
+- GET /api/v1/index - List named vector indexes (always empty)
+- POST /api/v1/index, POST /api/v1/index/search - 501 not_implemented
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from aragora.core.embeddings.types import EmbeddingError
 from aragora.knowledge import (
     DatasetQueryEngine,
     FactStore,
@@ -31,12 +37,14 @@ from aragora.knowledge import (
     SimpleQueryEngine,
 )
 from aragora.rbac.decorators import require_permission
+from aragora.server.http_utils import run_async as _run_async
 
 from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
     get_bounded_string_param,
+    json_response,
 )
 from ..utils.rate_limit import RateLimiter, get_client_ip
 
@@ -51,6 +59,15 @@ logger = logging.getLogger(__name__)
 
 # Rate limiter for knowledge endpoints (60 requests per minute)
 _knowledge_limiter = RateLimiter(requests_per_minute=60)
+
+# Allowed methods per /api/v1/index route (also the 405 Allow header).
+_INDEX_ROUTE_METHODS = {
+    "/api/v1/index": "GET, POST",
+    "/api/v1/index/embed-batch": "POST",
+    "/api/v1/index/search": "POST",
+}
+_MAX_EMBED_BATCH_TEXTS = 1000
+_MAX_EMBED_BATCH_SIZE = 100
 
 
 class KnowledgeHandler(
@@ -200,8 +217,8 @@ class KnowledgeHandler(
             if perm_error:
                 return perm_error
         elif method == "POST":
-            # Query is read, create fact is write
-            if path == "/api/v1/knowledge/query":
+            # Query and index search are reads; every other POST is a write
+            if path in ("/api/v1/knowledge/query", "/api/v1/index/search"):
                 perm_error = self._check_permission(handler, self.KNOWLEDGE_READ_PERMISSION)
             else:
                 perm_error = self._check_permission(handler, self.KNOWLEDGE_WRITE_PERMISSION)
@@ -215,6 +232,9 @@ class KnowledgeHandler(
             perm_error = self._check_permission(handler, self.KNOWLEDGE_DELETE_PERMISSION)
             if perm_error:
                 return perm_error
+
+        if path in _INDEX_ROUTE_METHODS:
+            return self._handle_index_routes(path, method, handler)
 
         # Query endpoint (POST)
         if path == "/api/v1/knowledge/query":
@@ -243,6 +263,71 @@ class KnowledgeHandler(
             return self._handle_fact_routes(path, query_params, handler)
 
         return None
+
+    def _handle_index_routes(self, path: str, method: str, handler: Any) -> HandlerResult:
+        """Handle the /api/v1/index family; there is no named-index registry yet."""
+        if method not in _INDEX_ROUTE_METHODS[path].split(", "):
+            return error_response(
+                "Method not allowed", 405, headers={"Allow": _INDEX_ROUTE_METHODS[path]}
+            )
+        if path == "/api/v1/index/embed-batch":
+            return self._handle_embed_batch(handler)
+        if method == "GET":
+            return json_response({"indexes": [], "count": 0})
+        # Built directly: error_response rewrites 5xx messages in production.
+        return json_response(
+            {"error": "Named vector indexes are not implemented", "code": "not_implemented"},
+            status=501,
+        )
+
+    def _handle_embed_batch(self, handler: Any) -> HandlerResult:
+        """Handle POST /api/v1/index/embed-batch with the unified embedding service."""
+        data = self.read_json_body(handler)
+        if data is None:
+            return error_response("Invalid JSON body", 400)
+        texts = data.get("texts")
+        if not isinstance(texts, list) or not texts or not all(isinstance(t, str) for t in texts):
+            return error_response("'texts' must be a non-empty list of strings", 400)
+        if len(texts) > _MAX_EMBED_BATCH_TEXTS:
+            return error_response(f"At most {_MAX_EMBED_BATCH_TEXTS} texts per request", 400)
+        batch_size = data.get("batch_size", _MAX_EMBED_BATCH_SIZE)
+        if (
+            isinstance(batch_size, bool)
+            or not isinstance(batch_size, int)
+            or not 1 <= batch_size <= _MAX_EMBED_BATCH_SIZE
+        ):
+            return error_response(
+                f"'batch_size' must be an integer from 1 to {_MAX_EMBED_BATCH_SIZE}", 400
+            )
+
+        from aragora.core.embeddings.service import get_embedding_service
+
+        try:
+            service = get_embedding_service()
+            requested_model = data.get("model")
+            if requested_model is not None and requested_model != service.model:
+                return error_response(
+                    f"Model selection is not supported; this server embeds with {service.model}",
+                    400,
+                )
+            batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
+            embeddings: list[list[float]] = []
+            for batch in batches:
+                embeddings.extend(_run_async(service.embed_batch_raw(batch)))
+        except (EmbeddingError, RuntimeError, OSError, TimeoutError, ValueError) as e:
+            logger.warning("Index embed-batch failed: %s", e)
+            return error_response("Embedding service unavailable", 503)
+
+        return json_response(
+            {
+                "embeddings": embeddings,
+                "dimension": len(embeddings[0]) if embeddings else 0,
+                "count": len(embeddings),
+                "batch_count": len(batches),
+                "provider": service.provider,
+                "model": service.model,
+            }
+        )
 
     def _handle_fact_routes(
         self, path: str, query_params: dict, handler: Any
