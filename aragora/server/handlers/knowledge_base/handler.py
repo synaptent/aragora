@@ -25,11 +25,13 @@ Index API (no named-index registry exists yet):
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from aragora.core.embeddings.types import EmbeddingError
+from aragora.core.embeddings.types import EmbeddingConfig, EmbeddingError
 from aragora.knowledge import (
     DatasetQueryEngine,
     FactStore,
@@ -73,6 +75,12 @@ _MAX_EMBED_BATCH_SIZE = 100
 # cannot turn one request into many sequential 30 s waits.
 _EMBED_BATCH_BUDGET_SECONDS = 30.0
 _NOT_IMPLEMENTED_MESSAGE = "Named vector indexes are not implemented on this server"
+
+
+def _coded_error(message: str, code: str, status: int) -> HandlerResult:
+    """The error_response(..., code=...) envelope, built directly because
+    error_response replaces every 5xx message in production."""
+    return json_response({"error": {"message": message, "code": code}}, status=status)
 
 
 class KnowledgeHandler(
@@ -279,21 +287,20 @@ class KnowledgeHandler(
             return self._handle_embed_batch(handler)
         if method == "GET":
             return json_response({"indexes": [], "count": 0})
-        # The error_response(..., code=...) envelope, built directly because
-        # error_response replaces every 5xx message in production.
-        return json_response(
-            {"error": {"message": _NOT_IMPLEMENTED_MESSAGE, "code": "not_implemented"}},
-            status=501,
-        )
+        return _coded_error(_NOT_IMPLEMENTED_MESSAGE, "not_implemented", 501)
 
     def _handle_embed_batch(self, handler: Any) -> HandlerResult:
         """Handle POST /api/v1/index/embed-batch with the unified embedding service."""
-        data = self.read_json_body(handler)
+        data, body_error = self.read_json_body_validated(handler)
         if data is None:
-            return error_response("Invalid JSON body", 400)
+            return body_error if body_error is not None else error_response("Invalid JSON", 400)
         texts = data.get("texts")
-        if not isinstance(texts, list) or not texts or not all(isinstance(t, str) for t in texts):
-            return error_response("'texts' must be a non-empty list of strings", 400)
+        if (
+            not isinstance(texts, list)
+            or not texts
+            or not all(isinstance(t, str) and t for t in texts)
+        ):
+            return error_response("'texts' must be a non-empty list of non-empty strings", 400)
         if len(texts) > _MAX_EMBED_BATCH_TEXTS:
             return error_response(f"At most {_MAX_EMBED_BATCH_TEXTS} texts per request", 400)
         batch_size = data.get("batch_size", _MAX_EMBED_BATCH_SIZE)
@@ -309,7 +316,9 @@ class KnowledgeHandler(
         from aragora.core.embeddings.service import get_embedding_service
 
         try:
-            service = get_embedding_service()
+            # Not the process-wide singleton: its cache is shared with other subsystems
+            # and would keep the zero vectors the base backend substitutes on failure.
+            service = get_embedding_service(config=EmbeddingConfig(cache_enabled=False))
             requested_model = data.get("model")
             if requested_model is not None and requested_model != service.model:
                 return error_response(
@@ -328,20 +337,26 @@ class KnowledgeHandler(
                 vectors = _run_async(service.embed_batch_raw(batch), timeout=remaining)
                 if len(vectors) != len(batch):
                     raise ValueError(f"backend returned {len(vectors)} vectors for {len(batch)}")
+                # EmbeddingBackend.embed_batch answers a failed text with a zero vector.
+                if not all(any(vector) for vector in vectors):
+                    raise ValueError("backend returned an all-zero vector")
                 embeddings.extend(vectors)
         # AttributeError/TypeError: UnifiedEmbeddingService.embed_batch leaves None
         # placeholders when a backend returns fewer vectors than it was given.
+        # The three timeout classes are distinct on Python 3.10.
         except (
             EmbeddingError,
             RuntimeError,
             OSError,
             TimeoutError,
+            asyncio.TimeoutError,
+            concurrent.futures.TimeoutError,
             ValueError,
             AttributeError,
             TypeError,
         ) as e:
             logger.warning("Index embed-batch failed: %s", e)
-            return error_response("Embedding service unavailable", 503)
+            return _coded_error("Embedding service unavailable", "service_unavailable", 503)
 
         return json_response(
             {

@@ -10,6 +10,7 @@ so first-match ownership and the dispatcher's own 500 fallbacks are exercised.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import io
 import json
 import threading
@@ -19,7 +20,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aragora.billing.jwt_auth import create_access_token
-from aragora.core.embeddings.service import UnifiedEmbeddingService
+from aragora.core.embeddings.backends import EmbeddingBackend, HashBackend
+from aragora.core.embeddings.cache import EmbeddingCache
+from aragora.core.embeddings.service import UnifiedEmbeddingService, get_embedding_service
 from aragora.core.embeddings.types import EmbeddingConfig
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.base import error_response
@@ -82,6 +85,36 @@ def _clear_knowledge_limiter():
 @pytest.fixture
 def hash_service() -> UnifiedEmbeddingService:
     return UnifiedEmbeddingService(config=EmbeddingConfig(provider="hash", cache_enabled=False))
+
+
+@pytest.fixture
+def shared_embedding_cache(monkeypatch) -> EmbeddingCache:
+    """A fresh process-wide embedding cache and singleton, restored after the test."""
+    cache = EmbeddingCache()
+    monkeypatch.setattr("aragora.core.embeddings.cache._global_cache", cache)
+    monkeypatch.setattr("aragora.core.embeddings.service._global_service", None)
+    return cache
+
+
+class _FailingTextsBackend(EmbeddingBackend):
+    """Keeps the base embed_batch, which swaps every failed text for a zero vector."""
+
+    def __init__(self, failing: set[str]) -> None:
+        super().__init__(EmbeddingConfig(dimension=8), use_circuit_breaker=False)
+        self.failing = failing
+
+    @property
+    def provider_name(self) -> str:
+        return "failing"
+
+    @property
+    def model_name(self) -> str:
+        return "failing-model"
+
+    async def embed(self, text: str) -> list[float]:
+        if text in self.failing:
+            raise ConnectionError(f"provider outage for {text!r}")
+        return [1.0] * self.dimension
 
 
 def _dispatch(
@@ -154,6 +187,7 @@ def test_embed_batch_returns_service_embeddings(
         {"texts": []},
         {"texts": "alpha"},
         {"texts": ["ok", 7]},
+        {"texts": ["ok", ""]},
         {"texts": ["a"], "batch_size": 0},
         {"texts": ["a"], "batch_size": True},
         {"texts": ["a"] * 1001},
@@ -166,14 +200,73 @@ def test_embed_batch_rejects_invalid_payload(registry_cls, hash_service, payload
     assert status == 400, body
 
 
-def test_embed_batch_reports_backend_failure_as_503(registry_cls) -> None:
+def test_embed_batch_requires_a_json_content_type(registry_cls, hash_service) -> None:
+    with patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service):
+        status, body = _dispatch(
+            registry_cls,
+            "POST",
+            "/api/v1/index/embed-batch",
+            {"texts": ["alpha"]},
+            headers={"Content-Type": "text/plain"},
+        )
+    assert status == 415, body
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [RuntimeError("backend down"), asyncio.TimeoutError(), concurrent.futures.TimeoutError()],
+)
+def test_embed_batch_reports_backend_failure_as_503(
+    registry_cls, monkeypatch, failure: Exception
+) -> None:
+    # 5xx messages from error_response are rewritten in production; this one must not be.
+    monkeypatch.setenv("ARAGORA_ENV", "production")
     broken = MagicMock()
-    broken.embed_batch_raw.side_effect = RuntimeError("backend down")
+    broken.embed_batch_raw.side_effect = failure
     with patch("aragora.core.embeddings.service.get_embedding_service", return_value=broken):
         status, body = _dispatch(
             registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
         )
     assert status == 503, body
+    assert body == {
+        "error": {"message": "Embedding service unavailable", "code": "service_unavailable"}
+    }
+
+
+@pytest.mark.parametrize("failing", [{"alpha", "beta"}, {"beta"}])
+def test_embed_batch_answers_503_when_the_base_backend_swallows_failures(
+    registry_cls, shared_embedding_cache, monkeypatch, failing: set[str]
+) -> None:
+    monkeypatch.setattr(
+        UnifiedEmbeddingService, "_create_backend", lambda self: _FailingTextsBackend(failing)
+    )
+    status, body = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha", "beta"]}
+    )
+    assert status == 503, body
+    assert len(shared_embedding_cache) == 0
+
+
+def test_embed_batch_neither_reads_nor_writes_the_shared_embedding_cache(
+    registry_cls, shared_embedding_cache, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        UnifiedEmbeddingService, "_create_backend", lambda self: HashBackend(self.config)
+    )
+    shared = get_embedding_service()
+    stale = [9.0] * shared.dimension
+    shared_embedding_cache.set("alpha", stale)
+    before = shared_embedding_cache.stats()
+
+    status, body = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha", "beta"]}
+    )
+
+    assert status == 200, body
+    assert body["embeddings"] == asyncio.run(shared._backend.embed_batch(["alpha", "beta"]))
+    assert body["embeddings"][0] != stale
+    assert shared_embedding_cache.stats() == before
+    assert get_embedding_service() is shared
 
 
 def test_embed_batch_stops_at_the_overall_time_budget(registry_cls, monkeypatch) -> None:
@@ -187,7 +280,7 @@ def test_embed_batch_stops_at_the_overall_time_budget(registry_cls, monkeypatch)
         async def embed_batch_raw(self, batch: list[str]) -> list[list[float]]:
             calls.append(batch)
             await asyncio.sleep(0.05)
-            return [[0.0] for _ in batch]
+            return [[1.0] for _ in batch]
 
     texts = [f"t{i}" for i in range(40)]
     with patch(
