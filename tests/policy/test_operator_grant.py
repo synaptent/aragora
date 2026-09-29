@@ -5,7 +5,7 @@ import copy
 import hashlib
 import json
 from dataclasses import FrozenInstanceError, replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from cryptography.exceptions import UnsupportedAlgorithm
@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 from aragora.policy import operator_grant as g
 
+UTC = timezone.utc
 NOW = datetime(2026, 9, 7, 12, tzinfo=UTC)
 DEFAULT_WIRE = object()
 
@@ -170,6 +171,10 @@ def test_context_bool_does_not_match_integer_and_signed_wrong_repo_rejects(state
         ("can_subdelegate", True),
         ("approval_ref", "quoted\nreply"),
         ("approval_ref", "\ud800"),
+        ("approval_ref", "test\u0085event"),
+        ("approval_ref", "test\u202eevent"),
+        ("approval_ref", "test\u200bevent"),
+        ("validation_commands", ["pytest\u2028tests/test_example.py"]),
         ("actions", []),
         ("actions", ["admin_merge"]),
         ("actions", ["validate", "validate"]),
@@ -193,6 +198,19 @@ def test_signed_malformed_payloads_reject(state, field, value):
     denied(verify(state, wire(state, p)), g.VerificationCode.MALFORMED)
     with pytest.raises(g.GrantValidationError):
         g.canonical_grant_payload(p)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("approval_ref", "test-\u00e9v\u00e9nement"),
+        ("approval_ref", "\u5ba1\u6279-event"),
+        ("validation_commands", ["pytest tests/test_\u00fcber.py"]),
+    ],
+)
+def test_signed_non_ascii_letters_verify(state, field, value):
+    p = {**state["payload"], field: value}
+    assert verify(state, wire(state, p)).code is g.VerificationCode.VERIFIED
 
 
 @pytest.mark.parametrize("field", sorted(g.CONTEXT_FIELDS) + ["scope", "budget", "approval_digest"])

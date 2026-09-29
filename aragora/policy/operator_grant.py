@@ -12,19 +12,23 @@ import binascii
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any
 
 from aragora.storage.receipt_signing import Ed25519Signer
 
+# `datetime.UTC` needs Python 3.11; this is the same singleton on every supported version.
+UTC = timezone.utc
 SCHEMA_VERSION = "aragora-operator-grant/1.0"
 DOMAIN = b"aragora/operator-grant/v1\n"
 MAX_BYTES = 65_536
 MAX_OBSERVATION_AGE = timedelta(seconds=60)
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 ACTION_NAMES = frozenset(
     {"branch_write", "validate", "draft_publish", "ready", "evidence_apply", "protected_squash"}
 )
@@ -143,6 +147,9 @@ def _fields(value: Any, fields: set[str] | frozenset[str]) -> None:
 def _text(value: Any) -> None:
     _require(type(value) is str and 0 < len(value) <= 2048)
     _require(value == value.strip() and not any(ord(c) < 32 or ord(c) == 127 for c in value))
+    # C1 controls, bidi/zero-width format characters and line/paragraph separators can make
+    # a signed value display differently from the bytes the signature covers.
+    _require(not any(unicodedata.category(c) in _INVISIBLE_CATEGORIES for c in value))
     try:
         value.encode("utf-8", errors="strict")
     except UnicodeError as exc:
