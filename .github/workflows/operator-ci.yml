@@ -1,0 +1,140 @@
+name: Operator CI
+
+on:
+  pull_request:
+    paths:
+      - 'aragora-operator/**'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/operator-file-sizes.json'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/workflows/operator-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'aragora-operator/**'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/operator-file-sizes.json'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/workflows/operator-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operator-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Go comes from aragora-operator/go.mod, the same version as the Dockerfile's
+# builder image. Tools whose own go.mod needs a newer Go (controller-gen,
+# setup-envtest) are fetched by `go install` through GOTOOLCHAIN=auto.
+jobs:
+  checks:
+    name: Format, build, vet, lint and generated code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+        working-directory: aragora-operator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: aragora-operator/go.mod
+          cache-dependency-path: aragora-operator/go.sum
+      - name: Set up Python for the file-size ratchet
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+      - name: gofmt
+        run: |
+          test -n "$(git ls-files '*.go')" || { echo "::error::no tracked Go files under aragora-operator/"; exit 1; }
+          # shellcheck disable=SC2046 # one argument per tracked file; the paths contain no spaces
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would reformat these files (run gofmt -w):"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go build
+        run: go build ./...
+      - name: go vet
+        run: go vet ./...
+      - name: go mod tidy
+        run: go mod tidy -diff
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: aragora-operator
+          args: --timeout 5m
+      - name: File-size ratchet
+        working-directory: .
+        run: >-
+          python scripts/ci/check_file_sizes.py
+          --glob 'aragora-operator/**/*.go'
+          --baseline scripts/baselines/operator-file-sizes.json
+      - name: Generated code and manifests are up to date
+        run: |
+          make generate manifests
+          git diff --exit-code -- .
+          untracked="$(git status --porcelain --untracked-files=all -- .)"
+          if [ -n "$untracked" ]; then
+            echo "::error::make generate manifests created files that are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
+
+  envtest:
+    name: Controller tests (envtest, Kubernetes 1.29)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+        working-directory: aragora-operator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: aragora-operator/go.mod
+          cache-dependency-path: aragora-operator/go.sum
+      - name: Install setup-envtest and gotestsum
+        run: |
+          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+          go install gotest.tools/gotestsum@v1.13.0
+      # Keep 1.29.x in step with ENVTEST_K8S_VERSION in aragora-operator/Makefile.
+      - name: Cache envtest binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/share/kubebuilder-envtest
+          key: envtest-k8s-1.29.x-${{ runner.os }}-${{ runner.arch }}
+      - name: Set KUBEBUILDER_ASSETS
+        run: |
+          assets="$(setup-envtest use 1.29.x --bin-dir "$HOME/.local/share/kubebuilder-envtest" -p path)"
+          test -x "$assets/kube-apiserver" || { echo "::error::no kube-apiserver in $assets"; exit 1; }
+          echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"
+      - name: Run unit and controller tests
+        env:
+          ARAGORA_OPERATOR_TEST_METRICS_OUT: ${{ github.workspace }}/aragora-operator/operator-metrics.txt
+        run: >-
+          gotestsum --junitfile operator-junit.xml --jsonfile operator-test.json
+          -- ./... -count=1 -timeout 5m
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operator-test-results
+          path: |
+            aragora-operator/operator-junit.xml
+            aragora-operator/operator-test.json
+            aragora-operator/operator-metrics.txt
+          if-no-files-found: warn

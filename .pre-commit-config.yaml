@@ -238,6 +238,24 @@ repos:
         stages: [pre-push]
         verbose: true
 
+  # Operator: fails on any tracked Go file gofmt would reformat, then go vet.
+  # Same SKIP contract as `make readiness-lint-operator`.
+  - repo: local
+    hooks:
+      - id: operator-gofmt-vet
+        name: gofmt and go vet (operator)
+        entry: >-
+          bash -c 'command -v go >/dev/null || {
+          echo "SKIP operator: go not found"; exit 0; };
+          cd aragora-operator && unfmt=$(gofmt -l $(git ls-files "*.go")) && [ -z "$unfmt" ] || {
+          echo "$unfmt"; exit 1; };
+          go vet ./...'
+        language: system
+        pass_filenames: false
+        files: ^aragora-operator/.*\.go$
+        stages: [pre-push]
+        verbose: true
+
   # Portability guard: block new hardcoded private/legacy references
   # (private home dirs, .venv/bin/python, an0mium/aragora slug). Baselined in
   # scripts/portability_baseline.json so it only fails on NEW violations.

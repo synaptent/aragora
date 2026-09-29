@@ -319,6 +319,10 @@ jobs:
         run: |
           docker build -f aragora-operator/Dockerfile -t test-operator:latest aragora-operator/
 
+      - name: Smoke test operator image (--help)
+        run: |
+          docker run --rm test-operator:latest --help
+
       - name: Run Trivy vulnerability scanner (operator)
         uses: aquasecurity/trivy-action@0.35.0
         with:
