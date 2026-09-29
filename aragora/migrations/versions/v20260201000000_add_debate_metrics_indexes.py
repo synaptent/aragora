@@ -127,6 +127,7 @@ migration = Migration(
     down_fn=down_fn,
     # Recorded by databases that applied the revision before the column guards.
     # The guards only skip indexes naming a column the table lacks, which
-    # PostgreSQL rejected (SQLite indexed the quoted name as a string constant).
+    # PostgreSQL rejected (SQLite indexed the quoted name as a string constant;
+    # 20260929000000 drops that constant index).
     previous_checksums=("1750a3d82adbb6420727f27dcc0f502cdeab0b02147b3bf13978532e8913049e",),
 )

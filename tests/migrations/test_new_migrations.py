@@ -760,6 +760,103 @@ class TestRuntimeCreatedTablesMissingColumns:
         assert not backend.index_exists("idx_km_validation_staleness")
 
 
+# What the pre-guard 20260201000000 ran on SQLite: with no scheduled_at column,
+# SQLite reads the quoted name as a string literal and indexes a constant.
+PRE_GUARD_JOB_QUEUE_INDEX = (
+    'CREATE INDEX IF NOT EXISTS "idx_job_queue_pending_priority" '
+    'ON "job_queue" ("status", "priority", "scheduled_at")'
+)
+
+
+def _index_key_columns(backend, index: str) -> list:
+    return [row[2] for row in backend.fetch_all(f'PRAGMA index_xinfo("{index}")') if row[5] == 1]
+
+
+class TestJobQueueConstantIndexRepair:
+    """20260929000000 drops the constant index the pre-guard 20260201000000 left on SQLite."""
+
+    def test_drops_constant_index_when_scheduled_at_is_missing(self, backend):
+        from aragora.migrations.versions.v20260929000000_repair_job_queue_constant_index import (
+            up_fn,
+        )
+
+        backend.execute_write(RUNTIME_JOB_QUEUE)
+        backend.execute_write(PRE_GUARD_JOB_QUEUE_INDEX)
+        assert _index_key_columns(backend, "idx_job_queue_pending_priority") == [
+            "status",
+            "priority",
+            None,
+        ]
+
+        up_fn(backend)
+
+        assert not backend.index_exists("idx_job_queue_pending_priority")
+
+    def test_rebuilds_real_index_once_scheduled_at_exists(self, backend):
+        from aragora.migrations.versions.v20260929000000_repair_job_queue_constant_index import (
+            up_fn,
+        )
+
+        backend.execute_write(RUNTIME_JOB_QUEUE)
+        backend.execute_write(PRE_GUARD_JOB_QUEUE_INDEX)
+        backend.execute_write("ALTER TABLE job_queue ADD COLUMN scheduled_at REAL")
+
+        up_fn(backend)
+
+        assert _index_key_columns(backend, "idx_job_queue_pending_priority") == [
+            "status",
+            "priority",
+            "scheduled_at",
+        ]
+
+    def test_leaves_a_real_index_untouched(self, backend):
+        from aragora.migrations.versions.v20260929000000_repair_job_queue_constant_index import (
+            up_fn,
+        )
+
+        backend.execute_write(RUNTIME_JOB_QUEUE)
+        backend.execute_write("ALTER TABLE job_queue ADD COLUMN scheduled_at REAL")
+        backend.execute_write(PRE_GUARD_JOB_QUEUE_INDEX)
+        before = backend.fetch_all(
+            "SELECT sql FROM sqlite_master WHERE name = 'idx_job_queue_pending_priority'"
+        )
+
+        up_fn(backend)
+
+        after = backend.fetch_all(
+            "SELECT sql FROM sqlite_master WHERE name = 'idx_job_queue_pending_priority'"
+        )
+        assert after == before
+        assert _index_key_columns(backend, "idx_job_queue_pending_priority")[2] == "scheduled_at"
+
+    def test_no_job_queue_is_a_no_op(self, backend):
+        from aragora.migrations.versions.v20260929000000_repair_job_queue_constant_index import (
+            up_fn,
+        )
+
+        up_fn(backend)
+
+        assert not backend.table_exists("job_queue")
+        assert not backend.index_exists("idx_job_queue_pending_priority")
+
+    def test_full_upgrade_repairs_a_database_that_applied_the_pre_guard_version(
+        self, runner, backend
+    ):
+        from aragora.migrations.runner import _load_migrations
+
+        # The constant index a pre-guard 20260201000000 run left behind; the
+        # guarded 20260201000000 skips (the name already exists) and the repair
+        # migration removes it.
+        backend.execute_write(RUNTIME_JOB_QUEUE)
+        backend.execute_write(PRE_GUARD_JOB_QUEUE_INDEX)
+        _load_migrations(runner)
+
+        runner.upgrade()
+
+        assert runner.get_pending_migrations() == []
+        assert not backend.index_exists("idx_job_queue_pending_priority")
+
+
 class TestColumnGuardChecksumContinuity:
     """Adding the column guards must not fail checksum verification on applied databases."""
 
