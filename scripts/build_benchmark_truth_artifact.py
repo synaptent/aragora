@@ -201,7 +201,7 @@ def row_observes_execution(row: dict[str, Any]) -> bool:
 
 def has_elapsed_sample(row: dict[str, Any]) -> bool:
     elapsed = row.get("elapsed_seconds")
-    return isinstance(elapsed, (int, float)) and elapsed > 0
+    return isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool) and elapsed > 0
 
 
 def elapsed_time_status(rows: list[dict[str, Any]]) -> str:
@@ -221,7 +221,7 @@ def _issue_refs(issue_numbers: list[int]) -> str:
     return ", ".join(f"#{number}" for number in issue_numbers)
 
 
-def _ledger_issue_number(value: Any) -> int | None:
+def _ledger_number(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -235,8 +235,15 @@ def observe_rescue_ledger(
     path: Path | None,
     *,
     corpus_issue_numbers: set[int],
+    corpus_issue_number_by_pr: dict[int, int],
 ) -> dict[str, Any]:
-    """Summarize the rescue event ledger as provenance for ``rescue_history``."""
+    """Summarize the rescue event ledger as provenance for ``rescue_history``.
+
+    Producers attribute a rescue by ``issue_number`` (RescuePlanner) or only by
+    ``pr_number`` (the agent-bridge supervisor), so an event counts against a
+    corpus issue through either key. An event carrying neither cannot be ruled
+    out as a corpus intervention and is counted as unattributed.
+    """
     if path is None:
         return {"status": "not_consulted"}
     try:
@@ -244,6 +251,7 @@ def observe_rescue_ledger(
     except RescueLedgerValidationError as exc:
         return {"path": _repo_stable_path(path), "status": "unavailable", "error_code": exc.code}
     corpus_event_issue_numbers: set[int] = set()
+    unattributed_event_count = 0
     for line in raw.decode("utf-8").splitlines():
         try:
             event = json.loads(line)
@@ -253,9 +261,15 @@ def observe_rescue_ledger(
             continue
         if not isinstance(event, dict):
             continue
-        issue_number = _ledger_issue_number(event.get("issue_number"))
+        issue_number = _ledger_number(event.get("issue_number"))
+        pr_number = _ledger_number(event.get("pr_number"))
+        if issue_number is None and pr_number is None:
+            unattributed_event_count += 1
+            continue
         if issue_number is not None and issue_number in corpus_issue_numbers:
             corpus_event_issue_numbers.add(issue_number)
+        if pr_number is not None and pr_number in corpus_issue_number_by_pr:
+            corpus_event_issue_numbers.add(corpus_issue_number_by_pr[pr_number])
     return {
         "path": _repo_stable_path(path),
         "status": "available",
@@ -265,6 +279,7 @@ def observe_rescue_ledger(
             source.get("skipped_trailing_partial_line_count") or 0
         ),
         "corpus_event_issue_numbers": sorted(corpus_event_issue_numbers),
+        "unattributed_event_count": unattributed_event_count,
     }
 
 
@@ -312,8 +327,14 @@ def build_observation_markers(
         if ledger_issue_numbers:
             reasons.append(
                 "The rescue event ledger records interventions on corpus issue(s) "
-                f"{_issue_refs(ledger_issue_numbers)}, which the metrics-derived rescue "
-                "fields do not count."
+                f"{_issue_refs(ledger_issue_numbers)} or their linked PRs, which the "
+                "metrics-derived rescue fields do not count."
+            )
+        unattributed = int(rescue_ledger.get("unattributed_event_count") or 0)
+        if unattributed:
+            reasons.append(
+                f"{unattributed} rescue event ledger record(s) carry neither an issue nor a "
+                "PR number, so they cannot be ruled out as interventions on corpus issues."
             )
     if issues_without_executed_attempt:
         reasons.append(
@@ -1188,6 +1209,11 @@ def build_benchmark_truth_artifact(
     rescue_ledger = observe_rescue_ledger(
         rescue_ledger_path,
         corpus_issue_numbers=corpus_issue_numbers,
+        corpus_issue_number_by_pr={
+            linked_pr.number: record.issue_number
+            for record in records
+            for linked_pr in record.linked_prs
+        },
     )
     observation_markers = build_observation_markers(
         corpus_rows=[

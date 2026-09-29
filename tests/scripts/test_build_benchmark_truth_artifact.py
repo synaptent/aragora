@@ -1586,7 +1586,8 @@ def test_executed_attempts_and_fully_read_ledger_mark_rescue_history_complete(
     ledger_path.write_text(
         json.dumps({"event_type": "manual_merge", "reason": "other issue", "issue_number": 9999})
         + "\n"
-        + json.dumps({"event_type": "session_restart", "reason": "no issue"})
+        # Supervisor-style PR-only event on a PR that closes no corpus issue.
+        + json.dumps({"event_type": "approve_prompt", "reason": "other pr", "pr_number": 7777})
         + "\n",
         encoding="utf-8",
     )
@@ -1607,6 +1608,7 @@ def test_executed_attempts_and_fully_read_ledger_mark_rescue_history_complete(
     assert artifact["rescue_ledger"]["status"] == "available"
     assert artifact["rescue_ledger"]["event_count"] == 2
     assert artifact["rescue_ledger"]["corpus_event_issue_numbers"] == []
+    assert artifact["rescue_ledger"]["unattributed_event_count"] == 0
     assert artifact["rescue_counts_by_type"] == {"rescue_worker_crash": 1}
 
 
@@ -1623,6 +1625,7 @@ def test_executed_attempt_without_elapsed_sample_marks_elapsed_incomplete(
     )
 
     assert artifact["observation_status"]["elapsed_time"] == "incomplete"
+    assert mod.has_elapsed_sample({"elapsed_seconds": True}) is False
     assert artifact["observation_status"]["rescue_history"] == "complete"
     # The truth artifact publishes no elapsed values, so nothing is demoted.
     assert "observation_limits" not in artifact
@@ -1637,6 +1640,17 @@ def test_executed_attempt_without_elapsed_sample_marks_elapsed_incomplete(
             "interventions on corpus issue(s) #1064",
         ),
         (
+            # The agent-bridge supervisor records rescues by PR number only;
+            # PR 6001 is the merged PR that closes corpus issue 1064.
+            json.dumps({"event_type": "approve_prompt", "reason": "supervisor", "pr_number": 6001})
+            + "\n",
+            "interventions on corpus issue(s) #1064 or their linked PRs",
+        ),
+        (
+            json.dumps({"event_type": "session_restart", "reason": "no attribution"}) + "\n",
+            "1 rescue event ledger record(s) carry neither an issue nor a PR number",
+        ),
+        (
             json.dumps({"event_type": "manual_merge", "reason": "ok"})
             + "\n"
             + '{"event_type": "manual_merge", "reason": "torn", "issue_n',
@@ -1645,7 +1659,14 @@ def test_executed_attempt_without_elapsed_sample_marks_elapsed_incomplete(
         ("not json\n", "`rescue_ledger_malformed`"),
         (None, "No rescue event ledger was consulted"),
     ],
-    ids=["corpus-intervention", "torn-trailing-record", "malformed", "not-consulted"],
+    ids=[
+        "corpus-issue-intervention",
+        "corpus-pr-intervention",
+        "unattributed-event",
+        "torn-trailing-record",
+        "malformed",
+        "not-consulted",
+    ],
 )
 def test_rescue_ledger_gaps_mark_rescue_history_incomplete(
     tmp_path: Path,
