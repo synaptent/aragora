@@ -695,17 +695,32 @@ readiness-typecheck-operator:
 	cd aragora-operator && go build ./... && go vet ./... && \
 	$(READINESS_DONE)
 
+# Unit tests only: -short skips the controller tests that need a Kubernetes
+# API server; readiness-heavy-operator runs those.
 readiness-test-operator:
 	@$(READINESS_T0); \
 	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
-	cd aragora-operator && go test ./... -count=1 && \
+	cd aragora-operator && go test ./... -short -count=1 && \
 	$(READINESS_DONE)
 
 # golangci-lint v2 (config aragora-operator/.golangci.yml; pin
-# GOLANGCI_LINT_VERSION in aragora-operator/Makefile). No ports.
+# GOLANGCI_LINT_VERSION in aragora-operator/Makefile), then the envtest
+# controller suite against the binaries in $KUBEBUILDER_ASSETS (see the Test
+# section of aragora-operator/README.md). Each step skips on its own when its
+# tool is missing. No ports: the suite binds 127.0.0.1:0 unless told otherwise.
 readiness-heavy-operator:
 	@$(READINESS_T0); \
 	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
-	command -v golangci-lint >/dev/null 2>&1 || { echo "SKIP operator: golangci-lint not found (cd aragora-operator && make golangci-lint, then put its bin/ on PATH)"; exit 0; }; \
-	cd aragora-operator && golangci-lint run ./... --timeout 5m && \
+	cd aragora-operator || exit 1; \
+	if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./... --timeout 5m || exit 1; \
+	else \
+		echo "SKIP operator: golangci-lint not found (cd aragora-operator && make golangci-lint, then put its bin/ on PATH)"; \
+	fi; \
+	if [ -n "$$KUBEBUILDER_ASSETS" ]; then \
+		go test ./... -count=1 -timeout 5m -coverprofile=cover.out || exit 1; \
+		go tool cover -func=cover.out | tail -n 1; \
+	else \
+		echo "SKIP operator: KUBEBUILDER_ASSETS not set, envtest suite not run (see aragora-operator/README.md, Test)"; \
+	fi; \
 	$(READINESS_DONE)
