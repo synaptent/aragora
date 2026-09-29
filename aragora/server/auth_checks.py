@@ -232,6 +232,12 @@ class AuthChecksMixin:
             "/api/v1/health/detailed",
             "/api/v1/health/deep",
             "/api/v1/health/stores",
+            # Build identity (sha, version, build time): public by the handler's
+            # own contract (handlers/admin/health/build.py PUBLIC_ROUTES) so an
+            # operator can confirm what is deployed from outside.
+            "/health/build",
+            "/api/health/build",
+            "/api/v1/health/build",
             # ODR signing-key trust anchor (issue #8804): serves only the
             # PUBLIC Ed25519 key so external auditors can verify receipts.
             # Unauthenticated by design, like any /.well-known resource.

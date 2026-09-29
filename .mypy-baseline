@@ -2743,7 +2743,6 @@ scripts/capability_gap_report.py:0: error: Need type annotation for "gaps"  [var
 scripts/check_docs_consistency.py:0: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
 scripts/check_test_dependencies.py:0: error: "str" has no attribute "group"  [attr-defined]
 scripts/check_test_dependencies.py:0: error: Incompatible types in assignment (expression has type "list[str]", variable has type "EntryPoints")  [assignment]
-scripts/check_version_alignment.py:0: error: Item "None" of "Match[str] | None" has no attribute "group"  [union-attr]
 scripts/cleanup_nomic_state.py:0: error: Incompatible types in assignment (expression has type "float", target has type "int")  [assignment]
 scripts/cleanup_nomic_state.py:0: error: Incompatible types in assignment (expression has type "float", target has type "int")  [assignment]
 scripts/cleanup_nomic_state.py:0: error: Incompatible types in assignment (expression has type "float", target has type "int")  [assignment]
