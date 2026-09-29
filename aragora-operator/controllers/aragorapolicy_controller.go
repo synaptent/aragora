@@ -370,11 +370,11 @@ func (r *AragoraPolicyReconciler) convertToAPIPolicy(policy *aragorav1alpha1.Ara
 	// Convert model restrictions
 	for _, mr := range policy.Spec.ModelRestrictions {
 		apiPolicy.ModelRestrictions = append(apiPolicy.ModelRestrictions, aragora.ModelRestriction{
-			Name:               mr.Name,
-			Allowed:            mr.Allowed,
-			MaxRequestsPerHour: mr.MaxRequestsPerHour,
+			Name:                mr.Name,
+			Allowed:             mr.Allowed,
+			MaxRequestsPerHour:  mr.MaxRequestsPerHour,
 			MaxTokensPerRequest: mr.MaxTokensPerRequest,
-			AllowedOperations:  mr.AllowedOperations,
+			AllowedOperations:   mr.AllowedOperations,
 		})
 	}
 

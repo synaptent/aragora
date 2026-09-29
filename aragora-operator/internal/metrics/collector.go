@@ -44,9 +44,9 @@ type Collector struct {
 	policyConflicts  *prometheus.GaugeVec
 
 	// Control plane communication metrics
-	apiRequestsTotal    *prometheus.CounterVec
-	apiRequestDuration  *prometheus.HistogramVec
-	apiRequestErrors    *prometheus.CounterVec
+	apiRequestsTotal   *prometheus.CounterVec
+	apiRequestDuration *prometheus.HistogramVec
+	apiRequestErrors   *prometheus.CounterVec
 }
 
 // NewCollector creates a new metrics collector
