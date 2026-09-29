@@ -6,6 +6,26 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-09-28)
+
+#### Breaking Changes
+
+Contract-drift batch 5 removes 3 TypeScript operations whose routes no server
+handler implements. Each SDK path, with its `/api/v1` and legacy twin, was
+dispatched through the real `HANDLER_REGISTRY` as an owner and as an admin: each
+answered `handler_no_result`, and no FastAPI route matches it. The Python SDK is
+unchanged; its `ap_automation.add_invoice()` (sync and async) still calls
+`POST /api/v1/ap/invoices` and is left for a later change. A Migration cell names
+an alternative only where that route was dispatched and served.
+`UnsubscriptionResult`, used only by `crossPollination.unsubscribe` and not
+re-exported from `src/namespaces/index.ts`, is deleted with it.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `crossPollination.unsubscribe` | `DELETE /api/v1/cross-pollination/subscribers/{id}` | No replacement |
+| `apAutomation.addAPInvoice` | `POST /api/v1/ap/invoices` | No replacement: `apAutomation.addInvoice()` calls `POST /api/v1/accounting/ap/invoices`, which answers `handler_no_result` too |
+| `policies.resolveViolation` | `POST /api/policies/violations/{id}/resolve` | No typed TypeScript call. Send `{ "status": "resolved", "resolution_notes": "..." }` with `PATCH /api/v1/compliance/violations/{id}` (Python: `policies.update_violation(violation_id, "resolved")`). `compliance.updateViolation()` sends `PUT`, which that route does not dispatch |
+
 ### Unreleased (2026-09-27)
 
 #### Breaking Changes
