@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 _scripts_dir = str(Path(__file__).resolve().parent.parent.parent / "scripts")
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
@@ -1439,3 +1441,231 @@ def test_main_publish_dir_with_json_keeps_stdout_json_and_reports_path_on_stderr
         / "rev-9"
         / "truth-20260414T080910Z.json"
     )
+
+
+def _observation_corpus(tmp_path: Path) -> Path:
+    return _write_json(
+        tmp_path / "corpus.json",
+        {
+            "corpus_id": "tw-01-bounded-execution-v1",
+            "revision": 7,
+            "recorded_on": "2026-08-19",
+            "success_contract": "mergeable_pr_or_merged_pr",
+            "issues": [
+                {"issue_id": 1064, "title": "Dependency bump"},
+                {"issue_id": 2712, "title": "Boolean parsing fix"},
+            ],
+        },
+    )
+
+
+def _observation_client() -> FakeGitHubTruthClient:
+    return FakeGitHubTruthClient(
+        issues={
+            1064: {
+                "title": "Dependency bump",
+                "closedByPullRequestsReferences": [
+                    {
+                        "number": 6001,
+                        "repository": {"name": "aragora", "owner": {"login": "synaptent"}},
+                    }
+                ],
+                "comments": [],
+            },
+            2712: {"title": "Boolean parsing fix", "comments": []},
+        },
+        prs={
+            6001: {
+                "number": 6001,
+                "title": "merged fix",
+                "url": "https://github.com/synaptent/aragora/pull/6001",
+                "state": "MERGED",
+                "mergeable": "MERGEABLE",
+                "mergeStateStatus": "CLEAN",
+                "mergedAt": "2026-04-13T12:00:00Z",
+                "isDraft": False,
+            }
+        },
+    )
+
+
+def _executed_rows_metrics(tmp_path: Path, *, elapsed: tuple[float, float]) -> Path:
+    metrics_path = tmp_path / "boss_metrics.jsonl"
+    rows = [
+        {
+            "issue_number": 1064,
+            "terminal_class": "deliverable_pr_created",
+            "publish_action": "pr_created",
+            "elapsed_seconds": elapsed[0],
+        },
+        {
+            "issue_number": 2712,
+            "terminal_class": "rescue_worker_crash",
+            "elapsed_seconds": elapsed[1],
+        },
+    ]
+    metrics_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+    return metrics_path
+
+
+def _build_observed_artifact(
+    tmp_path: Path, *, metrics_path: Path, rescue_ledger_path: Path | None
+) -> dict:
+    return mod.build_benchmark_truth_artifact(
+        repo="synaptent/aragora",
+        metrics_file=metrics_path,
+        corpus_path=_observation_corpus(tmp_path),
+        client=_observation_client(),
+        generated_at="2026-09-29T01:59:04Z",
+        rescue_ledger_path=rescue_ledger_path,
+    )
+
+
+def test_recurrence_placeholder_rows_leave_rescue_and_elapsed_unobserved(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # Reproduce the rows the daily recurrence writes for closed and
+    # label-skipped corpus issues, via the real producer.
+    import run_benchmark_corpus_recurrence as recurrence
+    from aragora.swarm import boss_loop_outcome
+
+    monkeypatch.setattr(boss_loop_outcome, "load_category_success_rates", lambda **_: {})
+    metrics_path = tmp_path / "boss_metrics.jsonl"
+    recurrence.append_closed_issue_rows(
+        metrics_file=metrics_path,
+        closed_issue_numbers=[1064],
+        issue_titles={1064: "Dependency bump"},
+    )
+    recurrence.append_skipped_open_issue_rows(
+        metrics_file=metrics_path,
+        skipped_issue_numbers=[2712],
+        issue_titles={2712: "Boolean parsing fix"},
+        skip_label_map={2712: ["boss-stuck"]},
+        start_iteration=2,
+    )
+    rows = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
+    assert [row["terminal_class"] for row in rows] == [
+        "issue_already_resolved",
+        "blocked_not_dispatch_bounded",
+    ]
+
+    artifact = _build_observed_artifact(
+        tmp_path,
+        metrics_path=metrics_path,
+        rescue_ledger_path=tmp_path / "missing" / "rescue_events.jsonl",
+    )
+
+    assert artifact["observation_status"] == {
+        "raw_inputs": "available",
+        "elapsed_time": "unmeasured",
+        "rescue_history": "incomplete",
+        "raw_input_replay": "unmeasured",
+    }
+    limits = artifact["observation_limits"]
+    assert limits["non_authoritative_fields"] == list(mod.RESCUE_DEPENDENT_FIELDS)
+    assert limits["issues_without_executed_attempt"] == [1064, 2712]
+    assert "`rescue_ledger_missing`" in limits["reason"]
+    assert "#1064, #2712 have no executed attempt" in limits["reason"]
+    assert artifact["rescue_ledger"]["status"] == "unavailable"
+    assert artifact["rescue_ledger"]["error_code"] == "rescue_ledger_missing"
+    # Values are retained; the markers above are what demote them.
+    issue_1064 = next(item for item in artifact["issues"] if item["issue_number"] == 1064)
+    assert issue_1064["had_rescue"] is False
+    assert issue_1064["no_rescue_truth_success"] is True
+    assert artifact["rescue_counts_by_type"] == {}
+
+
+def test_executed_attempts_and_fully_read_ledger_mark_rescue_history_complete(
+    tmp_path: Path,
+) -> None:
+    ledger_path = tmp_path / "rescue_events.jsonl"
+    ledger_path.write_text(
+        json.dumps({"event_type": "manual_merge", "reason": "other issue", "issue_number": 9999})
+        + "\n"
+        + json.dumps({"event_type": "session_restart", "reason": "no issue"})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    artifact = _build_observed_artifact(
+        tmp_path,
+        metrics_path=_executed_rows_metrics(tmp_path, elapsed=(120.0, 30.0)),
+        rescue_ledger_path=ledger_path,
+    )
+
+    assert artifact["observation_status"] == {
+        "raw_inputs": "available",
+        "elapsed_time": "measured",
+        "rescue_history": "complete",
+        "raw_input_replay": "unmeasured",
+    }
+    assert "observation_limits" not in artifact
+    assert artifact["rescue_ledger"]["status"] == "available"
+    assert artifact["rescue_ledger"]["event_count"] == 2
+    assert artifact["rescue_ledger"]["corpus_event_issue_numbers"] == []
+    assert artifact["rescue_counts_by_type"] == {"rescue_worker_crash": 1}
+
+
+def test_executed_attempt_without_elapsed_sample_marks_elapsed_incomplete(
+    tmp_path: Path,
+) -> None:
+    ledger_path = tmp_path / "rescue_events.jsonl"
+    ledger_path.write_text("", encoding="utf-8")
+
+    artifact = _build_observed_artifact(
+        tmp_path,
+        metrics_path=_executed_rows_metrics(tmp_path, elapsed=(120.0, 0.0)),
+        rescue_ledger_path=ledger_path,
+    )
+
+    assert artifact["observation_status"]["elapsed_time"] == "incomplete"
+    assert artifact["observation_status"]["rescue_history"] == "complete"
+    # The truth artifact publishes no elapsed values, so nothing is demoted.
+    assert "observation_limits" not in artifact
+
+
+@pytest.mark.parametrize(
+    ("ledger_content", "reason_fragment"),
+    [
+        (
+            json.dumps({"event_type": "manual_merge", "reason": "hand merge", "issue_number": 1064})
+            + "\n",
+            "interventions on corpus issue(s) #1064",
+        ),
+        (
+            json.dumps({"event_type": "manual_merge", "reason": "ok"})
+            + "\n"
+            + '{"event_type": "manual_merge", "reason": "torn", "issue_n',
+            "1 torn trailing rescue ledger record(s)",
+        ),
+        ("not json\n", "`rescue_ledger_malformed`"),
+        (None, "No rescue event ledger was consulted"),
+    ],
+    ids=["corpus-intervention", "torn-trailing-record", "malformed", "not-consulted"],
+)
+def test_rescue_ledger_gaps_mark_rescue_history_incomplete(
+    tmp_path: Path,
+    ledger_content: str | None,
+    reason_fragment: str,
+) -> None:
+    ledger_path: Path | None = None
+    if ledger_content is not None:
+        ledger_path = tmp_path / "rescue_events.jsonl"
+        ledger_path.write_text(ledger_content, encoding="utf-8")
+
+    artifact = _build_observed_artifact(
+        tmp_path,
+        metrics_path=_executed_rows_metrics(tmp_path, elapsed=(120.0, 30.0)),
+        rescue_ledger_path=ledger_path,
+    )
+
+    assert artifact["observation_status"]["rescue_history"] == "incomplete"
+    limits = artifact["observation_limits"]
+    assert reason_fragment in limits["reason"]
+    assert limits["non_authoritative_fields"] == list(mod.RESCUE_DEPENDENT_FIELDS)
+    # Every corpus issue had an executed attempt; only the ledger is short.
+    assert "issues_without_executed_attempt" not in limits
