@@ -117,7 +117,7 @@ func (c *Client) GetAgentStatus(ctx context.Context) (map[string]aragorav1alpha1
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -147,7 +147,7 @@ func (c *Client) GetHealth(ctx context.Context) (*HealthStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -172,7 +172,7 @@ func (c *Client) ApplyPolicy(ctx context.Context, policy *Policy) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -188,7 +188,7 @@ func (c *Client) DeletePolicy(ctx context.Context, policyID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -203,7 +203,7 @@ func (c *Client) GetAffectedWorkspaces(ctx context.Context, policyID string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -230,7 +230,7 @@ func (c *Client) RegisterInstance(ctx context.Context, instance *InstanceRegistr
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -245,7 +245,7 @@ func (c *Client) DeregisterInstance(ctx context.Context, instanceID string) erro
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -276,7 +276,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, instanceID string, status *I
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -302,7 +302,7 @@ func (c *Client) GetClusterMetrics(ctx context.Context, clusterName string) (*Cl
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -348,4 +348,11 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body []byte
 	}
 
 	return c.httpClient.Do(req)
+}
+
+// closeBody closes a response body from a deferred call. A close error cannot
+// change the outcome of a request whose result is already decided, so it is
+// discarded.
+func closeBody(body io.Closer) {
+	_ = body.Close()
 }

@@ -1,0 +1,5 @@
+# Tool binaries installed by the Makefile (LOCALBIN) and the manager build output
+/bin/
+
+# Coverage profile written by `make test`
+/cover.out

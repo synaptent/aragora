@@ -84,7 +84,7 @@ func (r *AragoraClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	r.MetricsCollector.RecordReconciliation("AragoraCluster", cluster.Name)
 
 	// Handle deletion
-	if !cluster.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !cluster.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, log, cluster)
 	}
 

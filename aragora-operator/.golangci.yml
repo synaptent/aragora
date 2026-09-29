@@ -1,0 +1,30 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - dupl
+    - gocyclo
+    - misspell
+  # revive is not enabled: its default rules report 12 findings today
+  # (missing doc/package comments, unused parameters), and any finding fails
+  # the run.
+  settings:
+    dupl:
+      threshold: 150
+    gocyclo:
+      # The most complex functions today score 15; anything above fails.
+      min-complexity: 16
+
+formatters:
+  enable:
+    - gofmt
+
+issues:
+  # Report every finding; the defaults hide repeats of the same message.
+  max-issues-per-linter: 0
+  max-same-issues: 0

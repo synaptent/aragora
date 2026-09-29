@@ -79,7 +79,7 @@ func (r *AragoraInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	r.MetricsCollector.RecordReconciliation("AragoraInstance", instance.Name)
 
 	// Handle deletion
-	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !instance.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, log, instance)
 	}
 

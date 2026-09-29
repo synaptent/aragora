@@ -75,7 +75,7 @@ func (r *AragoraPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	r.MetricsCollector.RecordReconciliation("AragoraPolicy", policy.Name)
 
 	// Handle deletion
-	if !policy.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !policy.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, log, policy)
 	}
 
@@ -278,7 +278,7 @@ func (r *AragoraPolicyReconciler) checkRateLimitConflict(policy *aragorav1alpha1
 			return &aragorav1alpha1.PolicyConflict{
 				PolicyName:   other.Name,
 				ConflictType: "rate_limit",
-				Description:  fmt.Sprintf("Conflicting debates per minute limits"),
+				Description:  "Conflicting debates per minute limits",
 			}
 		}
 	}
