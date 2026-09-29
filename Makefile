@@ -395,7 +395,7 @@ READINESS_DONE = echo "[readiness] $@ ok ($$(( $$(date +%s) - start ))s)"
 .PHONY: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 .PHONY: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
 .PHONY: readiness-test-root readiness-test-debate readiness-test-verify readiness-test-live readiness-test-docs readiness-test-vscode readiness-test-operator
-.PHONY: readiness-heavy-live readiness-heavy-docs readiness-heavy-vscode
+.PHONY: readiness-heavy-live readiness-heavy-docs readiness-heavy-vscode readiness-heavy-operator
 
 readiness-lint: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 readiness-typecheck: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
@@ -673,26 +673,39 @@ readiness-heavy-vscode:
 	$(READINESS_DONE)
 
 # --- operator (aragora-operator, Go) ----------------------------------------
-# `gofmt -l` is advisory here: two files are unformatted at mission-base and
-# M9 owns the operator source; go vet is the gating step.
+# gofmt fails on any tracked Go file it would reformat (an empty file list
+# would make gofmt read stdin, so it fails instead).
 readiness-lint-operator:
 	@$(READINESS_T0); \
 	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
 	command -v gofmt >/dev/null 2>&1 || { echo "SKIP operator: gofmt not found"; exit 0; }; \
-	cd aragora-operator && \
-	unformatted=$$(gofmt -l .) && \
-	{ [ -z "$$unformatted" ] || echo "gofmt (advisory until M9) would reformat: $$unformatted"; } && \
-	go vet ./... && \
+	command -v python3 >/dev/null 2>&1 || { echo "SKIP operator: python3 not found"; exit 0; }; \
+	command -v git >/dev/null 2>&1 || { echo "SKIP operator: git not found"; exit 0; }; \
+	[ -n "$$(cd aragora-operator && git ls-files '*.go')" ] || { echo "readiness-lint-operator: no tracked Go files"; exit 1; }; \
+	unformatted=$$(cd aragora-operator && gofmt -l $$(git ls-files '*.go')) || exit 1; \
+	[ -z "$$unformatted" ] || { echo "gofmt would reformat (run gofmt -w):"; echo "$$unformatted"; exit 1; }; \
+	(cd aragora-operator && go vet ./...) && \
+	python3 scripts/ci/check_file_sizes.py --glob 'aragora-operator/**/*.go' \
+		--baseline scripts/baselines/operator-file-sizes.json && \
 	$(READINESS_DONE)
 
 readiness-typecheck-operator:
 	@$(READINESS_T0); \
 	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
-	cd aragora-operator && go build ./... && \
+	cd aragora-operator && go build ./... && go vet ./... && \
 	$(READINESS_DONE)
 
 readiness-test-operator:
 	@$(READINESS_T0); \
 	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
 	cd aragora-operator && go test ./... -count=1 && \
+	$(READINESS_DONE)
+
+# golangci-lint v2 (config aragora-operator/.golangci.yml; pin
+# GOLANGCI_LINT_VERSION in aragora-operator/Makefile). No ports.
+readiness-heavy-operator:
+	@$(READINESS_T0); \
+	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
+	command -v golangci-lint >/dev/null 2>&1 || { echo "SKIP operator: golangci-lint not found (cd aragora-operator && make golangci-lint, then put its bin/ on PATH)"; exit 0; }; \
+	cd aragora-operator && golangci-lint run ./... --timeout 5m && \
 	$(READINESS_DONE)

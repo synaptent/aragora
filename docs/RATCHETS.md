@@ -221,6 +221,7 @@ appends its baselines here, one row per file:
 | `scripts/baselines/docs-broken-links.json` | `readiness-heavy-docs` (build + link gate; never the three aggregates) | `node docs-site/scripts/check_broken_links.mjs --update` (runs `docusaurus build`; `--log <file>` reuses a saved build log; growth needs `--allow-grow --reason "<why>"`) |
 | `scripts/baselines/vscode-knip.json` | `readiness-lint-vscode` | `python scripts/ci/check_tool_baseline.py --tool knip --cwd ide/vscode-aragora --baseline scripts/baselines/vscode-knip.json --update -- npx knip --reporter json` |
 | `scripts/baselines/vscode-file-sizes.json` (file-size census format) | `readiness-lint-vscode` | `python scripts/ci/check_file_sizes.py --glob 'ide/vscode-aragora/src/**/*.ts' --glob 'ide/vscode-aragora/webview-ui/src/**/*.{ts,tsx}' --baseline scripts/baselines/vscode-file-sizes.json --freeze` |
+| `scripts/baselines/operator-file-sizes.json` (file-size census format) | `readiness-lint-operator` | `python scripts/ci/check_file_sizes.py --glob 'aragora-operator/**/*.go' --baseline scripts/baselines/operator-file-sizes.json --freeze` |
 
 The convention for every row: the regeneration command is the wired check
 command plus `--update`, run from the repository root, e.g.

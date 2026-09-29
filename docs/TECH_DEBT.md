@@ -40,6 +40,7 @@ counts and the number of files are recorded separately below.
 | Docs broken links (Docusaurus `onBrokenLinks: 'warn'` report; one key per page route and link as written, 54 occurrences; the build stays green, this ratchet enforces) | `scripts/baselines/docs-broken-links.json` | 54 | Docs site maintainers | `node docs-site/scripts/check_broken_links.mjs --update` (runs `docusaurus build`; add `--log <file>` to reuse a saved build log) |
 | VS Code extension knip (unused files, dependencies, exports and types; plain `npx knip` also exits 0) | `scripts/baselines/vscode-knip.json` | 0 | VS Code extension maintainers | `python scripts/ci/check_tool_baseline.py --tool knip --cwd ide/vscode-aragora --baseline scripts/baselines/vscode-knip.json --update -- npx knip --reporter json` |
 | VS Code extension file size (2,000 lines; extension and webview-ui sources) | `scripts/baselines/vscode-file-sizes.json` | 0 | VS Code extension maintainers | `python scripts/ci/check_file_sizes.py --glob 'ide/vscode-aragora/src/**/*.ts' --glob 'ide/vscode-aragora/webview-ui/src/**/*.{ts,tsx}' --baseline scripts/baselines/vscode-file-sizes.json --freeze` |
+| Operator file size (2,000 lines; every Go file, including generated deepcopy) | `scripts/baselines/operator-file-sizes.json` | 0 | Operator maintainers | `python scripts/ci/check_file_sizes.py --glob 'aragora-operator/**/*.go' --baseline scripts/baselines/operator-file-sizes.json --freeze` |
 
 ### ESLint suppression growth_log
 
