@@ -58,21 +58,24 @@ export function GauntletDashboard({
     }
   }, [apiBase, authToken, verdictFilter]);
 
-  const fetchHeatmap = useCallback(async (gauntletId: string) => {
-    try {
-      setHeatmapError(null);
-      const response = await fetch(`${apiBase}/api/gauntlet/${gauntletId}/heatmap`);
-      if (response.ok) {
-        const data = await response.json();
-        setHeatmapData(data);
-      } else {
-        setHeatmapError('Failed to load heatmap data.');
+  const fetchHeatmap = useCallback(
+    async (gauntletId: string) => {
+      try {
+        setHeatmapError(null);
+        const response = await fetch(`${apiBase}/api/gauntlet/${gauntletId}/heatmap`);
+        if (response.ok) {
+          const data = await response.json();
+          setHeatmapData(data);
+        } else {
+          setHeatmapError('Failed to load heatmap data.');
+        }
+      } catch (err) {
+        logger.error('Failed to fetch heatmap:', err);
+        setHeatmapError('Unable to load heatmap. Please try again.');
       }
-    } catch (err) {
-      logger.error('Failed to fetch heatmap:', err);
-      setHeatmapError('Unable to load heatmap. Please try again.');
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     fetchResults();
@@ -108,16 +111,27 @@ export function GauntletDashboard({
 
   // Summary stats
   const summary = useMemo(() => {
-    const passed = results.filter(r => ['PASS', 'APPROVED'].includes(r.verdict)).length;
-    const conditional = results.filter(r => ['CONDITIONAL', 'APPROVED_WITH_CONDITIONS', 'NEEDS_REVIEW'].includes(r.verdict)).length;
-    const failed = results.filter(r => ['FAIL', 'REJECTED'].includes(r.verdict)).length;
+    const passed = results.filter((r) => ['PASS', 'APPROVED'].includes(r.verdict)).length;
+    const conditional = results.filter((r) =>
+      ['CONDITIONAL', 'APPROVED_WITH_CONDITIONS', 'NEEDS_REVIEW'].includes(r.verdict),
+    ).length;
+    const failed = results.filter((r) => ['FAIL', 'REJECTED'].includes(r.verdict)).length;
     const totalCritical = results.reduce((sum, r) => sum + (r.critical_count || 0), 0);
     const totalHigh = results.reduce((sum, r) => sum + (r.high_count || 0), 0);
-    const avgRobustness = results.length > 0
-      ? results.reduce((sum, r) => sum + (r.robustness_score || 0), 0) / results.length
-      : 0;
+    const avgRobustness =
+      results.length > 0
+        ? results.reduce((sum, r) => sum + (r.robustness_score || 0), 0) / results.length
+        : 0;
 
-    return { passed, conditional, failed, totalCritical, totalHigh, avgRobustness, total: results.length };
+    return {
+      passed,
+      conditional,
+      failed,
+      totalCritical,
+      totalHigh,
+      avgRobustness,
+      total: results.length,
+    };
   }, [results]);
 
   return (
@@ -140,14 +154,30 @@ export function GauntletDashboard({
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <StatCard label="TOTAL RUNS" value={summary.total} icon={'\u{1F3C3}'} />
         <StatCard label="PASSED" value={summary.passed} color="acid-green" icon={'\u2713'} />
-        <StatCard label="CONDITIONAL" value={summary.conditional} color="acid-yellow" icon={'\u26A0'} />
+        <StatCard
+          label="CONDITIONAL"
+          value={summary.conditional}
+          color="acid-yellow"
+          icon={'\u26A0'}
+        />
         <StatCard label="FAILED" value={summary.failed} color="acid-red" icon={'\u2717'} />
-        <StatCard label="CRITICAL ISSUES" value={summary.totalCritical} color="acid-red" icon={'\u{1F6A8}'} />
+        <StatCard
+          label="CRITICAL ISSUES"
+          value={summary.totalCritical}
+          color="acid-red"
+          icon={'\u{1F6A8}'}
+        />
         <StatCard label="HIGH ISSUES" value={summary.totalHigh} color="warning" icon={'\u26A0'} />
         <StatCard
           label="AVG ROBUSTNESS"
           value={`${(summary.avgRobustness * 100).toFixed(0)}%`}
-          color={summary.avgRobustness > 0.7 ? 'acid-green' : summary.avgRobustness > 0.4 ? 'acid-yellow' : 'acid-red'}
+          color={
+            summary.avgRobustness > 0.7
+              ? 'acid-green'
+              : summary.avgRobustness > 0.4
+                ? 'acid-yellow'
+                : 'acid-red'
+          }
           icon={'\u{1F6E1}'}
         />
       </div>
@@ -155,7 +185,7 @@ export function GauntletDashboard({
       {/* Filters */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-theme-data text-text-muted">FILTER:</span>
-        {['PASS', 'CONDITIONAL', 'FAIL'].map(verdict => (
+        {['PASS', 'CONDITIONAL', 'FAIL'].map((verdict) => (
           <button
             key={verdict}
             onClick={() => setVerdictFilter(verdictFilter === verdict ? null : verdict)}
@@ -234,7 +264,7 @@ export function GauntletDashboard({
                 No gauntlet runs found
               </div>
             )}
-            {results.map(result => (
+            {results.map((result) => (
               <ResultRow
                 key={result.gauntlet_id}
                 result={result}
@@ -332,7 +362,9 @@ export function GauntletDashboard({
           {/* Heatmap */}
           {selectedResult && (heatmapData || heatmapError) && (
             <div className="bg-surface border border-acid-yellow/30 rounded-lg p-4">
-              <h3 className="font-theme-data text-[var(--acid-yellow)] text-sm mb-4">RISK HEATMAP</h3>
+              <h3 className="font-theme-data text-[var(--acid-yellow)] text-sm mb-4">
+                RISK HEATMAP
+              </h3>
               {heatmapError ? (
                 <div className="p-3 bg-warning/10 border border-warning/30 rounded text-warning font-theme-data text-sm">
                   {heatmapError}
@@ -347,14 +379,18 @@ export function GauntletDashboard({
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs font-theme-data pt-4 border-t border-border">
-        {Object.entries(VERDICT_CONFIG).slice(0, 5).map(([verdict, config]) => (
-          <div key={verdict} className="flex items-center gap-2">
-            <div className={`w-4 h-4 rounded ${config.bg} ${config.border} border flex items-center justify-center`}>
-              <span className={config.text}>{config.icon}</span>
+        {Object.entries(VERDICT_CONFIG)
+          .slice(0, 5)
+          .map(([verdict, config]) => (
+            <div key={verdict} className="flex items-center gap-2">
+              <div
+                className={`w-4 h-4 rounded ${config.bg} ${config.border} border flex items-center justify-center`}
+              >
+                <span className={config.text}>{config.icon}</span>
+              </div>
+              <span className="text-text-muted">{verdict}</span>
             </div>
-            <span className="text-text-muted">{verdict}</span>
-          </div>
-        ))}
+          ))}
       </div>
     </div>
   );

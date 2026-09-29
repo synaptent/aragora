@@ -26,11 +26,7 @@ describe('DocumentUpload', () => {
     mockFetch.mockReset();
   });
 
-  const createFile = (
-    name: string,
-    type: string,
-    size: number = 1024
-  ): File => {
+  const createFile = (name: string, type: string, size: number = 1024): File => {
     const content = new Array(size).fill('x').join('');
     return new File([content], name, { type });
   };
@@ -150,7 +146,7 @@ describe('DocumentUpload', () => {
       const input = document.querySelector('input[type="file"]') as HTMLInputElement;
       const file = createFile(
         'valid.docx',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       );
 
       await waitFor(() => {
@@ -366,12 +362,7 @@ describe('DocumentUpload', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            document: {
-              id: 'doc-remove',
-              filename: 'removable.pdf',
-              word_count: 100,
-              preview: '',
-            },
+            document: { id: 'doc-remove', filename: 'removable.pdf', word_count: 100, preview: '' },
           }),
       });
 
@@ -435,12 +426,7 @@ describe('DocumentUpload', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            document: {
-              id: 'doc-1',
-              filename: 'first.pdf',
-              word_count: 100,
-              preview: '',
-            },
+            document: { id: 'doc-1', filename: 'first.pdf', word_count: 100, preview: '' },
           }),
       });
 
@@ -489,12 +475,7 @@ describe('DocumentUpload', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            document: {
-              id: 'doc-drop',
-              filename: 'dropped.pdf',
-              word_count: 100,
-              preview: '',
-            },
+            document: { id: 'doc-drop', filename: 'dropped.pdf', word_count: 100, preview: '' },
           }),
       });
 
@@ -503,9 +484,7 @@ describe('DocumentUpload', () => {
       const dropZone = screen.getByRole('button', { name: /upload a document/i });
       const file = createFile('dropped.pdf', 'application/pdf');
 
-      const dataTransfer = {
-        files: [file],
-      };
+      const dataTransfer = { files: [file] };
 
       fireEvent.drop(dropZone, { dataTransfer });
 
@@ -551,12 +530,7 @@ describe('DocumentUpload', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            document: {
-              id: 'doc-api',
-              filename: 'test.pdf',
-              word_count: 100,
-              preview: '',
-            },
+            document: { id: 'doc-api', filename: 'test.pdf', word_count: 100, preview: '' },
           }),
       });
 
@@ -570,7 +544,7 @@ describe('DocumentUpload', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'https://api.example.com/api/documents/upload',
-          expect.any(Object)
+          expect.any(Object),
         );
       });
     });

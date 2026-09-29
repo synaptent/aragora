@@ -8,11 +8,7 @@
  */
 
 import { memo, useCallback } from 'react';
-import {
-  PIPELINE_STAGE_CONFIG,
-  STAGE_COLOR_CLASSES,
-  type PipelineStageType,
-} from './types';
+import { PIPELINE_STAGE_CONFIG, STAGE_COLOR_CLASSES, type PipelineStageType } from './types';
 
 export interface TransitionSuggestion {
   node_id: string;
@@ -81,9 +77,7 @@ export const AutoTransitionSuggestion = memo(function AutoTransitionSuggestion({
                 />
               ))}
               {group.length > 5 && (
-                <div className="text-xs text-text-muted pl-2">
-                  + {group.length - 5} more
-                </div>
+                <div className="text-xs text-text-muted pl-2">+ {group.length - 5} more</div>
               )}
             </div>
           </div>

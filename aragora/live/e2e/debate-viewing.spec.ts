@@ -1,11 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect, mockApiResponse, mockDebate } from './fixtures';
 
-async function mockSavedDebateEndpoints(
-  page: Page,
-  debateId: string,
-  payload = mockDebate,
-) {
+async function mockSavedDebateEndpoints(page: Page, debateId: string, payload = mockDebate) {
   await mockApiResponse(page, `**/api/v1/debates/public/${debateId}`, { data: payload });
   await mockApiResponse(page, `**/api/v1/playground/debate/${debateId}`, { data: payload });
   await mockApiResponse(page, `**/api/debates/${debateId}`, payload);
@@ -25,7 +21,9 @@ test.describe('Debate Viewing', () => {
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');
 
-    const topicHeading = page.getByRole('heading', { name: new RegExp(mockDebate.topic, 'i') }).first();
+    const topicHeading = page
+      .getByRole('heading', { name: new RegExp(mockDebate.topic, 'i') })
+      .first();
     await expect(topicHeading).toBeVisible({ timeout: 10000 });
   });
 
@@ -109,21 +107,14 @@ test.describe('Debate Viewing - Real-time Updates', () => {
       });
     });
 
-    const liveDebate = {
-      ...mockDebate,
-      id: 'live-debate',
-      status: 'running',
-    };
+    const liveDebate = { ...mockDebate, id: 'live-debate', status: 'running' };
     await mockSavedDebateEndpoints(page, 'live-debate', liveDebate);
 
     await page.goto('/debate/live-debate');
     await aragoraPage.dismissAllOverlays();
 
     // WebSocket should be attempted (may not connect in test env)
-    await Promise.race([
-      wsConnected,
-      page.waitForTimeout(5000),
-    ]);
+    await Promise.race([wsConnected, page.waitForTimeout(5000)]);
   });
 });
 
@@ -135,9 +126,10 @@ test.describe('Debate Viewing - Interaction', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Find collapsible sections or any expandable content
-    const collapseButton = page.locator('button, [role="button"]').filter({
-      hasText: /collapse|expand|show|hide|analysis|panels/i
-    }).first();
+    const collapseButton = page
+      .locator('button, [role="button"]')
+      .filter({ hasText: /collapse|expand|show|hide|analysis|panels/i })
+      .first();
 
     if (await collapseButton.isVisible().catch(() => false)) {
       await aragoraPage.dismissConnectivityWarning();

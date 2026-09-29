@@ -9,20 +9,47 @@ interface ThemeOption {
 }
 
 const SunIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="8" cy="8" r="3" />
     <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.17 3.17l1.06 1.06M11.77 11.77l1.06 1.06M3.17 12.83l1.06-1.06M11.77 4.23l1.06-1.06" />
   </svg>
 );
 
 const MoonIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M13.5 8.5a5.5 5.5 0 01-7.78 1.22A5.5 5.5 0 018 2.5a4.5 4.5 0 005.5 6z" />
   </svg>
 );
 
 const SaturnIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="8" cy="8" r="3.5" />
     <ellipse cx="8" cy="8" rx="7" ry="2.5" transform="rotate(-30 8 8)" />
   </svg>
@@ -47,7 +74,10 @@ export function ThemeSelector() {
           border: '1px solid var(--border)',
         }}
       >
-        <span className="w-20 h-7 animate-pulse" style={{ backgroundColor: 'var(--border)', borderRadius: 'var(--radius-card)' }} />
+        <span
+          className="w-20 h-7 animate-pulse"
+          style={{ backgroundColor: 'var(--border)', borderRadius: 'var(--radius-card)' }}
+        />
       </div>
     );
   }

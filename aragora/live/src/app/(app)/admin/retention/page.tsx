@@ -7,11 +7,7 @@ import { AsciiBannerCompact } from '@/components/AsciiBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
-import {
-  usePruning,
-  PrunableItem,
-  PruneHistoryEntry,
-} from '@/hooks/usePruning';
+import { usePruning, PrunableItem, PruneHistoryEntry } from '@/hooks/usePruning';
 
 // ---------------------------------------------------------------------------
 // Tier colors (matching admin/memory convention)
@@ -52,19 +48,119 @@ const DEMO_TIER_SUMMARY: TierSummary[] = [
 ];
 
 const DEMO_PRUNABLE: PrunableItem[] = [
-  { node_id: 'n-401', content_preview: 'Outdated API v1 migration notes...', staleness_score: 0.97, confidence: 0.12, retrieval_count: 0, last_retrieved_at: null, tier: 'glacial', created_at: '2025-08-15T09:00:00Z', prune_reason: 'Stale, zero retrievals for 6 months', recommended_action: 'delete' },
-  { node_id: 'n-402', content_preview: 'Draft consensus on logging format...', staleness_score: 0.93, confidence: 0.25, retrieval_count: 1, last_retrieved_at: '2025-10-02T11:00:00Z', tier: 'slow', created_at: '2025-09-01T14:00:00Z', prune_reason: 'Low confidence, superseded by newer entry', recommended_action: 'archive' },
-  { node_id: 'n-403', content_preview: 'Test fixture patterns for resilience...', staleness_score: 0.91, confidence: 0.31, retrieval_count: 2, last_retrieved_at: '2025-11-20T08:00:00Z', tier: 'slow', created_at: '2025-07-22T16:00:00Z', prune_reason: 'Confidence decayed below threshold', recommended_action: 'demote' },
-  { node_id: 'n-404', content_preview: 'Spike: evaluate NATS vs Kafka for events...', staleness_score: 0.95, confidence: 0.18, retrieval_count: 0, last_retrieved_at: null, tier: 'medium', created_at: '2025-06-10T10:00:00Z', prune_reason: 'Decision made, spike obsolete', recommended_action: 'archive' },
-  { node_id: 'n-405', content_preview: 'Temp debug notes on memory leak in ws...', staleness_score: 0.99, confidence: 0.05, retrieval_count: 0, last_retrieved_at: null, tier: 'fast', created_at: '2026-01-28T23:00:00Z', prune_reason: 'Ephemeral debug content, no value', recommended_action: 'delete' },
+  {
+    node_id: 'n-401',
+    content_preview: 'Outdated API v1 migration notes...',
+    staleness_score: 0.97,
+    confidence: 0.12,
+    retrieval_count: 0,
+    last_retrieved_at: null,
+    tier: 'glacial',
+    created_at: '2025-08-15T09:00:00Z',
+    prune_reason: 'Stale, zero retrievals for 6 months',
+    recommended_action: 'delete',
+  },
+  {
+    node_id: 'n-402',
+    content_preview: 'Draft consensus on logging format...',
+    staleness_score: 0.93,
+    confidence: 0.25,
+    retrieval_count: 1,
+    last_retrieved_at: '2025-10-02T11:00:00Z',
+    tier: 'slow',
+    created_at: '2025-09-01T14:00:00Z',
+    prune_reason: 'Low confidence, superseded by newer entry',
+    recommended_action: 'archive',
+  },
+  {
+    node_id: 'n-403',
+    content_preview: 'Test fixture patterns for resilience...',
+    staleness_score: 0.91,
+    confidence: 0.31,
+    retrieval_count: 2,
+    last_retrieved_at: '2025-11-20T08:00:00Z',
+    tier: 'slow',
+    created_at: '2025-07-22T16:00:00Z',
+    prune_reason: 'Confidence decayed below threshold',
+    recommended_action: 'demote',
+  },
+  {
+    node_id: 'n-404',
+    content_preview: 'Spike: evaluate NATS vs Kafka for events...',
+    staleness_score: 0.95,
+    confidence: 0.18,
+    retrieval_count: 0,
+    last_retrieved_at: null,
+    tier: 'medium',
+    created_at: '2025-06-10T10:00:00Z',
+    prune_reason: 'Decision made, spike obsolete',
+    recommended_action: 'archive',
+  },
+  {
+    node_id: 'n-405',
+    content_preview: 'Temp debug notes on memory leak in ws...',
+    staleness_score: 0.99,
+    confidence: 0.05,
+    retrieval_count: 0,
+    last_retrieved_at: null,
+    tier: 'fast',
+    created_at: '2026-01-28T23:00:00Z',
+    prune_reason: 'Ephemeral debug content, no value',
+    recommended_action: 'delete',
+  },
 ];
 
 const DEMO_HISTORY: PruneHistoryEntry[] = [
-  { history_id: 'h-001', executed_at: '2026-02-24T02:00:00Z', policy_id: 'auto-nightly', action: 'archive', items_pruned: 14, pruned_item_ids: [], reason: 'Scheduled nightly retention sweep', executed_by: 'system' },
-  { history_id: 'h-002', executed_at: '2026-02-23T14:30:00Z', policy_id: 'manual', action: 'delete', items_pruned: 3, pruned_item_ids: [], reason: 'Admin manual cleanup', executed_by: 'admin@aragora.ai' },
-  { history_id: 'h-003', executed_at: '2026-02-23T02:00:00Z', policy_id: 'auto-nightly', action: 'archive', items_pruned: 9, pruned_item_ids: [], reason: 'Scheduled nightly retention sweep', executed_by: 'system' },
-  { history_id: 'h-004', executed_at: '2026-02-22T16:12:00Z', policy_id: 'confidence-decay', action: 'demote', items_pruned: 22, pruned_item_ids: [], reason: 'Confidence decay below 0.15 threshold', executed_by: 'system' },
-  { history_id: 'h-005', executed_at: '2026-02-22T02:00:00Z', policy_id: 'auto-nightly', action: 'archive', items_pruned: 11, pruned_item_ids: [], reason: 'Scheduled nightly retention sweep', executed_by: 'system' },
+  {
+    history_id: 'h-001',
+    executed_at: '2026-02-24T02:00:00Z',
+    policy_id: 'auto-nightly',
+    action: 'archive',
+    items_pruned: 14,
+    pruned_item_ids: [],
+    reason: 'Scheduled nightly retention sweep',
+    executed_by: 'system',
+  },
+  {
+    history_id: 'h-002',
+    executed_at: '2026-02-23T14:30:00Z',
+    policy_id: 'manual',
+    action: 'delete',
+    items_pruned: 3,
+    pruned_item_ids: [],
+    reason: 'Admin manual cleanup',
+    executed_by: 'admin@aragora.ai',
+  },
+  {
+    history_id: 'h-003',
+    executed_at: '2026-02-23T02:00:00Z',
+    policy_id: 'auto-nightly',
+    action: 'archive',
+    items_pruned: 9,
+    pruned_item_ids: [],
+    reason: 'Scheduled nightly retention sweep',
+    executed_by: 'system',
+  },
+  {
+    history_id: 'h-004',
+    executed_at: '2026-02-22T16:12:00Z',
+    policy_id: 'confidence-decay',
+    action: 'demote',
+    items_pruned: 22,
+    pruned_item_ids: [],
+    reason: 'Confidence decay below 0.15 threshold',
+    executed_by: 'system',
+  },
+  {
+    history_id: 'h-005',
+    executed_at: '2026-02-22T02:00:00Z',
+    policy_id: 'auto-nightly',
+    action: 'archive',
+    items_pruned: 11,
+    pruned_item_ids: [],
+    reason: 'Scheduled nightly retention sweep',
+    executed_by: 'system',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -73,21 +169,31 @@ const DEMO_HISTORY: PruneHistoryEntry[] = [
 
 const actionIcon = (action: string) => {
   switch (action) {
-    case 'archive': return '[A]';
-    case 'delete': return '[D]';
-    case 'demote': return '[v]';
-    case 'flag': return '[!]';
-    default: return '[-]';
+    case 'archive':
+      return '[A]';
+    case 'delete':
+      return '[D]';
+    case 'demote':
+      return '[v]';
+    case 'flag':
+      return '[!]';
+    default:
+      return '[-]';
   }
 };
 
 const actionColor = (action: string) => {
   switch (action) {
-    case 'archive': return 'text-[var(--acid-cyan)]';
-    case 'delete': return 'text-[var(--crimson)]';
-    case 'demote': return 'text-[var(--acid-yellow)]';
-    case 'flag': return 'text-purple-400';
-    default: return 'text-text-muted';
+    case 'archive':
+      return 'text-[var(--acid-cyan)]';
+    case 'delete':
+      return 'text-[var(--crimson)]';
+    case 'demote':
+      return 'text-[var(--acid-yellow)]';
+    case 'flag':
+      return 'text-purple-400';
+    default:
+      return 'text-text-muted';
   }
 };
 
@@ -132,7 +238,7 @@ export default function RetentionDashboardPage() {
             demoted: Math.round(t.count * 0.04),
             forgotten: Math.round(t.count * 0.03),
             consolidated: Math.round(t.count * 0.03),
-          }))
+          })),
         );
         return;
       }
@@ -171,12 +277,7 @@ export default function RetentionDashboardPage() {
   }, [backendConfig.api]);
 
   const loadAll = useCallback(async () => {
-    await Promise.all([
-      getPrunableItems(),
-      getHistory(),
-      fetchTierSummary(),
-      fetchSurpriseData(),
-    ]);
+    await Promise.all([getPrunableItems(), getHistory(), fetchTierSummary(), fetchSurpriseData()]);
     setInitialLoad(false);
   }, [getPrunableItems, getHistory, fetchTierSummary, fetchSurpriseData]);
 
@@ -196,9 +297,10 @@ export default function RetentionDashboardPage() {
   const totalConsolidated = displayTiers.reduce((s, t) => s + t.consolidated, 0);
 
   const toggleItem = (id: string) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -222,7 +324,7 @@ export default function RetentionDashboardPage() {
     await loadAll();
   };
 
-  const maxSurprise = Math.max(...surpriseData.map(b => b.count), 1);
+  const maxSurprise = Math.max(...surpriseData.map((b) => b.count), 1);
 
   return (
     <>
@@ -237,7 +339,10 @@ export default function RetentionDashboardPage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/admin" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)]">
+              <Link
+                href="/admin"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)]"
+              >
                 [ADMIN]
               </Link>
               <BackendSelector compact />
@@ -252,11 +357,15 @@ export default function RetentionDashboardPage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <div className="text-xs font-theme-data text-text-muted mb-1">
-                  <Link href="/admin" className="hover:text-[var(--accent)]">Admin</Link>
+                  <Link href="/admin" className="hover:text-[var(--accent)]">
+                    Admin
+                  </Link>
                   <span className="mx-2">/</span>
                   <span className="text-[var(--accent)]">Retention &amp; Pruning</span>
                 </div>
-                <h1 className="text-2xl font-theme-data text-[var(--accent)]">Retention &amp; Pruning Dashboard</h1>
+                <h1 className="text-2xl font-theme-data text-[var(--accent)]">
+                  Retention &amp; Pruning Dashboard
+                </h1>
                 <p className="text-text-muted font-theme-data text-sm mt-1">
                   Retention gating, confidence decay, and memory lifecycle management
                 </p>
@@ -302,7 +411,9 @@ export default function RetentionDashboardPage() {
 
             {initialLoad && isLoading ? (
               <div className="card p-8 text-center">
-                <div className="animate-pulse font-theme-data text-text-muted">Loading retention data...</div>
+                <div className="animate-pulse font-theme-data text-text-muted">
+                  Loading retention data...
+                </div>
               </div>
             ) : (
               <>
@@ -310,37 +421,56 @@ export default function RetentionDashboardPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="card p-4">
                     <div className="text-xs font-theme-data text-text-muted mb-1">RETAINED</div>
-                    <div className="text-2xl font-theme-data text-[var(--accent)]">{totalRetained.toLocaleString()}</div>
+                    <div className="text-2xl font-theme-data text-[var(--accent)]">
+                      {totalRetained.toLocaleString()}
+                    </div>
                   </div>
                   <div className="card p-4">
                     <div className="text-xs font-theme-data text-text-muted mb-1">DEMOTED</div>
-                    <div className="text-2xl font-theme-data text-[var(--acid-yellow)]">{totalDemoted.toLocaleString()}</div>
+                    <div className="text-2xl font-theme-data text-[var(--acid-yellow)]">
+                      {totalDemoted.toLocaleString()}
+                    </div>
                   </div>
                   <div className="card p-4">
                     <div className="text-xs font-theme-data text-text-muted mb-1">FORGOTTEN</div>
-                    <div className="text-2xl font-theme-data text-[var(--crimson)]">{totalForgotten.toLocaleString()}</div>
+                    <div className="text-2xl font-theme-data text-[var(--crimson)]">
+                      {totalForgotten.toLocaleString()}
+                    </div>
                   </div>
                   <div className="card p-4">
                     <div className="text-xs font-theme-data text-text-muted mb-1">CONSOLIDATED</div>
-                    <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{totalConsolidated.toLocaleString()}</div>
+                    <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                      {totalConsolidated.toLocaleString()}
+                    </div>
                   </div>
                 </div>
 
                 {/* Memory Tier Breakdown */}
                 <div className="card p-4 mb-6">
-                  <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">Memory Tier Breakdown</h3>
+                  <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
+                    Memory Tier Breakdown
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {displayTiers.map((tier) => (
-                      <div key={tier.tier} className={`p-3 rounded border border-border ${TIER_BG[tier.tier] ?? 'bg-surface'}`}>
-                        <div className={`font-theme-data font-bold text-sm mb-2 ${TIER_COLORS[tier.tier] ?? 'text-text'}`}>
+                      <div
+                        key={tier.tier}
+                        className={`p-3 rounded border border-border ${TIER_BG[tier.tier] ?? 'bg-surface'}`}
+                      >
+                        <div
+                          className={`font-theme-data font-bold text-sm mb-2 ${TIER_COLORS[tier.tier] ?? 'text-text'}`}
+                        >
                           {tier.tier.toUpperCase()}
                         </div>
-                        <div className="text-2xl font-theme-data mb-2">{tier.count.toLocaleString()}</div>
+                        <div className="text-2xl font-theme-data mb-2">
+                          {tier.count.toLocaleString()}
+                        </div>
                         <div className="grid grid-cols-2 gap-1 text-xs font-theme-data">
                           <div className="text-[var(--accent)]">Retained: {tier.retained}</div>
                           <div className="text-[var(--acid-yellow)]">Demoted: {tier.demoted}</div>
                           <div className="text-[var(--crimson)]">Forgotten: {tier.forgotten}</div>
-                          <div className="text-[var(--acid-cyan)]">Consolidated: {tier.consolidated}</div>
+                          <div className="text-[var(--acid-cyan)]">
+                            Consolidated: {tier.consolidated}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -350,7 +480,8 @@ export default function RetentionDashboardPage() {
                 {/* Surprise-Score Distribution */}
                 <div className="card p-4 mb-6">
                   <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
-                    Surprise-Score Distribution <span className="text-text-muted">(MIRAS/Titans)</span>
+                    Surprise-Score Distribution{' '}
+                    <span className="text-text-muted">(MIRAS/Titans)</span>
                   </h3>
                   <div className="flex items-end gap-1 h-32">
                     {surpriseData.map((bucket) => (
@@ -395,16 +526,25 @@ export default function RetentionDashboardPage() {
                           <th className="text-left py-2 pr-2 text-text-muted text-xs w-8"></th>
                           <th className="text-left py-2 pr-4 text-text-muted text-xs">CONTENT</th>
                           <th className="text-left py-2 pr-4 text-text-muted text-xs">TIER</th>
-                          <th className="text-center py-2 pr-4 text-text-muted text-xs">STALENESS</th>
-                          <th className="text-center py-2 pr-4 text-text-muted text-xs">CONFIDENCE</th>
-                          <th className="text-center py-2 pr-4 text-text-muted text-xs">RETRIEVALS</th>
+                          <th className="text-center py-2 pr-4 text-text-muted text-xs">
+                            STALENESS
+                          </th>
+                          <th className="text-center py-2 pr-4 text-text-muted text-xs">
+                            CONFIDENCE
+                          </th>
+                          <th className="text-center py-2 pr-4 text-text-muted text-xs">
+                            RETRIEVALS
+                          </th>
                           <th className="text-left py-2 pr-4 text-text-muted text-xs">REASON</th>
                           <th className="text-left py-2 text-text-muted text-xs">ACTION</th>
                         </tr>
                       </thead>
                       <tbody>
                         {displayPrunable.map((item) => (
-                          <tr key={item.node_id} className="border-b border-border/50 hover:bg-surface/50">
+                          <tr
+                            key={item.node_id}
+                            className="border-b border-border/50 hover:bg-surface/50"
+                          >
                             <td className="py-2 pr-2">
                               <input
                                 type="checkbox"
@@ -413,26 +553,46 @@ export default function RetentionDashboardPage() {
                                 className="accent-acid-green"
                               />
                             </td>
-                            <td className="py-2 pr-4 max-w-xs truncate" title={item.content_preview}>
+                            <td
+                              className="py-2 pr-4 max-w-xs truncate"
+                              title={item.content_preview}
+                            >
                               {item.content_preview}
                             </td>
-                            <td className={`py-2 pr-4 text-xs ${TIER_COLORS[item.tier] ?? 'text-text-muted'}`}>
+                            <td
+                              className={`py-2 pr-4 text-xs ${TIER_COLORS[item.tier] ?? 'text-text-muted'}`}
+                            >
                               {item.tier}
                             </td>
                             <td className="py-2 pr-4 text-center">
-                              <span className={item.staleness_score >= 0.95 ? 'text-[var(--crimson)]' : 'text-[var(--acid-yellow)]'}>
+                              <span
+                                className={
+                                  item.staleness_score >= 0.95
+                                    ? 'text-[var(--crimson)]'
+                                    : 'text-[var(--acid-yellow)]'
+                                }
+                              >
                                 {(item.staleness_score * 100).toFixed(0)}%
                               </span>
                             </td>
                             <td className="py-2 pr-4 text-center">
-                              <span className={item.confidence < 0.2 ? 'text-[var(--crimson)]' : 'text-text-muted'}>
+                              <span
+                                className={
+                                  item.confidence < 0.2
+                                    ? 'text-[var(--crimson)]'
+                                    : 'text-text-muted'
+                                }
+                              >
                                 {(item.confidence * 100).toFixed(0)}%
                               </span>
                             </td>
                             <td className="py-2 pr-4 text-center text-text-muted">
                               {item.retrieval_count}
                             </td>
-                            <td className="py-2 pr-4 text-xs text-text-muted max-w-xs truncate" title={item.prune_reason}>
+                            <td
+                              className="py-2 pr-4 text-xs text-text-muted max-w-xs truncate"
+                              title={item.prune_reason}
+                            >
                               {item.prune_reason}
                             </td>
                             <td className={`py-2 text-xs ${actionColor(item.recommended_action)}`}>
@@ -447,7 +607,9 @@ export default function RetentionDashboardPage() {
 
                 {/* Recent Retention Decisions */}
                 <div className="card p-4">
-                  <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">Recent Retention Decisions</h3>
+                  <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
+                    Recent Retention Decisions
+                  </h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm font-theme-data">
                       <thead>
@@ -462,7 +624,10 @@ export default function RetentionDashboardPage() {
                       </thead>
                       <tbody>
                         {displayHistory.map((entry) => (
-                          <tr key={entry.history_id} className="border-b border-border/50 hover:bg-surface/50">
+                          <tr
+                            key={entry.history_id}
+                            className="border-b border-border/50 hover:bg-surface/50"
+                          >
                             <td className="py-2 pr-4 text-text-muted text-xs">
                               {new Date(entry.executed_at).toLocaleString()}
                             </td>
@@ -470,8 +635,13 @@ export default function RetentionDashboardPage() {
                             <td className={`py-2 pr-4 text-xs ${actionColor(entry.action)}`}>
                               {actionIcon(entry.action)} {entry.action}
                             </td>
-                            <td className="py-2 pr-4 text-center text-[var(--acid-cyan)]">{entry.items_pruned}</td>
-                            <td className="py-2 pr-4 text-xs text-text-muted max-w-xs truncate" title={entry.reason}>
+                            <td className="py-2 pr-4 text-center text-[var(--acid-cyan)]">
+                              {entry.items_pruned}
+                            </td>
+                            <td
+                              className="py-2 pr-4 text-xs text-text-muted max-w-xs truncate"
+                              title={entry.reason}
+                            >
                               {entry.reason}
                             </td>
                             <td className="py-2 text-xs text-text-muted">{entry.executed_by}</td>

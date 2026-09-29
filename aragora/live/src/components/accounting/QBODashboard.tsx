@@ -5,12 +5,7 @@ import { API_BASE_URL } from '@/config';
 import { TransactionList } from './TransactionList';
 import { ReportGenerator } from './ReportGenerator';
 import { useAuth } from '@/context/AuthContext';
-import {
-  DEMO_COMPANY,
-  DEMO_DASHBOARD_STATS,
-  DEMO_CUSTOMERS,
-  DEMO_TRANSACTIONS,
-} from '@/fixtures';
+import { DEMO_COMPANY, DEMO_DASHBOARD_STATS, DEMO_CUSTOMERS, DEMO_TRANSACTIONS } from '@/fixtures';
 
 type DashboardTab = 'overview' | 'transactions' | 'customers' | 'reports';
 
@@ -131,7 +126,7 @@ export function QBODashboard() {
       <div className="animate-pulse space-y-6">
         <div className="h-8 bg-[var(--surface)] rounded w-1/3" />
         <div className="grid grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-24 bg-[var(--surface)] rounded" />
           ))}
         </div>
@@ -147,8 +142,8 @@ export function QBODashboard() {
           Connect QuickBooks Online
         </h2>
         <p className="text-[var(--text-muted)] mb-6 max-w-md mx-auto">
-          Connect your QuickBooks Online account to sync transactions, generate reports,
-          and get AI-powered insights into your finances.
+          Connect your QuickBooks Online account to sync transactions, generate reports, and get
+          AI-powered insights into your finances.
         </p>
         <button
           onClick={handleConnect}
@@ -175,9 +170,7 @@ export function QBODashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-theme-data text-[var(--acid-green)]">
-            {'>'} QUICKBOOKS
-          </h1>
+          <h1 className="text-xl font-theme-data text-[var(--acid-green)]">{'>'} QUICKBOOKS</h1>
           {company && (
             <p className="text-sm text-[var(--text-muted)] mt-1">
               Connected to <span className="text-[var(--acid-cyan)]">{company.name}</span>
@@ -200,7 +193,7 @@ export function QBODashboard() {
 
       {/* Tabs */}
       <div className="flex border-b border-[var(--border)]">
-        {tabs.map(tab => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -251,7 +244,8 @@ export function QBODashboard() {
                 <div>
                   <h3 className="text-sm font-theme-data text-red-400">Overdue Invoices</h3>
                   <p className="text-xs text-[var(--text-muted)]">
-                    You have {stats.overdueInvoices} overdue invoice{stats.overdueInvoices !== 1 ? 's' : ''} requiring attention.
+                    You have {stats.overdueInvoices} overdue invoice
+                    {stats.overdueInvoices !== 1 ? 's' : ''} requiring attention.
                   </p>
                 </div>
                 <button className="ml-auto px-3 py-1 text-xs font-theme-data border border-red-500/30 text-red-400 rounded hover:bg-red-500/10 transition-colors">
@@ -267,29 +261,34 @@ export function QBODashboard() {
               {'>'} RECENT ACTIVITY
             </h3>
             <div className="space-y-3">
-              {transactions.slice(0, 5).map(txn => (
+              {transactions.slice(0, 5).map((txn) => (
                 <div
                   key={txn.id}
                   className="flex items-center justify-between p-3 bg-[var(--bg)] rounded"
                 >
                   <div className="flex items-center gap-3">
-                    <span className={`w-2 h-2 rounded-full ${
-                      txn.status === 'Paid' ? 'bg-green-400' :
-                      txn.status === 'Overdue' ? 'bg-red-400' : 'bg-yellow-400'
-                    }`} />
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        txn.status === 'Paid'
+                          ? 'bg-green-400'
+                          : txn.status === 'Overdue'
+                            ? 'bg-red-400'
+                            : 'bg-yellow-400'
+                      }`}
+                    />
                     <div>
-                      <div className="text-sm font-theme-data">
-                        {txn.docNumber || txn.type}
-                      </div>
+                      <div className="text-sm font-theme-data">{txn.docNumber || txn.type}</div>
                       <div className="text-xs text-[var(--text-muted)]">
                         {txn.customerName || txn.vendorName}
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`text-sm font-theme-data ${
-                      txn.type === 'Invoice' ? 'text-[var(--acid-green)]' : 'text-red-400'
-                    }`}>
+                    <div
+                      className={`text-sm font-theme-data ${
+                        txn.type === 'Invoice' ? 'text-[var(--acid-green)]' : 'text-red-400'
+                      }`}
+                    >
                       {txn.type === 'Invoice' ? '+' : '-'}${txn.totalAmount.toLocaleString()}
                     </div>
                     <div className="text-xs text-[var(--text-muted)]">{txn.txnDate}</div>
@@ -329,9 +328,7 @@ export function QBODashboard() {
       )}
 
       {/* Transactions Tab */}
-      {activeTab === 'transactions' && (
-        <TransactionList transactions={transactions} />
-      )}
+      {activeTab === 'transactions' && <TransactionList transactions={transactions} />}
 
       {/* Customers Tab */}
       {activeTab === 'customers' && (
@@ -342,7 +339,7 @@ export function QBODashboard() {
             </h3>
           </div>
           <div className="divide-y divide-[var(--border)]">
-            {customers.map(customer => (
+            {customers.map((customer) => (
               <div
                 key={customer.id}
                 className="p-4 flex items-center justify-between hover:bg-[var(--bg)] transition-colors"
@@ -354,7 +351,9 @@ export function QBODashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`font-theme-data ${customer.balance > 0 ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}`}>
+                  <div
+                    className={`font-theme-data ${customer.balance > 0 ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}`}
+                  >
                     ${customer.balance.toLocaleString()}
                   </div>
                   <div className="text-xs text-[var(--text-muted)]">Balance</div>
@@ -366,9 +365,7 @@ export function QBODashboard() {
       )}
 
       {/* Reports Tab */}
-      {activeTab === 'reports' && (
-        <ReportGenerator />
-      )}
+      {activeTab === 'reports' && <ReportGenerator />}
     </div>
   );
 }
@@ -385,9 +382,7 @@ function StatCard({ label, value, color, sublabel }: StatCardProps) {
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
       <div className={`text-2xl font-theme-data font-bold ${color}`}>{value}</div>
       <div className="text-xs text-[var(--text-muted)] mt-1">{label}</div>
-      {sublabel && (
-        <div className="text-xs text-[var(--text-muted)] opacity-70">{sublabel}</div>
-      )}
+      {sublabel && <div className="text-xs text-[var(--text-muted)] opacity-70">{sublabel}</div>}
     </div>
   );
 }
@@ -400,8 +395,12 @@ interface InsightCardProps {
 }
 
 function InsightCard({ icon, title, description, type }: InsightCardProps) {
-  const borderColor = type === 'positive' ? 'border-green-500/30' :
-                      type === 'warning' ? 'border-yellow-500/30' : 'border-[var(--border)]';
+  const borderColor =
+    type === 'positive'
+      ? 'border-green-500/30'
+      : type === 'warning'
+        ? 'border-yellow-500/30'
+        : 'border-[var(--border)]';
 
   return (
     <div className={`p-3 bg-[var(--bg)] rounded border-l-2 ${borderColor}`}>

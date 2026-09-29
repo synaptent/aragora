@@ -11,41 +11,39 @@ export interface ExecutionTimelineProps {
   onStepClick?: (step: ExecutionStep) => void;
 }
 
-const statusStyles: Record<
-  StepStatus,
-  { bg: string; border: string; dot: string; text: string }
-> = {
-  pending: {
-    bg: 'bg-gray-900/20',
-    border: 'border-gray-700',
-    dot: 'bg-gray-500',
-    text: 'text-gray-400',
-  },
-  running: {
-    bg: 'bg-blue-900/20',
-    border: 'border-blue-700',
-    dot: 'bg-blue-400 animate-pulse',
-    text: 'text-blue-400',
-  },
-  completed: {
-    bg: 'bg-green-900/20',
-    border: 'border-green-700',
-    dot: 'bg-green-400',
-    text: 'text-green-400',
-  },
-  failed: {
-    bg: 'bg-red-900/20',
-    border: 'border-red-700',
-    dot: 'bg-red-400',
-    text: 'text-red-400',
-  },
-  skipped: {
-    bg: 'bg-yellow-900/20',
-    border: 'border-yellow-700',
-    dot: 'bg-yellow-400',
-    text: 'text-yellow-400',
-  },
-};
+const statusStyles: Record<StepStatus, { bg: string; border: string; dot: string; text: string }> =
+  {
+    pending: {
+      bg: 'bg-gray-900/20',
+      border: 'border-gray-700',
+      dot: 'bg-gray-500',
+      text: 'text-gray-400',
+    },
+    running: {
+      bg: 'bg-blue-900/20',
+      border: 'border-blue-700',
+      dot: 'bg-blue-400 animate-pulse',
+      text: 'text-blue-400',
+    },
+    completed: {
+      bg: 'bg-green-900/20',
+      border: 'border-green-700',
+      dot: 'bg-green-400',
+      text: 'text-green-400',
+    },
+    failed: {
+      bg: 'bg-red-900/20',
+      border: 'border-red-700',
+      dot: 'bg-red-400',
+      text: 'text-red-400',
+    },
+    skipped: {
+      bg: 'bg-yellow-900/20',
+      border: 'border-yellow-700',
+      dot: 'bg-yellow-400',
+      text: 'text-yellow-400',
+    },
+  };
 
 const statusLabels: Record<StepStatus, string> = {
   pending: 'Pending',
@@ -71,11 +69,7 @@ const stepTypeIcons: Record<string, string> = {
 /**
  * Timeline visualization for workflow execution steps.
  */
-export function ExecutionTimeline({
-  steps,
-  currentStepId,
-  onStepClick,
-}: ExecutionTimelineProps) {
+export function ExecutionTimeline({ steps, currentStepId, onStepClick }: ExecutionTimelineProps) {
   if (steps.length === 0) {
     return (
       <div className="text-center py-8 text-text-muted">
@@ -124,9 +118,7 @@ export function ExecutionTimeline({
                 {/* Header */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">
-                      {stepTypeIcons[step.step_type] || '📦'}
-                    </span>
+                    <span className="text-lg">{stepTypeIcons[step.step_type] || '📦'}</span>
                     <div>
                       <div className="text-sm font-theme-data text-text">{step.name}</div>
                       <div className="text-xs text-text-muted">{step.step_type}</div>

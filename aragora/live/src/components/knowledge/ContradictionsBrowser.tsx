@@ -72,8 +72,16 @@ const CONTRADICTION_TYPE_LABELS: Record<string, string> = {
 
 const RESOLUTION_OPTIONS: { value: ResolutionStrategy; label: string; description: string }[] = [
   { value: 'prefer_newer', label: 'Prefer Newer', description: 'Keep the more recent item' },
-  { value: 'prefer_higher_confidence', label: 'Prefer Higher Confidence', description: 'Keep the item with higher confidence' },
-  { value: 'prefer_more_sources', label: 'Prefer More Sources', description: 'Keep the item backed by more sources' },
+  {
+    value: 'prefer_higher_confidence',
+    label: 'Prefer Higher Confidence',
+    description: 'Keep the item with higher confidence',
+  },
+  {
+    value: 'prefer_more_sources',
+    label: 'Prefer More Sources',
+    description: 'Keep the item backed by more sources',
+  },
   { value: 'merge', label: 'Merge', description: 'Combine into a nuanced item' },
   { value: 'human_review', label: 'Flag for Review', description: 'Escalate for manual review' },
   { value: 'keep_both', label: 'Keep Both', description: 'Mark as disputed, keep both' },
@@ -88,7 +96,9 @@ type SeverityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 function SeverityBadge({ severity }: { severity: string }) {
   const style = SEVERITY_STYLES[severity] ?? SEVERITY_STYLES.low;
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${style.bg} ${style.text} ${style.border}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${style.bg} ${style.text} ${style.border}`}
+    >
       {severity.toUpperCase()}
     </span>
   );
@@ -111,7 +121,13 @@ function ConflictScoreBar({ score, label }: { score: number; label: string }) {
   );
 }
 
-function ResolutionStatusBadge({ resolved, resolution }: { resolved: boolean; resolution: string | null }) {
+function ResolutionStatusBadge({
+  resolved,
+  resolution,
+}: {
+  resolved: boolean;
+  resolution: string | null;
+}) {
   if (!resolved) {
     return (
       <span className="px-2 py-0.5 text-[10px] font-theme-data rounded border bg-amber-900/20 text-amber-400 border-amber-500/30">
@@ -166,76 +182,73 @@ export function ContradictionsBrowser() {
   const [showResolveFor, setShowResolveFor] = useState<string | null>(null);
 
   // Fetch contradictions list
-  const endpoint = severityFilter === 'all'
-    ? '/api/v1/knowledge/mound/contradictions'
-    : `/api/v1/knowledge/mound/contradictions?min_severity=${severityFilter}`;
+  const endpoint =
+    severityFilter === 'all'
+      ? '/api/v1/knowledge/mound/contradictions'
+      : `/api/v1/knowledge/mound/contradictions?min_severity=${severityFilter}`;
 
   const {
     data: contradictionsData,
     error: contradictionsError,
     isLoading: contradictionsLoading,
     mutate: refreshContradictions,
-  } = useSWRFetch<ContradictionsResponse>(endpoint, {
-    refreshInterval: 60000,
-  });
+  } = useSWRFetch<ContradictionsResponse>(endpoint, { refreshInterval: 60000 });
 
   // Fetch contradiction stats
-  const {
-    data: statsData,
-    mutate: refreshStats,
-  } = useSWRFetch<ContradictionStatsResponse>('/api/v1/knowledge/mound/contradictions/stats', {
-    refreshInterval: 60000,
-  });
+  const { data: statsData, mutate: refreshStats } = useSWRFetch<ContradictionStatsResponse>(
+    '/api/v1/knowledge/mound/contradictions/stats',
+    { refreshInterval: 60000 },
+  );
 
   // Resolve a contradiction
-  const handleResolve = useCallback(async (contradictionId: string) => {
-    setResolvingId(contradictionId);
-    setResolveError(null);
+  const handleResolve = useCallback(
+    async (contradictionId: string) => {
+      setResolvingId(contradictionId);
+      setResolveError(null);
 
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/knowledge/mound/contradictions/${contradictionId}/resolve`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            strategy: selectedStrategy,
-            notes: resolutionNotes.trim() || undefined,
-          }),
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/v1/knowledge/mound/contradictions/${contradictionId}/resolve`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              strategy: selectedStrategy,
+              notes: resolutionNotes.trim() || undefined,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Resolution failed (${response.status})`);
         }
-      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Resolution failed (${response.status})`);
+        // Refresh data
+        await Promise.all([refreshContradictions(), refreshStats()]);
+        setShowResolveFor(null);
+        setResolutionNotes('');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Resolution failed';
+        setResolveError(message);
+        logger.error('Failed to resolve contradiction:', err);
+      } finally {
+        setResolvingId(null);
       }
-
-      // Refresh data
-      await Promise.all([refreshContradictions(), refreshStats()]);
-      setShowResolveFor(null);
-      setResolutionNotes('');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Resolution failed';
-      setResolveError(message);
-      logger.error('Failed to resolve contradiction:', err);
-    } finally {
-      setResolvingId(null);
-    }
-  }, [selectedStrategy, resolutionNotes, refreshContradictions, refreshStats]);
+    },
+    [selectedStrategy, resolutionNotes, refreshContradictions, refreshStats],
+  );
 
   // Trigger a new scan
   const [scanning, setScanning] = useState(false);
   const handleScan = useCallback(async () => {
     setScanning(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/knowledge/mound/contradictions/detect`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/v1/knowledge/mound/contradictions/detect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
 
       if (response.ok) {
         await Promise.all([refreshContradictions(), refreshStats()]);
@@ -339,7 +352,8 @@ export function ContradictionsBrowser() {
       {!contradictionsLoading && contradictions.length > 0 && (
         <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
           {contradictions.map((c) => {
-            const typeLabel = CONTRADICTION_TYPE_LABELS[c.contradiction_type] ?? c.contradiction_type;
+            const typeLabel =
+              CONTRADICTION_TYPE_LABELS[c.contradiction_type] ?? c.contradiction_type;
             const isResolving = resolvingId === c.id;
             const showResolve = showResolveFor === c.id;
 
@@ -391,7 +405,8 @@ export function ContradictionsBrowser() {
                 {/* Validation info */}
                 {c.validation_consensus && (
                   <div className="text-[10px] font-theme-data text-text-muted mb-2">
-                    Validation consensus: <span className="text-[var(--acid-cyan)]">{c.validation_consensus}</span>
+                    Validation consensus:{' '}
+                    <span className="text-[var(--acid-cyan)]">{c.validation_consensus}</span>
                     {c.validator_votes.length > 0 && (
                       <span className="ml-2">({c.validator_votes.length} votes)</span>
                     )}
@@ -399,11 +414,7 @@ export function ContradictionsBrowser() {
                 )}
 
                 {/* Notes */}
-                {c.notes && (
-                  <div className="text-xs text-text-muted mb-2 italic">
-                    {c.notes}
-                  </div>
-                )}
+                {c.notes && <div className="text-xs text-text-muted mb-2 italic">{c.notes}</div>}
 
                 {/* Resolution info for resolved items */}
                 {c.resolved && c.resolved_at && (

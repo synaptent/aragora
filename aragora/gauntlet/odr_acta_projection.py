@@ -290,36 +290,33 @@ def _is_rfc3339(value: str) -> bool:
     return int(match["offset_hour"]) <= 23 and int(match["offset_minute"]) <= 59
 
 
-def _shape_errors(envelope: Any) -> list[str]:
-    if not isinstance(envelope, Mapping):
-        return [f"envelope must be an object, got {type(envelope).__name__}"]
-    errors: list[str] = []
-    members = set(envelope)
-    if members != {"payload", "signature"}:
-        errors.append(
-            f"envelope members must be exactly payload, signature (got {_names(members)})"
-        )
-    signature = envelope.get("signature")
-    kid: Any = None
+def _signature_errors(signature: Any) -> tuple[list[str], Any]:
+    """Check the signature block and report the kid the payload must echo.
+
+    The kid is ``None`` whenever it cannot be read, which suppresses the
+    downstream issuer_id comparison rather than reporting it against a value
+    that was never supplied.
+    """
     if not isinstance(signature, Mapping):
-        errors.append("signature must be an object")
-    else:
-        if set(signature) != _SIGNATURE_MEMBERS:
-            errors.append(
-                f"signature members must be exactly alg, kid, sig (got {_names(set(signature))})"
-            )
-        if signature.get("alg") != ACTA_SIGNATURE_ALG:
-            errors.append(f"signature.alg must be {ACTA_SIGNATURE_ALG!r}")
-        kid = signature.get("kid")
-        if not isinstance(kid, str) or not kid:
-            errors.append("signature.kid must be a non-empty string")
-        sig = signature.get("sig")
-        if not isinstance(sig, str) or not _ED25519_SIG_HEX.fullmatch(sig):
-            errors.append("signature.sig must be a 128-character lowercase hex Ed25519 signature")
-    payload = envelope.get("payload")
-    if not isinstance(payload, Mapping):
-        errors.append("payload must be an object")
-        return errors
+        return ["signature must be an object"], None
+    errors: list[str] = []
+    if set(signature) != _SIGNATURE_MEMBERS:
+        errors.append(
+            f"signature members must be exactly alg, kid, sig (got {_names(set(signature))})"
+        )
+    if signature.get("alg") != ACTA_SIGNATURE_ALG:
+        errors.append(f"signature.alg must be {ACTA_SIGNATURE_ALG!r}")
+    kid = signature.get("kid")
+    if not isinstance(kid, str) or not kid:
+        errors.append("signature.kid must be a non-empty string")
+    sig = signature.get("sig")
+    if not isinstance(sig, str) or not _ED25519_SIG_HEX.fullmatch(sig):
+        errors.append("signature.sig must be a 128-character lowercase hex Ed25519 signature")
+    return errors, kid
+
+
+def _payload_errors(payload: Mapping[str, Any], kid: Any) -> list[str]:
+    errors: list[str] = []
     if set(payload) != _PAYLOAD_MEMBERS:
         errors.append(
             f"payload members must be exactly {_names(_PAYLOAD_MEMBERS)} (got {_names(set(payload))})"
@@ -339,6 +336,25 @@ def _shape_errors(envelope: Any) -> list[str]:
     errors.extend(_digest_errors(payload.get("payload_digest")))
     if not isinstance(payload.get("odr"), Mapping):
         errors.append("payload.odr must be the projected ODR document object")
+    return errors
+
+
+def _shape_errors(envelope: Any) -> list[str]:
+    if not isinstance(envelope, Mapping):
+        return [f"envelope must be an object, got {type(envelope).__name__}"]
+    errors: list[str] = []
+    members = set(envelope)
+    if members != {"payload", "signature"}:
+        errors.append(
+            f"envelope members must be exactly payload, signature (got {_names(members)})"
+        )
+    signature_errors, kid = _signature_errors(envelope.get("signature"))
+    errors.extend(signature_errors)
+    payload = envelope.get("payload")
+    if not isinstance(payload, Mapping):
+        errors.append("payload must be an object")
+        return errors
+    errors.extend(_payload_errors(payload, kid))
     return errors
 
 

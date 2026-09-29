@@ -58,21 +58,13 @@ export function GraphNode({ position, isSelected, onClick }: GraphNodeProps) {
 
       {/* Confidence indicator */}
       {node.confidence > 0 && (
-        <text
-          y={35}
-          textAnchor="middle"
-          className="text-[10px] font-theme-data fill-text-muted"
-        >
+        <text y={35} textAnchor="middle" className="text-[10px] font-theme-data fill-text-muted">
           {(node.confidence * 100).toFixed(0)}%
         </text>
       )}
 
       {/* Agent label */}
-      <text
-        y={-35}
-        textAnchor="middle"
-        className={`text-[10px] font-theme-data ${colors.text}`}
-      >
+      <text y={-35} textAnchor="middle" className={`text-[10px] font-theme-data ${colors.text}`}>
         {node.agent_id.slice(0, 8)}
       </text>
     </g>

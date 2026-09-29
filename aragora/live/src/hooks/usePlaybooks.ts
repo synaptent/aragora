@@ -102,10 +102,10 @@ export function usePlaybooks() {
   const runPlaybook = useCallback(
     async (playbookId: string, input: string, context?: Record<string, unknown>) => {
       try {
-        const result = await runApi.post(`/api/v1/playbooks/${encodeURIComponent(playbookId)}/run`, {
-          input,
-          context: context ?? {},
-        });
+        const result = await runApi.post(
+          `/api/v1/playbooks/${encodeURIComponent(playbookId)}/run`,
+          { input, context: context ?? {} },
+        );
         return result;
       } catch {
         return null;

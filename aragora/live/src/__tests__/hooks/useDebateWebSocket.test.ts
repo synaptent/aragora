@@ -78,7 +78,7 @@ describe('useDebateWebSocket', () => {
     jest.useRealTimers();
     jest.clearAllTimers();
     // Close all mock WebSocket instances to prevent memory leaks
-    MockWebSocket.instances.forEach(ws => {
+    MockWebSocket.instances.forEach((ws) => {
       if (ws.readyState !== 3) ws.readyState = 3;
     });
     MockWebSocket.instances = [];
@@ -90,9 +90,7 @@ describe('useDebateWebSocket', () => {
 
   describe('initial state', () => {
     it('should start with connecting status', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       expect(result.current.status).toBe('connecting');
       expect(result.current.error).toBeNull();
@@ -104,9 +102,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should not create WebSocket when disabled', () => {
-      renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1', enabled: false })
-      );
+      renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1', enabled: false }));
 
       expect(MockWebSocket.instances.length).toBe(0);
     });
@@ -115,10 +111,7 @@ describe('useDebateWebSocket', () => {
   describe('connection lifecycle', () => {
     it('should connect to WebSocket with correct URL', () => {
       renderHook(() =>
-        useDebateWebSocket({
-          debateId: 'test-debate-1',
-          wsUrl: 'wss://custom.ws.url/ws',
-        })
+        useDebateWebSocket({ debateId: 'test-debate-1', wsUrl: 'wss://custom.ws.url/ws' }),
       );
 
       expect(getLatestWs().url).toBe('wss://custom.ws.url/ws');
@@ -127,17 +120,13 @@ describe('useDebateWebSocket', () => {
     it('uses the selected runtime backend when wsUrl is omitted', () => {
       localStorage.setItem('aragora-backend', 'production');
 
-      renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       expect(getLatestWs().url).toBe('wss://api.aragora.ai/ws');
     });
 
     it('should set status to streaming on open', async () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -150,9 +139,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should subscribe to debate on open', () => {
-      renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       // Get the WebSocket instance before simulating open
       const ws = getLatestWs();
@@ -171,9 +158,7 @@ describe('useDebateWebSocket', () => {
 
     it('should attempt reconnection on WebSocket error + close', () => {
       // The hook's onerror doesn't set error status - it lets onclose handle it
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateError();
@@ -187,9 +172,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should set status to complete on close when streaming', async () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -209,9 +192,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should clean up WebSocket on unmount', () => {
-      const { unmount } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { unmount } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       const ws = getLatestWs();
       act(() => {
@@ -226,20 +207,14 @@ describe('useDebateWebSocket', () => {
 
   describe('debate events', () => {
     it('should scope sync events using top-level debate_id and payload id', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'sync',
           debate_id: 'test-debate-1',
-          data: {
-            id: 'test-debate-1',
-            task: 'Scoped sync task',
-            agents: ['Agent A', 'Agent B'],
-          },
+          data: { id: 'test-debate-1', task: 'Scoped sync task', agents: ['Agent A', 'Agent B'] },
         });
       });
 
@@ -248,18 +223,13 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should handle debate_start event', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'debate_start',
-          data: {
-            task: 'Should AI be regulated?',
-            agents: ['Agent A', 'Agent B'],
-          },
+          data: { task: 'Should AI be regulated?', agents: ['Agent A', 'Agent B'] },
         });
       });
 
@@ -268,9 +238,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should handle debate_end event', async () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -285,19 +253,14 @@ describe('useDebateWebSocket', () => {
 
   describe('agent messages', () => {
     it('should handle debate_message event', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'debate_message',
           agent: 'Agent A',
-          data: {
-            content: 'This is my argument',
-            role: 'proponent',
-          },
+          data: { content: 'This is my argument', role: 'proponent' },
           round: 1,
           timestamp: 1234567890,
         });
@@ -314,9 +277,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should deduplicate messages', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       const message = {
         type: 'debate_message',
@@ -337,9 +298,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should ignore messages from other debates', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -357,16 +316,11 @@ describe('useDebateWebSocket', () => {
 
   describe('token streaming', () => {
     it('should handle token_start event', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'token_start',
-          agent: 'Agent A',
-        });
+        getLatestWs().simulateMessage({ type: 'token_start', agent: 'Agent A' });
       });
 
       expect(result.current.streamingMessages.has('Agent A')).toBe(true);
@@ -375,9 +329,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should handle token_delta events', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -398,9 +350,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should handle token_end event and convert to message', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -423,19 +373,14 @@ describe('useDebateWebSocket', () => {
 
   describe('special events', () => {
     it('should handle critique event', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'critique',
           agent: 'Critic',
-          data: {
-            target: 'Agent A',
-            issues: ['Logical fallacy', 'Missing evidence'],
-          },
+          data: { target: 'Agent A', issues: ['Logical fallacy', 'Missing evidence'] },
         });
       });
 
@@ -446,9 +391,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should handle consensus event', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -466,9 +409,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should handle grounded_verdict event and set hasCitations', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -485,9 +426,7 @@ describe('useDebateWebSocket', () => {
 
   describe('user actions', () => {
     it('should send vote when connected', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       const ws = getLatestWs();
 
@@ -508,9 +447,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should use default intensity when not provided', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       const ws = getLatestWs();
 
@@ -525,9 +462,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should send suggestion when connected', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       const ws = getLatestWs();
 
@@ -546,9 +481,7 @@ describe('useDebateWebSocket', () => {
     });
 
     it('should not send when WebSocket is not open', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       const ws = getLatestWs();
 
@@ -566,17 +499,12 @@ describe('useDebateWebSocket', () => {
   describe('callbacks', () => {
     it('should call ack callback on ack event', () => {
       const ackCallback = jest.fn();
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         result.current.registerAckCallback(ackCallback);
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'ack',
-          data: { message_type: 'user_vote' },
-        });
+        getLatestWs().simulateMessage({ type: 'ack', data: { message_type: 'user_vote' } });
       });
 
       expect(ackCallback).toHaveBeenCalledWith('user_vote');
@@ -584,17 +512,12 @@ describe('useDebateWebSocket', () => {
 
     it('should call error callback on error event', () => {
       const errorCallback = jest.fn();
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         result.current.registerErrorCallback(errorCallback);
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'error',
-          data: { message: 'Something went wrong' },
-        });
+        getLatestWs().simulateMessage({ type: 'error', data: { message: 'Something went wrong' } });
       });
 
       expect(errorCallback).toHaveBeenCalledWith('Something went wrong');
@@ -602,9 +525,7 @@ describe('useDebateWebSocket', () => {
 
     it('should unregister callbacks when cleanup is called', () => {
       const ackCallback = jest.fn();
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       let unregister: () => void;
       act(() => {
@@ -614,10 +535,7 @@ describe('useDebateWebSocket', () => {
       act(() => {
         unregister();
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'ack',
-          data: { message_type: 'user_vote' },
-        });
+        getLatestWs().simulateMessage({ type: 'ack', data: { message_type: 'user_vote' } });
       });
 
       expect(ackCallback).not.toHaveBeenCalled();
@@ -626,9 +544,7 @@ describe('useDebateWebSocket', () => {
 
   describe('stream events buffer', () => {
     it('should limit stream events to MAX_STREAM_EVENTS', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -649,9 +565,7 @@ describe('useDebateWebSocket', () => {
 
   describe('orphan stream cleanup', () => {
     it('should timeout stale streaming messages', async () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -673,8 +587,8 @@ describe('useDebateWebSocket', () => {
 
       // Streaming should be cleared and message added with timeout indicator
       expect(result.current.streamingMessages.has('Agent A')).toBe(false);
-      const timedOutMessage = result.current.messages.find(
-        m => m.content.includes('[stream timed out]')
+      const timedOutMessage = result.current.messages.find((m) =>
+        m.content.includes('[stream timed out]'),
       );
       expect(timedOutMessage).toBeDefined();
     });
@@ -682,16 +596,11 @@ describe('useDebateWebSocket', () => {
 
   describe('cleanup on status change', () => {
     it('should clear stream events when debate completes', () => {
-      const { result } = renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      const { result } = renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'audience_metrics',
-          data: { count: 1 },
-        });
+        getLatestWs().simulateMessage({ type: 'audience_metrics', data: { count: 1 } });
       });
 
       expect(result.current.streamEvents.length).toBe(1);
@@ -713,9 +622,7 @@ describe('useDebateWebSocket', () => {
         json: async () => ({ status: 'running' }),
       } as Response);
 
-      renderHook(() =>
-        useDebateWebSocket({ debateId: 'test-debate-1' })
-      );
+      renderHook(() => useDebateWebSocket({ debateId: 'test-debate-1' }));
 
       act(() => {
         getLatestWs().simulateOpen();

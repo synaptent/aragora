@@ -39,7 +39,9 @@ export function AgentProfileWrapper() {
   const [selectedRival, setSelectedRival] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'moments' | 'network' | 'compare' | 'domains' | 'performance' | 'history'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'moments' | 'network' | 'compare' | 'domains' | 'performance' | 'history'
+  >('overview');
 
   const apiBase = DEFAULT_API_BASE;
 
@@ -54,14 +56,15 @@ export function AgentProfileWrapper() {
       setError(null);
 
       // Fetch profile, moments, network, domains, performance, and history in parallel
-      const [profileRes, momentsRes, networkRes, domainsRes, performanceRes, historyRes] = await Promise.all([
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/profile`),
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/moments?limit=10`),
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/network`),
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/domains`),
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/performance`),
-        fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/history?limit=20`),
-      ]);
+      const [profileRes, momentsRes, networkRes, domainsRes, performanceRes, historyRes] =
+        await Promise.all([
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/profile`),
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/moments?limit=10`),
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/network`),
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/domains`),
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/performance`),
+          fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/history?limit=20`),
+        ]);
 
       if (profileRes.ok) {
         const data = await profileRes.json();
@@ -104,21 +107,24 @@ export function AgentProfileWrapper() {
   }, [agentName, apiBase]);
 
   // Fetch head-to-head when rival is selected
-  const fetchHeadToHead = useCallback(async (opponent: string) => {
-    if (!agentName) return;
+  const fetchHeadToHead = useCallback(
+    async (opponent: string) => {
+      if (!agentName) return;
 
-    try {
-      const res = await fetch(
-        `${apiBase}/api/agent/${encodeURIComponent(agentName)}/head-to-head/${encodeURIComponent(opponent)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setHeadToHead(data);
+      try {
+        const res = await fetch(
+          `${apiBase}/api/agent/${encodeURIComponent(agentName)}/head-to-head/${encodeURIComponent(opponent)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setHeadToHead(data);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch head-to-head:', err);
       }
-    } catch (err) {
-      logger.error('Failed to fetch head-to-head:', err);
-    }
-  }, [agentName, apiBase]);
+    },
+    [agentName, apiBase],
+  );
 
   useEffect(() => {
     fetchData();
@@ -218,7 +224,9 @@ export function AgentProfileWrapper() {
           {/* ELO */}
           <div className="bg-surface border border-border rounded-lg p-4">
             <div className="text-xs text-text-muted mb-1">ELO Rating</div>
-            <div className={`text-2xl font-bold font-theme-data ${getEloColor(profile?.ranking?.rating?.elo || 1500)}`}>
+            <div
+              className={`text-2xl font-bold font-theme-data ${getEloColor(profile?.ranking?.rating?.elo || 1500)}`}
+            >
               {profile?.ranking?.rating?.elo || 1500}
             </div>
           </div>
@@ -232,15 +240,20 @@ export function AgentProfileWrapper() {
                 : 'N/A'}
             </div>
             <div className="text-xs text-text-muted">
-              {profile?.ranking?.rating?.wins || 0}W-{profile?.ranking?.rating?.losses || 0}L-{profile?.ranking?.rating?.draws || 0}D
+              {profile?.ranking?.rating?.wins || 0}W-{profile?.ranking?.rating?.losses || 0}L-
+              {profile?.ranking?.rating?.draws || 0}D
             </div>
           </div>
 
           {/* Consistency */}
           <div className="bg-surface border border-border rounded-lg p-4">
             <div className="text-xs text-text-muted mb-1">Consistency</div>
-            <div className={`text-2xl font-bold font-theme-data ${getConsistencyColor(profile?.consistency?.score || 0)}`}>
-              {profile?.consistency?.score ? `${(profile.consistency.score * 100).toFixed(0)}%` : 'N/A'}
+            <div
+              className={`text-2xl font-bold font-theme-data ${getConsistencyColor(profile?.consistency?.score || 0)}`}
+            >
+              {profile?.consistency?.score
+                ? `${(profile.consistency.score * 100).toFixed(0)}%`
+                : 'N/A'}
             </div>
             {profile?.consistency?.recent_flips !== undefined && (
               <div className="text-xs text-text-muted">
@@ -267,7 +280,17 @@ export function AgentProfileWrapper() {
 
         {/* Tab Navigation */}
         <div className="flex flex-wrap gap-1 bg-surface border border-border rounded p-1 mb-6">
-          {(['overview', 'performance', 'domains', 'history', 'moments', 'network', 'compare'] as const).map((tab) => (
+          {(
+            [
+              'overview',
+              'performance',
+              'domains',
+              'history',
+              'moments',
+              'network',
+              'compare',
+            ] as const
+          ).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -332,7 +355,9 @@ export function AgentProfileWrapper() {
                         <span className="text-xl">{getMomentIcon(moment.type)}</span>
                         <div className="flex-1">
                           <div className="text-sm font-medium text-text">
-                            {moment.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                            {moment.type
+                              .replace(/_/g, ' ')
+                              .replace(/\b\w/g, (c) => c.toUpperCase())}
                           </div>
                           <div className="text-xs text-text-muted">{moment.description}</div>
                         </div>
@@ -362,16 +387,15 @@ export function AgentProfileWrapper() {
                 </div>
               ) : (
                 moments.map((moment, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 bg-bg border border-border rounded-lg"
-                  >
+                  <div key={idx} className="p-4 bg-bg border border-border rounded-lg">
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{getMomentIcon(moment.type)}</span>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-medium text-text">
-                            {moment.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                            {moment.type
+                              .replace(/_/g, ' ')
+                              .replace(/\b\w/g, (c) => c.toUpperCase())}
                           </span>
                           <span className="text-xs text-yellow-400">
                             {(moment.significance * 100).toFixed(0)}% significance
@@ -548,15 +572,21 @@ export function AgentProfileWrapper() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                     <div className="bg-green-900/20 border border-green-800/30 rounded-lg p-4">
-                      <div className="text-3xl font-bold text-green-400">{headToHead.wins || 0}</div>
+                      <div className="text-3xl font-bold text-green-400">
+                        {headToHead.wins || 0}
+                      </div>
                       <div className="text-xs text-green-400/70">Wins</div>
                     </div>
                     <div className="bg-surface border border-border rounded-lg p-4">
-                      <div className="text-3xl font-bold text-text-muted">{headToHead.draws || 0}</div>
+                      <div className="text-3xl font-bold text-text-muted">
+                        {headToHead.draws || 0}
+                      </div>
                       <div className="text-xs text-text-muted">Draws</div>
                     </div>
                     <div className="bg-red-900/20 border border-red-800/30 rounded-lg p-4">
-                      <div className="text-3xl font-bold text-red-400">{headToHead.losses || 0}</div>
+                      <div className="text-3xl font-bold text-red-400">
+                        {headToHead.losses || 0}
+                      </div>
                       <div className="text-xs text-red-400/70">Losses</div>
                     </div>
                   </div>
@@ -624,11 +654,17 @@ export function AgentProfileWrapper() {
                       <div className="text-xs text-text-muted">Recent (Last 10)</div>
                     </div>
                     <div className="bg-bg border border-border rounded-lg p-4 text-center">
-                      <div className={`text-2xl font-bold font-theme-data ${
-                        performance.elo_trend > 0 ? 'text-green-400' :
-                        performance.elo_trend < 0 ? 'text-red-400' : 'text-text-muted'
-                      }`}>
-                        {performance.elo_trend > 0 ? '+' : ''}{performance.elo_trend}
+                      <div
+                        className={`text-2xl font-bold font-theme-data ${
+                          performance.elo_trend > 0
+                            ? 'text-green-400'
+                            : performance.elo_trend < 0
+                              ? 'text-red-400'
+                              : 'text-text-muted'
+                        }`}
+                      >
+                        {performance.elo_trend > 0 ? '+' : ''}
+                        {performance.elo_trend}
                       </div>
                       <div className="text-xs text-text-muted">ELO Trend</div>
                     </div>
@@ -650,17 +686,23 @@ export function AgentProfileWrapper() {
                             <>
                               <div
                                 className="bg-green-500"
-                                style={{ width: `${(performance.wins / performance.total_games) * 100}%` }}
+                                style={{
+                                  width: `${(performance.wins / performance.total_games) * 100}%`,
+                                }}
                                 title={`${performance.wins} wins`}
                               />
                               <div
                                 className="bg-gray-500"
-                                style={{ width: `${(performance.draws / performance.total_games) * 100}%` }}
+                                style={{
+                                  width: `${(performance.draws / performance.total_games) * 100}%`,
+                                }}
                                 title={`${performance.draws} draws`}
                               />
                               <div
                                 className="bg-red-500"
-                                style={{ width: `${(performance.losses / performance.total_games) * 100}%` }}
+                                style={{
+                                  width: `${(performance.losses / performance.total_games) * 100}%`,
+                                }}
                                 title={`${performance.losses} losses`}
                               />
                             </>
@@ -692,7 +734,8 @@ export function AgentProfileWrapper() {
                           {(performance.calibration.accuracy * 100).toFixed(1)}%
                         </div>
                         <div className="text-xs text-text-muted">
-                          Brier: {performance.calibration.brier_score.toFixed(3)} ({performance.calibration.prediction_count} predictions)
+                          Brier: {performance.calibration.brier_score.toFixed(3)} (
+                          {performance.calibration.prediction_count} predictions)
                         </div>
                       </div>
                     </div>
@@ -714,9 +757,9 @@ export function AgentProfileWrapper() {
               {domains && domains.domains.length > 0 ? (
                 <>
                   <div className="text-sm text-text-muted mb-4">
-                    Overall ELO: <span className="font-theme-data text-text">{domains.overall_elo}</span>
-                    {' '}&middot;{' '}
-                    {domains.domain_count} domain{domains.domain_count !== 1 ? 's' : ''}
+                    Overall ELO:{' '}
+                    <span className="font-theme-data text-text">{domains.overall_elo}</span>{' '}
+                    &middot; {domains.domain_count} domain{domains.domain_count !== 1 ? 's' : ''}
                   </div>
 
                   <div className="space-y-3">
@@ -730,12 +773,20 @@ export function AgentProfileWrapper() {
                             {domain.domain.replace(/_/g, ' ')}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span className="font-theme-data text-text">{Math.round(domain.elo)}</span>
-                            <span className={`text-xs font-theme-data ${
-                              domain.relative > 0 ? 'text-green-400' :
-                              domain.relative < 0 ? 'text-red-400' : 'text-text-muted'
-                            }`}>
-                              {domain.relative > 0 ? '+' : ''}{domain.relative}
+                            <span className="font-theme-data text-text">
+                              {Math.round(domain.elo)}
+                            </span>
+                            <span
+                              className={`text-xs font-theme-data ${
+                                domain.relative > 0
+                                  ? 'text-green-400'
+                                  : domain.relative < 0
+                                    ? 'text-red-400'
+                                    : 'text-text-muted'
+                              }`}
+                            >
+                              {domain.relative > 0 ? '+' : ''}
+                              {domain.relative}
                             </span>
                           </div>
                         </div>
@@ -743,11 +794,17 @@ export function AgentProfileWrapper() {
                         <div className="h-2 rounded overflow-hidden bg-surface">
                           <div
                             className={`h-full ${
-                              domain.elo >= 1600 ? 'bg-green-500' :
-                              domain.elo >= 1500 ? 'bg-yellow-500' :
-                              domain.elo >= 1400 ? 'bg-orange-500' : 'bg-red-500'
+                              domain.elo >= 1600
+                                ? 'bg-green-500'
+                                : domain.elo >= 1500
+                                  ? 'bg-yellow-500'
+                                  : domain.elo >= 1400
+                                    ? 'bg-orange-500'
+                                    : 'bg-red-500'
                             }`}
-                            style={{ width: `${Math.min(100, Math.max(0, (domain.elo - 1000) / 10))}%` }}
+                            style={{
+                              width: `${Math.min(100, Math.max(0, (domain.elo - 1000) / 10))}%`,
+                            }}
                           />
                         </div>
                       </div>
@@ -756,7 +813,8 @@ export function AgentProfileWrapper() {
                 </>
               ) : (
                 <div className="text-center text-text-muted py-8">
-                  No domain expertise data available. This agent needs more debates in specific topic areas.
+                  No domain expertise data available. This agent needs more debates in specific
+                  topic areas.
                 </div>
               )}
             </div>
@@ -776,18 +834,28 @@ export function AgentProfileWrapper() {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
-                          <span className={`text-xl ${
-                            entry.result === 'win' ? 'text-green-400' :
-                            entry.result === 'loss' ? 'text-red-400' : 'text-yellow-400'
-                          }`}>
+                          <span
+                            className={`text-xl ${
+                              entry.result === 'win'
+                                ? 'text-green-400'
+                                : entry.result === 'loss'
+                                  ? 'text-red-400'
+                                  : 'text-yellow-400'
+                            }`}
+                          >
                             {entry.result === 'win' ? '🏆' : entry.result === 'loss' ? '💔' : '🤝'}
                           </span>
                           <div>
                             <div className="text-sm font-medium text-text">
-                              {entry.result === 'win' ? 'Won' : entry.result === 'loss' ? 'Lost' : 'Draw'}
+                              {entry.result === 'win'
+                                ? 'Won'
+                                : entry.result === 'loss'
+                                  ? 'Lost'
+                                  : 'Draw'}
                               {entry.opponent && (
                                 <span className="text-text-muted">
-                                  {' '}vs{' '}
+                                  {' '}
+                                  vs{' '}
                                   <Link
                                     href={`/agent/${encodeURIComponent(entry.opponent)}/`}
                                     className="text-accent hover:underline"
@@ -805,15 +873,19 @@ export function AgentProfileWrapper() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className={`text-sm font-theme-data ${
-                            entry.elo_change > 0 ? 'text-green-400' :
-                            entry.elo_change < 0 ? 'text-red-400' : 'text-text-muted'
-                          }`}>
-                            {entry.elo_change > 0 ? '+' : ''}{entry.elo_change}
+                          <div
+                            className={`text-sm font-theme-data ${
+                              entry.elo_change > 0
+                                ? 'text-green-400'
+                                : entry.elo_change < 0
+                                  ? 'text-red-400'
+                                  : 'text-text-muted'
+                            }`}
+                          >
+                            {entry.elo_change > 0 ? '+' : ''}
+                            {entry.elo_change}
                           </div>
-                          <div className="text-xs text-text-muted">
-                            → {entry.elo_after}
-                          </div>
+                          <div className="text-xs text-text-muted">→ {entry.elo_after}</div>
                         </div>
                       </div>
                       <div className="text-xs text-text-muted/50">

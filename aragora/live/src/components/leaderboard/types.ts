@@ -51,11 +51,7 @@ export interface RankingStats {
 
 export interface AgentIntrospection {
   agent: string;
-  self_model: {
-    strengths: string[];
-    weaknesses: string[];
-    biases: string[];
-  };
+  self_model: { strengths: string[]; weaknesses: string[]; biases: string[] };
   confidence_calibration: number;
   recent_performance_assessment: string;
   improvement_focus: string[];

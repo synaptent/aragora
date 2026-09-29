@@ -214,9 +214,13 @@ export const ExecutionProgressOverlay = memo(function ExecutionProgressOverlay({
               <div
                 key={`${evt.nodeId}-${i}`}
                 className={`flex items-center gap-1.5 text-[10px] font-theme-data ${
-                  evt.status === 'succeeded' ? 'text-emerald-400' :
-                  evt.status === 'failed' ? 'text-red-400' :
-                  evt.status === 'in_progress' ? 'text-amber-300' : 'text-text-muted'
+                  evt.status === 'succeeded'
+                    ? 'text-emerald-400'
+                    : evt.status === 'failed'
+                      ? 'text-red-400'
+                      : evt.status === 'in_progress'
+                        ? 'text-amber-300'
+                        : 'text-text-muted'
                 }`}
               >
                 {evt.status === 'in_progress' && (

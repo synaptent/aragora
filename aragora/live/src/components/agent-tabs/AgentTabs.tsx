@@ -5,7 +5,13 @@ import { isAgentMessage } from '@/types/events';
 import { getAgentColors } from '@/utils/agentColors';
 import { AllAgentsTab } from './AllAgentsTab';
 import { IndividualAgentTab } from './IndividualAgentTab';
-import type { AgentTabsProps, AgentData, TimelineMessage, PositionEntry, MatchHistoryEntry } from './types';
+import type {
+  AgentTabsProps,
+  AgentData,
+  TimelineMessage,
+  PositionEntry,
+  MatchHistoryEntry,
+} from './types';
 import { ALL_AGENTS_TAB } from './types';
 import { logger } from '@/utils/logger';
 import { API_BASE_URL } from '@/config';
@@ -25,38 +31,48 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
   const [autoScroll, setAutoScroll] = useState(true);
 
   // Fetch positions when viewing individual agent
-  const fetchPositions = useCallback(async (agentName: string) => {
-    setPositionsLoading(true);
-    try {
-      const response = await fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/positions`);
-      if (response.ok) {
-        const data = await response.json();
-        setPositions(data.positions || []);
+  const fetchPositions = useCallback(
+    async (agentName: string) => {
+      setPositionsLoading(true);
+      try {
+        const response = await fetch(
+          `${apiBase}/api/agent/${encodeURIComponent(agentName)}/positions`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setPositions(data.positions || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch positions:', err);
+        setPositions([]);
+      } finally {
+        setPositionsLoading(false);
       }
-    } catch (err) {
-      logger.error('Failed to fetch positions:', err);
-      setPositions([]);
-    } finally {
-      setPositionsLoading(false);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   // Fetch match history when viewing individual agent
-  const fetchMatchHistory = useCallback(async (agentName: string) => {
-    setMatchHistoryLoading(true);
-    try {
-      const response = await fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/history?limit=50`);
-      if (response.ok) {
-        const data = await response.json();
-        setMatchHistory(data.history || []);
+  const fetchMatchHistory = useCallback(
+    async (agentName: string) => {
+      setMatchHistoryLoading(true);
+      try {
+        const response = await fetch(
+          `${apiBase}/api/agent/${encodeURIComponent(agentName)}/history?limit=50`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setMatchHistory(data.history || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch match history:', err);
+        setMatchHistory([]);
+      } finally {
+        setMatchHistoryLoading(false);
       }
-    } catch (err) {
-      logger.error('Failed to fetch match history:', err);
-      setMatchHistory([]);
-    } finally {
-      setMatchHistoryLoading(false);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   // Fetch positions and match history when agent selection changes
   useEffect(() => {
@@ -100,12 +116,7 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
         };
       }
 
-      agents[agentName].allMessages.push({
-        content,
-        round,
-        role,
-        timestamp: event.timestamp,
-      });
+      agents[agentName].allMessages.push({ content, round, role, timestamp: event.timestamp });
 
       // Update to latest message
       if (event.timestamp >= agents[agentName].timestamp) {
@@ -178,9 +189,8 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
     setShowPositions(false);
   }, []);
 
-  const currentAgent = selectedAgent !== ALL_AGENTS_TAB
-    ? agentData.find((a) => a.name === selectedAgent)
-    : null;
+  const currentAgent =
+    selectedAgent !== ALL_AGENTS_TAB ? agentData.find((a) => a.name === selectedAgent) : null;
 
   if (agentData.length === 0) {
     return (
@@ -238,7 +248,9 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
                 {agent.name}
                 {agent.round > 0 && <span className="text-xs opacity-60">R{agent.round}</span>}
               </span>
-              {isActive && <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${colors.tab}`} />}
+              {isActive && (
+                <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${colors.tab}`} />
+              )}
             </button>
           );
         })}

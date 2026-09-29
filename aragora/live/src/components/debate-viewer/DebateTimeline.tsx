@@ -109,7 +109,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
         case 'agent_evidence':
           content = `Considering ${((data.sources as unknown[]) || []).length} source(s)`;
           detail = ((data.sources as Array<{ title: string }>) || [])
-            .map(s => s.title)
+            .map((s) => s.title)
             .join(', ');
           break;
         case 'agent_confidence':
@@ -121,7 +121,8 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
           break;
         case 'vote':
           content = `Voted: ${(data.choice as string) || (data.vote as string) || '?'}`;
-          if (data.confidence) detail = `Confidence: ${Math.round((data.confidence as number) * 100)}%`;
+          if (data.confidence)
+            detail = `Confidence: ${Math.round((data.confidence as number) * 100)}%`;
           break;
         case 'consensus':
           content = (data.reached as boolean) ? 'Consensus reached' : 'No consensus';
@@ -176,7 +177,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
   }, [messages, streamEvents]);
 
   const filteredEntries = useMemo(() => {
-    return timelineEntries.filter(entry => {
+    return timelineEntries.filter((entry) => {
       if (!filterTypes.has(entry.type)) return false;
       if (selectedAgent && entry.agent && entry.agent !== selectedAgent) return false;
       return true;
@@ -184,7 +185,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
   }, [timelineEntries, filterTypes, selectedAgent]);
 
   const toggleEntry = useCallback((id: string) => {
-    setExpandedEntries(prev => {
+    setExpandedEntries((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -196,7 +197,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
   }, []);
 
   const toggleFilter = useCallback((type: string) => {
-    setFilterTypes(prev => {
+    setFilterTypes((prev) => {
       const next = new Set(prev);
       if (next.has(type)) {
         next.delete(type);
@@ -228,8 +229,10 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
             className="text-[10px] font-theme-data bg-bg border border-border text-text-muted px-1 py-0.5"
           >
             <option value="">All Agents</option>
-            {agents.map(agent => (
-              <option key={agent} value={agent}>{agent}</option>
+            {agents.map((agent) => (
+              <option key={agent} value={agent}>
+                {agent}
+              </option>
             ))}
           </select>
         </div>
@@ -237,7 +240,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
 
       {/* Type filters */}
       <div className="px-4 py-2 border-b border-border flex flex-wrap gap-1">
-        {Array.from(TIMELINE_EVENT_TYPES).map(type => (
+        {Array.from(TIMELINE_EVENT_TYPES).map((type) => (
           <button
             key={type}
             onClick={() => toggleFilter(type)}
@@ -265,13 +268,12 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
             const isExpanded = expandedEntries.has(entry.id);
 
             return (
-              <div
-                key={entry.id}
-                className="flex gap-3 group"
-              >
+              <div key={entry.id} className="flex gap-3 group">
                 {/* Timeline line */}
                 <div className="flex flex-col items-center">
-                  <div className={`w-2 h-2 rounded-full border ${eventColor} bg-bg shrink-0 mt-1.5`} />
+                  <div
+                    className={`w-2 h-2 rounded-full border ${eventColor} bg-bg shrink-0 mt-1.5`}
+                  />
                   {idx < filteredEntries.length - 1 && (
                     <div className="w-px flex-1 bg-border min-h-[16px]" />
                   )}
@@ -280,7 +282,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
                 {/* Entry content */}
                 <div
                   className="flex-1 pb-3 cursor-pointer"
-                  onClick={() => entry.detail ? toggleEntry(entry.id) : undefined}
+                  onClick={() => (entry.detail ? toggleEntry(entry.id) : undefined)}
                 >
                   <div className="flex items-center gap-2 text-[10px] font-theme-data">
                     <span className="text-text-muted">{formatTime(entry.timestamp)}</span>
@@ -294,9 +296,7 @@ export function DebateTimeline({ messages, streamEvents, agents }: DebateTimelin
                       <span className="text-text-muted">R{entry.round}</span>
                     )}
                   </div>
-                  <div className="text-xs text-text font-theme-data mt-0.5">
-                    {entry.content}
-                  </div>
+                  <div className="text-xs text-text font-theme-data mt-0.5">{entry.content}</div>
                   {isExpanded && entry.detail && (
                     <div className="text-xs text-text-muted font-theme-data mt-1 pl-2 border-l border-border whitespace-pre-wrap">
                       {entry.detail}

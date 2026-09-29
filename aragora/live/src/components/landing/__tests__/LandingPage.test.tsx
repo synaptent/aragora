@@ -10,21 +10,15 @@ jest.mock('@/context/ThemeContext', () => ({
 }));
 
 jest.mock('../../BackendSelector', () => ({
-  BACKENDS: {
-    production: { api: 'https://api.example.com', ws: 'wss://api.example.com/ws' },
-  },
+  BACKENDS: { production: { api: 'https://api.example.com', ws: 'wss://api.example.com/ws' } },
   useBackend: () => mockUseBackend(),
 }));
 
 // Mock all child components to isolate LandingPage logic
-jest.mock('../Header', () => ({
-  Header: () => <header data-testid="header">Header</header>,
-}));
+jest.mock('../Header', () => ({ Header: () => <header data-testid="header">Header</header> }));
 
 jest.mock('../HeroSection', () => ({
-  HeroSection: () => (
-    <div data-testid="hero-section">Hero</div>
-  ),
+  HeroSection: () => <div data-testid="hero-section">Hero</div>,
 }));
 
 const mockLiveDebatePanel = jest.fn(() => (
@@ -54,9 +48,7 @@ jest.mock('../PricingSection', () => ({
   PricingSection: () => <section data-testid="pricing-section">Pricing</section>,
 }));
 
-jest.mock('../Footer', () => ({
-  Footer: () => <footer data-testid="footer">Footer</footer>,
-}));
+jest.mock('../Footer', () => ({ Footer: () => <footer data-testid="footer">Footer</footer> }));
 
 describe('LandingPage', () => {
   beforeEach(() => {

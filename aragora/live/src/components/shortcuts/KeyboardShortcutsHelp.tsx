@@ -69,10 +69,7 @@ export function KeyboardShortcutsHelp() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--accent)]/20">
-          <h2
-            id="shortcuts-help-title"
-            className="text-lg font-theme-data text-[var(--accent)]"
-          >
+          <h2 id="shortcuts-help-title" className="text-lg font-theme-data text-[var(--accent)]">
             Keyboard Shortcuts
           </h2>
           <button
@@ -84,12 +81,7 @@ export function KeyboardShortcutsHelp() {
             "
             aria-label="Close shortcuts help"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -140,8 +132,8 @@ export function KeyboardShortcutsHelp() {
             </span>
           </label>
           <p className="mt-2 text-xs text-text-muted/70 font-theme-data">
-            Press <ShortcutKey keys={{ key: '?' }} size="sm" /> anywhere to open this help.
-            Press <ShortcutKey keys={{ key: 'escape' }} size="sm" /> to close.
+            Press <ShortcutKey keys={{ key: '?' }} size="sm" /> anywhere to open this help. Press{' '}
+            <ShortcutKey keys={{ key: 'escape' }} size="sm" /> to close.
           </p>
         </div>
       </div>
@@ -169,15 +161,10 @@ function ShortcutCategory({
       <ul className="space-y-2">
         {shortcuts.map((shortcut) => {
           // Get the primary key binding (first one if array)
-          const primaryKey = Array.isArray(shortcut.keys)
-            ? shortcut.keys[0]
-            : shortcut.keys;
+          const primaryKey = Array.isArray(shortcut.keys) ? shortcut.keys[0] : shortcut.keys;
 
           return (
-            <li
-              key={shortcut.id}
-              className="flex items-center justify-between gap-4 text-sm"
-            >
+            <li key={shortcut.id} className="flex items-center justify-between gap-4 text-sm">
               <span className="text-text-muted font-theme-data truncate">
                 {shortcut.description}
               </span>

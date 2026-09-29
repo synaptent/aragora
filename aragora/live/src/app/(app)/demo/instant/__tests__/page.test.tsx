@@ -16,10 +16,16 @@ describe('InstantDemoPage', () => {
   it('labels the replay as synthetic and avoids fake receipt claims', () => {
     render(<InstantDemoPage />);
 
-    expect(screen.getByText(/Watch a cached synthetic replay of five models debating a sample decision\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Watch a cached synthetic replay of five models debating a sample decision\./i,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('Synthetic Replay')).toBeInTheDocument();
     expect(
-      screen.getByText(/This page is a scripted demonstration\. It does not publish a live receipt, proof link, or cryptographic artifact\./i)
+      screen.getByText(
+        /This page is a scripted demonstration\. It does not publish a live receipt, proof link, or cryptographic artifact\./i,
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Receipt sample/i)).not.toBeInTheDocument();
   });

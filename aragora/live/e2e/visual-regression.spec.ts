@@ -68,7 +68,7 @@ async function countThemeToggles(page: Page): Promise<number> {
   return await page.evaluate(() => {
     // Look for theme toggle buttons (sun/moon icons or theme-related buttons)
     const toggles = document.querySelectorAll(
-      'button[aria-label*="theme" i], button[aria-label*="dark" i], button[aria-label*="light" i], [data-testid="theme-toggle"]'
+      'button[aria-label*="theme" i], button[aria-label*="dark" i], button[aria-label*="light" i], [data-testid="theme-toggle"]',
     );
     return toggles.length;
   });
@@ -122,7 +122,7 @@ test.describe('Header Consistency', () => {
       const headerCount = await countHeaders(page);
       expect(
         headerCount,
-        `Page ${pageConfig.path} has ${headerCount} headers (expected at most 1)`
+        `Page ${pageConfig.path} has ${headerCount} headers (expected at most 1)`,
       ).toBeLessThanOrEqual(1);
     });
 
@@ -131,10 +131,7 @@ test.describe('Header Consistency', () => {
       await prepareForScreenshot(page);
 
       const hasNested = await hasNestedHeaders(page);
-      expect(
-        hasNested,
-        `Page ${pageConfig.path} has nested header elements`
-      ).toBe(false);
+      expect(hasNested, `Page ${pageConfig.path} has nested header elements`).toBe(false);
     });
   }
 });
@@ -148,7 +145,7 @@ test.describe('Branding Consistency', () => {
     const brandingCount = await countAragoraBranding(page);
     expect(
       brandingCount,
-      'Dashboard should have ARAGORA branding exactly once in TopBar'
+      'Dashboard should have ARAGORA branding exactly once in TopBar',
     ).toBeGreaterThanOrEqual(1);
   });
 
@@ -160,7 +157,7 @@ test.describe('Branding Consistency', () => {
     const brandingCount = await countAragoraBranding(page);
     expect(
       brandingCount,
-      'Landing page should have ARAGORA branding (may appear in ASCII art + header)'
+      'Landing page should have ARAGORA branding (may appear in ASCII art + header)',
     ).toBeGreaterThanOrEqual(1);
   });
 });
@@ -174,7 +171,7 @@ test.describe('Theme Toggle Consistency', () => {
       const toggleCount = await countThemeToggles(page);
       expect(
         toggleCount,
-        `Page ${pageConfig.path} has ${toggleCount} theme toggles (expected at most 1)`
+        `Page ${pageConfig.path} has ${toggleCount} theme toggles (expected at most 1)`,
       ).toBeLessThanOrEqual(1);
     });
   }
@@ -272,7 +269,7 @@ test.describe('Layout Stability', () => {
     // but flag if there are too many different header heights
     expect(
       uniqueHeights.length,
-      `Found ${uniqueHeights.length} different header heights: ${JSON.stringify(headerHeights)}`
+      `Found ${uniqueHeights.length} different header heights: ${JSON.stringify(headerHeights)}`,
     ).toBeLessThanOrEqual(2);
   });
 });
@@ -284,10 +281,7 @@ test.describe('Debate Viewer (Standalone)', () => {
     await prepareForScreenshot(page);
 
     const headerCount = await countHeaders(page);
-    expect(
-      headerCount,
-      'Debate viewer should have exactly one header'
-    ).toBeLessThanOrEqual(1);
+    expect(headerCount, 'Debate viewer should have exactly one header').toBeLessThanOrEqual(1);
 
     const hasNested = await hasNestedHeaders(page);
     expect(hasNested, 'Debate viewer should not have nested headers').toBe(false);

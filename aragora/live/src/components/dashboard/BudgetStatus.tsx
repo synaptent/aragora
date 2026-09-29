@@ -103,7 +103,9 @@ export function BudgetStatus({ budget, loading = false }: BudgetStatusProps) {
           <span>$</span> BUDGET STATUS
         </h3>
         {budget.alert_level !== 'normal' && (
-          <span className={`px-2 py-1 text-xs font-theme-data uppercase ${getAlertBgColor(budget.alert_level)} ${getAlertTextColor(budget.alert_level)}`}>
+          <span
+            className={`px-2 py-1 text-xs font-theme-data uppercase ${getAlertBgColor(budget.alert_level)} ${getAlertTextColor(budget.alert_level)}`}
+          >
             {budget.alert_level}
           </span>
         )}
@@ -131,7 +133,9 @@ export function BudgetStatus({ budget, loading = false }: BudgetStatusProps) {
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">Remaining</div>
-          <div className={`text-lg font-theme-data font-bold ${budget.remaining_usd > 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <div
+            className={`text-lg font-theme-data font-bold ${budget.remaining_usd > 0 ? 'text-green-400' : 'text-red-400'}`}
+          >
             {formatCurrency(budget.remaining_usd)}
           </div>
         </div>
@@ -142,14 +146,20 @@ export function BudgetStatus({ budget, loading = false }: BudgetStatusProps) {
           </div>
         </div>
         <div>
-          <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">Days Remaining</div>
+          <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">
+            Days Remaining
+          </div>
           <div className="text-lg font-theme-data font-bold text-yellow-400">
             {budget.days_remaining}
           </div>
         </div>
         <div>
-          <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">EOM Projection</div>
-          <div className={`text-lg font-theme-data font-bold ${budget.will_exceed ? 'text-red-400' : 'text-green-400'}`}>
+          <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">
+            EOM Projection
+          </div>
+          <div
+            className={`text-lg font-theme-data font-bold ${budget.will_exceed ? 'text-red-400' : 'text-green-400'}`}
+          >
             {formatCurrency(budget.projected_end_of_month_usd)}
           </div>
         </div>
@@ -157,9 +167,12 @@ export function BudgetStatus({ budget, loading = false }: BudgetStatusProps) {
 
       {/* Warning/Alert Message */}
       {budget.will_exceed && (
-        <div className={`p-3 ${getAlertBgColor(budget.alert_level)} border ${getAlertBorderColor(budget.alert_level)}`}>
+        <div
+          className={`p-3 ${getAlertBgColor(budget.alert_level)} border ${getAlertBorderColor(budget.alert_level)}`}
+        >
           <div className={`text-xs font-theme-data ${getAlertTextColor(budget.alert_level)}`}>
-            {'!'} WARNING: Projected to exceed budget by {formatCurrency(budget.projected_end_of_month_usd - budget.monthly_limit_usd)}
+            {'!'} WARNING: Projected to exceed budget by{' '}
+            {formatCurrency(budget.projected_end_of_month_usd - budget.monthly_limit_usd)}
           </div>
           <div className="text-xs font-theme-data text-[var(--text-muted)] mt-1">
             Consider reducing usage or increasing budget limit.

@@ -53,7 +53,9 @@ interface BackendDebatesResponse {
 }
 
 // Normalize backend debate data to DebateArtifact shape
-function normalizeDebate(d: NonNullable<BackendDebatesResponse['debates']>[number]): DebateArtifact {
+function normalizeDebate(
+  d: NonNullable<BackendDebatesResponse['debates']>[number],
+): DebateArtifact {
   return {
     id: d.debate_id || d.id,
     loop_id: d.loop_id || '',
@@ -88,10 +90,9 @@ const DEFAULT_STATUS_ITEMS = [
 ];
 
 function SystemStatusPanel({ refreshInterval = 30000 }: { refreshInterval?: number }) {
-  const { data: health, error: healthError } = useSWRFetch<HealthResponse>(
-    '/api/health',
-    { refreshInterval }
-  );
+  const { data: health, error: healthError } = useSWRFetch<HealthResponse>('/api/health', {
+    refreshInterval,
+  });
 
   const getComponentStatus = (key: string): string => {
     if (healthError || !health) return 'unknown';
@@ -111,22 +112,27 @@ function SystemStatusPanel({ refreshInterval = 30000 }: { refreshInterval?: numb
     return 'unknown';
   };
 
-  const overallUp = !healthError && health && (health.status === 'ok' || health.status === 'healthy');
+  const overallUp =
+    !healthError && health && (health.status === 'ok' || health.status === 'healthy');
   const uptimePercent = health?.uptime_percent ?? (overallUp ? 99.9 : null);
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)]">
       <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} SYSTEM STATUS
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} SYSTEM STATUS</h3>
         <div className="flex items-center gap-2">
           {overallUp ? (
-            <span className="px-2 py-0.5 text-[10px] font-theme-data bg-green-500/20 text-green-400 border border-green-500/30">LIVE</span>
+            <span className="px-2 py-0.5 text-[10px] font-theme-data bg-green-500/20 text-green-400 border border-green-500/30">
+              LIVE
+            </span>
           ) : healthError ? (
-            <span className="px-2 py-0.5 text-[10px] font-theme-data bg-red-500/20 text-red-400 border border-red-500/30">OFFLINE</span>
+            <span className="px-2 py-0.5 text-[10px] font-theme-data bg-red-500/20 text-red-400 border border-red-500/30">
+              OFFLINE
+            </span>
           ) : (
-            <span className="px-2 py-0.5 text-[10px] font-theme-data bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse">CHECKING</span>
+            <span className="px-2 py-0.5 text-[10px] font-theme-data bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse">
+              CHECKING
+            </span>
           )}
           <Link
             href="/admin"
@@ -151,10 +157,10 @@ function SystemStatusPanel({ refreshInterval = 30000 }: { refreshInterval?: numb
                   status === 'operational'
                     ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                     : status === 'degraded'
-                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                    : status === 'unknown'
-                    ? 'bg-gray-500/20 text-gray-400 border border-gray-500/30 animate-pulse'
-                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                      : status === 'unknown'
+                        ? 'bg-gray-500/20 text-gray-400 border border-gray-500/30 animate-pulse'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
                 }`}
               >
                 {status === 'unknown' ? 'checking' : status}
@@ -166,7 +172,9 @@ function SystemStatusPanel({ refreshInterval = 30000 }: { refreshInterval?: numb
         <div className="pt-3 mt-3 border-t border-[var(--border)]">
           <div className="flex items-center justify-between text-xs font-theme-data">
             <span className="text-[var(--text-muted)]">30-day uptime</span>
-            <span className={uptimePercent !== null ? 'text-green-400' : 'text-[var(--text-muted)]'}>
+            <span
+              className={uptimePercent !== null ? 'text-green-400' : 'text-[var(--text-muted)]'}
+            >
               {uptimePercent !== null ? `${uptimePercent.toFixed(2)}%` : '--'}
             </span>
           </div>
@@ -276,10 +284,13 @@ function DashboardContent() {
   const pollInterval = wsConnected ? 120_000 : 30_000; // 120 s safety-net vs 30 s fallback
 
   // Fetch debates from backend API
-  const { data: backendDebates, error: backendError, isLoading: backendLoading } = useSWRFetch<BackendDebatesResponse>(
-    '/api/v1/debates?limit=5&sort=created_at:desc',
-    { refreshInterval: pollInterval }
-  );
+  const {
+    data: backendDebates,
+    error: backendError,
+    isLoading: backendLoading,
+  } = useSWRFetch<BackendDebatesResponse>('/api/v1/debates?limit=5&sort=created_at:desc', {
+    refreshInterval: pollInterval,
+  });
 
   // When backend data arrives, use it; otherwise fall back to Supabase
   useEffect(() => {
@@ -334,9 +345,12 @@ function DashboardContent() {
             Overview of AI-debated decisions across your organization.
           </div>
           <div className="border-t border-[var(--border)] pt-3">
-            <div className="text-xs text-[var(--acid-green)] font-theme-data mb-1">WHAT IS ARAGORA?</div>
+            <div className="text-xs text-[var(--acid-green)] font-theme-data mb-1">
+              WHAT IS ARAGORA?
+            </div>
             <div className="text-xs text-[var(--text)] font-theme-data leading-relaxed">
-              Multiple AI models debate your decisions and deliver verdicts with confidence scores and audit trails.
+              Multiple AI models debate your decisions and deliver verdicts with confidence scores
+              and audit trails.
             </div>
           </div>
         </div>
@@ -395,15 +409,18 @@ function DashboardContent() {
                   {'>'} EXECUTIVE DASHBOARD
                 </h1>
                 <p className="text-xs text-[var(--text-muted)] font-theme-data">
-                  AI models that debate your decisions — with confidence scores and full audit trails
+                  AI models that debate your decisions — with confidence scores and full audit
+                  trails
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 text-xs font-theme-data border ${
-                  wsConnected
-                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                    : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                }`}>
+                <span
+                  className={`px-2 py-1 text-xs font-theme-data border ${
+                    wsConnected
+                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                      : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                  }`}
+                >
                   {wsConnected ? ' LIVE' : ' POLLING'}
                 </span>
               </div>
@@ -459,7 +476,10 @@ function DashboardContent() {
                   </div>
                 ) : recentDebates.length === 0 ? (
                   <div className="p-4 text-center text-[var(--text-muted)] font-theme-data text-sm">
-                    No recent debates. <Link href="/arena" className="text-[var(--acid-green)] hover:underline">Start one</Link>
+                    No recent debates.{' '}
+                    <Link href="/arena" className="text-[var(--acid-green)] hover:underline">
+                      Start one
+                    </Link>
                   </div>
                 ) : (
                   <div className="divide-y divide-[var(--border)]">
@@ -496,9 +516,11 @@ function DashboardContent() {
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <div className={`text-xs font-theme-data ${
-                              debate.consensus_reached ? 'text-green-400' : 'text-yellow-400'
-                            }`}>
+                            <div
+                              className={`text-xs font-theme-data ${
+                                debate.consensus_reached ? 'text-green-400' : 'text-yellow-400'
+                              }`}
+                            >
                               {debate.consensus_reached ? '' : ''}{' '}
                               {Math.round(debate.confidence * 100)}%
                             </div>
@@ -566,9 +588,7 @@ function DashboardContent() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-6 border-t border-[var(--border)] mt-8">
-          <p className="text-[var(--text-muted)]">
-            42 AI agents debating your decisions
-          </p>
+          <p className="text-[var(--text-muted)]">42 AI agents debating your decisions</p>
         </footer>
       </main>
     </>

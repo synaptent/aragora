@@ -28,12 +28,7 @@ const mockCruxes = [
     crux_score: 0.856,
     centrality: 0.42,
     entropy: 0.75,
-    current_belief: {
-      true_prob: 0.6,
-      false_prob: 0.15,
-      uncertain_prob: 0.25,
-      confidence: 0.7,
-    },
+    current_belief: { true_prob: 0.6, false_prob: 0.15, uncertain_prob: 0.25, confidence: 0.7 },
   },
   {
     claim_id: 'crux-002',
@@ -42,12 +37,7 @@ const mockCruxes = [
     crux_score: 0.723,
     centrality: 0.35,
     entropy: 0.62,
-    current_belief: {
-      true_prob: 0.7,
-      false_prob: 0.1,
-      uncertain_prob: 0.2,
-      confidence: 0.8,
-    },
+    current_belief: { true_prob: 0.7, false_prob: 0.1, uncertain_prob: 0.2, confidence: 0.8 },
   },
 ];
 
@@ -69,10 +59,7 @@ const mockLoadBearingClaims = [
 function setupSuccessfulFetch() {
   mockFetch.mockImplementation((url: string) => {
     if (url.includes('/api/belief-network/') && url.includes('/cruxes')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ cruxes: mockCruxes }),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ cruxes: mockCruxes }) });
     }
     if (url.includes('/api/belief-network/') && url.includes('/load-bearing-claims')) {
       return Promise.resolve({
@@ -112,7 +99,9 @@ describe('CruxPanel', () => {
 
     it('shows help text about cruxes', () => {
       renderWithProviders(<CruxPanel apiBase="http://localhost:8080" />);
-      expect(screen.getByText(/Claims with high uncertainty and high centrality/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Claims with high uncertainty and high centrality/),
+      ).toBeInTheDocument();
     });
 
     it('shows help text about load-bearing claims', () => {
@@ -122,7 +111,9 @@ describe('CruxPanel', () => {
 
     it('shows initial empty state', () => {
       renderWithProviders(<CruxPanel apiBase="http://localhost:8080" />);
-      expect(screen.getByText('Enter a debate ID to analyze belief network cruxes.')).toBeInTheDocument();
+      expect(
+        screen.getByText('Enter a debate ID to analyze belief network cruxes.'),
+      ).toBeInTheDocument();
     });
 
     it('uses initial debateId if provided', () => {
@@ -167,11 +158,11 @@ describe('CruxPanel', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/belief-network/debate-123/cruxes'),
-          expect.anything()
+          expect.anything(),
         );
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/belief-network/debate-123/load-bearing-claims'),
-          expect.anything()
+          expect.anything(),
         );
       });
     });
@@ -200,8 +191,12 @@ describe('CruxPanel', () => {
       fireEvent.click(screen.getByText('ANALYZE'));
 
       await waitFor(() => {
-        expect(screen.getByText('AI alignment requires formal verification methods')).toBeInTheDocument();
-        expect(screen.getByText('Interpretability is key to safe AI deployment')).toBeInTheDocument();
+        expect(
+          screen.getByText('AI alignment requires formal verification methods'),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByText('Interpretability is key to safe AI deployment'),
+        ).toBeInTheDocument();
       });
     });
 
@@ -321,8 +316,12 @@ describe('CruxPanel', () => {
       fireEvent.click(screen.getByText('LOAD-BEARING (2)'));
 
       await waitFor(() => {
-        expect(screen.getByText('Current AI systems lack robust goal stability')).toBeInTheDocument();
-        expect(screen.getByText('Value learning is tractable with sufficient oversight')).toBeInTheDocument();
+        expect(
+          screen.getByText('Current AI systems lack robust goal stability'),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByText('Value learning is tractable with sufficient oversight'),
+        ).toBeInTheDocument();
       });
     });
   });
@@ -371,10 +370,7 @@ describe('CruxPanel', () => {
     it('shows empty state for load-bearing when none found', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/cruxes')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ cruxes: mockCruxes }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ cruxes: mockCruxes }) });
         }
         if (url.includes('/load-bearing-claims')) {
           return Promise.resolve({
@@ -398,7 +394,9 @@ describe('CruxPanel', () => {
       fireEvent.click(screen.getByText('LOAD-BEARING (0)'));
 
       await waitFor(() => {
-        expect(screen.getByText('No load-bearing claims found for this debate.')).toBeInTheDocument();
+        expect(
+          screen.getByText('No load-bearing claims found for this debate.'),
+        ).toBeInTheDocument();
       });
     });
   });
@@ -446,7 +444,7 @@ describe('CruxPanel', () => {
           ok: false,
           status: 500,
           json: () => Promise.resolve({ error: 'Server error' }),
-        })
+        }),
       );
 
       // Search again

@@ -1,0 +1,9 @@
+{
+  "path": ["src"],
+  "minTokens": 50,
+  "threshold": 6,
+  "reporters": ["json", "console"],
+  "output": ".jscpd-report",
+  "gitignore": true,
+  "silent": true
+}

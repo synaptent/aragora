@@ -3,32 +3,11 @@
   "name": "Aragora Context Send",
   "version": "0.1.0",
   "description": "Send highlighted webpage text to Aragora for adversarial review, then review results in the popup.",
-  "permissions": [
-    "activeTab",
-    "contextMenus",
-    "storage"
-  ],
-  "host_permissions": [
-    "https://*/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "action": {
-    "default_title": "Aragora",
-    "default_popup": "popup.html"
-  },
+  "permissions": ["activeTab", "contextMenus", "storage"],
+  "host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Aragora", "default_popup": "popup.html" },
   "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
+    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }
   ]
 }

@@ -50,19 +50,17 @@ export const GoalNode = memo(function GoalNode({ data, selected }: GoalNodeProps
         <span className="px-1.5 py-0.5 text-xs bg-emerald-500/30 text-emerald-200 rounded font-theme-data uppercase">
           {goalTypeLabels[goalType] || goalType}
         </span>
-        <span className={`px-1.5 py-0.5 text-xs rounded font-theme-data ${priorityColors[priority] || priorityColors.medium}`}>
+        <span
+          className={`px-1.5 py-0.5 text-xs rounded font-theme-data ${priorityColors[priority] || priorityColors.medium}`}
+        >
           {priority}
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1">{label}</div>
 
       {description && (
-        <div className="text-xs text-text-muted mb-1 line-clamp-2">
-          {description}
-        </div>
+        <div className="text-xs text-text-muted mb-1 line-clamp-2">{description}</div>
       )}
 
       {typeof confidence === 'number' && (

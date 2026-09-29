@@ -102,9 +102,7 @@ export function RhetoricalObservationsPanel({ events }: RhetoricalObservationsPa
           <span className="text-xs font-theme-data text-text-muted">
             {observations.length} observation{observations.length !== 1 ? 's' : ''}
           </span>
-          <span className="text-xs font-theme-data text-purple">
-            {isExpanded ? '[-]' : '[+]'}
-          </span>
+          <span className="text-xs font-theme-data text-purple">{isExpanded ? '[-]' : '[+]'}</span>
         </div>
       </div>
 
@@ -148,17 +146,10 @@ export function RhetoricalObservationsPanel({ events }: RhetoricalObservationsPa
           {observations.map((obs, idx) => {
             const colors = getAgentColors(obs.agent);
             return (
-              <div
-                key={idx}
-                className={`p-3 border ${colors.border} ${colors.bg}`}
-              >
+              <div key={idx} className={`p-3 border ${colors.border} ${colors.bg}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`text-xs font-theme-data ${colors.text}`}>
-                    {obs.agent}
-                  </span>
-                  <span className="text-xs font-theme-data text-text-muted">
-                    Round {obs.round}
-                  </span>
+                  <span className={`text-xs font-theme-data ${colors.text}`}>{obs.agent}</span>
+                  <span className="text-xs font-theme-data text-text-muted">Round {obs.round}</span>
                 </div>
 
                 {/* Patterns */}

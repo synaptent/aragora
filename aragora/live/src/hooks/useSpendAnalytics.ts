@@ -69,11 +69,7 @@ export interface SpendDashboardTrends {
   org_id: string;
   period: string;
   days: number;
-  data_points: Array<{
-    date: string;
-    amount_usd: number;
-    [key: string]: unknown;
-  }>;
+  data_points: Array<{ date: string; amount_usd: number; [key: string]: unknown }>;
 }
 
 /** Single agent cost entry from GET /api/v1/analytics/spend/by-agent */
@@ -129,16 +125,10 @@ export function useSpendAnalytics(
 ) {
   const result = useSWRFetch<{ data: SpendAnalyticsData }>(
     `/api/v1/spend/analytics?period=${period}&workspace_id=${workspaceId}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    },
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    analytics: result.data?.data ?? null,
-  };
+  return { ...result, analytics: result.data?.data ?? null };
 }
 
 /**
@@ -151,16 +141,10 @@ export function useSpendTrend(
 ) {
   const result = useSWRFetch<{ data: SpendTrend }>(
     `/api/v1/spend/analytics/trend?period=${period}&workspace_id=${workspaceId}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    },
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    trend: result.data?.data ?? null,
-  };
+  return { ...result, trend: result.data?.data ?? null };
 }
 
 /**
@@ -173,16 +157,10 @@ export function useSpendForecast(
 ) {
   const result = useSWRFetch<{ data: SpendForecast }>(
     `/api/v1/spend/analytics/forecast?workspace_id=${workspaceId}&days=${days}`,
-    {
-      refreshInterval: 300000,
-      ...options,
-    },
+    { refreshInterval: 300000, ...options },
   );
 
-  return {
-    ...result,
-    forecast: result.data?.data ?? null,
-  };
+  return { ...result, forecast: result.data?.data ?? null };
 }
 
 /**
@@ -195,16 +173,10 @@ export function useSpendAnomalies(
 ) {
   const result = useSWRFetch<{ data: { anomalies: SpendAnomaly[] } }>(
     `/api/v1/spend/analytics/anomalies?period=${period}&workspace_id=${workspaceId}`,
-    {
-      refreshInterval: 300000,
-      ...options,
-    },
+    { refreshInterval: 300000, ...options },
   );
 
-  return {
-    ...result,
-    anomalies: result.data?.data?.anomalies ?? [],
-  };
+  return { ...result, anomalies: result.data?.data?.anomalies ?? [] };
 }
 
 // ============================================================================
@@ -222,16 +194,10 @@ export function useSpendDashboardSummary(
 ) {
   const result = useSWRFetch<SpendDashboardSummary>(
     `/api/v1/analytics/spend/summary?workspace_id=${workspaceId}&org_id=${orgId}`,
-    {
-      refreshInterval: 30000,
-      ...options,
-    },
+    { refreshInterval: 30000, ...options },
   );
 
-  return {
-    ...result,
-    summary: result.data ?? null,
-  };
+  return { ...result, summary: result.data ?? null };
 }
 
 /**
@@ -246,16 +212,10 @@ export function useSpendDashboardTrends(
 ) {
   const result = useSWRFetch<SpendDashboardTrends>(
     `/api/v1/analytics/spend/trends?org_id=${orgId}&period=${period}&days=${days}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    },
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    trends: result.data ?? null,
-  };
+  return { ...result, trends: result.data ?? null };
 }
 
 /**
@@ -268,16 +228,10 @@ export function useSpendDashboardByAgent(
 ) {
   const result = useSWRFetch<SpendDashboardByAgent>(
     `/api/v1/analytics/spend/by-agent?workspace_id=${workspaceId}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    },
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    agentBreakdown: result.data ?? null,
-  };
+  return { ...result, agentBreakdown: result.data ?? null };
 }
 
 /**
@@ -291,16 +245,10 @@ export function useSpendDashboardByDecision(
 ) {
   const result = useSWRFetch<SpendDashboardByDecision>(
     `/api/v1/analytics/spend/by-decision?workspace_id=${workspaceId}&limit=${limit}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    },
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    decisionBreakdown: result.data ?? null,
-  };
+  return { ...result, decisionBreakdown: result.data ?? null };
 }
 
 /**
@@ -313,14 +261,8 @@ export function useSpendDashboardBudget(
 ) {
   const result = useSWRFetch<SpendDashboardBudget>(
     `/api/v1/analytics/spend/budget?org_id=${orgId}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    },
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    budget: result.data ?? null,
-  };
+  return { ...result, budget: result.data ?? null };
 }

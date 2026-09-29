@@ -77,9 +77,10 @@ test.describe('Plugin Marketplace', () => {
 
   test('should allow filtering by capability', async ({ page }) => {
     // Find filter dropdown
-    const filterSelect = page.locator('select').filter({
-      has: page.locator('option')
-    }).first();
+    const filterSelect = page
+      .locator('select')
+      .filter({ has: page.locator('option') })
+      .first();
 
     if (await filterSelect.isVisible().catch(() => false)) {
       await filterSelect.selectOption({ index: 1 }); // Select first non-default option
@@ -91,7 +92,9 @@ test.describe('Plugin Marketplace', () => {
 
   test('should allow searching plugins', async ({ page }) => {
     // Find search input
-    const searchInput = page.locator('input[type="text"], input[type="search"], input[placeholder*="search" i]').first();
+    const searchInput = page
+      .locator('input[type="text"], input[type="search"], input[placeholder*="search" i]')
+      .first();
 
     if (await searchInput.isVisible().catch(() => false)) {
       await searchInput.fill('security');
@@ -108,9 +111,10 @@ test.describe('Plugin Marketplace', () => {
       await pluginCard.click();
 
       // Should show install button
-      const installButton = page.locator('button').filter({
-        hasText: /install/i
-      }).first();
+      const installButton = page
+        .locator('button')
+        .filter({ hasText: /install/i })
+        .first();
 
       const _hasInstall = await installButton.isVisible({ timeout: 3000 }).catch(() => false);
       // Test passes if page renders (install button may not exist)
@@ -133,9 +137,10 @@ test.describe('Plugin Marketplace', () => {
       await pluginCard.click();
 
       // Click install
-      const installButton = page.locator('button').filter({
-        hasText: /install/i
-      }).first();
+      const installButton = page
+        .locator('button')
+        .filter({ hasText: /install/i })
+        .first();
 
       if (await installButton.isVisible().catch(() => false)) {
         await installButton.click();
@@ -147,9 +152,7 @@ test.describe('Plugin Marketplace', () => {
   });
 
   test('should open run modal for installed plugins', async ({ page, aragoraPage }) => {
-    await mockApiResponse(page, '**/api/plugins/installed', {
-      installed: [mockPlugins[0]],
-    });
+    await mockApiResponse(page, '**/api/plugins/installed', { installed: [mockPlugins[0]] });
 
     await page.goto('/plugins');
     await aragoraPage.dismissAllOverlays();
@@ -160,9 +163,7 @@ test.describe('Plugin Marketplace', () => {
       await pluginCard.click();
 
       // Find run button
-      const runButton = page.locator('button').filter({
-        hasText: /run/i
-      }).first();
+      const runButton = page.locator('button').filter({ hasText: /run/i }).first();
 
       if (await runButton.isVisible().catch(() => false)) {
         await runButton.click();
@@ -179,9 +180,7 @@ test.describe('Plugin Run Modal', () => {
   test.beforeEach(async ({ page, aragoraPage }) => {
     await mockApiResponse(page, '**/api/health', { status: 'ok' });
     await mockApiResponse(page, '**/api/plugins', { plugins: mockPlugins });
-    await mockApiResponse(page, '**/api/plugins/installed', {
-      installed: [mockPlugins[0]],
-    });
+    await mockApiResponse(page, '**/api/plugins/installed', { installed: [mockPlugins[0]] });
     await page.goto('/plugins');
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');

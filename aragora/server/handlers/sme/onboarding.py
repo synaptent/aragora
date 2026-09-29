@@ -586,7 +586,7 @@ def _track_event(
     user_id: str,
     organization_id: str | None,
     data: dict[str, Any],
-):
+) -> None:
     """Track onboarding analytics event."""
     with _analytics_lock:
         _analytics_events.append(

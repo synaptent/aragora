@@ -52,8 +52,10 @@ export function QuickLinksBar() {
     <div className="hidden sm:block border-b border-[var(--accent)]/10 bg-surface/30">
       <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6 py-1.5">
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
-          <span className="text-[9px] font-theme-data text-text-muted/40 mr-2 shrink-0">EXPLORE:</span>
-          {QUICK_LINKS.filter(link => isFeatureVisible(link.minMode)).map(link => (
+          <span className="text-[9px] font-theme-data text-text-muted/40 mr-2 shrink-0">
+            EXPLORE:
+          </span>
+          {QUICK_LINKS.filter((link) => isFeatureVisible(link.minMode)).map((link) => (
             <Link
               key={link.href}
               href={link.href}

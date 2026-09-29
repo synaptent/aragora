@@ -40,11 +40,7 @@ const mockReplaysData = [
 ];
 
 const mockReplayDetail = {
-  meta: {
-    topic: 'AI Ethics Debate',
-    debate_id: 'debate-123',
-    created_at: '2026-01-05T10:00:00Z',
-  },
+  meta: { topic: 'AI Ethics Debate', debate_id: 'debate-123', created_at: '2026-01-05T10:00:00Z' },
   events: [
     {
       event_id: 'evt-001',
@@ -90,16 +86,10 @@ function setupSuccessfulFetch() {
       });
     }
     if (url.includes('/api/replays/replay-001')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockReplayDetail),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockReplayDetail) });
     }
     if (url.includes('/api/replays')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockReplaysData),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockReplaysData) });
     }
     return Promise.resolve({ ok: false, statusText: 'Not Found' });
   });
@@ -124,7 +114,7 @@ describe('ReplayBrowser', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/replays'),
-          expect.anything()
+          expect.anything(),
         );
       });
 
@@ -205,7 +195,7 @@ describe('ReplayBrowser', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/replays/replay-001'),
-          expect.anything()
+          expect.anything(),
         );
       });
     });
@@ -356,9 +346,7 @@ describe('ReplayBrowser', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/fork'),
-          expect.objectContaining({
-            method: 'POST',
-          })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -388,7 +376,7 @@ describe('ReplayBrowser', () => {
   describe('Error Handling', () => {
     it('shows error when fetch fails', async () => {
       mockFetch.mockImplementation(() =>
-        Promise.resolve({ ok: false, statusText: 'Internal Server Error' })
+        Promise.resolve({ ok: false, statusText: 'Internal Server Error' }),
       );
 
       render(<ReplayBrowser />);
@@ -403,16 +391,17 @@ describe('ReplayBrowser', () => {
       jest.useRealTimers();
 
       // Mock to reject - fetchWithRetry will retry but eventually fail
-      mockFetch.mockImplementation(() =>
-        Promise.reject(new Error('Network error'))
-      );
+      mockFetch.mockImplementation(() => Promise.reject(new Error('Network error')));
 
       render(<ReplayBrowser />);
 
       // Wait for retries to complete (fetchWithRetry has maxRetries: 2)
-      await waitFor(() => {
-        expect(screen.getByText('Network error')).toBeInTheDocument();
-      }, { timeout: 10000 });
+      await waitFor(
+        () => {
+          expect(screen.getByText('Network error')).toBeInTheDocument();
+        },
+        { timeout: 10000 },
+      );
 
       // Restore fake timers for other tests
       jest.useFakeTimers();
@@ -420,7 +409,7 @@ describe('ReplayBrowser', () => {
 
     it('has retry button on error', async () => {
       mockFetch.mockImplementation(() =>
-        Promise.resolve({ ok: false, statusText: 'Internal Server Error' })
+        Promise.resolve({ ok: false, statusText: 'Internal Server Error' }),
       );
 
       render(<ReplayBrowser />);

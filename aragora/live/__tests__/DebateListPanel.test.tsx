@@ -58,10 +58,7 @@ describe('DebateListPanel', () => {
     });
 
     it('displays error message when fetch fails', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
       renderWithProviders(<DebateListPanel />);
 
@@ -226,7 +223,9 @@ describe('DebateListPanel', () => {
         expect(screen.getByText('Discuss rate limiting strategies')).toBeInTheDocument();
       });
 
-      const debateCard = screen.getByText('Discuss rate limiting strategies').closest('div[class*="cursor-pointer"]');
+      const debateCard = screen
+        .getByText('Discuss rate limiting strategies')
+        .closest('div[class*="cursor-pointer"]');
       if (debateCard) {
         fireEvent.click(debateCard);
         expect(onSelectDebate).toHaveBeenCalledWith('debate-1');
@@ -275,10 +274,7 @@ describe('DebateListPanel', () => {
 
   describe('Empty State', () => {
     it('shows empty state when no debates', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ debates: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
       renderWithProviders(<DebateListPanel />);
 

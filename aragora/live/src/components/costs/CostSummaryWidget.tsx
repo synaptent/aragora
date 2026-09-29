@@ -37,33 +37,32 @@ export function CostSummaryWidget() {
       <div className="bg-[var(--surface)] border border-[var(--border)] p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} COSTS</h3>
-          <Link href="/usage" className="text-[10px] font-theme-data text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors">
+          <Link
+            href="/usage"
+            className="text-[10px] font-theme-data text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors"
+          >
             VIEW
           </Link>
         </div>
-        <p className="text-xs font-theme-data text-[var(--text-muted)]">
-          Cost data unavailable
-        </p>
+        <p className="text-xs font-theme-data text-[var(--text-muted)]">Cost data unavailable</p>
       </div>
     );
   }
 
-  const budgetPercent = summary.budget_usd > 0
-    ? Math.min((summary.total_cost_usd / summary.budget_usd) * 100, 100)
-    : 0;
+  const budgetPercent =
+    summary.budget_usd > 0 ? Math.min((summary.total_cost_usd / summary.budget_usd) * 100, 100) : 0;
 
-  const barColor = budgetPercent > 90
-    ? 'bg-red-400'
-    : budgetPercent > 75
-    ? 'bg-yellow-400'
-    : 'bg-[var(--acid-green)]';
+  const barColor =
+    budgetPercent > 90
+      ? 'bg-red-400'
+      : budgetPercent > 75
+        ? 'bg-yellow-400'
+        : 'bg-[var(--acid-green)]';
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)]">
       <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} COST OVERVIEW
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} COST OVERVIEW</h3>
         <Link
           href="/usage"
           className="text-xs font-theme-data text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors"
@@ -87,9 +86,15 @@ export function CostSummaryWidget() {
             <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
               of {formatCurrency(summary.budget_usd)} budget
             </div>
-            <div className={`text-sm font-theme-data font-bold ${
-              budgetPercent > 90 ? 'text-red-400' : budgetPercent > 75 ? 'text-yellow-400' : 'text-[var(--acid-green)]'
-            }`}>
+            <div
+              className={`text-sm font-theme-data font-bold ${
+                budgetPercent > 90
+                  ? 'text-red-400'
+                  : budgetPercent > 75
+                    ? 'text-yellow-400'
+                    : 'text-[var(--acid-green)]'
+              }`}
+            >
               {budgetPercent.toFixed(0)}%
             </div>
           </div>

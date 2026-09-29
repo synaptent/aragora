@@ -56,7 +56,9 @@ function StatusBadge({ status }: { status: string }) {
     experimental: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
   };
 
-  const style = colors[status.toLowerCase()] || 'text-[var(--text-muted)] bg-[var(--surface)] border-[var(--border)]';
+  const style =
+    colors[status.toLowerCase()] ||
+    'text-[var(--text-muted)] bg-[var(--surface)] border-[var(--border)]';
 
   return (
     <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded border ${style}`}>
@@ -78,17 +80,15 @@ function CategoryBadge({ category }: { category: string }) {
 
   const color = colors[category.toLowerCase()] || 'text-[var(--text-muted)]';
 
-  return (
-    <span className={`text-[10px] font-theme-data uppercase ${color}`}>
-      {category}
-    </span>
-  );
+  return <span className={`text-[10px] font-theme-data uppercase ${color}`}>{category}</span>;
 }
 
 function ValueDisplay({ value, type: _type }: { value: unknown; type?: string }) {
   if (typeof value === 'boolean') {
     return (
-      <span className={`font-theme-data text-sm font-bold ${value ? 'text-[var(--acid-green)]' : 'text-red-400'}`}>
+      <span
+        className={`font-theme-data text-sm font-bold ${value ? 'text-[var(--acid-green)]' : 'text-red-400'}`}
+      >
         {value ? 'ON' : 'OFF'}
       </span>
     );
@@ -106,7 +106,11 @@ function ValueDisplay({ value, type: _type }: { value: unknown; type?: string })
     );
   }
 
-  return <span className="font-theme-data text-xs text-[var(--text-muted)]">{JSON.stringify(value)}</span>;
+  return (
+    <span className="font-theme-data text-xs text-[var(--text-muted)]">
+      {JSON.stringify(value)}
+    </span>
+  );
 }
 
 function ToggleSwitch({
@@ -123,14 +127,14 @@ function ToggleSwitch({
       onClick={onToggle}
       disabled={disabled}
       className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-50 ${
-        enabled ? 'bg-[var(--acid-green)]/30 border border-[var(--acid-green)]/50' : 'bg-[var(--surface)] border border-[var(--border)]'
+        enabled
+          ? 'bg-[var(--acid-green)]/30 border border-[var(--acid-green)]/50'
+          : 'bg-[var(--surface)] border border-[var(--border)]'
       }`}
     >
       <span
         className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${
-          enabled
-            ? 'left-5 bg-[var(--acid-green)]'
-            : 'left-0.5 bg-[var(--text-muted)]'
+          enabled ? 'left-5 bg-[var(--acid-green)]' : 'left-0.5 bg-[var(--text-muted)]'
         }`}
       />
     </button>
@@ -155,11 +159,15 @@ export default function FeatureFlagsPage() {
   const queryString = params.toString();
 
   // Fetch from admin endpoint for richer data (value + default + type + stats)
-  const { data: flagsData, isLoading, error, mutate: refreshFlags } =
-    useSWRFetch<FlagsResponse>(
-      `/api/v1/admin/feature-flags${queryString ? `?${queryString}` : ''}`,
-      { refreshInterval: 30000 },
-    );
+  const {
+    data: flagsData,
+    isLoading,
+    error,
+    mutate: refreshFlags,
+  } = useSWRFetch<FlagsResponse>(
+    `/api/v1/admin/feature-flags${queryString ? `?${queryString}` : ''}`,
+    { refreshInterval: 30000 },
+  );
 
   const allFlags = flagsData?.flags ?? [];
   const stats = flagsData?.stats;
@@ -177,25 +185,28 @@ export default function FeatureFlagsPage() {
   const categories = Array.from(new Set(allFlags.map((f) => f.category))).sort();
 
   // Toggle a boolean flag
-  const handleToggle = useCallback(async (flag: FeatureFlag) => {
-    if (typeof flag.value !== 'boolean') return;
+  const handleToggle = useCallback(
+    async (flag: FeatureFlag) => {
+      if (typeof flag.value !== 'boolean') return;
 
-    setTogglingFlag(flag.name);
-    try {
-      const response = await fetch(`/api/v1/admin/feature-flags/${flag.name}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: !flag.value }),
-      });
-      if (response.ok) {
-        refreshFlags();
+      setTogglingFlag(flag.name);
+      try {
+        const response = await fetch(`/api/v1/admin/feature-flags/${flag.name}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: !flag.value }),
+        });
+        if (response.ok) {
+          refreshFlags();
+        }
+      } catch {
+        // toggle failed silently
+      } finally {
+        setTogglingFlag(null);
       }
-    } catch {
-      // toggle failed silently
-    } finally {
-      setTogglingFlag(null);
-    }
-  }, [refreshFlags]);
+    },
+    [refreshFlags],
+  );
 
   // Count by status
   const activeCount = allFlags.filter((f) => f.status === 'active').length;
@@ -221,14 +232,16 @@ export default function FeatureFlagsPage() {
                 Admin
               </Link>
               <span className="text-[var(--text-muted)]">/</span>
-              <span className="text-xs font-theme-data text-[var(--acid-green)]">Feature Flags</span>
+              <span className="text-xs font-theme-data text-[var(--acid-green)]">
+                Feature Flags
+              </span>
             </div>
             <h1 className="text-xl font-theme-data text-[var(--acid-green)]">
               {'>'} FEATURE FLAGS
             </h1>
             <p className="text-xs text-[var(--text-muted)] font-theme-data mt-1">
-              View and manage feature flags across the platform.
-              Toggle boolean flags, filter by category or status, and monitor usage.
+              View and manage feature flags across the platform. Toggle boolean flags, filter by
+              category or status, and monitor usage.
             </p>
           </div>
 
@@ -242,26 +255,38 @@ export default function FeatureFlagsPage() {
           {/* Summary Stats */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-              <div className="text-2xl font-theme-data text-[var(--acid-green)]">{allFlags.length}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Total Flags</div>
+              <div className="text-2xl font-theme-data text-[var(--acid-green)]">
+                {allFlags.length}
+              </div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Total Flags
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-[var(--acid-green)]">{activeCount}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Active</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Active
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{betaCount}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Beta</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Beta
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-yellow-400">{deprecatedCount}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Deprecated</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Deprecated
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-purple-400">
                 {booleanOnCount}/{booleanTotal}
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Enabled</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Enabled
+              </div>
             </div>
           </div>
 
@@ -307,7 +332,9 @@ export default function FeatureFlagsPage() {
             >
               <option value="">All Categories</option>
               {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
               ))}
             </select>
             <select
@@ -401,47 +428,79 @@ export default function FeatureFlagsPage() {
                         <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--bg)]/50">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                             <div>
-                              <span className="text-[var(--text-muted)] font-theme-data block">Type</span>
-                              <span className="text-[var(--text)] font-theme-data">{flag.type || 'unknown'}</span>
+                              <span className="text-[var(--text-muted)] font-theme-data block">
+                                Type
+                              </span>
+                              <span className="text-[var(--text)] font-theme-data">
+                                {flag.type || 'unknown'}
+                              </span>
                             </div>
                             <div>
-                              <span className="text-[var(--text-muted)] font-theme-data block">Default</span>
-                              <span className="text-purple-400 font-theme-data">{String(flag.default ?? '--')}</span>
+                              <span className="text-[var(--text-muted)] font-theme-data block">
+                                Default
+                              </span>
+                              <span className="text-purple-400 font-theme-data">
+                                {String(flag.default ?? '--')}
+                              </span>
                             </div>
                             <div>
-                              <span className="text-[var(--text-muted)] font-theme-data block">Current</span>
-                              <span className="text-[var(--acid-cyan)] font-theme-data">{String(flag.value)}</span>
+                              <span className="text-[var(--text-muted)] font-theme-data block">
+                                Current
+                              </span>
+                              <span className="text-[var(--acid-cyan)] font-theme-data">
+                                {String(flag.value)}
+                              </span>
                             </div>
                             {flag.env_var && (
                               <div>
-                                <span className="text-[var(--text-muted)] font-theme-data block">Env Var</span>
-                                <span className="text-yellow-400 font-theme-data text-[10px]">{flag.env_var}</span>
+                                <span className="text-[var(--text-muted)] font-theme-data block">
+                                  Env Var
+                                </span>
+                                <span className="text-yellow-400 font-theme-data text-[10px]">
+                                  {flag.env_var}
+                                </span>
                               </div>
                             )}
                           </div>
 
                           {flag.deprecated_since && (
                             <div className="mt-3 p-2 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs font-theme-data">
-                              <span className="text-yellow-400">Deprecated since {flag.deprecated_since}</span>
+                              <span className="text-yellow-400">
+                                Deprecated since {flag.deprecated_since}
+                              </span>
                               {flag.removed_in && (
-                                <span className="text-[var(--text-muted)]"> (removal in {flag.removed_in})</span>
+                                <span className="text-[var(--text-muted)]">
+                                  {' '}
+                                  (removal in {flag.removed_in})
+                                </span>
                               )}
                               {flag.replacement && (
-                                <span className="text-[var(--acid-cyan)]"> - replace with: {flag.replacement}</span>
+                                <span className="text-[var(--acid-cyan)]">
+                                  {' '}
+                                  - replace with: {flag.replacement}
+                                </span>
                               )}
                             </div>
                           )}
 
                           {flag.usage && (
                             <div className="mt-3 pt-3 border-t border-[var(--border)]">
-                              <h4 className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">Usage Stats</h4>
+                              <h4 className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">
+                                Usage Stats
+                              </h4>
                               <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div>
-                                  <span className="text-[var(--text-muted)] font-theme-data">Accesses: </span>
-                                  <span className="text-[var(--acid-green)] font-theme-data">{flag.usage.access_count}</span>
+                                  <span className="text-[var(--text-muted)] font-theme-data">
+                                    Accesses:{' '}
+                                  </span>
+                                  <span className="text-[var(--acid-green)] font-theme-data">
+                                    {flag.usage.access_count}
+                                  </span>
                                 </div>
                                 <div>
-                                  <span className="text-[var(--text-muted)] font-theme-data">Last: </span>
+                                  <span className="text-[var(--text-muted)] font-theme-data">
+                                    Last:{' '}
+                                  </span>
                                   <span className="text-[var(--text)] font-theme-data">
                                     {flag.usage.last_accessed
                                       ? new Date(flag.usage.last_accessed).toLocaleString()
@@ -449,24 +508,27 @@ export default function FeatureFlagsPage() {
                                   </span>
                                 </div>
                               </div>
-                              {flag.usage.access_locations && Object.keys(flag.usage.access_locations).length > 0 && (
-                                <div className="mt-2">
-                                  <span className="text-[10px] text-[var(--text-muted)] font-theme-data">Access Locations:</span>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {Object.entries(flag.usage.access_locations)
-                                      .sort(([, a], [, b]) => b - a)
-                                      .slice(0, 10)
-                                      .map(([loc, count]) => (
-                                        <span
-                                          key={loc}
-                                          className="px-1.5 py-0.5 text-[10px] font-theme-data bg-[var(--surface)] text-[var(--text-muted)] rounded"
-                                        >
-                                          {loc} ({count})
-                                        </span>
-                                      ))}
+                              {flag.usage.access_locations &&
+                                Object.keys(flag.usage.access_locations).length > 0 && (
+                                  <div className="mt-2">
+                                    <span className="text-[10px] text-[var(--text-muted)] font-theme-data">
+                                      Access Locations:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {Object.entries(flag.usage.access_locations)
+                                        .sort(([, a], [, b]) => b - a)
+                                        .slice(0, 10)
+                                        .map(([loc, count]) => (
+                                          <span
+                                            key={loc}
+                                            className="px-1.5 py-0.5 text-[10px] font-theme-data bg-[var(--surface)] text-[var(--text-muted)] rounded"
+                                          >
+                                            {loc} ({count})
+                                          </span>
+                                        ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
                             </div>
                           )}
                         </div>
@@ -506,9 +568,7 @@ export default function FeatureFlagsPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // FEATURE FLAGS
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // FEATURE FLAGS</p>
         </footer>
       </main>
     </>

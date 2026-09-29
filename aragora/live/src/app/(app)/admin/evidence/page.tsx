@@ -114,10 +114,7 @@ export default function EvidencePage() {
     setError(null);
     try {
       const client = getClient();
-      const response = await client.evidence.list({
-        limit: browseLimit,
-        offset,
-      });
+      const response = await client.evidence.list({ limit: browseLimit, offset });
       setEvidenceList(response.evidence);
       setTotalEvidence(response.total);
       setBrowseOffset(offset);
@@ -143,9 +140,9 @@ export default function EvidencePage() {
       const client = getClient();
       await client.evidence.delete(id);
       // Remove from local state
-      setEvidenceList(prev => prev.filter(e => e.id !== id));
-      setSearchResults(prev => prev.filter(e => e.id !== id));
-      setCollectResults(prev => prev.filter(e => e.id !== id));
+      setEvidenceList((prev) => prev.filter((e) => e.id !== id));
+      setSearchResults((prev) => prev.filter((e) => e.id !== id));
+      setCollectResults((prev) => prev.filter((e) => e.id !== id));
       loadStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete evidence');
@@ -208,7 +205,12 @@ export default function EvidencePage() {
             title="Delete evidence"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
             </svg>
           </button>
         )}
@@ -380,7 +382,8 @@ export default function EvidencePage() {
               Previous
             </button>
             <span className="py-2 text-gray-600 dark:text-gray-400">
-              {browseOffset + 1} - {Math.min(browseOffset + browseLimit, totalEvidence)} of {totalEvidence}
+              {browseOffset + 1} - {Math.min(browseOffset + browseLimit, totalEvidence)} of{' '}
+              {totalEvidence}
             </span>
             <button
               onClick={() => loadEvidenceList(browseOffset + browseLimit)}

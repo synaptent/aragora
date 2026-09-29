@@ -28,11 +28,11 @@ function TemplateCard({ template, compact }: { template: TemplateData; compact?:
                   hover:border-${meta.accent}/50 hover:bg-surface/50 transition-all group`}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className={`text-${meta.accent}/60 font-theme-data text-xs`}>
-          [{meta.label}]
-        </span>
+        <span className={`text-${meta.accent}/60 font-theme-data text-xs`}>[{meta.label}]</span>
       </div>
-      <h3 className={`text-${meta.accent} font-theme-data text-sm mb-1 group-hover:text-${meta.accent}/80`}>
+      <h3
+        className={`text-${meta.accent} font-theme-data text-sm mb-1 group-hover:text-${meta.accent}/80`}
+      >
         {template.name}
       </h3>
       <p className="text-text-muted text-xs font-theme-data leading-relaxed mb-3">
@@ -102,9 +102,10 @@ export function TemplatePicker({ compact = false, compactLimit = 2 }: TemplatePi
                   key={cat}
                   onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
                   className={`px-2 py-1 text-[10px] font-theme-data border transition-colors
-                    ${selectedCategory === cat
-                      ? `border-${meta.accent} bg-${meta.accent}/10 text-${meta.accent}`
-                      : `border-[var(--accent)]/20 text-text-muted/50 hover:text-${meta.accent} hover:border-${meta.accent}/40`
+                    ${
+                      selectedCategory === cat
+                        ? `border-${meta.accent} bg-${meta.accent}/10 text-${meta.accent}`
+                        : `border-[var(--accent)]/20 text-text-muted/50 hover:text-${meta.accent} hover:border-${meta.accent}/40`
                     }`}
                 >
                   <span className="mr-1">{meta.icon}</span>
@@ -130,7 +131,9 @@ export function TemplatePicker({ compact = false, compactLimit = 2 }: TemplatePi
                 const meta = CATEGORY_META[cat];
                 return (
                   <div key={cat}>
-                    <h3 className={`text-${meta.accent} font-theme-data text-xs mb-2 flex items-center gap-2`}>
+                    <h3
+                      className={`text-${meta.accent} font-theme-data text-xs mb-2 flex items-center gap-2`}
+                    >
                       <span className="opacity-60">{meta.icon}</span>
                       {meta.label}
                     </h3>

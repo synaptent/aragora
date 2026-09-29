@@ -42,9 +42,7 @@ export function CycleTimeline({ cycles }: CycleTimelineProps) {
 
             <div className="bg-surface rounded border border-border p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-theme-data text-sm text-text">
-                  Cycle {entry.cycle}
-                </span>
+                <span className="font-theme-data text-sm text-text">Cycle {entry.cycle}</span>
                 <span
                   className={`font-theme-data text-xs px-1.5 py-0.5 rounded ${
                     entry.success
@@ -58,15 +56,9 @@ export function CycleTimeline({ cycles }: CycleTimelineProps) {
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-theme-data text-text-muted">
                 <span>phase: {entry.phase}</span>
-                {entry.files_modified != null && (
-                  <span>{entry.files_modified} files</span>
-                )}
-                {entry.tests_added != null && (
-                  <span>+{entry.tests_added} tests</span>
-                )}
-                {entry.duration_seconds != null && (
-                  <span>{entry.duration_seconds}s</span>
-                )}
+                {entry.files_modified != null && <span>{entry.files_modified} files</span>}
+                {entry.tests_added != null && <span>+{entry.tests_added} tests</span>}
+                {entry.duration_seconds != null && <span>{entry.duration_seconds}s</span>}
               </div>
 
               <div className="text-xs font-theme-data text-text-muted/60 mt-1">

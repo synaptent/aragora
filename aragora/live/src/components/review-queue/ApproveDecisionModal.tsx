@@ -93,7 +93,10 @@ export function ApproveDecisionModal({
   }, []);
 
   const isVerdictDisagree =
-    state === 'ready' && verdict !== null && verdict !== undefined && verdict !== 'approve_candidate';
+    state === 'ready' &&
+    verdict !== null &&
+    verdict !== undefined &&
+    verdict !== 'approve_candidate';
 
   let bodyLines: string[];
   if (isVerdictDisagree) {
@@ -126,8 +129,7 @@ export function ApproveDecisionModal({
   let primaryLabel = 'Generate brief first';
   if (state === 'failed') primaryLabel = 'Retry generation';
   else if (state === 'stale') primaryLabel = 'Regenerate for current commit';
-  else if (state === 'running' || state === 'queued')
-    primaryLabel = 'Wait for brief';
+  else if (state === 'running' || state === 'queued') primaryLabel = 'Wait for brief';
 
   return (
     <div
@@ -153,10 +155,7 @@ export function ApproveDecisionModal({
           color: 'var(--text)',
         }}
       >
-        <h2
-          id={`approve-decision-title-${prNumber}`}
-          className="text-base font-semibold"
-        >
+        <h2 id={`approve-decision-title-${prNumber}`} className="text-base font-semibold">
           Approve PR #{prNumber}?
         </h2>
         <div className="mt-3 space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -177,7 +176,10 @@ export function ApproveDecisionModal({
               color: 'var(--accent)',
             }}
           >
-            {primaryLabel} <span aria-hidden="true" className="ml-1 opacity-70">(g)</span>
+            {primaryLabel}{' '}
+            <span aria-hidden="true" className="ml-1 opacity-70">
+              (g)
+            </span>
           </button>
           <button
             type="button"
@@ -191,7 +193,10 @@ export function ApproveDecisionModal({
               color: 'var(--text)',
             }}
           >
-            Approve anyway <span aria-hidden="true" className="ml-1 opacity-70">(a)</span>
+            Approve anyway{' '}
+            <span aria-hidden="true" className="ml-1 opacity-70">
+              (a)
+            </span>
           </button>
           <button
             type="button"
@@ -200,15 +205,15 @@ export function ApproveDecisionModal({
             className="text-xs underline-offset-4 hover:underline"
             style={{ color: 'var(--text-muted)' }}
           >
-            Cancel <span aria-hidden="true" className="ml-1 opacity-70">(Esc)</span>
+            Cancel{' '}
+            <span aria-hidden="true" className="ml-1 opacity-70">
+              (Esc)
+            </span>
           </button>
         </div>
-        <p
-          className="mt-4 text-[11px]"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          Tip: press <kbd className="font-theme-data">a</kbd> twice quickly to
-          bypass this check on trusted PRs.
+        <p className="mt-4 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          Tip: press <kbd className="font-theme-data">a</kbd> twice quickly to bypass this check on
+          trusted PRs.
         </p>
       </div>
     </div>

@@ -84,3 +84,10 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # GitHub Pages propagation lags the deployment by up to a minute or two;
+      # five attempts 20 s apart fail the job only after the last non-200.
+      - name: Verify docs.aragora.ai is serving
+        shell: bash
+        run: |
+          for i in $(seq 1 5); do curl -sf https://docs.aragora.ai/ && exit 0; sleep 20; done; exit 1

@@ -80,22 +80,13 @@ describe('TrainingExportPanel', () => {
   const setupMockFetch = (statsResponse = mockStats, formatsResponse = mockFormats) => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/training/stats')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(statsResponse),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(statsResponse) });
       }
       if (url.includes('/training/formats')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(formatsResponse),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(formatsResponse) });
       }
       if (url.includes('/training/export/')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockExportResult),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockExportResult) });
       }
       return Promise.reject(new Error('Unknown URL'));
     });
@@ -113,16 +104,10 @@ describe('TrainingExportPanel', () => {
     it('shows error message on export failure', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/training/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/training/formats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockFormats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockFormats) });
         }
         if (url.includes('/training/export/')) {
           return Promise.resolve({
@@ -372,9 +357,7 @@ describe('TrainingExportPanel', () => {
       fireEvent.click(screen.getByText(/export sft/i));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/training/export/sft')
-        );
+        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/training/export/sft'));
       });
     });
 
@@ -388,9 +371,7 @@ describe('TrainingExportPanel', () => {
       fireEvent.click(screen.getByText(/export sft/i));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringMatching(/min_confidence=0\.7/)
-        );
+        expect(mockFetch).toHaveBeenCalledWith(expect.stringMatching(/min_confidence=0\.7/));
       });
     });
 
@@ -398,23 +379,17 @@ describe('TrainingExportPanel', () => {
       // Make export slow
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/training/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/training/formats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockFormats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockFormats) });
         }
         if (url.includes('/training/export/')) {
           return new Promise((resolve) => {
-            setTimeout(() => resolve({
-              ok: true,
-              json: () => Promise.resolve(mockExportResult),
-            }), 1000);
+            setTimeout(
+              () => resolve({ ok: true, json: () => Promise.resolve(mockExportResult) }),
+              1000,
+            );
           });
         }
         return Promise.reject(new Error('Unknown URL'));
@@ -622,7 +597,7 @@ describe('TrainingExportPanel', () => {
 
       await waitFor(() => {
         // DPO should show unavailable status in the availability list
-        const dpoStatus = screen.getAllByText(/DPO/i).find(el => el.textContent?.includes(''));
+        const dpoStatus = screen.getAllByText(/DPO/i).find((el) => el.textContent?.includes(''));
         expect(dpoStatus).toBeTruthy();
       });
     });
@@ -630,10 +605,7 @@ describe('TrainingExportPanel', () => {
 
   describe('Empty State', () => {
     it('shows empty exports list when no files', async () => {
-      setupMockFetch({
-        ...mockStats,
-        exported_files: [],
-      });
+      setupMockFetch({ ...mockStats, exported_files: [] });
 
       render(<TrainingExportPanel />);
 

@@ -21,11 +21,7 @@ interface BeliefNode extends d3.SimulationNodeDatum {
   is_crux: boolean;
   crux_score?: number;
   entropy?: number;
-  belief?: {
-    true_prob: number;
-    false_prob: number;
-    uncertain_prob: number;
-  };
+  belief?: { true_prob: number; false_prob: number; uncertain_prob: number };
 }
 
 interface InfluenceLink {
@@ -46,11 +42,7 @@ interface SimulatedInfluenceLink extends d3.SimulationLinkDatum<BeliefNode> {
 interface NetworkData {
   nodes: BeliefNode[];
   links: InfluenceLink[];
-  metadata?: {
-    debate_id: string;
-    total_claims: number;
-    crux_count: number;
-  };
+  metadata?: { debate_id: string; total_claims: number; crux_count: number };
 }
 
 interface InfluenceGraphProps {
@@ -124,10 +116,7 @@ export function InfluenceGraph({
       if (tokens?.access_token) {
         headers['Authorization'] = `Bearer ${tokens.access_token}`;
       }
-      const response = await fetch(
-        `${apiBase}/api/belief-network/${debateId}/graph`,
-        { headers }
-      );
+      const response = await fetch(`${apiBase}/api/belief-network/${debateId}/graph`, { headers });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -162,26 +151,26 @@ export function InfluenceGraph({
     // Add glow filter for crux nodes
     const defs = svg.append('defs');
 
-    const glowFilter = defs.append('filter')
+    const glowFilter = defs
+      .append('filter')
       .attr('id', 'crux-glow')
       .attr('x', '-50%')
       .attr('y', '-50%')
       .attr('width', '200%')
       .attr('height', '200%');
 
-    glowFilter.append('feGaussianBlur')
-      .attr('stdDeviation', '3')
-      .attr('result', 'coloredBlur');
+    glowFilter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
 
     const feMerge = glowFilter.append('feMerge');
     feMerge.append('feMergeNode').attr('in', 'coloredBlur');
     feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
     // Arrow markers
-    defs.selectAll('marker')
+    defs
+      .selectAll('marker')
       .data(['supports', 'opposes', 'influences'])
       .join('marker')
-      .attr('id', d => `arrow-${d}`)
+      .attr('id', (d) => `arrow-${d}`)
       .attr('viewBox', '0 -5 10 10')
       .attr('refX', 25)
       .attr('refY', 0)
@@ -189,35 +178,46 @@ export function InfluenceGraph({
       .attr('markerHeight', 6)
       .attr('orient', 'auto')
       .append('path')
-      .attr('fill', d => d === 'opposes' ? '#ff3939' : d === 'supports' ? '#39ff14' : '#666')
+      .attr('fill', (d) => (d === 'opposes' ? '#ff3939' : d === 'supports' ? '#39ff14' : '#666'))
       .attr('d', 'M0,-5L10,0L0,5');
 
     // Create simulation with proper typing
-    const simulation = d3.forceSimulation<BeliefNode>(data.nodes)
-      .force('link', d3.forceLink<BeliefNode, InfluenceLink>(data.links)
-        .id(d => d.id)
-        .distance(d => 150 - d.weight * 50)
-        .strength(d => d.weight * 0.5))
-      .force('charge', d3.forceManyBody<BeliefNode>()
-        .strength(d => -200 - d.centrality * 300))
+    const simulation = d3
+      .forceSimulation<BeliefNode>(data.nodes)
+      .force(
+        'link',
+        d3
+          .forceLink<BeliefNode, InfluenceLink>(data.links)
+          .id((d) => d.id)
+          .distance((d) => 150 - d.weight * 50)
+          .strength((d) => d.weight * 0.5),
+      )
+      .force(
+        'charge',
+        d3.forceManyBody<BeliefNode>().strength((d) => -200 - d.centrality * 300),
+      )
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide<BeliefNode>()
-        .radius(d => 20 + d.centrality * 30));
+      .force(
+        'collision',
+        d3.forceCollide<BeliefNode>().radius((d) => 20 + d.centrality * 30),
+      );
 
     // Draw links
-    const link = g.append('g')
+    const link = g
+      .append('g')
       .attr('class', 'links')
       .selectAll('line')
       .data(data.links)
       .join('line')
-      .attr('stroke', d =>
-        d.type === 'opposes' ? '#ff393960' :
-        d.type === 'supports' ? '#39ff1460' : '#66666660')
-      .attr('stroke-width', d => 1 + d.weight * 3)
-      .attr('marker-end', d => `url(#arrow-${d.type})`);
+      .attr('stroke', (d) =>
+        d.type === 'opposes' ? '#ff393960' : d.type === 'supports' ? '#39ff1460' : '#66666660',
+      )
+      .attr('stroke-width', (d) => 1 + d.weight * 3)
+      .attr('marker-end', (d) => `url(#arrow-${d.type})`);
 
     // Draw nodes
-    const node = g.append('g')
+    const node = g
+      .append('g')
       .attr('class', 'nodes')
       .selectAll('g')
       .data(data.nodes)
@@ -227,16 +227,18 @@ export function InfluenceGraph({
       .call(drag(simulation) as never);
 
     // Node circles
-    node.append('circle')
-      .attr('r', d => 8 + d.centrality * 20)
-      .attr('fill', d => getAgentColor(d.author))
-      .attr('stroke', d => d.is_crux && highlightCruxes ? '#ffff00' : '#000')
-      .attr('stroke-width', d => d.is_crux && highlightCruxes ? 3 : 1.5)
-      .attr('opacity', d => 0.7 + d.centrality * 0.3)
-      .attr('filter', d => d.is_crux && highlightCruxes ? 'url(#crux-glow)' : null);
+    node
+      .append('circle')
+      .attr('r', (d) => 8 + d.centrality * 20)
+      .attr('fill', (d) => getAgentColor(d.author))
+      .attr('stroke', (d) => (d.is_crux && highlightCruxes ? '#ffff00' : '#000'))
+      .attr('stroke-width', (d) => (d.is_crux && highlightCruxes ? 3 : 1.5))
+      .attr('opacity', (d) => 0.7 + d.centrality * 0.3)
+      .attr('filter', (d) => (d.is_crux && highlightCruxes ? 'url(#crux-glow)' : null));
 
     // Crux indicator
-    node.filter(d => d.is_crux && highlightCruxes)
+    node
+      .filter((d) => d.is_crux && highlightCruxes)
       .append('text')
       .attr('text-anchor', 'middle')
       .attr('dy', 4)
@@ -247,21 +249,21 @@ export function InfluenceGraph({
 
     // Labels
     if (showLabels) {
-      node.append('text')
-        .attr('dx', d => 12 + d.centrality * 20)
+      node
+        .append('text')
+        .attr('dx', (d) => 12 + d.centrality * 20)
         .attr('dy', 4)
         .attr('font-size', '10px')
         .attr('fill', '#aaa')
         .attr('font-family', 'monospace')
-        .text(d => d.author);
+        .text((d) => d.author);
     }
 
     // Tooltips
-    node.append('title')
-      .text(d => {
-        const cruxLabel = d.is_crux ? ' [CRUX]' : '';
-        return `${d.author}${cruxLabel}\n${d.statement.slice(0, 100)}...`;
-      });
+    node.append('title').text((d) => {
+      const cruxLabel = d.is_crux ? ' [CRUX]' : '';
+      return `${d.author}${cruxLabel}\n${d.statement.slice(0, 100)}...`;
+    });
 
     // Click handler
     node.on('click', (event, d) => {
@@ -475,11 +477,15 @@ export function InfluenceGraph({
             {selectedNode.entropy !== undefined && (
               <span className="text-text-muted">
                 Entropy:{' '}
-                <span className={
-                  selectedNode.entropy >= 0.8 ? 'text-acid-red' :
-                  selectedNode.entropy >= 0.5 ? 'text-[var(--acid-yellow)]' :
-                  'text-[var(--accent)]'
-                }>
+                <span
+                  className={
+                    selectedNode.entropy >= 0.8
+                      ? 'text-acid-red'
+                      : selectedNode.entropy >= 0.5
+                        ? 'text-[var(--acid-yellow)]'
+                        : 'text-[var(--accent)]'
+                  }
+                >
                   {selectedNode.entropy.toFixed(2)}
                 </span>
               </span>

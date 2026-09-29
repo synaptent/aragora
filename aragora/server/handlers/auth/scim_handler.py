@@ -76,7 +76,7 @@ class SCIMHandler(BaseHandler):
         "/scim/v2/Groups/*",
     ]
 
-    def __init__(self, server_context):
+    def __init__(self, server_context: dict[str, Any]) -> None:
         super().__init__(server_context)
         self._scim_server: SCIMServer | None = None
 

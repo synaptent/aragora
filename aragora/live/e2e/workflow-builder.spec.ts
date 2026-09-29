@@ -59,7 +59,9 @@ test.describe('Workflow Builder Page', () => {
 
     if (await nodePalette.isVisible().catch(() => false)) {
       // Should have node type options
-      const nodeTypes = page.locator('[data-testid="node-type"], .node-type-item, [draggable="true"]');
+      const nodeTypes = page.locator(
+        '[data-testid="node-type"], .node-type-item, [draggable="true"]',
+      );
       await expect(nodeTypes.first()).toBeVisible();
     }
   });
@@ -112,7 +114,9 @@ test.describe('Workflow Builder Page', () => {
       await node.click();
 
       // Property editor should appear
-      const propertyEditor = page.locator('[data-testid="property-editor"], .property-editor, aside');
+      const propertyEditor = page.locator(
+        '[data-testid="property-editor"], .property-editor, aside',
+      );
 
       if (await propertyEditor.isVisible().catch(() => false)) {
         // Should have editable fields
@@ -130,7 +134,9 @@ test.describe('Workflow Builder Page', () => {
     await mockApiResponse(page, '**/api/workflows', { id: 'new-workflow-123', success: true }, 201);
 
     // Find save button
-    const saveButton = page.locator('button:has-text("Save"), button:has-text("SAVE"), [data-testid="save-workflow"]');
+    const saveButton = page.locator(
+      'button:has-text("Save"), button:has-text("SAVE"), [data-testid="save-workflow"]',
+    );
 
     if (await saveButton.isVisible().catch(() => false)) {
       await expect(saveButton).toBeEnabled();
@@ -142,7 +148,9 @@ test.describe('Workflow Builder Page', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Find clear button
-    const clearButton = page.locator('button:has-text("Clear"), button:has-text("CLEAR"), [data-testid="clear-canvas"]');
+    const clearButton = page.locator(
+      'button:has-text("Clear"), button:has-text("CLEAR"), [data-testid="clear-canvas"]',
+    );
 
     if (await clearButton.isVisible().catch(() => false)) {
       await expect(clearButton).toBeEnabled();
@@ -160,7 +168,9 @@ test.describe('Workflow Templates', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Should show templates section or button
-    const templatesSection = page.locator('[data-testid="templates"], button:has-text("Template"), .template-browser');
+    const templatesSection = page.locator(
+      '[data-testid="templates"], button:has-text("Template"), .template-browser',
+    );
 
     if (await templatesSection.isVisible().catch(() => false)) {
       await expect(templatesSection.first()).toBeVisible();
@@ -189,9 +199,16 @@ test.describe('Workflow Templates', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Find industry filter
-    const industryFilter = page.locator('[data-testid="industry-filter"], button:has-text("legal"), button:has-text("code")');
+    const industryFilter = page.locator(
+      '[data-testid="industry-filter"], button:has-text("legal"), button:has-text("code")',
+    );
 
-    if (await industryFilter.first().isVisible().catch(() => false)) {
+    if (
+      await industryFilter
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
       await industryFilter.first().click();
 
       // Templates should be filtered
@@ -223,7 +240,7 @@ test.describe('Workflows List Page', () => {
     const workflowItems = page.locator('[data-testid="workflow-item"], .workflow-card');
     const emptyState = page.locator(':text("No workflows"), :text("Create your first")');
 
-    const hasWorkflows = await workflowItems.count() > 0;
+    const hasWorkflows = (await workflowItems.count()) > 0;
     const hasEmptyState = await emptyState.isVisible().catch(() => false);
 
     expect(hasWorkflows || hasEmptyState).toBeTruthy();
@@ -234,7 +251,9 @@ test.describe('Workflows List Page', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Should have create button or link
-    const createButton = page.locator('a:has-text("Create"), a:has-text("New"), button:has-text("New Workflow")');
+    const createButton = page.locator(
+      'a:has-text("Create"), a:has-text("New"), button:has-text("New Workflow")',
+    );
 
     if (await createButton.isVisible().catch(() => false)) {
       await expect(createButton.first()).toBeEnabled();
@@ -260,7 +279,9 @@ test.describe('Workflow Node Types', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Look for human checkpoint node type
-    const checkpointNode = page.locator(':text("Human"), :text("Checkpoint"), :text("Approval"), [data-type="human_checkpoint"]');
+    const checkpointNode = page.locator(
+      ':text("Human"), :text("Checkpoint"), :text("Approval"), [data-type="human_checkpoint"]',
+    );
 
     if (await checkpointNode.isVisible().catch(() => false)) {
       await expect(checkpointNode.first()).toBeVisible();
@@ -272,7 +293,9 @@ test.describe('Workflow Node Types', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Look for decision node type
-    const decisionNode = page.locator(':text("Decision"), :text("Branch"), :text("Conditional"), [data-type="decision"]');
+    const decisionNode = page.locator(
+      ':text("Decision"), :text("Branch"), :text("Conditional"), [data-type="decision"]',
+    );
 
     if (await decisionNode.isVisible().catch(() => false)) {
       await expect(decisionNode.first()).toBeVisible();
@@ -284,7 +307,9 @@ test.describe('Workflow Node Types', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Look for memory node types
-    const memoryNode = page.locator(':text("Memory"), :text("Knowledge"), [data-type="memory_read"], [data-type="memory_write"]');
+    const memoryNode = page.locator(
+      ':text("Memory"), :text("Knowledge"), [data-type="memory_read"], [data-type="memory_write"]',
+    );
 
     if (await memoryNode.isVisible().catch(() => false)) {
       await expect(memoryNode.first()).toBeVisible();

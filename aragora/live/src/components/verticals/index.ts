@@ -1,9 +1,5 @@
 export { VerticalSelector, type Vertical } from './VerticalSelector';
-export {
-  KnowledgeExplorer,
-  type KnowledgeFact,
-  type ReasoningPattern,
-} from './KnowledgeExplorer';
+export { KnowledgeExplorer, type KnowledgeFact, type ReasoningPattern } from './KnowledgeExplorer';
 export {
   ExecutionMonitor,
   type TaskExecution,

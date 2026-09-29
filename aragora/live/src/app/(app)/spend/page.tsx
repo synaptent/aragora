@@ -54,11 +54,7 @@ function PeriodSelector({
   value: 'daily' | 'weekly' | 'monthly';
   onChange: (v: 'daily' | 'weekly' | 'monthly') => void;
 }) {
-  const options: Array<'daily' | 'weekly' | 'monthly'> = [
-    'daily',
-    'weekly',
-    'monthly',
-  ];
+  const options: Array<'daily' | 'weekly' | 'monthly'> = ['daily', 'weekly', 'monthly'];
 
   return (
     <div className="flex gap-1">
@@ -123,22 +119,16 @@ function BudgetGauge({
       <div className="grid grid-cols-3 gap-4">
         <div className="text-center">
           <div className="text-text-muted text-[10px] font-theme-data">BUDGET</div>
-          <div className="text-[var(--accent)] font-theme-data text-sm">
-            {formatUsd(total)}
-          </div>
+          <div className="text-[var(--accent)] font-theme-data text-sm">{formatUsd(total)}</div>
         </div>
         <div className="text-center">
-          <div className="text-text-muted text-[10px] font-theme-data">
-            REMAINING
-          </div>
+          <div className="text-text-muted text-[10px] font-theme-data">REMAINING</div>
           <div className="text-[var(--acid-cyan)] font-theme-data text-sm">
             {formatUsd(remaining)}
           </div>
         </div>
         <div className="text-center">
-          <div className="text-text-muted text-[10px] font-theme-data">
-            DAYS LEFT
-          </div>
+          <div className="text-text-muted text-[10px] font-theme-data">DAYS LEFT</div>
           <div className="text-purple-400 font-theme-data text-sm">
             {forecastDays !== null ? `~${forecastDays}d` : '--'}
           </div>
@@ -169,19 +159,13 @@ function DecisionCostTable({
 
   return (
     <div className="card p-4">
-      <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
-        {'>'} COST PER DECISION
-      </h3>
+      <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">{'>'} COST PER DECISION</h3>
       <div className="overflow-x-auto">
         <table className="w-full font-theme-data text-sm">
           <thead>
             <tr className="border-b border-[var(--accent)]/30">
-              <th className="py-2 px-3 text-[var(--accent)] text-left">
-                Debate ID
-              </th>
-              <th className="py-2 px-3 text-[var(--accent)] text-right">
-                Cost (USD)
-              </th>
+              <th className="py-2 px-3 text-[var(--accent)] text-left">Debate ID</th>
+              <th className="py-2 px-3 text-[var(--accent)] text-right">Cost (USD)</th>
             </tr>
           </thead>
           <tbody>
@@ -195,9 +179,7 @@ function DecisionCostTable({
                 <td className="py-2 px-3 text-[var(--acid-cyan)] truncate max-w-[200px]">
                   {d.debate_id}
                 </td>
-                <td className="py-2 px-3 text-right text-text">
-                  {formatUsd(d.cost_usd)}
-                </td>
+                <td className="py-2 px-3 text-right text-text">{formatUsd(d.cost_usd)}</td>
               </tr>
             ))}
           </tbody>
@@ -212,31 +194,18 @@ function DecisionCostTable({
 // ============================================================================
 
 export default function SpendDashboardPage() {
-  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>(
-    'daily',
-  );
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [days, _setDays] = useState(30);
 
   // Fetch data from all 5 endpoints
-  const { summary, isLoading: summaryLoading, error: summaryError } =
-    useSpendDashboardSummary();
-  const { trends, isLoading: trendsLoading } = useSpendDashboardTrends(
-    'default',
-    period,
-    days,
-  );
-  const { agentBreakdown, isLoading: agentLoading } =
-    useSpendDashboardByAgent();
-  const { decisionBreakdown, isLoading: decisionLoading } =
-    useSpendDashboardByDecision();
+  const { summary, isLoading: summaryLoading, error: summaryError } = useSpendDashboardSummary();
+  const { trends, isLoading: trendsLoading } = useSpendDashboardTrends('default', period, days);
+  const { agentBreakdown, isLoading: agentLoading } = useSpendDashboardByAgent();
+  const { decisionBreakdown, isLoading: decisionLoading } = useSpendDashboardByDecision();
   const { budget, isLoading: budgetLoading } = useSpendDashboardBudget();
 
   const _isLoading =
-    summaryLoading ||
-    trendsLoading ||
-    agentLoading ||
-    decisionLoading ||
-    budgetLoading;
+    summaryLoading || trendsLoading || agentLoading || decisionLoading || budgetLoading;
 
   // Transform trend data_points into DataPoint[] for TrendChart
   const timelineData: DataPoint[] = useMemo(() => {
@@ -301,9 +270,7 @@ export default function SpendDashboardPage() {
           {/* ---- Overview Cards ---- */}
           <PanelErrorBoundary panelName="Spend Summary">
             <section className="mb-6">
-              <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
-                {'>'} SUMMARY
-              </h2>
+              <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} SUMMARY</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <MetricCard
                   title="Total Spend"
@@ -389,18 +356,14 @@ export default function SpendDashboardPage() {
           {/* ---- Decision Cost Table ---- */}
           <PanelErrorBoundary panelName="Decision Costs">
             <section className="mb-6">
-              <DecisionCostTable
-                decisions={decisionBreakdown?.decisions ?? []}
-              />
+              <DecisionCostTable decisions={decisionBreakdown?.decisions ?? []} />
             </section>
           </PanelErrorBoundary>
 
           {/* Footer */}
           <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
             <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
-            <p className="text-text-muted">
-              {'>'} ARAGORA // SPEND DASHBOARD
-            </p>
+            <p className="text-text-muted">{'>'} ARAGORA // SPEND DASHBOARD</p>
           </footer>
         </div>
       </main>

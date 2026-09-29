@@ -18,9 +18,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'debate-123' }),
-  useSearchParams: () => ({
-    get: mockSearchParamsGet,
-  }),
+  useSearchParams: () => ({ get: mockSearchParamsGet }),
 }));
 
 jest.mock('next/link', () => ({
@@ -30,31 +28,18 @@ jest.mock('next/link', () => ({
   ),
 }));
 
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 jest.mock('@/context/RightSidebarContext', () => ({
-  useRightSidebar: () => ({
-    setContext: mockSetContext,
-    clearContext: mockClearContext,
-  }),
+  useRightSidebar: () => ({ setContext: mockSetContext, clearContext: mockClearContext }),
 }));
 
 jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: {
-      api: 'http://backend.test',
-      ws: 'ws://backend.test',
-    },
-  }),
+  useBackend: () => ({ config: { api: 'http://backend.test', ws: 'ws://backend.test' } }),
 }));
 
 jest.mock('@/hooks/useAuthenticatedFetch', () => ({
-  useAuthFetch: () => ({
-    getAuthHeaders: mockGetAuthHeaders,
-  }),
+  useAuthFetch: () => ({ getAuthHeaders: mockGetAuthHeaders }),
 }));
 
 jest.mock('@/components/debates/DecisionPackageView', () => ({
@@ -82,10 +67,7 @@ jest.mock('@/components/debate-viewer/InterventionPanel', () => ({
 }));
 
 jest.mock('@/hooks/debate-websocket', () => ({
-  useDebateWebSocket: () => ({
-    messages: [],
-    status: 'closed',
-  }),
+  useDebateWebSocket: () => ({ messages: [], status: 'closed' }),
 }));
 
 jest.mock('@/components/debate/LiveDebateStream', () => ({
@@ -97,12 +79,7 @@ jest.mock('../normalizeDecisionPackage', () => ({
 }));
 
 function jsonResponse(data: unknown, ok = true, status = 200): Response {
-  return {
-    ok,
-    status,
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-  } as Response;
+  return { ok, status, json: async () => data, text: async () => JSON.stringify(data) } as Response;
 }
 
 describe('DebateDetailClient bridge actions', () => {
@@ -271,10 +248,7 @@ describe('DebateDetailClient bridge actions', () => {
         'http://backend.test/api/v1/debates/debate-123/share',
         {
           method: 'POST',
-          headers: {
-            Authorization: 'Bearer test-token',
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
         },
       );
     });

@@ -80,7 +80,9 @@ export function BusinessTypeStep({ selectedType, onSelect }: BusinessTypeStepPro
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h3 className="text-xl font-theme-data text-[var(--accent)] mb-2">What industry are you in?</h3>
+        <h3 className="text-xl font-theme-data text-[var(--accent)] mb-2">
+          What industry are you in?
+        </h3>
         <p className="text-sm text-text-muted">
           We&apos;ll customize your experience with relevant templates and workflows
         </p>
@@ -123,9 +125,7 @@ export function BusinessTypeStep({ selectedType, onSelect }: BusinessTypeStepPro
       )}
 
       <div className="text-center">
-        <p className="text-xs text-text-muted">
-          You can always change this later in Settings
-        </p>
+        <p className="text-xs text-text-muted">You can always change this later in Settings</p>
       </div>
     </div>
   );

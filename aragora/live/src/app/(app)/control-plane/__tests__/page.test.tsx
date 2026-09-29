@@ -62,28 +62,49 @@ jest.mock('@/hooks/useControlPlaneWebSocket', () => ({
 
 // Mock control-plane components
 jest.mock('@/components/control-plane', () => ({
-  AgentCatalog: ({ onSelectAgent: _onSelectAgent, onConfigureAgent: _onConfigureAgent }: { onSelectAgent: () => void; onConfigureAgent: () => void }) => (
-    <div data-testid="agent-catalog">Agent Catalog</div>
-  ),
-  WorkflowBuilder: ({ onSave: _onSave, onExecute: _onExecute }: { onSave: () => void; onExecute: () => void }) => (
-    <div data-testid="workflow-builder">Workflow Builder</div>
-  ),
+  AgentCatalog: ({
+    onSelectAgent: _onSelectAgent,
+    onConfigureAgent: _onConfigureAgent,
+  }: {
+    onSelectAgent: () => void;
+    onConfigureAgent: () => void;
+  }) => <div data-testid="agent-catalog">Agent Catalog</div>,
+  WorkflowBuilder: ({
+    onSave: _onSave,
+    onExecute: _onExecute,
+  }: {
+    onSave: () => void;
+    onExecute: () => void;
+  }) => <div data-testid="workflow-builder">Workflow Builder</div>,
   KnowledgeExplorer: ({ onSelectNode: _onSelectNode }: { onSelectNode: () => void }) => (
     <div data-testid="knowledge-explorer">Knowledge Explorer</div>
   ),
-  ExecutionMonitor: ({ onSelectExecution: _onSelectExecution }: { onSelectExecution: () => void }) => (
-    <div data-testid="execution-monitor">Execution Monitor</div>
-  ),
+  ExecutionMonitor: ({
+    onSelectExecution: _onSelectExecution,
+  }: {
+    onSelectExecution: () => void;
+  }) => <div data-testid="execution-monitor">Execution Monitor</div>,
   PolicyDashboard: () => <div data-testid="policy-dashboard">Policy Dashboard</div>,
-  WorkspaceManager: ({ onWorkspaceSelect: _onWorkspaceSelect, onWorkspaceUpdate: _onWorkspaceUpdate }: { onWorkspaceSelect: () => void; onWorkspaceUpdate: () => void }) => (
-    <div data-testid="workspace-manager">Workspace Manager</div>
-  ),
-  ConnectorDashboard: ({ onSelectConnector: _onSelectConnector }: { onSelectConnector: () => void }) => (
-    <div data-testid="connector-dashboard">Connector Dashboard</div>
-  ),
-  FleetStatusWidget: ({ onViewAgents: _onViewAgents }: { agents: unknown[]; runningTasks: number; queuedTasks: number; onViewAgents: () => void }) => (
-    <div data-testid="fleet-status-widget">Fleet Status</div>
-  ),
+  WorkspaceManager: ({
+    onWorkspaceSelect: _onWorkspaceSelect,
+    onWorkspaceUpdate: _onWorkspaceUpdate,
+  }: {
+    onWorkspaceSelect: () => void;
+    onWorkspaceUpdate: () => void;
+  }) => <div data-testid="workspace-manager">Workspace Manager</div>,
+  ConnectorDashboard: ({
+    onSelectConnector: _onSelectConnector,
+  }: {
+    onSelectConnector: () => void;
+  }) => <div data-testid="connector-dashboard">Connector Dashboard</div>,
+  FleetStatusWidget: ({
+    onViewAgents: _onViewAgents,
+  }: {
+    agents: unknown[];
+    runningTasks: number;
+    queuedTasks: number;
+    onViewAgents: () => void;
+  }) => <div data-testid="fleet-status-widget">Fleet Status</div>,
   ActivityFeed: () => <div data-testid="activity-feed">Activity Feed</div>,
   DeliberationTracker: () => <div data-testid="deliberation-tracker">Deliberation Tracker</div>,
   SystemHealthDashboard: () => <div data-testid="system-health-dashboard">System Health</div>,
@@ -101,9 +122,7 @@ jest.mock('@/components/VerticalSelector', () => ({
     selectedVertical: string;
     onVerticalChange: (verticalId: string) => void;
     compact?: boolean;
-  }) => (
-    <div data-testid="vertical-selector">Vertical Selector</div>
-  ),
+  }) => <div data-testid="vertical-selector">Vertical Selector</div>,
 }));
 
 // Mock fetch globally
@@ -116,41 +135,30 @@ describe('ControlPlanePage', () => {
     // Default mock responses for successful data fetch
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/control-plane/agents')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ agents: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
       }
       if (url.includes('/api/control-plane/queue')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ jobs: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
       }
       if (url.includes('/api/control-plane/metrics')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            active_jobs: 0,
-            queued_jobs: 0,
-            agents_available: 0,
-            agents_busy: 0,
-            documents_processed_today: 0,
-            audits_completed_today: 0,
-            tokens_used_today: 0,
-          }),
+          json: () =>
+            Promise.resolve({
+              active_jobs: 0,
+              queued_jobs: 0,
+              agents_available: 0,
+              agents_busy: 0,
+              documents_processed_today: 0,
+              audits_completed_today: 0,
+              tokens_used_today: 0,
+            }),
         });
       }
       if (url.includes('/api/verticals')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ verticals: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   });
 
@@ -170,14 +178,18 @@ describe('ControlPlanePage', () => {
       renderWithProviders(<ControlPlanePage />);
 
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
-      expect(screen.getByText(/Monitor and orchestrate multi-agent document processing/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Monitor and orchestrate multi-agent document processing/),
+      ).toBeInTheDocument();
     });
 
     it('renders page title and description', async () => {
       renderWithProviders(<ControlPlanePage />);
 
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
-      expect(screen.getByText(/Monitor and orchestrate multi-agent document processing/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Monitor and orchestrate multi-agent document processing/),
+      ).toBeInTheDocument();
     });
 
     it('shows loading state initially', () => {
@@ -222,9 +234,7 @@ describe('ControlPlanePage', () => {
       });
 
       expect(screen.getByText('Decision Console')).toBeInTheDocument();
-      expect(
-        screen.getByPlaceholderText('Describe the decision to debate...')
-      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Describe the decision to debate...')).toBeInTheDocument();
     });
   });
 
@@ -234,24 +244,14 @@ describe('ControlPlanePage', () => {
         return Promise.resolve({
           ok: true,
           json: () =>
-            Promise.resolve({
-              request_id: 'req-test-1',
-              status: 'queued',
-              task_id: 'task-test-1',
-            }),
+            Promise.resolve({ request_id: 'req-test-1', status: 'queued', task_id: 'task-test-1' }),
         });
       }
       if (url.includes('/api/control-plane/agents')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ agents: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
       }
       if (url.includes('/api/control-plane/queue')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ jobs: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
       }
       if (url.includes('/api/control-plane/metrics')) {
         return Promise.resolve({
@@ -269,10 +269,7 @@ describe('ControlPlanePage', () => {
         });
       }
       if (url.includes('/api/verticals')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([]),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
       return Promise.resolve({
         ok: false,
@@ -289,7 +286,7 @@ describe('ControlPlanePage', () => {
 
     await user.type(
       screen.getByPlaceholderText('Describe the decision to debate...'),
-      'Assess migration risk for service X'
+      'Assess migration risk for service X',
     );
 
     await user.click(screen.getByRole('button', { name: /START DEBATE/i }));
@@ -297,7 +294,7 @@ describe('ControlPlanePage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:8080/api/control-plane/deliberations',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -339,34 +336,26 @@ describe('ControlPlanePage', () => {
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 3,
-              queued_jobs: 5,
-              agents_available: 2,
-              agents_busy: 1,
-              documents_processed_today: 42,
-              audits_completed_today: 7,
-              tokens_used_today: 125000,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 3,
+                queued_jobs: 5,
+                agents_available: 2,
+                agents_busy: 1,
+                documents_processed_today: 42,
+                audits_completed_today: 7,
+                tokens_used_today: 125000,
+              }),
           });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/control-plane/queue')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ jobs: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -550,34 +539,26 @@ describe('ControlPlanePage', () => {
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 2,
-              queued_jobs: 3,
-              agents_available: 4,
-              agents_busy: 1,
-              documents_processed_today: 50,
-              audits_completed_today: 5,
-              tokens_used_today: 500000,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 2,
+                queued_jobs: 3,
+                agents_available: 4,
+                agents_busy: 1,
+                documents_processed_today: 50,
+                audits_completed_today: 5,
+                tokens_used_today: 500000,
+              }),
           });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/control-plane/queue')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ jobs: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -595,36 +576,28 @@ describe('ControlPlanePage', () => {
     it('shows no active jobs message when queue is empty', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/control-plane/queue')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ jobs: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
         }
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 0,
-              queued_jobs: 0,
-              agents_available: 2,
-              agents_busy: 0,
-              documents_processed_today: 0,
-              audits_completed_today: 0,
-              tokens_used_today: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 0,
+                queued_jobs: 0,
+                agents_available: 2,
+                agents_busy: 0,
+                documents_processed_today: 0,
+                audits_completed_today: 0,
+                tokens_used_today: 0,
+              }),
           });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -641,39 +614,35 @@ describe('ControlPlanePage', () => {
         if (url.includes('/api/control-plane/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [
-                { id: 'claude', name: 'Claude', model: 'claude-3.5-sonnet', status: 'ready' },
-                { id: 'gemini', name: 'Gemini', model: 'gemini-3-pro', status: 'busy' },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                agents: [
+                  { id: 'claude', name: 'Claude', model: 'claude-3.5-sonnet', status: 'ready' },
+                  { id: 'gemini', name: 'Gemini', model: 'gemini-3-pro', status: 'busy' },
+                ],
+              }),
           });
         }
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 0,
-              queued_jobs: 0,
-              agents_available: 1,
-              agents_busy: 1,
-              documents_processed_today: 0,
-              audits_completed_today: 0,
-              tokens_used_today: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 0,
+                queued_jobs: 0,
+                agents_available: 1,
+                agents_busy: 1,
+                documents_processed_today: 0,
+                audits_completed_today: 0,
+                tokens_used_today: 0,
+              }),
           });
         }
         if (url.includes('/api/control-plane/queue')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ jobs: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -695,39 +664,51 @@ describe('ControlPlanePage', () => {
         if (url.includes('/api/control-plane/queue')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              jobs: [
-                { id: 'job1', type: 'audit', name: 'Security Audit', status: 'running', progress: 0.5, document_count: 10, agents_assigned: ['claude'] },
-                { id: 'job2', type: 'document_processing', name: 'Batch Import', status: 'queued', progress: 0, document_count: 20, agents_assigned: [] },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                jobs: [
+                  {
+                    id: 'job1',
+                    type: 'audit',
+                    name: 'Security Audit',
+                    status: 'running',
+                    progress: 0.5,
+                    document_count: 10,
+                    agents_assigned: ['claude'],
+                  },
+                  {
+                    id: 'job2',
+                    type: 'document_processing',
+                    name: 'Batch Import',
+                    status: 'queued',
+                    progress: 0,
+                    document_count: 20,
+                    agents_assigned: [],
+                  },
+                ],
+              }),
           });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 1,
-              queued_jobs: 1,
-              agents_available: 1,
-              agents_busy: 1,
-              documents_processed_today: 0,
-              audits_completed_today: 0,
-              tokens_used_today: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 1,
+                queued_jobs: 1,
+                agents_available: 1,
+                agents_busy: 1,
+                documents_processed_today: 0,
+                audits_completed_today: 0,
+                tokens_used_today: 0,
+              }),
           });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -752,36 +733,28 @@ describe('ControlPlanePage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/control-plane/queue')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ jobs: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 0,
-              queued_jobs: 0,
-              agents_available: 0,
-              agents_busy: 0,
-              documents_processed_today: 0,
-              audits_completed_today: 0,
-              tokens_used_today: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 0,
+                queued_jobs: 0,
+                agents_available: 0,
+                agents_busy: 0,
+                documents_processed_today: 0,
+                audits_completed_today: 0,
+                tokens_used_today: 0,
+              }),
           });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -805,38 +778,42 @@ describe('ControlPlanePage', () => {
         if (url.includes('/api/control-plane/queue')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              jobs: [
-                { id: 'job1', type: 'audit', name: 'Running Job', status: 'running', progress: 0.5, document_count: 10, agents_assigned: ['claude'] },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                jobs: [
+                  {
+                    id: 'job1',
+                    type: 'audit',
+                    name: 'Running Job',
+                    status: 'running',
+                    progress: 0.5,
+                    document_count: 10,
+                    agents_assigned: ['claude'],
+                  },
+                ],
+              }),
           });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 1,
-              queued_jobs: 0,
-              agents_available: 0,
-              agents_busy: 1,
-              documents_processed_today: 0,
-              audits_completed_today: 0,
-              tokens_used_today: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 1,
+                queued_jobs: 0,
+                agents_available: 0,
+                agents_busy: 1,
+                documents_processed_today: 0,
+                audits_completed_today: 0,
+                tokens_used_today: 0,
+              }),
           });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -866,38 +843,42 @@ describe('ControlPlanePage', () => {
         if (url.includes('/api/control-plane/queue')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              jobs: [
-                { id: 'job1', type: 'audit', name: 'Running Job', status: 'running', progress: 0.5, document_count: 10, agents_assigned: ['claude'] },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                jobs: [
+                  {
+                    id: 'job1',
+                    type: 'audit',
+                    name: 'Running Job',
+                    status: 'running',
+                    progress: 0.5,
+                    document_count: 10,
+                    agents_assigned: ['claude'],
+                  },
+                ],
+              }),
           });
         }
         if (url.includes('/api/control-plane/agents')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         if (url.includes('/api/control-plane/metrics')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              active_jobs: 1,
-              queued_jobs: 0,
-              agents_available: 0,
-              agents_busy: 1,
-              documents_processed_today: 0,
-              audits_completed_today: 0,
-              tokens_used_today: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                active_jobs: 1,
+                queued_jobs: 0,
+                agents_available: 0,
+                agents_busy: 1,
+                documents_processed_today: 0,
+                audits_completed_today: 0,
+                tokens_used_today: 0,
+              }),
           });
         }
         if (url.includes('/api/verticals')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ verticals: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -919,7 +900,7 @@ describe('ControlPlanePage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/control-plane/tasks/job1/cancel',
-          { method: 'POST' }
+          { method: 'POST' },
         );
       });
     });

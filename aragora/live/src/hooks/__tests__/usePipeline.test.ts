@@ -3,9 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { usePipeline } from '../usePipeline';
 import { useApi } from '../useApi';
 
-jest.mock('../useApi', () => ({
-  useApi: jest.fn(),
-}));
+jest.mock('../useApi', () => ({ useApi: jest.fn() }));
 
 describe('usePipeline', () => {
   it('sends unified orchestrator flags for brain dump pipeline creation', async () => {

@@ -28,11 +28,7 @@ export function useThemeFont(): { display: string; body: string; mono: string } 
   const { theme } = useTheme();
   switch (theme) {
     case 'dark':
-      return {
-        display: 'font-theme-data',
-        body: 'font-theme-data',
-        mono: 'font-theme-data',
-      };
+      return { display: 'font-theme-data', body: 'font-theme-data', mono: 'font-theme-data' };
     case 'warm':
       return {
         display: 'font-[var(--font-display)]',

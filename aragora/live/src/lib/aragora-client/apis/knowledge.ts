@@ -217,7 +217,8 @@ export class KnowledgeAPI extends BaseAPI {
     const searchParams = new URLSearchParams();
     if (params?.type) searchParams.set('type', params.type);
     if (params?.domain) searchParams.set('domain', params.domain);
-    if (params?.min_confidence) searchParams.set('min_confidence', params.min_confidence.toString());
+    if (params?.min_confidence)
+      searchParams.set('min_confidence', params.min_confidence.toString());
     if (params?.limit) searchParams.set('limit', params.limit.toString());
     if (params?.offset) searchParams.set('offset', params.offset.toString());
 
@@ -327,7 +328,11 @@ export class KnowledgeAPI extends BaseAPI {
   /**
    * Grant access to a node
    */
-  async grantAccess(nodeId: string, granteeId: string, permission: 'read' | 'write' | 'admin'): Promise<void> {
+  async grantAccess(
+    nodeId: string,
+    granteeId: string,
+    permission: 'read' | 'write' | 'admin',
+  ): Promise<void> {
     return this.http.post(`/api/v1/knowledge/mound/nodes/${nodeId}/access`, {
       grantee_id: granteeId,
       permission,
@@ -535,7 +540,10 @@ export class KnowledgeAPI extends BaseAPI {
   /**
    * Store a verified global fact (admin only)
    */
-  async storeGlobalFact(content: string, metadata?: Record<string, unknown>): Promise<KnowledgeNode> {
+  async storeGlobalFact(
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<KnowledgeNode> {
     return this.http.post('/api/v1/knowledge/mound/global', { content, metadata });
   }
 

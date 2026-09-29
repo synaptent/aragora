@@ -6,12 +6,7 @@ import React from 'react';
 // Types
 // =============================================================================
 
-export type ProvenanceNodeType =
-  | 'debate'
-  | 'goal'
-  | 'action'
-  | 'receipt'
-  | 'orchestration';
+export type ProvenanceNodeType = 'debate' | 'goal' | 'action' | 'receipt' | 'orchestration';
 
 export interface ProvenanceNode {
   id: string;
@@ -113,10 +108,7 @@ export function ProvenanceNodeCard({ node, onClick }: ProvenanceNodeCardProps) {
       </div>
 
       {/* Label */}
-      <div
-        className="text-xs text-[var(--text)] truncate mb-1"
-        title={node.label}
-      >
+      <div className="text-xs text-[var(--text)] truncate mb-1" title={node.label}>
         {node.label}
       </div>
 

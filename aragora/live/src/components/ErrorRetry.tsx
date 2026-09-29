@@ -26,11 +26,7 @@ export function ErrorRetry({
   size = 'md',
   inline = false,
 }: ErrorRetryProps) {
-  const sizeClasses = {
-    sm: 'text-xs p-2',
-    md: 'text-sm p-3',
-    lg: 'text-base p-4',
-  };
+  const sizeClasses = { sm: 'text-xs p-2', md: 'text-sm p-3', lg: 'text-base p-4' };
 
   const buttonSizeClasses = {
     sm: 'px-2 py-0.5 text-xs',
@@ -57,7 +53,9 @@ export function ErrorRetry({
   }
 
   return (
-    <div className={`bg-warning/10 border border-warning/30 rounded ${sizeClasses[size]} font-theme-data`}>
+    <div
+      className={`bg-warning/10 border border-warning/30 rounded ${sizeClasses[size]} font-theme-data`}
+    >
       <div className="flex items-center gap-3">
         <span className="text-warning text-lg">⚠</span>
         <div className="flex-1">

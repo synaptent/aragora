@@ -40,7 +40,19 @@ export interface SystemMetrics {
   tokens_used_today: number;
 }
 
-export type TabId = 'overview' | 'agents' | 'workflows' | 'knowledge' | 'connectors' | 'executions' | 'queue' | 'verticals' | 'policy' | 'workspace' | 'health' | 'settings';
+export type TabId =
+  | 'overview'
+  | 'agents'
+  | 'workflows'
+  | 'knowledge'
+  | 'connectors'
+  | 'executions'
+  | 'queue'
+  | 'verticals'
+  | 'policy'
+  | 'workspace'
+  | 'health'
+  | 'settings';
 
 // =============================================================================
 // Helper Functions

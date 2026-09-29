@@ -11,14 +11,6 @@ export {
   type ChannelType,
 } from './ChannelSelector';
 
-export {
-  DeliveryModal,
-  type DeliveryModalProps,
-  type DeliveryOptions,
-} from './DeliveryModal';
+export { DeliveryModal, type DeliveryModalProps, type DeliveryOptions } from './DeliveryModal';
 
-export {
-  DeliveryHistory,
-  type DeliveryHistoryProps,
-  type DeliveryRecord,
-} from './DeliveryHistory';
+export { DeliveryHistory, type DeliveryHistoryProps, type DeliveryRecord } from './DeliveryHistory';

@@ -89,10 +89,7 @@ export function TopicDetailDrawer({
   }, [customFocus, debateConfig.focusAreas]);
 
   const removeFocusArea = useCallback((area: string) => {
-    setDebateConfig((prev) => ({
-      ...prev,
-      focusAreas: prev.focusAreas.filter((a) => a !== area),
-    }));
+    setDebateConfig((prev) => ({ ...prev, focusAreas: prev.focusAreas.filter((a) => a !== area) }));
   }, []);
 
   const getScoreColor = (score: number): string => {
@@ -116,10 +113,7 @@ export function TopicDetailDrawer({
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-bg/80 backdrop-blur-sm z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-bg/80 backdrop-blur-sm z-40" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-surface border-l border-[var(--accent)]/30 z-50 flex flex-col shadow-2xl">
@@ -175,9 +169,7 @@ export function TopicDetailDrawer({
             {topic.category && (
               <div className="bg-bg p-3 rounded border border-border">
                 <div className="text-xs text-text-muted mb-1">CATEGORY</div>
-                <div className="text-lg font-theme-data text-text capitalize">
-                  {topic.category}
-                </div>
+                <div className="text-lg font-theme-data text-text capitalize">{topic.category}</div>
               </div>
             )}
           </div>
@@ -208,7 +200,9 @@ export function TopicDetailDrawer({
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-theme-data text-text-muted">ROUNDS</label>
-                <span className="text-xs font-theme-data text-[var(--accent)]">{debateConfig.rounds}</span>
+                <span className="text-xs font-theme-data text-[var(--accent)]">
+                  {debateConfig.rounds}
+                </span>
               </div>
               <input
                 type="range"
@@ -231,7 +225,9 @@ export function TopicDetailDrawer({
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-theme-data text-text-muted">AGENTS</label>
-                <span className="text-xs font-theme-data text-[var(--accent)]">{debateConfig.agentCount}</span>
+                <span className="text-xs font-theme-data text-[var(--accent)]">
+                  {debateConfig.agentCount}
+                </span>
               </div>
               <input
                 type="range"

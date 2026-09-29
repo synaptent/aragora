@@ -14,7 +14,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo, FormEvent } from 'react';
 import Link from 'next/link';
 import { WS_URL } from '@/config';
-import { DebateResultPreview, RETURN_URL_KEY, PENDING_DEBATE_KEY, type DebateResponse } from './DebateResultPreview';
+import {
+  DebateResultPreview,
+  RETURN_URL_KEY,
+  PENDING_DEBATE_KEY,
+  type DebateResponse,
+} from './DebateResultPreview';
 import type { LandingDebatePreflight, LandingPreparedDebateOption } from './landing/types';
 import { submitLandingFeedback, trackLandingEvent } from './landing/landingTelemetry';
 import { getCurrentReturnUrl, normalizeReturnUrl } from '@/utils/returnUrl';
@@ -112,7 +117,9 @@ function readTask(data: Record<string, unknown>): string | null {
 function readAgents(data: Record<string, unknown>): string[] {
   const agents = data.agents;
   if (!Array.isArray(agents)) return [];
-  return agents.filter((agent): agent is string => typeof agent === 'string' && agent.trim().length > 0);
+  return agents.filter(
+    (agent): agent is string => typeof agent === 'string' && agent.trim().length > 0,
+  );
 }
 
 function describeLiveEvent(
@@ -189,7 +196,8 @@ function normalizeRecentEvent(event: PublicSpectateEvent): LivePreviewEvent {
 function normalizeSocketEvent(message: SpectateSocketMessage): LivePreviewEvent {
   const timestampMs =
     typeof message.timestamp === 'number' ? Math.round(message.timestamp * 1000) : Date.now();
-  const details = typeof message.details === 'string' && message.details.trim() ? message.details.trim() : null;
+  const details =
+    typeof message.details === 'string' && message.details.trim() ? message.details.trim() : null;
   const roundNumber = typeof message.round === 'number' ? message.round : null;
   const id = [
     message.type,
@@ -255,13 +263,7 @@ function summarizeLiveDebates(
   });
 }
 
-function LiveDebatePanel({
-  apiBase,
-  wsUrl,
-}: {
-  apiBase: string;
-  wsUrl?: string;
-}) {
+function LiveDebatePanel({ apiBase, wsUrl }: { apiBase: string; wsUrl?: string }) {
   const resolvedWsBase = (wsUrl || WS_URL).replace(/\/ws\/?$/, '');
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -351,8 +353,7 @@ function LiveDebatePanel({
           if (Array.isArray(message.agents)) {
             setSocketAgents(
               message.agents.filter(
-                (agent): agent is string =>
-                  typeof agent === 'string' && agent.trim().length > 0,
+                (agent): agent is string => typeof agent === 'string' && agent.trim().length > 0,
               ),
             );
           }
@@ -379,9 +380,7 @@ function LiveDebatePanel({
     };
 
     socket.onclose = () => {
-      setSocketStatus((currentStatus) =>
-        currentStatus === 'connected' ? 'idle' : currentStatus,
-      );
+      setSocketStatus((currentStatus) => (currentStatus === 'connected' ? 'idle' : currentStatus));
     };
 
     return () => {
@@ -415,17 +414,19 @@ function LiveDebatePanel({
       .slice(-LIVE_PREVIEW_EVENT_LIMIT);
   }, [recentDebateEvents, socketEvents]);
 
-  const bridgeTone = socketStatus === 'connected'
-    ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/30'
-    : bridgeReachable
-      ? 'bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30'
-      : 'bg-[var(--crimson)]/10 text-[var(--crimson)] border-[var(--crimson)]/30';
+  const bridgeTone =
+    socketStatus === 'connected'
+      ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/30'
+      : bridgeReachable
+        ? 'bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30'
+        : 'bg-[var(--crimson)]/10 text-[var(--crimson)] border-[var(--crimson)]/30';
 
-  const bridgeLabel = socketStatus === 'connected'
-    ? 'STREAMING NOW'
-    : bridgeReachable
-      ? 'FOLLOWING LIVE BRIDGE'
-      : 'BRIDGE OFFLINE';
+  const bridgeLabel =
+    socketStatus === 'connected'
+      ? 'STREAMING NOW'
+      : bridgeReachable
+        ? 'FOLLOWING LIVE BRIDGE'
+        : 'BRIDGE OFFLINE';
 
   const bridgeSummary = !loaded
     ? 'Checking the public spectate bridge before claiming a live debate.'
@@ -435,9 +436,10 @@ function LiveDebatePanel({
         ? 'The bridge is online. This panel will attach as soon as a public debate starts emitting events.'
         : 'The public spectate bridge is unreachable right now, so no live debate is shown.';
 
-  const activeTask = socketTask
-    ?? selectedDebate?.task
-    ?? 'Waiting for a public debate to surface in the live bridge.';
+  const activeTask =
+    socketTask ??
+    selectedDebate?.task ??
+    'Waiting for a public debate to surface in the live bridge.';
   const activeAgents = socketAgents.length > 0 ? socketAgents : (selectedDebate?.agents ?? []);
 
   return (
@@ -449,7 +451,9 @@ function LiveDebatePanel({
               <span className="px-2 py-1 text-[10px] font-theme-data border border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)] tracking-[0.2em]">
                 LIVE DEBATE
               </span>
-              <span className={`px-2 py-1 text-[10px] font-theme-data border tracking-[0.16em] ${bridgeTone}`}>
+              <span
+                className={`px-2 py-1 text-[10px] font-theme-data border tracking-[0.16em] ${bridgeTone}`}
+              >
                 {bridgeLabel}
               </span>
             </div>
@@ -460,9 +464,7 @@ function LiveDebatePanel({
             <p className="font-theme-data text-sm text-text-muted leading-relaxed mb-4">
               {bridgeSummary}
             </p>
-            <p className="font-theme-data text-sm text-text leading-relaxed mb-6">
-              {activeTask}
-            </p>
+            <p className="font-theme-data text-sm text-text leading-relaxed mb-6">{activeTask}</p>
 
             {liveDebates.length > 1 && (
               <div className="mb-6">
@@ -490,7 +492,8 @@ function LiveDebatePanel({
 
             <div className="flex flex-wrap gap-3 mb-6">
               <span className="font-theme-data text-xs text-text-muted">
-                {(status?.recent_event_count ?? recentEvents.length).toString()} recent bridge events
+                {(status?.recent_event_count ?? recentEvents.length).toString()} recent bridge
+                events
               </span>
               {selectedDebateId && (
                 <span className="font-theme-data text-xs text-text-muted">
@@ -537,15 +540,9 @@ function LiveDebatePanel({
 
             <div className="flex-1 p-4">
               {mergedEvents.length > 0 ? (
-                <div
-                  aria-live="polite"
-                  className="space-y-3 max-h-[360px] overflow-y-auto pr-1"
-                >
+                <div aria-live="polite" className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
                   {mergedEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="border border-border bg-bg/60 p-3"
-                    >
+                    <div key={event.id} className="border border-border bg-bg/60 p-3">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span
                           className={`px-2 py-1 text-[10px] font-theme-data border tracking-[0.14em] ${eventBadgeClasses(event.eventType)}`}
@@ -553,9 +550,7 @@ function LiveDebatePanel({
                           {event.eventType.replace(/_/g, ' ').toUpperCase()}
                         </span>
                         {event.agent && (
-                          <span className="font-theme-data text-xs text-text">
-                            {event.agent}
-                          </span>
+                          <span className="font-theme-data text-xs text-text">{event.agent}</span>
                         )}
                         {event.roundNumber !== null && (
                           <span className="font-theme-data text-[10px] text-text-muted">
@@ -628,9 +623,9 @@ function buildLandingErrorMessage(status: number, data: Record<string, unknown> 
 
   if (code === 'landing_preview_needs_clarification') {
     return (
-      message
-      || error
-      || 'The fast preview drifted away from your question. Tighten the wording or pick one interpretation first.'
+      message ||
+      error ||
+      'The fast preview drifted away from your question. Tighten the wording or pick one interpretation first.'
     );
   }
 
@@ -650,7 +645,9 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
   const [error, setError] = useState<string | null>(null);
   const [editorNotice, setEditorNotice] = useState<string | null>(null);
   const [lastTopic, setLastTopic] = useState('');
-  const [lastPreparedOption, setLastPreparedOption] = useState<LandingPreparedDebateOption | null>(null);
+  const [lastPreparedOption, setLastPreparedOption] = useState<LandingPreparedDebateOption | null>(
+    null,
+  );
   const [pendingPreflight, setPendingPreflight] = useState<LandingDebatePreflight | null>(null);
   const [progressMsg, setProgressMsg] = useState(PROGRESS_MESSAGES[0]);
   const abortRef = useRef<AbortController | null>(null);
@@ -660,12 +657,15 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
 
   const resolvedApiBase = apiBase || 'https://api.aragora.ai';
   const livePreviewApiBase = useMemo(() => resolvedApiBase.replace(/\/$/, ''), [resolvedApiBase]);
-  const trackEvent = useCallback((
-    eventType: Parameters<typeof trackLandingEvent>[1],
-    data: Parameters<typeof trackLandingEvent>[2] = {},
-  ) => {
-    trackLandingEvent(resolvedApiBase, eventType, data);
-  }, [resolvedApiBase]);
+  const trackEvent = useCallback(
+    (
+      eventType: Parameters<typeof trackLandingEvent>[1],
+      data: Parameters<typeof trackLandingEvent>[2] = {},
+    ) => {
+      trackLandingEvent(resolvedApiBase, eventType, data);
+    },
+    [resolvedApiBase],
+  );
   const focusComposer = useCallback(() => {
     const focus = () => {
       textareaRef.current?.focus();
@@ -700,7 +700,9 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
   const saveDebateBeforeLogin = useCallback(() => {
     if (result) {
       sessionStorage.setItem(PENDING_DEBATE_KEY, JSON.stringify(result));
-      const debateDestination = result.id ? `/debates/${encodeURIComponent(result.id)}` : getCurrentReturnUrl();
+      const debateDestination = result.id
+        ? `/debates/${encodeURIComponent(result.id)}`
+        : getCurrentReturnUrl();
       sessionStorage.setItem(RETURN_URL_KEY, normalizeReturnUrl(debateDestination));
     }
   }, [result]);
@@ -756,7 +758,8 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
 
       if (res.status === 429) {
         const retryAfter = parseRetryAfterSeconds(res.headers.get('Retry-After'));
-        const waitText = retryAfter > 60 ? `${Math.ceil(retryAfter / 60)} minutes` : `${retryAfter} seconds`;
+        const waitText =
+          retryAfter > 60 ? `${Math.ceil(retryAfter / 60)} minutes` : `${retryAfter} seconds`;
         setError(`Rate limit reached. Please try again in ${waitText}.`);
         return;
       }
@@ -787,8 +790,8 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
         original_question: option.originalQuestion,
         interpreted_question: option.interpretedQuestion,
         result_warning:
-          data.result_warning
-          || (option.interpretedQuestion !== option.originalQuestion
+          data.result_warning ||
+          (option.interpretedQuestion !== option.originalQuestion
             ? 'Aragora debated the focused interpretation you chose before opening the full transcript.'
             : undefined),
       };
@@ -835,15 +838,12 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
     };
 
     try {
-      const assessRes = await fetch(
-        `${livePreviewApiBase}/api/v1/playground/assess`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: rawQuestion }),
-          signal: AbortSignal.timeout(8000),
-        },
-      );
+      const assessRes = await fetch(`${livePreviewApiBase}/api/v1/playground/assess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: rawQuestion }),
+        signal: AbortSignal.timeout(8000),
+      });
 
       if (!assessRes.ok) {
         setPendingPreflight(null);
@@ -875,41 +875,42 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
     }
   }
 
-  const handleWrongAnswer = useCallback((currentResult: DebateResponse) => {
-    const sourceQuestion =
-      currentResult.original_question
-      || question
-      || lastTopic
-      || currentResult.topic;
-    const rewritten =
-      Boolean(currentResult.interpreted_question)
-      && currentResult.interpreted_question !== (currentResult.original_question || currentResult.topic);
+  const handleWrongAnswer = useCallback(
+    (currentResult: DebateResponse) => {
+      const sourceQuestion =
+        currentResult.original_question || question || lastTopic || currentResult.topic;
+      const rewritten =
+        Boolean(currentResult.interpreted_question) &&
+        currentResult.interpreted_question !==
+          (currentResult.original_question || currentResult.topic);
 
-    setQuestion(sourceQuestion);
-    setResult(null);
-    setError(null);
-    setLastTopic(sourceQuestion);
-    setLastPreparedOption(null);
-    setPendingPreflight(null);
-    setEditorNotice('Edit the wording below and rerun the debate with one more specific detail.');
+      setQuestion(sourceQuestion);
+      setResult(null);
+      setError(null);
+      setLastTopic(sourceQuestion);
+      setLastPreparedOption(null);
+      setPendingPreflight(null);
+      setEditorNotice('Edit the wording below and rerun the debate with one more specific detail.');
 
-    submitLandingFeedback(resolvedApiBase, {
-      question: sourceQuestion,
-      interpreted_question: currentResult.interpreted_question || currentResult.topic,
-      final_answer: currentResult.final_answer,
-      result_warning: currentResult.result_warning || null,
-      result_mode: currentResult.result_mode || 'full',
-      debate_id: currentResult.id || null,
-      verdict: currentResult.verdict || null,
-      participant_count: currentResult.participants.length,
-      rewritten,
-    });
-    trackEvent('wrong_answer_clicked', {
-      result_mode: currentResult.result_mode || 'full',
-      rewritten,
-    });
-    focusComposer();
-  }, [focusComposer, lastTopic, question, resolvedApiBase, trackEvent]);
+      submitLandingFeedback(resolvedApiBase, {
+        question: sourceQuestion,
+        interpreted_question: currentResult.interpreted_question || currentResult.topic,
+        final_answer: currentResult.final_answer,
+        result_warning: currentResult.result_warning || null,
+        result_mode: currentResult.result_mode || 'full',
+        debate_id: currentResult.id || null,
+        verdict: currentResult.verdict || null,
+        participant_count: currentResult.participants.length,
+        rewritten,
+      });
+      trackEvent('wrong_answer_clicked', {
+        result_mode: currentResult.result_mode || 'full',
+        rewritten,
+      });
+      focusComposer();
+    },
+    [focusComposer, lastTopic, question, resolvedApiBase, trackEvent],
+  );
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -927,15 +928,24 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
             ARAGORA
           </span>
           <div className="flex items-center gap-4">
-            <a href="#how-it-works" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors hidden sm:block">
+            <a
+              href="#how-it-works"
+              className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors hidden sm:block"
+            >
               How it works
             </a>
-            <Link href="/oracle" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors hidden sm:block">
+            <Link
+              href="/oracle"
+              className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors hidden sm:block"
+            >
               Oracle
             </Link>
             {onEnterDashboard ? (
               <button
-                onClick={() => { saveDebateBeforeLogin(); onEnterDashboard(); }}
+                onClick={() => {
+                  saveDebateBeforeLogin();
+                  onEnterDashboard();
+                }}
                 className="text-xs font-theme-data px-3 py-1.5 border border-[var(--accent)]/40 text-text-muted hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
               >
                 Log in
@@ -969,8 +979,8 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
             <span className="text-[var(--accent)]">Make them argue.</span>
           </h1>
           <p className="font-theme-data text-sm text-text-muted max-w-lg mx-auto mb-12 leading-relaxed">
-            Multiple AI models debate your question, stress-test each answer,
-            and deliver an audit-ready verdict you can actually defend.
+            Multiple AI models debate your question, stress-test each answer, and deliver an
+            audit-ready verdict you can actually defend.
           </p>
 
           <form onSubmit={handleSubmit} className="text-left max-w-xl mx-auto">
@@ -1005,7 +1015,9 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
           {/* Example topics — reduce blank-page friction */}
           {!result && !isRunning && (
             <div className="max-w-xl mx-auto mt-4">
-              <p className="text-xs font-theme-data text-text-muted/60 mb-2 text-center">Or try an example:</p>
+              <p className="text-xs font-theme-data text-text-muted/60 mb-2 text-center">
+                Or try an example:
+              </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {[
                   'Should we build or buy our analytics platform?',
@@ -1014,7 +1026,10 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
                 ].map((topic) => (
                   <button
                     key={topic}
-                    onClick={() => { setQuestion(topic); void runDebate(topic); }}
+                    onClick={() => {
+                      setQuestion(topic);
+                      void runDebate(topic);
+                    }}
                     className="text-xs font-theme-data px-3 py-1.5 border border-border text-text-muted hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
                   >
                     {topic}
@@ -1042,7 +1057,9 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
                   <button
                     key={option.id}
                     type="button"
-                    onClick={() => { void executeDebate(option); }}
+                    onClick={() => {
+                      void executeDebate(option);
+                    }}
                     className="w-full text-left border border-border bg-surface px-4 py-3 hover:border-[var(--accent)]/40 transition-colors"
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -1073,12 +1090,25 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
             <div className="flex flex-col items-center py-8 gap-3">
               <div className="flex items-center gap-3 text-[var(--accent)]">
                 <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
                 </svg>
                 <span className="text-sm font-theme-data">{progressMsg}</span>
               </div>
-              <span className="text-xs font-theme-data text-text-muted/60">Usually takes 10-20 seconds</span>
+              <span className="text-xs font-theme-data text-text-muted/60">
+                Usually takes 10-20 seconds
+              </span>
             </div>
           )}
 
@@ -1119,9 +1149,7 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
                 });
               }}
               onShare={(debateResult) => {
-                trackEvent('share_clicked', {
-                  result_mode: debateResult.result_mode || 'full',
-                });
+                trackEvent('share_clicked', { result_mode: debateResult.result_mode || 'full' });
               }}
             />
           )}
@@ -1138,15 +1166,31 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
           </h2>
           <div className="space-y-12">
             {[
-              { step: '01', title: 'You ask a question', desc: 'Any decision, strategy, or architecture question you need vetted.' },
-              { step: '02', title: 'AI agents debate it', desc: 'Claude, GPT, Gemini, Mistral, and others argue every angle. Different models catch different blind spots.' },
-              { step: '03', title: 'You get a decision receipt', desc: 'An audit-ready verdict with evidence chains, confidence scores, and dissenting views preserved.' },
+              {
+                step: '01',
+                title: 'You ask a question',
+                desc: 'Any decision, strategy, or architecture question you need vetted.',
+              },
+              {
+                step: '02',
+                title: 'AI agents debate it',
+                desc: 'Claude, GPT, Gemini, Mistral, and others argue every angle. Different models catch different blind spots.',
+              },
+              {
+                step: '03',
+                title: 'You get a decision receipt',
+                desc: 'An audit-ready verdict with evidence chains, confidence scores, and dissenting views preserved.',
+              },
             ].map((item) => (
               <div key={item.step} className="flex gap-6 items-start">
-                <span className="font-theme-data text-[var(--accent)] text-sm mt-0.5 flex-shrink-0">{item.step}</span>
+                <span className="font-theme-data text-[var(--accent)] text-sm mt-0.5 flex-shrink-0">
+                  {item.step}
+                </span>
                 <div>
                   <h3 className="font-theme-data text-base text-text mb-1">{item.title}</h3>
-                  <p className="font-theme-data text-sm text-text-muted leading-relaxed">{item.desc}</p>
+                  <p className="font-theme-data text-sm text-text-muted leading-relaxed">
+                    {item.desc}
+                  </p>
                 </div>
               </div>
             ))}
@@ -1161,18 +1205,31 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
             Why this matters
           </h2>
           <p className="font-theme-data text-lg text-center text-text mb-12 max-w-xl mx-auto leading-relaxed">
-            A single AI hallucinates, agrees with you, and contradicts itself.
-            Adversarial debate fixes all three.
+            A single AI hallucinates, agrees with you, and contradicts itself. Adversarial debate
+            fixes all three.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { problem: 'Hallucination', fix: 'Cross-model verification catches fabrications before they reach you.' },
-              { problem: 'Sycophancy', fix: 'Agents are structurally incentivized to disagree and find flaws.' },
-              { problem: 'Inconsistency', fix: 'Debate convergence produces stable, defensible positions.' },
+              {
+                problem: 'Hallucination',
+                fix: 'Cross-model verification catches fabrications before they reach you.',
+              },
+              {
+                problem: 'Sycophancy',
+                fix: 'Agents are structurally incentivized to disagree and find flaws.',
+              },
+              {
+                problem: 'Inconsistency',
+                fix: 'Debate convergence produces stable, defensible positions.',
+              },
             ].map((item) => (
               <div key={item.problem}>
-                <h3 className="font-theme-data text-sm text-[var(--accent)] mb-2">{item.problem}</h3>
-                <p className="font-theme-data text-xs text-text-muted leading-relaxed">{item.fix}</p>
+                <h3 className="font-theme-data text-sm text-[var(--accent)] mb-2">
+                  {item.problem}
+                </h3>
+                <p className="font-theme-data text-xs text-text-muted leading-relaxed">
+                  {item.fix}
+                </p>
               </div>
             ))}
           </div>
@@ -1205,13 +1262,26 @@ export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPagePro
       {/* Footer */}
       <footer className="py-6 px-4 border-t border-border">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="font-theme-data text-xs text-text-muted/50">
-            Aragora
-          </span>
+          <span className="font-theme-data text-xs text-text-muted/50">Aragora</span>
           <div className="flex items-center gap-6">
-            <a href="/about" className="font-theme-data text-xs text-text-muted/50 hover:text-text-muted transition-colors">About</a>
-            <a href="/pricing" className="font-theme-data text-xs text-text-muted/50 hover:text-text-muted transition-colors">Pricing</a>
-            <a href="mailto:support@aragora.ai" className="font-theme-data text-xs text-text-muted/50 hover:text-text-muted transition-colors">Support</a>
+            <a
+              href="/about"
+              className="font-theme-data text-xs text-text-muted/50 hover:text-text-muted transition-colors"
+            >
+              About
+            </a>
+            <a
+              href="/pricing"
+              className="font-theme-data text-xs text-text-muted/50 hover:text-text-muted transition-colors"
+            >
+              Pricing
+            </a>
+            <a
+              href="mailto:support@aragora.ai"
+              className="font-theme-data text-xs text-text-muted/50 hover:text-text-muted transition-colors"
+            >
+              Support
+            </a>
           </div>
         </div>
       </footer>

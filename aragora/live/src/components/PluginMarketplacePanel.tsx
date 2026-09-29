@@ -157,36 +157,35 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
     }
   }, [apiBase]);
 
-  const fetchPluginDetails = useCallback(async (pluginName: string) => {
-    try {
-      const response = await fetchWithRetry(
-        `${apiBase}/api/plugins/${pluginName}`,
-        undefined,
-        { maxRetries: 2 }
-      );
+  const fetchPluginDetails = useCallback(
+    async (pluginName: string) => {
+      try {
+        const response = await fetchWithRetry(`${apiBase}/api/plugins/${pluginName}`, undefined, {
+          maxRetries: 2,
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedPlugin(data);
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedPlugin(data);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch plugin details:', err);
       }
-    } catch (err) {
-      logger.error('Failed to fetch plugin details:', err);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   const fetchInstalledPlugins = useCallback(async () => {
     try {
       setInstalledError(null);
-      const response = await fetchWithRetry(
-        `${apiBase}/api/plugins/installed`,
-        undefined,
-        { maxRetries: 2 }
-      );
+      const response = await fetchWithRetry(`${apiBase}/api/plugins/installed`, undefined, {
+        maxRetries: 2,
+      });
 
       if (response.ok) {
         const data = await response.json();
         const installed = new Set<string>(
-          (data.installed || []).map((p: PluginManifest) => p.name)
+          (data.installed || []).map((p: PluginManifest) => p.name),
         );
         setInstalledPlugins(installed);
       } else if (response.status === 401) {
@@ -200,58 +199,64 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
     }
   }, [apiBase]);
 
-  const handleInstallPlugin = useCallback(async (pluginName: string) => {
-    setInstallingPlugin(pluginName);
-    setInstallError(null);
+  const handleInstallPlugin = useCallback(
+    async (pluginName: string) => {
+      setInstallingPlugin(pluginName);
+      setInstallError(null);
 
-    try {
-      const response = await fetch(`${apiBase}/api/plugins/${pluginName}/install`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
+      try {
+        const response = await fetch(`${apiBase}/api/plugins/${pluginName}/install`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to install plugin');
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to install plugin');
+        }
+
+        setInstalledPlugins((prev) => new Set([...prev, pluginName]));
+      } catch (err) {
+        setInstallError(err instanceof Error ? err.message : 'Failed to install plugin');
+      } finally {
+        setInstallingPlugin(null);
       }
+    },
+    [apiBase],
+  );
 
-      setInstalledPlugins(prev => new Set([...prev, pluginName]));
-    } catch (err) {
-      setInstallError(err instanceof Error ? err.message : 'Failed to install plugin');
-    } finally {
-      setInstallingPlugin(null);
-    }
-  }, [apiBase]);
+  const handleUninstallPlugin = useCallback(
+    async (pluginName: string) => {
+      setInstallingPlugin(pluginName);
+      setInstallError(null);
 
-  const handleUninstallPlugin = useCallback(async (pluginName: string) => {
-    setInstallingPlugin(pluginName);
-    setInstallError(null);
+      try {
+        const response = await fetch(`${apiBase}/api/plugins/${pluginName}/install`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
 
-    try {
-      const response = await fetch(`${apiBase}/api/plugins/${pluginName}/install`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
+        const data = await response.json();
 
-      const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to uninstall plugin');
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to uninstall plugin');
+        setInstalledPlugins((prev) => {
+          const next = new Set(prev);
+          next.delete(pluginName);
+          return next;
+        });
+      } catch (err) {
+        setInstallError(err instanceof Error ? err.message : 'Failed to uninstall plugin');
+      } finally {
+        setInstallingPlugin(null);
       }
-
-      setInstalledPlugins(prev => {
-        const next = new Set(prev);
-        next.delete(pluginName);
-        return next;
-      });
-    } catch (err) {
-      setInstallError(err instanceof Error ? err.message : 'Failed to uninstall plugin');
-    } finally {
-      setInstallingPlugin(null);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     fetchPlugins();
@@ -261,15 +266,16 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
   // Filter plugins
   const filteredPlugins = plugins.filter((plugin) => {
     const matchesCapability = !filterCapability || plugin.capabilities.includes(filterCapability);
-    const matchesSearch = !searchQuery ||
+    const matchesSearch =
+      !searchQuery ||
       plugin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       plugin.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      plugin.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      plugin.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCapability && matchesSearch;
   });
 
   // Get unique capabilities for filter
-  const allCapabilities = Array.from(new Set(plugins.flatMap(p => p.capabilities)));
+  const allCapabilities = Array.from(new Set(plugins.flatMap((p) => p.capabilities)));
 
   if (loading && plugins.length === 0) {
     return (
@@ -283,12 +289,7 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
   }
 
   if (error && plugins.length === 0) {
-    return (
-      <ErrorWithRetry
-        error={error || "Failed to load plugins"}
-        onRetry={fetchPlugins}
-      />
-    );
+    return <ErrorWithRetry error={error || 'Failed to load plugins'} onRetry={fetchPlugins} />;
   }
 
   return (
@@ -356,9 +357,13 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
           <div>
             <div className="text-2xl font-theme-data text-accent">
               {installedError === 'auth' ? (
-                <span className="text-text-muted" title="Login to see installed plugins">--</span>
+                <span className="text-text-muted" title="Login to see installed plugins">
+                  --
+                </span>
               ) : installedError ? (
-                <span className="text-warning" title={installedError}>?</span>
+                <span className="text-warning" title={installedError}>
+                  ?
+                </span>
               ) : (
                 installedPlugins.size
               )}
@@ -368,11 +373,15 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
             </div>
           </div>
           <div>
-            <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{allCapabilities.length}</div>
+            <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+              {allCapabilities.length}
+            </div>
             <div className="text-xs font-theme-data text-text-muted">Capabilities</div>
           </div>
           <div>
-            <div className="text-2xl font-theme-data text-[var(--acid-yellow)]">{filteredPlugins.length}</div>
+            <div className="text-2xl font-theme-data text-[var(--acid-yellow)]">
+              {filteredPlugins.length}
+            </div>
             <div className="text-xs font-theme-data text-text-muted">Showing</div>
           </div>
         </div>
@@ -383,77 +392,75 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
         {filteredPlugins.map((plugin) => {
           const isInstalled = installedPlugins.has(plugin.name);
           return (
-          <button
-            key={plugin.name}
-            onClick={() => {
-              setSelectedPlugin(plugin);
-              fetchPluginDetails(plugin.name);
-            }}
-            className={`card p-4 text-left transition-all hover:border-[var(--accent)]/60 ${
-              selectedPlugin?.name === plugin.name ? 'border-[var(--accent)] bg-[var(--accent)]/5' : ''
-            } ${isInstalled ? 'ring-1 ring-accent/50' : ''}`}
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="font-theme-data text-[var(--accent)] font-bold">{plugin.name}</h3>
-                {isInstalled && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-theme-data bg-accent/20 text-accent rounded">
-                    INSTALLED
+            <button
+              key={plugin.name}
+              onClick={() => {
+                setSelectedPlugin(plugin);
+                fetchPluginDetails(plugin.name);
+              }}
+              className={`card p-4 text-left transition-all hover:border-[var(--accent)]/60 ${
+                selectedPlugin?.name === plugin.name
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/5'
+                  : ''
+              } ${isInstalled ? 'ring-1 ring-accent/50' : ''}`}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-theme-data text-[var(--accent)] font-bold">{plugin.name}</h3>
+                  {isInstalled && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-theme-data bg-accent/20 text-accent rounded">
+                      INSTALLED
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-theme-data text-text-muted">v{plugin.version}</span>
+              </div>
+
+              <p className="font-theme-data text-xs text-text-muted mb-3 line-clamp-2">
+                {plugin.description}
+              </p>
+
+              {/* Capabilities */}
+              <div className="flex flex-wrap gap-1 mb-3">
+                {plugin.capabilities.slice(0, 3).map((cap) => {
+                  const style = CAPABILITY_COLORS[cap] || CAPABILITY_COLORS.custom;
+                  return (
+                    <span
+                      key={cap}
+                      className={`text-xs font-theme-data px-2 py-0.5 rounded ${style.bg} ${style.text}`}
+                    >
+                      {cap.replace(/_/g, ' ')}
+                    </span>
+                  );
+                })}
+                {plugin.capabilities.length > 3 && (
+                  <span className="text-xs font-theme-data text-text-muted">
+                    +{plugin.capabilities.length - 3}
                   </span>
                 )}
               </div>
-              <span className="text-xs font-theme-data text-text-muted">v{plugin.version}</span>
-            </div>
 
-            <p className="font-theme-data text-xs text-text-muted mb-3 line-clamp-2">
-              {plugin.description}
-            </p>
-
-            {/* Capabilities */}
-            <div className="flex flex-wrap gap-1 mb-3">
-              {plugin.capabilities.slice(0, 3).map((cap) => {
-                const style = CAPABILITY_COLORS[cap] || CAPABILITY_COLORS.custom;
-                return (
-                  <span
-                    key={cap}
-                    className={`text-xs font-theme-data px-2 py-0.5 rounded ${style.bg} ${style.text}`}
-                  >
-                    {cap.replace(/_/g, ' ')}
-                  </span>
-                );
-              })}
-              {plugin.capabilities.length > 3 && (
-                <span className="text-xs font-theme-data text-text-muted">
-                  +{plugin.capabilities.length - 3}
-                </span>
+              {/* Tags */}
+              {plugin.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {plugin.tags.slice(0, 3).map((tag) => (
+                    <span key={tag} className="text-xs font-theme-data text-text-muted">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
               )}
-            </div>
 
-            {/* Tags */}
-            {plugin.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {plugin.tags.slice(0, 3).map((tag) => (
-                  <span key={tag} className="text-xs font-theme-data text-text-muted">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Author */}
-            <div className="mt-2 text-xs font-theme-data text-text-muted">
-              by {plugin.author}
-            </div>
-          </button>
-        );
+              {/* Author */}
+              <div className="mt-2 text-xs font-theme-data text-text-muted">by {plugin.author}</div>
+            </button>
+          );
         })}
       </div>
 
       {filteredPlugins.length === 0 && (
         <div className="card p-8 text-center">
-          <p className="text-text-muted font-theme-data">
-            No plugins match your search criteria.
-          </p>
+          <p className="text-text-muted font-theme-data">No plugins match your search criteria.</p>
         </div>
       )}
 
@@ -478,9 +485,7 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
             </button>
           </div>
 
-          <p className="font-theme-data text-sm text-text mb-6">
-            {selectedPlugin.description}
-          </p>
+          <p className="font-theme-data text-sm text-text mb-6">{selectedPlugin.description}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Capabilities */}
@@ -503,7 +508,9 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
 
             {/* Requirements */}
             <div>
-              <h4 className="font-theme-data text-xs text-[var(--acid-yellow)] mb-2">REQUIREMENTS</h4>
+              <h4 className="font-theme-data text-xs text-[var(--acid-yellow)] mb-2">
+                REQUIREMENTS
+              </h4>
               <div className="space-y-1">
                 {selectedPlugin.requirements.map((req) => {
                   const info = REQUIREMENT_INFO[req] || { icon: '?', description: req };
@@ -520,9 +527,11 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
               </div>
 
               {selectedPlugin.requirements_satisfied !== undefined && (
-                <div className={`mt-2 text-xs font-theme-data ${
-                  selectedPlugin.requirements_satisfied ? 'text-[var(--accent)]' : 'text-acid-red'
-                }`}>
+                <div
+                  className={`mt-2 text-xs font-theme-data ${
+                    selectedPlugin.requirements_satisfied ? 'text-[var(--accent)]' : 'text-acid-red'
+                  }`}
+                >
                   {selectedPlugin.requirements_satisfied
                     ? 'All requirements satisfied'
                     : `Missing: ${selectedPlugin.missing_requirements?.join(', ')}`}
@@ -533,7 +542,9 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
 
           {/* Technical Details */}
           <div className="mt-6 p-4 bg-surface rounded">
-            <h4 className="font-theme-data text-xs text-[var(--acid-cyan)] mb-3">TECHNICAL DETAILS</h4>
+            <h4 className="font-theme-data text-xs text-[var(--acid-cyan)] mb-3">
+              TECHNICAL DETAILS
+            </h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-theme-data text-xs">
               <div>
                 <span className="text-text-muted">Entry Point:</span>
@@ -565,9 +576,7 @@ export function PluginMarketplacePanel({ backendConfig }: PluginMarketplacePanel
             {selectedPlugin.system_tools.length > 0 && (
               <div className="mt-1">
                 <span className="text-text-muted text-xs">System Tools: </span>
-                <span className="text-text text-xs">
-                  {selectedPlugin.system_tools.join(', ')}
-                </span>
+                <span className="text-text text-xs">{selectedPlugin.system_tools.join(', ')}</span>
               </div>
             )}
           </div>

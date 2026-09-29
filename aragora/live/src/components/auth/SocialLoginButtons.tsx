@@ -71,7 +71,10 @@ export function SocialLoginButtons({ mode }: SocialLoginButtonsProps) {
 
   useEffect(() => {
     const fetchProviders = async () => {
-      logger.debug('[SocialLoginButtons] Fetching providers from:', `${API_BASE_URL}/api/auth/oauth/providers`);
+      logger.debug(
+        '[SocialLoginButtons] Fetching providers from:',
+        `${API_BASE_URL}/api/auth/oauth/providers`,
+      );
       try {
         // Use explicit API URL from config (handles production vs dev)
         const response = await fetch(`${API_BASE_URL}/api/auth/oauth/providers`);
@@ -161,9 +164,7 @@ export function SocialLoginButtons({ mode }: SocialLoginButtonsProps) {
         ))}
       </div>
 
-      {error && (
-        <p className="text-xs font-theme-data text-warning text-center">{error}</p>
-      )}
+      {error && <p className="text-xs font-theme-data text-warning text-center">{error}</p>}
     </div>
   );
 }

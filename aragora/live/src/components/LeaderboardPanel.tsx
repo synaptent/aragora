@@ -30,7 +30,11 @@ interface LeaderboardPanelProps {
 
 const DEFAULT_API_BASE = API_BASE_URL;
 
-function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_API_BASE }: LeaderboardPanelProps) {
+function LeaderboardPanelComponent({
+  wsMessages = [],
+  loopId,
+  apiBase = DEFAULT_API_BASE,
+}: LeaderboardPanelProps) {
   const { tokens } = useAuth();
   const [agents, setAgents] = useState<AgentRanking[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -41,7 +45,9 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [endpointErrors, setEndpointErrors] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'rankings' | 'matches' | 'reputation' | 'teams' | 'stats' | 'minds'>('rankings');
+  const [activeTab, setActiveTab] = useState<
+    'rankings' | 'matches' | 'reputation' | 'teams' | 'stats' | 'minds'
+  >('rankings');
   const [lastEventId, setLastEventId] = useState<string | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [availableDomains, setAvailableDomains] = useState<string[]>([]);
@@ -92,11 +98,11 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
       if (data.matches) {
         setMatches(data.matches.matches || []);
         const domainSet = new Set<string>(
-          (data.matches.matches || []).map((m: Match) => m.domain).filter(Boolean)
+          (data.matches.matches || []).map((m: Match) => m.domain).filter(Boolean),
         );
         const matchDomains = Array.from(domainSet);
         if (matchDomains.length > 0) {
-          setAvailableDomains(prev => Array.from(new Set([...prev, ...matchDomains])));
+          setAvailableDomains((prev) => Array.from(new Set([...prev, ...matchDomains])));
         }
       }
 
@@ -141,8 +147,14 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
       logger.warn('Attempting legacy endpoints fallback');
       const errors: Record<string, string> = {};
       const endpoints = [
-        { key: 'rankings', url: `${apiBase}/api/leaderboard?limit=10${loopId ? `&loop_id=${loopId}` : ''}${selectedDomain ? `&domain=${selectedDomain}` : ''}` },
-        { key: 'matches', url: `${apiBase}/api/matches/recent?limit=5${loopId ? `&loop_id=${loopId}` : ''}` },
+        {
+          key: 'rankings',
+          url: `${apiBase}/api/leaderboard?limit=10${loopId ? `&loop_id=${loopId}` : ''}${selectedDomain ? `&domain=${selectedDomain}` : ''}`,
+        },
+        {
+          key: 'matches',
+          url: `${apiBase}/api/matches/recent?limit=5${loopId ? `&loop_id=${loopId}` : ''}`,
+        },
         { key: 'reputation', url: `${apiBase}/api/reputation/all` },
         { key: 'teams', url: `${apiBase}/api/routing/best-teams?min_debates=3&limit=10` },
         { key: 'stats', url: `${apiBase}/api/ranking/stats` },
@@ -153,19 +165,34 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
           const r = await fetch(url, { headers });
           if (!r.ok) throw new Error(`${r.status}`);
           return { key, data: await r.json() };
-        })
+        }),
       );
       results.forEach((result, idx) => {
         const { key } = endpoints[idx];
-        if (result.status === 'rejected') { errors[key] = result.reason?.message || 'Failed'; return; }
+        if (result.status === 'rejected') {
+          errors[key] = result.reason?.message || 'Failed';
+          return;
+        }
         const { data } = result.value;
         switch (key) {
-          case 'rankings': setAgents(data.agents || data.rankings || []); break;
-          case 'matches': setMatches(data.matches || []); break;
-          case 'reputation': setReputations(data.reputations || []); break;
-          case 'teams': setTeams(data.combinations || []); break;
-          case 'stats': setStats(data); break;
-          case 'minds': setIntrospections(Object.values(data.agents || {}) as AgentIntrospection[]); break;
+          case 'rankings':
+            setAgents(data.agents || data.rankings || []);
+            break;
+          case 'matches':
+            setMatches(data.matches || []);
+            break;
+          case 'reputation':
+            setReputations(data.reputations || []);
+            break;
+          case 'teams':
+            setTeams(data.combinations || []);
+            break;
+          case 'stats':
+            setStats(data);
+            break;
+          case 'minds':
+            setIntrospections(Object.values(data.agents || {}) as AgentIntrospection[]);
+            break;
         }
       });
       setEndpointErrors(errors);
@@ -181,16 +208,20 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
 
   // Legacy fallback kept as separate function for testing
   const _fetchDataLegacy = useCallback(async () => {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (tokens?.access_token) {
       headers['Authorization'] = `Bearer ${tokens.access_token}`;
     }
     const errors: Record<string, string> = {};
     const endpoints = [
-      { key: 'rankings', url: `${apiBase}/api/leaderboard?limit=10${loopId ? `&loop_id=${loopId}` : ''}${selectedDomain ? `&domain=${selectedDomain}` : ''}` },
-      { key: 'matches', url: `${apiBase}/api/matches/recent?limit=5${loopId ? `&loop_id=${loopId}` : ''}` },
+      {
+        key: 'rankings',
+        url: `${apiBase}/api/leaderboard?limit=10${loopId ? `&loop_id=${loopId}` : ''}${selectedDomain ? `&domain=${selectedDomain}` : ''}`,
+      },
+      {
+        key: 'matches',
+        url: `${apiBase}/api/matches/recent?limit=5${loopId ? `&loop_id=${loopId}` : ''}`,
+      },
       { key: 'reputation', url: `${apiBase}/api/reputation/all` },
       { key: 'teams', url: `${apiBase}/api/routing/best-teams?min_debates=3&limit=10` },
       { key: 'stats', url: `${apiBase}/api/ranking/stats` },
@@ -202,7 +233,7 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
         const res = await fetch(url, { headers });
         if (!res.ok) throw new Error(`${res.status}`);
         return { key, data: await res.json() };
-      })
+      }),
     );
 
     results.forEach((result, idx) => {
@@ -287,7 +318,7 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
         // Track new domains from match events
         const eventDomain = eventData?.domain as string | undefined;
         if (eventDomain && !availableDomains.includes(eventDomain)) {
-          setAvailableDomains(prev => [...prev, eventDomain]);
+          setAvailableDomains((prev) => [...prev, eventDomain]);
         }
       }
     }
@@ -429,9 +460,7 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
       )}
 
       {/* Recent Matches Tab */}
-      {activeTab === 'matches' && (
-        <MatchesTabPanel matches={matches} loading={loading} />
-      )}
+      {activeTab === 'matches' && <MatchesTabPanel matches={matches} loading={loading} />}
 
       {/* Reputation Tab */}
       {activeTab === 'reputation' && (
@@ -439,19 +468,13 @@ function LeaderboardPanelComponent({ wsMessages = [], loopId, apiBase = DEFAULT_
       )}
 
       {/* Teams Tab */}
-      {activeTab === 'teams' && (
-        <TeamsTabPanel teams={teams} loading={loading} />
-      )}
+      {activeTab === 'teams' && <TeamsTabPanel teams={teams} loading={loading} />}
 
       {/* Stats Tab */}
-      {activeTab === 'stats' && (
-        <StatsTabPanel stats={stats} loading={loading} />
-      )}
+      {activeTab === 'stats' && <StatsTabPanel stats={stats} loading={loading} />}
 
       {/* Minds (Introspection) Tab */}
-      {activeTab === 'minds' && (
-        <MindsTabPanel introspections={introspections} loading={loading} />
-      )}
+      {activeTab === 'minds' && <MindsTabPanel introspections={introspections} loading={loading} />}
 
       {/* Agent Moments Modal */}
       {selectedAgent && (

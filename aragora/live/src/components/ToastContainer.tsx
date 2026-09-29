@@ -9,26 +9,10 @@ interface ToastContainerProps {
 }
 
 const TOAST_STYLES: Record<ToastType, { bg: string; border: string; icon: string }> = {
-  error: {
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/50',
-    icon: '✕',
-  },
-  success: {
-    bg: 'bg-green-500/10',
-    border: 'border-green-500/50',
-    icon: '✓',
-  },
-  warning: {
-    bg: 'bg-yellow-500/10',
-    border: 'border-yellow-500/50',
-    icon: '⚠',
-  },
-  info: {
-    bg: 'bg-[var(--acid-cyan)]/10',
-    border: 'border-[var(--acid-cyan)]/50',
-    icon: 'ℹ',
-  },
+  error: { bg: 'bg-red-500/10', border: 'border-red-500/50', icon: '✕' },
+  success: { bg: 'bg-green-500/10', border: 'border-green-500/50', icon: '✓' },
+  warning: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/50', icon: '⚠' },
+  info: { bg: 'bg-[var(--acid-cyan)]/10', border: 'border-[var(--acid-cyan)]/50', icon: 'ℹ' },
 };
 
 export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {

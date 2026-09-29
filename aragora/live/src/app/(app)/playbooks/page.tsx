@@ -9,7 +9,15 @@ import { usePlaybooks, type Playbook } from '@/hooks/usePlaybooks';
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALL_CATEGORIES = ['all', 'healthcare', 'finance', 'legal', 'compliance', 'engineering', 'general'] as const;
+const ALL_CATEGORIES = [
+  'all',
+  'healthcare',
+  'finance',
+  'legal',
+  'compliance',
+  'engineering',
+  'general',
+] as const;
 type CategoryFilter = (typeof ALL_CATEGORIES)[number];
 
 const CATEGORY_LABELS: Record<CategoryFilter, string> = {
@@ -109,9 +117,8 @@ export default function PlaybooksPage() {
               {'>'} DECISION PLAYBOOKS
             </h1>
             <p className="text-[var(--text-muted)] font-theme-data max-w-2xl mx-auto">
-              Pre-built decision workflows combining debate templates, vertical scoring,
-              compliance artifacts, and approval gates. Choose a playbook and launch it
-              with your question.
+              Pre-built decision workflows combining debate templates, vertical scoring, compliance
+              artifacts, and approval gates. Choose a playbook and launch it with your question.
             </p>
           </div>
         </div>
@@ -213,11 +220,7 @@ export default function PlaybooksPage() {
           {!loading && filteredPlaybooks.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPlaybooks.map((playbook) => (
-                <PlaybookCard
-                  key={playbook.id}
-                  playbook={playbook}
-                  onLaunch={handleLaunch}
-                />
+                <PlaybookCard key={playbook.id} playbook={playbook} onLaunch={handleLaunch} />
               ))}
             </div>
           )}
@@ -225,15 +228,11 @@ export default function PlaybooksPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--acid-green)]/20 mt-8">
-          <div className="text-[var(--acid-green)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
+          <div className="text-[var(--acid-green)]/50 mb-2">{'='.repeat(40)}</div>
           <p className="text-[var(--text-muted)]">
             {'>'} ARAGORA DECISION PLAYBOOKS // {playbooks.length} AVAILABLE
           </p>
-          <div className="text-[var(--acid-green)]/50 mt-4">
-            {'='.repeat(40)}
-          </div>
+          <div className="text-[var(--acid-green)]/50 mt-4">{'='.repeat(40)}</div>
         </footer>
       </main>
 

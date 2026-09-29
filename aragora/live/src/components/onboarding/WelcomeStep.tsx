@@ -9,12 +9,8 @@ export function WelcomeStep() {
             &#128640;
           </span>
         </div>
-        <h3 className="text-xl font-theme-data text-[var(--accent)] mb-2">
-          Welcome to Aragora
-        </h3>
-        <p className="text-sm text-text-muted">
-          Multi-agent AI debates for better team decisions
-        </p>
+        <h3 className="text-xl font-theme-data text-[var(--accent)] mb-2">Welcome to Aragora</h3>
+        <p className="text-sm text-text-muted">Multi-agent AI debates for better team decisions</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -36,18 +32,14 @@ export function WelcomeStep() {
       </div>
 
       <div className="text-center">
-        <p className="text-sm text-text-muted">
-          This wizard will help you:
-        </p>
+        <p className="text-sm text-text-muted">This wizard will help you:</p>
         <ul className="text-sm text-text mt-2 space-y-1">
           <li>1. Set up your workspace</li>
           <li>2. Invite your team</li>
           <li>3. Run your first debate</li>
           <li>4. View your decision receipt</li>
         </ul>
-        <p className="text-xs text-text-muted mt-4">
-          Takes about 10-15 minutes
-        </p>
+        <p className="text-xs text-text-muted mt-4">Takes about 10-15 minutes</p>
       </div>
     </div>
   );

@@ -13,7 +13,16 @@ function formatCredits(amount: number): string {
 
 function OpenRouterIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
       <path d="M2 17l10 5 10-5" />
       <path d="M2 12l10 5 10-5" />
@@ -26,7 +35,10 @@ interface ConnectOpenRouterButtonProps {
   className?: string;
 }
 
-export function ConnectOpenRouterButton({ compact = false, className = '' }: ConnectOpenRouterButtonProps) {
+export function ConnectOpenRouterButton({
+  compact = false,
+  className = '',
+}: ConnectOpenRouterButtonProps) {
   const { isConnected, keyInfo, connect, disconnect } = useOpenRouterConnection();
 
   if (compact) {
@@ -36,13 +48,15 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
           className={`inline-flex items-center gap-1.5 font-theme-data text-xs ${className}`}
           style={{ color: 'var(--accent)' }}
         >
-          <span style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            backgroundColor: 'var(--accent)',
-            display: 'inline-block',
-          }} />
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              backgroundColor: 'var(--accent)',
+              display: 'inline-block',
+            }}
+          />
           OpenRouter connected
           {keyInfo?.limitRemaining != null && (
             <span style={{ color: 'var(--text-muted)' }}>
@@ -67,9 +81,10 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
 
   // Full card mode (settings page)
   if (isConnected) {
-    const storedKeys = typeof window !== 'undefined'
-      ? JSON.parse(localStorage.getItem('aragora_provider_keys') || '{}')
-      : {};
+    const storedKeys =
+      typeof window !== 'undefined'
+        ? JSON.parse(localStorage.getItem('aragora_provider_keys') || '{}')
+        : {};
     const maskedKey = storedKeys.openrouter ? maskKey(storedKeys.openrouter) : '';
 
     return (
@@ -83,7 +98,10 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-theme-data text-sm font-medium" style={{ color: 'var(--text)' }}>
+              <span
+                className="font-theme-data text-sm font-medium"
+                style={{ color: 'var(--text)' }}
+              >
                 OpenRouter
               </span>
               <span
@@ -108,9 +126,7 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
             {keyInfo?.limitRemaining != null && (
               <div className="mt-2 font-theme-data text-xs" style={{ color: 'var(--text-muted)' }}>
                 {formatCredits(keyInfo.limitRemaining)} credit remaining
-                {keyInfo.limit != null && (
-                  <span> of {formatCredits(keyInfo.limit)} limit</span>
-                )}
+                {keyInfo.limit != null && <span> of {formatCredits(keyInfo.limit)} limit</span>}
               </div>
             )}
           </div>
@@ -118,8 +134,11 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
             onClick={disconnect}
             className="px-2 py-1 text-[10px] font-theme-data rounded transition-colors cursor-pointer"
             style={{ color: 'var(--crimson, #ff0040)' }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--crimson, #ff0040) 10%, transparent)')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor =
+                'color-mix(in srgb, var(--crimson, #ff0040) 10%, transparent)')
+            }
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             Disconnect
           </button>
@@ -141,7 +160,10 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
           <div className="font-theme-data text-sm font-medium" style={{ color: 'var(--text)' }}>
             One-click setup via OpenRouter
           </div>
-          <div className="font-theme-data text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+          <div
+            className="font-theme-data text-[10px] mt-0.5"
+            style={{ color: 'var(--text-muted)' }}
+          >
             Connect your account and set a budget — no key pasting needed.
           </div>
         </div>
@@ -153,8 +175,14 @@ export function ConnectOpenRouterButton({ compact = false, className = '' }: Con
             border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
             backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
           }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--accent) 20%, transparent)')}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--accent) 10%, transparent)')}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor =
+              'color-mix(in srgb, var(--accent) 20%, transparent)')
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor =
+              'color-mix(in srgb, var(--accent) 10%, transparent)')
+          }
         >
           <OpenRouterIcon />
           Connect OpenRouter

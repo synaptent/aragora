@@ -9,7 +9,10 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const PluginMarketplacePanel = dynamic(
-  () => import('@/components/PluginMarketplacePanel').then(m => ({ default: m.PluginMarketplacePanel })),
+  () =>
+    import('@/components/PluginMarketplacePanel').then((m) => ({
+      default: m.PluginMarketplacePanel,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +20,7 @@ const PluginMarketplacePanel = dynamic(
         <div className="h-96 bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function PluginsPage() {
@@ -72,18 +75,16 @@ export default function PluginsPage() {
           </div>
 
           <PanelErrorBoundary panelName="Plugin Marketplace">
-            <PluginMarketplacePanel backendConfig={{ apiUrl: backendConfig.api, wsUrl: backendConfig.ws }} />
+            <PluginMarketplacePanel
+              backendConfig={{ apiUrl: backendConfig.api, wsUrl: backendConfig.ws }}
+            />
           </PanelErrorBoundary>
         </div>
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // PLUGIN MARKETPLACE
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // PLUGIN MARKETPLACE</p>
         </footer>
       </main>
     </>

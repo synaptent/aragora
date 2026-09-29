@@ -119,217 +119,197 @@ export function useAgentRouting() {
   // Get Recommendations
   // ---------------------------------------------------------------------------
 
-  const getRecommendations = useCallback(async (options: {
-    primary_domain?: string;
-    secondary_domains?: string[];
-    required_traits?: string[];
-    task_id?: string;
-    limit?: number;
-  } = {}): Promise<AgentRecommendation[]> => {
-    setState(s => ({ ...s, recommendationsLoading: true, recommendationsError: null }));
+  const getRecommendations = useCallback(
+    async (
+      options: {
+        primary_domain?: string;
+        secondary_domains?: string[];
+        required_traits?: string[];
+        task_id?: string;
+        limit?: number;
+      } = {},
+    ): Promise<AgentRecommendation[]> => {
+      setState((s) => ({ ...s, recommendationsLoading: true, recommendationsError: null }));
 
-    try {
-      const response = await fetch(`${API_BASE}/api/routing/recommendations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-      });
+      try {
+        const response = await fetch(`${API_BASE}/api/routing/recommendations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(options),
+        });
 
-      if (!response.ok) {
-        if (response.status === 503) {
-          throw new Error('Agent routing unavailable');
+        if (!response.ok) {
+          if (response.status === 503) {
+            throw new Error('Agent routing unavailable');
+          }
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+
+        const data = await response.json();
+        const recommendations = data.recommendations || [];
+        setState((s) => ({ ...s, recommendationsLoading: false, recommendations }));
+        return recommendations;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to get recommendations';
+        setState((s) => ({ ...s, recommendationsLoading: false, recommendationsError: errorMsg }));
+        return [];
       }
-
-      const data = await response.json();
-      const recommendations = data.recommendations || [];
-      setState(s => ({
-        ...s,
-        recommendationsLoading: false,
-        recommendations,
-      }));
-      return recommendations;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to get recommendations';
-      setState(s => ({ ...s, recommendationsLoading: false, recommendationsError: errorMsg }));
-      return [];
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Auto-Route Task
   // ---------------------------------------------------------------------------
 
-  const autoRoute = useCallback(async (
-    task: string,
-    options: { task_id?: string; exclude?: string[] } = {}
-  ): Promise<AutoRouteResult | null> => {
-    setState(s => ({ ...s, autoRouteLoading: true, autoRouteError: null }));
+  const autoRoute = useCallback(
+    async (
+      task: string,
+      options: { task_id?: string; exclude?: string[] } = {},
+    ): Promise<AutoRouteResult | null> => {
+      setState((s) => ({ ...s, autoRouteLoading: true, autoRouteError: null }));
 
-    try {
-      const response = await fetch(`${API_BASE}/api/routing/auto-route`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, ...options }),
-      });
+      try {
+        const response = await fetch(`${API_BASE}/api/routing/auto-route`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task, ...options }),
+        });
 
-      if (!response.ok) {
-        if (response.status === 503) {
-          throw new Error('Agent routing unavailable');
+        if (!response.ok) {
+          if (response.status === 503) {
+            throw new Error('Agent routing unavailable');
+          }
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+
+        const data: AutoRouteResult = await response.json();
+        setState((s) => ({ ...s, autoRouteLoading: false, autoRouteResult: data }));
+        return data;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to auto-route task';
+        setState((s) => ({ ...s, autoRouteLoading: false, autoRouteError: errorMsg }));
+        return null;
       }
-
-      const data: AutoRouteResult = await response.json();
-      setState(s => ({
-        ...s,
-        autoRouteLoading: false,
-        autoRouteResult: data,
-      }));
-      return data;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to auto-route task';
-      setState(s => ({ ...s, autoRouteLoading: false, autoRouteError: errorMsg }));
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Detect Domain
   // ---------------------------------------------------------------------------
 
-  const detectDomain = useCallback(async (
-    task: string,
-    topN: number = 3
-  ): Promise<DomainScore[]> => {
-    setState(s => ({ ...s, domainLoading: true, domainError: null }));
+  const detectDomain = useCallback(
+    async (task: string, topN: number = 3): Promise<DomainScore[]> => {
+      setState((s) => ({ ...s, domainLoading: true, domainError: null }));
 
-    try {
-      const response = await fetch(`${API_BASE}/api/routing/detect-domain`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, top_n: topN }),
-      });
+      try {
+        const response = await fetch(`${API_BASE}/api/routing/detect-domain`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task, top_n: topN }),
+        });
 
-      if (!response.ok) {
-        if (response.status === 503) {
-          throw new Error('Domain detection unavailable');
+        if (!response.ok) {
+          if (response.status === 503) {
+            throw new Error('Domain detection unavailable');
+          }
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+
+        const data = await response.json();
+        const domains = data.domains || [];
+        setState((s) => ({ ...s, domainLoading: false, detectedDomains: domains }));
+        return domains;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to detect domain';
+        setState((s) => ({ ...s, domainLoading: false, domainError: errorMsg }));
+        return [];
       }
-
-      const data = await response.json();
-      const domains = data.domains || [];
-      setState(s => ({
-        ...s,
-        domainLoading: false,
-        detectedDomains: domains,
-      }));
-      return domains;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to detect domain';
-      setState(s => ({ ...s, domainLoading: false, domainError: errorMsg }));
-      return [];
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Get Best Teams
   // ---------------------------------------------------------------------------
 
-  const getBestTeams = useCallback(async (
-    minDebates: number = 3,
-    limit: number = 10
-  ): Promise<TeamCombination[]> => {
-    setState(s => ({ ...s, bestTeamsLoading: true, bestTeamsError: null }));
+  const getBestTeams = useCallback(
+    async (minDebates: number = 3, limit: number = 10): Promise<TeamCombination[]> => {
+      setState((s) => ({ ...s, bestTeamsLoading: true, bestTeamsError: null }));
 
-    try {
-      const params = new URLSearchParams({
-        min_debates: String(minDebates),
-        limit: String(limit),
-      });
+      try {
+        const params = new URLSearchParams({
+          min_debates: String(minDebates),
+          limit: String(limit),
+        });
 
-      const response = await fetch(`${API_BASE}/api/routing/best-teams?${params}`);
+        const response = await fetch(`${API_BASE}/api/routing/best-teams?${params}`);
 
-      if (!response.ok) {
-        if (response.status === 503) {
-          throw new Error('Team routing unavailable');
+        if (!response.ok) {
+          if (response.status === 503) {
+            throw new Error('Team routing unavailable');
+          }
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+
+        const data = await response.json();
+        const teams = data.combinations || [];
+        setState((s) => ({ ...s, bestTeamsLoading: false, bestTeams: teams }));
+        return teams;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to get best teams';
+        setState((s) => ({ ...s, bestTeamsLoading: false, bestTeamsError: errorMsg }));
+        return [];
       }
-
-      const data = await response.json();
-      const teams = data.combinations || [];
-      setState(s => ({
-        ...s,
-        bestTeamsLoading: false,
-        bestTeams: teams,
-      }));
-      return teams;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to get best teams';
-      setState(s => ({ ...s, bestTeamsLoading: false, bestTeamsError: errorMsg }));
-      return [];
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Get Domain Leaderboard
   // ---------------------------------------------------------------------------
 
-  const getDomainLeaderboard = useCallback(async (
-    domain: string = 'general',
-    limit: number = 10
-  ): Promise<DomainLeaderboardEntry[]> => {
-    setState(s => ({ ...s, leaderboardLoading: true, leaderboardError: null }));
+  const getDomainLeaderboard = useCallback(
+    async (domain: string = 'general', limit: number = 10): Promise<DomainLeaderboardEntry[]> => {
+      setState((s) => ({ ...s, leaderboardLoading: true, leaderboardError: null }));
 
-    try {
-      const params = new URLSearchParams({
-        domain,
-        limit: String(limit),
-      });
+      try {
+        const params = new URLSearchParams({ domain, limit: String(limit) });
 
-      const response = await fetch(`${API_BASE}/api/routing/domain-leaderboard?${params}`);
+        const response = await fetch(`${API_BASE}/api/routing/domain-leaderboard?${params}`);
 
-      if (!response.ok) {
-        if (response.status === 503) {
-          throw new Error('Leaderboard unavailable');
+        if (!response.ok) {
+          if (response.status === 503) {
+            throw new Error('Leaderboard unavailable');
+          }
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+
+        const data = await response.json();
+        const leaderboard = data.leaderboard || [];
+        setState((s) => ({ ...s, leaderboardLoading: false, domainLeaderboard: leaderboard }));
+        return leaderboard;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to get leaderboard';
+        setState((s) => ({ ...s, leaderboardLoading: false, leaderboardError: errorMsg }));
+        return [];
       }
-
-      const data = await response.json();
-      const leaderboard = data.leaderboard || [];
-      setState(s => ({
-        ...s,
-        leaderboardLoading: false,
-        domainLeaderboard: leaderboard,
-      }));
-      return leaderboard;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to get leaderboard';
-      setState(s => ({ ...s, leaderboardLoading: false, leaderboardError: errorMsg }));
-      return [];
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Clear State
   // ---------------------------------------------------------------------------
 
   const clearAutoRoute = useCallback(() => {
-    setState(s => ({
+    setState((s) => ({
       ...s,
       autoRouteResult: null,
       autoRouteError: null,
@@ -339,7 +319,7 @@ export function useAgentRouting() {
   }, []);
 
   const clearErrors = useCallback(() => {
-    setState(s => ({
+    setState((s) => ({
       ...s,
       recommendationsError: null,
       autoRouteError: null,

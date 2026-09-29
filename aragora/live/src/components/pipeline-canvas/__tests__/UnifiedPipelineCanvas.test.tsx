@@ -12,12 +12,29 @@ import type { PipelineResultResponse, PipelineStageType } from '../types';
 // Track onViewportChange callback so tests can simulate zoom
 // ---------------------------------------------------------------------------
 
-let capturedOnViewportChange: ((viewport: { zoom: number; x: number; y: number }) => void) | null = null;
-let _capturedOnNodeClick: ((event: React.MouseEvent, node: Record<string, unknown>) => void) | null = null;
+let capturedOnViewportChange: ((viewport: { zoom: number; x: number; y: number }) => void) | null =
+  null;
+let _capturedOnNodeClick:
+  ((event: React.MouseEvent, node: Record<string, unknown>) => void) | null = null;
 let _capturedOnPaneClick: (() => void) | null = null;
 
 jest.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children, onViewportChange, onNodeClick, onPaneClick, nodes, edges, ..._rest }: Record<string, unknown> & { children?: React.ReactNode; onViewportChange?: (viewport: { zoom: number; x: number; y: number }) => void; onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void; onPaneClick?: () => void; nodes?: Array<Record<string, unknown>>; edges?: Array<Record<string, unknown>> }) => {
+  ReactFlow: ({
+    children,
+    onViewportChange,
+    onNodeClick,
+    onPaneClick,
+    nodes,
+    edges,
+    ..._rest
+  }: Record<string, unknown> & {
+    children?: React.ReactNode;
+    onViewportChange?: (viewport: { zoom: number; x: number; y: number }) => void;
+    onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void;
+    onPaneClick?: () => void;
+    nodes?: Array<Record<string, unknown>>;
+    edges?: Array<Record<string, unknown>>;
+  }) => {
     capturedOnViewportChange = onViewportChange || null;
     _capturedOnNodeClick = onNodeClick || null;
     _capturedOnPaneClick = onPaneClick || null;
@@ -35,7 +52,11 @@ jest.mock('@xyflow/react', () => ({
           </div>
         ))}
         {edges?.map((e: Record<string, unknown>) => (
-          <div key={e.id as string} data-testid={`edge-${e.id}`} data-edge-style={JSON.stringify(e.style)} />
+          <div
+            key={e.id as string}
+            data-testid={`edge-${e.id}`}
+            data-edge-style={JSON.stringify(e.style)}
+          />
         ))}
       </div>
     );
@@ -44,7 +65,9 @@ jest.mock('@xyflow/react', () => ({
   Controls: () => <div data-testid="controls" />,
   Background: () => <div data-testid="background" />,
   MiniMap: () => <div data-testid="minimap" />,
-  Panel: ({ children, position }: { children: React.ReactNode; position: string }) => <div data-testid={`panel-${position}`}>{children}</div>,
+  Panel: ({ children, position }: { children: React.ReactNode; position: string }) => (
+    <div data-testid={`panel-${position}`}>{children}</div>
+  ),
   BackgroundVariant: { Dots: 'dots' },
   useNodesState: (initial: unknown[]) => {
     const [nodes, setNodes] = require('react').useState(initial);
@@ -58,7 +81,10 @@ jest.mock('@xyflow/react', () => ({
     fitView: jest.fn(),
     screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
   }),
-  addEdge: jest.fn((connection: Record<string, unknown>, edges: unknown[]) => [...edges, { id: 'new-edge', ...connection }]),
+  addEdge: jest.fn((connection: Record<string, unknown>, edges: unknown[]) => [
+    ...edges,
+    { id: 'new-edge', ...connection },
+  ]),
 }));
 
 // ---------------------------------------------------------------------------
@@ -82,9 +108,7 @@ jest.mock('../../DebateThisButton', () => ({
 // ---------------------------------------------------------------------------
 
 import { usePipelineCanvas } from '../../../hooks/usePipelineCanvas';
-jest.mock('../../../hooks/usePipelineCanvas', () => ({
-  usePipelineCanvas: jest.fn(),
-}));
+jest.mock('../../../hooks/usePipelineCanvas', () => ({ usePipelineCanvas: jest.fn() }));
 
 const mockedUsePipelineCanvas = usePipelineCanvas as jest.MockedFunction<typeof usePipelineCanvas>;
 
@@ -423,13 +447,7 @@ describe('UnifiedPipelineCanvas', () => {
           actions: [],
           orchestration: [],
         },
-        stageEdges: {
-          ideas: [edge],
-          principles: [],
-          goals: [],
-          actions: [],
-          orchestration: [],
-        },
+        stageEdges: { ideas: [edge], principles: [], goals: [], actions: [], orchestration: [] },
       }),
     );
 
@@ -447,7 +465,11 @@ describe('UnifiedPipelineCanvas', () => {
           principles: [],
           goals: [makeGoalNode('g1', 'G')],
           actions: [],
-          orchestration: [makeOrchNode('o1', 'O'), makeOrchNode('o2', 'O2'), makeOrchNode('o3', 'O3')],
+          orchestration: [
+            makeOrchNode('o1', 'O'),
+            makeOrchNode('o2', 'O2'),
+            makeOrchNode('o3', 'O3'),
+          ],
         },
       }),
     );
@@ -465,7 +487,9 @@ describe('UnifiedPipelineCanvas', () => {
     render(<UnifiedPipelineCanvas />);
 
     // Default zoom 1.0 is between 0.8 and 1.5
-    expect(screen.getByTestId('zoom-indicator')).toHaveTextContent('ideas + principles + goals + actions');
+    expect(screen.getByTestId('zoom-indicator')).toHaveTextContent(
+      'ideas + principles + goals + actions',
+    );
 
     // Change to high zoom
     act(() => {
@@ -591,7 +615,9 @@ describe('UnifiedPipelineCanvas', () => {
     fireEvent.click(screen.getByTestId('node-idea-1'));
 
     expect(screen.getByTestId('ideas-to-goals-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('ideas-to-goals-goal-preview')).toHaveTextContent('Protect API latency');
+    expect(screen.getByTestId('ideas-to-goals-goal-preview')).toHaveTextContent(
+      'Protect API latency',
+    );
     expect(screen.getByTestId('transition-focus-trans-ideas-goals')).toHaveTextContent(
       '1 idea selected for promotion',
     );
@@ -701,12 +727,7 @@ describe('UnifiedPipelineCanvas', () => {
               ],
             },
             review: {
-              transition_counts: {
-                pending: 2,
-                approved: 1,
-                rejected: 0,
-                revised: 0,
-              },
+              transition_counts: { pending: 2, approved: 1, rejected: 0, revised: 0 },
               pending_reviews: [
                 {
                   id: 'trans-actions-orch',
@@ -722,11 +743,7 @@ describe('UnifiedPipelineCanvas', () => {
             repair: {
               status: 'in_progress',
               attempts: 2,
-              active_items: [
-                {
-                  title: 'Retry flaky verification',
-                },
-              ],
+              active_items: [{ title: 'Retry flaky verification' }],
             },
             merge_gate: {
               enabled: true,
@@ -748,7 +765,9 @@ describe('UnifiedPipelineCanvas', () => {
     expect(screen.getByTestId('live-state-review')).toHaveTextContent('2 pending');
     expect(screen.getByTestId('live-state-review')).toHaveTextContent('actions -> orchestration');
     expect(screen.getByTestId('live-state-repair')).toHaveTextContent('Retry flaky verification');
-    expect(screen.getByTestId('live-state-merge-gate')).toHaveTextContent('merge gate blocked: pytest failed');
+    expect(screen.getByTestId('live-state-merge-gate')).toHaveTextContent(
+      'merge gate blocked: pytest failed',
+    );
     expect(screen.getByTestId('live-state-node-orch-1')).toHaveTextContent('in progress');
   });
 });

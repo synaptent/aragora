@@ -28,7 +28,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <div>Test content</div>
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('Test content')).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingComponent shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('RUNTIME ERROR')).toBeInTheDocument();
@@ -50,7 +50,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingComponent shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // The error name appears as "> Error" in the details section
@@ -61,7 +61,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingComponent shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('> RESET_COMPONENT')).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingComponent shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('RUNTIME ERROR')).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary fallback={customFallback}>
         <ThrowingComponent shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('Custom error: Test error message')).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('DataState', () => {
     render(
       <DataState data={null} loading={true} error={null}>
         {(data) => <div>{data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     expect(screen.getByText('Loading...')).toBeInTheDocument();
@@ -223,7 +223,7 @@ describe('DataState', () => {
     render(
       <DataState data={null} loading={true} error={null} loadingText="Fetching data...">
         {(data) => <div>{data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     expect(screen.getByText('Fetching data...')).toBeInTheDocument();
@@ -234,7 +234,7 @@ describe('DataState', () => {
     render(
       <DataState data={null} loading={false} error={error}>
         {(data) => <div>{data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     expect(screen.getByText('Fetch failed')).toBeInTheDocument();
@@ -244,7 +244,7 @@ describe('DataState', () => {
     render(
       <DataState data={null} loading={false} error={null}>
         {(data) => <div>{data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     expect(screen.getByText('No data available')).toBeInTheDocument();
@@ -254,7 +254,7 @@ describe('DataState', () => {
     render(
       <DataState data={null} loading={false} error={null} emptyText="Nothing here">
         {(data) => <div>{data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     expect(screen.getByText('Nothing here')).toBeInTheDocument();
@@ -264,7 +264,7 @@ describe('DataState', () => {
     render(
       <DataState data="Test data" loading={false} error={null}>
         {(data) => <div>Data: {data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     expect(screen.getByText('Data: Test data')).toBeInTheDocument();
@@ -277,7 +277,7 @@ describe('DataState', () => {
     render(
       <DataState data={null} loading={false} error={error} onRetry={onRetry}>
         {(data) => <div>{data}</div>}
-      </DataState>
+      </DataState>,
     );
 
     fireEvent.click(screen.getByText('[RETRY]'));

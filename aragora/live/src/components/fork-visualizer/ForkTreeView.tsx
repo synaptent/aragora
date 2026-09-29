@@ -22,15 +22,17 @@ function TreeNode({
   onCompareSelect: (node: ForkNode, slot: 0 | 1) => void;
   selectedNodes: [ForkNode | null, ForkNode | null];
 }) {
-  const isSelected = selectedNodes.some(s => s?.id === node.id);
-  const selectedSlot = selectedNodes[0]?.id === node.id ? 0 : selectedNodes[1]?.id === node.id ? 1 : null;
+  const isSelected = selectedNodes.some((s) => s?.id === node.id);
+  const selectedSlot =
+    selectedNodes[0]?.id === node.id ? 0 : selectedNodes[1]?.id === node.id ? 1 : null;
 
-  const statusColor = {
-    created: 'bg-[var(--acid-cyan)]',
-    running: 'bg-acid-yellow animate-pulse',
-    completed: 'bg-[var(--accent)]',
-    unknown: 'bg-text-muted',
-  }[node.status || 'unknown'] || 'bg-text-muted';
+  const statusColor =
+    {
+      created: 'bg-[var(--acid-cyan)]',
+      running: 'bg-acid-yellow animate-pulse',
+      completed: 'bg-[var(--accent)]',
+      unknown: 'bg-text-muted',
+    }[node.status || 'unknown'] || 'bg-text-muted';
 
   return (
     <div className="ml-4">
@@ -44,20 +46,29 @@ function TreeNode({
             {node.type === 'root' ? 'ROOT' : `Fork @ R${node.branch_point}`}
           </div>
           {node.pivot_claim && (
-            <div className="text-[10px] font-theme-data text-text-muted truncate max-w-48" title={node.pivot_claim}>
+            <div
+              className="text-[10px] font-theme-data text-text-muted truncate max-w-48"
+              title={node.pivot_claim}
+            >
               {node.pivot_claim}
             </div>
           )}
         </div>
         <div className="flex gap-1">
           <button
-            onClick={(e) => { e.stopPropagation(); onCompareSelect(node, 0); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCompareSelect(node, 0);
+            }}
             className={`px-1.5 py-0.5 text-[10px] font-theme-data border transition-colors ${selectedSlot === 0 ? 'border-[var(--acid-cyan)] text-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10' : 'border-[var(--accent)]/30 text-text-muted hover:border-[var(--accent)]/60'}`}
           >
             L
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onCompareSelect(node, 1); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCompareSelect(node, 1);
+            }}
             className={`px-1.5 py-0.5 text-[10px] font-theme-data border transition-colors ${selectedSlot === 1 ? 'border-[var(--acid-cyan)] text-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10' : 'border-[var(--accent)]/30 text-text-muted hover:border-[var(--accent)]/60'}`}
           >
             R
@@ -82,7 +93,12 @@ function TreeNode({
   );
 }
 
-export function ForkTreeView({ tree, onNodeSelect, onCompareSelect, selectedNodes }: ForkTreeViewProps) {
+export function ForkTreeView({
+  tree,
+  onNodeSelect,
+  onCompareSelect,
+  selectedNodes,
+}: ForkTreeViewProps) {
   if (!tree) {
     return (
       <div className="text-center py-8 text-xs font-theme-data text-text-muted">
@@ -98,9 +114,15 @@ export function ForkTreeView({ tree, onNodeSelect, onCompareSelect, selectedNode
           {tree.total_nodes} nodes | max depth: {tree.max_depth}
         </div>
         <div className="flex items-center gap-3 text-[10px] font-theme-data text-text-muted">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--accent)]" /> completed</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-acid-yellow" /> running</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--acid-cyan)]" /> created</span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[var(--accent)]" /> completed
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-acid-yellow" /> running
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[var(--acid-cyan)]" /> created
+          </span>
         </div>
       </div>
       <TreeNode

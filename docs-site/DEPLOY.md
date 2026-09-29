@@ -7,16 +7,19 @@ The Aragora documentation site is built with [Docusaurus](https://docusaurus.io/
 ### First-Time Setup
 
 1. Install Vercel CLI (if not already installed):
+
    ```bash
    npm i -g vercel
    ```
 
 2. Login to Vercel:
+
    ```bash
    vercel login
    ```
 
 3. Link the project:
+
    ```bash
    cd docs-site
    vercel link
@@ -36,6 +39,7 @@ node scripts/sync-docs.js && npm run build && vercel --prod
 ```
 
 Or use the npm script:
+
 ```bash
 npm run deploy
 ```
@@ -48,11 +52,11 @@ After the first manual deployment, configure GitHub Actions for automated deploy
 
 Add these secrets to your GitHub repository settings:
 
-| Secret | Description |
-|--------|-------------|
-| `VERCEL_TOKEN` | Your Vercel API token ([create one here](https://vercel.com/account/tokens)) |
-| `VERCEL_ORG_ID` | Found in `.vercel/project.json` after linking |
-| `VERCEL_PROJECT_ID` | Found in `.vercel/project.json` after linking |
+| Secret              | Description                                                                  |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `VERCEL_TOKEN`      | Your Vercel API token ([create one here](https://vercel.com/account/tokens)) |
+| `VERCEL_ORG_ID`     | Found in `.vercel/project.json` after linking                                |
+| `VERCEL_PROJECT_ID` | Found in `.vercel/project.json` after linking                                |
 
 ### Workflow Triggers
 
@@ -87,11 +91,13 @@ The build may report broken links. Most are cross-references that need updating 
 ### Build Failures
 
 1. Clear the cache:
+
    ```bash
    npm run clear
    ```
 
 2. Ensure Node.js 18+:
+
    ```bash
    node --version
    ```

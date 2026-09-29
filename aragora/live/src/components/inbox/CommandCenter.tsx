@@ -56,8 +56,10 @@ export function CommandCenter() {
         setEmails(data.emails || []);
         setStats({
           total: data.total || 0,
-          critical: data.emails?.filter((e: PrioritizedEmail) => e.priority === 'critical').length || 0,
-          actionRequired: data.emails?.filter((e: PrioritizedEmail) => e.priority === 'high').length || 0,
+          critical:
+            data.emails?.filter((e: PrioritizedEmail) => e.priority === 'critical').length || 0,
+          actionRequired:
+            data.emails?.filter((e: PrioritizedEmail) => e.priority === 'high').length || 0,
           deferred: data.emails?.filter((e: PrioritizedEmail) => e.priority === 'low').length || 0,
           processed: data.processed || 0,
         });
@@ -77,75 +79,84 @@ export function CommandCenter() {
   }, [fetchEmails]);
 
   // Handle email selection
-  const handleSelectEmail = useCallback(async (email: PrioritizedEmail) => {
-    setSelectedEmail(email);
-    setShowInsights(true);
+  const handleSelectEmail = useCallback(
+    async (email: PrioritizedEmail) => {
+      setSelectedEmail(email);
+      setShowInsights(true);
 
-    // Fetch sender profile
-    try {
-      const response = await fetch(
-        `${apiBase}/api/email/sender-profile?email=${encodeURIComponent(email.from_address)}`
-      );
-      if (response.ok) {
-        const profile = await response.json();
-        setSenderProfile(profile);
+      // Fetch sender profile
+      try {
+        const response = await fetch(
+          `${apiBase}/api/email/sender-profile?email=${encodeURIComponent(email.from_address)}`,
+        );
+        if (response.ok) {
+          const profile = await response.json();
+          setSenderProfile(profile);
+        }
+      } catch (error) {
+        logger.error('Failed to fetch sender profile:', error);
+        setSenderProfile(null);
       }
-    } catch (error) {
-      logger.error('Failed to fetch sender profile:', error);
-      setSenderProfile(null);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   // Quick actions
-  const handleQuickAction = useCallback(async (action: string, emailIds?: string[]) => {
-    const ids = emailIds || (selectedEmail ? [selectedEmail.id] : []);
-    if (ids.length === 0) return;
+  const handleQuickAction = useCallback(
+    async (action: string, emailIds?: string[]) => {
+      const ids = emailIds || (selectedEmail ? [selectedEmail.id] : []);
+      if (ids.length === 0) return;
 
-    try {
-      const response = await fetch(`${apiBase}/api/email/actions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, emailIds: ids }),
-      });
+      try {
+        const response = await fetch(`${apiBase}/api/email/actions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, emailIds: ids }),
+        });
 
-      if (response.ok) {
-        // Refresh inbox after action
-        await fetchEmails();
-        if (action === 'archive' || action === 'delete') {
-          setSelectedEmail(null);
-          setShowInsights(false);
+        if (response.ok) {
+          // Refresh inbox after action
+          await fetchEmails();
+          if (action === 'archive' || action === 'delete') {
+            setSelectedEmail(null);
+            setShowInsights(false);
+          }
         }
+      } catch (error) {
+        logger.error('Failed to execute action:', error);
       }
-    } catch (error) {
-      logger.error('Failed to execute action:', error);
-    }
-  }, [selectedEmail, fetchEmails, apiBase]);
+    },
+    [selectedEmail, fetchEmails, apiBase],
+  );
 
   // Bulk actions
-  const handleBulkAction = useCallback(async (action: string, filter: string) => {
-    let emailIds: string[] = [];
+  const handleBulkAction = useCallback(
+    async (action: string, filter: string) => {
+      let emailIds: string[] = [];
 
-    switch (filter) {
-      case 'low':
-        emailIds = emails.filter(e => e.priority === 'low').map(e => e.id);
-        break;
-      case 'deferred':
-        emailIds = emails.filter(e => e.priority === 'defer').map(e => e.id);
-        break;
-      case 'spam':
-        emailIds = emails.filter(e => e.priority === 'spam').map(e => e.id);
-        break;
-      case 'read':
-        emailIds = emails.filter(e => e.read).map(e => e.id);
-        break;
-      default:
-        return;
-    }
+      switch (filter) {
+        case 'low':
+          emailIds = emails.filter((e) => e.priority === 'low').map((e) => e.id);
+          break;
+        case 'deferred':
+          emailIds = emails.filter((e) => e.priority === 'defer').map((e) => e.id);
+          break;
+        case 'spam':
+          emailIds = emails.filter((e) => e.priority === 'spam').map((e) => e.id);
+          break;
+        case 'read':
+          emailIds = emails.filter((e) => e.read).map((e) => e.id);
+          break;
+        default:
+          return;
+      }
 
-    if (emailIds.length > 0) {
-      await handleQuickAction(action, emailIds);
-    }
-  }, [emails, handleQuickAction]);
+      if (emailIds.length > 0) {
+        await handleQuickAction(action, emailIds);
+      }
+    },
+    [emails, handleQuickAction],
+  );
 
   const tabs = [
     { id: 'inbox', label: 'Inbox', badge: stats.total },
@@ -157,32 +168,16 @@ export function CommandCenter() {
     <div className="space-y-4">
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard
-          label="Total"
-          value={stats.total}
-          color="text-[var(--text)]"
-        />
+        <StatCard label="Total" value={stats.total} color="text-[var(--text)]" />
         <StatCard
           label="Critical"
           value={stats.critical}
           color="text-red-400"
           pulse={stats.critical > 0}
         />
-        <StatCard
-          label="Action Required"
-          value={stats.actionRequired}
-          color="text-yellow-400"
-        />
-        <StatCard
-          label="Deferred"
-          value={stats.deferred}
-          color="text-[var(--text-muted)]"
-        />
-        <StatCard
-          label="Processed Today"
-          value={stats.processed}
-          color="text-green-400"
-        />
+        <StatCard label="Action Required" value={stats.actionRequired} color="text-yellow-400" />
+        <StatCard label="Deferred" value={stats.deferred} color="text-[var(--text-muted)]" />
+        <StatCard label="Processed Today" value={stats.processed} color="text-green-400" />
       </div>
 
       {/* Quick Actions Bar */}
@@ -191,7 +186,7 @@ export function CommandCenter() {
         onAction={handleQuickAction}
         onBulkAction={handleBulkAction}
         emailCount={emails.length}
-        lowPriorityCount={emails.filter(e => e.priority === 'low').length}
+        lowPriorityCount={emails.filter((e) => e.priority === 'low').length}
       />
 
       {/* Tab Navigation */}
@@ -235,11 +230,7 @@ export function CommandCenter() {
             />
           )}
 
-          {activeTab === 'rules' && (
-            <TriageRulesPanel
-              onRuleChange={fetchEmails}
-            />
-          )}
+          {activeTab === 'rules' && <TriageRulesPanel onRuleChange={fetchEmails} />}
 
           {activeTab === 'insights' && (
             <div className="bg-[var(--surface)] border border-[var(--border)] p-6 rounded">
@@ -262,11 +253,7 @@ export function CommandCenter() {
                   description="How well AI predicted importance"
                   icon="🎯"
                 />
-                <InsightCard
-                  title="Time Saved"
-                  description="Hours saved by AI triage"
-                  icon="💎"
-                />
+                <InsightCard title="Time Saved" description="Hours saved by AI triage" icon="💎" />
               </div>
             </div>
           )}
@@ -298,11 +285,21 @@ export function CommandCenter() {
       {/* Keyboard Shortcuts Help */}
       <div className="text-xs font-theme-data text-[var(--text-muted)] flex items-center gap-4 mt-4">
         <span>Shortcuts:</span>
-        <span><kbd className="px-1 bg-[var(--surface)] rounded">j/k</kbd> Navigate</span>
-        <span><kbd className="px-1 bg-[var(--surface)] rounded">e</kbd> Archive</span>
-        <span><kbd className="px-1 bg-[var(--surface)] rounded">s</kbd> Snooze</span>
-        <span><kbd className="px-1 bg-[var(--surface)] rounded">r</kbd> Reply</span>
-        <span><kbd className="px-1 bg-[var(--surface)] rounded">?</kbd> Help</span>
+        <span>
+          <kbd className="px-1 bg-[var(--surface)] rounded">j/k</kbd> Navigate
+        </span>
+        <span>
+          <kbd className="px-1 bg-[var(--surface)] rounded">e</kbd> Archive
+        </span>
+        <span>
+          <kbd className="px-1 bg-[var(--surface)] rounded">s</kbd> Snooze
+        </span>
+        <span>
+          <kbd className="px-1 bg-[var(--surface)] rounded">r</kbd> Reply
+        </span>
+        <span>
+          <kbd className="px-1 bg-[var(--surface)] rounded">?</kbd> Help
+        </span>
       </div>
     </div>
   );
@@ -318,7 +315,9 @@ interface StatCardProps {
 function StatCard({ label, value, color, pulse }: StatCardProps) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] p-3 rounded">
-      <div className={`text-2xl font-theme-data font-bold ${color} ${pulse ? 'animate-pulse' : ''}`}>
+      <div
+        className={`text-2xl font-theme-data font-bold ${color} ${pulse ? 'animate-pulse' : ''}`}
+      >
         {value}
       </div>
       <div className="text-xs text-[var(--text-muted)]">{label}</div>

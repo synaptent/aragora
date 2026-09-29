@@ -24,7 +24,11 @@ interface PhaseProgressProps {
 const DEFAULT_API_BASE = API_BASE_URL;
 const PHASES = ['debate', 'design', 'implement', 'verify', 'commit'];
 
-export function PhaseProgress({ events, currentPhase, apiBase = DEFAULT_API_BASE }: PhaseProgressProps) {
+export function PhaseProgress({
+  events,
+  currentPhase,
+  apiBase = DEFAULT_API_BASE,
+}: PhaseProgressProps) {
   const { tokens } = useAuth();
   const [nomicState, setNomicState] = useState<NomicState | null>(null);
 
@@ -73,10 +77,7 @@ export function PhaseProgress({ events, currentPhase, apiBase = DEFAULT_API_BASE
 
     if (endEvent) {
       const endEventData = endEvent.data as Record<string, unknown>;
-      return {
-        phase,
-        status: (endEventData.success ? 'complete' : 'failed') as PhaseStatusType,
-      };
+      return { phase, status: (endEventData.success ? 'complete' : 'failed') as PhaseStatusType };
     }
     if (startEvent || currentPhase === phase) {
       return { phase, status: 'active' as PhaseStatusType };
@@ -120,9 +121,7 @@ export function PhaseProgress({ events, currentPhase, apiBase = DEFAULT_API_BASE
           return (
             <div key={phase} className="flex items-center">
               <PhaseBlock phase={phase} status={effectiveStatus} />
-              {index < phaseStatuses.length - 1 && (
-                <div className="w-4 h-0.5 bg-border" />
-              )}
+              {index < phaseStatuses.length - 1 && <div className="w-4 h-0.5 bg-border" />}
             </div>
           );
         })}

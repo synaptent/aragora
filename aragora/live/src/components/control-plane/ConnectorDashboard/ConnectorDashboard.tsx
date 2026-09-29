@@ -4,7 +4,12 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { PanelTemplate } from '@/components/shared/PanelTemplate';
 import { useApi } from '@/hooks/useApi';
 import { useBackend } from '@/components/BackendSelector';
-import { ConnectorCard, type ConnectorInfo, type ConnectorType, type ConnectorStatus } from './ConnectorCard';
+import {
+  ConnectorCard,
+  type ConnectorInfo,
+  type ConnectorType,
+  type ConnectorStatus,
+} from './ConnectorCard';
 import { ConnectorConfigModal } from './ConnectorConfigModal';
 import { SyncStatusWidget, type SyncHistoryItem } from './SyncStatusWidget';
 import { ConnectorHealthGrid, connectorToHealthData } from './ConnectorHealthGrid';
@@ -24,58 +29,39 @@ export interface ConnectorDashboardProps {
 }
 
 // Available connector types with metadata
-const AVAILABLE_CONNECTORS: Omit<ConnectorInfo, 'id' | 'status' | 'last_sync' | 'items_synced'>[] = [
-  {
-    type: 'github',
-    name: 'GitHub Enterprise',
-    description: 'Sync repositories, issues, and pull requests from GitHub',
-  },
-  {
-    type: 's3',
-    name: 'Amazon S3',
-    description: 'Index documents from S3 buckets',
-  },
-  {
-    type: 'sharepoint',
-    name: 'Microsoft SharePoint',
-    description: 'Sync document libraries from SharePoint Online',
-  },
-  {
-    type: 'confluence',
-    name: 'Atlassian Confluence',
-    description: 'Index spaces and pages from Confluence',
-  },
-  {
-    type: 'notion',
-    name: 'Notion',
-    description: 'Sync workspaces and databases from Notion',
-  },
-  {
-    type: 'slack',
-    name: 'Slack',
-    description: 'Index channel messages and threads',
-  },
-  {
-    type: 'postgresql',
-    name: 'PostgreSQL',
-    description: 'Sync data from PostgreSQL databases',
-  },
-  {
-    type: 'mongodb',
-    name: 'MongoDB',
-    description: 'Index collections from MongoDB',
-  },
-  {
-    type: 'fhir',
-    name: 'FHIR (Healthcare)',
-    description: 'Connect to FHIR-compliant healthcare systems',
-  },
-  {
-    type: 'gdrive',
-    name: 'Google Drive',
-    description: 'Sync documents and files from Google Drive',
-  },
-];
+const AVAILABLE_CONNECTORS: Omit<ConnectorInfo, 'id' | 'status' | 'last_sync' | 'items_synced'>[] =
+  [
+    {
+      type: 'github',
+      name: 'GitHub Enterprise',
+      description: 'Sync repositories, issues, and pull requests from GitHub',
+    },
+    { type: 's3', name: 'Amazon S3', description: 'Index documents from S3 buckets' },
+    {
+      type: 'sharepoint',
+      name: 'Microsoft SharePoint',
+      description: 'Sync document libraries from SharePoint Online',
+    },
+    {
+      type: 'confluence',
+      name: 'Atlassian Confluence',
+      description: 'Index spaces and pages from Confluence',
+    },
+    { type: 'notion', name: 'Notion', description: 'Sync workspaces and databases from Notion' },
+    { type: 'slack', name: 'Slack', description: 'Index channel messages and threads' },
+    { type: 'postgresql', name: 'PostgreSQL', description: 'Sync data from PostgreSQL databases' },
+    { type: 'mongodb', name: 'MongoDB', description: 'Index collections from MongoDB' },
+    {
+      type: 'fhir',
+      name: 'FHIR (Healthcare)',
+      description: 'Connect to FHIR-compliant healthcare systems',
+    },
+    {
+      type: 'gdrive',
+      name: 'Google Drive',
+      description: 'Sync documents and files from Google Drive',
+    },
+  ];
 
 /**
  * Enterprise Connector Dashboard for managing data source connections.
@@ -127,7 +113,7 @@ export function ConnectorDashboard({
         (c) =>
           c.name.toLowerCase().includes(query) ||
           c.type.toLowerCase().includes(query) ||
-          c.description.toLowerCase().includes(query)
+          c.description.toLowerCase().includes(query),
       );
     }
 
@@ -154,8 +140,12 @@ export function ConnectorDashboard({
 
     try {
       const [connectorsResponse, historyResponse] = await Promise.all([
-        api.get('/api/connectors').catch(() => ({ connectors: [] })) as Promise<{ connectors: ConnectorInfo[] }>,
-        api.get('/api/connectors/sync-history').catch(() => ({ history: [] })) as Promise<{ history: SyncHistoryItem[] }>,
+        api.get('/api/connectors').catch(() => ({ connectors: [] })) as Promise<{
+          connectors: ConnectorInfo[];
+        }>,
+        api.get('/api/connectors/sync-history').catch(() => ({ history: [] })) as Promise<{
+          history: SyncHistoryItem[];
+        }>,
       ]);
 
       setConnectors(connectorsResponse.connectors || []);
@@ -254,7 +244,7 @@ export function ConnectorDashboard({
       setSelectedConnector(connector);
       onSelectConnector?.(connector);
     },
-    [onSelectConnector]
+    [onSelectConnector],
   );
 
   // Handle configure
@@ -273,13 +263,17 @@ export function ConnectorDashboard({
         logger.error('Failed to start sync:', err);
       }
     },
-    [api, loadConnectors]
+    [api, loadConnectors],
   );
 
   // Handle disconnect
   const handleDisconnect = useCallback(
     async (connector: ConnectorInfo) => {
-      if (!confirm(`Disconnect ${connector.name}? This will stop syncing but won't delete indexed data.`)) {
+      if (
+        !confirm(
+          `Disconnect ${connector.name}? This will stop syncing but won't delete indexed data.`,
+        )
+      ) {
         return;
       }
 
@@ -290,7 +284,7 @@ export function ConnectorDashboard({
         logger.error('Failed to disconnect:', err);
       }
     },
-    [api, loadConnectors]
+    [api, loadConnectors],
   );
 
   // Handle save config
@@ -299,16 +293,19 @@ export function ConnectorDashboard({
       await api.put(`/api/connectors/${connectorId}`, { config });
       loadConnectors();
     },
-    [api, loadConnectors]
+    [api, loadConnectors],
   );
 
   // Handle test connection
   const handleTestConnection = useCallback(
     async (connectorId: string, config: Record<string, unknown>) => {
-      const result = await api.post(`/api/connectors/test`, { connector_id: connectorId, config }) as { success: boolean };
+      const result = (await api.post(`/api/connectors/test`, {
+        connector_id: connectorId,
+        config,
+      })) as { success: boolean };
       return result.success;
     },
-    [api]
+    [api],
   );
 
   // Handle cancel sync
@@ -321,7 +318,7 @@ export function ConnectorDashboard({
         logger.error('Failed to cancel sync:', err);
       }
     },
-    [api, loadConnectors]
+    [api, loadConnectors],
   );
 
   // Handle retry sync
@@ -334,16 +331,20 @@ export function ConnectorDashboard({
         logger.error('Failed to retry sync:', err);
       }
     },
-    [api, loadConnectors]
+    [api, loadConnectors],
   );
 
   // Filter counts
-  const filterCounts = useMemo(() => ({
-    all: mergedConnectors.length,
-    connected: mergedConnectors.filter((c) => c.status === 'connected' || c.status === 'syncing').length,
-    disconnected: mergedConnectors.filter((c) => c.status === 'disconnected').length,
-    error: mergedConnectors.filter((c) => c.status === 'error').length,
-  }), [mergedConnectors]);
+  const filterCounts = useMemo(
+    () => ({
+      all: mergedConnectors.length,
+      connected: mergedConnectors.filter((c) => c.status === 'connected' || c.status === 'syncing')
+        .length,
+      disconnected: mergedConnectors.filter((c) => c.status === 'disconnected').length,
+      error: mergedConnectors.filter((c) => c.status === 'error').length,
+    }),
+    [mergedConnectors],
+  );
 
   const tabs = [
     { id: 'connectors' as DashboardTab, label: 'Connectors' },
@@ -425,7 +426,7 @@ export function ConnectorDashboard({
 
           {filteredConnectors.length === 0 && (
             <div className="text-center py-8">
-              <div className="text-4xl mb-2">  </div>
+              <div className="text-4xl mb-2"> </div>
               <p className="text-text-muted">No connectors found</p>
             </div>
           )}
@@ -478,7 +479,7 @@ export function ConnectorDashboard({
       {/* Scheduled Jobs Tab */}
       {activeTab === 'scheduled' && (
         <div className="card p-6 text-center">
-          <div className="text-4xl mb-2">  </div>
+          <div className="text-4xl mb-2"> </div>
           <h3 className="font-theme-data text-lg mb-2">Scheduled Sync Jobs</h3>
           <p className="text-text-muted text-sm mb-4">
             Configure automatic sync schedules for your connectors.

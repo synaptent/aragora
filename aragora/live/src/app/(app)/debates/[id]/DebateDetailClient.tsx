@@ -62,13 +62,19 @@ export default function DebateDetailClient() {
   const [bridging, setBridging] = useState<string | null>(null);
   const [bridgeResult, setBridgeResult] = useState<string | null>(null);
   // Track whether the debate is still running (enables live streaming)
-  const [debateStatus, setDebateStatus] = useState<'loading' | 'in_progress' | 'completed' | 'error'>('loading');
+  const [debateStatus, setDebateStatus] = useState<
+    'loading' | 'in_progress' | 'completed' | 'error'
+  >('loading');
   const [showIntervention, setShowIntervention] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
   const { setContext, clearContext } = useRightSidebar();
   const requestedTab = searchParams.get('tab');
-  const shareButtonLabel = copied ? 'COPIED!' : shareEnabled ? 'COPY PUBLIC LINK' : 'MAKE PUBLIC LINK';
+  const shareButtonLabel = copied
+    ? 'COPIED!'
+    : shareEnabled
+      ? 'COPY PUBLIC LINK'
+      : 'MAKE PUBLIC LINK';
   const shareHelperText = shareEnabled
     ? 'Public link is live. Anyone with the URL can view this debate.'
     : 'Creates a public read-only link for anyone with the URL.';
@@ -154,18 +160,21 @@ export default function DebateDetailClient() {
     checkAndLoad();
   }, [backendConfig.api, getAuthHeaders, id, fetchDebatePackage]);
 
-  const copyShareUrl = useCallback(async (data?: DebateShareResponse) => {
-    const sharePath =
-      typeof data?.share_url === 'string' && data.share_url.length > 0 ? data.share_url : null;
-    const url = sharePath
-      ? new URL(sharePath, window.location.origin).toString()
-      : typeof data?.full_url === 'string' && data.full_url.length > 0
-        ? data.full_url
-        : new URL(`/debate/${id}`, window.location.origin).toString();
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [id]);
+  const copyShareUrl = useCallback(
+    async (data?: DebateShareResponse) => {
+      const sharePath =
+        typeof data?.share_url === 'string' && data.share_url.length > 0 ? data.share_url : null;
+      const url = sharePath
+        ? new URL(sharePath, window.location.origin).toString()
+        : typeof data?.full_url === 'string' && data.full_url.length > 0
+          ? data.full_url
+          : new URL(`/debate/${id}`, window.location.origin).toString();
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    },
+    [id],
+  );
 
   const handleShare = useCallback(async () => {
     if (!id) return;
@@ -239,27 +248,25 @@ export default function DebateDetailClient() {
         </div>
       ),
       actionsContent: (
-            <div className="space-y-2">
-              <button
-                onClick={handleShare}
-                className="block w-full px-3 py-2 text-xs font-theme-data text-center bg-[var(--acid-green)]/10 text-[var(--acid-green)] border border-[var(--acid-green)]/30 hover:bg-[var(--acid-green)]/20 transition-colors"
-              >
-                {shareButtonLabel}
-              </button>
-              <p className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                {shareHelperText}
-              </p>
-              <Link
-                href={`/debates/compare?left=${id}`}
-                className="block w-full px-3 py-2 text-xs font-theme-data text-center bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border border-[var(--acid-cyan)]/30 hover:bg-[var(--acid-cyan)]/20 transition-colors"
-              >
-                COMPARE RUN
-              </Link>
-              <Link
-                href={`/self-improve?from=debate&id=${id}`}
-                className="block w-full px-3 py-2 text-xs font-theme-data text-center bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border border-[var(--acid-cyan)]/30 hover:bg-[var(--acid-cyan)]/20 transition-colors"
-              >
-                IMPROVE FROM THIS
+        <div className="space-y-2">
+          <button
+            onClick={handleShare}
+            className="block w-full px-3 py-2 text-xs font-theme-data text-center bg-[var(--acid-green)]/10 text-[var(--acid-green)] border border-[var(--acid-green)]/30 hover:bg-[var(--acid-green)]/20 transition-colors"
+          >
+            {shareButtonLabel}
+          </button>
+          <p className="text-[10px] font-theme-data text-[var(--text-muted)]">{shareHelperText}</p>
+          <Link
+            href={`/debates/compare?left=${id}`}
+            className="block w-full px-3 py-2 text-xs font-theme-data text-center bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border border-[var(--acid-cyan)]/30 hover:bg-[var(--acid-cyan)]/20 transition-colors"
+          >
+            COMPARE RUN
+          </Link>
+          <Link
+            href={`/self-improve?from=debate&id=${id}`}
+            className="block w-full px-3 py-2 text-xs font-theme-data text-center bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border border-[var(--acid-cyan)]/30 hover:bg-[var(--acid-cyan)]/20 transition-colors"
+          >
+            IMPROVE FROM THIS
           </Link>
           <Link
             href="/debates"
@@ -269,13 +276,11 @@ export default function DebateDetailClient() {
           </Link>
         </div>
       ),
-      activityContent: (
-        <RelatedKnowledge query={pkg.question} limit={5} />
-      ),
+      activityContent: <RelatedKnowledge query={pkg.question} limit={5} />,
     });
 
     return () => clearContext();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkg, handleShare, shareButtonLabel, shareHelperText]);
 
   const tabs: { key: Tab; label: string }[] = [
@@ -304,9 +309,8 @@ export default function DebateDetailClient() {
 
   // Live streaming view — debate is in progress
   if (debateStatus === 'in_progress') {
-    const currentRound = ws.messages.length > 0
-      ? Math.max(...ws.messages.map((m) => m.round || 0))
-      : 0;
+    const currentRound =
+      ws.messages.length > 0 ? Math.max(...ws.messages.map((m) => m.round || 0)) : 0;
 
     return (
       <>
@@ -428,9 +432,7 @@ export default function DebateDetailClient() {
         <CRTVignette />
         <main className="min-h-screen bg-[var(--bg)] text-[var(--text)] relative z-10">
           <div className="container mx-auto px-4 py-20 text-center">
-            <div className="text-[var(--warning)] font-theme-data text-lg mb-4">
-              {'>'} ERROR
-            </div>
+            <div className="text-[var(--warning)] font-theme-data text-lg mb-4">{'>'} ERROR</div>
             <p className="text-[var(--text-muted)] font-theme-data text-sm mb-6">{error}</p>
             <div className="flex items-center justify-center gap-3">
               <button
@@ -551,18 +553,13 @@ export default function DebateDetailClient() {
           </div>
 
           {/* Tab Content */}
-          {activeTab === 'overview' && (
-            <DecisionPackageView pkg={pkg} />
-          )}
+          {activeTab === 'overview' && <DecisionPackageView pkg={pkg} />}
 
           {activeTab === 'arguments' && (
             <div className="space-y-3">
               {pkg.arguments && pkg.arguments.length > 0 ? (
                 pkg.arguments.map((arg, i) => (
-                  <div
-                    key={i}
-                    className="bg-[var(--surface)] border border-[var(--border)] p-4"
-                  >
+                  <div key={i} className="bg-[var(--surface)] border border-[var(--border)] p-4">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="px-1.5 py-0.5 text-xs font-theme-data bg-[var(--acid-green)]/10 text-[var(--acid-green)]">
                         {arg.agent}
@@ -589,14 +586,12 @@ export default function DebateDetailClient() {
             </div>
           )}
 
-          {activeTab === 'graph' && (
-            <ArgumentGraph debateId={id} />
-          )}
+          {activeTab === 'graph' && <ArgumentGraph debateId={id} />}
 
           {activeTab === 'receipt' && (
             <div className="bg-[var(--surface)] border border-[var(--border)] p-6">
               {pkg.receipt ? (
-                  <div className="space-y-4">
+                <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs font-theme-data text-[var(--acid-green)]">
                       {'>'} CRYPTOGRAPHIC RECEIPT
@@ -724,7 +719,8 @@ export default function DebateDetailClient() {
                                 <div className="flex flex-wrap items-center gap-3 text-xs font-theme-data text-[var(--text-muted)]">
                                   <span>{formatCount(usage.call_count)} calls</span>
                                   <span>
-                                    {formatCount(usage.total_tokens_in + usage.total_tokens_out)} tokens
+                                    {formatCount(usage.total_tokens_in + usage.total_tokens_out)}{' '}
+                                    tokens
                                   </span>
                                   <span className="text-[var(--acid-cyan)]">
                                     {formatCurrency(usage.total_cost_usd)}
@@ -754,7 +750,8 @@ export default function DebateDetailClient() {
                                   <div className="flex flex-wrap items-center gap-3 text-xs font-theme-data text-[var(--text-muted)]">
                                     <span>{formatCount(agent.call_count)} calls</span>
                                     <span>
-                                      {formatCount(agent.total_tokens_in + agent.total_tokens_out)} tokens
+                                      {formatCount(agent.total_tokens_in + agent.total_tokens_out)}{' '}
+                                      tokens
                                     </span>
                                     <span className="text-[var(--acid-cyan)]">
                                       {formatCurrency(agent.total_cost_usd)}
@@ -798,7 +795,9 @@ export default function DebateDetailClient() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <button
                     onClick={() => {
-                      const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+                      const blob = new Blob([JSON.stringify(pkg, null, 2)], {
+                        type: 'application/json',
+                      });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
@@ -809,18 +808,17 @@ export default function DebateDetailClient() {
                     className="px-4 py-3 text-xs font-theme-data bg-[var(--surface)] text-[var(--acid-green)] border border-[var(--acid-green)]/30 hover:bg-[var(--acid-green)]/10 transition-colors text-left"
                   >
                     <div className="text-[var(--acid-green)]">JSON</div>
-                    <div className="text-[var(--text-muted)] mt-1">
-                      Full decision package
-                    </div>
+                    <div className="text-[var(--text-muted)] mt-1">Full decision package</div>
                   </button>
                   <button
                     disabled={exporting === 'md'}
                     onClick={async () => {
                       setExporting('md');
                       try {
-                        const res = await fetch(`${backendConfig.api}/api/v1/debates/${pkg.id}/export/md`, {
-                          headers: getAuthHeaders(),
-                        });
+                        const res = await fetch(
+                          `${backendConfig.api}/api/v1/debates/${pkg.id}/export/md`,
+                          { headers: getAuthHeaders() },
+                        );
                         if (res.ok) {
                           const text = await res.text();
                           const blob = new Blob([text], { type: 'text/markdown' });
@@ -831,26 +829,29 @@ export default function DebateDetailClient() {
                           a.click();
                           URL.revokeObjectURL(url);
                         }
-                      } catch { /* fail silently */ }
+                      } catch {
+                        /* fail silently */
+                      }
                       setExporting(null);
                     }}
                     className={`px-4 py-3 text-xs font-theme-data bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] transition-colors text-left ${
-                      exporting === 'md' ? 'opacity-50 cursor-wait' : 'hover:border-[var(--acid-green)]/40'
+                      exporting === 'md'
+                        ? 'opacity-50 cursor-wait'
+                        : 'hover:border-[var(--acid-green)]/40'
                     }`}
                   >
                     <div>{exporting === 'md' ? 'EXPORTING...' : 'MARKDOWN'}</div>
-                    <div className="text-[var(--text-muted)] mt-1">
-                      Human-readable report
-                    </div>
+                    <div className="text-[var(--text-muted)] mt-1">Human-readable report</div>
                   </button>
                   <button
                     disabled={exporting === 'csv'}
                     onClick={async () => {
                       setExporting('csv');
                       try {
-                        const res = await fetch(`${backendConfig.api}/api/v1/debates/${pkg.id}/export/csv`, {
-                          headers: getAuthHeaders(),
-                        });
+                        const res = await fetch(
+                          `${backendConfig.api}/api/v1/debates/${pkg.id}/export/csv`,
+                          { headers: getAuthHeaders() },
+                        );
                         if (res.ok) {
                           const text = await res.text();
                           const blob = new Blob([text], { type: 'text/csv' });
@@ -861,17 +862,19 @@ export default function DebateDetailClient() {
                           a.click();
                           URL.revokeObjectURL(url);
                         }
-                      } catch { /* fail silently */ }
+                      } catch {
+                        /* fail silently */
+                      }
                       setExporting(null);
                     }}
                     className={`px-4 py-3 text-xs font-theme-data bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] transition-colors text-left ${
-                      exporting === 'csv' ? 'opacity-50 cursor-wait' : 'hover:border-[var(--acid-green)]/40'
+                      exporting === 'csv'
+                        ? 'opacity-50 cursor-wait'
+                        : 'hover:border-[var(--acid-green)]/40'
                     }`}
                   >
                     <div>{exporting === 'csv' ? 'EXPORTING...' : 'CSV'}</div>
-                    <div className="text-[var(--text-muted)] mt-1">
-                      Spreadsheet format
-                    </div>
+                    <div className="text-[var(--text-muted)] mt-1">Spreadsheet format</div>
                   </button>
                   <button
                     onClick={handleShare}
@@ -922,7 +925,7 @@ export default function DebateDetailClient() {
                               method: 'POST',
                               headers: getAuthHeaders(),
                               body: JSON.stringify({ target }),
-                            }
+                            },
                           );
                           if (res.ok) {
                             setBridgeResult(`${target} triggered`);
@@ -966,10 +969,7 @@ export default function DebateDetailClient() {
                 )}
               </div>
 
-              <CostBreakdown
-                costBreakdown={pkg.cost_breakdown}
-                totalCost={pkg.total_cost}
-              />
+              <CostBreakdown costBreakdown={pkg.cost_breakdown} totalCost={pkg.total_cost} />
             </div>
           )}
 

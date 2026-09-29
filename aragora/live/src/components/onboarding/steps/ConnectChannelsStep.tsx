@@ -53,12 +53,10 @@ export function ConnectChannelsStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">
-          Connect Channels
-        </h2>
+        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">Connect Channels</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
-          Optional: deliver debate results to your team&apos;s existing tools.
-          You can set this up later in Settings.
+          Optional: deliver debate results to your team&apos;s existing tools. You can set this up
+          later in Settings.
         </p>
       </div>
 
@@ -112,8 +110,8 @@ export function ConnectChannelsStep() {
 
       {selectedChannels.size > 0 && (
         <div className="p-3 border border-[var(--acid-green)]/30 bg-[var(--acid-green)]/5 text-xs font-theme-data text-[var(--acid-green)]">
-          {'>'} {selectedChannels.size} channel{selectedChannels.size > 1 ? 's' : ''} selected.
-          You can configure credentials in Settings after onboarding.
+          {'>'} {selectedChannels.size} channel{selectedChannels.size > 1 ? 's' : ''} selected. You
+          can configure credentials in Settings after onboarding.
         </div>
       )}
 

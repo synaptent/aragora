@@ -23,9 +23,9 @@ export default function MCPPage() {
               {'>'} MCP TOOLS
             </h1>
             <p className="text-[var(--text-muted)] font-theme-data max-w-2xl">
-              {MCP_TOOLS.length} tools for AI coding assistants. Connect Claude Desktop, Cursor,
-              or any MCP-compatible client to get multi-agent debate, audit, knowledge,
-              and workflow capabilities directly in your editor.
+              {MCP_TOOLS.length} tools for AI coding assistants. Connect Claude Desktop, Cursor, or
+              any MCP-compatible client to get multi-agent debate, audit, knowledge, and workflow
+              capabilities directly in your editor.
             </p>
           </div>
         </div>
@@ -34,10 +34,12 @@ export default function MCPPage() {
         <div className="border-b border-[var(--border)]">
           <div className="container mx-auto px-4">
             <div className="flex">
-              {([
-                { key: 'catalog', label: 'TOOL CATALOG' },
-                { key: 'setup', label: 'CONNECTION GUIDE' },
-              ] as const).map((t) => (
+              {(
+                [
+                  { key: 'catalog', label: 'TOOL CATALOG' },
+                  { key: 'setup', label: 'CONNECTION GUIDE' },
+                ] as const
+              ).map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setTab(t.key)}

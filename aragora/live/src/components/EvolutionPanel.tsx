@@ -80,7 +80,9 @@ const DEFAULT_API_BASE = API_BASE_URL;
 function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
   const apiBase = backendConfig?.apiUrl || DEFAULT_API_BASE;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'genomes' | 'lineage' | 'timeline' | 'patterns' | 'abtests'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'genomes' | 'lineage' | 'timeline' | 'patterns' | 'abtests'
+  >('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,11 +96,13 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetchWithRetry(`${apiBase}/api/genesis/stats`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/genesis/stats`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setStats(data);
-        setError(null);  // Clear error on success
+        setError(null); // Clear error on success
       } else {
         setError('Failed to load evolution stats. Please try again.');
       }
@@ -110,7 +114,11 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
   const fetchGenomes = useCallback(async () => {
     try {
-      const response = await fetchWithRetry(`${apiBase}/api/genesis/genomes/top?limit=20`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(
+        `${apiBase}/api/genesis/genomes/top?limit=20`,
+        undefined,
+        { maxRetries: 2 },
+      );
       if (response.ok) {
         const data = await response.json();
         setGenomes(data.genomes || []);
@@ -123,7 +131,9 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const response = await fetchWithRetry(`${apiBase}/api/genesis/events?limit=50`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/genesis/events?limit=50`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setEvents(data.events || []);
@@ -136,7 +146,9 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
   const fetchPatterns = useCallback(async () => {
     try {
-      const response = await fetchWithRetry(`${apiBase}/api/evolution/patterns`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/evolution/patterns`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setPatterns(data.patterns || []);
@@ -149,7 +161,9 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
   const fetchABTests = useCallback(async () => {
     try {
-      const response = await fetchWithRetry(`${apiBase}/api/evolution/ab-tests`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/evolution/ab-tests`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setAbTests(data.tests || []);
@@ -215,7 +229,9 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
       {loading && (
         <div className="text-center py-12">
-          <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading evolution data...</div>
+          <div className="text-[var(--accent)] font-theme-data animate-pulse">
+            Loading evolution data...
+          </div>
         </div>
       )}
 
@@ -224,11 +240,15 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
           {/* Stats Cards */}
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">TOTAL GENOMES</div>
-            <div className="text-3xl font-theme-data text-[var(--accent)]">{stats?.total_genomes || 0}</div>
+            <div className="text-3xl font-theme-data text-[var(--accent)]">
+              {stats?.total_genomes || 0}
+            </div>
           </div>
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">ACTIVE POPULATION</div>
-            <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">{stats?.active_population || 0}</div>
+            <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">
+              {stats?.active_population || 0}
+            </div>
           </div>
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">AVERAGE FITNESS</div>
@@ -245,22 +265,32 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
           {/* Mutation/Crossover Stats */}
           <div className="card p-4 col-span-2">
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3">EVOLUTION OPERATIONS</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3">
+              EVOLUTION OPERATIONS
+            </div>
             <div className="grid grid-cols-4 gap-4">
               <div>
-                <div className="text-lg font-theme-data text-[var(--accent)]">{stats?.total_mutations || 0}</div>
+                <div className="text-lg font-theme-data text-[var(--accent)]">
+                  {stats?.total_mutations || 0}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Mutations</div>
               </div>
               <div>
-                <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{stats?.total_crossovers || 0}</div>
+                <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+                  {stats?.total_crossovers || 0}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Crossovers</div>
               </div>
               <div>
-                <div className="text-lg font-theme-data text-[var(--acid-yellow)]">{stats?.total_selections || 0}</div>
+                <div className="text-lg font-theme-data text-[var(--acid-yellow)]">
+                  {stats?.total_selections || 0}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Selections</div>
               </div>
               <div>
-                <div className="text-lg font-theme-data text-acid-red">{stats?.extinction_count || 0}</div>
+                <div className="text-lg font-theme-data text-acid-red">
+                  {stats?.extinction_count || 0}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Extinctions</div>
               </div>
             </div>
@@ -268,21 +298,34 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
           {/* Recent Events Preview */}
           <div className="card p-4 col-span-2">
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3">RECENT ACTIVITY</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3">
+              RECENT ACTIVITY
+            </div>
             <div className="space-y-2">
               {events.slice(0, 5).map((event) => (
-                <div key={event.id} className="flex items-center justify-between text-xs font-theme-data">
-                  <span className={`px-2 py-0.5 rounded ${
-                    event.event_type === 'mutation' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-                    event.event_type === 'crossover' ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]' :
-                    event.event_type === 'selection' ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]' :
-                    event.event_type === 'extinction' ? 'bg-acid-red/20 text-acid-red' :
-                    'bg-accent/20 text-accent'
-                  }`}>
+                <div
+                  key={event.id}
+                  className="flex items-center justify-between text-xs font-theme-data"
+                >
+                  <span
+                    className={`px-2 py-0.5 rounded ${
+                      event.event_type === 'mutation'
+                        ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                        : event.event_type === 'crossover'
+                          ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
+                          : event.event_type === 'selection'
+                            ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]'
+                            : event.event_type === 'extinction'
+                              ? 'bg-acid-red/20 text-acid-red'
+                              : 'bg-accent/20 text-accent'
+                    }`}
+                  >
                     {event.event_type}
                   </span>
                   <span className="text-text-muted">{event.genome_id.slice(0, 8)}</span>
-                  <span className="text-text-muted">{new Date(event.timestamp).toLocaleTimeString()}</span>
+                  <span className="text-text-muted">
+                    {new Date(event.timestamp).toLocaleTimeString()}
+                  </span>
                 </div>
               ))}
             </div>
@@ -294,7 +337,9 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Genome List */}
           <div className="lg:col-span-2 card p-4">
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-4">TOP GENOMES BY FITNESS</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-4">
+              TOP GENOMES BY FITNESS
+            </div>
             <div className="space-y-2">
               {genomes.map((genome, idx) => (
                 <button
@@ -310,13 +355,21 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
                     <div className="flex items-center gap-3">
                       <span className="text-lg font-theme-data text-text-muted">#{idx + 1}</span>
                       <div>
-                        <div className="font-theme-data text-[var(--accent)]">{genome.name || genome.id.slice(0, 12)}</div>
-                        <div className="text-xs font-theme-data text-text-muted">Gen {genome.generation}</div>
+                        <div className="font-theme-data text-[var(--accent)]">
+                          {genome.name || genome.id.slice(0, 12)}
+                        </div>
+                        <div className="text-xs font-theme-data text-text-muted">
+                          Gen {genome.generation}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-theme-data text-[var(--acid-yellow)]">{(genome.fitness * 100).toFixed(1)}%</div>
-                      <div className="text-xs font-theme-data text-text-muted">{genome.mutation_count} mutations</div>
+                      <div className="font-theme-data text-[var(--acid-yellow)]">
+                        {(genome.fitness * 100).toFixed(1)}%
+                      </div>
+                      <div className="text-xs font-theme-data text-text-muted">
+                        {genome.mutation_count} mutations
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -326,12 +379,16 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
           {/* Selected Genome Details */}
           <div className="card p-4">
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-4">GENOME DETAILS</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-4">
+              GENOME DETAILS
+            </div>
             {selectedGenome ? (
               <div className="space-y-4">
                 <div>
                   <div className="text-xs text-text-muted mb-1">ID</div>
-                  <div className="font-theme-data text-sm text-[var(--accent)]">{selectedGenome.id}</div>
+                  <div className="font-theme-data text-sm text-[var(--accent)]">
+                    {selectedGenome.id}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-text-muted mb-1">FITNESS</div>
@@ -341,14 +398,18 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
                 </div>
                 <div>
                   <div className="text-xs text-text-muted mb-1">GENERATION</div>
-                  <div className="font-theme-data text-lg text-[var(--acid-cyan)]">{selectedGenome.generation}</div>
+                  <div className="font-theme-data text-lg text-[var(--acid-cyan)]">
+                    {selectedGenome.generation}
+                  </div>
                 </div>
                 {selectedGenome.parent_ids && selectedGenome.parent_ids.length > 0 && (
                   <div>
                     <div className="text-xs text-text-muted mb-1">PARENTS</div>
                     <div className="space-y-1">
                       {selectedGenome.parent_ids.map((pid) => (
-                        <div key={pid} className="font-theme-data text-xs text-text-muted">{pid.slice(0, 12)}</div>
+                        <div key={pid} className="font-theme-data text-xs text-text-muted">
+                          {pid.slice(0, 12)}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -360,7 +421,9 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
                       {Object.entries(selectedGenome.traits).map(([trait, value]) => (
                         <div key={trait} className="text-xs font-theme-data">
                           <span className="text-text-muted">{trait}:</span>
-                          <span className="text-[var(--accent)] ml-1">{(value * 100).toFixed(0)}%</span>
+                          <span className="text-[var(--accent)] ml-1">
+                            {(value * 100).toFixed(0)}%
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -382,7 +445,7 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
             apiBase={apiBase}
             genomeId={selectedGenome?.id}
             onGenomeSelect={(id) => {
-              const genome = genomes.find(g => g.id === id);
+              const genome = genomes.find((g) => g.id === id);
               if (genome) setSelectedGenome(genome);
             }}
           />
@@ -391,11 +454,7 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
       {!loading && activeTab === 'timeline' && (
         <div className="card p-4">
-          <EvolutionTimeline
-            apiBase={apiBase}
-            limit={100}
-            autoRefresh={false}
-          />
+          <EvolutionTimeline apiBase={apiBase} limit={100} autoRefresh={false} />
         </div>
       )}
 
@@ -406,10 +465,14 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="font-theme-data text-[var(--accent)]">{pattern.name}</div>
-                  <div className="text-xs font-theme-data text-text-muted mt-1">{pattern.description}</div>
+                  <div className="text-xs font-theme-data text-text-muted mt-1">
+                    {pattern.description}
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-theme-data text-[var(--acid-yellow)]">{(pattern.success_rate * 100).toFixed(0)}%</div>
+                  <div className="text-lg font-theme-data text-[var(--acid-yellow)]">
+                    {(pattern.success_rate * 100).toFixed(0)}%
+                  </div>
                   <div className="text-xs font-theme-data text-text-muted">success</div>
                 </div>
               </div>
@@ -429,10 +492,7 @@ function EvolutionPanelComponent({ backendConfig }: EvolutionPanelProps) {
 
       {!loading && activeTab === 'abtests' && (
         <div className="card p-4">
-          <ABTestResultsPanel
-            apiBase={apiBase}
-            showListView={true}
-          />
+          <ABTestResultsPanel apiBase={apiBase} showListView={true} />
         </div>
       )}
 

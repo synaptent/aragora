@@ -52,10 +52,7 @@ export function AdaptiveModeToggle({
           border border-[var(--accent)]/40
           transition-colors duration-200
           focus:outline-none focus:ring-2 focus:ring-acid-green/50
-          ${isAdvanced
-            ? 'bg-[var(--accent)]/20'
-            : 'bg-surface'
-          }
+          ${isAdvanced ? 'bg-[var(--accent)]/20' : 'bg-surface'}
         `}
       >
         {/* Toggle knob */}
@@ -67,10 +64,7 @@ export function AdaptiveModeToggle({
             bg-[var(--accent)]
             shadow-lg shadow-acid-green/30
             transition-transform duration-200
-            ${isAdvanced
-              ? compact ? 'translate-x-6' : 'translate-x-7'
-              : 'translate-x-1'
-            }
+            ${isAdvanced ? (compact ? 'translate-x-6' : 'translate-x-7') : 'translate-x-1'}
           `}
         />
       </button>
@@ -107,9 +101,10 @@ export function AdaptiveModeBadge({ className = '' }: { className?: string }) {
         text-xs font-theme-data
         border rounded
         transition-colors
-        ${isAdvanced
-          ? 'border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10'
-          : 'border-[var(--accent)]/50 text-[var(--accent)] bg-[var(--accent)]/10'
+        ${
+          isAdvanced
+            ? 'border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10'
+            : 'border-[var(--accent)]/50 text-[var(--accent)] bg-[var(--accent)]/10'
         }
         hover:opacity-80
         ${className}
@@ -133,9 +128,7 @@ export function AdaptiveModeCard({ className = '' }: { className?: string }) {
     <div className={`border border-[var(--accent)]/30 bg-surface ${className}`}>
       <div className="border-b border-[var(--accent)]/20 px-4 py-3">
         <h3 className="text-text font-bold font-theme-data">UI Mode</h3>
-        <p className="text-text-muted text-sm mt-1">
-          Choose your interface complexity level
-        </p>
+        <p className="text-text-muted text-sm mt-1">Choose your interface complexity level</p>
       </div>
 
       <div className="p-4 space-y-3">
@@ -147,23 +140,24 @@ export function AdaptiveModeCard({ className = '' }: { className?: string }) {
           className={`
             w-full p-4 text-left border rounded
             transition-colors
-            ${isSimple
-              ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-              : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50'
+            ${
+              isSimple
+                ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+                : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50'
             }
           `}
         >
           <div className="flex items-center gap-2 mb-1">
-            <span className={`font-theme-data font-bold ${isSimple ? 'text-[var(--accent)]' : 'text-text'}`}>
+            <span
+              className={`font-theme-data font-bold ${isSimple ? 'text-[var(--accent)]' : 'text-text'}`}
+            >
               Simple
             </span>
-            {isSimple && (
-              <span className="text-xs text-[var(--accent)]">[ACTIVE]</span>
-            )}
+            {isSimple && <span className="text-xs text-[var(--accent)]">[ACTIVE]</span>}
           </div>
           <p className="text-sm text-text-muted">
-            Streamlined interface with guided workflows, automatic agent selection, and summary results.
-            Perfect for quick tasks and new users.
+            Streamlined interface with guided workflows, automatic agent selection, and summary
+            results. Perfect for quick tasks and new users.
           </p>
         </button>
 
@@ -175,19 +169,20 @@ export function AdaptiveModeCard({ className = '' }: { className?: string }) {
           className={`
             w-full p-4 text-left border rounded
             transition-colors
-            ${isAdvanced
-              ? 'border-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10'
-              : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50'
+            ${
+              isAdvanced
+                ? 'border-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10'
+                : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50'
             }
           `}
         >
           <div className="flex items-center gap-2 mb-1">
-            <span className={`font-theme-data font-bold ${isAdvanced ? 'text-[var(--acid-cyan)]' : 'text-text'}`}>
+            <span
+              className={`font-theme-data font-bold ${isAdvanced ? 'text-[var(--acid-cyan)]' : 'text-text'}`}
+            >
               Advanced
             </span>
-            {isAdvanced && (
-              <span className="text-xs text-[var(--acid-cyan)]">[ACTIVE]</span>
-            )}
+            {isAdvanced && <span className="text-xs text-[var(--acid-cyan)]">[ACTIVE]</span>}
           </div>
           <p className="text-sm text-text-muted">
             Full control with all features: custom protocols, memory configuration, graph debates,

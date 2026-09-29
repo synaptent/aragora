@@ -9,7 +9,8 @@ const CERTIFICATIONS = [
   {
     name: 'SOC 2 Type II',
     status: 'In Progress',
-    description: 'Trust Service Criteria for Security, Availability, Processing Integrity, Confidentiality',
+    description:
+      'Trust Service Criteria for Security, Availability, Processing Integrity, Confidentiality',
     eta: 'Q2 2026',
   },
   {
@@ -31,7 +32,8 @@ const SECURITY_FEATURES = [
   {
     icon: '🔐',
     title: 'Encryption at Rest',
-    description: 'AES-256 encryption for all stored data including debate content, user information, and credentials.',
+    description:
+      'AES-256 encryption for all stored data including debate content, user information, and credentials.',
   },
   {
     icon: '🔒',
@@ -46,12 +48,14 @@ const SECURITY_FEATURES = [
   {
     icon: '📝',
     title: 'Audit Logging',
-    description: 'Comprehensive audit trail with hash chain integrity verification. 7-year retention.',
+    description:
+      'Comprehensive audit trail with hash chain integrity verification. 7-year retention.',
   },
   {
     icon: '🚦',
     title: 'Rate Limiting',
-    description: 'Per-endpoint rate limiting with configurable thresholds. Protection against abuse.',
+    description:
+      'Per-endpoint rate limiting with configurable thresholds. Protection against abuse.',
   },
   {
     icon: '🏢',
@@ -74,10 +78,7 @@ const DATA_PRACTICES = [
     title: 'Data Portability',
     description: 'Export your data anytime in standard formats (JSON, CSV).',
   },
-  {
-    title: 'Right to Deletion',
-    description: 'Request deletion of your data at any time.',
-  },
+  { title: 'Right to Deletion', description: 'Request deletion of your data at any time.' },
 ];
 
 // Security contacts
@@ -109,7 +110,10 @@ export default function SecurityPage() {
         {/* Header */}
         <header className="border-b border-[var(--accent)]/30 bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-            <Link href="/" className="text-[var(--accent)] font-theme-data font-bold hover:text-[var(--acid-cyan)] transition-colors">
+            <Link
+              href="/"
+              className="text-[var(--accent)] font-theme-data font-bold hover:text-[var(--acid-cyan)] transition-colors"
+            >
               [ARAGORA]
             </Link>
             <div className="flex items-center gap-4">
@@ -139,23 +143,31 @@ export default function SecurityPage() {
         {/* Compliance Status */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Compliance Status</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Compliance Status
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {CERTIFICATIONS.map((cert) => (
                 <div key={cert.name} className="border border-[var(--accent)]/30 p-6 bg-bg/50">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold">{cert.name}</h3>
-                    <span className={`text-xs font-theme-data px-2 py-1 ${
-                      cert.status === 'Active'
-                        ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
-                        : 'bg-warning/20 text-warning'
-                    }`}>
+                    <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold">
+                      {cert.name}
+                    </h3>
+                    <span
+                      className={`text-xs font-theme-data px-2 py-1 ${
+                        cert.status === 'Active'
+                          ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                          : 'bg-warning/20 text-warning'
+                      }`}
+                    >
                       {cert.status}
                     </span>
                   </div>
                   <p className="text-text-muted text-sm font-theme-data mb-2">{cert.description}</p>
                   {cert.eta && (
-                    <p className="text-text-muted/60 text-xs font-theme-data">Expected: {cert.eta}</p>
+                    <p className="text-text-muted/60 text-xs font-theme-data">
+                      Expected: {cert.eta}
+                    </p>
                   )}
                 </div>
               ))}
@@ -166,13 +178,20 @@ export default function SecurityPage() {
         {/* Security Features */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-5xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Security Features</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Security Features
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {SECURITY_FEATURES.map((feature) => (
-                <div key={feature.title} className="border border-[var(--accent)]/20 p-5 bg-surface/20">
+                <div
+                  key={feature.title}
+                  className="border border-[var(--accent)]/20 p-5 bg-surface/20"
+                >
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-2xl">{feature.icon}</span>
-                    <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm">{feature.title}</h3>
+                    <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm">
+                      {feature.title}
+                    </h3>
                   </div>
                   <p className="text-text-muted text-xs font-theme-data">{feature.description}</p>
                 </div>
@@ -184,14 +203,20 @@ export default function SecurityPage() {
         {/* Data Practices */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Data Practices</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Data Practices
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {DATA_PRACTICES.map((practice) => (
                 <div key={practice.title} className="flex items-start gap-3">
                   <span className="text-[var(--accent)] mt-1">✓</span>
                   <div>
-                    <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm">{practice.title}</h3>
-                    <p className="text-text-muted text-xs font-theme-data">{practice.description}</p>
+                    <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm">
+                      {practice.title}
+                    </h3>
+                    <p className="text-text-muted text-xs font-theme-data">
+                      {practice.description}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -210,15 +235,19 @@ export default function SecurityPage() {
         {/* Responsible Disclosure */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Responsible Disclosure</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Responsible Disclosure
+            </h2>
             <div className="border border-[var(--accent)]/30 p-6 bg-surface/20">
               <p className="text-text-muted font-theme-data text-sm mb-6">
-                We value the security research community and appreciate responsible disclosure
-                of any vulnerabilities. If you discover a security issue, please report it to us
+                We value the security research community and appreciate responsible disclosure of
+                any vulnerabilities. If you discover a security issue, please report it to us
                 privately before any public disclosure.
               </p>
 
-              <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-4">Disclosure Guidelines</h3>
+              <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-4">
+                Disclosure Guidelines
+              </h3>
               <ul className="space-y-2 text-text-muted text-sm font-theme-data mb-6">
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--accent)]">1.</span>
@@ -226,7 +255,9 @@ export default function SecurityPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--accent)]">2.</span>
-                  <span>Include steps to reproduce, potential impact, and any proof-of-concept</span>
+                  <span>
+                    Include steps to reproduce, potential impact, and any proof-of-concept
+                  </span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--accent)]">3.</span>
@@ -247,7 +278,9 @@ export default function SecurityPage() {
                 <li>• Multi-tenant isolation bypass</li>
               </ul>
 
-              <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-4">Out of Scope</h3>
+              <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-4">
+                Out of Scope
+              </h3>
               <ul className="space-y-1 text-text-muted text-sm font-theme-data">
                 <li>• Third-party services (Anthropic, OpenAI, Stripe)</li>
                 <li>• Physical security</li>
@@ -262,11 +295,18 @@ export default function SecurityPage() {
         {/* Security Contacts */}
         <section className="py-12 px-4 bg-surface/30">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Contact Us</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Contact Us
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {SECURITY_CONTACTS.map((contact) => (
-                <div key={contact.title} className="border border-[var(--accent)]/20 p-5 bg-bg/50 text-center">
-                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-2">{contact.title}</h3>
+                <div
+                  key={contact.title}
+                  className="border border-[var(--accent)]/20 p-5 bg-bg/50 text-center"
+                >
+                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold mb-2">
+                    {contact.title}
+                  </h3>
                   <a
                     href={`mailto:${contact.email}`}
                     className="text-[var(--accent)] font-theme-data text-sm hover:underline block mb-2"
@@ -283,7 +323,9 @@ export default function SecurityPage() {
         {/* Trust Center Links */}
         <section className="py-12 px-4">
           <div className="container mx-auto max-w-4xl">
-            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">Documentation</h2>
+            <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-8 text-center">
+              Documentation
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { title: 'Privacy Policy', href: '/privacy', desc: 'How we handle your data' },
@@ -296,7 +338,9 @@ export default function SecurityPage() {
                   href={link.href}
                   className="border border-[var(--accent)]/20 p-4 bg-surface/20 hover:bg-surface/40 transition-colors block"
                 >
-                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm mb-1">{link.title}</h3>
+                  <h3 className="text-[var(--acid-cyan)] font-theme-data font-bold text-sm mb-1">
+                    {link.title}
+                  </h3>
                   <p className="text-text-muted text-xs font-theme-data">{link.desc}</p>
                 </Link>
               ))}
@@ -307,35 +351,42 @@ export default function SecurityPage() {
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-12 border-t border-[var(--accent)]/20">
           <div className="container mx-auto px-4">
-            <div className="text-[var(--accent)]/50 mb-4">
-              {'═'.repeat(50)}
-            </div>
+            <div className="text-[var(--accent)]/50 mb-4">{'═'.repeat(50)}</div>
             <div className="flex justify-center gap-6 mb-6">
-              <Link href="/" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Home
               </Link>
-              <Link href="/about" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/about"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 About
               </Link>
-              <Link href="/privacy" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/privacy"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Privacy
               </Link>
-              <Link href="/system-status" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/system-status"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Status
               </Link>
-              <a href="mailto:security@aragora.ai" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">
+              <a
+                href="mailto:security@aragora.ai"
+                className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+              >
                 Contact
               </a>
             </div>
-            <p className="text-text-muted mb-2">
-              Security is our priority.
-            </p>
-            <p className="text-text-muted/60">
-              Last updated: January 2026
-            </p>
-            <div className="text-[var(--accent)]/50 mt-4">
-              {'═'.repeat(50)}
-            </div>
+            <p className="text-text-muted mb-2">Security is our priority.</p>
+            <p className="text-text-muted/60">Last updated: January 2026</p>
+            <div className="text-[var(--accent)]/50 mt-4">{'═'.repeat(50)}</div>
           </div>
         </footer>
       </main>

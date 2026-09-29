@@ -17,10 +17,7 @@ interface MarketplaceTemplate {
   rating_count: number;
   created_at: number;
   updated_at: number;
-  workflow_definition?: {
-    nodes: unknown[];
-    edges: unknown[];
-  };
+  workflow_definition?: { nodes: unknown[]; edges: unknown[] };
 }
 
 interface TemplateReview {
@@ -98,7 +95,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
       if (sortBy) params.set('sort_by', sortBy);
 
       const response = await fetch(
-        `${API_BASE_URL}/api/marketplace/templates?${params.toString()}`
+        `${API_BASE_URL}/api/marketplace/templates?${params.toString()}`,
       );
       if (!response.ok) throw new Error('Failed to fetch templates');
 
@@ -150,9 +147,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
 
   const fetchTemplateDetails = async (templateId: string) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/marketplace/templates/${templateId}`
-      );
+      const response = await fetch(`${API_BASE_URL}/api/marketplace/templates/${templateId}`);
       if (response.ok) {
         const data = await response.json();
         setSelectedTemplate(data);
@@ -167,21 +162,14 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/marketplace/templates/${templateId}/import`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-        }
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' },
       );
 
       if (!response.ok) throw new Error('Failed to import template');
 
       const data = await response.json();
       if (onImport && data.workflow_definition) {
-        onImport({
-          ...selectedTemplate!,
-          workflow_definition: data.workflow_definition,
-        });
+        onImport({ ...selectedTemplate!, workflow_definition: data.workflow_definition });
       }
       alert('Template imported successfully!');
     } catch (err) {
@@ -197,31 +185,21 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
     setSubmittingRating(true);
     try {
       // Submit rating
-      await fetch(
-        `${API_BASE_URL}/api/marketplace/templates/${selectedTemplate.id}/rate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ rating: ratingValue }),
-        }
-      );
+      await fetch(`${API_BASE_URL}/api/marketplace/templates/${selectedTemplate.id}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ rating: ratingValue }),
+      });
 
       // Submit review if provided
       if (reviewTitle && reviewContent) {
-        await fetch(
-          `${API_BASE_URL}/api/marketplace/templates/${selectedTemplate.id}/reviews`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              rating: ratingValue,
-              title: reviewTitle,
-              content: reviewContent,
-            }),
-          }
-        );
+        await fetch(`${API_BASE_URL}/api/marketplace/templates/${selectedTemplate.id}/reviews`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ rating: ratingValue, title: reviewTitle, content: reviewContent }),
+        });
       }
 
       setShowRatingModal(false);
@@ -266,9 +244,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
       <h3 className="font-theme-data text-[var(--accent)] font-bold mb-1">{template.name}</h3>
 
       {/* Author */}
-      <p className="text-xs font-theme-data text-text-muted mb-2">
-        by {template.author_name}
-      </p>
+      <p className="text-xs font-theme-data text-text-muted mb-2">by {template.author_name}</p>
 
       {/* Description */}
       <p className="text-sm font-theme-data text-text-muted mb-3 line-clamp-2">
@@ -315,9 +291,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-theme-data text-[var(--accent)] text-xl">
-          {'>'} TEMPLATE MARKETPLACE
-        </h2>
+        <h2 className="font-theme-data text-[var(--accent)] text-xl">{'>'} TEMPLATE MARKETPLACE</h2>
         <div className="text-xs font-theme-data text-text-muted">
           {templates.length} templates available
         </div>
@@ -374,9 +348,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Search */}
               <div>
-                <label className="block font-theme-data text-xs text-text-muted mb-2">
-                  Search
-                </label>
+                <label className="block font-theme-data text-xs text-text-muted mb-2">Search</label>
                 <input
                   type="text"
                   value={searchQuery}
@@ -554,9 +526,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
                 className="flex-1 px-6 py-2 font-theme-data text-sm bg-[var(--accent)] text-bg
                          hover:bg-[var(--accent)]/80 transition-colors disabled:opacity-50"
               >
-                {importingTemplate === selectedTemplate.id
-                  ? '[IMPORTING...]'
-                  : '[IMPORT TEMPLATE]'}
+                {importingTemplate === selectedTemplate.id ? '[IMPORTING...]' : '[IMPORT TEMPLATE]'}
               </button>
             </div>
           </div>
@@ -573,9 +543,7 @@ export function TemplateMarketplace({ onImport }: TemplateMarketplaceProps) {
 
             {/* Star Rating Input */}
             <div className="mb-4">
-              <label className="block font-theme-data text-xs text-text-muted mb-2">
-                Rating
-              </label>
+              <label className="block font-theme-data text-xs text-text-muted mb-2">Rating</label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button

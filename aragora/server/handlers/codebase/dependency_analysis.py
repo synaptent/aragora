@@ -143,7 +143,7 @@ def _validate_repo_path(raw_path: str | None) -> tuple[Path | None, HandlerResul
     return path, None
 
 
-def get_dependency_analyzer():
+def get_dependency_analyzer() -> Any:
     """Get or create dependency analyzer (thread-safe).
 
     Uses circuit breaker to prevent cascading failures.

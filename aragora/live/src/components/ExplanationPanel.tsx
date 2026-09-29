@@ -36,15 +36,11 @@ function Section({
           {open ? '[-]' : '[+]'} {title}
         </span>
         {count !== undefined && (
-          <span className="text-xs font-theme-data text-[var(--text-muted)]">
-            {count}
-          </span>
+          <span className="text-xs font-theme-data text-[var(--text-muted)]">{count}</span>
         )}
       </button>
       {open && (
-        <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)]">
-          {children}
-        </div>
+        <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)]">{children}</div>
       )}
     </div>
   );
@@ -139,10 +135,7 @@ function EvidenceSection({ evidence }: { evidence: EvidenceLink[] }) {
     <Section title="EVIDENCE CHAIN" count={evidence.length}>
       <div className="space-y-2">
         {sorted.map((e) => (
-          <div
-            key={e.id}
-            className="bg-[var(--surface)] border border-[var(--border)] p-3"
-          >
+          <div key={e.id} className="bg-[var(--surface)] border border-[var(--border)] p-3">
             <div className="flex items-center gap-2 mb-1">
               <span className="px-1.5 py-0.5 text-xs font-theme-data bg-[var(--acid-green)]/10 text-[var(--acid-green)]">
                 {e.source}
@@ -176,16 +169,9 @@ function CounterfactualsSection({ counterfactuals }: { counterfactuals: Counterf
     <Section title="COUNTERFACTUALS" count={counterfactuals.length}>
       <div className="space-y-2">
         {counterfactuals.map((c, i) => (
-          <div
-            key={i}
-            className="bg-[var(--surface)] border border-[var(--border)] p-3"
-          >
-            <div className="text-xs font-theme-data text-[var(--warning)] mb-1">
-              {c.condition}
-            </div>
-            <div className="text-xs font-theme-data text-[var(--text)]">
-              {c.outcome_change}
-            </div>
+          <div key={i} className="bg-[var(--surface)] border border-[var(--border)] p-3">
+            <div className="text-xs font-theme-data text-[var(--warning)] mb-1">{c.condition}</div>
+            <div className="text-xs font-theme-data text-[var(--text)]">{c.outcome_change}</div>
             <div className="flex gap-4 mt-2 text-xs font-theme-data text-[var(--text-muted)]">
               <span>Sensitivity: {Math.round(c.sensitivity * 100)}%</span>
               <span>Likelihood: {Math.round(c.likelihood * 100)}%</span>

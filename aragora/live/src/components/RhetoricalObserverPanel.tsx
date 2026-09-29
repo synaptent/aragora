@@ -20,7 +20,11 @@ const PATTERN_STYLES: Record<string, { color: string; icon: string; description:
   concession: { color: 'text-yellow-400', icon: '🤝', description: 'Acknowledged opposing point' },
   rebuttal: { color: 'text-red-400', icon: '⚔️', description: 'Directly countered argument' },
   synthesis: { color: 'text-green-400', icon: '🔗', description: 'Combined multiple viewpoints' },
-  appeal_to_authority: { color: 'text-blue-400', icon: '📚', description: 'Referenced expert/source' },
+  appeal_to_authority: {
+    color: 'text-blue-400',
+    icon: '📚',
+    description: 'Referenced expert/source',
+  },
   appeal_to_emotion: { color: 'text-pink-400', icon: '💭', description: 'Used emotional framing' },
   technical_depth: { color: 'text-cyan-400', icon: '🔬', description: 'Deep technical analysis' },
   qualification: { color: 'text-orange-400', icon: '⚠️', description: 'Added nuance/caveats' },
@@ -31,11 +35,9 @@ const PATTERN_STYLES: Record<string, { color: string; icon: string; description:
 
 function getPatternStyle(pattern: string) {
   const normalized = pattern.toLowerCase().replace(/\s+/g, '_');
-  return PATTERN_STYLES[normalized] || {
-    color: 'text-text-muted',
-    icon: '📌',
-    description: pattern
-  };
+  return (
+    PATTERN_STYLES[normalized] || { color: 'text-text-muted', icon: '📌', description: pattern }
+  );
 }
 
 export function RhetoricalObserverPanel({ events }: RhetoricalObserverPanelProps) {
@@ -84,7 +86,9 @@ export function RhetoricalObserverPanel({ events }: RhetoricalObserverPanelProps
       {/* Header */}
       <div className="panel-collapsible-header">
         <div className="flex items-center gap-2">
-          <span className="text-[var(--acid-cyan)] font-theme-data text-sm">[RHETORICAL OBSERVER]</span>
+          <span className="text-[var(--acid-cyan)] font-theme-data text-sm">
+            [RHETORICAL OBSERVER]
+          </span>
           <span className="text-text-muted text-xs">Debate pattern analysis</span>
         </div>
         <span className="text-xs text-[var(--accent)]">{observations.length} observations</span>
@@ -147,9 +151,7 @@ export function RhetoricalObserverPanel({ events }: RhetoricalObserverPanelProps
                 })}
               </div>
               {obs.analysis && (
-                <div className="text-text-muted/70 italic mt-1">
-                  &quot;{obs.analysis}&quot;
-                </div>
+                <div className="text-text-muted/70 italic mt-1">&quot;{obs.analysis}&quot;</div>
               )}
             </div>
           ))}

@@ -9,10 +9,7 @@ interface ParallelNodeProps {
   selected?: boolean;
 }
 
-export const ParallelNode = memo(function ParallelNode({
-  data,
-  selected,
-}: ParallelNodeProps) {
+export const ParallelNode = memo(function ParallelNode({ data, selected }: ParallelNodeProps) {
   const branchCount = data.branches?.length || 2;
 
   return (
@@ -37,14 +34,10 @@ export const ParallelNode = memo(function ParallelNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="text-xs font-theme-data text-orange-300">
@@ -59,9 +52,7 @@ export const ParallelNode = memo(function ParallelNode({
           position={Position.Bottom}
           id={`branch-${i}`}
           className="w-3 h-3 bg-orange-500 border-2 border-bg"
-          style={{
-            left: `${20 + (i * 60) / Math.min(branchCount, 4)}%`,
-          }}
+          style={{ left: `${20 + (i * 60) / Math.min(branchCount, 4)}%` }}
         />
       ))}
 
@@ -82,10 +73,7 @@ interface LoopNodeProps {
   selected?: boolean;
 }
 
-export const LoopNode = memo(function LoopNode({
-  data,
-  selected,
-}: LoopNodeProps) {
+export const LoopNode = memo(function LoopNode({ data, selected }: LoopNodeProps) {
   return (
     <div
       className={`
@@ -108,14 +96,10 @@ export const LoopNode = memo(function LoopNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="px-2 py-1 bg-pink-500/30 rounded text-xs font-theme-data text-pink-200 mb-2 truncate">

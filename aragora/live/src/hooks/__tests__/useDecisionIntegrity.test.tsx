@@ -3,9 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { useDecisionIntegrity } from '@/hooks/useDecisionIntegrity';
 import { useSWRFetch } from '@/hooks/useSWRFetch';
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
 const mockUseSWRFetch = useSWRFetch as jest.Mock;
 
@@ -59,13 +57,7 @@ describe('useDecisionIntegrity', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        isValidating: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, isValidating: false, mutate: jest.fn() };
     });
   });
 
@@ -162,13 +154,7 @@ describe('useDecisionIntegrity', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        isValidating: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, isValidating: false, mutate: jest.fn() };
     });
 
     const { result } = renderHook(() => useDecisionIntegrity());

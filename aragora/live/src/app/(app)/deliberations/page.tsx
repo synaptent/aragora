@@ -42,7 +42,7 @@ export default function DeliberationsPage() {
       // Extract agent influence from decisionmaking sessions
       const agentMap = new Map<string, AgentInfluence>();
       (data.deliberations || []).forEach((d: Deliberation) => {
-        d.agents.forEach(agent => {
+        d.agents.forEach((agent) => {
           if (!agentMap.has(agent)) {
             agentMap.set(agent, {
               agent_id: agent,
@@ -104,7 +104,7 @@ export default function DeliberationsPage() {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data) as DeliberationEvent;
-            setEvents(prev => [...prev.slice(-99), data]);
+            setEvents((prev) => [...prev.slice(-99), data]);
 
             // Update decisionmaking sessions based on events
             if (data.type === 'consensus_progress' || data.type === 'round_complete') {
@@ -146,8 +146,11 @@ export default function DeliberationsPage() {
   }, [fetchDeliberations, fetchStats, wsConnected]);
 
   // Filter decisionmaking sessions
-  const filteredDeliberations = deliberations.filter(d => {
-    if (filter === 'active') return d.status === 'active' || d.status === 'consensus_forming' || d.status === 'initializing';
+  const filteredDeliberations = deliberations.filter((d) => {
+    if (filter === 'active')
+      return (
+        d.status === 'active' || d.status === 'consensus_forming' || d.status === 'initializing'
+      );
     if (filter === 'complete') return d.status === 'complete';
     return true;
   });
@@ -214,7 +217,13 @@ export default function DeliberationsPage() {
                   {f}
                   {f === 'active' && (
                     <span className="ml-1 text-[var(--acid-cyan)]">
-                      ({deliberations.filter(d => d.status === 'active' || d.status === 'consensus_forming').length})
+                      (
+                      {
+                        deliberations.filter(
+                          (d) => d.status === 'active' || d.status === 'consensus_forming',
+                        ).length
+                      }
+                      )
                     </span>
                   )}
                 </button>
@@ -225,19 +234,17 @@ export default function DeliberationsPage() {
             <DeliberationGrid
               deliberations={filteredDeliberations}
               loading={loading}
-              emptyMessage={filter === 'active' ? 'No active debate sessions' : 'No debate sessions found'}
+              emptyMessage={
+                filter === 'active' ? 'No active debate sessions' : 'No debate sessions found'
+              }
             />
           </PanelErrorBoundary>
         </div>
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // MULTI-AGENT DEBATE PLATFORM
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // MULTI-AGENT DEBATE PLATFORM</p>
         </footer>
       </main>
     </>

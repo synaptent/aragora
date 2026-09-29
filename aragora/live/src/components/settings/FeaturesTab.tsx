@@ -14,10 +14,10 @@ export function FeaturesTab({ config, loading, onUpdate }: FeaturesTabProps) {
   const supermemoryAvailable = useFeatureStatus('supermemory');
   const supermemoryInfo = useFeatureInfo('supermemory');
   const supermemoryBase =
-    supermemoryInfo?.description ||
-    'External cross-session memory sync and context injection';
-  const supermemoryHint =
-    supermemoryAvailable ? '' : (supermemoryInfo?.reason || supermemoryInfo?.install_hint || '');
+    supermemoryInfo?.description || 'External cross-session memory sync and context injection';
+  const supermemoryHint = supermemoryAvailable
+    ? ''
+    : supermemoryInfo?.reason || supermemoryInfo?.install_hint || '';
   const supermemoryDescription = supermemoryHint
     ? `${supermemoryBase} — ${supermemoryHint}`
     : supermemoryBase;

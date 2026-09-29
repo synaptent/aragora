@@ -9,11 +9,15 @@ import { BackendSelector } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const ReplayBrowser = dynamic(
-  () => import('@/components/ReplayBrowser').then(m => ({ default: m.ReplayBrowser })),
+  () => import('@/components/ReplayBrowser').then((m) => ({ default: m.ReplayBrowser })),
   {
     ssr: false,
-    loading: () => <div className="card p-4 animate-pulse"><div className="h-96 bg-surface rounded" /></div>,
-  }
+    loading: () => (
+      <div className="card p-4 animate-pulse">
+        <div className="h-96 bg-surface rounded" />
+      </div>
+    ),
+  },
 );
 
 export default function ReplaysPage() {
@@ -65,7 +69,8 @@ export default function ReplaysPage() {
           <div className="mb-6">
             <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">Debate Replays</h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Browse and replay historical debates. Fork from any point to explore alternative paths.
+              Browse and replay historical debates. Fork from any point to explore alternative
+              paths.
             </p>
           </div>
 
@@ -84,7 +89,8 @@ export default function ReplaysPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
-                  Use &quot;Fork Here&quot; to create a branch point for exploring alternative debate paths
+                  Use &quot;Fork Here&quot; to create a branch point for exploring alternative
+                  debate paths
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
@@ -97,12 +103,8 @@ export default function ReplaysPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // REPLAY BROWSER
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // REPLAY BROWSER</p>
         </footer>
       </main>
     </>

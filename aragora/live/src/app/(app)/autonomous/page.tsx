@@ -78,12 +78,10 @@ export default function AutonomousPage() {
         <div className="mb-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                Autonomous Operations
-              </h1>
+              <h1 className="text-3xl font-bold text-white mb-2">Autonomous Operations</h1>
               <p className="text-white/50">
-                Self-improving system with human-in-the-loop oversight. Manage approvals,
-                alerts, scheduled triggers, and continuous learning.
+                Self-improving system with human-in-the-loop oversight. Manage approvals, alerts,
+                scheduled triggers, and continuous learning.
               </p>
             </div>
             {agentBridgeEnabled ? (

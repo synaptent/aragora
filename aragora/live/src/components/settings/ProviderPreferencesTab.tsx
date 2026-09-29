@@ -55,7 +55,14 @@ const PROVIDER_LABELS: Record<string, string> = {
 const PROVIDER_ORDER = ['anthropic', 'openai', 'openrouter', 'gemini', 'xai', 'mistral'];
 const REQUIRED_PROVIDERS = new Set(['anthropic', 'openai', 'openrouter']);
 const ONLINE_STATUSES = new Set(['available', 'online', 'ready', 'healthy', 'connected']);
-const CONFIGURED_STATUSES = new Set(['configured', 'available', 'online', 'ready', 'healthy', 'connected']);
+const CONFIGURED_STATUSES = new Set([
+  'configured',
+  'available',
+  'online',
+  'ready',
+  'healthy',
+  'connected',
+]);
 
 function dedupe(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
@@ -104,24 +111,27 @@ function normalizeProviders(data: ProviderStatusResponse | null): ProviderCard[]
       const normalizedStatus = (rawProvider.status || '').trim().toLowerCase().replace(/\s+/g, '_');
       const envVars = getEnvVars(rawProvider);
       const missingEnvVars = envVars.filter(
-        (envVar) => missingRequired.has(envVar) || missingOptional.has(envVar)
+        (envVar) => missingRequired.has(envVar) || missingOptional.has(envVar),
       );
 
-      const available = typeof rawProvider.available === 'boolean'
-        ? rawProvider.available
-        : ONLINE_STATUSES.has(normalizedStatus);
-      const configured = typeof rawProvider.configured === 'boolean'
-        ? rawProvider.configured
-        : envVars.length > 0
-          ? missingEnvVars.length < envVars.length
-          : typeof rawProvider.available === 'boolean'
-            ? rawProvider.available
-            : CONFIGURED_STATUSES.has(normalizedStatus);
-      const required = typeof rawProvider.required === 'boolean'
-        ? rawProvider.required
-        : typeof rawProvider.is_required === 'boolean'
-          ? rawProvider.is_required
-          : REQUIRED_PROVIDERS.has(id) || envVars.some((envVar) => missingRequired.has(envVar));
+      const available =
+        typeof rawProvider.available === 'boolean'
+          ? rawProvider.available
+          : ONLINE_STATUSES.has(normalizedStatus);
+      const configured =
+        typeof rawProvider.configured === 'boolean'
+          ? rawProvider.configured
+          : envVars.length > 0
+            ? missingEnvVars.length < envVars.length
+            : typeof rawProvider.available === 'boolean'
+              ? rawProvider.available
+              : CONFIGURED_STATUSES.has(normalizedStatus);
+      const required =
+        typeof rawProvider.required === 'boolean'
+          ? rawProvider.required
+          : typeof rawProvider.is_required === 'boolean'
+            ? rawProvider.is_required
+            : REQUIRED_PROVIDERS.has(id) || envVars.some((envVar) => missingRequired.has(envVar));
 
       return {
         id,
@@ -130,15 +140,18 @@ function normalizeProviders(data: ProviderStatusResponse | null): ProviderCard[]
         available,
         required,
         configurationLabel: configured ? 'CONFIGURED' : 'MISSING CONFIG',
-        availabilityLabel: rawProvider.status && !CONFIGURED_STATUSES.has(normalizedStatus)
-          ? formatStatusLabel(rawProvider.status)
-          : available
-            ? 'ONLINE'
-            : 'OFFLINE',
+        availabilityLabel:
+          rawProvider.status && !CONFIGURED_STATUSES.has(normalizedStatus)
+            ? formatStatusLabel(rawProvider.status)
+            : available
+              ? 'ONLINE'
+              : 'OFFLINE',
         model: rawProvider.model || rawProvider.default_model || null,
-        reason: rawProvider.reason || (!configured && missingEnvVars.length > 0
-          ? `Missing ${missingEnvVars.join(', ')}`
-          : null),
+        reason:
+          rawProvider.reason ||
+          (!configured && missingEnvVars.length > 0
+            ? `Missing ${missingEnvVars.join(', ')}`
+            : null),
         envVars,
         missingEnvVars,
       };
@@ -158,24 +171,17 @@ function normalizeProviders(data: ProviderStatusResponse | null): ProviderCard[]
 }
 
 export function ProviderPreferencesTab() {
-  const {
-    data,
-    error,
-    isLoading,
-    isValidating,
-    mutate,
-  } = useSWRFetch<ProviderStatusResponse>('/api/v1/routing/providers/status', {
-    refreshInterval: 120000,
-  });
+  const { data, error, isLoading, isValidating, mutate } = useSWRFetch<ProviderStatusResponse>(
+    '/api/v1/routing/providers/status',
+    { refreshInterval: 120000 },
+  );
 
   const providers = useMemo(() => normalizeProviders(data), [data]);
   const configuredProviders = providers.filter((provider) => provider.configured).length;
   const onlineProviders = providers.filter((provider) => provider.available).length;
   const missingRequiredCount = data?.missing_required?.length || 0;
   const missingOptionalCount = data?.missing_optional?.length || 0;
-  const lastChecked = data?.timestamp
-    ? new Date(data.timestamp).toLocaleString()
-    : null;
+  const lastChecked = data?.timestamp ? new Date(data.timestamp).toLocaleString() : null;
 
   if (isLoading && providers.length === 0) {
     return (
@@ -198,7 +204,9 @@ export function ProviderPreferencesTab() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} PROVIDER PREFERENCES</h2>
+          <h2 className="text-sm font-theme-data text-[var(--acid-green)]">
+            {'>'} PROVIDER PREFERENCES
+          </h2>
           <p className="mt-1 text-xs font-theme-data text-[var(--text-muted)]">
             Inspect which routing providers are configured and whether they are currently reachable.
           </p>
@@ -218,11 +226,13 @@ export function ProviderPreferencesTab() {
       </div>
 
       {typeof data?.ready_to_debate === 'boolean' && (
-        <div className={`p-3 border font-theme-data text-xs ${
-          data.ready_to_debate
-            ? 'bg-[var(--acid-green)]/10 border-[var(--acid-green)]/30 text-[var(--acid-green)]'
-            : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-        }`}>
+        <div
+          className={`p-3 border font-theme-data text-xs ${
+            data.ready_to_debate
+              ? 'bg-[var(--acid-green)]/10 border-[var(--acid-green)]/30 text-[var(--acid-green)]'
+              : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+          }`}
+        >
           {data.ready_to_debate
             ? 'At least one core provider is configured for routing.'
             : 'No core routing provider is configured yet.'}
@@ -237,20 +247,34 @@ export function ProviderPreferencesTab() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-              <div className="text-2xl font-theme-data text-[var(--acid-green)]">{configuredProviders}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Configured Providers</div>
+              <div className="text-2xl font-theme-data text-[var(--acid-green)]">
+                {configuredProviders}
+              </div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Configured Providers
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-              <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{onlineProviders}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Online Providers</div>
+              <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                {onlineProviders}
+              </div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Online Providers
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-amber-300">{missingRequiredCount}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Missing Required Env Vars</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Missing Required Env Vars
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-              <div className="text-2xl font-theme-data text-[var(--text)]">{missingOptionalCount}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Missing Optional Env Vars</div>
+              <div className="text-2xl font-theme-data text-[var(--text)]">
+                {missingOptionalCount}
+              </div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Missing Optional Env Vars
+              </div>
             </div>
           </div>
 
@@ -273,7 +297,9 @@ export function ProviderPreferencesTab() {
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h3 className="text-sm font-theme-data text-[var(--text)]">{provider.displayName}</h3>
+                      <h3 className="text-sm font-theme-data text-[var(--text)]">
+                        {provider.displayName}
+                      </h3>
                       <p className="mt-1 text-[10px] font-theme-data uppercase tracking-wider text-[var(--text-muted)]">
                         {provider.id}
                       </p>
@@ -308,9 +334,7 @@ export function ProviderPreferencesTab() {
                   <div className="mt-4 space-y-3 font-theme-data text-xs">
                     <div className="text-[var(--text-muted)]">
                       Model:{' '}
-                      <span className="text-[var(--text)]">
-                        {provider.model || 'Not reported'}
-                      </span>
+                      <span className="text-[var(--text)]">{provider.model || 'Not reported'}</span>
                     </div>
 
                     {provider.envVars.length > 0 && (

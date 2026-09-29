@@ -7,20 +7,10 @@ const mockFetch = jest.fn();
 
 global.fetch = mockFetch as typeof fetch;
 
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => ({
-    get: () => null,
-  }),
-}));
+jest.mock('next/navigation', () => ({ useSearchParams: () => ({ get: () => null }) }));
 
 jest.mock('next/link', () => {
-  return function MockLink({
-    children,
-    href,
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) {
+  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
     return <a href={href}>{children}</a>;
   };
 });
@@ -35,11 +25,7 @@ jest.mock('@/components/try/TeaserResult', () => ({
 }));
 
 jest.mock('react-markdown', () => {
-  return function MockMarkdown({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) {
+  return function MockMarkdown({ children }: { children: React.ReactNode }) {
     return <div>{children}</div>;
   };
 });
@@ -48,9 +34,7 @@ function jsonResponse(data: unknown): Response {
   return {
     ok: true,
     status: 200,
-    headers: {
-      get: () => 'application/json',
-    },
+    headers: { get: () => 'application/json' },
     json: async () => data,
   } as Response;
 }
@@ -74,9 +58,7 @@ describe('runtime backend selection for public debate surfaces', () => {
 
     renderWithProviders(<TryPage />);
     fireEvent.change(screen.getByPlaceholderText('Enter your decision question...'), {
-      target: {
-        value: 'Should we use the production backend for public try flows?',
-      },
+      target: { value: 'Should we use the production backend for public try flows?' },
     });
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
 

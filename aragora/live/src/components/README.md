@@ -8,35 +8,39 @@ Components are organized into these categories:
 
 ### Feature Directories (Already Organized)
 
-| Directory | Purpose | Examples |
-|-----------|---------|----------|
-| `agent-tabs/` | Agent activity views | AgentTabs, IndividualAgentTab |
-| `auth/` | Authentication UI | UserMenu, ProtectedRoute |
-| `billing/` | Subscription & usage | SubscriptionCard, UsageMetrics |
-| `broadcast/` | Audio broadcast features | AudioPlayer, BroadcastPanel |
+| Directory        | Purpose                   | Examples                            |
+| ---------------- | ------------------------- | ----------------------------------- |
+| `agent-tabs/`    | Agent activity views      | AgentTabs, IndividualAgentTab       |
+| `auth/`          | Authentication UI         | UserMenu, ProtectedRoute            |
+| `billing/`       | Subscription & usage      | SubscriptionCard, UsageMetrics      |
+| `broadcast/`     | Audio broadcast features  | AudioPlayer, BroadcastPanel         |
 | `debate-viewer/` | Debate display components | DebateViewer, TranscriptMessageCard |
-| `deep-audit/` | Deep audit UI | DeepAuditView, FindingsSection |
-| `gauntlet/` | Gauntlet mode | GauntletLive |
-| `landing/` | Marketing pages | HeroSection, Footer |
-| `shared/` | Reusable utilities | PanelContainer, RefreshButton |
+| `deep-audit/`    | Deep audit UI             | DeepAuditView, FindingsSection      |
+| `gauntlet/`      | Gauntlet mode             | GauntletLive                        |
+| `landing/`       | Marketing pages           | HeroSection, Footer                 |
+| `shared/`        | Reusable utilities        | PanelContainer, RefreshButton       |
 
 ### Root Components (To Be Organized)
 
 Components in the root directory should eventually be moved:
 
 **Panels** → `panels/`
+
 - `*Panel.tsx` files (30+ components)
 - Feature-specific panels for the main UI
 
 **Core UI** → `core/`
+
 - ErrorBoundary, LoadingSpinner, Skeleton
 - ToastContainer, Tabs, ThemeToggle
 
 **Visualization** → `visualization/`
+
 - ForceGraph, MatrixRain
 - ProofVisualizerPanel
 
 **Debate** → `debate/`
+
 - DebateBrowser, DebateInput
 - GraphDebateBrowser
 

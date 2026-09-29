@@ -6,9 +6,15 @@ const mockLocalStorage = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: jest.fn((key: string) => store[key] || null),
-    setItem: jest.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: jest.fn((key: string) => { delete store[key]; }),
-    clear: jest.fn(() => { store = {}; }),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: jest.fn(() => {
+      store = {};
+    }),
   };
 })();
 
@@ -203,7 +209,7 @@ describe('useDashboardPreferences', () => {
 
       expect(mockLocalStorage.setItem).toHaveBeenCalled();
       const savedValue = mockLocalStorage.setItem.mock.calls.find(
-        (call: string[]) => call[0] === 'aragora-dashboard-prefs'
+        (call: string[]) => call[0] === 'aragora-dashboard-prefs',
       );
       expect(savedValue).toBeDefined();
     });

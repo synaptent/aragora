@@ -27,15 +27,10 @@ jest.mock('@/components/auth/ProtectedRoute', () => ({
 }));
 
 // Mock MatrixRain
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 // Mock AsciiBanner
-jest.mock('@/components/AsciiBanner', () => ({
-  AsciiBannerCompact: () => <div>ARAGORA</div>,
-}));
+jest.mock('@/components/AsciiBanner', () => ({ AsciiBannerCompact: () => <div>ARAGORA</div> }));
 
 const mockUsage = {
   debates_used: 15,
@@ -52,11 +47,7 @@ const mockSubscription = {
   is_active: true,
   current_period_end: '2026-02-01T00:00:00Z',
   cancel_at_period_end: false,
-  limits: {
-    debates_per_month: 50,
-    users_per_org: 5,
-    api_access: true,
-  },
+  limits: { debates_per_month: 50, users_per_org: 5, api_access: true },
 };
 
 const mockInvoices = [
@@ -89,10 +80,7 @@ const mockInvoices = [
 ];
 
 const mockForecast = {
-  current_usage: {
-    debates: 15,
-    debates_limit: 50,
-  },
+  current_usage: { debates: 15, debates_limit: 50 },
   projection: {
     debates_end_of_cycle: 45,
     debates_per_day: 2,
@@ -112,12 +100,14 @@ describe('BillingPage', () => {
     mockFetch.mockReset();
   });
 
-  const setupMocks = (options: {
-    usageOk?: boolean;
-    subscriptionOk?: boolean;
-    invoicesOk?: boolean;
-    forecastOk?: boolean;
-  } = {}) => {
+  const setupMocks = (
+    options: {
+      usageOk?: boolean;
+      subscriptionOk?: boolean;
+      invoicesOk?: boolean;
+      forecastOk?: boolean;
+    } = {},
+  ) => {
     const { usageOk = true, subscriptionOk = true, invoicesOk = true, forecastOk = true } = options;
 
     mockFetch.mockImplementation((url: string) => {
@@ -128,10 +118,7 @@ describe('BillingPage', () => {
         });
       }
       if (url.includes('/api/billing/usage')) {
-        return Promise.resolve({
-          ok: usageOk,
-          json: () => Promise.resolve({ usage: mockUsage }),
-        });
+        return Promise.resolve({ ok: usageOk, json: () => Promise.resolve({ usage: mockUsage }) });
       }
       if (url.includes('/api/billing/subscription')) {
         return Promise.resolve({
@@ -231,10 +218,7 @@ describe('BillingPage', () => {
         });
       }
       if (url.includes('/api/billing/usage')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ usage: mockUsage }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ usage: mockUsage }) });
       }
       if (url.includes('/api/billing/subscription')) {
         return Promise.resolve({
@@ -243,10 +227,7 @@ describe('BillingPage', () => {
         });
       }
       if (url.includes('/api/billing/invoices')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ invoices: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ invoices: [] }) });
       }
       return Promise.resolve({ ok: false });
     });
@@ -283,10 +264,7 @@ describe('BillingPage', () => {
         });
       }
       if (url.includes('/api/billing/usage')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ usage: mockUsage }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ usage: mockUsage }) });
       }
       if (url.includes('/api/billing/subscription')) {
         return Promise.resolve({
@@ -322,9 +300,7 @@ describe('BillingPage', () => {
       if (options?.method === 'POST' && url.includes('/api/billing/portal')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            portal: { url: 'https://billing.stripe.com/session' },
-          }),
+          json: () => Promise.resolve({ portal: { url: 'https://billing.stripe.com/session' } }),
         });
       }
       if (url.includes('/api/billing/usage/forecast')) {
@@ -334,10 +310,7 @@ describe('BillingPage', () => {
         });
       }
       if (url.includes('/api/billing/usage')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ usage: mockUsage }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ usage: mockUsage }) });
       }
       if (url.includes('/api/billing/subscription')) {
         return Promise.resolve({
@@ -365,7 +338,7 @@ describe('BillingPage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/billing/portal'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 

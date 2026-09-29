@@ -8,12 +8,7 @@ interface CompletionStepProps {
 }
 
 export function CompletionStep({ onComplete }: CompletionStepProps) {
-  const {
-    organizationName,
-    firstDebateId,
-    firstReceiptId,
-    teamMembers,
-  } = useOnboardingStore();
+  const { organizationName, firstDebateId, firstReceiptId, teamMembers } = useOnboardingStore();
 
   return (
     <div className="space-y-6 text-center">
@@ -23,19 +18,13 @@ export function CompletionStep({ onComplete }: CompletionStepProps) {
             &#127881;
           </span>
         </div>
-        <h3 className="text-xl font-theme-data text-[var(--accent)] mb-2">
-          You&apos;re All Set!
-        </h3>
-        <p className="text-sm text-text-muted">
-          Welcome to Aragora, {organizationName || 'team'}!
-        </p>
+        <h3 className="text-xl font-theme-data text-[var(--accent)] mb-2">You&apos;re All Set!</h3>
+        <p className="text-sm text-text-muted">Welcome to Aragora, {organizationName || 'team'}!</p>
       </div>
 
       {/* Summary */}
       <div className="p-4 border border-[var(--accent)]/20 rounded-lg bg-surface text-left">
-        <div className="text-sm font-theme-data text-[var(--accent)] mb-3">
-          Onboarding Summary
-        </div>
+        <div className="text-sm font-theme-data text-[var(--accent)] mb-3">Onboarding Summary</div>
         <div className="space-y-2 text-sm text-text">
           <div className="flex items-center gap-2">
             <span className="text-[var(--accent)]">&#10003;</span>
@@ -58,9 +47,7 @@ export function CompletionStep({ onComplete }: CompletionStepProps) {
 
       {/* Next Steps */}
       <div>
-        <div className="text-sm font-theme-data text-text mb-3">
-          What&apos;s Next?
-        </div>
+        <div className="text-sm font-theme-data text-text mb-3">What&apos;s Next?</div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <NextStepCard
             icon="&#128196;"
@@ -69,7 +56,9 @@ export function CompletionStep({ onComplete }: CompletionStepProps) {
             href={
               firstReceiptId
                 ? `${API_BASE_URL}/api/v2/receipts/${encodeURIComponent(firstReceiptId)}/export?format=html&raw=true`
-                : (firstDebateId ? `/debate/${firstDebateId}` : '/debates')
+                : firstDebateId
+                  ? `/debate/${firstDebateId}`
+                  : '/debates'
             }
           />
           <NextStepCard

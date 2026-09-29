@@ -57,11 +57,7 @@ export interface ForkComparisonData {
   rightFork: ForkNode;
   divergencePoint: number;
   sharedMessages: number;
-  outcomeDiff: Array<{
-    field: string;
-    left: unknown;
-    right: unknown;
-  }>;
+  outcomeDiff: Array<{ field: string; left: unknown; right: unknown }>;
 }
 
 // ============================================================================
@@ -110,7 +106,10 @@ export function useDebateFork(debateId: string) {
     forkError: null,
   });
 
-  const [selectedNodes, setSelectedNodes] = useState<[ForkNode | null, ForkNode | null]>([null, null]);
+  const [selectedNodes, setSelectedNodes] = useState<[ForkNode | null, ForkNode | null]>([
+    null,
+    null,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Load Forks
@@ -119,7 +118,7 @@ export function useDebateFork(debateId: string) {
   const loadForks = useCallback(async (): Promise<void> => {
     if (!debateId) return;
 
-    setState(s => ({ ...s, loading: true, error: null }));
+    setState((s) => ({ ...s, loading: true, error: null }));
 
     try {
       const response = await fetch(`${API_BASE}/api/debates/${debateId}/forks`);
@@ -127,12 +126,7 @@ export function useDebateFork(debateId: string) {
       if (!response.ok) {
         if (response.status === 404) {
           // No forks yet - not an error
-          setState(s => ({
-            ...s,
-            loading: false,
-            forks: [],
-            forkTree: null,
-          }));
+          setState((s) => ({ ...s, loading: false, forks: [], forkTree: null }));
           return;
         }
         const data = await response.json().catch(() => ({}));
@@ -140,7 +134,7 @@ export function useDebateFork(debateId: string) {
       }
 
       const data = await response.json();
-      setState(s => ({
+      setState((s) => ({
         ...s,
         loading: false,
         forks: data.forks || [],
@@ -148,7 +142,7 @@ export function useDebateFork(debateId: string) {
       }));
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Failed to load forks';
-      setState(s => ({ ...s, loading: false, error: errorMsg }));
+      setState((s) => ({ ...s, loading: false, error: errorMsg }));
     }
   }, [debateId]);
 
@@ -156,53 +150,46 @@ export function useDebateFork(debateId: string) {
   // Create Fork
   // ---------------------------------------------------------------------------
 
-  const createFork = useCallback(async (
-    branchPoint: number,
-    modifiedContext?: string
-  ): Promise<ForkResult | null> => {
-    if (!debateId) return null;
+  const createFork = useCallback(
+    async (branchPoint: number, modifiedContext?: string): Promise<ForkResult | null> => {
+      if (!debateId) return null;
 
-    setState(s => ({ ...s, forking: true, forkError: null }));
+      setState((s) => ({ ...s, forking: true, forkError: null }));
 
-    try {
-      const response = await fetch(`${API_BASE}/api/debates/${debateId}/fork`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          branch_point: branchPoint,
-          modified_context: modifiedContext,
-        }),
-      });
+      try {
+        const response = await fetch(`${API_BASE}/api/debates/${debateId}/fork`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ branch_point: branchPoint, modified_context: modifiedContext }),
+        });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        const result: ForkResult = await response.json();
+        setState((s) => ({ ...s, forking: false, forkResult: result }));
+
+        // Refresh forks list after creating
+        await loadForks();
+
+        return result;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to create fork';
+        setState((s) => ({ ...s, forking: false, forkError: errorMsg }));
+        return null;
       }
-
-      const result: ForkResult = await response.json();
-      setState(s => ({
-        ...s,
-        forking: false,
-        forkResult: result,
-      }));
-
-      // Refresh forks list after creating
-      await loadForks();
-
-      return result;
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to create fork';
-      setState(s => ({ ...s, forking: false, forkError: errorMsg }));
-      return null;
-    }
-  }, [debateId, loadForks]);
+    },
+    [debateId, loadForks],
+  );
 
   // ---------------------------------------------------------------------------
   // Selection for Comparison
   // ---------------------------------------------------------------------------
 
   const selectForComparison = useCallback((node: ForkNode, slot: 0 | 1) => {
-    setSelectedNodes(prev => {
+    setSelectedNodes((prev) => {
       const next: [ForkNode | null, ForkNode | null] = [...prev];
       next[slot] = node;
       return next;
@@ -222,10 +209,7 @@ export function useDebateFork(debateId: string) {
     if (!left || !right) return null;
 
     // Find common ancestor / divergence point
-    const divergencePoint = Math.min(
-      left.branch_point || 0,
-      right.branch_point || 0
-    );
+    const divergencePoint = Math.min(left.branch_point || 0, right.branch_point || 0);
 
     const sharedMessages = divergencePoint;
 
@@ -239,16 +223,14 @@ export function useDebateFork(debateId: string) {
       outcomeDiff.push({ field: 'pivot_claim', left: left.pivot_claim, right: right.pivot_claim });
     }
     if (left.messages_inherited !== right.messages_inherited) {
-      outcomeDiff.push({ field: 'messages_inherited', left: left.messages_inherited, right: right.messages_inherited });
+      outcomeDiff.push({
+        field: 'messages_inherited',
+        left: left.messages_inherited,
+        right: right.messages_inherited,
+      });
     }
 
-    return {
-      leftFork: left,
-      rightFork: right,
-      divergencePoint,
-      sharedMessages,
-      outcomeDiff,
-    };
+    return { leftFork: left, rightFork: right, divergencePoint, sharedMessages, outcomeDiff };
   }, [selectedNodes]);
 
   // ---------------------------------------------------------------------------
@@ -256,11 +238,11 @@ export function useDebateFork(debateId: string) {
   // ---------------------------------------------------------------------------
 
   const clearError = useCallback(() => {
-    setState(s => ({ ...s, error: null, forkError: null }));
+    setState((s) => ({ ...s, error: null, forkError: null }));
   }, []);
 
   const clearForkResult = useCallback(() => {
-    setState(s => ({ ...s, forkResult: null }));
+    setState((s) => ({ ...s, forkResult: null }));
   }, []);
 
   // ---------------------------------------------------------------------------

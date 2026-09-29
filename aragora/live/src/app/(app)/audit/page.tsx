@@ -147,7 +147,8 @@ export default function AuditDashboardPage() {
         const sessionList = data.sessions || [];
         const computedStats: DashboardStats = {
           total_sessions: sessionList.length,
-          completed_sessions: sessionList.filter((s: AuditSession) => s.status === 'completed').length,
+          completed_sessions: sessionList.filter((s: AuditSession) => s.status === 'completed')
+            .length,
           running_sessions: sessionList.filter((s: AuditSession) => s.status === 'running').length,
           total_findings: 0,
           critical_findings: 0,
@@ -260,13 +261,14 @@ export default function AuditDashboardPage() {
   // Filter sessions
   const filteredSessions = sessions.filter((session) => {
     if (statusFilter !== 'all' && session.status !== statusFilter) return false;
-    if (searchQuery && !session.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (searchQuery && !session.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      return false;
     return true;
   });
 
   // Sort by created_at descending
   const sortedSessions = [...filteredSessions].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 
   return (
@@ -417,9 +419,7 @@ export default function AuditDashboardPage() {
             <div className="card p-12 text-center">
               <div className="text-4xl mb-4">🔍</div>
               <div className="text-muted font-theme-data mb-4">
-                {sessions.length === 0
-                  ? 'No audit sessions yet'
-                  : 'No sessions match your filters'}
+                {sessions.length === 0 ? 'No audit sessions yet' : 'No sessions match your filters'}
               </div>
               <Link href="/audit/new" className="btn btn-primary">
                 Create First Audit
@@ -447,7 +447,9 @@ export default function AuditDashboardPage() {
                       onClick={() => router.push(`/audit/view?id=${session.id}`)}
                     >
                       <td className="p-3">
-                        <div className="font-theme-data text-sm">{session.name || session.id.slice(0, 12)}</div>
+                        <div className="font-theme-data text-sm">
+                          {session.name || session.id.slice(0, 12)}
+                        </div>
                         <div className="text-xs text-muted flex items-center gap-2 mt-1">
                           <span>{session.model}</span>
                           <span className="text-border">|</span>
@@ -484,7 +486,9 @@ export default function AuditDashboardPage() {
                         </div>
                       </td>
                       <td className="p-3">
-                        <span className="font-theme-data text-sm">{session.document_ids.length}</span>
+                        <span className="font-theme-data text-sm">
+                          {session.document_ids.length}
+                        </span>
                       </td>
                       <td className="p-3">
                         <span className="text-sm text-muted">{formatDate(session.created_at)}</span>
@@ -512,7 +516,7 @@ export default function AuditDashboardPage() {
                                 // Export functionality
                                 window.open(
                                   `${backendConfig.api}/api/audit/sessions/${session.id}/report?format=html`,
-                                  '_blank'
+                                  '_blank',
                                 );
                               }}
                               className="px-2 py-1 text-xs font-theme-data bg-surface hover:bg-accent/10 rounded transition-colors"
@@ -536,23 +540,41 @@ export default function AuditDashboardPage() {
             <h3 className="text-sm font-theme-data text-muted mb-4">FINDINGS BY SEVERITY</h3>
             <div className="flex items-end gap-2 h-32">
               {[
-                { key: 'critical', label: 'Critical', count: stats.critical_findings, color: 'bg-acid-red' },
+                {
+                  key: 'critical',
+                  label: 'Critical',
+                  count: stats.critical_findings,
+                  color: 'bg-acid-red',
+                },
                 { key: 'high', label: 'High', count: stats.high_findings, color: 'bg-acid-orange' },
-                { key: 'medium', label: 'Medium', count: stats.medium_findings, color: 'bg-acid-yellow' },
-                { key: 'low', label: 'Low', count: stats.low_findings, color: 'bg-[var(--acid-cyan)]' },
+                {
+                  key: 'medium',
+                  label: 'Medium',
+                  count: stats.medium_findings,
+                  color: 'bg-acid-yellow',
+                },
+                {
+                  key: 'low',
+                  label: 'Low',
+                  count: stats.low_findings,
+                  color: 'bg-[var(--acid-cyan)]',
+                },
               ].map((item) => {
                 const maxCount = Math.max(
                   stats.critical_findings,
                   stats.high_findings,
                   stats.medium_findings,
                   stats.low_findings,
-                  1
+                  1,
                 );
                 const height = (item.count / maxCount) * 100;
 
                 return (
                   <div key={item.key} className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full flex items-end justify-center" style={{ height: '100px' }}>
+                    <div
+                      className="w-full flex items-end justify-center"
+                      style={{ height: '100px' }}
+                    >
                       <div
                         className={`w-full max-w-[60px] ${item.color} rounded-t transition-all`}
                         style={{ height: `${Math.max(height, 4)}%` }}

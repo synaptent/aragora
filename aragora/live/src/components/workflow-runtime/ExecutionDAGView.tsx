@@ -47,25 +47,18 @@ interface ExecutionDAGViewProps {
   selectedStepId?: string;
 }
 
-const STATUS_STYLES: Record<string, { bg: string; border: string; glow: string; animate: boolean }> = {
-  pending: {
-    bg: 'bg-gray-900/50',
-    border: 'border-gray-500',
-    glow: '',
-    animate: false,
-  },
+const STATUS_STYLES: Record<
+  string,
+  { bg: string; border: string; glow: string; animate: boolean }
+> = {
+  pending: { bg: 'bg-gray-900/50', border: 'border-gray-500', glow: '', animate: false },
   running: {
     bg: 'bg-blue-900/40',
     border: 'border-blue-400',
     glow: 'shadow-[0_0_15px_rgba(59,130,246,0.5)]',
     animate: true,
   },
-  completed: {
-    bg: 'bg-green-900/40',
-    border: 'border-green-500',
-    glow: '',
-    animate: false,
-  },
+  completed: { bg: 'bg-green-900/40', border: 'border-green-500', glow: '', animate: false },
   failed: {
     bg: 'bg-red-900/40',
     border: 'border-red-500',
@@ -140,9 +133,7 @@ function ExecutionNodeComponent({ data }: { data: ExecutionNodeData }) {
       </div>
 
       {/* Step name */}
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {step.name}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{step.name}</div>
 
       {/* Timing info */}
       {step.startedAt && (
@@ -152,25 +143,17 @@ function ExecutionNodeComponent({ data }: { data: ExecutionNodeData }) {
               Completed in {formatDuration(step.startedAt, step.completedAt)}
             </span>
           ) : step.status === 'running' ? (
-            <span className="text-blue-400">
-              Running for {formatDuration(step.startedAt)}...
-            </span>
+            <span className="text-blue-400">Running for {formatDuration(step.startedAt)}...</span>
           ) : null}
         </div>
       )}
 
       {/* Error indicator */}
-      {step.error && (
-        <div className="mt-2 text-xs text-red-400 truncate">
-          Error: {step.error}
-        </div>
-      )}
+      {step.error && <div className="mt-2 text-xs text-red-400 truncate">Error: {step.error}</div>}
 
       {/* Approval indicator */}
       {step.status === 'waiting_approval' && step.approvalMessage && (
-        <div className="mt-2 text-xs text-purple-300">
-          Awaiting approval
-        </div>
+        <div className="mt-2 text-xs text-purple-300">Awaiting approval</div>
       )}
 
       <Handle
@@ -200,7 +183,9 @@ function StatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-[10px] font-theme-data rounded ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-0.5 text-[10px] font-theme-data rounded ${colors[status] || colors.pending}`}
+    >
       {labels[status] || status.toUpperCase()}
     </span>
   );
@@ -217,9 +202,7 @@ function formatDuration(startedAt: string, completedAt?: string): string {
 }
 
 // Node types for React Flow
-const nodeTypes = {
-  executionStep: ExecutionNodeComponent,
-};
+const nodeTypes = { executionStep: ExecutionNodeComponent };
 
 export function ExecutionDAGView({
   execution,
@@ -230,7 +213,7 @@ export function ExecutionDAGView({
     (step: WorkflowStep) => {
       onStepSelect?.(step);
     },
-    [onStepSelect]
+    [onStepSelect],
   );
 
   // Convert steps to nodes with automatic layout
@@ -249,10 +232,7 @@ export function ExecutionDAGView({
       return {
         id: step.id,
         type: 'executionStep',
-        position: {
-          x: col * (nodeWidth + horizontalGap),
-          y: row * (nodeHeight + verticalGap),
-        },
+        position: { x: col * (nodeWidth + horizontalGap), y: row * (nodeHeight + verticalGap) },
         data: {
           step,
           isSelected: step.id === selectedStepId,
@@ -320,11 +300,15 @@ export function ExecutionDAGView({
             <div key={status} className="flex items-center gap-1.5">
               <div
                 className={`w-2 h-2 rounded-full ${
-                  status === 'pending' ? 'bg-gray-500' :
-                  status === 'running' ? 'bg-blue-400 animate-pulse' :
-                  status === 'completed' ? 'bg-green-500' :
-                  status === 'failed' ? 'bg-red-500' :
-                  'bg-purple-400 animate-pulse'
+                  status === 'pending'
+                    ? 'bg-gray-500'
+                    : status === 'running'
+                      ? 'bg-blue-400 animate-pulse'
+                      : status === 'completed'
+                        ? 'bg-green-500'
+                        : status === 'failed'
+                          ? 'bg-red-500'
+                          : 'bg-purple-400 animate-pulse'
                 }`}
               />
               <span className="text-[10px] font-theme-data text-text-muted capitalize">
@@ -347,21 +331,23 @@ export function ExecutionDAGView({
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#1a1a2e" gap={20} />
-        <Controls
-          className="!bg-surface !border-border !shadow-none"
-          showInteractive={false}
-        />
+        <Controls className="!bg-surface !border-border !shadow-none" showInteractive={false} />
         <MiniMap
           className="!bg-surface !border-border"
           nodeColor={(node) => {
             const step = (node.data as ExecutionNodeData)?.step;
             if (!step) return '#6b7280';
             switch (step.status) {
-              case 'completed': return '#22c55e';
-              case 'running': return '#3b82f6';
-              case 'failed': return '#ef4444';
-              case 'waiting_approval': return '#a855f7';
-              default: return '#6b7280';
+              case 'completed':
+                return '#22c55e';
+              case 'running':
+                return '#3b82f6';
+              case 'failed':
+                return '#ef4444';
+              case 'waiting_approval':
+                return '#a855f7';
+              default:
+                return '#6b7280';
             }
           }}
           maskColor="rgba(0,0,0,0.8)"

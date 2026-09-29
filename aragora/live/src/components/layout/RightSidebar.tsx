@@ -6,7 +6,8 @@ import { useRightSidebar } from '@/context/RightSidebarContext';
 
 export function RightSidebar() {
   const { rightSidebarOpen, isMobile, rightSidebarWidth, closeRightSidebar } = useLayout();
-  const { title, subtitle, statsContent, propertiesContent, actionsContent, activityContent } = useRightSidebar();
+  const { title, subtitle, statsContent, propertiesContent, actionsContent, activityContent } =
+    useRightSidebar();
 
   // Don't render on mobile or when closed
   if (isMobile || !rightSidebarOpen) {
@@ -23,14 +24,8 @@ export function RightSidebar() {
         <div className="p-4 border-b border-[var(--border)]">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-[var(--text)]">
-                {title || 'Context'}
-              </h2>
-              {subtitle && (
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  {subtitle}
-                </p>
-              )}
+              <h2 className="text-sm font-semibold text-[var(--text)]">{title || 'Context'}</h2>
+              {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
             </div>
             <button
               onClick={closeRightSidebar}

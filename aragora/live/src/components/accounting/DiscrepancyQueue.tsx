@@ -4,24 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useBackend } from '@/components/BackendSelector';
 import { useAuth } from '@/context/AuthContext';
 
-type DiscrepancyType = 'amount_mismatch' | 'missing_bank' | 'missing_book' | 'date_mismatch' | 'duplicate';
+type DiscrepancyType =
+  'amount_mismatch' | 'missing_bank' | 'missing_book' | 'date_mismatch' | 'duplicate';
 type ResolutionStatus = 'pending' | 'investigating' | 'resolved' | 'rejected';
 
 interface Discrepancy {
   id: string;
   type: DiscrepancyType;
-  bankTransaction?: {
-    id: string;
-    date: string;
-    description: string;
-    amount: number;
-  };
-  bookTransaction?: {
-    id: string;
-    date: string;
-    description: string;
-    amount: number;
-  };
+  bankTransaction?: { id: string; date: string; description: string; amount: number };
+  bookTransaction?: { id: string; date: string; description: string; amount: number };
   difference?: number;
   status: ResolutionStatus;
   aiSuggestion?: string;
@@ -66,17 +57,18 @@ export function DiscrepancyQueue() {
               id: 'bank_tx_1',
               date: '2025-01-15',
               description: 'PAYMENT TO VENDOR XYZ',
-              amount: -1250.00,
+              amount: -1250.0,
             },
             bookTransaction: {
               id: 'book_tx_1',
               date: '2025-01-15',
               description: 'Vendor XYZ - Invoice #1234',
-              amount: -1245.00,
+              amount: -1245.0,
             },
-            difference: 5.00,
+            difference: 5.0,
             status: 'pending',
-            aiSuggestion: 'The $5.00 difference appears to be a bank fee. Recommend recording as "Bank Service Charges" expense.',
+            aiSuggestion:
+              'The $5.00 difference appears to be a bank fee. Recommend recording as "Bank Service Charges" expense.',
             aiConfidence: 0.87,
           },
           {
@@ -86,10 +78,11 @@ export function DiscrepancyQueue() {
               id: 'bank_tx_2',
               date: '2025-01-18',
               description: 'WIRE TRANSFER FROM ACME CORP',
-              amount: 3500.00,
+              amount: 3500.0,
             },
             status: 'investigating',
-            aiSuggestion: 'This appears to be a customer payment from Acme Corporation. Match with open Invoice #1087 ($3,500.00).',
+            aiSuggestion:
+              'This appears to be a customer payment from Acme Corporation. Match with open Invoice #1087 ($3,500.00).',
             aiConfidence: 0.94,
           },
           {
@@ -99,16 +92,17 @@ export function DiscrepancyQueue() {
               id: 'bank_tx_3',
               date: '2025-01-12',
               description: 'PAYROLL - ADP',
-              amount: -15420.50,
+              amount: -15420.5,
             },
             bookTransaction: {
               id: 'book_tx_3',
               date: '2025-01-12',
               description: 'Payroll - January 1st',
-              amount: -15420.50,
+              amount: -15420.5,
             },
             status: 'resolved',
-            aiSuggestion: 'Transaction appears to be recorded twice in books. Recommend removing duplicate entry.',
+            aiSuggestion:
+              'Transaction appears to be recorded twice in books. Recommend removing duplicate entry.',
             aiConfidence: 0.91,
             resolvedBy: 'AI Assistant',
             resolvedAt: '2025-01-20T14:30:00Z',
@@ -127,60 +121,76 @@ export function DiscrepancyQueue() {
     fetchDiscrepancies();
   }, [fetchDiscrepancies]);
 
-  const handleInvestigate = useCallback(async (id: string) => {
-    setInvestigating(id);
-    try {
-      const response = await fetch(`${backendConfig.api}/api/accounting/discrepancies/${id}/investigate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.access_token || ''}`,
-        },
-      });
-      if (response.ok) {
-        fetchDiscrepancies();
+  const handleInvestigate = useCallback(
+    async (id: string) => {
+      setInvestigating(id);
+      try {
+        const response = await fetch(
+          `${backendConfig.api}/api/accounting/discrepancies/${id}/investigate`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${tokens?.access_token || ''}`,
+            },
+          },
+        );
+        if (response.ok) {
+          fetchDiscrepancies();
+        }
+      } catch {
+        // Handle error
+      } finally {
+        setInvestigating(null);
       }
-    } catch {
-      // Handle error
-    } finally {
-      setInvestigating(null);
-    }
-  }, [backendConfig.api, tokens?.access_token, fetchDiscrepancies]);
+    },
+    [backendConfig.api, tokens?.access_token, fetchDiscrepancies],
+  );
 
-  const handleResolve = useCallback(async (id: string, action: 'accept' | 'reject') => {
-    try {
-      const response = await fetch(`${backendConfig.api}/api/accounting/discrepancies/${id}/resolve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.access_token || ''}`,
-        },
-        body: JSON.stringify({ action }),
-      });
-      if (response.ok) {
-        fetchDiscrepancies();
-        setSelectedId(null);
+  const handleResolve = useCallback(
+    async (id: string, action: 'accept' | 'reject') => {
+      try {
+        const response = await fetch(
+          `${backendConfig.api}/api/accounting/discrepancies/${id}/resolve`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${tokens?.access_token || ''}`,
+            },
+            body: JSON.stringify({ action }),
+          },
+        );
+        if (response.ok) {
+          fetchDiscrepancies();
+          setSelectedId(null);
+        }
+      } catch {
+        // Handle error
       }
-    } catch {
-      // Handle error
-    }
-  }, [backendConfig.api, tokens?.access_token, fetchDiscrepancies]);
+    },
+    [backendConfig.api, tokens?.access_token, fetchDiscrepancies],
+  );
 
-  const filteredDiscrepancies = discrepancies.filter(d => {
+  const filteredDiscrepancies = discrepancies.filter((d) => {
     if (filter === 'pending') return d.status === 'pending' || d.status === 'investigating';
     if (filter === 'resolved') return d.status === 'resolved' || d.status === 'rejected';
     return true;
   });
 
-  const pendingCount = discrepancies.filter(d => d.status === 'pending' || d.status === 'investigating').length;
-  const resolvedCount = discrepancies.filter(d => d.status === 'resolved' || d.status === 'rejected').length;
+  const pendingCount = discrepancies.filter(
+    (d) => d.status === 'pending' || d.status === 'investigating',
+  ).length;
+  const resolvedCount = discrepancies.filter(
+    (d) => d.status === 'resolved' || d.status === 'rejected',
+  ).length;
 
   if (loading) {
     return (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4 animate-pulse">
         <div className="h-5 bg-[var(--bg)] rounded w-1/3 mb-4" />
         <div className="space-y-3">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3].map((i) => (
             <div key={i} className="h-20 bg-[var(--bg)] rounded" />
           ))}
         </div>
@@ -201,7 +211,7 @@ export function DiscrepancyQueue() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {(['pending', 'resolved', 'all'] as const).map(f => (
+          {(['pending', 'resolved', 'all'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -227,7 +237,7 @@ export function DiscrepancyQueue() {
         </div>
       ) : (
         <div className="divide-y divide-[var(--border)]">
-          {filteredDiscrepancies.map(disc => {
+          {filteredDiscrepancies.map((disc) => {
             const typeInfo = TYPE_LABELS[disc.type];
             const isSelected = selectedId === disc.id;
 
@@ -283,9 +293,7 @@ export function DiscrepancyQueue() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[var(--text-muted)]">
-                        {isSelected ? '▲' : '▼'}
-                      </span>
+                      <span className="text-[var(--text-muted)]">{isSelected ? '▲' : '▼'}</span>
                     </div>
                   </div>
                 </div>
@@ -297,13 +305,21 @@ export function DiscrepancyQueue() {
                       {/* Bank Transaction */}
                       {disc.bankTransaction && (
                         <div className="p-3 bg-[var(--surface)] rounded border border-[var(--border)]">
-                          <div className="text-xs text-[var(--text-muted)] mb-2">Bank Transaction</div>
-                          <div className="text-sm font-theme-data">{disc.bankTransaction.description}</div>
+                          <div className="text-xs text-[var(--text-muted)] mb-2">
+                            Bank Transaction
+                          </div>
+                          <div className="text-sm font-theme-data">
+                            {disc.bankTransaction.description}
+                          </div>
                           <div className="flex justify-between mt-2">
-                            <span className="text-xs text-[var(--text-muted)]">{disc.bankTransaction.date}</span>
-                            <span className={`text-sm font-theme-data ${
-                              disc.bankTransaction.amount >= 0 ? 'text-green-400' : 'text-red-400'
-                            }`}>
+                            <span className="text-xs text-[var(--text-muted)]">
+                              {disc.bankTransaction.date}
+                            </span>
+                            <span
+                              className={`text-sm font-theme-data ${
+                                disc.bankTransaction.amount >= 0 ? 'text-green-400' : 'text-red-400'
+                              }`}
+                            >
                               ${Math.abs(disc.bankTransaction.amount).toFixed(2)}
                             </span>
                           </div>
@@ -313,13 +329,21 @@ export function DiscrepancyQueue() {
                       {/* Book Transaction */}
                       {disc.bookTransaction && (
                         <div className="p-3 bg-[var(--surface)] rounded border border-[var(--border)]">
-                          <div className="text-xs text-[var(--text-muted)] mb-2">Book Transaction</div>
-                          <div className="text-sm font-theme-data">{disc.bookTransaction.description}</div>
+                          <div className="text-xs text-[var(--text-muted)] mb-2">
+                            Book Transaction
+                          </div>
+                          <div className="text-sm font-theme-data">
+                            {disc.bookTransaction.description}
+                          </div>
                           <div className="flex justify-between mt-2">
-                            <span className="text-xs text-[var(--text-muted)]">{disc.bookTransaction.date}</span>
-                            <span className={`text-sm font-theme-data ${
-                              disc.bookTransaction.amount >= 0 ? 'text-green-400' : 'text-red-400'
-                            }`}>
+                            <span className="text-xs text-[var(--text-muted)]">
+                              {disc.bookTransaction.date}
+                            </span>
+                            <span
+                              className={`text-sm font-theme-data ${
+                                disc.bookTransaction.amount >= 0 ? 'text-green-400' : 'text-red-400'
+                              }`}
+                            >
                               ${Math.abs(disc.bookTransaction.amount).toFixed(2)}
                             </span>
                           </div>
@@ -334,14 +358,18 @@ export function DiscrepancyQueue() {
                           <span className="text-xl">🤖</span>
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-theme-data text-[var(--acid-green)]">AI Suggestion</span>
+                              <span className="text-sm font-theme-data text-[var(--acid-green)]">
+                                AI Suggestion
+                              </span>
                               {disc.aiConfidence && (
                                 <span className="text-xs text-[var(--text-muted)]">
                                   {(disc.aiConfidence * 100).toFixed(0)}% confidence
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-[var(--text-muted)] mt-1">{disc.aiSuggestion}</p>
+                            <p className="text-xs text-[var(--text-muted)] mt-1">
+                              {disc.aiSuggestion}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -351,7 +379,8 @@ export function DiscrepancyQueue() {
                     {disc.resolution && (
                       <div className="p-3 bg-green-500/5 border border-green-500/20 rounded mb-4">
                         <div className="text-xs text-green-400">
-                          Resolved by {disc.resolvedBy} on {disc.resolvedAt && new Date(disc.resolvedAt).toLocaleString()}
+                          Resolved by {disc.resolvedBy} on{' '}
+                          {disc.resolvedAt && new Date(disc.resolvedAt).toLocaleString()}
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mt-1">{disc.resolution}</p>
                       </div>

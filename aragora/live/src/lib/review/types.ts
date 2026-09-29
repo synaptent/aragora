@@ -23,100 +23,95 @@
 // ---------------------------------------------------------------------------
 
 export const ReviewRole = {
-  LOGIC: "logic_reviewer",
-  SECURITY: "security_reviewer",
-  MAINTAINABILITY: "maintainability_reviewer",
-  SKEPTIC: "skeptic",
-  SYNTHESIZER: "synthesizer",
+  LOGIC: 'logic_reviewer',
+  SECURITY: 'security_reviewer',
+  MAINTAINABILITY: 'maintainability_reviewer',
+  SKEPTIC: 'skeptic',
+  SYNTHESIZER: 'synthesizer',
 } as const;
 export type ReviewRole = (typeof ReviewRole)[keyof typeof ReviewRole];
 
 export const Recommendation = {
-  APPROVE_CANDIDATE: "approve_candidate",
-  NEEDS_HUMAN_ATTENTION: "needs_human_attention",
-  REPAIR_FIRST: "repair_first",
+  APPROVE_CANDIDATE: 'approve_candidate',
+  NEEDS_HUMAN_ATTENTION: 'needs_human_attention',
+  REPAIR_FIRST: 'repair_first',
 } as const;
 export type Recommendation = (typeof Recommendation)[keyof typeof Recommendation];
 
 export const DissentPosition = {
-  APPROVE: "approve",
-  REQUEST_CHANGES: "request_changes",
-  DEFER: "defer",
+  APPROVE: 'approve',
+  REQUEST_CHANGES: 'request_changes',
+  DEFER: 'defer',
 } as const;
 export type DissentPosition = (typeof DissentPosition)[keyof typeof DissentPosition];
 
 export const SynthesisPolicy = {
-  MAJORITY: "majority",
-  WEIGHTED: "weighted",
-  SYNTHESIZER_AGENT: "synthesizer",
-  UNANIMOUS_OR_ESCALATE: "unanimous_or_escalate",
+  MAJORITY: 'majority',
+  WEIGHTED: 'weighted',
+  SYNTHESIZER_AGENT: 'synthesizer',
+  UNANIMOUS_OR_ESCALATE: 'unanimous_or_escalate',
 } as const;
 export type SynthesisPolicy = (typeof SynthesisPolicy)[keyof typeof SynthesisPolicy];
 
 export const EvidenceKind = {
-  FILE: "file",
-  TEST: "test",
-  COMMIT: "commit",
-  ARTIFACT: "artifact",
-  ISSUE: "issue",
-  PR: "pr",
-  EXTERNAL: "external",
+  FILE: 'file',
+  TEST: 'test',
+  COMMIT: 'commit',
+  ARTIFACT: 'artifact',
+  ISSUE: 'issue',
+  PR: 'pr',
+  EXTERNAL: 'external',
 } as const;
 export type EvidenceKind = (typeof EvidenceKind)[keyof typeof EvidenceKind];
 
 export const ValidationKind = {
-  CI_CHECK: "ci_check",
-  TEST_SUITE: "test_suite",
-  RECEIPT: "receipt",
-  BENCHMARK: "benchmark",
-  MANUAL_REVIEW: "manual_review",
+  CI_CHECK: 'ci_check',
+  TEST_SUITE: 'test_suite',
+  RECEIPT: 'receipt',
+  BENCHMARK: 'benchmark',
+  MANUAL_REVIEW: 'manual_review',
 } as const;
 export type ValidationKind = (typeof ValidationKind)[keyof typeof ValidationKind];
 
 export const ValidationResult = {
-  SUCCESS: "success",
-  FAILURE: "failure",
-  SKIPPED: "skipped",
-  CANCELLED: "cancelled",
-  PENDING: "pending",
+  SUCCESS: 'success',
+  FAILURE: 'failure',
+  SKIPPED: 'skipped',
+  CANCELLED: 'cancelled',
+  PENDING: 'pending',
 } as const;
 export type ValidationResult = (typeof ValidationResult)[keyof typeof ValidationResult];
 
 export const SettlementAction = {
-  APPROVE: "approve",
-  REQUEST_CHANGES: "request_changes",
-  DEFER: "defer",
+  APPROVE: 'approve',
+  REQUEST_CHANGES: 'request_changes',
+  DEFER: 'defer',
 } as const;
 export type SettlementAction = (typeof SettlementAction)[keyof typeof SettlementAction];
 
-export const ReviewDepth = {
-  TRIVIAL: "trivial",
-  STANDARD: "standard",
-  DEEP: "deep",
-} as const;
+export const ReviewDepth = { TRIVIAL: 'trivial', STANDARD: 'standard', DEEP: 'deep' } as const;
 export type ReviewDepth = (typeof ReviewDepth)[keyof typeof ReviewDepth];
 
 export const RiskClass = {
-  LOW: "low",
-  MEDIUM: "medium",
-  HIGH: "high",
-  CRITICAL: "critical",
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
 } as const;
 export type RiskClass = (typeof RiskClass)[keyof typeof RiskClass];
 
 export const ReviewPolicyDecision = {
-  ALLOW: "allow",
-  DEGRADE: "degrade",
-  DENY: "deny",
-  ESCALATE: "escalate",
+  ALLOW: 'allow',
+  DEGRADE: 'degrade',
+  DENY: 'deny',
+  ESCALATE: 'escalate',
 } as const;
-export type ReviewPolicyDecision =
-  (typeof ReviewPolicyDecision)[keyof typeof ReviewPolicyDecision];
+export type ReviewPolicyDecision = (typeof ReviewPolicyDecision)[keyof typeof ReviewPolicyDecision];
 
 export const BudgetScope = {
-  PER_PR: "per_pr",
-  PER_REPO_DAILY: "per_repo_daily",
-  PER_ORG_DAILY: "per_org_daily",
+  PER_PR: 'per_pr',
+  PER_REPO_DAILY: 'per_repo_daily',
+  PER_ORG_DAILY: 'per_org_daily',
 } as const;
 export type BudgetScope = (typeof BudgetScope)[keyof typeof BudgetScope];
 
@@ -129,10 +124,10 @@ export type BudgetScope = (typeof BudgetScope)[keyof typeof BudgetScope];
  * ``parked`` off by default.
  */
 export const QueueLane = {
-  READY_NOW: "ready_now",
-  NEEDS_ATTENTION: "needs_attention",
-  REPAIRABLE: "repairable",
-  PARKED: "parked",
+  READY_NOW: 'ready_now',
+  NEEDS_ATTENTION: 'needs_attention',
+  REPAIRABLE: 'repairable',
+  PARKED: 'parked',
 } as const;
 export type QueueLane = (typeof QueueLane)[keyof typeof QueueLane];
 
@@ -148,12 +143,8 @@ export type QueueLane = (typeof QueueLane)[keyof typeof QueueLane];
  * today; narrowing the TS field lets the UI branch safely on lane
  * presence without allowing drift values.
  */
-export const ProviderSlotStatus = {
-  AVAILABLE: "available",
-  UNAVAILABLE: "unavailable",
-} as const;
-export type ProviderSlotStatus =
-  (typeof ProviderSlotStatus)[keyof typeof ProviderSlotStatus];
+export const ProviderSlotStatus = { AVAILABLE: 'available', UNAVAILABLE: 'unavailable' } as const;
+export type ProviderSlotStatus = (typeof ProviderSlotStatus)[keyof typeof ProviderSlotStatus];
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -177,14 +168,14 @@ export type ProviderSlotStatus =
  * the bug codex flagged on #6361 revision 1.
  */
 export const REVIEW_BRIEF_ADVISORY_NOTE =
-  "This brief is advisory only. It does not approve or block merge. Human settlement required.";
+  'This brief is advisory only. It does not approve or block merge. Human settlement required.';
 
 export const REVIEW_PACKET_ADVISORY_NOTE =
-  "This packet is advisory only. It does not approve or block merge. Human settlement required.";
+  'This packet is advisory only. It does not approve or block merge. Human settlement required.';
 
 export const BRIEF_RECEIPT_ADVISORY_NOTE =
-  "This receipt records an advisory brief. It does not approve or block merge. " +
-  "Human settlement required.";
+  'This receipt records an advisory brief. It does not approve or block merge. ' +
+  'Human settlement required.';
 
 // ---------------------------------------------------------------------------
 // Brief + debate shapes (mirror aragora/review/protocol.py)
@@ -615,9 +606,7 @@ export interface SettlementDeferRequest extends SettlementActionRequestBase {
 }
 
 export type SettlementActionRequest =
-  | SettlementApproveRequest
-  | SettlementRequestChangesRequest
-  | SettlementDeferRequest;
+  SettlementApproveRequest | SettlementRequestChangesRequest | SettlementDeferRequest;
 
 /**
  * Response payload for a settlement action.

@@ -116,7 +116,7 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
         });
       }
     },
-    [onSync]
+    [onSync],
   );
 
   if (error) {
@@ -163,9 +163,7 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
           <div className="p-6 text-center text-gray-500">
             No federated regions configured
             {isAdmin && (
-              <p className="text-sm mt-2">
-                Add a region to sync knowledge across deployments
-              </p>
+              <p className="text-sm mt-2">Add a region to sync knowledge across deployments</p>
             )}
           </div>
         ) : (
@@ -191,18 +189,14 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{modeIcons[region.mode]}</span>
-                        <h4 className="text-sm font-medium text-gray-900">
-                          {region.name}
-                        </h4>
+                        <h4 className="text-sm font-medium text-gray-900">{region.name}</h4>
                         {!region.enabled && (
                           <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-500 rounded">
                             Disabled
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 truncate">
-                        {region.endpointUrl}
-                      </p>
+                      <p className="text-xs text-gray-500 truncate">{region.endpointUrl}</p>
                     </div>
 
                     {/* Last sync */}
@@ -211,9 +205,7 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
                         {formatTimeAgo(region.lastSyncAt)}
                       </div>
                       {region.nodesSynced !== undefined && (
-                        <div className="text-xs text-gray-400">
-                          {region.nodesSynced} nodes
-                        </div>
+                        <div className="text-xs text-gray-400">{region.nodesSynced} nodes</div>
                       )}
                     </div>
 
@@ -257,9 +249,7 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
                         </div>
                         <div>
                           <span className="text-gray-500">Last sync:</span>{' '}
-                          <span className="font-medium">
-                            {formatDate(region.lastSyncAt)}
-                          </span>
+                          <span className="font-medium">{formatDate(region.lastSyncAt)}</span>
                         </div>
                         {region.pendingSync !== undefined && (
                           <div>
@@ -274,8 +264,7 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
                         <div className="flex items-center gap-2 pt-2">
                           {onSync && region.enabled && (
                             <>
-                              {(region.mode === 'push' ||
-                                region.mode === 'bidirectional') && (
+                              {(region.mode === 'push' || region.mode === 'bidirectional') && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -291,16 +280,11 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
                                     }
                                   `}
                                 >
-                                  {isSyncing ? (
-                                    <span className="animate-spin">⏳</span>
-                                  ) : (
-                                    '⬆️'
-                                  )}
+                                  {isSyncing ? <span className="animate-spin">⏳</span> : '⬆️'}
                                   Push
                                 </button>
                               )}
-                              {(region.mode === 'pull' ||
-                                region.mode === 'bidirectional') && (
+                              {(region.mode === 'pull' || region.mode === 'bidirectional') && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -316,11 +300,7 @@ export const FederationStatus: React.FC<FederationStatusProps> = ({
                                     }
                                   `}
                                 >
-                                  {isSyncing ? (
-                                    <span className="animate-spin">⏳</span>
-                                  ) : (
-                                    '⬇️'
-                                  )}
+                                  {isSyncing ? <span className="animate-spin">⏳</span> : '⬇️'}
                                   Pull
                                 </button>
                               )}

@@ -73,13 +73,7 @@ export interface GauntletVerdict {
   confidence: number;
   riskScore: number;
   robustnessScore: number;
-  findings: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    total: number;
-  };
+  findings: { critical: number; high: number; medium: number; low: number; total: number };
 }
 
 export type GauntletConnectionStatus = 'connecting' | 'streaming' | 'complete' | 'error';
@@ -95,7 +89,7 @@ interface UseGauntletWebSocketReturn {
   status: GauntletConnectionStatus;
   error: string | null;
   isConnected: boolean;
-  reconnectAttempt: number;  // Expose for UI feedback
+  reconnectAttempt: number; // Expose for UI feedback
 
   // Gauntlet data
   inputType: string;
@@ -155,191 +149,198 @@ export function useGauntletWebSocket({
 
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 30s)
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), MAX_RECONNECT_DELAY_MS);
-    logger.debug(`[Gauntlet WebSocket] Scheduling reconnect attempt ${reconnectAttempt + 1} in ${delay}ms`);
+    logger.debug(
+      `[Gauntlet WebSocket] Scheduling reconnect attempt ${reconnectAttempt + 1} in ${delay}ms`,
+    );
 
     clearReconnectTimeout();
     reconnectTimeoutRef.current = setTimeout(() => {
       if (!isUnmountedRef.current) {
-        setReconnectAttempt(prev => prev + 1);
+        setReconnectAttempt((prev) => prev + 1);
         // Reconnection will be triggered by the useEffect dependency on reconnectAttempt
       }
     }, delay);
   }, [reconnectAttempt, clearReconnectTimeout]);
 
-  const toGauntletFinding = useCallback((payload: Record<string, unknown>): GauntletFinding | null => {
-    const findingId = typeof payload.finding_id === 'string' ? payload.finding_id : null;
-    const severity = typeof payload.severity === 'string' ? payload.severity.toUpperCase() : null;
-    const category = typeof payload.category === 'string' ? payload.category : null;
-    const title = typeof payload.title === 'string' ? payload.title : null;
-    const description = typeof payload.description === 'string' ? payload.description : null;
-    const source = typeof payload.source === 'string' ? payload.source : null;
+  const toGauntletFinding = useCallback(
+    (payload: Record<string, unknown>): GauntletFinding | null => {
+      const findingId = typeof payload.finding_id === 'string' ? payload.finding_id : null;
+      const severity = typeof payload.severity === 'string' ? payload.severity.toUpperCase() : null;
+      const category = typeof payload.category === 'string' ? payload.category : null;
+      const title = typeof payload.title === 'string' ? payload.title : null;
+      const description = typeof payload.description === 'string' ? payload.description : null;
+      const source = typeof payload.source === 'string' ? payload.source : null;
 
-    if (
-      !findingId ||
-      !severity ||
-      !category ||
-      !title ||
-      !description ||
-      !source ||
-      !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(severity)
-    ) {
-      return null;
-    }
-
-    return {
-      finding_id: findingId,
-      severity: severity as GauntletFinding['severity'],
-      category,
-      title,
-      description,
-      source,
-    };
-  }, []);
-
-  const handleEvent = useCallback((event: GauntletEvent) => {
-    if (!event.type.startsWith('gauntlet_')) {
-      return;
-    }
-
-    const eventGauntletId =
-      event.loop_id || (event.data as { gauntlet_id?: string }).gauntlet_id;
-
-    if (eventGauntletId && eventGauntletId !== gauntletId) {
-      return;
-    }
-
-    // Add to events list
-    setEvents(prev => [...prev, event]);
-
-    switch (event.type) {
-      case 'gauntlet_start': {
-        const data = event.data as {
-          input_type: string;
-          input_summary: string;
-          agents: string[];
-        };
-        setInputType(data.input_type);
-        setInputSummary(data.input_summary);
-
-        // Initialize agents
-        const newAgents = new Map<string, GauntletAgent>();
-        data.agents.forEach(name => {
-          newAgents.set(name, {
-            name,
-            role: 'analyst',
-            status: 'idle',
-            attackCount: 0,
-            probeCount: 0,
-          });
-        });
-        setAgents(newAgents);
-        break;
+      if (
+        !findingId ||
+        !severity ||
+        !category ||
+        !title ||
+        !description ||
+        !source ||
+        !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(severity)
+      ) {
+        return null;
       }
 
-      case 'gauntlet_phase': {
-        const data = event.data as { phase: string };
-        setPhase(data.phase);
-        break;
+      return {
+        finding_id: findingId,
+        severity: severity as GauntletFinding['severity'],
+        category,
+        title,
+        description,
+        source,
+      };
+    },
+    [],
+  );
+
+  const handleEvent = useCallback(
+    (event: GauntletEvent) => {
+      if (!event.type.startsWith('gauntlet_')) {
+        return;
       }
 
-      case 'gauntlet_progress': {
-        const data = event.data as { progress: number; elapsed_seconds: number };
-        setProgress(data.progress);
-        setElapsedSeconds(data.elapsed_seconds);
-        break;
+      const eventGauntletId = event.loop_id || (event.data as { gauntlet_id?: string }).gauntlet_id;
+
+      if (eventGauntletId && eventGauntletId !== gauntletId) {
+        return;
       }
 
-      case 'gauntlet_agent_active': {
-        const data = event.data as { agent: string; role: string };
-        setAgents(prev => {
-          const updated = new Map(prev);
-          const existing = updated.get(data.agent);
-          if (existing) {
-            updated.set(data.agent, { ...existing, role: data.role, status: 'active' });
-          }
-          return updated;
-        });
-        break;
-      }
+      // Add to events list
+      setEvents((prev) => [...prev, event]);
 
-      case 'gauntlet_attack': {
-        const data = event.data as { agent: string };
-        setAgents(prev => {
-          const updated = new Map(prev);
-          const existing = updated.get(data.agent);
-          if (existing) {
-            updated.set(data.agent, { ...existing, attackCount: existing.attackCount + 1 });
-          }
-          return updated;
-        });
-        break;
-      }
-
-      case 'gauntlet_probe': {
-        const data = event.data as { agent: string };
-        setAgents(prev => {
-          const updated = new Map(prev);
-          const existing = updated.get(data.agent);
-          if (existing) {
-            updated.set(data.agent, { ...existing, probeCount: existing.probeCount + 1 });
-          }
-          return updated;
-        });
-        break;
-      }
-
-      case 'gauntlet_finding': {
-        const data = toGauntletFinding(event.data);
-        if (data) {
-          setFindings(prev => [...prev, data]);
-        } else {
-          logger.warn('Gauntlet finding payload malformed:', event.data);
-        }
-        break;
-      }
-
-      case 'gauntlet_verdict': {
-        const data = event.data as {
-          verdict: string;
-          confidence: number;
-          risk_score: number;
-          robustness_score: number;
-          findings: {
-            critical: number;
-            high: number;
-            medium: number;
-            low: number;
-            total: number;
+      switch (event.type) {
+        case 'gauntlet_start': {
+          const data = event.data as {
+            input_type: string;
+            input_summary: string;
+            agents: string[];
           };
-        };
-        setVerdict({
-          verdict: data.verdict as GauntletVerdict['verdict'],
-          confidence: data.confidence,
-          riskScore: data.risk_score,
-          robustnessScore: data.robustness_score,
-          findings: data.findings,
-        });
-        break;
-      }
+          setInputType(data.input_type);
+          setInputSummary(data.input_summary);
 
-      case 'gauntlet_complete': {
-        setStatus('complete');
-        // Mark all agents as complete
-        setAgents(prev => {
-          const updated = new Map(prev);
-          updated.forEach((agent, name) => {
-            updated.set(name, { ...agent, status: 'complete' });
+          // Initialize agents
+          const newAgents = new Map<string, GauntletAgent>();
+          data.agents.forEach((name) => {
+            newAgents.set(name, {
+              name,
+              role: 'analyst',
+              status: 'idle',
+              attackCount: 0,
+              probeCount: 0,
+            });
           });
-          return updated;
-        });
-        // Clean up interval
-        if (elapsedIntervalRef.current) {
-          clearInterval(elapsedIntervalRef.current);
+          setAgents(newAgents);
+          break;
         }
-        break;
+
+        case 'gauntlet_phase': {
+          const data = event.data as { phase: string };
+          setPhase(data.phase);
+          break;
+        }
+
+        case 'gauntlet_progress': {
+          const data = event.data as { progress: number; elapsed_seconds: number };
+          setProgress(data.progress);
+          setElapsedSeconds(data.elapsed_seconds);
+          break;
+        }
+
+        case 'gauntlet_agent_active': {
+          const data = event.data as { agent: string; role: string };
+          setAgents((prev) => {
+            const updated = new Map(prev);
+            const existing = updated.get(data.agent);
+            if (existing) {
+              updated.set(data.agent, { ...existing, role: data.role, status: 'active' });
+            }
+            return updated;
+          });
+          break;
+        }
+
+        case 'gauntlet_attack': {
+          const data = event.data as { agent: string };
+          setAgents((prev) => {
+            const updated = new Map(prev);
+            const existing = updated.get(data.agent);
+            if (existing) {
+              updated.set(data.agent, { ...existing, attackCount: existing.attackCount + 1 });
+            }
+            return updated;
+          });
+          break;
+        }
+
+        case 'gauntlet_probe': {
+          const data = event.data as { agent: string };
+          setAgents((prev) => {
+            const updated = new Map(prev);
+            const existing = updated.get(data.agent);
+            if (existing) {
+              updated.set(data.agent, { ...existing, probeCount: existing.probeCount + 1 });
+            }
+            return updated;
+          });
+          break;
+        }
+
+        case 'gauntlet_finding': {
+          const data = toGauntletFinding(event.data);
+          if (data) {
+            setFindings((prev) => [...prev, data]);
+          } else {
+            logger.warn('Gauntlet finding payload malformed:', event.data);
+          }
+          break;
+        }
+
+        case 'gauntlet_verdict': {
+          const data = event.data as {
+            verdict: string;
+            confidence: number;
+            risk_score: number;
+            robustness_score: number;
+            findings: {
+              critical: number;
+              high: number;
+              medium: number;
+              low: number;
+              total: number;
+            };
+          };
+          setVerdict({
+            verdict: data.verdict as GauntletVerdict['verdict'],
+            confidence: data.confidence,
+            riskScore: data.risk_score,
+            robustnessScore: data.robustness_score,
+            findings: data.findings,
+          });
+          break;
+        }
+
+        case 'gauntlet_complete': {
+          setStatus('complete');
+          // Mark all agents as complete
+          setAgents((prev) => {
+            const updated = new Map(prev);
+            updated.forEach((agent, name) => {
+              updated.set(name, { ...agent, status: 'complete' });
+            });
+            return updated;
+          });
+          // Clean up interval
+          if (elapsedIntervalRef.current) {
+            clearInterval(elapsedIntervalRef.current);
+          }
+          break;
+        }
       }
-    }
-  }, [gauntletId, toGauntletFinding]);
+    },
+    [gauntletId, toGauntletFinding],
+  );
 
   const connect = useCallback(() => {
     if (!enabled || !gauntletId) return;

@@ -15,16 +15,19 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from aragora.server.versioning.compat import strip_version_prefix
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 try:
     from aragora.rbac.decorators import require_permission
 except ImportError:  # pragma: no cover
 
-    def require_permission(*_a, **_kw):  # type: ignore[misc]
-        def _noop(fn):  # type: ignore[no-untyped-def]
+    def require_permission(*_a: Any, **_kw: Any) -> Callable[[_F], _F]:  # type: ignore[misc]
+        def _noop(fn: _F) -> _F:
             return fn
 
         return _noop

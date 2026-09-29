@@ -59,9 +59,7 @@ function BillingSuccessContent() {
       ) : (
         <>
           <div className="text-4xl mb-4 text-warning">⚠</div>
-          <h1 className="text-xl font-theme-data text-warning mb-2">
-            SOMETHING WENT WRONG
-          </h1>
+          <h1 className="text-xl font-theme-data text-warning mb-2">SOMETHING WENT WRONG</h1>
           <p className="text-sm font-theme-data text-text-muted mb-6">
             There was an issue processing your payment. Please contact support.
           </p>
@@ -81,9 +79,7 @@ function BillingSuccessLoading() {
   return (
     <div className="max-w-md w-full border border-[var(--accent)]/30 bg-surface/30 p-8 text-center">
       <div className="text-4xl mb-4 animate-pulse">⟳</div>
-      <h1 className="text-xl font-theme-data text-[var(--acid-cyan)] mb-2">
-        LOADING...
-      </h1>
+      <h1 className="text-xl font-theme-data text-[var(--acid-cyan)] mb-2">LOADING...</h1>
     </div>
   );
 }
@@ -115,7 +111,10 @@ export default function BillingSuccessPage() {
         <footer className="text-center text-xs font-theme-data py-4 border-t border-[var(--accent)]/20">
           <p className="text-text-muted">
             Questions? Contact{' '}
-            <a href="mailto:support@aragora.ai" className="text-[var(--acid-cyan)] hover:text-[var(--accent)]">
+            <a
+              href="mailto:support@aragora.ai"
+              className="text-[var(--acid-cyan)] hover:text-[var(--accent)]"
+            >
               support@aragora.ai
             </a>
           </p>

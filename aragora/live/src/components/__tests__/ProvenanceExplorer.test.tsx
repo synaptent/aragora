@@ -2,7 +2,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 // Mock @xyflow/react
 jest.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children, nodes, edges }: { children?: React.ReactNode; nodes: unknown[]; edges: unknown[] }) => (
+  ReactFlow: ({
+    children,
+    nodes,
+    edges,
+  }: {
+    children?: React.ReactNode;
+    nodes: unknown[];
+    edges: unknown[];
+  }) => (
     <div data-testid="react-flow" data-node-count={nodes.length} data-edge-count={edges.length}>
       {children}
     </div>
@@ -16,9 +24,7 @@ jest.mock('@xyflow/react', () => ({
 
 // Mock apiFetch
 const mockApiFetch = jest.fn();
-jest.mock('@/lib/api', () => ({
-  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
-}));
+jest.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => mockApiFetch(...args) }));
 
 import { ProvenanceExplorer } from '../ProvenanceExplorer';
 
@@ -135,9 +141,7 @@ describe('ProvenanceExplorer', () => {
     render(<ProvenanceExplorer graphId="my-graph-42" />);
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledWith(
-        '/api/v1/pipeline/graph/my-graph-42/react-flow'
-      );
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/v1/pipeline/graph/my-graph-42/react-flow');
     });
   });
 
@@ -146,23 +150,14 @@ describe('ProvenanceExplorer', () => {
     mockApiFetch
       .mockRejectedValueOnce(new Error('Not found'))
       .mockResolvedValueOnce({
-        nodes: [
-          {
-            id: 'n1',
-            type: 'debate',
-            label: 'Test',
-            hash: 'abc123',
-          },
-        ],
+        nodes: [{ id: 'n1', type: 'debate', label: 'Test', hash: 'abc123' }],
         edges: [],
       });
 
     render(<ProvenanceExplorer graphId="g1" nodeId="n1" />);
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledWith(
-        '/api/v1/pipeline/graph/g1/provenance/n1'
-      );
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/v1/pipeline/graph/g1/provenance/n1');
     });
   });
 
