@@ -13,6 +13,93 @@ Kubernetes 1.29 client libraries. It reconciles three custom resources in the
 The CRDs are generated into `config/crd/bases/` (`make manifests`) and copied
 into the Helm chart's `crds/` directory.
 
+## Run
+
+The operator is one binary. `go run ./main.go --help` lists every flag. The
+main ones:
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--metrics-bind-address` | `:8080` | Prometheus `/metrics` endpoint |
+| `--health-probe-bind-address` | `:8081` | `/healthz` and `/readyz` probe endpoint |
+| `--pprof-addr` | empty (off) | `net/http/pprof` endpoint under `/debug/pprof/`. Starts before the kubeconfig is loaded |
+| `--leader-elect` | `false` | Leader election, for running more than one replica |
+| `--aragora-api-endpoint` | `https://aragora-control-plane:8443` | Aragora control-plane API |
+| `--aragora-api-token` | empty | Bearer token for that API |
+| `--allow-insecure-control-plane` | `false` | Allow an `http://` control-plane endpoint |
+| `--kubeconfig-wait` | `30s` | How long to keep retrying when no kubeconfig or in-cluster config loads. `0` exits on the first failure |
+| `--kubeconfig` | none | Kubeconfig path (otherwise `KUBECONFIG`, the in-cluster config, then `~/.kube/config`) |
+
+Both `-flag` and `--flag` spellings work. Bind to `127.0.0.1` when running
+locally so nothing listens on every interface:
+
+```bash
+go run ./main.go --metrics-bind-address=127.0.0.1:3143 --health-probe-bind-address=127.0.0.1:3144 --pprof-addr=127.0.0.1:3145
+```
+
+With a reachable cluster this starts all three controllers. Without one (no
+`KUBECONFIG`, no `~/.kube/config`, not in a pod), the pprof endpoint still
+answers on `http://127.0.0.1:3145/debug/pprof/` while the operator retries the
+kubeconfig for `--kubeconfig-wait`; then the process exits with status 1. The
+metrics and probe endpoints only start once the manager has a cluster.
+
+The Aragora control-plane API client retries connection errors, `429`, and
+`5xx` answers (except `501`) up to 3 times with 0.5 to 5 s exponential backoff,
+honouring `Retry-After`. Each attempt times out after 30 s. After 5 consecutive
+failed calls to one endpoint a circuit breaker opens and calls fail at once
+without reaching the API; after 30 s it lets one trial call through and closes
+again if that call succeeds.
+
+## Configuration
+
+Telemetry is off unless its environment variable is set. The operator logs
+one line at startup for each, saying whether it is enabled.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset (tracing off) | OTLP/HTTP collector base URL, for example `http://localhost:4318`. Spans go to `<endpoint>/v1/traces`. The other standard `OTEL_EXPORTER_OTLP_*` variables (headers, timeout, `..._TRACES_ENDPOINT`) apply too |
+| `SENTRY_DSN` | unset (Sentry off) | Sentry project DSN |
+| `SENTRY_ENVIRONMENT` | `development` | Sentry environment tag. Only read when `SENTRY_DSN` is set |
+
+The service name is always `aragora-operator`. The version reported to Sentry
+(`aragora-operator@<version>`) and on spans (`service.version`) is `dev` unless
+the binary is built with:
+
+```bash
+go build -ldflags "-X github.com/synaptent/aragora-operator/internal/observability.version=v1.2.3" -o bin/manager main.go
+```
+
+## Observability
+
+- **Metrics.** `/metrics` on `--metrics-bind-address` serves the
+  controller-runtime metrics (`controller_runtime_reconcile_total`,
+  `workqueue_depth`, `leader_election_master_status`, ...) and the operator's
+  own `aragora_operator_*` metrics. `/healthz` and `/readyz` are on
+  `--health-probe-bind-address`.
+- **Profiling.** Set `--pprof-addr` and use the standard endpoints, for
+  example `go tool pprof http://127.0.0.1:3145/debug/pprof/heap` or
+  `curl 'http://127.0.0.1:3145/debug/pprof/goroutine?debug=1'`. Keep it on a
+  loopback or cluster-internal address; it exposes the command line and
+  process internals.
+- **Tracing.** With `OTEL_EXPORTER_OTLP_ENDPOINT` set, every request to the
+  Aragora control-plane API is a client span (via `otelhttp`) carrying W3C
+  `traceparent` headers, batched to the collector over OTLP/HTTP. Pending
+  spans are flushed when the operator exits. To send one span to a local
+  collector listening on 4318 (for example the mission's
+  `otel/opentelemetry-collector-contrib` container with a `debug` exporter),
+  run from this directory:
+
+  ```bash
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 go test ./internal/observability/ -run TestOTelExporterOnlyWithEndpoint -count=1 -v
+  ```
+
+  The collector then logs a span with `service.name: Str(aragora-operator)`.
+  Without the variable the same test sends its span to an in-process receiver
+  instead, and nothing leaves the machine.
+- **Errors.** With `SENTRY_DSN` set, a fatal startup or manager error is sent
+  to Sentry, tagged with the release and environment above, and flushed before
+  the process exits.
+
 ## Test
 
 There are two kinds of tests.

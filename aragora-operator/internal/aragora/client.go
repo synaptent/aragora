@@ -23,29 +23,54 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	aragorav1alpha1 "github.com/synaptent/aragora-operator/api/v1alpha1"
+	"github.com/synaptent/aragora-operator/internal/httpclient"
+	"github.com/synaptent/aragora-operator/internal/observability"
 )
 
 // Client is the Aragora control plane API client
 type Client struct {
-	endpoint   string
-	token      string
-	httpClient *http.Client
+	endpoint string
+	token    string
+	http     *httpclient.Client
 }
 
-// NewClient creates a new Aragora API client
+// NewClient creates a new Aragora API client. Requests are retried with
+// backoff and pass through a circuit breaker shared by every Client for the
+// same endpoint, and they are traced when OpenTelemetry is enabled.
 func NewClient(endpoint, token string) *Client {
-	return &Client{
-		endpoint: endpoint,
-		token:    token,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+	return newClient(endpoint, token, sharedHTTPClient(endpoint))
+}
+
+func newClient(endpoint, token string, hc *httpclient.Client) *Client {
+	return &Client{endpoint: endpoint, token: token, http: hc}
+}
+
+// The reconcilers build a Client for every call, so the HTTP client (and its
+// breaker state) lives here, one per endpoint, for the life of the process.
+var (
+	sharedHTTPClientsMu sync.Mutex
+	sharedHTTPClients   = map[string]*httpclient.Client{}
+)
+
+func sharedHTTPClient(endpoint string) *httpclient.Client {
+	sharedHTTPClientsMu.Lock()
+	defer sharedHTTPClientsMu.Unlock()
+	if hc, ok := sharedHTTPClients[endpoint]; ok {
+		return hc
 	}
+	cfg := httpclient.DefaultConfig("aragora-api " + endpoint)
+	cfg.Transport = observability.WrapTransport(nil)
+	cfg.Logger = logf.Log.WithName("aragora-client")
+	hc := httpclient.New(cfg)
+	sharedHTTPClients[endpoint] = hc
+	return hc
 }
 
 // Policy represents an Aragora policy in API format
@@ -347,7 +372,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body []byte
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
-	return c.httpClient.Do(req)
+	return c.http.Do(req)
 }
 
 // closeBody closes a response body from a deferred call. A close error cannot
