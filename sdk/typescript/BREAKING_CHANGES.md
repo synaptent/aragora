@@ -6,6 +6,19 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-09-27)
+
+#### Breaking Changes
+
+Stale-path cleanup removes two methods whose routes the server does not serve.
+Python removes the same two methods from both synchronous and asynchronous
+clients; no server routes are removed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `ModesAPI.getMode` | `GET /api/v1/modes/{mode_name}` | No replacement |
+| `SpectateAPI.connectSSE` | `GET /api/v1/spectate/{debate_id}/stream` | No replacement |
+
 ### Unreleased (2026-09-21)
 
 #### Breaking Changes
