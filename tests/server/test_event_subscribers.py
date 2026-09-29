@@ -36,6 +36,8 @@ from aragora.server.event_subscribers import (
     get_server_event_subscriber,
     register,
 )
+from aragora.storage import webhook_config_store
+from aragora.storage.webhook_config_store import SQLiteWebhookConfigStore
 
 
 def make_stream_event(event_type: StreamEventType, data: dict | None = None) -> StreamEvent:
@@ -51,6 +53,21 @@ def _clean_registry_and_manager():
     yield
     reset_registry()
     reset_cross_subscriber_manager()
+
+
+@pytest.fixture(autouse=True)
+def isolated_webhook_store(tmp_path, monkeypatch):
+    """Give each test its own webhook config store.
+
+    Webhook delivery reads the process-wide store, which otherwise opens
+    ``webhook_configs.db`` in the shared data dir; a concurrent writer there
+    fails these tests with ``sqlite3.OperationalError: database is locked``.
+    ``monkeypatch`` restores the previous store without closing it.
+    """
+    store = SQLiteWebhookConfigStore(tmp_path / "webhook_configs.db")
+    monkeypatch.setattr(webhook_config_store, "_webhook_config_store", store)
+    yield store
+    store.close()
 
 
 class TestServerEventSubscriberHandlers:
@@ -131,7 +148,10 @@ class TestServerEventSubscriberHandlers:
             StreamEventType.MEMORY_STORED,
             data={"content": "test"},
         )
-        subscriber._handle_webhook_delivery(event)
+        with patch("aragora.events.dispatcher.dispatch_webhook_with_retry") as mock_dispatch:
+            subscriber._handle_webhook_delivery(event)
+        # The isolated store is empty, so nothing is delivered.
+        mock_dispatch.assert_not_called()
 
     def test_webhook_delivery_dispatches_to_matching_webhooks(self):
         subscriber = ServerEventSubscriber()

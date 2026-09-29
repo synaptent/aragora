@@ -60,6 +60,7 @@ jobs:
         run: |
           VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -94,16 +95,22 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push == 'true' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Served by /health/build, so a deployment can be traced to its commit.
+          build-args: |
+            ARAGORA_BUILD_SHA=${{ github.sha }}
+            ARAGORA_BUILD_TIME=${{ steps.version.outputs.build_time }}
+            ARAGORA_DEPLOY_VERSION=${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
       - name: Test backend image
         run: |
-          docker build -f deploy/Dockerfile.backend -t test-backend:latest .
+          docker build -f deploy/Dockerfile.backend --build-arg ARAGORA_BUILD_SHA=${{ github.sha }} -t test-backend:latest .
           docker image inspect test-backend:latest --format '{{.Architecture}}'
           docker run --rm test-backend:latest python -c "import pydantic, psycopg2, aragora.config; print('ok')"
           docker run --rm test-backend:latest python -c "import asyncpg, redis, prometheus_client; print('ok2')"
+          docker run --rm -e EXPECTED_SHA=${{ github.sha }} test-backend:latest python -c "import os; from aragora.server.build_info import get_build_info; sha = get_build_info()['sha']; assert sha == os.environ['EXPECTED_SHA'], sha; print('build sha', sha)"
 
       - name: Run Trivy vulnerability scanner (backend)
         uses: aquasecurity/trivy-action@0.35.0
