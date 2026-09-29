@@ -165,6 +165,13 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
+.PHONY: setup
+setup: controller-gen envtest golangci-lint ## Download Go modules, install the pinned tools and the envtest Kubernetes binaries into bin/.
+	go mod download
+	@assets="$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" || exit 1; \
+	echo "Tools are in $(LOCALBIN). For the controller tests run:"; \
+	echo "  export KUBEBUILDER_ASSETS=$$assets"
+
 # go-install-tool will 'go install' any package with custom target and target@version support.
 # An existing binary at the target path is reused as-is; delete it to pick up a new pin.
 define go-install-tool
