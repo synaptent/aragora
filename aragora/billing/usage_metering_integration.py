@@ -28,7 +28,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from aragora.core import Agent
@@ -96,7 +96,8 @@ async def record_debate_tokens(
 
         if agent_input > 0 or agent_output > 0:
             # Get provider and model info
-            provider = getattr(agent, "provider", None) or getattr(agent, "agent_type", "unknown")
+            provider_id = getattr(agent, "provider", None) or getattr(agent, "agent_type", None)
+            provider = str(provider_id) if provider_id else "unknown"
             model = getattr(agent, "model", "unknown")
             agent_name = getattr(agent, "name", str(agent))
 
@@ -106,7 +107,7 @@ async def record_debate_tokens(
                     input_tokens=agent_input,
                     output_tokens=agent_output,
                     model=model,
-                    provider=cast(str, provider),
+                    provider=provider,
                     user_id=user_id,
                     debate_id=debate_id,
                     metadata={

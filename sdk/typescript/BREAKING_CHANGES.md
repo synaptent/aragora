@@ -26,6 +26,19 @@ re-exported from `src/namespaces/index.ts`, is deleted with it.
 | `apAutomation.addAPInvoice` | `POST /api/v1/ap/invoices` | No replacement: `apAutomation.addInvoice()` calls `POST /api/v1/accounting/ap/invoices`, which answers `handler_no_result` too |
 | `policies.resolveViolation` | `POST /api/policies/violations/{id}/resolve` | No typed TypeScript call. Send `{ "status": "resolved", "resolution_notes": "..." }` with `PATCH /api/v1/compliance/violations/{id}` (Python: `policies.update_violation(violation_id, "resolved")`). `compliance.updateViolation()` sends `PUT`, which that route does not dispatch |
 
+### Unreleased (2026-09-27)
+
+#### Breaking Changes
+
+Stale-path cleanup removes two methods whose routes the server does not serve.
+Python removes the same two methods from both synchronous and asynchronous
+clients; no server routes are removed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `ModesAPI.getMode` | `GET /api/v1/modes/{mode_name}` | No replacement |
+| `SpectateAPI.connectSSE` | `GET /api/v1/spectate/{debate_id}/stream` | No replacement |
+
 ### Unreleased (2026-09-21)
 
 #### Breaking Changes
