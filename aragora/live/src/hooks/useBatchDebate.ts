@@ -145,106 +145,113 @@ export function useBatchDebate() {
   // Submit Batch
   // ---------------------------------------------------------------------------
 
-  const submitBatch = useCallback(async (request: BatchSubmitRequest): Promise<BatchSubmitResponse | null> => {
-    if (!isAuthenticated && !authLoading) {
-      setState(s => ({ ...s, submitError: 'Authentication required' }));
-      return null;
-    }
-
-    setState(s => ({ ...s, submitting: true, submitError: null }));
-
-    try {
-      const response = await fetch(`${API_BASE}/api/debates/batch`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        const errorMsg = data.error || data.message || `HTTP ${response.status}`;
-        setState(s => ({ ...s, submitting: false, submitError: errorMsg }));
+  const submitBatch = useCallback(
+    async (request: BatchSubmitRequest): Promise<BatchSubmitResponse | null> => {
+      if (!isAuthenticated && !authLoading) {
+        setState((s) => ({ ...s, submitError: 'Authentication required' }));
         return null;
       }
 
-      const data: BatchSubmitResponse = await response.json();
-      setState(s => ({
-        ...s,
-        submitting: false,
-        submitError: null,
-        lastSubmittedBatchId: data.batch_id,
-      }));
-      return data;
+      setState((s) => ({ ...s, submitting: true, submitError: null }));
 
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to submit batch';
-      setState(s => ({ ...s, submitting: false, submitError: errorMsg }));
-      return null;
-    }
-  }, [isAuthenticated, authLoading, getAuthHeaders]);
+      try {
+        const response = await fetch(`${API_BASE}/api/debates/batch`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          const errorMsg = data.error || data.message || `HTTP ${response.status}`;
+          setState((s) => ({ ...s, submitting: false, submitError: errorMsg }));
+          return null;
+        }
+
+        const data: BatchSubmitResponse = await response.json();
+        setState((s) => ({
+          ...s,
+          submitting: false,
+          submitError: null,
+          lastSubmittedBatchId: data.batch_id,
+        }));
+        return data;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to submit batch';
+        setState((s) => ({ ...s, submitting: false, submitError: errorMsg }));
+        return null;
+      }
+    },
+    [isAuthenticated, authLoading, getAuthHeaders],
+  );
 
   // ---------------------------------------------------------------------------
   // Get Batch Status
   // ---------------------------------------------------------------------------
 
-  const getBatchStatus = useCallback(async (batchId: string): Promise<BatchStatus | null> => {
-    setState(s => ({ ...s, batchLoading: true, batchError: null }));
+  const getBatchStatus = useCallback(
+    async (batchId: string): Promise<BatchStatus | null> => {
+      setState((s) => ({ ...s, batchLoading: true, batchError: null }));
 
-    try {
-      const response = await fetch(`${API_BASE}/api/debates/batch/${batchId}/status`, {
-        headers: getAuthHeaders(),
-      });
+      try {
+        const response = await fetch(`${API_BASE}/api/debates/batch/${batchId}/status`, {
+          headers: getAuthHeaders(),
+        });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          setState(s => ({ ...s, batchLoading: false, batchError: 'Batch not found' }));
-          return null;
+        if (!response.ok) {
+          if (response.status === 404) {
+            setState((s) => ({ ...s, batchLoading: false, batchError: 'Batch not found' }));
+            return null;
+          }
+          throw new Error(`HTTP ${response.status}`);
         }
-        throw new Error(`HTTP ${response.status}`);
+
+        const data: BatchStatus = await response.json();
+        setState((s) => ({ ...s, batchLoading: false, batchError: null, currentBatch: data }));
+        return data;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to fetch batch status';
+        setState((s) => ({ ...s, batchLoading: false, batchError: errorMsg }));
+        return null;
       }
-
-      const data: BatchStatus = await response.json();
-      setState(s => ({
-        ...s,
-        batchLoading: false,
-        batchError: null,
-        currentBatch: data,
-      }));
-      return data;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to fetch batch status';
-      setState(s => ({ ...s, batchLoading: false, batchError: errorMsg }));
-      return null;
-    }
-  }, [getAuthHeaders]);
+    },
+    [getAuthHeaders],
+  );
 
   // ---------------------------------------------------------------------------
   // Poll Batch Status
   // ---------------------------------------------------------------------------
 
-  const pollBatchStatus = useCallback((batchId: string, intervalMs: number = 5000) => {
-    // Clear any existing polling
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-
-    // Immediate fetch
-    getBatchStatus(batchId);
-
-    // Start polling
-    pollingRef.current = setInterval(async () => {
-      const status = await getBatchStatus(batchId);
-
-      // Stop polling if batch is complete or failed
-      if (status && (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled')) {
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
+  const pollBatchStatus = useCallback(
+    (batchId: string, intervalMs: number = 5000) => {
+      // Clear any existing polling
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
       }
-    }, intervalMs);
-  }, [getBatchStatus]);
+
+      // Immediate fetch
+      getBatchStatus(batchId);
+
+      // Start polling
+      pollingRef.current = setInterval(async () => {
+        const status = await getBatchStatus(batchId);
+
+        // Stop polling if batch is complete or failed
+        if (
+          status &&
+          (status.status === 'completed' ||
+            status.status === 'failed' ||
+            status.status === 'cancelled')
+        ) {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        }
+      }, intervalMs);
+    },
+    [getBatchStatus],
+  );
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -257,49 +264,43 @@ export function useBatchDebate() {
   // List Batches
   // ---------------------------------------------------------------------------
 
-  const listBatches = useCallback(async (
-    limit: number = 50,
-    statusFilter?: BatchStatusValue
-  ): Promise<BatchListItem[]> => {
-    setState(s => ({ ...s, batchesLoading: true, batchesError: null }));
+  const listBatches = useCallback(
+    async (limit: number = 50, statusFilter?: BatchStatusValue): Promise<BatchListItem[]> => {
+      setState((s) => ({ ...s, batchesLoading: true, batchesError: null }));
 
-    try {
-      const params = new URLSearchParams({ limit: String(limit) });
-      if (statusFilter) {
-        params.set('status', statusFilter);
+      try {
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (statusFilter) {
+          params.set('status', statusFilter);
+        }
+
+        const response = await fetch(`${API_BASE}/api/debates/batch?${params}`, {
+          headers: getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const batches = data.batches || [];
+        setState((s) => ({ ...s, batchesLoading: false, batchesError: null, batches }));
+        return batches;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to list batches';
+        setState((s) => ({ ...s, batchesLoading: false, batchesError: errorMsg }));
+        return [];
       }
-
-      const response = await fetch(`${API_BASE}/api/debates/batch?${params}`, {
-        headers: getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const batches = data.batches || [];
-      setState(s => ({
-        ...s,
-        batchesLoading: false,
-        batchesError: null,
-        batches,
-      }));
-      return batches;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to list batches';
-      setState(s => ({ ...s, batchesLoading: false, batchesError: errorMsg }));
-      return [];
-    }
-  }, [getAuthHeaders]);
+    },
+    [getAuthHeaders],
+  );
 
   // ---------------------------------------------------------------------------
   // Get Queue Status
   // ---------------------------------------------------------------------------
 
   const getQueueStatus = useCallback(async (): Promise<QueueStatus | null> => {
-    setState(s => ({ ...s, queueLoading: true }));
+    setState((s) => ({ ...s, queueLoading: true }));
 
     try {
       const response = await fetch(`${API_BASE}/api/debates/batch/queue`, {
@@ -311,15 +312,10 @@ export function useBatchDebate() {
       }
 
       const data: QueueStatus = await response.json();
-      setState(s => ({
-        ...s,
-        queueLoading: false,
-        queueStatus: data,
-      }));
+      setState((s) => ({ ...s, queueLoading: false, queueStatus: data }));
       return data;
-
     } catch {
-      setState(s => ({ ...s, queueLoading: false }));
+      setState((s) => ({ ...s, queueLoading: false }));
       return null;
     }
   }, [getAuthHeaders]);
@@ -330,15 +326,11 @@ export function useBatchDebate() {
 
   const clearBatch = useCallback(() => {
     stopPolling();
-    setState(s => ({
-      ...s,
-      currentBatch: null,
-      batchError: null,
-    }));
+    setState((s) => ({ ...s, currentBatch: null, batchError: null }));
   }, [stopPolling]);
 
   const clearSubmitError = useCallback(() => {
-    setState(s => ({ ...s, submitError: null }));
+    setState((s) => ({ ...s, submitError: null }));
   }, []);
 
   // ---------------------------------------------------------------------------

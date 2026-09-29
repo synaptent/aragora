@@ -17,18 +17,8 @@ interface RLMMetrics {
     avgDuration: number;
     successRate: number;
   };
-  cache: {
-    hits: number;
-    misses: number;
-    hitRate: number;
-    memoryBytes: number;
-    maxMemory: number;
-  };
-  refinement: {
-    avgIterations: number;
-    successRate: number;
-    readyFalseTotal: number;
-  };
+  cache: { hits: number; misses: number; hitRate: number; memoryBytes: number; maxMemory: number };
+  refinement: { avgIterations: number; successRate: number; readyFalseTotal: number };
 }
 
 interface RLMStatus {
@@ -71,17 +61,15 @@ function MetricCard({
         {title}
       </div>
       <div className="flex items-baseline gap-1">
-        <span className={`font-theme-data text-2xl ${trend ? trendColors[trend] : 'text-[var(--accent)]'}`}>
+        <span
+          className={`font-theme-data text-2xl ${trend ? trendColors[trend] : 'text-[var(--accent)]'}`}
+        >
           {value}
         </span>
-        {unit && (
-          <span className="text-text-muted font-theme-data text-xs">{unit}</span>
-        )}
+        {unit && <span className="text-text-muted font-theme-data text-xs">{unit}</span>}
       </div>
       {subtext && (
-        <div className="text-text-muted/50 font-theme-data text-[10px] mt-1">
-          {subtext}
-        </div>
+        <div className="text-text-muted/50 font-theme-data text-[10px] mt-1">{subtext}</div>
       )}
     </div>
   );
@@ -126,7 +114,9 @@ function QueryTypeChart({ data }: { data: Record<string, number> }) {
         <div key={type}>
           <div className="flex justify-between text-[10px] font-theme-data mb-1">
             <span className="text-[var(--acid-cyan)]">{type}</span>
-            <span className="text-text-muted">{count} ({((count / total) * 100).toFixed(1)}%)</span>
+            <span className="text-text-muted">
+              {count} ({((count / total) * 100).toFixed(1)}%)
+            </span>
           </div>
           <div className="h-1.5 bg-surface border border-[var(--accent)]/10">
             <div
@@ -169,12 +159,8 @@ function ActiveQueriesTable({ queries }: { queries: ActiveQuery[] }) {
         <tbody>
           {queries.map((query) => (
             <tr key={query.id} className="border-t border-[var(--accent)]/10">
-              <td className="py-2 px-2 text-text max-w-[200px] truncate">
-                {query.query}
-              </td>
-              <td className="py-2 px-2 text-center text-[var(--accent)]">
-                {query.iteration}
-              </td>
+              <td className="py-2 px-2 text-text max-w-[200px] truncate">{query.query}</td>
+              <td className="py-2 px-2 text-center text-[var(--accent)]">{query.iteration}</td>
               <td className="py-2 px-2 text-center">
                 <span className={`px-2 py-0.5 ${statusColors[query.status]} text-[10px]`}>
                   {query.status.toUpperCase()}
@@ -252,11 +238,7 @@ export default function RLMDashboard() {
             memoryBytes: 134217728,
             maxMemory: 268435456,
           },
-          refinement: {
-            avgIterations: 2.3,
-            successRate: 0.91,
-            readyFalseTotal: 1243,
-          },
+          refinement: { avgIterations: 2.3, successRate: 0.91, readyFalseTotal: 1243 },
         });
       }
 
@@ -295,7 +277,10 @@ export default function RLMDashboard() {
       <header className="border-b border-[var(--accent)]/30 bg-surface/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80">
+            <Link
+              href="/"
+              className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80"
+            >
               [ARAGORA]
             </Link>
             <span className="text-[var(--accent)]/30">/</span>
@@ -327,7 +312,9 @@ export default function RLMDashboard() {
         {status && (
           <div className="mb-6 p-3 border border-[var(--accent)]/20 bg-surface/30 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <span className={`w-2 h-2 rounded-full ${status.available ? 'bg-[var(--accent)]' : 'bg-warning'}`} />
+              <span
+                className={`w-2 h-2 rounded-full ${status.available ? 'bg-[var(--accent)]' : 'bg-warning'}`}
+              />
               <span className="text-text font-theme-data text-xs">
                 RLM {status.available ? 'ONLINE' : 'OFFLINE'}
               </span>
@@ -357,7 +344,9 @@ export default function RLMDashboard() {
 
         {isLoading ? (
           <div className="text-center py-12">
-            <span className="text-[var(--accent)] font-theme-data animate-pulse">LOADING RLM METRICS...</span>
+            <span className="text-[var(--accent)] font-theme-data animate-pulse">
+              LOADING RLM METRICS...
+            </span>
           </div>
         ) : metrics ? (
           <div className="space-y-8">
@@ -436,13 +425,17 @@ export default function RLMDashboard() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <div className="text-text-muted font-theme-data text-[10px]">AVG ITERATIONS</div>
+                      <div className="text-text-muted font-theme-data text-[10px]">
+                        AVG ITERATIONS
+                      </div>
                       <div className="text-[var(--acid-cyan)] font-theme-data text-xl">
                         {metrics.refinement.avgIterations.toFixed(1)}
                       </div>
                     </div>
                     <div>
-                      <div className="text-text-muted font-theme-data text-[10px]">SUCCESS RATE</div>
+                      <div className="text-text-muted font-theme-data text-[10px]">
+                        SUCCESS RATE
+                      </div>
                       <div className="text-[var(--accent)] font-theme-data text-xl">
                         {(metrics.refinement.successRate * 100).toFixed(0)}%
                       </div>
@@ -456,7 +449,8 @@ export default function RLMDashboard() {
                   </div>
                   <div className="border-t border-[var(--accent)]/10 pt-4">
                     <div className="text-text-muted/50 font-theme-data text-[10px]">
-                      Iterative refinement with Prime Intellect alignment. Lower iterations = better initial context.
+                      Iterative refinement with Prime Intellect alignment. Lower iterations = better
+                      initial context.
                     </div>
                   </div>
                 </div>
@@ -498,8 +492,8 @@ export default function RLMDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-text-muted/60 font-theme-data text-[10px]">
                 <div className="p-4 border border-[var(--accent)]/10 bg-surface/20">
                   <div className="text-[var(--accent)] font-bold mb-2">Compression</div>
-                  Build hierarchical context representations with multiple abstraction levels
-                  (FULL, DETAILED, SUMMARY, ABSTRACT, METADATA).
+                  Build hierarchical context representations with multiple abstraction levels (FULL,
+                  DETAILED, SUMMARY, ABSTRACT, METADATA).
                 </div>
                 <div className="p-4 border border-[var(--accent)]/10 bg-surface/20">
                   <div className="text-[var(--accent)] font-bold mb-2">Queries</div>
@@ -508,8 +502,8 @@ export default function RLMDashboard() {
                 </div>
                 <div className="p-4 border border-[var(--accent)]/10 bg-surface/20">
                   <div className="text-[var(--accent)] font-bold mb-2">Refinement</div>
-                  Iterative improvement with LLM feedback loops. Continues until ready=True
-                  or max iterations reached.
+                  Iterative improvement with LLM feedback loops. Continues until ready=True or max
+                  iterations reached.
                 </div>
               </div>
             </section>

@@ -68,10 +68,7 @@ export interface DebateConsensus {
   confidence: number;
   method: 'majority' | 'unanimous' | 'synthesis' | 'weighted';
   agreeingAgents: string[];
-  dissent?: {
-    agent: string;
-    reason: string;
-  }[];
+  dissent?: { agent: string; reason: string }[];
 }
 
 export interface DebateState {
@@ -98,10 +95,7 @@ export interface ReviewComment {
   location: CodeLocation;
   severity: Severity;
   category: 'bug' | 'security' | 'performance' | 'style' | 'suggestion' | 'praise';
-  suggestedFix?: {
-    oldCode: string;
-    newCode: string;
-  };
+  suggestedFix?: { oldCode: string; newCode: string };
   isResolved?: boolean;
 }
 
@@ -174,7 +168,7 @@ export type WebviewMessage =
 // State Types
 // ============================================
 
-export interface WebviewState {
+interface WebviewState {
   debates: DebateState[];
   reviews: ReviewResult[];
   findings: SecurityFinding[];
@@ -182,7 +176,7 @@ export interface WebviewState {
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
 }
 
-export interface ExtensionSettings {
+interface ExtensionSettings {
   apiUrl: string;
   defaultAgents: string[];
   defaultRounds: number;

@@ -28,24 +28,70 @@ interface MomentsSummary {
 }
 
 const MOMENT_TYPES = [
-  { id: 'upset_victory', label: 'Upset Victory', color: 'text-warning', description: 'Underdog wins against favorite' },
-  { id: 'position_reversal', label: 'Position Reversal', color: 'text-acid-purple', description: 'Agent changes stance significantly' },
-  { id: 'calibration_vindication', label: 'Calibration Vindication', color: 'text-[var(--accent)]', description: 'Agent\'s confidence proven accurate' },
-  { id: 'alliance_shift', label: 'Alliance Shift', color: 'text-[var(--acid-cyan)]', description: 'Unexpected coalition change' },
-  { id: 'consensus_breakthrough', label: 'Consensus Breakthrough', color: 'text-[var(--accent)]', description: 'Multiple agents reach agreement' },
-  { id: 'streak_achievement', label: 'Streak Achievement', color: 'text-warning', description: 'Consecutive wins or performance' },
-  { id: 'domain_mastery', label: 'Domain Mastery', color: 'text-[var(--acid-cyan)]', description: 'Excellence in specific topic area' },
+  {
+    id: 'upset_victory',
+    label: 'Upset Victory',
+    color: 'text-warning',
+    description: 'Underdog wins against favorite',
+  },
+  {
+    id: 'position_reversal',
+    label: 'Position Reversal',
+    color: 'text-acid-purple',
+    description: 'Agent changes stance significantly',
+  },
+  {
+    id: 'calibration_vindication',
+    label: 'Calibration Vindication',
+    color: 'text-[var(--accent)]',
+    description: "Agent's confidence proven accurate",
+  },
+  {
+    id: 'alliance_shift',
+    label: 'Alliance Shift',
+    color: 'text-[var(--acid-cyan)]',
+    description: 'Unexpected coalition change',
+  },
+  {
+    id: 'consensus_breakthrough',
+    label: 'Consensus Breakthrough',
+    color: 'text-[var(--accent)]',
+    description: 'Multiple agents reach agreement',
+  },
+  {
+    id: 'streak_achievement',
+    label: 'Streak Achievement',
+    color: 'text-warning',
+    description: 'Consecutive wins or performance',
+  },
+  {
+    id: 'domain_mastery',
+    label: 'Domain Mastery',
+    color: 'text-[var(--acid-cyan)]',
+    description: 'Excellence in specific topic area',
+  },
 ];
 
 function getMomentTypeConfig(type: string) {
-  return MOMENT_TYPES.find(t => t.id === type) || { id: type, label: type, color: 'text-text', description: '' };
+  return (
+    MOMENT_TYPES.find((t) => t.id === type) || {
+      id: type,
+      label: type,
+      color: 'text-text',
+      description: '',
+    }
+  );
 }
 
 function SignificanceBadge({ score }: { score: number }) {
-  const color = score >= 0.8 ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-                score >= 0.6 ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]' :
-                score >= 0.4 ? 'bg-warning/20 text-warning' :
-                'bg-text-muted/20 text-text-muted';
+  const color =
+    score >= 0.8
+      ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+      : score >= 0.6
+        ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
+        : score >= 0.4
+          ? 'bg-warning/20 text-warning'
+          : 'bg-text-muted/20 text-text-muted';
   return (
     <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${color}`}>
       {(score * 100).toFixed(0)}%
@@ -55,7 +101,9 @@ function SignificanceBadge({ score }: { score: number }) {
 
 export default function MomentsPage() {
   const { config: backendConfig } = useBackend();
-  const [activeTab, setActiveTab] = useState<'timeline' | 'trending' | 'summary' | 'types'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'trending' | 'summary' | 'types'>(
+    'timeline',
+  );
 
   // Summary state
   const [summary, setSummary] = useState<MomentsSummary | null>(null);
@@ -96,7 +144,9 @@ export default function MomentsPage() {
   const fetchTimeline = useCallback(async () => {
     setTimelineLoading(true);
     try {
-      const res = await fetch(`${backendConfig.api}/api/moments/timeline?limit=20&offset=${timelinePage * 20}`);
+      const res = await fetch(
+        `${backendConfig.api}/api/moments/timeline?limit=20&offset=${timelinePage * 20}`,
+      );
       if (res.ok) {
         const data = await res.json();
         setMoments(data.moments || []);
@@ -126,21 +176,24 @@ export default function MomentsPage() {
   }, [backendConfig.api]);
 
   // Fetch by type
-  const fetchByType = useCallback(async (type: string) => {
-    if (!type) return;
-    setTypeLoading(true);
-    try {
-      const res = await fetch(`${backendConfig.api}/api/moments/by-type/${type}?limit=50`);
-      if (res.ok) {
-        const data = await res.json();
-        setTypeMoments(data.moments || []);
+  const fetchByType = useCallback(
+    async (type: string) => {
+      if (!type) return;
+      setTypeLoading(true);
+      try {
+        const res = await fetch(`${backendConfig.api}/api/moments/by-type/${type}?limit=50`);
+        if (res.ok) {
+          const data = await res.json();
+          setTypeMoments(data.moments || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch by type:', err);
+      } finally {
+        setTypeLoading(false);
       }
-    } catch (err) {
-      logger.error('Failed to fetch by type:', err);
-    } finally {
-      setTypeLoading(false);
-    }
-  }, [backendConfig.api]);
+    },
+    [backendConfig.api],
+  );
 
   // Load data when tab changes
   useEffect(() => {
@@ -163,11 +216,16 @@ export default function MomentsPage() {
   const renderMomentCard = (moment: Moment) => {
     const typeConfig = getMomentTypeConfig(moment.type);
     return (
-      <div key={moment.id} className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30 hover:border-[var(--accent)]/40 transition-colors">
+      <div
+        key={moment.id}
+        className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30 hover:border-[var(--accent)]/40 transition-colors"
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`text-xs font-theme-data px-2 py-0.5 rounded bg-surface ${typeConfig.color}`}>
+              <span
+                className={`text-xs font-theme-data px-2 py-0.5 rounded bg-surface ${typeConfig.color}`}
+              >
                 {typeConfig.label}
               </span>
               <SignificanceBadge score={moment.significance} />
@@ -211,9 +269,7 @@ export default function MomentsPage() {
         <div className="container mx-auto px-4 py-6">
           {/* Title */}
           <div className="mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
-              {'>'} MOMENTS
-            </h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">{'>'} MOMENTS</h1>
             <p className="text-text-muted font-theme-data text-sm">
               Significant events and achievements across all debates and agents.
             </p>
@@ -287,7 +343,7 @@ export default function MomentsPage() {
                   </div>
                 ) : moments.length === 0 ? (
                   <div className="ml-8">
-                    <MomentsEmptyState onViewDebates={() => window.location.href = '/debates'} />
+                    <MomentsEmptyState onViewDebates={() => (window.location.href = '/debates')} />
                   </div>
                 ) : (
                   <div className="space-y-4 ml-8">
@@ -296,10 +352,15 @@ export default function MomentsPage() {
                         {/* Timeline dot */}
                         <div className="absolute -left-8 top-4 w-2 h-2 rounded-full bg-[var(--accent)]" />
                         {/* Date marker */}
-                        {(index === 0 || (moment.created_at && moments[index - 1]?.created_at &&
-                          new Date(moment.created_at).toDateString() !== new Date(moments[index - 1].created_at!).toDateString())) && (
+                        {(index === 0 ||
+                          (moment.created_at &&
+                            moments[index - 1]?.created_at &&
+                            new Date(moment.created_at).toDateString() !==
+                              new Date(moments[index - 1].created_at!).toDateString())) && (
                           <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2 -ml-4">
-                            {moment.created_at ? new Date(moment.created_at).toLocaleDateString() : 'Unknown date'}
+                            {moment.created_at
+                              ? new Date(moment.created_at).toLocaleDateString()
+                              : 'Unknown date'}
                           </div>
                         )}
                         {renderMomentCard(moment)}
@@ -313,7 +374,8 @@ export default function MomentsPage() {
               {timelineTotal > 20 && (
                 <div className="flex items-center justify-between pt-4 border-t border-[var(--accent)]/20">
                   <div className="text-xs font-theme-data text-text-muted">
-                    Showing {timelinePage * 20 + 1} - {Math.min((timelinePage + 1) * 20, timelineTotal)} of {timelineTotal}
+                    Showing {timelinePage * 20 + 1} -{' '}
+                    {Math.min((timelinePage + 1) * 20, timelineTotal)} of {timelineTotal}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -369,9 +431,7 @@ export default function MomentsPage() {
                       <div className="w-8 h-8 flex items-center justify-center bg-surface rounded font-theme-data text-lg text-[var(--accent)] border border-[var(--accent)]/30">
                         {index + 1}
                       </div>
-                      <div className="flex-1">
-                        {renderMomentCard(moment)}
-                      </div>
+                      <div className="flex-1">{renderMomentCard(moment)}</div>
                     </div>
                   ))}
                 </div>
@@ -406,34 +466,51 @@ export default function MomentsPage() {
                   {/* Stats cards */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="p-4 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                      <div className="text-2xl font-theme-data text-[var(--accent)]">{summary.total_moments}</div>
+                      <div className="text-2xl font-theme-data text-[var(--accent)]">
+                        {summary.total_moments}
+                      </div>
                       <div className="text-xs font-theme-data text-text-muted">Total Moments</div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                      <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{Object.keys(summary.by_type).length}</div>
+                      <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                        {Object.keys(summary.by_type).length}
+                      </div>
                       <div className="text-xs font-theme-data text-text-muted">Moment Types</div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                      <div className="text-2xl font-theme-data text-text">{Object.keys(summary.by_agent).length}</div>
+                      <div className="text-2xl font-theme-data text-text">
+                        {Object.keys(summary.by_agent).length}
+                      </div>
                       <div className="text-xs font-theme-data text-text-muted">Agents</div>
                     </div>
                     <div className="p-4 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
                       <div className="text-2xl font-theme-data text-warning">
-                        {summary.most_significant ? `${(summary.most_significant.significance * 100).toFixed(0)}%` : 'N/A'}
+                        {summary.most_significant
+                          ? `${(summary.most_significant.significance * 100).toFixed(0)}%`
+                          : 'N/A'}
                       </div>
-                      <div className="text-xs font-theme-data text-text-muted">Top Significance</div>
+                      <div className="text-xs font-theme-data text-text-muted">
+                        Top Significance
+                      </div>
                     </div>
                   </div>
 
                   {/* By Type */}
                   <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                    <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">By Type</h3>
+                    <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                      By Type
+                    </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {Object.entries(summary.by_type).map(([type, count]) => {
                         const typeConfig = getMomentTypeConfig(type);
                         return (
-                          <div key={type} className="flex items-center justify-between p-2 bg-bg/50 rounded">
-                            <span className={`text-xs font-theme-data ${typeConfig.color}`}>{typeConfig.label}</span>
+                          <div
+                            key={type}
+                            className="flex items-center justify-between p-2 bg-bg/50 rounded"
+                          >
+                            <span className={`text-xs font-theme-data ${typeConfig.color}`}>
+                              {typeConfig.label}
+                            </span>
                             <span className="text-xs font-theme-data text-text">{count}</span>
                           </div>
                         );
@@ -443,14 +520,21 @@ export default function MomentsPage() {
 
                   {/* By Agent */}
                   <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                    <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">By Agent</h3>
+                    <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                      By Agent
+                    </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {Object.entries(summary.by_agent)
                         .sort(([, a], [, b]) => b - a)
                         .map(([agent, count]) => (
-                          <div key={agent} className="flex items-center justify-between p-2 bg-bg/50 rounded">
+                          <div
+                            key={agent}
+                            className="flex items-center justify-between p-2 bg-bg/50 rounded"
+                          >
                             <span className="text-xs font-theme-data text-text">{agent}</span>
-                            <span className="text-xs font-theme-data text-[var(--accent)]">{count}</span>
+                            <span className="text-xs font-theme-data text-[var(--accent)]">
+                              {count}
+                            </span>
                           </div>
                         ))}
                     </div>
@@ -459,7 +543,9 @@ export default function MomentsPage() {
                   {/* Most Significant */}
                   {summary.most_significant && (
                     <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                      <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Most Significant Moment</h3>
+                      <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                        Most Significant Moment
+                      </h3>
                       {renderMomentCard(summary.most_significant)}
                     </div>
                   )}
@@ -467,9 +553,11 @@ export default function MomentsPage() {
                   {/* Recent */}
                   {summary.recent.length > 0 && (
                     <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                      <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Recent Moments</h3>
+                      <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                        Recent Moments
+                      </h3>
                       <div className="space-y-2">
-                        {summary.recent.map(moment => renderMomentCard(moment))}
+                        {summary.recent.map((moment) => renderMomentCard(moment))}
                       </div>
                     </div>
                   )}
@@ -507,7 +595,9 @@ export default function MomentsPage() {
                     }`}
                   >
                     <div className={`font-theme-data text-sm ${type.color}`}>{type.label}</div>
-                    <div className="font-theme-data text-xs text-text-muted mt-1">{type.description}</div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">
+                      {type.description}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -521,11 +611,13 @@ export default function MomentsPage() {
                     </div>
                   ) : typeMoments.length === 0 ? (
                     <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
-                      <p className="font-theme-data text-text-muted">No {getMomentTypeConfig(selectedType).label} moments found.</p>
+                      <p className="font-theme-data text-text-muted">
+                        No {getMomentTypeConfig(selectedType).label} moments found.
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {typeMoments.map(moment => renderMomentCard(moment))}
+                      {typeMoments.map((moment) => renderMomentCard(moment))}
                     </div>
                   )}
                 </>

@@ -10,7 +10,13 @@ interface CommandStatusBarProps {
   loading: boolean;
 }
 
-export function CommandStatusBar({ stats, onAutoFlowAll, onValidateAll, onExecuteReady, loading }: CommandStatusBarProps) {
+export function CommandStatusBar({
+  stats,
+  onAutoFlowAll,
+  onValidateAll,
+  onExecuteReady,
+  loading,
+}: CommandStatusBarProps) {
   return (
     <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-surface">
       {/* Left: Title */}
@@ -41,7 +47,15 @@ export function CommandStatusBar({ stats, onAutoFlowAll, onValidateAll, onExecut
   );
 }
 
-function StatChip({ label, value, color }: { label: string; value: string | number; color: string }) {
+function StatChip({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+}) {
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     amber: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
@@ -49,14 +63,26 @@ function StatChip({ label, value, color }: { label: string; value: string | numb
     indigo: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30',
   };
   return (
-    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-theme-data border ${colorMap[color] || colorMap.blue}`}>
+    <div
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-theme-data border ${colorMap[color] || colorMap.blue}`}
+    >
       <span className="opacity-70">{label}</span>
       <span className="font-bold">{value}</span>
     </div>
   );
 }
 
-function ActionButton({ label, onClick, disabled, accent }: { label: string; onClick: () => void; disabled: boolean; accent?: boolean }) {
+function ActionButton({
+  label,
+  onClick,
+  disabled,
+  accent,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled: boolean;
+  accent?: boolean;
+}) {
   return (
     <button
       onClick={onClick}

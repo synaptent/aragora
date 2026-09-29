@@ -14,9 +14,7 @@ interface SystemMetrics {
     error_rate: number;
     top_endpoints: { endpoint: string; count: number }[];
   };
-  cache: {
-    entries: number;
-  };
+  cache: { entries: number };
   databases: Record<string, { bytes: number; human: string }>;
   timestamp: string;
 }
@@ -55,10 +53,7 @@ interface SystemInfo {
   machine: string;
   processor: string;
   pid: number;
-  memory?: {
-    rss_mb: number;
-    vms_mb: number;
-  };
+  memory?: { rss_mb: number; vms_mb: number };
 }
 
 interface BackgroundStats {
@@ -74,13 +69,15 @@ interface DashboardMetrics {
     consensus_rate: number;
     avg_confidence: number;
   };
-  recent_activity: {
-    debates_last_hour: number;
-    debates_last_24h: number;
-  };
+  recent_activity: { debates_last_hour: number; debates_last_24h: number };
 }
 
-function MetricCard({ title, value, subtitle, status }: {
+function MetricCard({
+  title,
+  value,
+  subtitle,
+  status,
+}: {
   title: string;
   value: string | number;
   subtitle?: string;
@@ -102,16 +99,10 @@ function MetricCard({ title, value, subtitle, status }: {
 
   return (
     <div className={`p-4 border ${statusColors[status || 'neutral']}`}>
-      <div className="text-text-muted font-theme-data text-[10px] tracking-wider mb-1">
-        {title}
-      </div>
-      <div className={`font-theme-data text-xl ${valueColors[status || 'neutral']}`}>
-        {value}
-      </div>
+      <div className="text-text-muted font-theme-data text-[10px] tracking-wider mb-1">{title}</div>
+      <div className={`font-theme-data text-xl ${valueColors[status || 'neutral']}`}>{value}</div>
       {subtitle && (
-        <div className="text-text-muted/50 font-theme-data text-[9px] mt-1">
-          {subtitle}
-        </div>
+        <div className="text-text-muted/50 font-theme-data text-[9px] mt-1">{subtitle}</div>
       )}
     </div>
   );
@@ -128,7 +119,9 @@ function HealthCheck({ name, check }: { name: string; check: { status: string; e
   return (
     <div className="flex items-center justify-between py-2 border-b border-[var(--accent)]/10 last:border-0">
       <span className="font-theme-data text-xs text-text">{name}</span>
-      <span className={`px-2 py-0.5 font-theme-data text-[10px] ${statusColors[check.status as keyof typeof statusColors] || statusColors.unavailable}`}>
+      <span
+        className={`px-2 py-0.5 font-theme-data text-[10px] ${statusColors[check.status as keyof typeof statusColors] || statusColors.unavailable}`}
+      >
         {check.status.toUpperCase()}
       </span>
     </div>
@@ -142,7 +135,9 @@ function ProgressBar({ value, max, label }: { value: number; max: number; label:
     <div className="space-y-1">
       <div className="flex justify-between text-[10px] font-theme-data">
         <span className="text-text-muted">{label}</span>
-        <span className="text-[var(--acid-cyan)]">{value.toLocaleString()} / {max.toLocaleString()}</span>
+        <span className="text-[var(--acid-cyan)]">
+          {value.toLocaleString()} / {max.toLocaleString()}
+        </span>
       </div>
       <div className="h-2 bg-surface border border-[var(--accent)]/20">
         <div
@@ -186,7 +181,7 @@ export default function ObservabilityPage() {
             const data = await response.json();
             setter(data);
           }
-        })
+        }),
       );
 
       setLastUpdate(new Date());
@@ -234,7 +229,10 @@ export default function ObservabilityPage() {
       <header className="border-b border-[var(--accent)]/30 bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80">
+            <Link
+              href="/"
+              className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80"
+            >
               [ARAGORA]
             </Link>
             <span className="text-[var(--accent)]/30">/</span>
@@ -270,7 +268,9 @@ export default function ObservabilityPage() {
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Title */}
         <div className="text-center mb-8">
-          <h1 className="text-[var(--accent)] font-theme-data text-xl mb-2">SYSTEM OBSERVABILITY</h1>
+          <h1 className="text-[var(--accent)] font-theme-data text-xl mb-2">
+            SYSTEM OBSERVABILITY
+          </h1>
           <p className="text-text-muted font-theme-data text-xs">
             Real-time metrics and health monitoring
           </p>
@@ -278,7 +278,9 @@ export default function ObservabilityPage() {
 
         {isLoading && !metrics ? (
           <div className="text-center py-12">
-            <span className="text-[var(--accent)] font-theme-data animate-pulse">LOADING METRICS...</span>
+            <span className="text-[var(--accent)] font-theme-data animate-pulse">
+              LOADING METRICS...
+            </span>
           </div>
         ) : (
           <>
@@ -334,7 +336,9 @@ export default function ObservabilityPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-text-muted font-theme-data text-xs">No health data available</p>
+                  <p className="text-text-muted font-theme-data text-xs">
+                    No health data available
+                  </p>
                 )}
               </div>
 
@@ -350,13 +354,17 @@ export default function ObservabilityPage() {
                         <div className="text-[var(--accent)] font-theme-data text-lg">
                           {verification.z3_verified}
                         </div>
-                        <div className="text-text-muted/50 font-theme-data text-[9px]">VERIFIED</div>
+                        <div className="text-text-muted/50 font-theme-data text-[9px]">
+                          VERIFIED
+                        </div>
                       </div>
                       <div className="text-center p-2 border border-[var(--accent)]/20">
                         <div className="text-warning font-theme-data text-lg">
                           {verification.z3_disproved}
                         </div>
-                        <div className="text-text-muted/50 font-theme-data text-[9px]">DISPROVED</div>
+                        <div className="text-text-muted/50 font-theme-data text-[9px]">
+                          DISPROVED
+                        </div>
                       </div>
                     </div>
                     <ProgressBar
@@ -389,22 +397,31 @@ export default function ObservabilityPage() {
                     <div className="grid grid-cols-2 gap-2 text-[10px] font-theme-data">
                       <div>
                         <span className="text-text-muted">Hits:</span>
-                        <span className="text-[var(--accent)] ml-2">{cache.hits?.toLocaleString()}</span>
+                        <span className="text-[var(--accent)] ml-2">
+                          {cache.hits?.toLocaleString()}
+                        </span>
                       </div>
                       <div>
                         <span className="text-text-muted">Misses:</span>
-                        <span className="text-[var(--acid-yellow)] ml-2">{cache.misses?.toLocaleString()}</span>
+                        <span className="text-[var(--acid-yellow)] ml-2">
+                          {cache.misses?.toLocaleString()}
+                        </span>
                       </div>
                     </div>
                     {cache.entries_by_prefix && Object.keys(cache.entries_by_prefix).length > 0 && (
                       <div className="pt-2 border-t border-[var(--accent)]/10">
-                        <div className="text-text-muted/50 font-theme-data text-[9px] mb-2">BY PREFIX</div>
+                        <div className="text-text-muted/50 font-theme-data text-[9px] mb-2">
+                          BY PREFIX
+                        </div>
                         <div className="space-y-1">
                           {Object.entries(cache.entries_by_prefix)
                             .sort((a, b) => b[1] - a[1])
                             .slice(0, 5)
                             .map(([prefix, count]) => (
-                              <div key={prefix} className="flex justify-between text-[10px] font-theme-data">
+                              <div
+                                key={prefix}
+                                className="flex justify-between text-[10px] font-theme-data"
+                              >
                                 <span className="text-[var(--acid-cyan)]">{prefix}</span>
                                 <span className="text-text-muted">{count}</span>
                               </div>
@@ -490,30 +507,44 @@ export default function ObservabilityPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-text-muted font-theme-data text-[10px]">Running</span>
-                      <span className={`px-2 py-0.5 font-theme-data text-[10px] ${
-                        background.running
-                          ? 'text-[var(--accent)] bg-[var(--accent)]/10'
-                          : 'text-text-muted bg-surface'
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 font-theme-data text-[10px] ${
+                          background.running
+                            ? 'text-[var(--accent)] bg-[var(--accent)]/10'
+                            : 'text-text-muted bg-surface'
+                        }`}
+                      >
                         {background.running ? 'YES' : 'NO'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-text-muted font-theme-data text-[10px]">Task Count</span>
+                      <span className="text-text-muted font-theme-data text-[10px]">
+                        Task Count
+                      </span>
                       <span className="text-[var(--acid-cyan)] font-theme-data text-[10px]">
                         {background.task_count}
                       </span>
                     </div>
                     {Object.keys(background.tasks || {}).length > 0 && (
                       <div className="pt-2 border-t border-[var(--accent)]/10">
-                        <div className="text-text-muted/50 font-theme-data text-[9px] mb-2">TASKS</div>
+                        <div className="text-text-muted/50 font-theme-data text-[9px] mb-2">
+                          TASKS
+                        </div>
                         {Object.entries(background.tasks).map(([name, task]) => (
-                          <div key={name} className="flex justify-between text-[10px] font-theme-data py-1">
+                          <div
+                            key={name}
+                            className="flex justify-between text-[10px] font-theme-data py-1"
+                          >
                             <span className="text-[var(--acid-cyan)] truncate">{name}</span>
-                            <span className={
-                              task.status === 'running' ? 'text-[var(--accent)]' :
-                              task.status === 'completed' ? 'text-text-muted' : 'text-[var(--acid-yellow)]'
-                            }>
+                            <span
+                              className={
+                                task.status === 'running'
+                                  ? 'text-[var(--accent)]'
+                                  : task.status === 'completed'
+                                    ? 'text-text-muted'
+                                    : 'text-[var(--acid-yellow)]'
+                              }
+                            >
                               {task.status}
                             </span>
                           </div>
@@ -536,7 +567,9 @@ export default function ObservabilityPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   {Object.entries(metrics.databases).map(([name, info]) => (
                     <div key={name} className="text-center p-3 border border-[var(--accent)]/20">
-                      <div className="text-[var(--acid-cyan)] font-theme-data text-sm">{info.human}</div>
+                      <div className="text-[var(--acid-cyan)] font-theme-data text-sm">
+                        {info.human}
+                      </div>
                       <div className="text-text-muted/50 font-theme-data text-[9px] mt-1 truncate">
                         {name}
                       </div>

@@ -9,10 +9,7 @@ interface DecisionNodeProps {
   selected?: boolean;
 }
 
-export const DecisionNode = memo(function DecisionNode({
-  data,
-  selected,
-}: DecisionNodeProps) {
+export const DecisionNode = memo(function DecisionNode({ data, selected }: DecisionNodeProps) {
   return (
     <div
       className={`
@@ -36,14 +33,10 @@ export const DecisionNode = memo(function DecisionNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="px-2 py-1 bg-yellow-500/30 rounded text-xs font-theme-data text-yellow-200 truncate">
@@ -68,9 +61,7 @@ export const DecisionNode = memo(function DecisionNode({
       />
 
       {/* Labels for branches */}
-      <div className="absolute -right-8 top-1/2 text-xs font-theme-data text-green-400">
-        T
-      </div>
+      <div className="absolute -right-8 top-1/2 text-xs font-theme-data text-green-400">T</div>
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full text-xs font-theme-data text-red-400">
         F
       </div>

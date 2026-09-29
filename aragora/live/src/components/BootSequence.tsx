@@ -193,7 +193,10 @@ export function BootSequence({ onComplete, skip = false }: BootSequenceProps) {
     >
       <div className="max-w-2xl w-full p-8 font-theme-data text-sm">
         {/* Skip hint at top */}
-        <div className="text-center mb-4 text-[var(--acid-yellow)]/60 text-xs animate-pulse" aria-hidden="true">
+        <div
+          className="text-center mb-4 text-[var(--acid-yellow)]/60 text-xs animate-pulse"
+          aria-hidden="true"
+        >
           Press any key or click to skip...
         </div>
 

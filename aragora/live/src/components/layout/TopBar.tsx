@@ -63,7 +63,20 @@ export function TopBar() {
             aria-label="Toggle context panel"
             title={rightSidebarOpen ? 'Hide context panel' : 'Show context panel'}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="2" width="4" height="12" rx="1" /><line x1="7" y1="4" x2="15" y2="4" /><line x1="7" y1="8" x2="15" y2="8" /><line x1="7" y1="12" x2="15" y2="12" /></svg>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              <rect x="1" y="2" width="4" height="12" rx="1" />
+              <line x1="7" y1="4" x2="15" y2="4" />
+              <line x1="7" y1="8" x2="15" y2="8" />
+              <line x1="7" y1="12" x2="15" y2="12" />
+            </svg>
           </button>
         )}
 

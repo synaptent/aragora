@@ -7,7 +7,10 @@ import { test, expect } from './fixtures';
  * to visualizing the debate graph with nodes and branches.
  */
 
-async function openArena(page: import('@playwright/test').Page, aragoraPage: { dismissAllOverlays: () => Promise<void> }) {
+async function openArena(
+  page: import('@playwright/test').Page,
+  aragoraPage: { dismissAllOverlays: () => Promise<void> },
+) {
   await page.goto('/arena');
   await aragoraPage.dismissAllOverlays();
   await page.waitForLoadState('domcontentloaded');
@@ -24,7 +27,10 @@ test.describe('Graph Debate Mode Selection', () => {
   test.beforeEach(async () => {
     // Skip these tests on live.aragora.ai (dashboard shell instead of arena page)
     const baseUrl = process.env.PLAYWRIGHT_BASE_URL || '';
-    test.skip(baseUrl.includes('live.aragora.ai'), 'Mode selection only available in the local arena flow');
+    test.skip(
+      baseUrl.includes('live.aragora.ai'),
+      'Mode selection only available in the local arena flow',
+    );
   });
 
   test('should display mode selection buttons in the arena', async ({ page, aragoraPage }) => {
@@ -64,10 +70,16 @@ test.describe('Graph Debate Creation', () => {
   test.beforeEach(async () => {
     // Skip on live.aragora.ai - shows dashboard shell instead of arena page
     const baseUrl = process.env.PLAYWRIGHT_BASE_URL || '';
-    test.skip(baseUrl.includes('live.aragora.ai'), 'Debate creation only available in the local arena flow');
+    test.skip(
+      baseUrl.includes('live.aragora.ai'),
+      'Debate creation only available in the local arena flow',
+    );
   });
 
-  test('should create a graph debate and navigate to visualization', async ({ page, aragoraPage }) => {
+  test('should create a graph debate and navigate to visualization', async ({
+    page,
+    aragoraPage,
+  }) => {
     // This test may require API mocking or a running server
     await openArena(page, aragoraPage);
     await expandAdvancedDebateOptions(page);
@@ -81,9 +93,11 @@ test.describe('Graph Debate Creation', () => {
     if (!(await questionInput.isEnabled())) {
       const submitButton = page.getByRole('button', { name: /start debate/i });
       await expect(submitButton).toBeDisabled();
-      const disabledState = page.locator(
-        ':text("API server offline"), :text("Server temporarily unavailable"), :text("Demo mode"), :text("using mock agents")'
-      ).first();
+      const disabledState = page
+        .locator(
+          ':text("API server offline"), :text("Server temporarily unavailable"), :text("Demo mode"), :text("using mock agents")',
+        )
+        .first();
       await expect(disabledState).toBeVisible();
       return;
     }
@@ -135,11 +149,16 @@ test.describe('Graph Debate Visualization Page', () => {
 
     // Either debates exist or empty state
     const debateList = page.locator('[data-testid="debate-list"], .debate-list, ul, ol');
-    const emptyState = page.locator(':text("no graph debates"), :text("no debates"), [data-testid="empty-state"]');
+    const emptyState = page.locator(
+      ':text("no graph debates"), :text("no debates"), [data-testid="empty-state"]',
+    );
 
     const hasDebates = await debateList.isVisible().catch(() => false);
     const hasEmpty = await emptyState.isVisible().catch(() => false);
-    const hasLoading = await page.locator(':text("loading")').isVisible().catch(() => false);
+    const hasLoading = await page
+      .locator(':text("loading")')
+      .isVisible()
+      .catch(() => false);
 
     expect(hasDebates || hasEmpty || hasLoading || true).toBeTruthy();
   });
@@ -204,7 +223,7 @@ test.describe('Graph Debate Interaction', () => {
 
     // Look for connection indicator
     const connectionStatus = page.locator(
-      ':text("connected"), :text("disconnected"), :text("connecting"), [data-testid="connection-status"]'
+      ':text("connected"), :text("disconnected"), :text("connecting"), [data-testid="connection-status"]',
     );
 
     // Status should be present somewhere
@@ -244,7 +263,9 @@ test.describe('Graph Debate Branch Filtering', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Branch filter should appear when there are multiple branches
-    const branchFilter = page.locator('[data-testid="branch-filter"], :text("branches"), select, [role="listbox"]');
+    const branchFilter = page.locator(
+      '[data-testid="branch-filter"], :text("branches"), select, [role="listbox"]',
+    );
 
     // This is conditional on having a multi-branch debate loaded
     const _hasBranchFilter = await branchFilter.isVisible().catch(() => false);

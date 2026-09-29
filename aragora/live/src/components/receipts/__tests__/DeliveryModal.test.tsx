@@ -4,20 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { DeliveryModal } from '../DeliveryModal';
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({
-    tokens: { access_token: 'test-token' },
-  }),
+  useAuth: () => ({ tokens: { access_token: 'test-token' } }),
 }));
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
 function jsonResponse(data: unknown, ok = true, status = 200): Response {
-  return {
-    ok,
-    status,
-    json: async () => data,
-  } as Response;
+  return { ok, status, json: async () => data } as Response;
 }
 
 describe('DeliveryModal', () => {
@@ -49,7 +43,7 @@ describe('DeliveryModal', () => {
         receiptId="receipt-123"
         receiptSummary="Critical deployment receipt"
         apiUrl="http://localhost:8080"
-      />
+      />,
     );
 
     await waitFor(() => {
@@ -69,15 +63,13 @@ describe('DeliveryModal', () => {
         expect.objectContaining({
           method: 'POST',
           body: expect.stringContaining('"destination":"C12345678"'),
-        })
+        }),
       );
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:8080/api/v1/receipts/receipt-123/deliver',
-      expect.objectContaining({
-        body: expect.stringContaining('"channel_type":"slack"'),
-      })
+      expect.objectContaining({ body: expect.stringContaining('"channel_type":"slack"') }),
     );
   });
 });

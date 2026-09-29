@@ -10,7 +10,7 @@ import { useSWRFetch, invalidateCachePattern } from '@/hooks/useSWRFetch';
 import { API_BASE_URL } from '@/config';
 
 const SettingsPanel = dynamic(
-  () => import('@/components/settings-panel').then(m => ({ default: m.SettingsPanel })),
+  () => import('@/components/settings-panel').then((m) => ({ default: m.SettingsPanel })),
   {
     ssr: false,
     loading: () => (
@@ -18,7 +18,7 @@ const SettingsPanel = dynamic(
         <div className="h-96 bg-[var(--surface)] rounded" />
       </div>
     ),
-  }
+  },
 );
 
 // ---------------------------------------------------------------------------
@@ -26,9 +26,16 @@ const SettingsPanel = dynamic(
 // ---------------------------------------------------------------------------
 
 async function rbacApi<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== 'undefined'
-    ? (() => { try { return JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token; } catch { return null; } })()
-    : null;
+  const token =
+    typeof window !== 'undefined'
+      ? (() => {
+          try {
+            return JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -83,7 +90,13 @@ interface RbacResponse {
 interface RoleEditorProps {
   role: Role | null; // null = create mode
   allPermissions: Permission[];
-  onSave: (data: { name: string; display_name: string; description: string; permissions: string[]; base_role?: string }) => Promise<void>;
+  onSave: (data: {
+    name: string;
+    display_name: string;
+    description: string;
+    permissions: string[];
+    base_role?: string;
+  }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -91,9 +104,7 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
   const [name, setName] = useState(role?.name || '');
   const [displayName, setDisplayName] = useState(role?.display_name || '');
   const [description, setDescription] = useState(role?.description || '');
-  const [selectedPerms, setSelectedPerms] = useState<Set<string>>(
-    new Set(role?.permissions || [])
-  );
+  const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set(role?.permissions || []));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permFilter, setPermFilter] = useState('');
@@ -115,9 +126,16 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
     if (!permFilter) return groupedPerms;
     const lower = permFilter.toLowerCase();
     return groupedPerms
-      .map(([resource, perms]) => [resource, perms.filter(
-        (p) => p.name.toLowerCase().includes(lower) || p.resource.toLowerCase().includes(lower)
-      )] as [string, Permission[]])
+      .map(
+        ([resource, perms]) =>
+          [
+            resource,
+            perms.filter(
+              (p) =>
+                p.name.toLowerCase().includes(lower) || p.resource.toLowerCase().includes(lower),
+            ),
+          ] as [string, Permission[]],
+      )
       .filter(([, perms]) => perms.length > 0);
   }, [groupedPerms, permFilter]);
 
@@ -135,13 +153,16 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
       const next = new Set(prev);
       const keys = perms.map((p) => p.key || p.name);
       const allSelected = keys.every((k) => next.has(k));
-      keys.forEach((k) => allSelected ? next.delete(k) : next.add(k));
+      keys.forEach((k) => (allSelected ? next.delete(k) : next.add(k)));
       return next;
     });
   };
 
   const handleSubmit = async () => {
-    if (!name.trim()) { setError('Role name is required'); return; }
+    if (!name.trim()) {
+      setError('Role name is required');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -160,7 +181,10 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      onClick={onClose}
+    >
       <div
         className="bg-[var(--bg)] border border-[var(--acid-green)]/50 w-full max-w-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -170,7 +194,10 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
           <h2 className="font-theme-data text-sm text-[var(--acid-green)]">
             {'>'} {isEdit ? 'EDIT ROLE' : 'CREATE ROLE'}
           </h2>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)] font-theme-data text-sm">
+          <button
+            onClick={onClose}
+            className="text-[var(--text-muted)] hover:text-[var(--text)] font-theme-data text-sm"
+          >
             [X]
           </button>
         </div>
@@ -248,7 +275,9 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
                       onClick={() => toggleResource(perms)}
                       className="w-full text-left px-3 py-1.5 bg-[var(--acid-green)]/5 font-theme-data text-[10px] text-[var(--acid-green)] uppercase tracking-wider flex items-center gap-2 hover:bg-[var(--acid-green)]/10"
                     >
-                      <span className="font-theme-data">{allSelected ? '[+]' : someSelected ? '[~]' : '[-]'}</span>
+                      <span className="font-theme-data">
+                        {allSelected ? '[+]' : someSelected ? '[~]' : '[-]'}
+                      </span>
                       {resource} ({perms.length})
                     </button>
                     {perms.map((p) => {
@@ -258,7 +287,9 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
                           key={p.id}
                           onClick={() => togglePerm(key)}
                           className={`w-full text-left px-6 py-1 font-theme-data text-xs flex items-center gap-2 hover:bg-[var(--surface)]/50 ${
-                            selectedPerms.has(key) ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'
+                            selectedPerms.has(key)
+                              ? 'text-[var(--acid-green)]'
+                              : 'text-[var(--text-muted)]'
                           }`}
                         >
                           <span>{selectedPerms.has(key) ? '[+]' : '[-]'}</span>
@@ -298,7 +329,15 @@ function RoleEditorModal({ role, allPermissions, onSave, onClose }: RoleEditorPr
 // Delete Confirmation Modal
 // ---------------------------------------------------------------------------
 
-function ConfirmDeleteModal({ roleName, onConfirm, onClose }: { roleName: string; onConfirm: () => Promise<void>; onClose: () => void }) {
+function ConfirmDeleteModal({
+  roleName,
+  onConfirm,
+  onClose,
+}: {
+  roleName: string;
+  onConfirm: () => Promise<void>;
+  onClose: () => void;
+}) {
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -312,15 +351,24 @@ function ConfirmDeleteModal({ roleName, onConfirm, onClose }: { roleName: string
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
-      <div className="bg-[var(--bg)] border border-red-500/50 p-6 max-w-sm" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[var(--bg)] border border-red-500/50 p-6 max-w-sm"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="font-theme-data text-sm text-red-400 mb-3">{'>'} DELETE ROLE</h3>
         <p className="font-theme-data text-xs text-[var(--text-muted)] mb-4">
           Are you sure you want to delete <span className="text-[var(--text)]">{roleName}</span>?
           This action cannot be undone.
         </p>
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 font-theme-data text-xs text-[var(--text-muted)] border border-[var(--border)]">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 font-theme-data text-xs text-[var(--text-muted)] border border-[var(--border)]"
+          >
             CANCEL
           </button>
           <button
@@ -422,7 +470,9 @@ function PermissionMatrix({ roles, permissions }: { roles: Role[]; permissions: 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] overflow-hidden">
       <div className="p-4 border-b border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} PERMISSION MATRIX</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
+          {'>'} PERMISSION MATRIX
+        </h3>
         <p className="text-[10px] font-theme-data text-[var(--text-muted)] mt-1">
           {permissions.length} permissions across {resources.length} resources
         </p>
@@ -463,11 +513,14 @@ function PermissionMatrix({ roles, permissions }: { roles: Role[]; permissions: 
                     <td className="p-3 font-theme-data text-[var(--text)] sticky left-0 bg-[var(--surface)]">
                       <div>{perm.name}</div>
                       {perm.description && (
-                        <div className="text-[10px] text-[var(--text-muted)]">{perm.description}</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">
+                          {perm.description}
+                        </div>
                       )}
                     </td>
                     {roles.map((role) => {
-                      const hasPermission = role.permissions.includes(perm.id) || role.permissions.includes(perm.name);
+                      const hasPermission =
+                        role.permissions.includes(perm.id) || role.permissions.includes(perm.name);
                       return (
                         <td key={role.id} className="p-3 text-center">
                           {hasPermission ? (
@@ -489,7 +542,15 @@ function PermissionMatrix({ roles, permissions }: { roles: Role[]; permissions: 
   );
 }
 
-function RolesList({ roles, onEdit, onDelete }: { roles: Role[]; onEdit: (role: Role) => void; onDelete: (role: Role) => void }) {
+function RolesList({
+  roles,
+  onEdit,
+  onDelete,
+}: {
+  roles: Role[];
+  onEdit: (role: Role) => void;
+  onDelete: (role: Role) => void;
+}) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)]">
       <div className="p-4 border-b border-[var(--border)]">
@@ -503,7 +564,9 @@ function RolesList({ roles, onEdit, onDelete }: { roles: Role[]; onEdit: (role: 
                 <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
                   {role.display_name || role.name}
                 </span>
-                <span className="font-theme-data text-[10px] text-[var(--text-muted)]">({role.name})</span>
+                <span className="font-theme-data text-[10px] text-[var(--text-muted)]">
+                  ({role.name})
+                </span>
                 {role.is_system && (
                   <span className="px-1.5 py-0.5 text-[10px] font-theme-data bg-[var(--acid-green)]/10 text-[var(--acid-green)] border border-[var(--acid-green)]/30">
                     SYSTEM
@@ -581,16 +644,19 @@ export default function SettingsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Fetch RBAC data
-  const { data: rbacData, error: rbacError, isLoading: rbacLoading, mutate: mutateRoles } = useSWRFetch<RbacResponse>(
-    '/api/v1/rbac/roles?include_permissions=true',
-    { refreshInterval: 120000 },
-  );
+  const {
+    data: rbacData,
+    error: rbacError,
+    isLoading: rbacLoading,
+    mutate: mutateRoles,
+  } = useSWRFetch<RbacResponse>('/api/v1/rbac/roles?include_permissions=true', {
+    refreshInterval: 120000,
+  });
 
   // Fetch all permissions for the editor
-  const { data: permData } = useSWRFetch<PermissionsResponse>(
-    '/api/v1/rbac/permissions',
-    { refreshInterval: 300000 },
-  );
+  const { data: permData } = useSWRFetch<PermissionsResponse>('/api/v1/rbac/permissions', {
+    refreshInterval: 300000,
+  });
 
   const roles: Role[] = rbacData?.roles || [];
   const permissions: Permission[] = rbacData?.permissions || [];
@@ -601,28 +667,42 @@ export default function SettingsPage() {
     invalidateCachePattern(/\/rbac\//);
   }, [mutateRoles]);
 
-  const handleCreateRole = useCallback(async (data: { name: string; display_name: string; description: string; permissions: string[] }) => {
-    await rbacApi('/api/v1/rbac/roles', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    refreshRbac();
-  }, [refreshRbac]);
+  const handleCreateRole = useCallback(
+    async (data: {
+      name: string;
+      display_name: string;
+      description: string;
+      permissions: string[];
+    }) => {
+      await rbacApi('/api/v1/rbac/roles', { method: 'POST', body: JSON.stringify(data) });
+      refreshRbac();
+    },
+    [refreshRbac],
+  );
 
-  const handleUpdateRole = useCallback(async (data: { name: string; display_name: string; description: string; permissions: string[] }) => {
-    await rbacApi(`/api/v1/rbac/roles/${encodeURIComponent(data.name)}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    refreshRbac();
-  }, [refreshRbac]);
+  const handleUpdateRole = useCallback(
+    async (data: {
+      name: string;
+      display_name: string;
+      description: string;
+      permissions: string[];
+    }) => {
+      await rbacApi(`/api/v1/rbac/roles/${encodeURIComponent(data.name)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      refreshRbac();
+    },
+    [refreshRbac],
+  );
 
-  const handleDeleteRole = useCallback(async (name: string) => {
-    await rbacApi(`/api/v1/rbac/roles/${encodeURIComponent(name)}`, {
-      method: 'DELETE',
-    });
-    refreshRbac();
-  }, [refreshRbac]);
+  const handleDeleteRole = useCallback(
+    async (name: string) => {
+      await rbacApi(`/api/v1/rbac/roles/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      refreshRbac();
+    },
+    [refreshRbac],
+  );
 
   const tabs: { key: ActiveTab; label: string }[] = [
     { key: 'preferences', label: 'PREFERENCES' },
@@ -635,180 +715,185 @@ export default function SettingsPage() {
 
   return (
     <ProtectedRoute>
-    <>
-      <Scanlines opacity={0.02} />
-      <CRTVignette />
+      <>
+        <Scanlines opacity={0.02} />
+        <CRTVignette />
 
-      <main className="min-h-screen bg-[var(--bg)] text-[var(--text)] relative z-10">
-        <div className="container mx-auto px-4 py-6">
-          {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--acid-green)] mb-2">
-              {'>'} SETTINGS & RBAC
-            </h1>
-            <p className="text-[var(--text-muted)] font-theme-data text-sm">
-              Configure preferences, inspect provider availability, and manage roles.
-            </p>
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="flex gap-0.5 mb-6 bg-[var(--bg)] border border-[var(--border)] p-0.5 w-fit font-theme-data text-xs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2 transition-colors ${
-                  activeTab === tab.key
-                    ? 'bg-[var(--acid-green)] text-[var(--bg)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--acid-green)]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* RBAC Summary Stats */}
-          {showRbacSummary && (
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                <div className="text-2xl font-theme-data text-[var(--acid-green)]">
-                  {rbacLoading ? '-' : roles.length}
-                </div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Roles</div>
-              </div>
-              <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
-                  {rbacLoading ? '-' : permissions.length}
-                </div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Permissions</div>
-              </div>
-              <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                <div className="text-2xl font-theme-data text-purple-400">
-                  {rbacLoading
-                    ? '-'
-                    : new Set(permissions.map((p) => p.resource)).size}
-                </div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Resources</div>
-              </div>
+        <main className="min-h-screen bg-[var(--bg)] text-[var(--text)] relative z-10">
+          <div className="container mx-auto px-4 py-6">
+            {/* Header */}
+            <div className="mb-6">
+              <h1 className="text-2xl font-theme-data text-[var(--acid-green)] mb-2">
+                {'>'} SETTINGS & RBAC
+              </h1>
+              <p className="text-[var(--text-muted)] font-theme-data text-sm">
+                Configure preferences, inspect provider availability, and manage roles.
+              </p>
             </div>
-          )}
 
-          {/* Error State for RBAC */}
-          {rbacError && showRbacSummary && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 font-theme-data text-sm">
-              Failed to load RBAC data. The backend may be unavailable.
-            </div>
-          )}
-
-          {/* Tab Content */}
-          {activeTab === 'preferences' && (
-            <PanelErrorBoundary panelName="Settings">
-              <SettingsPanel />
-            </PanelErrorBoundary>
-          )}
-
-          {activeTab === 'providers' && (
-            <PanelErrorBoundary panelName="Provider Preferences">
-              <ProviderPreferencesTab />
-            </PanelErrorBoundary>
-          )}
-
-          {activeTab === 'roles' && (
-            <PanelErrorBoundary panelName="Roles">
-              {actionError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 font-theme-data text-xs flex items-center justify-between">
-                  <span>{actionError}</span>
-                  <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300">[X]</button>
-                </div>
-              )}
-              <div className="mb-4">
+            {/* Tab Navigation */}
+            <div className="flex gap-0.5 mb-6 bg-[var(--bg)] border border-[var(--border)] p-0.5 w-fit font-theme-data text-xs">
+              {tabs.map((tab) => (
                 <button
-                  onClick={() => setEditorRole(null)}
-                  className="px-4 py-2 font-theme-data text-xs bg-[var(--acid-green)] text-[var(--bg)] hover:bg-[var(--acid-green)]/80"
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 py-2 transition-colors ${
+                    activeTab === tab.key
+                      ? 'bg-[var(--acid-green)] text-[var(--bg)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--acid-green)]'
+                  }`}
                 >
-                  + CREATE ROLE
+                  {tab.label}
                 </button>
+              ))}
+            </div>
+
+            {/* RBAC Summary Stats */}
+            {showRbacSummary && (
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
+                  <div className="text-2xl font-theme-data text-[var(--acid-green)]">
+                    {rbacLoading ? '-' : roles.length}
+                  </div>
+                  <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Roles</div>
+                </div>
+                <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
+                  <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                    {rbacLoading ? '-' : permissions.length}
+                  </div>
+                  <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                    Permissions
+                  </div>
+                </div>
+                <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
+                  <div className="text-2xl font-theme-data text-purple-400">
+                    {rbacLoading ? '-' : new Set(permissions.map((p) => p.resource)).size}
+                  </div>
+                  <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                    Resources
+                  </div>
+                </div>
               </div>
-              {rbacLoading ? (
-                <div className="animate-pulse space-y-3">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-20 bg-[var(--surface)] rounded" />
-                  ))}
-                </div>
-              ) : (
-                <RolesList
-                  roles={roles}
-                  onEdit={(role) => setEditorRole(role)}
-                  onDelete={(role) => setDeleteRole(role)}
-                />
-              )}
-            </PanelErrorBoundary>
-          )}
+            )}
 
-          {activeTab === 'permissions' && (
-            <PanelErrorBoundary panelName="Permission Matrix">
-              {rbacLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-96 bg-[var(--surface)] rounded" />
-                </div>
-              ) : (
-                <PermissionMatrix roles={roles} permissions={permissions} />
-              )}
-            </PanelErrorBoundary>
-          )}
+            {/* Error State for RBAC */}
+            {rbacError && showRbacSummary && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 font-theme-data text-sm">
+                Failed to load RBAC data. The backend may be unavailable.
+              </div>
+            )}
 
-          {activeTab === 'hierarchy' && (
-            <PanelErrorBoundary panelName="Role Hierarchy">
-              {rbacLoading ? (
-                <div className="animate-pulse">
-                  <div className="h-48 bg-[var(--surface)] rounded" />
-                </div>
-              ) : (
-                <RoleHierarchy roles={roles} />
-              )}
-            </PanelErrorBoundary>
-          )}
-        </div>
+            {/* Tab Content */}
+            {activeTab === 'preferences' && (
+              <PanelErrorBoundary panelName="Settings">
+                <SettingsPanel />
+              </PanelErrorBoundary>
+            )}
 
-        {/* Footer */}
-        <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--acid-green)]/20 mt-8">
-          <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
-            {'='.repeat(40)}
+            {activeTab === 'providers' && (
+              <PanelErrorBoundary panelName="Provider Preferences">
+                <ProviderPreferencesTab />
+              </PanelErrorBoundary>
+            )}
+
+            {activeTab === 'roles' && (
+              <PanelErrorBoundary panelName="Roles">
+                {actionError && (
+                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 font-theme-data text-xs flex items-center justify-between">
+                    <span>{actionError}</span>
+                    <button
+                      onClick={() => setActionError(null)}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      [X]
+                    </button>
+                  </div>
+                )}
+                <div className="mb-4">
+                  <button
+                    onClick={() => setEditorRole(null)}
+                    className="px-4 py-2 font-theme-data text-xs bg-[var(--acid-green)] text-[var(--bg)] hover:bg-[var(--acid-green)]/80"
+                  >
+                    + CREATE ROLE
+                  </button>
+                </div>
+                {rbacLoading ? (
+                  <div className="animate-pulse space-y-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-20 bg-[var(--surface)] rounded" />
+                    ))}
+                  </div>
+                ) : (
+                  <RolesList
+                    roles={roles}
+                    onEdit={(role) => setEditorRole(role)}
+                    onDelete={(role) => setDeleteRole(role)}
+                  />
+                )}
+              </PanelErrorBoundary>
+            )}
+
+            {activeTab === 'permissions' && (
+              <PanelErrorBoundary panelName="Permission Matrix">
+                {rbacLoading ? (
+                  <div className="animate-pulse">
+                    <div className="h-96 bg-[var(--surface)] rounded" />
+                  </div>
+                ) : (
+                  <PermissionMatrix roles={roles} permissions={permissions} />
+                )}
+              </PanelErrorBoundary>
+            )}
+
+            {activeTab === 'hierarchy' && (
+              <PanelErrorBoundary panelName="Role Hierarchy">
+                {rbacLoading ? (
+                  <div className="animate-pulse">
+                    <div className="h-48 bg-[var(--surface)] rounded" />
+                  </div>
+                ) : (
+                  <RoleHierarchy roles={roles} />
+                )}
+              </PanelErrorBoundary>
+            )}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // SETTINGS & RBAC
-          </p>
-        </footer>
-      </main>
 
-      {/* Role Editor Modal */}
-      {editorRole !== undefined && (
-        <RoleEditorModal
-          role={editorRole}
-          allPermissions={allPermissions}
-          onSave={editorRole ? handleUpdateRole : handleCreateRole}
-          onClose={() => setEditorRole(undefined)}
-        />
-      )}
+          {/* Footer */}
+          <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--acid-green)]/20 mt-8">
+            <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
+              {'='.repeat(40)}
+            </div>
+            <p className="text-[var(--text-muted)]">{'>'} ARAGORA // SETTINGS & RBAC</p>
+          </footer>
+        </main>
 
-      {/* Delete Confirmation Modal */}
-      {deleteRole && (
-        <ConfirmDeleteModal
-          roleName={deleteRole.name}
-          onConfirm={async () => {
-            try {
-              await handleDeleteRole(deleteRole.name);
-              setDeleteRole(null);
-            } catch (e) {
-              setActionError(e instanceof Error ? e.message : 'Delete failed');
-              setDeleteRole(null);
-            }
-          }}
-          onClose={() => setDeleteRole(null)}
-        />
-      )}
-    </>
+        {/* Role Editor Modal */}
+        {editorRole !== undefined && (
+          <RoleEditorModal
+            role={editorRole}
+            allPermissions={allPermissions}
+            onSave={editorRole ? handleUpdateRole : handleCreateRole}
+            onClose={() => setEditorRole(undefined)}
+          />
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteRole && (
+          <ConfirmDeleteModal
+            roleName={deleteRole.name}
+            onConfirm={async () => {
+              try {
+                await handleDeleteRole(deleteRole.name);
+                setDeleteRole(null);
+              } catch (e) {
+                setActionError(e instanceof Error ? e.message : 'Delete failed');
+                setDeleteRole(null);
+              }
+            }}
+            onClose={() => setDeleteRole(null)}
+          />
+        )}
+      </>
     </ProtectedRoute>
   );
 }

@@ -12,11 +12,15 @@ import type { GauntletVerdict } from '@/hooks/useGauntletWebSocket';
 
 // Dynamically import GauntletPanel for list view
 const GauntletPanel = dynamic(
-  () => import('@/components/GauntletPanel').then(m => ({ default: m.GauntletPanel })),
+  () => import('@/components/GauntletPanel').then((m) => ({ default: m.GauntletPanel })),
   {
     ssr: false,
-    loading: () => <div className="card p-4 animate-pulse"><div className="h-96 bg-surface rounded" /></div>,
-  }
+    loading: () => (
+      <div className="card p-4 animate-pulse">
+        <div className="h-96 bg-surface rounded" />
+      </div>
+    ),
+  },
 );
 
 // List view component (no ID)
@@ -51,24 +55,27 @@ function GauntletListView() {
               <ul className="text-xs text-text-muted space-y-2 font-theme-data">
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
-                  <code className="bg-bg px-2 py-0.5">aragora gauntlet spec.md --profile quick</code>
+                  <code className="bg-bg px-2 py-0.5">
+                    aragora gauntlet spec.md --profile quick
+                  </code>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
-                  <code className="bg-bg px-2 py-0.5">aragora gauntlet policy.yaml --persona gdpr</code>
+                  <code className="bg-bg px-2 py-0.5">
+                    aragora gauntlet policy.yaml --persona gdpr
+                  </code>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
-                  <code className="bg-bg px-2 py-0.5">aragora gauntlet arch.md --profile thorough --output report.html</code>
+                  <code className="bg-bg px-2 py-0.5">
+                    aragora gauntlet arch.md --profile thorough --output report.html
+                  </code>
                 </li>
               </ul>
               <div className="mt-4 pt-3 border-t border-border">
                 <p className="text-xs text-text-muted">
                   See{' '}
-                  <a
-                    href="/about"
-                    className="text-[var(--acid-cyan)] hover:text-[var(--accent)]"
-                  >
+                  <a href="/about" className="text-[var(--acid-cyan)] hover:text-[var(--accent)]">
                     the documentation
                   </a>{' '}
                   for full documentation.
@@ -80,12 +87,8 @@ function GauntletListView() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // GAUNTLET STRESS TESTING
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // GAUNTLET STRESS TESTING</p>
         </footer>
       </main>
     </>
@@ -137,11 +140,7 @@ function GauntletDetailView({ gauntletId }: { gauntletId: string }) {
           </div>
 
           <PanelErrorBoundary panelName="Gauntlet Live View">
-            <GauntletLive
-              gauntletId={gauntletId}
-              wsUrl={wsUrl}
-              onComplete={handleComplete}
-            />
+            <GauntletLive gauntletId={gauntletId} wsUrl={wsUrl} onComplete={handleComplete} />
           </PanelErrorBoundary>
 
           {/* Post-completion actions */}
@@ -175,12 +174,8 @@ function GauntletDetailView({ gauntletId }: { gauntletId: string }) {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // LIVE GAUNTLET STRESS TEST
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // LIVE GAUNTLET STRESS TEST</p>
         </footer>
       </main>
     </>

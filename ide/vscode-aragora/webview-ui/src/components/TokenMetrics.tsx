@@ -24,18 +24,13 @@ export function TokenMetrics({ usage, maxTokens = 100000 }: TokenMetricsProps) {
     <div className="token-metrics">
       <div className="metrics-header">
         <span className="metrics-title">Token Usage</span>
-        {usage.cost !== undefined && (
-          <span className="metrics-cost">${usage.cost.toFixed(4)}</span>
-        )}
+        {usage.cost !== undefined && <span className="metrics-cost">${usage.cost.toFixed(4)}</span>}
       </div>
 
       <div className="metrics-bar">
         <div
           className="metrics-fill"
-          style={{
-            width: `${percentage}%`,
-            backgroundColor: getBarColor(percentage),
-          }}
+          style={{ width: `${percentage}%`, backgroundColor: getBarColor(percentage) }}
         />
       </div>
 

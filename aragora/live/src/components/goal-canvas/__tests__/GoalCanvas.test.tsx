@@ -14,7 +14,17 @@ import { GOAL_NODE_CONFIGS, PRIORITY_COLORS } from '../types';
 // ---------------------------------------------------------------------------
 
 jest.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children, onNodeClick, onPaneClick, ...props }: Record<string, unknown> & { children?: React.ReactNode; onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void; onPaneClick?: () => void; nodes?: Array<Record<string, unknown>> }) => (
+  ReactFlow: ({
+    children,
+    onNodeClick,
+    onPaneClick,
+    ...props
+  }: Record<string, unknown> & {
+    children?: React.ReactNode;
+    onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void;
+    onPaneClick?: () => void;
+    nodes?: Array<Record<string, unknown>>;
+  }) => (
     <div data-testid="react-flow">
       {children}
       {props.nodes?.map((n: Record<string, unknown>) => (
@@ -55,18 +65,14 @@ jest.mock('@xyflow/react', () => ({
 // ---------------------------------------------------------------------------
 
 import { useGoalCanvas } from '../useGoalCanvas';
-jest.mock('../useGoalCanvas', () => ({
-  useGoalCanvas: jest.fn(),
-}));
+jest.mock('../useGoalCanvas', () => ({ useGoalCanvas: jest.fn() }));
 
 // ---------------------------------------------------------------------------
 // Mock API module
 // ---------------------------------------------------------------------------
 
 const mockApiPost = jest.fn();
-jest.mock('../../../lib/api', () => ({
-  apiPost: (...args: unknown[]) => mockApiPost(...args),
-}));
+jest.mock('../../../lib/api', () => ({ apiPost: (...args: unknown[]) => mockApiPost(...args) }));
 
 const mockedUseGoalCanvas = useGoalCanvas as jest.MockedFunction<typeof useGoalCanvas>;
 
@@ -194,7 +200,14 @@ describe('GoalPalette', () => {
   it('sets application/goal-node-type on dragStart for each type', () => {
     render(<GoalPalette />);
 
-    const allTypes: GoalNodeType[] = ['goal', 'principle', 'strategy', 'milestone', 'metric', 'risk'];
+    const allTypes: GoalNodeType[] = [
+      'goal',
+      'principle',
+      'strategy',
+      'milestone',
+      'metric',
+      'risk',
+    ];
 
     for (const goalType of allTypes) {
       const config = GOAL_NODE_CONFIGS[goalType];
@@ -203,12 +216,7 @@ describe('GoalPalette', () => {
       const draggable = iconEl.closest('[draggable]')!;
 
       const setDataMock = jest.fn();
-      fireEvent.dragStart(draggable, {
-        dataTransfer: {
-          setData: setDataMock,
-          effectAllowed: '',
-        },
-      });
+      fireEvent.dragStart(draggable, { dataTransfer: { setData: setDataMock, effectAllowed: '' } });
 
       expect(setDataMock).toHaveBeenCalledWith('application/goal-node-type', goalType);
     }
@@ -220,10 +228,7 @@ describe('GoalPalette', () => {
     const goalLabel = screen.getByText('Goal');
     const draggable = goalLabel.closest('[draggable]')!;
 
-    const dataTransfer = {
-      setData: jest.fn(),
-      effectAllowed: '',
-    };
+    const dataTransfer = { setData: jest.fn(), effectAllowed: '' };
     fireEvent.dragStart(draggable, { dataTransfer });
 
     expect(dataTransfer.effectAllowed).toBe('move');
@@ -303,7 +308,7 @@ describe('GoalNode', () => {
     render(
       <GoalNode
         data={{ goalType: 'goal', label: 'Test', description: 'Detailed description here' }}
-      />
+      />,
     );
     expect(screen.getByText('Detailed description here')).toBeInTheDocument();
   });
@@ -315,7 +320,7 @@ describe('GoalNode', () => {
 
   it('renders measurable criteria in italic when provided', () => {
     render(
-      <GoalNode data={{ goalType: 'metric', label: 'Test', measurable: 'KPI target: 95%' }} />
+      <GoalNode data={{ goalType: 'metric', label: 'Test', measurable: 'KPI target: 95%' }} />,
     );
     const measurableEl = screen.getByText('KPI target: 95%');
     expect(measurableEl).toBeInTheDocument();
@@ -358,9 +363,7 @@ describe('GoalNode', () => {
   });
 
   it('applies ring styling when selected', () => {
-    const { container } = render(
-      <GoalNode data={{ goalType: 'goal', label: 'Test' }} selected />
-    );
+    const { container } = render(<GoalNode data={{ goalType: 'goal', label: 'Test' }} selected />);
     const nodeDiv = container.firstElementChild as HTMLElement;
     expect(nodeDiv.className).toContain('ring-2');
     expect(nodeDiv.className).toContain('ring-acid-green');
@@ -368,7 +371,7 @@ describe('GoalNode', () => {
 
   it('does not apply ring styling when not selected', () => {
     const { container } = render(
-      <GoalNode data={{ goalType: 'goal', label: 'Test' }} selected={false} />
+      <GoalNode data={{ goalType: 'goal', label: 'Test' }} selected={false} />,
     );
     const nodeDiv = container.firstElementChild as HTMLElement;
     expect(nodeDiv.className).not.toContain('ring-2');
@@ -376,19 +379,24 @@ describe('GoalNode', () => {
 
   it('applies opacity when lockedBy is set', () => {
     const { container } = render(
-      <GoalNode data={{ goalType: 'goal', label: 'Test', lockedBy: 'Bob' }} />
+      <GoalNode data={{ goalType: 'goal', label: 'Test', lockedBy: 'Bob' }} />,
     );
     const nodeDiv = container.firstElementChild as HTMLElement;
     expect(nodeDiv.className).toContain('opacity-70');
   });
 
   it('renders all 6 goal types correctly', () => {
-    const allTypes: GoalNodeType[] = ['goal', 'principle', 'strategy', 'milestone', 'metric', 'risk'];
+    const allTypes: GoalNodeType[] = [
+      'goal',
+      'principle',
+      'strategy',
+      'milestone',
+      'metric',
+      'risk',
+    ];
     for (const goalType of allTypes) {
       const config = GOAL_NODE_CONFIGS[goalType];
-      const { unmount } = render(
-        <GoalNode data={{ goalType, label: `${goalType} node` }} />
-      );
+      const { unmount } = render(<GoalNode data={{ goalType, label: `${goalType} node` }} />);
       expect(screen.getByText(config.icon)).toBeInTheDocument();
       expect(screen.getByText(config.label)).toBeInTheDocument();
       unmount();
@@ -398,9 +406,7 @@ describe('GoalNode', () => {
   it('applies priority-specific colors', () => {
     const priorities: GoalPriority[] = ['critical', 'high', 'medium', 'low'];
     for (const priority of priorities) {
-      const { unmount } = render(
-        <GoalNode data={{ goalType: 'goal', label: 'Test', priority }} />
-      );
+      const { unmount } = render(<GoalNode data={{ goalType: 'goal', label: 'Test', priority }} />);
       const badge = screen.getByText(priority);
       const expectedClass = PRIORITY_COLORS[priority];
       for (const cls of expectedClass.split(' ')) {
@@ -456,7 +462,7 @@ describe('GoalPropertyEditor', () => {
 
   it('renders Type select with 6 options', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const typeSelect = getFieldByLabel(container, 'Type') as HTMLSelectElement;
     expect(typeSelect).toBeInTheDocument();
@@ -474,7 +480,7 @@ describe('GoalPropertyEditor', () => {
 
   it('renders Priority select with 4 options', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const prioritySelect = getFieldByLabel(container, 'Priority') as HTMLSelectElement;
     expect(prioritySelect).toBeInTheDocument();
@@ -492,7 +498,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ label: 'My Goal' })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const titleInput = getFieldByLabel(container, 'Title') as HTMLInputElement;
     expect(titleInput).toBeInTheDocument();
@@ -504,7 +510,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ description: 'A description' })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const textarea = getFieldByLabel(container, 'Description') as HTMLTextAreaElement;
     expect(textarea).toBeInTheDocument();
@@ -516,7 +522,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ measurable: '95% uptime' })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const input = getFieldByLabel(container, 'Success Criteria') as HTMLInputElement;
     expect(input).toBeInTheDocument();
@@ -528,7 +534,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ confidence: 0.8 })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     expect(screen.getByText(/Confidence: 80%/)).toBeInTheDocument();
 
@@ -542,7 +548,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ tags: ['frontend', 'urgent'] })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const tagsInput = getFieldByLabel(container, 'Tags') as HTMLInputElement;
     expect(tagsInput.value).toBe('frontend, urgent');
@@ -550,10 +556,7 @@ describe('GoalPropertyEditor', () => {
 
   it('renders empty Tags input when tags array is empty', () => {
     const { container } = render(
-      <GoalPropertyEditor
-        data={makeGoalNodeData({ tags: [] })}
-        onChange={defaultOnChange}
-      />
+      <GoalPropertyEditor data={makeGoalNodeData({ tags: [] })} onChange={defaultOnChange} />,
     );
     const tagsInput = getFieldByLabel(container, 'Tags') as HTMLInputElement;
     expect(tagsInput.value).toBe('');
@@ -563,7 +566,7 @@ describe('GoalPropertyEditor', () => {
 
   it('calls onChange with goalType when Type select changes', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const typeSelect = getFieldByLabel(container, 'Type');
     fireEvent.change(typeSelect, { target: { value: 'risk' } });
@@ -572,7 +575,7 @@ describe('GoalPropertyEditor', () => {
 
   it('calls onChange with priority when Priority select changes', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const prioritySelect = getFieldByLabel(container, 'Priority');
     fireEvent.change(prioritySelect, { target: { value: 'critical' } });
@@ -581,7 +584,7 @@ describe('GoalPropertyEditor', () => {
 
   it('calls onChange with label when Title input changes', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const titleInput = getFieldByLabel(container, 'Title');
     fireEvent.change(titleInput, { target: { value: 'New Title' } });
@@ -590,7 +593,7 @@ describe('GoalPropertyEditor', () => {
 
   it('calls onChange with description when Description textarea changes', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const textarea = getFieldByLabel(container, 'Description');
     fireEvent.change(textarea, { target: { value: 'Updated desc' } });
@@ -599,7 +602,7 @@ describe('GoalPropertyEditor', () => {
 
   it('calls onChange with measurable when Success Criteria changes', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const input = getFieldByLabel(container, 'Success Criteria');
     fireEvent.change(input, { target: { value: '99% SLA' } });
@@ -611,7 +614,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ confidence: 0.5 })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '90' } });
@@ -620,7 +623,7 @@ describe('GoalPropertyEditor', () => {
 
   it('calls onChange with parsed tags array when Tags input changes', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const tagsInput = getFieldByLabel(container, 'Tags');
     fireEvent.change(tagsInput, { target: { value: 'alpha, beta, gamma' } });
@@ -629,7 +632,7 @@ describe('GoalPropertyEditor', () => {
 
   it('filters empty tags from comma-separated input', () => {
     const { container } = render(
-      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />
+      <GoalPropertyEditor data={makeGoalNodeData()} onChange={defaultOnChange} />,
     );
     const tagsInput = getFieldByLabel(container, 'Tags');
     fireEvent.change(tagsInput, { target: { value: 'alpha, , beta, ' } });
@@ -643,7 +646,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ sourceIdeaIds: ['idea-1', 'idea-2', 'idea-3'] })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     expect(screen.getByText('Derived from 3 idea(s)')).toBeInTheDocument();
   });
@@ -653,7 +656,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ sourceIdeaIds: [] })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     expect(screen.queryByText(/derived from/i)).not.toBeInTheDocument();
   });
@@ -674,7 +677,7 @@ describe('GoalPropertyEditor', () => {
         data={makeGoalNodeData()}
         onChange={defaultOnChange}
         onAdvance={onAdvance}
-      />
+      />,
     );
     const advanceBtn = screen.getByText('Advance to Actions');
     expect(advanceBtn).toBeInTheDocument();
@@ -687,7 +690,7 @@ describe('GoalPropertyEditor', () => {
         data={makeGoalNodeData()}
         onChange={defaultOnChange}
         onAdvance={onAdvance}
-      />
+      />,
     );
     fireEvent.click(screen.getByText('Advance to Actions'));
     expect(onAdvance).toHaveBeenCalledTimes(1);
@@ -707,7 +710,7 @@ describe('GoalPropertyEditor', () => {
         data={makeGoalNodeData()}
         onChange={defaultOnChange}
         onDelete={onDelete}
-      />
+      />,
     );
     const deleteBtn = screen.getByText('Delete Goal');
     expect(deleteBtn).toBeInTheDocument();
@@ -720,7 +723,7 @@ describe('GoalPropertyEditor', () => {
         data={makeGoalNodeData()}
         onChange={defaultOnChange}
         onDelete={onDelete}
-      />
+      />,
     );
     fireEvent.click(screen.getByText('Delete Goal'));
     expect(onDelete).toHaveBeenCalledTimes(1);
@@ -738,7 +741,7 @@ describe('GoalPropertyEditor', () => {
         onChange={defaultOnChange}
         onAdvance={jest.fn()}
         onDelete={jest.fn()}
-      />
+      />,
     );
     expect(screen.getByText('Advance to Actions')).toBeInTheDocument();
     expect(screen.getByText('Delete Goal')).toBeInTheDocument();
@@ -751,7 +754,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ goalType: 'risk' })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const typeSelect = getFieldByLabel(container, 'Type') as HTMLSelectElement;
     expect(typeSelect.value).toBe('risk');
@@ -762,7 +765,7 @@ describe('GoalPropertyEditor', () => {
       <GoalPropertyEditor
         data={makeGoalNodeData({ priority: 'critical' })}
         onChange={defaultOnChange}
-      />
+      />,
     );
     const prioritySelect = getFieldByLabel(container, 'Priority') as HTMLSelectElement;
     expect(prioritySelect.value).toBe('critical');
@@ -869,9 +872,7 @@ describe('GoalCanvas', () => {
 
   it('passes selectedNodeData to GoalPropertyEditor', () => {
     const nodeData = makeGoalNodeData({ label: 'Selected Goal' });
-    mockedUseGoalCanvas.mockReturnValue(
-      makeMockCanvas({ selectedNodeData: nodeData })
-    );
+    mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ selectedNodeData: nodeData }));
 
     const { container } = render(<GoalCanvas canvasId="canvas-1" />);
 
@@ -883,9 +884,7 @@ describe('GoalCanvas', () => {
   });
 
   it('renders property editor empty state when no node is selected', () => {
-    mockedUseGoalCanvas.mockReturnValue(
-      makeMockCanvas({ selectedNodeData: null })
-    );
+    mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ selectedNodeData: null }));
 
     render(<GoalCanvas canvasId="canvas-1" />);
     expect(screen.getByText(/select a goal node to edit/i)).toBeInTheDocument();
@@ -902,9 +901,7 @@ describe('GoalCanvas', () => {
 
   it('renders Delete Goal button in property editor (onDelete is always wired)', () => {
     const nodeData = makeGoalNodeData({ label: 'Deletable' });
-    mockedUseGoalCanvas.mockReturnValue(
-      makeMockCanvas({ selectedNodeData: nodeData })
-    );
+    mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ selectedNodeData: nodeData }));
 
     render(<GoalCanvas canvasId="canvas-1" />);
     expect(screen.getByText('Delete Goal')).toBeInTheDocument();
@@ -949,9 +946,7 @@ describe('GoalCanvas', () => {
 
   it('renders the Generate Actions button when pipelineId is provided', () => {
     render(<GoalCanvas canvasId="canvas-1" pipelineId="pipe-1" />);
-    expect(
-      screen.getByRole('button', { name: /generate actions/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /generate actions/i })).toBeInTheDocument();
   });
 
   it('disables Generate Actions button when there are no nodes', () => {
@@ -963,7 +958,12 @@ describe('GoalCanvas', () => {
 
   it('disables Generate Actions button when no pipelineId', () => {
     const testNodes = [
-      { id: 'g1', type: 'goalNode', position: { x: 0, y: 0 }, data: { goalType: 'goal', label: 'A Goal' } },
+      {
+        id: 'g1',
+        type: 'goalNode',
+        position: { x: 0, y: 0 },
+        data: { goalType: 'goal', label: 'A Goal' },
+      },
     ];
     mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ nodes: testNodes }));
     render(<GoalCanvas canvasId="canvas-1" />);
@@ -973,7 +973,12 @@ describe('GoalCanvas', () => {
 
   it('enables Generate Actions button when nodes exist and pipelineId is provided', () => {
     const testNodes = [
-      { id: 'g1', type: 'goalNode', position: { x: 0, y: 0 }, data: { goalType: 'goal', label: 'A Goal' } },
+      {
+        id: 'g1',
+        type: 'goalNode',
+        position: { x: 0, y: 0 },
+        data: { goalType: 'goal', label: 'A Goal' },
+      },
     ];
     mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ nodes: testNodes }));
     render(<GoalCanvas canvasId="canvas-1" pipelineId="pipe-1" />);
@@ -983,7 +988,12 @@ describe('GoalCanvas', () => {
 
   it('calls apiPost to advance pipeline when Generate Actions is clicked', async () => {
     const testNodes = [
-      { id: 'g1', type: 'goalNode', position: { x: 0, y: 0 }, data: { goalType: 'goal', label: 'A Goal' } },
+      {
+        id: 'g1',
+        type: 'goalNode',
+        position: { x: 0, y: 0 },
+        data: { goalType: 'goal', label: 'A Goal' },
+      },
     ];
     mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ nodes: testNodes }));
     mockApiPost.mockResolvedValueOnce({
@@ -999,7 +1009,7 @@ describe('GoalCanvas', () => {
         canvasId="canvas-1"
         pipelineId="pipe-1"
         onActionsGenerated={onActionsGenerated}
-      />
+      />,
     );
 
     const { act: rtlAct } = require('@testing-library/react');
@@ -1009,17 +1019,19 @@ describe('GoalCanvas', () => {
 
     expect(mockApiPost).toHaveBeenCalledWith(
       '/api/v1/canvas/pipeline/advance',
-      expect.objectContaining({
-        pipeline_id: 'pipe-1',
-        target_stage: 'actions',
-      }),
+      expect.objectContaining({ pipeline_id: 'pipe-1', target_stage: 'actions' }),
     );
     expect(onActionsGenerated).toHaveBeenCalledWith('pipe-1');
   });
 
   it('shows error when Generate Actions API call fails', async () => {
     const testNodes = [
-      { id: 'g1', type: 'goalNode', position: { x: 0, y: 0 }, data: { goalType: 'goal', label: 'A Goal' } },
+      {
+        id: 'g1',
+        type: 'goalNode',
+        position: { x: 0, y: 0 },
+        data: { goalType: 'goal', label: 'A Goal' },
+      },
     ];
     mockedUseGoalCanvas.mockReturnValue(makeMockCanvas({ nodes: testNodes }));
     mockApiPost.mockRejectedValueOnce(new Error('Pipeline advance failed'));

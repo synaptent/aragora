@@ -4,11 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAragoraClient } from '@/hooks/useAragoraClient';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ApiError } from './ApiError';
-import type {
-  AgentHistory,
-  AgentNetwork,
-  AgentPerformance,
-} from '@/lib/aragora-client';
+import type { AgentHistory, AgentNetwork, AgentPerformance } from '@/lib/aragora-client';
 
 interface AgentDetailPanelProps {
   agentId: string;
@@ -104,16 +100,14 @@ export function AgentDetailPanel({ agentId, onClose }: AgentDetailPanelProps) {
             <h2 className="text-lg font-semibold text-white">{agentId}</h2>
             {performance && (
               <p className="text-sm text-slate-400">
-                {performance.total_debates} debates • {(performance.win_rate * 100).toFixed(1)}% win rate
+                {performance.total_debates} debates • {(performance.win_rate * 100).toFixed(1)}% win
+                rate
               </p>
             )}
           </div>
         </div>
         {onClose && (
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             ✕
           </button>
         )}
@@ -147,10 +141,7 @@ export function AgentDetailPanel({ agentId, onClose }: AgentDetailPanelProps) {
               <StatCard label="Draws" value={performance.draws} color="text-yellow-400" />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <StatCard
-                label="Win Rate"
-                value={`${(performance.win_rate * 100).toFixed(1)}%`}
-              />
+              <StatCard label="Win Rate" value={`${(performance.win_rate * 100).toFixed(1)}%`} />
               <StatCard
                 label="Avg ELO Gain"
                 value={performance.avg_elo_gain.toFixed(1)}
@@ -180,18 +171,17 @@ export function AgentDetailPanel({ agentId, onClose }: AgentDetailPanelProps) {
                         h.outcome === 'win'
                           ? 'text-green-400'
                           : h.outcome === 'loss'
-                          ? 'text-red-400'
-                          : 'text-yellow-400'
+                            ? 'text-red-400'
+                            : 'text-yellow-400'
                       }`}
                     >
                       {h.outcome.toUpperCase()}
                     </span>
                     <span
-                      className={`text-xs ${
-                        h.elo_change >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}
+                      className={`text-xs ${h.elo_change >= 0 ? 'text-green-400' : 'text-red-400'}`}
                     >
-                      {h.elo_change >= 0 ? '+' : ''}{h.elo_change}
+                      {h.elo_change >= 0 ? '+' : ''}
+                      {h.elo_change}
                     </span>
                   </div>
                 </div>
@@ -234,9 +224,7 @@ export function AgentDetailPanel({ agentId, onClose }: AgentDetailPanelProps) {
                       className="flex items-center justify-between p-2 bg-slate-800 rounded"
                     >
                       <span className="text-white">{rival.agent_id}</span>
-                      <span className="text-red-400 text-sm">
-                        {rival.rivalry_score.toFixed(1)}
-                      </span>
+                      <span className="text-red-400 text-sm">{rival.rivalry_score.toFixed(1)}</span>
                     </div>
                   ))
                 )}

@@ -12,9 +12,7 @@ import { FeatureGate, useFeatureFlag } from '../FeatureGate';
 import { renderHook } from '@testing-library/react';
 
 // Mock the featureFlags module
-jest.mock('@/lib/featureFlags', () => ({
-  isFeatureEnabled: jest.fn(),
-}));
+jest.mock('@/lib/featureFlags', () => ({ isFeatureEnabled: jest.fn() }));
 
 import { isFeatureEnabled } from '@/lib/featureFlags';
 
@@ -34,7 +32,7 @@ describe('FeatureGate', () => {
       render(
         <FeatureGate feature="GRAPH_DEBATES">
           <div>Feature Content</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(screen.getByText('Feature Content')).toBeInTheDocument();
@@ -42,12 +40,9 @@ describe('FeatureGate', () => {
 
     it('does not render fallback', () => {
       render(
-        <FeatureGate
-          feature="MATRIX_DEBATES"
-          fallback={<div>Fallback Content</div>}
-        >
+        <FeatureGate feature="MATRIX_DEBATES" fallback={<div>Fallback Content</div>}>
           <div>Feature Content</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(screen.getByText('Feature Content')).toBeInTheDocument();
@@ -58,7 +53,7 @@ describe('FeatureGate', () => {
       render(
         <FeatureGate feature="PULSE_TOPICS">
           <div>Content</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(mockIsFeatureEnabled).toHaveBeenCalledWith('PULSE_TOPICS');
@@ -74,7 +69,7 @@ describe('FeatureGate', () => {
       render(
         <FeatureGate feature="GRAPH_DEBATES">
           <div>Feature Content</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(screen.queryByText('Feature Content')).not.toBeInTheDocument();
@@ -82,12 +77,9 @@ describe('FeatureGate', () => {
 
     it('renders fallback when provided', () => {
       render(
-        <FeatureGate
-          feature="MATRIX_DEBATES"
-          fallback={<div>Coming Soon</div>}
-        >
+        <FeatureGate feature="MATRIX_DEBATES" fallback={<div>Coming Soon</div>}>
           <div>Feature Content</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(screen.getByText('Coming Soon')).toBeInTheDocument();
@@ -98,7 +90,7 @@ describe('FeatureGate', () => {
       const { container } = render(
         <FeatureGate feature="GRAPH_DEBATES">
           <div>Feature Content</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(container.textContent).toBe('');
@@ -116,7 +108,7 @@ describe('FeatureGate', () => {
           <div>Child 1</div>
           <div>Child 2</div>
           <div>Child 3</div>
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(screen.getByText('Child 1')).toBeInTheDocument();
@@ -130,7 +122,7 @@ describe('FeatureGate', () => {
       render(
         <FeatureGate feature="GRAPH_DEBATES">
           <NestedComponent />
-        </FeatureGate>
+        </FeatureGate>,
       );
 
       expect(screen.getByText('Nested')).toBeInTheDocument();

@@ -80,13 +80,14 @@ export function MetricCard({
     return `${sign}${val.toFixed(1)}%`;
   };
 
-  const changeColor = change !== undefined
-    ? change >= 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'
-    : '';
+  const changeColor =
+    change !== undefined ? (change >= 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]') : '';
 
   if (loading) {
     return (
-      <div className={`border ${colors.border} ${colors.bg} p-4 rounded ${colors.glow} ${className}`}>
+      <div
+        className={`border ${colors.border} ${colors.bg} p-4 rounded ${colors.glow} ${className}`}
+      >
         <div className="animate-pulse space-y-3">
           <div className="h-3 bg-surface rounded w-1/2" />
           <div className="h-8 bg-surface rounded w-3/4" />
@@ -109,27 +110,15 @@ export function MetricCard({
       </div>
 
       {/* Value */}
-      <div className={`text-2xl font-theme-data ${colors.text} mb-1`}>
-        {value}
-      </div>
+      <div className={`text-2xl font-theme-data ${colors.text} mb-1`}>{value}</div>
 
       {/* Subtitle and Change */}
       <div className="flex items-center justify-between">
-        {subtitle && (
-          <span className="text-text-muted text-xs font-theme-data">
-            {subtitle}
-          </span>
-        )}
+        {subtitle && <span className="text-text-muted text-xs font-theme-data">{subtitle}</span>}
         {change !== undefined && (
           <div className="flex items-center gap-1">
-            <span className={`text-xs font-theme-data ${changeColor}`}>
-              {formatChange(change)}
-            </span>
-            {changePeriod && (
-              <span className="text-text-muted text-[10px]">
-                {changePeriod}
-              </span>
-            )}
+            <span className={`text-xs font-theme-data ${changeColor}`}>{formatChange(change)}</span>
+            {changePeriod && <span className="text-text-muted text-[10px]">{changePeriod}</span>}
           </div>
         )}
       </div>

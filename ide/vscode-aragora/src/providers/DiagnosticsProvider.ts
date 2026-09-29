@@ -7,6 +7,9 @@
 
 import * as vscode from 'vscode';
 import type { SecurityFinding, Severity, CodeLocation } from '../types/messages';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 interface AnalyzeResponse {
   findings: Array<{
@@ -82,7 +85,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         if (e.affectsConfiguration('aragora')) {
           this.loadConfiguration();
         }
-      })
+      }),
     );
 
     // Analyze on save
@@ -91,7 +94,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         if (this.analyzeOnSave && this.isAnalyzableDocument(document)) {
           this.analyzeDocument(document);
         }
-      })
+      }),
     );
 
     // Analyze on open
@@ -100,7 +103,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         if (this.analyzeOnOpen && this.isAnalyzableDocument(document)) {
           this.analyzeDocument(document);
         }
-      })
+      }),
     );
 
     // Clear diagnostics when document closes
@@ -108,7 +111,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
       vscode.workspace.onDidCloseTextDocument((document) => {
         this.diagnosticCollection.delete(document.uri);
         this.findings.delete(document.uri.toString());
-      })
+      }),
     );
 
     // Clear diagnostics when document content changes (debounced analysis)
@@ -117,7 +120,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         if (this.isAnalyzableDocument(event.document)) {
           this.scheduleAnalysis(event.document);
         }
-      })
+      }),
     );
   }
 
@@ -148,10 +151,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
       'swift',
       'kotlin',
     ];
-    return (
-      analyzableLanguages.includes(document.languageId) &&
-      document.uri.scheme === 'file'
-    );
+    return analyzableLanguages.includes(document.languageId) && document.uri.scheme === 'file';
   }
 
   private scheduleAnalysis(document: vscode.TextDocument): void {
@@ -188,7 +188,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
       this.updateDiagnostics(uri, findings);
       return findings;
     } catch (error) {
-      console.error('Aragora analysis failed:', error);
+      logger.error('Aragora analysis failed:', error);
       // Don't clear existing diagnostics on error
       return this.findings.get(uri.toString()) || [];
     }
@@ -197,11 +197,9 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
   private async callAnalyzeAPI(
     content: string,
     language: string,
-    fileName: string
+    fileName: string,
   ): Promise<SecurityFinding[]> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
@@ -234,9 +232,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
     }
   }
 
-  private transformFindings(
-    apiFindings: AnalyzeResponse['findings']
-  ): SecurityFinding[] {
+  private transformFindings(apiFindings: AnalyzeResponse['findings']): SecurityFinding[] {
     return apiFindings.map((f) => ({
       id: f.id,
       title: f.title,
@@ -269,7 +265,8 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         findings.push({
           id: `secret-${index}`,
           title: 'Hardcoded Secret Detected',
-          description: 'Sensitive data should not be hardcoded. Use environment variables or a secrets manager.',
+          description:
+            'Sensitive data should not be hardcoded. Use environment variables or a secrets manager.',
           severity: 'critical',
           category: 'security',
           location: { file: '', line: index + 1, column: 0 },
@@ -280,7 +277,9 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
       }
 
       // Check for SQL injection patterns (simplified)
-      if (/(?:execute|query|raw)\s*\([^)]*\+|f['"].*{.*}.*(?:SELECT|INSERT|UPDATE|DELETE)/i.test(line)) {
+      if (
+        /(?:execute|query|raw)\s*\([^)]*\+|f['"].*{.*}.*(?:SELECT|INSERT|UPDATE|DELETE)/i.test(line)
+      ) {
         findings.push({
           id: `sqli-${index}`,
           title: 'Potential SQL Injection',
@@ -303,7 +302,8 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
           severity: 'high',
           category: 'security',
           location: { file: '', line: index + 1, column: line.indexOf('eval') },
-          suggestion: 'Avoid eval() - use safer alternatives like JSON.parse() or Function constructor',
+          suggestion:
+            'Avoid eval() - use safer alternatives like JSON.parse() or Function constructor',
           cweId: 'CWE-95',
         });
       }
@@ -346,13 +346,13 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         finding.location.line - 1,
         finding.location.column,
         finding.location.endLine ? finding.location.endLine - 1 : finding.location.line - 1,
-        finding.location.endColumn || Number.MAX_VALUE
+        finding.location.endColumn || Number.MAX_VALUE,
       );
 
       const diagnostic = new vscode.Diagnostic(
         range,
         `${getSeverityIcon(finding.severity)} ${finding.title}: ${finding.description}`,
-        mapSeverity(finding.severity)
+        mapSeverity(finding.severity),
       );
 
       diagnostic.source = 'Aragora';
@@ -363,7 +363,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
         diagnostic.relatedInformation = [
           new vscode.DiagnosticRelatedInformation(
             new vscode.Location(uri, range),
-            `💡 Suggestion: ${finding.suggestion}`
+            `💡 Suggestion: ${finding.suggestion}`,
           ),
         ];
       }
@@ -414,7 +414,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
    */
   async analyzeAllOpenDocuments(): Promise<void> {
     const documents = vscode.workspace.textDocuments.filter((doc) =>
-      this.isAnalyzableDocument(doc)
+      this.isAnalyzableDocument(doc),
     );
 
     await Promise.all(documents.map((doc) => this.analyzeDocument(doc)));
@@ -424,14 +424,14 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
    * Analyze entire workspace
    */
   async analyzeWorkspace(
-    progress?: vscode.Progress<{ message?: string; increment?: number }>
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
   ): Promise<Map<string, SecurityFinding[]>> {
     const results = new Map<string, SecurityFinding[]>();
 
     // Find all code files in workspace
     const files = await vscode.workspace.findFiles(
       '**/*.{js,ts,jsx,tsx,py,java,go,rs,c,cpp,cs,php,rb,swift,kt}',
-      '**/node_modules/**'
+      '**/node_modules/**',
     );
 
     const total = files.length;
@@ -445,7 +445,7 @@ export class AragoraDiagnosticsProvider implements vscode.Disposable {
           results.set(file.fsPath, findings);
         }
       } catch (error) {
-        console.error(`Failed to analyze ${file.fsPath}:`, error);
+        logger.error(`Failed to analyze ${file.fsPath}:`, error);
       }
 
       processed++;

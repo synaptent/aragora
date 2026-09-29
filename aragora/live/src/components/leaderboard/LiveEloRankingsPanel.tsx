@@ -54,11 +54,7 @@ function normalizeRankings(response: RankingsResponse | null): LiveRankingRow[] 
     elo: Math.round(entry.elo ?? 1500),
     calibrationScore: entry.calibration_score,
     debateCount:
-      entry.games_played ??
-      entry.debate_count ??
-      entry.total_debates ??
-      entry.matches ??
-      0,
+      entry.games_played ?? entry.debate_count ?? entry.total_debates ?? entry.matches ?? 0,
   }));
 }
 
@@ -68,10 +64,7 @@ function formatErrorMessage(status: number | null): string {
   return 'Failed to load live rankings.';
 }
 
-function LiveEloRankingsPanelComponent({
-  apiBase,
-  limit = 20,
-}: LiveEloRankingsPanelProps) {
+function LiveEloRankingsPanelComponent({ apiBase, limit = 20 }: LiveEloRankingsPanelProps) {
   const { tokens } = useAuth();
   const [response, setResponse] = useState<RankingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,7 +96,7 @@ function LiveEloRankingsPanelComponent({
           return;
         }
 
-        const data = await res.json() as RankingsResponse;
+        const data = (await res.json()) as RankingsResponse;
         setResponse(data);
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -208,9 +201,7 @@ function LiveEloRankingsPanelComponent({
                         <span className="text-text-muted">--</span>
                       )}
                     </td>
-                    <td className="py-1.5 px-1 text-right text-text-muted">
-                      {agent.debateCount}
-                    </td>
+                    <td className="py-1.5 px-1 text-right text-text-muted">{agent.debateCount}</td>
                   </tr>
                 );
               })}

@@ -23,13 +23,7 @@ interface ScanResult {
   files_scanned: number;
   lines_scanned?: number;
   risk_score?: number;
-  summary: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    info?: number;
-  };
+  summary: { critical: number; high: number; medium: number; low: number; info?: number };
   findings: Finding[];
 }
 
@@ -39,32 +33,18 @@ interface ReportExporterProps {
 
 type ExportFormat = 'json' | 'csv' | 'sarif' | 'markdown';
 
-const EXPORT_FORMATS: Array<{ id: ExportFormat; name: string; description: string; icon: string }> = [
-  {
-    id: 'json',
-    name: 'JSON',
-    description: 'Full scan data in JSON format',
-    icon: '{ }',
-  },
-  {
-    id: 'csv',
-    name: 'CSV',
-    description: 'Spreadsheet-compatible format',
-    icon: '=',
-  },
-  {
-    id: 'sarif',
-    name: 'SARIF',
-    description: 'Standard format for code scanning tools',
-    icon: '#',
-  },
-  {
-    id: 'markdown',
-    name: 'Markdown',
-    description: 'Human-readable report',
-    icon: 'M',
-  },
-];
+const EXPORT_FORMATS: Array<{ id: ExportFormat; name: string; description: string; icon: string }> =
+  [
+    { id: 'json', name: 'JSON', description: 'Full scan data in JSON format', icon: '{ }' },
+    { id: 'csv', name: 'CSV', description: 'Spreadsheet-compatible format', icon: '=' },
+    {
+      id: 'sarif',
+      name: 'SARIF',
+      description: 'Standard format for code scanning tools',
+      icon: '#',
+    },
+    { id: 'markdown', name: 'Markdown', description: 'Human-readable report', icon: 'M' },
+  ];
 
 export function ReportExporter({ result }: ReportExporterProps) {
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
@@ -75,8 +55,18 @@ export function ReportExporter({ result }: ReportExporterProps) {
   };
 
   const generateCSV = (): string => {
-    const headers = ['ID', 'Severity', 'Title', 'Category', 'File', 'Line', 'CWE', 'Confidence', 'Description'];
-    const rows = result.findings.map(f => [
+    const headers = [
+      'ID',
+      'Severity',
+      'Title',
+      'Category',
+      'File',
+      'Line',
+      'CWE',
+      'Confidence',
+      'Description',
+    ];
+    const rows = result.findings.map((f) => [
       f.id,
       f.severity,
       `"${f.title.replace(/"/g, '""')}"`,
@@ -87,12 +77,13 @@ export function ReportExporter({ result }: ReportExporterProps) {
       (f.confidence * 100).toFixed(0) + '%',
       `"${f.description.replace(/"/g, '""')}"`,
     ]);
-    return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
   };
 
   const generateSARIF = (): string => {
     const sarif = {
-      $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+      $schema:
+        'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
       version: '2.1.0',
       runs: [
         {
@@ -101,26 +92,31 @@ export function ReportExporter({ result }: ReportExporterProps) {
               name: 'Aragora Security Scanner',
               version: '1.0.0',
               informationUri: 'https://aragora.ai',
-              rules: result.findings.map(f => ({
+              rules: result.findings.map((f) => ({
                 id: f.id,
                 name: f.title,
                 shortDescription: { text: f.title },
                 fullDescription: { text: f.description },
                 defaultConfiguration: {
-                  level: f.severity === 'critical' || f.severity === 'high' ? 'error' :
-                         f.severity === 'medium' ? 'warning' : 'note',
+                  level:
+                    f.severity === 'critical' || f.severity === 'high'
+                      ? 'error'
+                      : f.severity === 'medium'
+                        ? 'warning'
+                        : 'note',
                 },
-                properties: {
-                  category: f.category,
-                  cwe: f.cwe_id,
-                },
+                properties: { category: f.category, cwe: f.cwe_id },
               })),
             },
           },
-          results: result.findings.map(f => ({
+          results: result.findings.map((f) => ({
             ruleId: f.id,
-            level: f.severity === 'critical' || f.severity === 'high' ? 'error' :
-                   f.severity === 'medium' ? 'warning' : 'note',
+            level:
+              f.severity === 'critical' || f.severity === 'high'
+                ? 'error'
+                : f.severity === 'medium'
+                  ? 'warning'
+                  : 'note',
             message: { text: f.description },
             locations: [
               {
@@ -130,10 +126,7 @@ export function ReportExporter({ result }: ReportExporterProps) {
                 },
               },
             ],
-            properties: {
-              confidence: f.confidence,
-              recommendation: f.recommendation,
-            },
+            properties: { confidence: f.confidence, recommendation: f.recommendation },
           })),
         },
       ],
@@ -176,7 +169,7 @@ export function ReportExporter({ result }: ReportExporterProps) {
 
       const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
       const sortedFindings = [...result.findings].sort(
-        (a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity)
+        (a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity),
       );
 
       for (const finding of sortedFindings) {
@@ -270,9 +263,7 @@ export function ReportExporter({ result }: ReportExporterProps) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} EXPORT REPORT
-        </h4>
+        <h4 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} EXPORT REPORT</h4>
         <button
           onClick={copyToClipboard}
           className="px-3 py-1 text-xs font-theme-data text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)] rounded hover:border-[var(--acid-green)]/30 transition-colors"

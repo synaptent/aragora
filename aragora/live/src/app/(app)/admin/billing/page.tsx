@@ -42,16 +42,35 @@ interface PlanInfo {
 
 const TIER_PRICES: Record<string, { monthly: number; features: string[] }> = {
   free: { monthly: 0, features: ['10 debates/month', '3 agents', 'Community support'] },
-  starter: { monthly: 29, features: ['100 debates/month', '10 agents', 'Email support', 'API access'] },
-  professional: { monthly: 99, features: ['1,000 debates/month', 'All agents', 'Priority support', 'Advanced analytics', 'Full API access'] },
-  enterprise: { monthly: 0, features: ['Unlimited debates', 'SSO/SCIM', 'Dedicated support', 'SLA guarantee', 'On-prem option', 'Compliance'] },
+  starter: {
+    monthly: 29,
+    features: ['100 debates/month', '10 agents', 'Email support', 'API access'],
+  },
+  professional: {
+    monthly: 99,
+    features: [
+      '1,000 debates/month',
+      'All agents',
+      'Priority support',
+      'Advanced analytics',
+      'Full API access',
+    ],
+  },
+  enterprise: {
+    monthly: 0,
+    features: [
+      'Unlimited debates',
+      'SSO/SCIM',
+      'Dedicated support',
+      'SLA guarantee',
+      'On-prem option',
+      'Compliance',
+    ],
+  },
 };
 
 function formatCurrency(cents: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(cents / 100);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
 }
 
 function StatusBadge({ status }: { status: Invoice['status'] }) {
@@ -64,13 +83,23 @@ function StatusBadge({ status }: { status: Invoice['status'] }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.draft}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.draft}`}
+    >
       {status.toUpperCase()}
     </span>
   );
 }
 
-function TierCard({ tier, current, onUpgrade }: { tier: string; current: boolean; onUpgrade: (tier: string) => void }) {
+function TierCard({
+  tier,
+  current,
+  onUpgrade,
+}: {
+  tier: string;
+  current: boolean;
+  onUpgrade: (tier: string) => void;
+}) {
   const info = TIER_PRICES[tier];
   if (!info) return null;
 
@@ -85,7 +114,8 @@ function TierCard({ tier, current, onUpgrade }: { tier: string; current: boolean
         )}
       </div>
       <div className="font-theme-data text-2xl text-[var(--acid-cyan)] mb-4">
-        ${info.monthly}<span className="text-sm text-text-muted">/mo</span>
+        ${info.monthly}
+        <span className="text-sm text-text-muted">/mo</span>
       </div>
       <ul className="space-y-2 mb-4">
         {info.features.map((feature, idx) => (
@@ -132,7 +162,7 @@ export default function BillingPage() {
 
       // Fetch usage summary
       const usageRes = await fetch(`${backendConfig.api}/api/billing/usage`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (usageRes.ok) {
         const data = await usageRes.json();
@@ -141,7 +171,7 @@ export default function BillingPage() {
 
       // Fetch plan info
       const planRes = await fetch(`${backendConfig.api}/api/billing/plan`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (planRes.ok) {
         const data = await planRes.json();
@@ -150,7 +180,7 @@ export default function BillingPage() {
 
       // Fetch invoices
       const invoicesRes = await fetch(`${backendConfig.api}/api/billing/invoices`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (invoicesRes.ok) {
         const data = await invoicesRes.json();
@@ -161,34 +191,49 @@ export default function BillingPage() {
       try {
         const analyticsRes = await fetch(
           `${backendConfig.api}/api/v1/analytics/usage?period=${timeRange}`,
-          { headers: { 'Authorization': `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` } },
         );
         if (analyticsRes.ok) {
           const data = await analyticsRes.json();
           if (data.daily_tokens) {
-            setTokenChartData(data.daily_tokens.map((d: { date: string; count: number }) => ({
-              label: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              value: d.count,
-              date: d.date,
-            })));
+            setTokenChartData(
+              data.daily_tokens.map((d: { date: string; count: number }) => ({
+                label: new Date(d.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }),
+                value: d.count,
+                date: d.date,
+              })),
+            );
           } else {
             setTokenChartData([]);
           }
           if (data.daily_debates) {
-            setDebateChartData(data.daily_debates.map((d: { date: string; count: number }) => ({
-              label: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              value: d.count,
-              date: d.date,
-            })));
+            setDebateChartData(
+              data.daily_debates.map((d: { date: string; count: number }) => ({
+                label: new Date(d.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }),
+                value: d.count,
+                date: d.date,
+              })),
+            );
           } else {
             setDebateChartData([]);
           }
           if (data.daily_api_calls) {
-            setApiCallChartData(data.daily_api_calls.map((d: { date: string; count: number }) => ({
-              label: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              value: d.count,
-              date: d.date,
-            })));
+            setApiCallChartData(
+              data.daily_api_calls.map((d: { date: string; count: number }) => ({
+                label: new Date(d.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }),
+                value: d.count,
+                date: d.date,
+              })),
+            );
           } else {
             setApiCallChartData([]);
           }
@@ -227,10 +272,7 @@ export default function BillingPage() {
     try {
       const res = await fetch(`${backendConfig.api}/api/billing/checkout`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ tier }),
       });
 
@@ -380,15 +422,21 @@ export default function BillingPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="font-theme-data text-sm text-text-muted">Input Tokens</span>
-                    <span className="font-theme-data text-sm text-text">{usage.tokens_in?.toLocaleString() || 0}</span>
+                    <span className="font-theme-data text-sm text-text">
+                      {usage.tokens_in?.toLocaleString() || 0}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-theme-data text-sm text-text-muted">Output Tokens</span>
-                    <span className="font-theme-data text-sm text-text">{usage.tokens_out?.toLocaleString() || 0}</span>
+                    <span className="font-theme-data text-sm text-text">
+                      {usage.tokens_out?.toLocaleString() || 0}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center pt-4 border-t border-[var(--accent)]/20">
                     <span className="font-theme-data text-sm text-text-muted">Total</span>
-                    <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{usage.tokens_used?.toLocaleString() || 0}</span>
+                    <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                      {usage.tokens_used?.toLocaleString() || 0}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-theme-data text-sm text-text-muted">Total Debates</span>
@@ -417,19 +465,33 @@ export default function BillingPage() {
             <table className="w-full">
               <thead className="bg-surface border-b border-[var(--accent)]/20">
                 <tr>
-                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">INVOICE</th>
-                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">PERIOD</th>
-                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">AMOUNT</th>
-                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">STATUS</th>
-                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">DATE</th>
-                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">ACTIONS</th>
+                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                    INVOICE
+                  </th>
+                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                    PERIOD
+                  </th>
+                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                    AMOUNT
+                  </th>
+                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                    STATUS
+                  </th>
+                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                    DATE
+                  </th>
+                  <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                    ACTIONS
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center">
-                      <div className="font-theme-data text-text-muted animate-pulse">Loading...</div>
+                      <div className="font-theme-data text-text-muted animate-pulse">
+                        Loading...
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -440,44 +502,50 @@ export default function BillingPage() {
                     </td>
                   </tr>
                 )}
-                {!loading && invoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b border-[var(--accent)]/10 hover:bg-surface/50">
-                    <td className="px-4 py-3">
-                      <div className="font-theme-data text-sm text-[var(--acid-cyan)]">{invoice.number}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-theme-data text-xs text-text-muted">
-                        {new Date(invoice.period_start).toLocaleDateString()} -
-                        {new Date(invoice.period_end).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-theme-data text-sm text-text">
-                        {formatCurrency(invoice.amount_due, invoice.currency)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={invoice.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-theme-data text-xs text-text-muted">
-                        {new Date(invoice.created_at).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {invoice.pdf_url && (
-                        <a
-                          href={invoice.pdf_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-theme-data text-xs text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
-                        >
-                          Download PDF
-                        </a>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {!loading &&
+                  invoices.map((invoice) => (
+                    <tr
+                      key={invoice.id}
+                      className="border-b border-[var(--accent)]/10 hover:bg-surface/50"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                          {invoice.number}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-theme-data text-xs text-text-muted">
+                          {new Date(invoice.period_start).toLocaleDateString()} -
+                          {new Date(invoice.period_end).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-theme-data text-sm text-text">
+                          {formatCurrency(invoice.amount_due, invoice.currency)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={invoice.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-theme-data text-xs text-text-muted">
+                          {new Date(invoice.created_at).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {invoice.pdf_url && (
+                          <a
+                            href={invoice.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-theme-data text-xs text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+                          >
+                            Download PDF
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -508,9 +576,12 @@ export default function BillingPage() {
             <div className="mt-8 card p-6 border-acid-yellow/40 bg-acid-yellow/5">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <h3 className="font-theme-data text-lg text-[var(--acid-yellow)] mb-1">Need more power?</h3>
+                  <h3 className="font-theme-data text-lg text-[var(--acid-yellow)] mb-1">
+                    Need more power?
+                  </h3>
                   <p className="font-theme-data text-sm text-text-muted">
-                    Contact sales for Enterprise pricing with unlimited debates, SSO, and dedicated support.
+                    Contact sales for Enterprise pricing with unlimited debates, SSO, and dedicated
+                    support.
                   </p>
                 </div>
                 <a

@@ -10,7 +10,7 @@ export class MockUri {
   constructor(
     public readonly scheme: string,
     public readonly path: string,
-    public readonly fsPath: string = path
+    public readonly fsPath: string = path,
   ) {}
 
   static file(path: string): MockUri {
@@ -34,7 +34,7 @@ export class MockUri {
 export class MockPosition {
   constructor(
     public readonly line: number,
-    public readonly character: number
+    public readonly character: number,
   ) {}
 
   isEqual(other: MockPosition): boolean {
@@ -54,13 +54,18 @@ export class MockPosition {
 export class MockRange {
   constructor(
     public readonly start: MockPosition,
-    public readonly end: MockPosition
+    public readonly end: MockPosition,
   ) {}
 
-  static fromNumbers(startLine: number, startChar: number, endLine: number, endChar: number): MockRange {
+  static fromNumbers(
+    startLine: number,
+    startChar: number,
+    endLine: number,
+    endChar: number,
+  ): MockRange {
     return new MockRange(
       new MockPosition(startLine, startChar),
-      new MockPosition(endLine, endChar)
+      new MockPosition(endLine, endChar),
     );
   }
 
@@ -77,7 +82,7 @@ export class MockRange {
 export class MockSelection extends MockRange {
   constructor(
     public readonly anchor: MockPosition,
-    public readonly active: MockPosition
+    public readonly active: MockPosition,
   ) {
     super(anchor, active);
   }
@@ -100,7 +105,7 @@ export class MockDiagnostic {
   constructor(
     public range: MockRange,
     public message: string,
-    public severity: MockDiagnosticSeverity = MockDiagnosticSeverity.Warning
+    public severity: MockDiagnosticSeverity = MockDiagnosticSeverity.Warning,
   ) {}
 
   source?: string;
@@ -129,19 +134,14 @@ export class MockCodeActionKind {
 
 // Mock Code Action
 export class MockCodeAction {
-  command?: {
-    command: string;
-    title: string;
-    arguments?: unknown[];
-    tooltip?: string;
-  };
+  command?: { command: string; title: string; arguments?: unknown[]; tooltip?: string };
   diagnostics?: MockDiagnostic[];
   isPreferred?: boolean;
   edit?: unknown;
 
   constructor(
     public title: string,
-    public kind?: MockCodeActionKind
+    public kind?: MockCodeActionKind,
   ) {}
 }
 
@@ -155,7 +155,7 @@ export class MockTreeItem {
 
   constructor(
     public label: string,
-    public collapsibleState: MockTreeItemCollapsibleState = MockTreeItemCollapsibleState.None
+    public collapsibleState: MockTreeItemCollapsibleState = MockTreeItemCollapsibleState.None,
   ) {}
 }
 
@@ -170,7 +170,7 @@ export enum MockTreeItemCollapsibleState {
 export class MockThemeIcon {
   constructor(
     public readonly id: string,
-    public readonly color?: MockThemeColor
+    public readonly color?: MockThemeColor,
   ) {}
 }
 
@@ -208,7 +208,7 @@ export class MockMarkdownString {
 export class MockHover {
   constructor(
     public contents: MockMarkdownString | MockMarkdownString[],
-    public range?: MockRange
+    public range?: MockRange,
   ) {}
 }
 
@@ -271,7 +271,7 @@ export class MockTextLine {
     public readonly range: MockRange,
     public readonly rangeIncludingLineBreak: MockRange,
     public readonly firstNonWhitespaceCharacterIndex: number = 0,
-    public readonly isEmptyOrWhitespace: boolean = false
+    public readonly isEmptyOrWhitespace: boolean = false,
   ) {}
 }
 
@@ -283,7 +283,7 @@ export class MockTextDocument {
     public readonly uri: MockUri,
     public readonly languageId: string,
     public readonly content: string,
-    public readonly fileName: string = uri.fsPath
+    public readonly fileName: string = uri.fsPath,
   ) {
     this.lines = this.content.split('\n');
   }
@@ -300,7 +300,7 @@ export class MockTextDocument {
       MockRange.fromNumbers(line, 0, line, text.length),
       MockRange.fromNumbers(line, 0, line, text.length + 1),
       text.search(/\S/),
-      text.trim().length === 0
+      text.trim().length === 0,
     );
   }
 
@@ -315,12 +315,105 @@ export class MockTextDocument {
         text = text.substring(range.start.character);
       }
       if (i === range.end.line) {
-        text = text.substring(0, range.end.character - (i === range.start.line ? range.start.character : 0));
+        text = text.substring(
+          0,
+          range.end.character - (i === range.start.line ? range.start.character : 0),
+        );
       }
       lines.push(text);
     }
     return lines.join('\n');
   }
+}
+
+// Mock OutputChannel: records every appended line so tests can read the channel text.
+export class MockOutputChannel {
+  readonly lines: string[] = [];
+  disposed = false;
+
+  constructor(public readonly name: string) {}
+
+  append(value: string): void {
+    this.lines.push(value);
+  }
+
+  appendLine(value: string): void {
+    this.lines.push(value);
+  }
+
+  replace(value: string): void {
+    this.lines.length = 0;
+    this.lines.push(value);
+  }
+
+  clear(): void {
+    this.lines.length = 0;
+  }
+
+  show(): void {}
+
+  hide(): void {}
+
+  dispose(): void {
+    this.disposed = true;
+  }
+
+  get text(): string {
+    return this.lines.join('\n');
+  }
+}
+
+export enum ExtensionMode {
+  Production = 1,
+  Development = 2,
+  Test = 3,
+}
+
+// Settings read through workspace.getConfiguration(section).get(key), keyed by full name.
+const mockSettings = new Map<string, unknown>();
+
+export const createdOutputChannels: MockOutputChannel[] = [];
+
+export const window = {
+  createOutputChannel(name: string): MockOutputChannel {
+    const channel = new MockOutputChannel(name);
+    createdOutputChannels.push(channel);
+    return channel;
+  },
+};
+
+export const workspace = {
+  getConfiguration(section?: string) {
+    const fullKey = (key: string): string => (section ? `${section}.${key}` : key);
+    return {
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        const name = fullKey(key);
+        return mockSettings.has(name) ? (mockSettings.get(name) as T) : defaultValue;
+      },
+      has(key: string): boolean {
+        return mockSettings.has(fullKey(key));
+      },
+      async update(key: string, value: unknown): Promise<void> {
+        mockSettings.set(fullKey(key), value);
+      },
+    };
+  },
+};
+
+export const env = { isTelemetryEnabled: true, machineId: 'mock-machine-id' };
+
+/** Sets settings by full name, e.g. `{ 'aragora.logLevel': 'debug' }`. */
+export function setMockConfiguration(values: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(values)) {
+    mockSettings.set(key, value);
+  }
+}
+
+/** Restores the configurable parts of the mock to their defaults. */
+export function resetMockVscode(): void {
+  mockSettings.clear();
+  createdOutputChannels.length = 0;
+  env.isTelemetryEnabled = true;
 }
 
 // Export combined mock module
@@ -342,5 +435,3 @@ export const vscode = {
   EventEmitter: MockEventEmitter,
   Disposable: MockDisposable,
 };
-
-export default vscode;

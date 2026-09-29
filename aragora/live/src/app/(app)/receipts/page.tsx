@@ -116,12 +116,7 @@ interface ShareReceiptResponse {
   expires_at?: string;
 }
 
-const EMPTY_RISK_SUMMARY: RiskSummary = {
-  critical: 0,
-  high: 0,
-  medium: 0,
-  low: 0,
-};
+const EMPTY_RISK_SUMMARY: RiskSummary = { critical: 0, high: 0, medium: 0, low: 0 };
 
 const DEBATE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -211,13 +206,7 @@ function normalizeStatus(value: unknown): ReceiptListItem['status'] {
   }
 }
 
-type ReceiptSurfaceState =
-  | 'pending'
-  | 'live'
-  | 'partial'
-  | 'blocked'
-  | 'complete'
-  | 'failed';
+type ReceiptSurfaceState = 'pending' | 'live' | 'partial' | 'blocked' | 'complete' | 'failed';
 
 function deriveSurfaceState(item: ReceiptListItem): ReceiptSurfaceState {
   switch (item.status) {
@@ -381,7 +370,7 @@ function formatDate(value: string): string {
 
 function normalizeListItem(
   raw: Record<string, unknown>,
-  source: ReceiptSource
+  source: ReceiptSource,
 ): ReceiptListItem | null {
   const receiptId = safeString(raw.receipt_id) ?? safeString(raw.id);
   const gauntletId = safeString(raw.gauntlet_id) ?? safeString(raw.run_id);
@@ -415,7 +404,7 @@ function normalizeListItem(
 
 function normalizeListResponse(
   response: ApiListResponse | null,
-  source: ReceiptSource
+  source: ReceiptSource,
 ): ReceiptListItem[] {
   const rawItems = response?.receipts ?? response?.results ?? response?.data ?? [];
   return rawItems
@@ -426,12 +415,7 @@ function normalizeListResponse(
 function sameRiskSummary(a?: RiskSummary, b?: RiskSummary): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  return (
-    a.critical === b.critical &&
-    a.high === b.high &&
-    a.medium === b.medium &&
-    a.low === b.low
-  );
+  return a.critical === b.critical && a.high === b.high && a.medium === b.medium && a.low === b.low;
 }
 
 function sameReceiptItem(a: ReceiptListItem, b: ReceiptListItem): boolean {
@@ -459,10 +443,8 @@ function sameReceiptList(a: ReceiptListItem[], b: ReceiptListItem[]): boolean {
 function receiptIdentifiers(item: ReceiptListItem): string[] {
   return Array.from(
     new Set(
-      [item.receiptId, item.gauntletId, item.id].filter(
-        (value): value is string => Boolean(value)
-      )
-    )
+      [item.receiptId, item.gauntletId, item.id].filter((value): value is string => Boolean(value)),
+    ),
   );
 }
 
@@ -470,10 +452,7 @@ function hasReceiptFindings(summary?: RiskSummary): boolean {
   return totalFindings(summary) > 0;
 }
 
-function mergeReceiptItems(
-  preferred: ReceiptListItem,
-  fallback: ReceiptListItem
-): ReceiptListItem {
+function mergeReceiptItems(preferred: ReceiptListItem, fallback: ReceiptListItem): ReceiptListItem {
   return {
     ...preferred,
     receiptId: preferred.receiptId ?? fallback.receiptId,
@@ -485,12 +464,12 @@ function mergeReceiptItems(
     input_summary: preferred.input_summary ?? fallback.input_summary,
     risk_summary: hasReceiptFindings(preferred.risk_summary)
       ? preferred.risk_summary
-      : fallback.risk_summary ?? preferred.risk_summary,
+      : (fallback.risk_summary ?? preferred.risk_summary),
     risk_level: preferred.risk_level ?? fallback.risk_level,
     vulnerabilities_found:
       preferred.vulnerabilities_found && preferred.vulnerabilities_found > 0
         ? preferred.vulnerabilities_found
-        : fallback.vulnerabilities_found ?? preferred.vulnerabilities_found,
+        : (fallback.vulnerabilities_found ?? preferred.vulnerabilities_found),
   };
 }
 
@@ -526,7 +505,7 @@ function mergeReceiptSources(...sources: ReceiptListItem[][]): ReceiptListItem[]
       const nextItem = mergeReceiptItems(merged[existingIndex]!, item);
       merged[existingIndex] = nextItem;
       receiptIdentifiers(nextItem).forEach((identifier) =>
-        identifierToIndex.set(identifier, existingIndex)
+        identifierToIndex.set(identifier, existingIndex),
       );
     }
   }
@@ -606,13 +585,9 @@ function normalizeVulnerabilityDetails(value: unknown) {
     })
     .filter(
       (
-        finding
-      ): finding is {
-        id: string;
-        category: string;
-        severity: string;
-        description: string;
-      } => finding !== null
+        finding,
+      ): finding is { id: string; category: string; severity: string; description: string } =>
+        finding !== null,
     );
 }
 
@@ -729,41 +704,25 @@ function formatCount(value: number): string {
 
 function normalizeReceiptDetail(
   raw: Record<string, unknown>,
-  sourceItem: ReceiptListItem
+  sourceItem: ReceiptListItem,
 ): DecisionReceipt {
   const riskSummary = normalizeRiskSummary(raw) ?? EMPTY_RISK_SUMMARY;
   const findings = normalizeVulnerabilityDetails(raw.vulnerability_details ?? raw.findings);
 
   return {
-    receipt_id:
-      safeString(raw.receipt_id) ??
-      sourceItem.receiptId ??
-      sourceItem.id,
-    gauntlet_id:
-      safeString(raw.gauntlet_id) ??
-      sourceItem.gauntletId ??
-      sourceItem.id,
+    receipt_id: safeString(raw.receipt_id) ?? sourceItem.receiptId ?? sourceItem.id,
+    gauntlet_id: safeString(raw.gauntlet_id) ?? sourceItem.gauntletId ?? sourceItem.id,
     debate_id: safeDebateId(raw.debate_id) ?? sourceItem.debateId,
     timestamp: normalizeTimestamp(raw.timestamp ?? raw.created_at ?? sourceItem.created_at),
-    input_summary:
-      safeString(raw.input_summary) ??
-      sourceItem.input_summary ??
-      'Decision receipt',
-    input_hash:
-      safeString(raw.input_hash) ??
-      safeString(raw.checksum) ??
-      '',
-    risk_level:
-      safeString(raw.risk_level) ??
-      sourceItem.risk_level,
+    input_summary: safeString(raw.input_summary) ?? sourceItem.input_summary ?? 'Decision receipt',
+    input_hash: safeString(raw.input_hash) ?? safeString(raw.checksum) ?? '',
+    risk_level: safeString(raw.risk_level) ?? sourceItem.risk_level,
     risk_summary: riskSummary,
     attacks_attempted: safeNumber(raw.attacks_attempted) ?? 0,
     attacks_successful: safeNumber(raw.attacks_successful) ?? 0,
     probes_run: safeNumber(raw.probes_run) ?? 0,
     vulnerabilities_found:
-      safeNumber(raw.vulnerabilities_found) ??
-      totalFindings(riskSummary) ??
-      findings.length,
+      safeNumber(raw.vulnerabilities_found) ?? totalFindings(riskSummary) ?? findings.length,
     verdict: normalizeVerdict(raw.verdict) ?? 'UNKNOWN',
     confidence: safeNumber(raw.confidence) ?? sourceItem.confidence ?? 0,
     robustness_score:
@@ -780,10 +739,7 @@ function normalizeReceiptDetail(
     dissenting_views: normalizeDissentingViews(raw.dissenting_views),
     consensus_proof: normalizeConsensusProof(raw.consensus_proof),
     provenance_chain: normalizeProvenanceChain(raw.provenance_chain),
-    artifact_hash:
-      safeString(raw.artifact_hash) ??
-      safeString(raw.checksum) ??
-      '',
+    artifact_hash: safeString(raw.artifact_hash) ?? safeString(raw.checksum) ?? '',
     agents_involved: Array.isArray(raw.agents_involved)
       ? raw.agents_involved
           .map((agent) => safeString(agent))
@@ -797,11 +753,8 @@ function normalizeReceiptDetail(
 
 function createTimeoutSignal(timeoutMs: number): AbortSignal | undefined {
   if (typeof AbortSignal === 'undefined') return undefined;
-  const timeout = (
-    AbortSignal as typeof AbortSignal & {
-      timeout?: (ms: number) => AbortSignal;
-    }
-  ).timeout;
+  const timeout = (AbortSignal as typeof AbortSignal & { timeout?: (ms: number) => AbortSignal })
+    .timeout;
   return typeof timeout === 'function' ? timeout(timeoutMs) : undefined;
 }
 
@@ -827,21 +780,19 @@ function buildDetailUrls(item: ReceiptListItem, backendUrl: string): string[] {
 function buildExportUrls(
   item: ReceiptListItem,
   backendUrl: string,
-  format: 'json' | 'html' | 'markdown'
+  format: 'json' | 'html' | 'markdown',
 ): string[] {
   const exportFormat = format === 'markdown' ? 'md' : format;
   const urls = new Set<string>();
 
   if (item.receiptId) {
     urls.add(
-      `${backendUrl}/api/v2/receipts/${item.receiptId}/export?format=${exportFormat}&raw=true`
+      `${backendUrl}/api/v2/receipts/${item.receiptId}/export?format=${exportFormat}&raw=true`,
     );
   }
 
   if (!item.receiptId && item.id) {
-    urls.add(
-      `${backendUrl}/api/v2/receipts/${item.id}/export?format=${exportFormat}&raw=true`
-    );
+    urls.add(`${backendUrl}/api/v2/receipts/${item.id}/export?format=${exportFormat}&raw=true`);
   }
 
   if (item.gauntletId) {
@@ -854,9 +805,7 @@ function buildExportUrls(
 
 function matchesReceiptId(item: ReceiptListItem, requestedId: string): boolean {
   return (
-    item.id === requestedId ||
-    item.receiptId === requestedId ||
-    item.gauntletId === requestedId
+    item.id === requestedId || item.receiptId === requestedId || item.gauntletId === requestedId
   );
 }
 
@@ -867,7 +816,7 @@ function preferredReceiptId(item: ReceiptListItem): string {
 function buildReceiptsHref(
   pathname: string,
   searchParams: { toString(): string } | null | undefined,
-  receiptId?: string
+  receiptId?: string,
 ): string {
   const params = new URLSearchParams(searchParams?.toString() ?? '');
   if (receiptId) {
@@ -879,10 +828,7 @@ function buildReceiptsHref(
   return query ? `${pathname}?${query}` : pathname;
 }
 
-function buildReceiptShareUrl(
-  backendUrl: string,
-  response: ShareReceiptResponse
-): string | null {
+function buildReceiptShareUrl(backendUrl: string, response: ShareReceiptResponse): string | null {
   const sharePath = safeString(response.share_url);
   if (sharePath) {
     return new URL(sharePath, backendUrl).toString();
@@ -923,31 +869,22 @@ export default function ReceiptsPage() {
     error: gauntletReceiptsError,
     isLoading: gauntletReceiptsLoading,
     mutate: mutateGauntletReceipts,
-  } = useSWRFetch<ApiListResponse>(
-    '/api/v1/gauntlet/receipts?limit=50',
-    {
-      refreshInterval: 30000,
-      baseUrl: backendUrl,
-    }
-  );
+  } = useSWRFetch<ApiListResponse>('/api/v1/gauntlet/receipts?limit=50', {
+    refreshInterval: 30000,
+    baseUrl: backendUrl,
+  });
 
-  const gauntletReceiptItems = normalizeListResponse(
-    gauntletReceiptsData,
-    'gauntlet-receipts'
-  );
+  const gauntletReceiptItems = normalizeListResponse(gauntletReceiptsData, 'gauntlet-receipts');
 
   const {
     data: receiptsData,
     error: receiptsError,
     isLoading: receiptsLoading,
     mutate: mutateReceipts,
-  } = useSWRFetch<ApiListResponse>(
-    '/api/v2/receipts?limit=50',
-    {
-      refreshInterval: 30000,
-      baseUrl: backendUrl,
-    }
-  );
+  } = useSWRFetch<ApiListResponse>('/api/v2/receipts?limit=50', {
+    refreshInterval: 30000,
+    baseUrl: backendUrl,
+  });
 
   const v2ReceiptItems = normalizeListResponse(receiptsData, 'v2-receipts');
 
@@ -964,26 +901,19 @@ export default function ReceiptsPage() {
     mutate: mutateGauntletResults,
   } = useSWRFetch<ApiListResponse>(
     shouldFetchGauntletResults ? '/api/gauntlet/results?limit=50' : null,
-    {
-      refreshInterval: 30000,
-      baseUrl: backendUrl,
-    }
+    { refreshInterval: 30000, baseUrl: backendUrl },
   );
 
-  const gauntletResultItems = normalizeListResponse(
-    gauntletResultsData,
-    'gauntlet-results'
-  );
+  const gauntletResultItems = normalizeListResponse(gauntletResultsData, 'gauntlet-results');
 
   const mergedReceiptItems = mergeReceiptSources(
     v2ReceiptItems,
     gauntletReceiptItems,
-    gauntletResultItems
+    gauntletResultItems,
   );
 
   const loading =
-    results.length === 0 &&
-    (gauntletReceiptsLoading || receiptsLoading || gauntletResultsLoading);
+    results.length === 0 && (gauntletReceiptsLoading || receiptsLoading || gauntletResultsLoading);
 
   useEffect(() => {
     let nextResults: ReceiptListItem[] = [];
@@ -992,10 +922,7 @@ export default function ReceiptsPage() {
     if (mergedReceiptItems.length > 0) {
       nextResults = mergedReceiptItems;
     } else {
-      const allLoaded =
-        !gauntletReceiptsLoading &&
-        !receiptsLoading &&
-        !gauntletResultsLoading;
+      const allLoaded = !gauntletReceiptsLoading && !receiptsLoading && !gauntletResultsLoading;
 
       if (!allLoaded) return;
 
@@ -1022,18 +949,14 @@ export default function ReceiptsPage() {
 
   const loadData = useCallback(async () => {
     setError(null);
-    await Promise.allSettled([
-      mutateGauntletReceipts(),
-      mutateReceipts(),
-      mutateGauntletResults(),
-    ]);
+    await Promise.allSettled([mutateGauntletReceipts(), mutateReceipts(), mutateGauntletResults()]);
   }, [mutateGauntletReceipts, mutateReceipts, mutateGauntletResults]);
 
   const syncReceiptQuery = useCallback(
     (receiptId?: string) => {
       router.replace(buildReceiptsHref(pathname, searchParams, receiptId));
     },
-    [pathname, router, searchParams]
+    [pathname, router, searchParams],
   );
 
   const fetchReceipt = useCallback(
@@ -1046,9 +969,7 @@ export default function ReceiptsPage() {
         let lastStatus: number | null = null;
 
         for (const url of buildDetailUrls(item, backendUrl)) {
-          const response = await fetch(url, {
-            signal: createTimeoutSignal(10000),
-          });
+          const response = await fetch(url, { signal: createTimeoutSignal(10000) });
 
           if (!response.ok) {
             lastStatus = response.status;
@@ -1073,7 +994,7 @@ export default function ReceiptsPage() {
         setReceiptLoading(false);
       }
     },
-    [backendUrl, syncReceiptQuery]
+    [backendUrl, syncReceiptQuery],
   );
 
   const clearSelection = useCallback(() => {
@@ -1111,9 +1032,7 @@ export default function ReceiptsPage() {
       let lastStatus: number | null = null;
 
       for (const url of buildExportUrls(selectedItem, backendUrl, format)) {
-        const response = await fetch(url, {
-          signal: createTimeoutSignal(10000),
-        });
+        const response = await fetch(url, { signal: createTimeoutSignal(10000) });
 
         if (!response.ok) {
           lastStatus = response.status;
@@ -1164,7 +1083,7 @@ export default function ReceiptsPage() {
       }
 
       const confirmed = window.confirm(
-        'Create a public share link for this receipt? Anyone with the tokenized URL can view the receipt until the link expires.'
+        'Create a public share link for this receipt? Anyone with the tokenized URL can view the receipt until the link expires.',
       );
       if (!confirmed) {
         return;
@@ -1177,7 +1096,7 @@ export default function ReceiptsPage() {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({ expires_in_hours: 24 }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -1233,7 +1152,9 @@ export default function ReceiptsPage() {
   const renderResultsList = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">Decision Receipts</h2>
+        <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
+          Decision Receipts
+        </h2>
         <div className="flex gap-2">
           {(['all', 'PASS', 'CONDITIONAL', 'FAIL'] as const).map((value) => (
             <button
@@ -1256,8 +1177,8 @@ export default function ReceiptsPage() {
           <div className="text-2xl font-theme-data text-[var(--accent)]/40">[ ]</div>
           <p className="text-text font-theme-data font-bold">No decision receipts yet</p>
           <p className="text-text-muted font-theme-data text-sm max-w-md mx-auto">
-            Receipts are generated when a debate completes. Each receipt includes the verdict,
-            risk analysis, consensus proof, and a tamper-proof audit trail.
+            Receipts are generated when a debate completes. Each receipt includes the verdict, risk
+            analysis, consensus proof, and a tamper-proof audit trail.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Link
@@ -1295,10 +1216,7 @@ export default function ReceiptsPage() {
                   }
                 }}
                 onKeyDown={(event) => {
-                  if (
-                    isClickable &&
-                    (event.key === 'Enter' || event.key === ' ')
-                  ) {
+                  if (isClickable && (event.key === 'Enter' || event.key === ' ')) {
                     event.preventDefault();
                     void fetchReceipt(result);
                   }
@@ -1306,9 +1224,7 @@ export default function ReceiptsPage() {
                 role={isClickable ? 'button' : undefined}
                 tabIndex={isClickable ? 0 : undefined}
                 className={`w-full p-4 bg-surface border border-border rounded-lg text-left transition-all ${
-                  isClickable
-                    ? 'hover:border-[var(--accent)]/50 cursor-pointer'
-                    : ''
+                  isClickable ? 'hover:border-[var(--accent)]/50 cursor-pointer' : ''
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -1321,9 +1237,7 @@ export default function ReceiptsPage() {
                     >
                       {surfaceLabel}
                     </span>
-                    <span className="text-xs font-theme-data text-text-muted">
-                      {sourceLabel}
-                    </span>
+                    <span className="text-xs font-theme-data text-text-muted">{sourceLabel}</span>
                     {result.verdict && (
                       <span
                         className={`px-2 py-0.5 text-xs font-theme-data rounded border ${getVerdictColor(result.verdict)}`}
@@ -1393,7 +1307,9 @@ export default function ReceiptsPage() {
     if (receiptLoading) {
       return (
         <div className="flex items-center justify-center py-12">
-          <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading receipt...</div>
+          <div className="text-[var(--accent)] font-theme-data animate-pulse">
+            Loading receipt...
+          </div>
         </div>
       );
     }
@@ -1405,8 +1321,7 @@ export default function ReceiptsPage() {
     const receipt = selectedReceipt;
     const findingCount = totalFindings(receipt.risk_summary);
     const totalTokens =
-      (receipt.cost_summary?.total_tokens_in ?? 0) +
-      (receipt.cost_summary?.total_tokens_out ?? 0);
+      (receipt.cost_summary?.total_tokens_in ?? 0) + (receipt.cost_summary?.total_tokens_out ?? 0);
     const resultHref = receipt.debate_id
       ? `/debates/${encodeURIComponent(receipt.debate_id)}`
       : null;
@@ -1423,7 +1338,9 @@ export default function ReceiptsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">Decision Receipt</h2>
+            <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
+              Decision Receipt
+            </h2>
             <div className="text-xs text-text-muted font-theme-data mt-1">
               ID: {receipt.receipt_id}
               {receipt.artifact_hash ? ` | Artifact: ${truncateId(receipt.artifact_hash)}` : ''}
@@ -1564,7 +1481,9 @@ export default function ReceiptsPage() {
                   </div>
                   <div>
                     <div className="text-xs text-text-muted">Total Tokens</div>
-                    <div className="text-lg font-theme-data text-text">{formatCount(totalTokens)}</div>
+                    <div className="text-lg font-theme-data text-text">
+                      {formatCount(totalTokens)}
+                    </div>
                   </div>
                 </div>
 
@@ -1581,7 +1500,9 @@ export default function ReceiptsPage() {
                         >
                           <div className="font-theme-data text-text">{agent.agent_name}</div>
                           <div className="flex items-center gap-4 text-xs font-theme-data text-text-muted">
-                            <span>{formatCount(agent.total_tokens_in + agent.total_tokens_out)} tokens</span>
+                            <span>
+                              {formatCount(agent.total_tokens_in + agent.total_tokens_out)} tokens
+                            </span>
                             <span>{formatCount(agent.call_count)} calls</span>
                             <span className="text-[var(--acid-cyan)]">
                               {formatCurrency(agent.total_cost_usd)}
@@ -1721,7 +1642,9 @@ export default function ReceiptsPage() {
                       {vulnerability.severity.toUpperCase()}
                     </span>
                     <span className="text-xs text-text-muted">{vulnerability.category}</span>
-                    <span className="text-xs text-text-muted font-theme-data">{vulnerability.id}</span>
+                    <span className="text-xs text-text-muted font-theme-data">
+                      {vulnerability.id}
+                    </span>
                   </div>
                   <p className="text-sm text-text">{vulnerability.description}</p>
                 </div>
@@ -1752,7 +1675,10 @@ export default function ReceiptsPage() {
             </h3>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {receipt.provenance_chain.map((record, index) => (
-                <div key={`${record.event_type}-${index}`} className="flex items-start gap-3 text-xs">
+                <div
+                  key={`${record.event_type}-${index}`}
+                  className="flex items-start gap-3 text-xs"
+                >
                   <div className="w-20 text-text-muted shrink-0">
                     {record.timestamp ? new Date(record.timestamp).toLocaleTimeString() : '--:--'}
                   </div>
@@ -1764,7 +1690,10 @@ export default function ReceiptsPage() {
                   )}
                   <div className="text-text flex-1">{record.description}</div>
                   {record.evidence_hash && (
-                    <div className="text-text-muted font-theme-data shrink-0" title={record.evidence_hash}>
+                    <div
+                      className="text-text-muted font-theme-data shrink-0"
+                      title={record.evidence_hash}
+                    >
                       #{record.evidence_hash.slice(0, 8)}
                     </div>
                   )}
@@ -1808,7 +1737,9 @@ export default function ReceiptsPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-8 relative z-10">
         <div className="mb-8">
-          <h1 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-2">Decision Receipts</h1>
+          <h1 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-2">
+            Decision Receipts
+          </h1>
           <p className="text-text-muted font-theme-data text-sm">
             Audit-ready records of every AI-debated decision
           </p>

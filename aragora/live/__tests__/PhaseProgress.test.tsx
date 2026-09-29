@@ -40,7 +40,9 @@ describe('PhaseProgress', () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       expect(screen.getByText('Debate')).toBeInTheDocument();
@@ -54,7 +56,9 @@ describe('PhaseProgress', () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       expect(screen.getByText('Phase Progress')).toBeInTheDocument();
@@ -66,7 +70,9 @@ describe('PhaseProgress', () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="design" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="design" apiBase="http://localhost:3001" />,
+        );
       });
 
       const designBlock = screen.getByText('Design');
@@ -81,7 +87,9 @@ describe('PhaseProgress', () => {
       ];
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={events} currentPhase="design" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={events} currentPhase="design" apiBase="http://localhost:3001" />,
+        );
       });
 
       const debateBlock = screen.getByText('Debate');
@@ -96,7 +104,13 @@ describe('PhaseProgress', () => {
       ];
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={events} currentPhase="implement" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress
+            events={events}
+            currentPhase="implement"
+            apiBase="http://localhost:3001"
+          />,
+        );
       });
 
       const designBlock = screen.getByText('Design');
@@ -108,7 +122,9 @@ describe('PhaseProgress', () => {
       const events: StreamEvent[] = [createPhaseStartEvent('implement')];
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={events} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={events} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       const implementBlock = screen.getByText('Implement');
@@ -119,7 +135,9 @@ describe('PhaseProgress', () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       const commitBlock = screen.getByText('Commit');
@@ -141,11 +159,16 @@ describe('PhaseProgress', () => {
       });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('http://localhost:3001/api/nomic/state', expect.anything());
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:3001/api/nomic/state',
+          expect.anything(),
+        );
       });
     });
 
@@ -162,7 +185,9 @@ describe('PhaseProgress', () => {
       });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       await waitFor(() => {
@@ -183,7 +208,9 @@ describe('PhaseProgress', () => {
       });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       await waitFor(() => {
@@ -195,16 +222,13 @@ describe('PhaseProgress', () => {
       const savedAt = '2024-01-15T10:30:00Z';
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
-            phase: 'design',
-            cycle: 5,
-            saved_at: savedAt,
-          }),
+        json: () => Promise.resolve({ phase: 'design', cycle: 5, saved_at: savedAt }),
       });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       await waitFor(() => {
@@ -216,18 +240,16 @@ describe('PhaseProgress', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
-          Promise.resolve({
-            phase: 'implement',
-            cycle: 3,
-            saved_at: '2024-01-15T10:30:00Z',
-          }),
+          Promise.resolve({ phase: 'implement', cycle: 3, saved_at: '2024-01-15T10:30:00Z' }),
       });
 
       // Events say debate is active, but API says we're in implement phase
       const events: StreamEvent[] = [createPhaseStartEvent('debate')];
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={events} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={events} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       await waitFor(() => {
@@ -249,7 +271,9 @@ describe('PhaseProgress', () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       // Component should still render without crashing
@@ -261,15 +285,13 @@ describe('PhaseProgress', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
-          Promise.resolve({
-            phase: 'debate',
-            cycle: 1,
-            saved_at: '2024-01-15T10:30:00Z',
-          }),
+          Promise.resolve({ phase: 'debate', cycle: 1, saved_at: '2024-01-15T10:30:00Z' }),
       });
 
       await act(async () => {
-        renderWithProviders(<PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />);
+        renderWithProviders(
+          <PhaseProgress events={[]} currentPhase="debate" apiBase="http://localhost:3001" />,
+        );
       });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);

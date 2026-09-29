@@ -48,7 +48,11 @@ export function DeepAuditView({ events, isActive, onToggle }: DeepAuditViewProps
         </button>
       </div>
 
-      <RoundTimeline roundData={roundData} expandedRound={expandedRound} onExpandRound={setExpandedRound} />
+      <RoundTimeline
+        roundData={roundData}
+        expandedRound={expandedRound}
+        onExpandRound={setExpandedRound}
+      />
 
       {/* Active Round Summary */}
       {activeRound && (

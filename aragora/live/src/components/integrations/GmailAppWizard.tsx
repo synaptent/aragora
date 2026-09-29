@@ -44,11 +44,7 @@ const AVAILABLE_SCOPES = [
   },
 ];
 
-export function GmailAppWizard({
-  onClose,
-  onComplete,
-  apiBaseUrl = ''
-}: GmailAppWizardProps) {
+export function GmailAppWizard({ onClose, onComplete, apiBaseUrl = '' }: GmailAppWizardProps) {
   const [step, setStep] = useState<WizardStep>('check');
   const [error, setError] = useState<string | null>(null);
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
@@ -140,7 +136,7 @@ export function GmailAppWizard({
     const popup = window.open(
       `${apiBaseUrl}/api/integrations/gmail/authorize?scopes=${encodeURIComponent(scopeParam)}`,
       'gmail-oauth',
-      `width=${width},height=${height},left=${left},top=${top},popup=yes`
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
     );
 
     if (!popup) {
@@ -149,21 +145,17 @@ export function GmailAppWizard({
   };
 
   const handleScopeToggle = (scope: string) => {
-    const scopeConfig = AVAILABLE_SCOPES.find(s => s.key === scope);
+    const scopeConfig = AVAILABLE_SCOPES.find((s) => s.key === scope);
     if (scopeConfig?.required) return;
 
-    setSelectedScopes(prev =>
-      prev.includes(scope)
-        ? prev.filter(s => s !== scope)
-        : [...prev, scope]
+    setSelectedScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
     );
   };
 
   const handleLabelToggle = (labelId: string) => {
-    setSelectedLabels(prev =>
-      prev.includes(labelId)
-        ? prev.filter(id => id !== labelId)
-        : [...prev, labelId]
+    setSelectedLabels((prev) =>
+      prev.includes(labelId) ? prev.filter((id) => id !== labelId) : [...prev, labelId],
     );
   };
 
@@ -194,9 +186,7 @@ export function GmailAppWizard({
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/integrations/gmail/test`, {
-        method: 'POST',
-      });
+      const response = await fetch(`${apiBaseUrl}/api/integrations/gmail/test`, { method: 'POST' });
 
       if (!response.ok) {
         throw new Error('Test failed');
@@ -252,7 +242,7 @@ export function GmailAppWizard({
                     3. Add the following environment variables:
                   </p>
                   <pre className="font-theme-data text-xs text-[var(--accent)] bg-bg p-2 rounded overflow-x-auto">
-{`GOOGLE_CLIENT_ID=your_client_id
+                    {`GOOGLE_CLIENT_ID=your_client_id
 GOOGLE_CLIENT_SECRET=your_client_secret
 GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
                   </pre>
@@ -269,23 +259,21 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
       case 'scopes':
         return (
           <div className="py-4">
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Select Permissions
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Select Permissions</h3>
             <p className="font-theme-data text-sm text-text-muted mb-4">
               Choose which Gmail permissions Aragora should request:
             </p>
 
             <div className="space-y-3">
-              {AVAILABLE_SCOPES.map(scope => (
+              {AVAILABLE_SCOPES.map((scope) => (
                 <label
                   key={scope.key}
                   className={`flex items-start gap-3 p-3 border rounded transition-colors ${
                     scope.required
                       ? 'border-[var(--accent)]/50 bg-[var(--accent)]/5 cursor-not-allowed'
                       : selectedScopes.includes(scope.key)
-                      ? 'border-[var(--accent)] bg-[var(--accent)]/10 cursor-pointer'
-                      : 'border-[var(--accent)]/20 hover:border-[var(--accent)]/40 cursor-pointer'
+                        ? 'border-[var(--accent)] bg-[var(--accent)]/10 cursor-pointer'
+                        : 'border-[var(--accent)]/20 hover:border-[var(--accent)]/40 cursor-pointer'
                   }`}
                 >
                   <input
@@ -316,12 +304,10 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
         return (
           <div className="text-center py-8">
             <div className="font-theme-data text-[var(--acid-cyan)] text-4xl mb-4">@</div>
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Authorize Gmail Access
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Authorize Gmail Access</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
-              Click the button below to sign in with your Google account
-              and grant Aragora access to your Gmail.
+              Click the button below to sign in with your Google account and grant Aragora access to
+              your Gmail.
             </p>
             <button
               onClick={startOAuth}
@@ -342,9 +328,7 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
                   <span className="font-theme-data text-text">{account.email}</span>
                 </div>
               )}
-              <h3 className="font-theme-data text-lg text-text mb-2">
-                Select Labels (Optional)
-              </h3>
+              <h3 className="font-theme-data text-lg text-text mb-2">Select Labels (Optional)</h3>
               <p className="font-theme-data text-sm text-text-muted">
                 Choose labels to filter or organize debate-related emails:
               </p>
@@ -369,8 +353,8 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {labels
-                  .filter(l => l.type === 'user')
-                  .map(label => (
+                  .filter((l) => l.type === 'user')
+                  .map((label) => (
                     <label
                       key={label.id}
                       className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${
@@ -385,9 +369,7 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
                         onChange={() => handleLabelToggle(label.id)}
                         className="form-checkbox bg-bg border-[var(--accent)]/30"
                       />
-                      <span className="font-theme-data text-sm text-text">
-                        {label.name}
-                      </span>
+                      <span className="font-theme-data text-sm text-text">{label.name}</span>
                     </label>
                   ))}
               </div>
@@ -398,9 +380,7 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
       case 'test':
         return (
           <div className="text-center py-8">
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Test Connection
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Test Connection</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
               Verify the Gmail integration by fetching account info.
             </p>
@@ -412,8 +392,8 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
                 testStatus === 'success'
                   ? 'bg-[var(--accent)]/20 border-[var(--accent)] text-[var(--accent)]'
                   : testStatus === 'failed'
-                  ? 'bg-warning/20 border-warning text-warning'
-                  : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/30'
+                    ? 'bg-warning/20 border-warning text-warning'
+                    : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/30'
               }`}
             >
               {testStatus === 'testing' && '[TESTING CONNECTION...]'}
@@ -434,9 +414,7 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
         return (
           <div className="text-center py-8">
             <div className="font-theme-data text-[var(--accent)] text-4xl mb-4">✓</div>
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Gmail Integration Complete!
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Gmail Integration Complete!</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
               Aragora can now {selectedScopes.includes('gmail.send') ? 'send and ' : ''}
               read emails from your Gmail account.
@@ -475,28 +453,20 @@ GOOGLE_REDIRECT_URI=https://your-domain/api/integrations/gmail/callback`}
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-surface border border-[var(--accent)]/30 rounded-lg w-full max-w-xl max-h-[90vh] overflow-hidden">
         <div className="p-4 border-b border-[var(--accent)]/20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-theme-data text-[var(--acid-cyan)] text-xl">@</span>
             <div>
-              <h2 className="font-theme-data text-[var(--accent)] text-lg">
-                Gmail Setup
-              </h2>
+              <h2 className="font-theme-data text-[var(--accent)] text-lg">Gmail Setup</h2>
               <p className="font-theme-data text-xs text-text-muted">
                 Connect Aragora to your Gmail account
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-text font-theme-data"
-          >
+          <button onClick={onClose} className="text-text-muted hover:text-text font-theme-data">
             [X]
           </button>
         </div>

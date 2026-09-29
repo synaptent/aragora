@@ -7,13 +7,9 @@ const mockPush = jest.fn();
 const mockBackendConfig = { api: 'http://localhost:8080' };
 const mockCompactDebateResult = jest.fn();
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('@/context/ThemeContext', () => ({
-  useTheme: () => ({ theme: 'dark' }),
-}));
+jest.mock('@/context/ThemeContext', () => ({ useTheme: () => ({ theme: 'dark' }) }));
 
 jest.mock('../../DebateResultPreview', () => ({
   RETURN_URL_KEY: 'return_url',
@@ -38,11 +34,7 @@ jest.mock('../../DebateInput', () => ({
 }));
 
 function createResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
-  return {
-    ok: init.ok ?? true,
-    status: init.status ?? 200,
-    json: async () => body,
-  };
+  return { ok: init.ok ?? true, status: init.status ?? 200, json: async () => body };
 }
 
 function createNuggetsAssessResponse(question: string) {
@@ -55,7 +47,8 @@ function createNuggetsAssessResponse(question: string) {
         {
           id: 'interp-0',
           label: 'Practical food-safety first',
-          description: 'Focus on whether reheating pre-cooked chicken nuggets is safe and practical for a 4 year old.',
+          description:
+            'Focus on whether reheating pre-cooked chicken nuggets is safe and practical for a 4 year old.',
           originalQuestion: question,
           interpretedQuestion: 'Should I microwave pre-cooked chicken nuggets for my 4 year old?',
           debatePrompt: 'Should I microwave pre-cooked chicken nuggets for my 4 year old?',
@@ -101,7 +94,7 @@ describe('HeroSection', () => {
       render(<HeroSection {...defaultProps} />);
 
       expect(
-        screen.getByRole('heading', { name: /what decision should ai debate for you/i })
+        screen.getByRole('heading', { name: /what decision should ai debate for you/i }),
       ).toBeInTheDocument();
     });
 
@@ -145,13 +138,7 @@ describe('HeroSection', () => {
       const user = userEvent.setup();
       const onDismissError = jest.fn();
 
-      render(
-        <HeroSection
-          {...defaultProps}
-          error="Test error"
-          onDismissError={onDismissError}
-        />
-      );
+      render(<HeroSection {...defaultProps} error="Test error" onDismissError={onDismissError} />);
 
       await user.click(screen.getByRole('button', { name: /dismiss error/i }));
 
@@ -161,9 +148,7 @@ describe('HeroSection', () => {
     it('error dismiss button has accessible label', () => {
       render(<HeroSection {...defaultProps} error="Test error" />);
 
-      expect(
-        screen.getByRole('button', { name: /dismiss error/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /dismiss error/i })).toBeInTheDocument();
     });
   });
 
@@ -174,7 +159,7 @@ describe('HeroSection', () => {
           {...defaultProps}
           activeDebateId="debate-123"
           activeQuestion="Is AI beneficial?"
-        />
+        />,
       );
 
       expect(screen.getByText('DECISION IN PROGRESS')).toBeInTheDocument();
@@ -186,7 +171,7 @@ describe('HeroSection', () => {
           {...defaultProps}
           activeDebateId="debate-123"
           activeQuestion="Is AI beneficial?"
-        />
+        />,
       );
 
       expect(screen.getByText('Is AI beneficial?')).toBeInTheDocument();
@@ -198,7 +183,7 @@ describe('HeroSection', () => {
           {...defaultProps}
           activeDebateId="debate-123"
           activeQuestion="Is AI beneficial?"
-        />
+        />,
       );
 
       expect(screen.getByText(/ID: debate-123/)).toBeInTheDocument();
@@ -210,7 +195,7 @@ describe('HeroSection', () => {
           {...defaultProps}
           activeDebateId="debate-123"
           activeQuestion="Is AI beneficial?"
-        />
+        />,
       );
 
       expect(screen.getByText(/Events streaming via WebSocket/)).toBeInTheDocument();
@@ -219,19 +204,11 @@ describe('HeroSection', () => {
     it('does not show active debate section when no debate is active', () => {
       render(<HeroSection {...defaultProps} activeDebateId={null} />);
 
-      expect(
-        screen.queryByText('DECISION IN PROGRESS')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('DECISION IN PROGRESS')).not.toBeInTheDocument();
     });
 
     it('has animated pulse indicator for active debate', () => {
-      render(
-        <HeroSection
-          {...defaultProps}
-          activeDebateId="debate-123"
-          activeQuestion="Test"
-        />
-      );
+      render(<HeroSection {...defaultProps} activeDebateId="debate-123" activeQuestion="Test" />);
 
       const pulseIndicator = document.querySelector('.animate-pulse');
       expect(pulseIndicator).toBeInTheDocument();
@@ -250,10 +227,12 @@ describe('HeroSection', () => {
   describe('landing mode backend resolution', () => {
     it('uses the same-origin API proxy when the backend hook resolves an empty local API base', async () => {
       const user = userEvent.setup();
-      const fetchMock = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: 'debate-demo-123', status: 'completed' }),
-      });
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ id: 'debate-demo-123', status: 'completed' }),
+        });
       mockBackendConfig.api = '';
       global.fetch = fetchMock as typeof fetch;
 
@@ -263,15 +242,14 @@ describe('HeroSection', () => {
 
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/v1/playground/debate/',
-        expect.objectContaining({
-          method: 'POST',
-        }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
     it('shows a preflight chooser for ambiguous landing prompts before debating', async () => {
       const user = userEvent.setup();
-      const question = 'Should I cook my chickens in a microwave? What if they are alive, and what if they are dead?';
+      const question =
+        'Should I cook my chickens in a microwave? What if they are alive, and what if they are dead?';
       const fetchMock = jest.fn().mockImplementation((input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes('/api/v1/playground/landing/events')) {
@@ -283,17 +261,18 @@ describe('HeroSection', () => {
 
       render(<HeroSection />);
 
-      await user.type(
-        screen.getByRole('textbox'),
-        question,
-      );
+      await user.type(screen.getByRole('textbox'), question);
       await user.click(screen.getByRole('button', { name: /start debate/i }));
 
       expect(await screen.findByText('This question could mean a few things')).toBeInTheDocument();
-      expect(screen.getByText('Pick the interpretation you want Aragora to debate.')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /practical food-safety first/i })).toBeInTheDocument();
       expect(
-        fetchMock.mock.calls.some(([input]) => String(input).includes('/api/v1/playground/debate'))
+        screen.getByText('Pick the interpretation you want Aragora to debate.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /practical food-safety first/i }),
+      ).toBeInTheDocument();
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).includes('/api/v1/playground/debate')),
       ).toBe(false);
     });
 
@@ -323,39 +302,43 @@ describe('HeroSection', () => {
           return Promise.resolve(createResponse({}));
         }
         if (url.includes('/api/v1/playground/assess')) {
-          return Promise.resolve(createResponse({
-            type: 'ready',
-            option: {
-              id: 'original',
-              label: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
-              description: 'Debate the question exactly as written.',
-              originalQuestion: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
-              interpretedQuestion: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
-              debatePrompt: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
-              agents: 3,
-              rounds: 2,
-            },
-          }));
+          return Promise.resolve(
+            createResponse({
+              type: 'ready',
+              option: {
+                id: 'original',
+                label: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
+                description: 'Debate the question exactly as written.',
+                originalQuestion: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
+                interpretedQuestion: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
+                debatePrompt: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
+                agents: 3,
+                rounds: 2,
+              },
+            }),
+          );
         }
-        return Promise.resolve(createResponse({
-          id: 'debate-123',
-          topic: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
-          status: 'completed',
-          rounds_used: 1,
-          consensus_reached: false,
-          confidence: 0.7,
-          verdict: 'needs_review',
-          duration_seconds: 8,
-          participants: ['gpt', 'claude', 'grok'],
-          proposals: { gpt: 'Yes, if heated safely.' },
-          critiques: [],
-          votes: [],
-          dissenting_views: [],
-          final_answer: 'Yes, if heated safely.',
-          receipt: null,
-          receipt_hash: null,
-          result_mode: 'preview',
-        }));
+        return Promise.resolve(
+          createResponse({
+            id: 'debate-123',
+            topic: 'Can I microwave frozen chicken nuggets for my 4-year-old?',
+            status: 'completed',
+            rounds_used: 1,
+            consensus_reached: false,
+            confidence: 0.7,
+            verdict: 'needs_review',
+            duration_seconds: 8,
+            participants: ['gpt', 'claude', 'grok'],
+            proposals: { gpt: 'Yes, if heated safely.' },
+            critiques: [],
+            votes: [],
+            dissenting_views: [],
+            final_answer: 'Yes, if heated safely.',
+            receipt: null,
+            receipt_hash: null,
+            result_mode: 'preview',
+          }),
+        );
       });
       global.fetch = fetchMock as typeof fetch;
 
@@ -363,7 +346,7 @@ describe('HeroSection', () => {
 
       await user.type(
         screen.getByRole('textbox'),
-        'Can I microwave frozen chicken nuggets for my 4-year-old?'
+        'Can I microwave frozen chicken nuggets for my 4-year-old?',
       );
       await user.click(screen.getByRole('button', { name: /start debate/i }));
 
@@ -385,13 +368,16 @@ describe('HeroSection', () => {
         }),
       );
       expect(screen.getByRole('button', { name: /try another/i })).toBeInTheDocument();
-      expect(screen.getByText(/keep this debate and continue from the full transcript/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/keep this debate and continue from the full transcript/i),
+      ).toBeInTheDocument();
     });
 
     it('submits wrong-answer feedback from the active landing preview', async () => {
       const user = userEvent.setup();
       const question = 'Should we use Redis or Memcached for session cache?';
-      const interpretedQuestion = 'Should our app use Redis instead of Memcached for session cache?';
+      const interpretedQuestion =
+        'Should our app use Redis instead of Memcached for session cache?';
       const debateResult: DebateResponse = {
         id: 'debate-queue-123',
         topic: interpretedQuestion,
@@ -456,13 +442,11 @@ describe('HeroSection', () => {
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
           'http://localhost:8080/api/v1/playground/landing/feedback',
-          expect.objectContaining({
-            method: 'POST',
-          }),
+          expect.objectContaining({ method: 'POST' }),
         );
       });
       const feedbackCall = fetchMock.mock.calls.find(([input]) =>
-        String(input).includes('/api/v1/playground/landing/feedback')
+        String(input).includes('/api/v1/playground/landing/feedback'),
       );
       const feedbackBody = JSON.parse(String((feedbackCall?.[1] as RequestInit).body));
       expect(feedbackBody).toEqual({
@@ -530,7 +514,7 @@ describe('HeroSection', () => {
 
       await user.type(
         screen.getByRole('textbox'),
-        'Can I microwave frozen chicken nuggets for my 4-year-old?'
+        'Can I microwave frozen chicken nuggets for my 4-year-old?',
       );
       await user.click(screen.getByRole('button', { name: /start debate/i }));
 

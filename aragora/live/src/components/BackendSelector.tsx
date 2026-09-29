@@ -14,15 +14,8 @@ import {
   type BackendType,
 } from '@/lib/runtimeBackend';
 
-export {
-  BACKENDS,
-  buildHealthCheckUrl,
-  getRuntimeBackendConfig,
-};
-export type {
-  BackendConfig,
-  BackendType,
-};
+export { BACKENDS, buildHealthCheckUrl, getRuntimeBackendConfig };
+export type { BackendConfig, BackendType };
 
 export const BACKEND_CHANGE_EVENT = 'aragora-backend-change';
 
@@ -125,15 +118,15 @@ export function BackendSelector({ onChange, compact = false }: BackendSelectorPr
             selected === 'development'
               ? 'bg-[var(--acid-cyan)] text-bg border-[var(--acid-cyan)]'
               : devAvailable === false
-              ? 'text-text-muted/30 border-border/30 cursor-not-allowed'
-              : 'text-text-muted border-border hover:text-[var(--acid-cyan)] hover:border-[var(--acid-cyan)]/50'
+                ? 'text-text-muted/30 border-border/30 cursor-not-allowed'
+                : 'text-text-muted border-border hover:text-[var(--acid-cyan)] hover:border-[var(--acid-cyan)]/50'
           }`}
           title={
             devAvailable === false
               ? 'Dev server offline'
               : devSource === 'localhost'
-              ? 'Connected via localhost'
-              : BACKENDS.development.description
+                ? 'Connected via localhost'
+                : BACKENDS.development.description
           }
         >
           DEV
@@ -163,8 +156,8 @@ export function BackendSelector({ onChange, compact = false }: BackendSelectorPr
                     ? 'bg-[var(--accent)]/20 border-[var(--accent)] text-[var(--accent)]'
                     : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)]'
                   : isDisabled
-                  ? 'border-border/30 text-text-muted/30 cursor-not-allowed'
-                  : 'border-border text-text-muted hover:border-[var(--accent)]/50'
+                    ? 'border-border/30 text-text-muted/30 cursor-not-allowed'
+                    : 'border-border text-text-muted hover:border-[var(--accent)]/50'
               }`}
             >
               <div className="text-sm font-bold flex items-center gap-2">
@@ -194,8 +187,7 @@ export function BackendSelector({ onChange, compact = false }: BackendSelectorPr
 }
 
 export function useBackend(): { backend: BackendType; config: BackendConfig } {
-  const localHost =
-    typeof window !== 'undefined' && isLocalHost(window.location.hostname);
+  const localHost = typeof window !== 'undefined' && isLocalHost(window.location.hostname);
   const [backend, setBackend] = useState<BackendType>(() => getRuntimeBackendConfig().backend);
 
   useEffect(() => {
@@ -226,8 +218,5 @@ export function useBackend(): { backend: BackendType; config: BackendConfig } {
     };
   }, [localHost]);
 
-  return {
-    backend,
-    config: resolveBackendConfig(backend, localHost ? 'localhost' : null),
-  };
+  return { backend, config: resolveBackendConfig(backend, localHost ? 'localhost' : null) };
 }

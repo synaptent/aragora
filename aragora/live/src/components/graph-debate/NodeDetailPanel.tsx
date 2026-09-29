@@ -45,11 +45,17 @@ export function NodeDetailPanel({ node, onClose }: NodeDetailPanelProps) {
         {/* Claims */}
         {node.claims.length > 0 && (
           <div>
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-1">CLAIMS ({node.claims.length})</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-1">
+              CLAIMS ({node.claims.length})
+            </div>
             <ul className="space-y-1">
               {node.claims.slice(0, 5).map((claim, i) => (
-                <li key={i} className="text-xs font-theme-data text-text-muted pl-2 border-l border-[var(--acid-cyan)]/30">
-                  {claim.slice(0, 100)}{claim.length > 100 ? '...' : ''}
+                <li
+                  key={i}
+                  className="text-xs font-theme-data text-text-muted pl-2 border-l border-[var(--acid-cyan)]/30"
+                >
+                  {claim.slice(0, 100)}
+                  {claim.length > 100 ? '...' : ''}
                 </li>
               ))}
             </ul>

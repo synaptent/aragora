@@ -55,10 +55,10 @@ interface AgentWorkflowVisualizationProps {
 
 // Colors for different states
 const STATUS_COLORS: Record<string, string> = {
-  idle: '#39ff14',      // acid-green
-  working: '#00ffff',   // cyan
-  error: '#ff3939',     // red
-  complete: '#39ff14',  // acid-green
+  idle: '#39ff14', // acid-green
+  working: '#00ffff', // cyan
+  error: '#ff3939', // red
+  complete: '#39ff14', // acid-green
   rate_limited: '#ffff39', // yellow
 };
 
@@ -141,7 +141,12 @@ export function AgentWorkflowVisualization({
       id: `agent-${agent.id}`,
       type: 'agent' as WorkflowNodeType,
       label: agent.name || agent.id,
-      status: agent.status === 'working' || agent.status === 'busy' ? 'working' : agent.status === 'error' ? 'error' : 'idle',
+      status:
+        agent.status === 'working' || agent.status === 'busy'
+          ? 'working'
+          : agent.status === 'error'
+            ? 'error'
+            : 'idle',
       agent,
     }));
 
@@ -176,7 +181,8 @@ export function AgentWorkflowVisualization({
     // Mark active flow links
     return allLinks.map((link) => ({
       ...link,
-      active: link.type === 'flow' && activeStages.has(link.source) && activeStages.has(link.target),
+      active:
+        link.type === 'flow' && activeStages.has(link.source) && activeStages.has(link.target),
     }));
   }, [agents, activeStages]);
 
@@ -231,13 +237,21 @@ export function AgentWorkflowVisualization({
     });
 
     // Create simulation
-    const simulation = d3.forceSimulation<WorkflowNode>(nodes)
+    const simulation = d3
+      .forceSimulation<WorkflowNode>(nodes)
       .force(
         'link',
-        d3.forceLink<WorkflowNode, WorkflowLink>(links).id((d) => d.id).distance(80).strength(0.3)
+        d3
+          .forceLink<WorkflowNode, WorkflowLink>(links)
+          .id((d) => d.id)
+          .distance(80)
+          .strength(0.3),
       )
       .force('charge', d3.forceManyBody().strength(-200))
-      .force('y', d3.forceY<WorkflowNode>(height * 0.7).strength((d) => (d.type === 'agent' ? 0.1 : 0)))
+      .force(
+        'y',
+        d3.forceY<WorkflowNode>(height * 0.7).strength((d) => (d.type === 'agent' ? 0.1 : 0)),
+      )
       .force('collision', d3.forceCollide().radius(35));
 
     // Draw links
@@ -247,13 +261,13 @@ export function AgentWorkflowVisualization({
       .selectAll('line')
       .data(links)
       .join('line')
-      .attr('stroke', (d) =>
-        d.type === 'assigns' ? '#00ffff80' : d.active ? '#39ff14' : '#444'
-      )
+      .attr('stroke', (d) => (d.type === 'assigns' ? '#00ffff80' : d.active ? '#39ff14' : '#444'))
       .attr('stroke-width', (d) => (d.active ? 3 : 2))
       .attr('stroke-dasharray', (d) => (d.type === 'assigns' ? '5,5' : 'none'))
-      .attr('marker-end', (d) =>
-        `url(#arrow-${d.type === 'assigns' ? 'assigns' : d.active ? 'flow-active' : 'flow'})`
+      .attr(
+        'marker-end',
+        (d) =>
+          `url(#arrow-${d.type === 'assigns' ? 'assigns' : d.active ? 'flow-active' : 'flow'})`,
       )
       .attr('filter', (d) => (d.active ? 'url(#glow)' : 'none'));
 
@@ -284,7 +298,9 @@ export function AgentWorkflowVisualization({
     node
       .append('circle')
       .attr('r', (d) => NODE_RADIUS[d.type])
-      .attr('fill', (d) => (d.type === 'agent' ? STATUS_COLORS[d.status] || '#666' : NODE_COLORS[d.type]))
+      .attr('fill', (d) =>
+        d.type === 'agent' ? STATUS_COLORS[d.status] || '#666' : NODE_COLORS[d.type],
+      )
       .attr('stroke', '#000')
       .attr('stroke-width', 2)
       .attr('opacity', 0.9);
@@ -410,9 +426,7 @@ export function AgentWorkflowVisualization({
     <div className="relative">
       {/* Header */}
       <div className="flex items-center justify-between mb-2 px-2">
-        <div className="text-xs font-theme-data text-text-muted">
-          PIPELINE STATUS
-        </div>
+        <div className="text-xs font-theme-data text-text-muted">PIPELINE STATUS</div>
         {activeJobs.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--acid-cyan)] animate-pulse" />
@@ -441,8 +455,8 @@ export function AgentWorkflowVisualization({
                 selectedNode.status === 'working'
                   ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
                   : selectedNode.status === 'error'
-                  ? 'bg-acid-red/20 text-acid-red'
-                  : 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                    ? 'bg-acid-red/20 text-acid-red'
+                    : 'bg-[var(--accent)]/20 text-[var(--accent)]'
               }`}
             >
               {selectedNode.status.toUpperCase()}

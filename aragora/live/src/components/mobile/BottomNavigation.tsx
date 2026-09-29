@@ -86,7 +86,7 @@ export function BottomNavigation({
       triggerHaptic();
       onSelect(id);
     },
-    [onSelect]
+    [onSelect],
   );
 
   // Hide on desktop if configured
@@ -105,7 +105,7 @@ export function BottomNavigation({
         'pb-[env(safe-area-inset-bottom,0px)]',
         // Shadow
         'shadow-[0_-2px_10px_rgba(0,0,0,0.1)]',
-        className
+        className,
       )}
       role="navigation"
       aria-label="Main navigation"
@@ -138,21 +138,14 @@ export function BottomNavigation({
                 // Focus styles
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset',
                 // Active state
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground',
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                 // Disabled state
-                item.disabled && 'opacity-50 cursor-not-allowed'
+                item.disabled && 'opacity-50 cursor-not-allowed',
               )}
             >
               {/* Icon container with badge */}
               <span className="relative">
-                <span
-                  className={cn(
-                    'block w-6 h-6',
-                    isActive && 'scale-110 transition-transform'
-                  )}
-                >
+                <span className={cn('block w-6 h-6', isActive && 'scale-110 transition-transform')}>
                   {Icon}
                 </span>
 
@@ -167,7 +160,7 @@ export function BottomNavigation({
                       'font-medium',
                       item.showBadgeCount
                         ? 'min-w-[18px] h-[18px] px-1 text-[10px]'
-                        : 'w-2.5 h-2.5'
+                        : 'w-2.5 h-2.5',
                     )}
                     aria-label={`${item.badge} notifications`}
                   >
@@ -178,12 +171,7 @@ export function BottomNavigation({
 
               {/* Label */}
               {showLabels && (
-                <span
-                  className={cn(
-                    'text-[11px] mt-1 font-medium',
-                    'max-w-[64px] truncate'
-                  )}
-                >
+                <span className={cn('text-[11px] mt-1 font-medium', 'max-w-[64px] truncate')}>
                   {item.label}
                 </span>
               )}
@@ -210,10 +198,7 @@ interface BottomNavigationSpacerProps {
   height?: number;
 }
 
-export function BottomNavigationSpacer({
-  className,
-  height = 72,
-}: BottomNavigationSpacerProps) {
+export function BottomNavigationSpacer({ className, height = 72 }: BottomNavigationSpacerProps) {
   const isMobile = useIsMobile();
 
   if (!isMobile) return null;
@@ -221,9 +206,7 @@ export function BottomNavigationSpacer({
   return (
     <div
       className={cn('flex-shrink-0', className)}
-      style={{
-        height: `calc(${height}px + env(safe-area-inset-bottom, 0px))`,
-      }}
+      style={{ height: `calc(${height}px + env(safe-area-inset-bottom, 0px))` }}
       aria-hidden="true"
     />
   );

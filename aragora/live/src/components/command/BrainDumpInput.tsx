@@ -14,28 +14,50 @@ export function BrainDumpInput({ onSubmit, loading }: BrainDumpInputProps) {
 
   const stats = useMemo(() => {
     const words = text.trim().split(/\s+/).filter(Boolean).length;
-    const lines = text.split('\n').filter(l => l.trim()).length;
-    const estimatedNodes = mode === 'list' ? lines : mode === 'json' ? (() => {
-      try { return Array.isArray(JSON.parse(text)) ? JSON.parse(text).length : 1; } catch { return 0; }
-    })() : Math.max(1, Math.ceil(words / 15));
+    const lines = text.split('\n').filter((l) => l.trim()).length;
+    const estimatedNodes =
+      mode === 'list'
+        ? lines
+        : mode === 'json'
+          ? (() => {
+              try {
+                return Array.isArray(JSON.parse(text)) ? JSON.parse(text).length : 1;
+              } catch {
+                return 0;
+              }
+            })()
+          : Math.max(1, Math.ceil(words / 15));
     return { words, lines, estimatedNodes };
   }, [text, mode]);
 
   const modes: { id: InputMode; label: string; placeholder: string }[] = [
-    { id: 'text', label: 'Free Text', placeholder: 'Paste your ideas, brain dump, goals, or questions here...\n\nWrite freely - the AI will extract key ideas, cluster related concepts, set goals, decompose into tasks, and assign agents automatically.' },
-    { id: 'list', label: 'Structured List', placeholder: '- Improve error handling in the API layer\n- Add rate limiting to public endpoints\n- Refactor authentication to support SSO\n- Create dashboard for monitoring agent performance\n- Write integration tests for the pipeline' },
-    { id: 'json', label: 'Import JSON', placeholder: '[\n  "Improve error handling in the API layer",\n  "Add rate limiting to public endpoints",\n  "Refactor authentication to support SSO"\n]' },
+    {
+      id: 'text',
+      label: 'Free Text',
+      placeholder:
+        'Paste your ideas, brain dump, goals, or questions here...\n\nWrite freely - the AI will extract key ideas, cluster related concepts, set goals, decompose into tasks, and assign agents automatically.',
+    },
+    {
+      id: 'list',
+      label: 'Structured List',
+      placeholder:
+        '- Improve error handling in the API layer\n- Add rate limiting to public endpoints\n- Refactor authentication to support SSO\n- Create dashboard for monitoring agent performance\n- Write integration tests for the pipeline',
+    },
+    {
+      id: 'json',
+      label: 'Import JSON',
+      placeholder:
+        '[\n  "Improve error handling in the API layer",\n  "Add rate limiting to public endpoints",\n  "Refactor authentication to support SSO"\n]',
+    },
   ];
 
-  const activeMode = modes.find(m => m.id === mode) || modes[0];
+  const activeMode = modes.find((m) => m.id === mode) || modes[0];
 
   return (
     <div className="w-full max-w-3xl space-y-4">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-theme-data font-bold text-[var(--accent)]">
-          Command Center
-        </h1>
+        <h1 className="text-2xl font-theme-data font-bold text-[var(--accent)]">Command Center</h1>
         <p className="text-text-muted font-theme-data text-sm">
           Dump your ideas. Watch AI build execution plans.
         </p>
@@ -43,7 +65,7 @@ export function BrainDumpInput({ onSubmit, loading }: BrainDumpInputProps) {
 
       {/* Mode Tabs */}
       <div className="flex gap-1 bg-surface rounded-lg p-1 border border-border">
-        {modes.map(m => (
+        {modes.map((m) => (
           <button
             key={m.id}
             onClick={() => setMode(m.id)}
@@ -62,7 +84,7 @@ export function BrainDumpInput({ onSubmit, loading }: BrainDumpInputProps) {
       <div className="relative">
         <textarea
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value)}
           placeholder={activeMode.placeholder}
           className="w-full min-h-[200px] bg-surface text-text font-theme-data text-sm p-4 rounded-lg border border-border resize-y focus:outline-none focus:border-[var(--accent)]/50 focus:ring-1 focus:ring-acid-green/20 placeholder:text-text-muted/50"
           disabled={loading}
@@ -77,10 +99,16 @@ export function BrainDumpInput({ onSubmit, loading }: BrainDumpInputProps) {
           <span>~{stats.estimatedNodes} nodes</span>
         </div>
         <div>
-          {mode === 'json' && text.trim() && (() => {
-            try { JSON.parse(text); return <span className="text-emerald-400">Valid JSON</span>; }
-            catch { return <span className="text-red-400">Invalid JSON</span>; }
-          })()}
+          {mode === 'json' &&
+            text.trim() &&
+            (() => {
+              try {
+                JSON.parse(text);
+                return <span className="text-emerald-400">Valid JSON</span>;
+              } catch {
+                return <span className="text-red-400">Invalid JSON</span>;
+              }
+            })()}
         </div>
       </div>
 

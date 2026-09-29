@@ -23,9 +23,7 @@ export function RiskWarningCard({ warning }: RiskWarningCardProps) {
         <span className={`font-theme-data text-xs uppercase ${severityStyle.text}`}>
           {warning.severity} - {warning.risk_type}
         </span>
-        <span className="font-theme-data text-xs text-text-muted">
-          {warning.domain}
-        </span>
+        <span className="font-theme-data text-xs text-text-muted">{warning.domain}</span>
       </div>
       <p className="font-theme-data text-sm text-text">{warning.description}</p>
       {warning.mitigation && (

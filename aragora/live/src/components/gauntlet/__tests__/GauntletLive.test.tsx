@@ -34,9 +34,7 @@ const mockHookReturn = {
   events: [],
 };
 
-jest.mock('@/hooks/useGauntletWebSocket', () => ({
-  useGauntletWebSocket: () => mockHookReturn,
-}));
+jest.mock('@/hooks/useGauntletWebSocket', () => ({ useGauntletWebSocket: () => mockHookReturn }));
 
 describe('GauntletLive', () => {
   const defaultProps = {
@@ -130,8 +128,14 @@ describe('GauntletLive', () => {
     beforeEach(() => {
       mockHookReturn.status = 'streaming';
       mockHookReturn.agents = new Map([
-        ['claude', { name: 'claude', role: 'attacker', status: 'active', attackCount: 5, probeCount: 10 }],
-        ['gpt-4', { name: 'gpt-4', role: 'analyst', status: 'idle', attackCount: 3, probeCount: 8 }],
+        [
+          'claude',
+          { name: 'claude', role: 'attacker', status: 'active', attackCount: 5, probeCount: 10 },
+        ],
+        [
+          'gpt-4',
+          { name: 'gpt-4', role: 'analyst', status: 'idle', attackCount: 3, probeCount: 8 },
+        ],
       ]);
     });
 

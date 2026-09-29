@@ -6,7 +6,7 @@
   "publisher": "aragora",
   "engines": {
     "vscode": "^1.85.0",
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.22.0"
   },
   "categories": [
     "Other",
@@ -263,6 +263,46 @@
           "type": "array",
           "default": [],
           "description": "List of finding IDs to ignore"
+        },
+        "aragora.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "off"
+          ],
+          "default": "info",
+          "description": "Minimum level of messages written to the Aragora output channel. Secrets such as API keys and tokens are redacted."
+        },
+        "aragora.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "tags": [
+            "telemetry",
+            "usesOnlineServices"
+          ],
+          "description": "Send error reports (Sentry) and usage events (PostHog) to the Aragora team. Only takes effect when VS Code telemetry is also enabled and a Sentry DSN or PostHog key is configured. Reload the window after changing it."
+        },
+        "aragora.telemetry.sentryDsn": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "tags": [
+            "telemetry"
+          ],
+          "description": "Sentry DSN for error reports. Falls back to the ARAGORA_SENTRY_DSN environment variable when empty."
+        },
+        "aragora.telemetry.posthogKey": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "tags": [
+            "telemetry"
+          ],
+          "description": "PostHog project key for usage events. Falls back to the ARAGORA_POSTHOG_KEY environment variable when empty; ARAGORA_POSTHOG_HOST overrides the default host (https://us.i.posthog.com)."
         }
       }
     },
@@ -476,29 +516,41 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && npm run build:webview",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p ./tsconfig.integration.json",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "jest",
     "test:watch": "jest --watch",
-    "lint": "eslint src --ext ts",
-    "package": "vsce package",
+    "test:integration": "npm run compile && node ./out/test/runTest.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
+    "package": "vsce package --no-dependencies",
     "build:webview": "npm --prefix webview-ui ci && npm --prefix webview-ui run build"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/node": "^20.10.0",
+    "@eslint/js": "^9.39.5",
     "@types/jest": "^29.5.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.45.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "eslint": "^9.39.5",
+    "glob": "^13.0.6",
     "jest": "^29.7.0",
+    "jest-junit": "^17.0.0",
+    "knip": "^6.38.0",
+    "mocha": "^11.8.0",
+    "prettier": "^3.9.9",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.0",
-    "@vscode/vsce": "^3.9.2"
+    "typescript-eslint": "^8.70.1"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "@sentry/node": "^10.73.0",
+    "posthog-node": "^5.51.8"
   },
   "repository": {
     "type": "git",

@@ -28,7 +28,7 @@ const mockSettledTopics = {
       topic: 'Database Indexing',
       conclusion: 'B-tree indexes perform better for range queries',
       confidence: 0.88,
-      strength: 0.80,
+      strength: 0.8,
       timestamp: '2026-01-11T14:00:00Z',
     },
   ],
@@ -59,7 +59,7 @@ const mockSearchResults = {
     {
       topic: 'API Rate Limiting',
       conclusion: 'Use sliding window counters',
-      confidence: 0.90,
+      confidence: 0.9,
       similarity: 0.85,
     },
   ],
@@ -68,28 +68,16 @@ const mockSearchResults = {
 function setupMocks() {
   (global.fetch as jest.Mock).mockImplementation((url: string) => {
     if (url.includes('/api/consensus/settled')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockSettledTopics),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockSettledTopics) });
     }
     if (url.includes('/api/consensus/stats')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockStats),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
     }
     if (url.includes('/api/consensus/dissents')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockDissents),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockDissents) });
     }
     if (url.includes('/api/consensus/similar')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockSearchResults),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockSearchResults) });
     }
     return Promise.reject(new Error('Unknown endpoint'));
   });

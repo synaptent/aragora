@@ -24,7 +24,8 @@ export function ArchivedDebateView({ debate, onShare, copied }: ArchivedDebateVi
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs text-text-muted font-theme-data mb-2">
-              DEBATE {'// '}CYCLE {debate.cycle_number} {'// '}{debate.phase.toUpperCase()}
+              DEBATE {'// '}CYCLE {debate.cycle_number} {'// '}
+              {debate.phase.toUpperCase()}
             </div>
             <h1 className="text-lg font-theme-data text-[var(--accent)] mb-4">{debate.task}</h1>
             <div className="flex flex-wrap gap-2">
@@ -82,7 +83,10 @@ export function ArchivedDebateView({ debate, onShare, copied }: ArchivedDebateVi
           </div>
           {debate.vote_tally && Object.keys(debate.vote_tally).length > 0 && (
             <div className="text-xs font-theme-data text-text-muted">
-              VOTES: {Object.entries(debate.vote_tally).map(([k, v]) => `${k}:${v}`).join(' ')}
+              VOTES:{' '}
+              {Object.entries(debate.vote_tally)
+                .map(([k, v]) => `${k}:${v}`)
+                .join(' ')}
             </div>
           )}
         </div>
@@ -107,8 +111,12 @@ export function ArchivedDebateView({ debate, onShare, copied }: ArchivedDebateVi
       {/* Winning Proposal */}
       {debate.winning_proposal && (
         <div className="bg-gradient-to-br from-accent/10 to-purple-500/10 border-2 border-accent/50 p-6">
-          <div className="text-xs text-accent font-theme-data mb-2 uppercase tracking-wider">Winning Proposal</div>
-          <div className="text-text whitespace-pre-wrap font-theme-data text-sm">{debate.winning_proposal}</div>
+          <div className="text-xs text-accent font-theme-data mb-2 uppercase tracking-wider">
+            Winning Proposal
+          </div>
+          <div className="text-text whitespace-pre-wrap font-theme-data text-sm">
+            {debate.winning_proposal}
+          </div>
         </div>
       )}
 

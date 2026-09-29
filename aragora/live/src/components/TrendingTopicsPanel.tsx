@@ -69,13 +69,20 @@ export function TrendingTopicsPanel({
 
   const getSourceIcon = (source: string): string => {
     switch (source.toLowerCase()) {
-      case 'hackernews': return '🔶';
-      case 'arxiv': return '📄';
-      case 'reddit': return '🤖';
-      case 'twitter': return '🐦';
-      case 'github': return '🐙';
-      case 'debate': return '💬';
-      default: return '📡';
+      case 'hackernews':
+        return '🔶';
+      case 'arxiv':
+        return '📄';
+      case 'reddit':
+        return '🤖';
+      case 'twitter':
+        return '🐦';
+      case 'github':
+        return '🐙';
+      case 'debate':
+        return '💬';
+      default:
+        return '📡';
     }
   };
 
@@ -101,17 +108,12 @@ export function TrendingTopicsPanel({
   return (
     <div className="panel" style={{ padding: 0 }}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="panel-collapsible-header w-full"
-      >
+      <button onClick={() => setExpanded(!expanded)} className="panel-collapsible-header w-full">
         <div className="flex items-center gap-2">
           <span className="text-lg">🔥</span>
           <span className="text-[var(--acid-cyan)] font-theme-data text-sm">[TRENDING]</span>
           {topics.length > 0 && !expanded && (
-            <span className="text-xs text-text-muted">
-              {topics[0]?.topic?.slice(0, 30)}...
-            </span>
+            <span className="text-xs text-text-muted">{topics[0]?.topic?.slice(0, 30)}...</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -151,10 +153,7 @@ export function TrendingTopicsPanel({
           {topics.length > 0 && (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {topics.map((topic, idx) => (
-                <div
-                  key={idx}
-                  className="panel-item group"
-                >
+                <div key={idx} className="panel-item group">
                   <div className="flex items-start gap-2">
                     <span className="text-sm" title={topic.source}>
                       {getSourceIcon(topic.source)}
@@ -173,9 +172,7 @@ export function TrendingTopicsPanel({
                         {topic.debate_count !== undefined && topic.debate_count > 0 && (
                           <span>{topic.debate_count} debates</span>
                         )}
-                        {topic.last_active && (
-                          <span>{formatTimeAgo(topic.last_active)}</span>
-                        )}
+                        {topic.last_active && <span>{formatTimeAgo(topic.last_active)}</span>}
                         {topic.category && (
                           <span className="px-1 border border-text-muted/30 rounded">
                             {topic.category}

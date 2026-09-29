@@ -71,7 +71,7 @@ export function AgentCard({
       e.stopPropagation();
       onConfigure?.(agent);
     },
-    [agent, onConfigure]
+    [agent, onConfigure],
   );
 
   const handleViewCalibration = useCallback(
@@ -79,7 +79,7 @@ export function AgentCard({
       e.stopPropagation();
       onViewCalibration?.(agent);
     },
-    [agent, onViewCalibration]
+    [agent, onViewCalibration],
   );
 
   // Calibration score color (higher is better)
@@ -227,10 +227,7 @@ export function AgentCard({
       {agent.expertise && agent.expertise.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1">
           {agent.expertise.slice(0, 3).map((skill) => (
-            <span
-              key={skill}
-              className="px-1.5 py-0.5 text-xs bg-surface rounded text-text-muted"
-            >
+            <span key={skill} className="px-1.5 py-0.5 text-xs bg-surface rounded text-text-muted">
               {skill}
             </span>
           ))}
@@ -248,9 +245,7 @@ export function AgentCard({
           {agent.tokens_used_today !== undefined && (
             <span>{agent.tokens_used_today.toLocaleString()} tokens today</span>
           )}
-          {agent.requests_today !== undefined && (
-            <span>{agent.requests_today} requests</span>
-          )}
+          {agent.requests_today !== undefined && <span>{agent.requests_today} requests</span>}
         </div>
       )}
     </div>

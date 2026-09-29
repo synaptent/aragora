@@ -58,7 +58,11 @@ const nodeTypes: NodeTypes = {
 };
 
 const ALL_STAGES: PipelineStageType[] = [
-  'ideas', 'principles', 'goals', 'actions', 'orchestration',
+  'ideas',
+  'principles',
+  'goals',
+  'actions',
+  'orchestration',
 ];
 
 const STAGE_COLORS: Record<string, string> = {
@@ -118,9 +122,10 @@ function StageFilterSidebar({ enabledStages, onToggle, onFocus, nodeCounts }: St
                 className={`
                   w-full flex items-center justify-between px-3 py-2 rounded font-theme-data text-xs
                   transition-all duration-200 border
-                  ${enabled
-                    ? 'border-current opacity-100'
-                    : 'border-border opacity-40 hover:opacity-60'
+                  ${
+                    enabled
+                      ? 'border-current opacity-100'
+                      : 'border-border opacity-40 hover:opacity-60'
                   }
                 `}
                 style={{ color, borderColor: enabled ? color : undefined }}
@@ -132,9 +137,7 @@ function StageFilterSidebar({ enabledStages, onToggle, onFocus, nodeCounts }: St
                 </span>
                 <span
                   className="px-1.5 py-0.5 rounded-full text-xs font-theme-data"
-                  style={{
-                    backgroundColor: enabled ? `${color}33` : 'transparent',
-                  }}
+                  style={{ backgroundColor: enabled ? `${color}33` : 'transparent' }}
                 >
                   {count}
                 </span>
@@ -268,13 +271,20 @@ function ProvenanceSidebar({
             {provenanceChain.map((entry, i) => {
               const stageColor = STAGE_COLORS[entry.stage] || '#6b7280';
               return (
-                <div key={i} className="p-2 bg-bg rounded border border-border" data-testid="mc-provenance-entry">
+                <div
+                  key={i}
+                  className="p-2 bg-bg rounded border border-border"
+                  data-testid="mc-provenance-entry"
+                >
                   <div className="flex items-center gap-2 mb-1">
                     <span
                       className="w-2 h-2 rounded-full inline-block"
                       style={{ backgroundColor: stageColor }}
                     />
-                    <span className="text-xs font-theme-data uppercase" style={{ color: stageColor }}>
+                    <span
+                      className="text-xs font-theme-data uppercase"
+                      style={{ color: stageColor }}
+                    >
                       {entry.stage}
                     </span>
                     {entry.method && (
@@ -319,7 +329,9 @@ function ProvenanceSidebar({
                   data-testid="mc-downstream-execution-entry"
                 >
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className={`px-1 py-0.5 text-xs rounded font-theme-data ${colors.bg} ${colors.text}`}>
+                    <span
+                      className={`px-1 py-0.5 text-xs rounded font-theme-data ${colors.bg} ${colors.text}`}
+                    >
                       {stageLabel}
                     </span>
                     <StatusBadge status={entry.status} size="sm" agent={entry.agent} />
@@ -425,11 +437,13 @@ function MissionControlCanvasInner() {
           // Focus on the empty stage area
           fitView({
             padding: 0.3,
-            nodes: [{
-              id: `_focus_${stage}`,
-              position: { x: offsetX + 100, y: 100 },
-              measured: { width: 400, height: 400 },
-            }],
+            nodes: [
+              {
+                id: `_focus_${stage}`,
+                position: { x: offsetX + 100, y: 100 },
+                measured: { width: 400, height: 400 },
+              },
+            ],
           });
         }
       }, 50);
@@ -476,9 +490,7 @@ function MissionControlCanvasInner() {
       return stage && visibleStages.has(stage);
     });
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredEdges = allEdges.filter(
-      (e) => nodeIds.has(e.source) && nodeIds.has(e.target),
-    );
+    const filteredEdges = allEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
     return { displayNodes: filteredNodes, displayEdges: filteredEdges };
   }, [allNodes, allEdges, visibleStages]);
 
@@ -486,7 +498,7 @@ function MissionControlCanvasInner() {
   const selectedNodeLabel = useMemo(() => {
     if (!selectedNodeId) return '';
     const node = allNodes.find((n) => n.id === selectedNodeId);
-    return (node?.data as Record<string, unknown>)?.label as string || selectedNodeId;
+    return ((node?.data as Record<string, unknown>)?.label as string) || selectedNodeId;
   }, [selectedNodeId, allNodes]);
 
   const nodeLookup = useMemo(() => {
@@ -495,10 +507,7 @@ function MissionControlCanvasInner() {
       const data = node.data as Record<string, unknown>;
       const stage = data.stage as PipelineStageType | undefined;
       if (!stage) continue;
-      lookup[node.id] = {
-        label: (data.label as string) || node.id,
-        stage,
-      };
+      lookup[node.id] = { label: (data.label as string) || node.id, stage };
     }
     return lookup;
   }, [allNodes]);
@@ -532,11 +541,13 @@ function MissionControlCanvasInner() {
         if (targetNode) {
           fitView({
             padding: 0.3,
-            nodes: [{
-              id: targetNode.id,
-              position: targetNode.position,
-              measured: { width: 260, height: 140 },
-            }],
+            nodes: [
+              {
+                id: targetNode.id,
+                position: targetNode.position,
+                measured: { width: 260, height: 140 },
+              },
+            ],
           });
           return;
         }
@@ -549,12 +560,18 @@ function MissionControlCanvasInner() {
   // -- MiniMap color --------------------------------------------------------
   const miniMapNodeColor = useCallback((node: { type?: string }) => {
     switch (node.type) {
-      case 'ideaNode': return STAGE_COLORS.ideas;
-      case 'principleNode': return STAGE_COLORS.principles;
-      case 'goalNode': return STAGE_COLORS.goals;
-      case 'actionNode': return STAGE_COLORS.actions;
-      case 'orchestrationNode': return STAGE_COLORS.orchestration;
-      default: return '#6b7280';
+      case 'ideaNode':
+        return STAGE_COLORS.ideas;
+      case 'principleNode':
+        return STAGE_COLORS.principles;
+      case 'goalNode':
+        return STAGE_COLORS.goals;
+      case 'actionNode':
+        return STAGE_COLORS.actions;
+      case 'orchestrationNode':
+        return STAGE_COLORS.orchestration;
+      default:
+        return '#6b7280';
     }
   }, []);
 
@@ -562,10 +579,7 @@ function MissionControlCanvasInner() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Don't capture when typing in inputs
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
@@ -614,10 +628,13 @@ function MissionControlCanvasInner() {
                 stage={stage}
                 nodeCount={stageNodeCounts[stage]}
                 status={
-                  stageStatus[stage] === 'complete' ? 'complete' :
-                  stageStatus[stage] === 'active' || stageStatus[stage] === 'running' ? 'active' :
-                  stageStatus[stage] === 'error' || stageStatus[stage] === 'failed' ? 'error' :
-                  'pending'
+                  stageStatus[stage] === 'complete'
+                    ? 'complete'
+                    : stageStatus[stage] === 'active' || stageStatus[stage] === 'running'
+                      ? 'active'
+                      : stageStatus[stage] === 'error' || stageStatus[stage] === 'failed'
+                        ? 'error'
+                        : 'pending'
                 }
               />
             </div>
@@ -636,15 +653,15 @@ function MissionControlCanvasInner() {
             fitView
             snapToGrid
             snapGrid={[16, 16]}
-            defaultEdgeOptions={{
-              animated: true,
-              style: { stroke: '#6b7280', strokeWidth: 2 },
-            }}
+            defaultEdgeOptions={{ animated: true, style: { stroke: '#6b7280', strokeWidth: 2 } }}
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#333" />
             <Controls className="bg-surface border border-border rounded" />
-            <MiniMap className="bg-surface border border-border rounded" nodeColor={miniMapNodeColor} />
+            <MiniMap
+              className="bg-surface border border-border rounded"
+              nodeColor={miniMapNodeColor}
+            />
 
             {/* Error banner */}
             {error && (
@@ -666,7 +683,10 @@ function MissionControlCanvasInner() {
             )}
 
             {/* Bottom panel: stats */}
-            <Panel position="bottom-left" className="bg-surface/90 border border-border rounded p-2">
+            <Panel
+              position="bottom-left"
+              className="bg-surface/90 border border-border rounded p-2"
+            >
               <div className="text-xs font-theme-data text-text-muted">
                 {pipelineId && (
                   <>
@@ -682,14 +702,16 @@ function MissionControlCanvasInner() {
                     ? 'all stages'
                     : zoomLevel >= ZOOM_PARTIAL
                       ? '4 stages'
-                      : '3 stages'
-                  }
+                      : '3 stages'}
                 </span>
               </div>
             </Panel>
 
             {/* Bottom right: keyboard hint */}
-            <Panel position="bottom-right" className="bg-surface/90 border border-border rounded p-2">
+            <Panel
+              position="bottom-right"
+              className="bg-surface/90 border border-border rounded p-2"
+            >
               <div className="text-xs font-theme-data text-text-muted">
                 <kbd className="px-1 bg-bg border border-border rounded">1</kbd>-
                 <kbd className="px-1 bg-bg border border-border rounded">5</kbd> stages |{' '}

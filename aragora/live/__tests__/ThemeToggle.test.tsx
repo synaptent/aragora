@@ -13,12 +13,7 @@
  *   - Uses text glyphs (no SVG icons)
  */
 
-import {
-  renderWithProviders,
-  screen,
-  fireEvent,
-  act,
-} from '@/test-utils';
+import { renderWithProviders, screen, fireEvent, act } from '@/test-utils';
 import { ThemeToggle } from '../src/components/ThemeToggle';
 
 const STORAGE_KEY = 'aragora-theme';
@@ -46,16 +41,18 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 const mockMatchMedia = (matches: boolean) => {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
-    value: jest.fn().mockImplementation((query) => ({
-      matches,
-      media: query,
-      onchange: null,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
-    })),
+    value: jest
+      .fn()
+      .mockImplementation((query) => ({
+        matches,
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      })),
   });
 };
 
@@ -168,9 +165,7 @@ describe('ThemeToggle (3-way segmented control)', () => {
       fireEvent.click(screen.getByRole('radio', { name: /pro/i }));
 
       expect(localStorageMock.getItem(STORAGE_KEY)).toBe('professional');
-      expect(document.documentElement.getAttribute('data-theme')).toBe(
-        'professional',
-      );
+      expect(document.documentElement.getAttribute('data-theme')).toBe('professional');
     });
 
     it('updates aria-checked when switching between radios', async () => {
@@ -198,9 +193,7 @@ describe('ThemeToggle (3-way segmented control)', () => {
       await flush();
 
       expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-      expect(
-        screen.getByRole('radio', { name: /dark/i }),
-      ).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radio', { name: /dark/i })).toHaveAttribute('aria-checked', 'true');
     });
 
     it('loads professional theme from localStorage on mount', async () => {
@@ -208,12 +201,8 @@ describe('ThemeToggle (3-way segmented control)', () => {
       renderWithProviders(<ThemeToggle />);
       await flush();
 
-      expect(document.documentElement.getAttribute('data-theme')).toBe(
-        'professional',
-      );
-      expect(
-        screen.getByRole('radio', { name: /pro/i }),
-      ).toHaveAttribute('aria-checked', 'true');
+      expect(document.documentElement.getAttribute('data-theme')).toBe('professional');
+      expect(screen.getByRole('radio', { name: /pro/i })).toHaveAttribute('aria-checked', 'true');
     });
   });
 

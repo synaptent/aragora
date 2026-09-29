@@ -18,9 +18,7 @@ export function StatCard({ label, value, subValue, color = 'acid-green', icon }:
         {icon && <span className="text-lg">{icon}</span>}
       </div>
       <div className={`text-2xl font-theme-data text-${color}`}>{value}</div>
-      {subValue && (
-        <div className="text-xs font-theme-data text-text-muted mt-1">{subValue}</div>
-      )}
+      {subValue && <div className="text-xs font-theme-data text-text-muted mt-1">{subValue}</div>}
     </div>
   );
 }

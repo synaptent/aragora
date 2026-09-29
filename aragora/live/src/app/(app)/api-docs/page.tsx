@@ -99,7 +99,13 @@ export default function ApiDocsPage() {
 
   // Group endpoints by tag
   const { grouped, tags, methodCounts, totalEndpoints } = useMemo(() => {
-    if (!spec) return { grouped: new Map<string, GroupedEndpoint[]>(), tags: [] as string[], methodCounts: {} as Record<string, number>, totalEndpoints: 0 };
+    if (!spec)
+      return {
+        grouped: new Map<string, GroupedEndpoint[]>(),
+        tags: [] as string[],
+        methodCounts: {} as Record<string, number>,
+        totalEndpoints: 0,
+      };
 
     const map = new Map<string, GroupedEndpoint[]>();
     const mCounts: Record<string, number> = {};
@@ -119,7 +125,8 @@ export default function ApiDocsPage() {
         if (selectedTag && !opTags.includes(selectedTag)) continue;
 
         if (searchLower) {
-          const searchable = `${path} ${operation.summary || ''} ${operation.operationId || ''} ${operation.description || ''}`.toLowerCase();
+          const searchable =
+            `${path} ${operation.summary || ''} ${operation.operationId || ''} ${operation.description || ''}`.toLowerCase();
           if (!searchable.includes(searchLower)) continue;
         }
 
@@ -141,7 +148,9 @@ export default function ApiDocsPage() {
   // Tag descriptions from spec
   const tagDescriptions = useMemo(() => {
     const desc: Record<string, string> = {};
-    spec?.tags?.forEach((t) => { if (t.description) desc[t.name] = t.description; });
+    spec?.tags?.forEach((t) => {
+      if (t.description) desc[t.name] = t.description;
+    });
     return desc;
   }, [spec]);
 
@@ -248,11 +257,13 @@ export default function ApiDocsPage() {
 
                 {/* Stats */}
                 <div className="text-xs font-theme-data text-[var(--text-muted)] ml-auto flex gap-3">
-                  {Object.entries(methodCounts).sort().map(([m, c]) => (
-                    <span key={m} className={METHOD_COLORS[m]?.split(' ')[1] || ''}>
-                      {m}: {c}
-                    </span>
-                  ))}
+                  {Object.entries(methodCounts)
+                    .sort()
+                    .map(([m, c]) => (
+                      <span key={m} className={METHOD_COLORS[m]?.split(' ')[1] || ''}>
+                        {m}: {c}
+                      </span>
+                    ))}
                 </div>
               </div>
 
@@ -261,7 +272,10 @@ export default function ApiDocsPage() {
                 {tags.map((tag) => {
                   const endpoints = grouped.get(tag) || [];
                   return (
-                    <section key={tag} className="border border-[var(--border)] bg-[var(--surface)]/50">
+                    <section
+                      key={tag}
+                      className="border border-[var(--border)] bg-[var(--surface)]/50"
+                    >
                       {/* Tag header */}
                       <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--surface)]">
                         <div className="flex items-center justify-between">
@@ -294,7 +308,8 @@ export default function ApiDocsPage() {
                                 {/* Method badge */}
                                 <span
                                   className={`inline-block w-16 text-center px-2 py-0.5 text-[10px] font-theme-data font-bold border ${
-                                    METHOD_COLORS[method] || 'bg-gray-500/20 text-gray-400 border-gray-500/40'
+                                    METHOD_COLORS[method] ||
+                                    'bg-gray-500/20 text-gray-400 border-gray-500/40'
                                   }`}
                                 >
                                   {method}
@@ -327,7 +342,11 @@ export default function ApiDocsPage() {
 
                               {/* Expanded details */}
                               {isExpanded && (
-                                <EndpointDetails operation={operation} path={path} method={method} />
+                                <EndpointDetails
+                                  operation={operation}
+                                  path={path}
+                                  method={method}
+                                />
                               )}
                             </div>
                           );
@@ -355,9 +374,7 @@ export default function ApiDocsPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // API REFERENCE
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // API REFERENCE</p>
         </footer>
       </main>
     </>
@@ -380,7 +397,9 @@ function EndpointDetails({
       {/* Description */}
       {operation.description && (
         <div>
-          <p className="text-xs font-theme-data text-[var(--text-muted)]">{operation.description}</p>
+          <p className="text-xs font-theme-data text-[var(--text-muted)]">
+            {operation.description}
+          </p>
         </div>
       )}
 
@@ -408,9 +427,7 @@ function EndpointDetails({
                 <code className="text-[var(--acid-green)] min-w-[100px]">{param.name}</code>
                 <span className="text-[var(--text-muted)] min-w-[50px]">{param.in}</span>
                 <span className="text-[var(--text-muted)]">{param.schema?.type || 'string'}</span>
-                {param.required && (
-                  <span className="text-red-400 text-[10px]">required</span>
-                )}
+                {param.required && <span className="text-red-400 text-[10px]">required</span>}
                 {param.description && (
                   <span className="text-[var(--text-muted)] ml-auto truncate max-w-xs">
                     {param.description}
@@ -427,9 +444,7 @@ function EndpointDetails({
         <div>
           <h4 className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">
             Request Body
-            {operation.requestBody.required && (
-              <span className="text-red-400 ml-2">required</span>
-            )}
+            {operation.requestBody.required && <span className="text-red-400 ml-2">required</span>}
           </h4>
           {operation.requestBody.content && (
             <div className="border border-[var(--border)]/50">
@@ -465,10 +480,10 @@ function EndpointDetails({
                       status.startsWith('2')
                         ? 'text-emerald-400'
                         : status.startsWith('4')
-                        ? 'text-amber-400'
-                        : status.startsWith('5')
-                        ? 'text-red-400'
-                        : 'text-[var(--text-muted)]'
+                          ? 'text-amber-400'
+                          : status.startsWith('5')
+                            ? 'text-red-400'
+                            : 'text-[var(--text-muted)]'
                     }`}
                   >
                     {status}
@@ -479,7 +494,7 @@ function EndpointDetails({
                 </div>
                 {response.content && (
                   <div className="mt-1">
-                    {Object.entries(response.content).map(([ct, media]) => (
+                    {Object.entries(response.content).map(([ct, media]) =>
                       media.schema ? (
                         <pre
                           key={ct}
@@ -487,8 +502,8 @@ function EndpointDetails({
                         >
                           {JSON.stringify(media.schema, null, 2)}
                         </pre>
-                      ) : null
-                    ))}
+                      ) : null,
+                    )}
                   </div>
                 )}
               </div>

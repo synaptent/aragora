@@ -11,13 +11,7 @@
 
 'use client';
 
-import React, {
-  useRef,
-  useState,
-  useCallback,
-  useEffect,
-  ReactNode,
-} from 'react';
+import React, { useRef, useState, useCallback, useEffect, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion, useIsTouchDevice } from '@/hooks/useMediaQuery';
 
@@ -67,9 +61,7 @@ function DefaultRefreshIndicator({ progress }: { progress: number }) {
       className="flex items-center justify-center"
       style={{
         opacity: Math.min(1, progress),
-        transform: `scale(${Math.min(1, 0.5 + progress * 0.5)}) rotate(${
-          progress * 180
-        }deg)`,
+        transform: `scale(${Math.min(1, 0.5 + progress * 0.5)}) rotate(${progress * 180}deg)`,
       }}
     >
       <svg
@@ -91,19 +83,8 @@ function DefaultRefreshIndicator({ progress }: { progress: number }) {
 
 function DefaultLoadingIndicator() {
   return (
-    <svg
-      className="animate-spin w-6 h-6 text-primary"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
+    <svg className="animate-spin w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
         className="opacity-75"
         fill="currentColor"
@@ -141,10 +122,7 @@ export function PullToRefresh({
   const isTouch = useIsTouchDevice();
 
   // Calculate the visual distance with rubber-band effect
-  const visualDistance = Math.min(
-    maxPull,
-    pullDistance > 0 ? pullDistance / resistance : 0
-  );
+  const visualDistance = Math.min(maxPull, pullDistance > 0 ? pullDistance / resistance : 0);
 
   // Progress towards threshold (0-1)
   const progress = Math.min(1, visualDistance / threshold);
@@ -164,7 +142,7 @@ export function PullToRefresh({
       currentYRef.current = e.touches[0].clientY;
       setHasTriggeredHaptic(false);
     },
-    [disabled, state]
+    [disabled, state],
   );
 
   // Handle touch move
@@ -203,7 +181,7 @@ export function PullToRefresh({
         }
       }
     },
-    [disabled, state, threshold, resistance, hasTriggeredHaptic]
+    [disabled, state, threshold, resistance, hasTriggeredHaptic],
   );
 
   // Handle touch end
@@ -247,16 +225,13 @@ export function PullToRefresh({
   }, [isTouch, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   return (
-    <div
-      ref={containerRef}
-      className={cn('relative overflow-auto h-full', className)}
-    >
+    <div ref={containerRef} className={cn('relative overflow-auto h-full', className)}>
       {/* Refresh indicator */}
       <div
         className={cn(
           'absolute left-0 right-0 flex items-center justify-center',
           'pointer-events-none z-10',
-          prefersReducedMotion ? '' : 'transition-transform duration-200'
+          prefersReducedMotion ? '' : 'transition-transform duration-200',
         )}
         style={{
           height: `${threshold}px`,
@@ -272,13 +247,8 @@ export function PullToRefresh({
       {/* Content */}
       <div
         ref={contentRef}
-        className={cn(
-          prefersReducedMotion ? '' : 'transition-transform duration-200'
-        )}
-        style={{
-          transform:
-            state !== 'idle' ? `translateY(${visualDistance}px)` : undefined,
-        }}
+        className={cn(prefersReducedMotion ? '' : 'transition-transform duration-200')}
+        style={{ transform: state !== 'idle' ? `translateY(${visualDistance}px)` : undefined }}
       >
         {children}
       </div>

@@ -6,11 +6,7 @@ export interface MetricCardProps {
   color?: string;
 }
 
-export function MetricCard({
-  label,
-  value,
-  color = 'text-[var(--accent)]',
-}: MetricCardProps) {
+export function MetricCard({ label, value, color = 'text-[var(--accent)]' }: MetricCardProps) {
   return (
     <div className="bg-bg/50 border border-[var(--accent)]/20 p-3 text-center">
       <div className="text-xs font-theme-data text-text-muted mb-1">{label}</div>

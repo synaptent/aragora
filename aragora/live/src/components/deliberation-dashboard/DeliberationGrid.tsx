@@ -19,10 +19,7 @@ export function DeliberationGrid({
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-surface border border-[var(--accent)]/20 p-4 animate-pulse"
-          >
+          <div key={i} className="bg-surface border border-[var(--accent)]/20 p-4 animate-pulse">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-[var(--accent)]/20" />
               <div className="w-12 h-3 bg-[var(--accent)]/20 rounded" />
@@ -53,7 +50,13 @@ export function DeliberationGrid({
 
   // Sort decisionmaking sessions: active first, then by updated_at
   const sorted = [...deliberations].sort((a, b) => {
-    const statusPriority = { active: 0, consensus_forming: 1, initializing: 2, complete: 3, failed: 4 };
+    const statusPriority = {
+      active: 0,
+      consensus_forming: 1,
+      initializing: 2,
+      complete: 3,
+      failed: 4,
+    };
     const aPriority = statusPriority[a.status] ?? 5;
     const bPriority = statusPriority[b.status] ?? 5;
     if (aPriority !== bPriority) return aPriority - bPriority;

@@ -16,7 +16,7 @@ import logging
 import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
@@ -41,6 +41,19 @@ def get_audit_log() -> AuditLog:
 
         _audit_log = AuditLog()
     return _audit_log
+
+
+def _require_body(body: dict[str, Any] | None) -> dict[str, Any]:
+    """Narrow the parsed body once the parser's error branch has been handled.
+
+    ``parse_json_body`` returns ``(dict, None)`` or ``(None, response)``, so the
+    body is always a dict after the error response has been consumed; the
+    ``None`` branch keeps the native first-use failure rather than adding a
+    new response.
+    """
+    if body is None:
+        raise AttributeError("'NoneType' object has no attribute 'get'")
+    return body
 
 
 @require_permission("audit:read")
@@ -173,6 +186,7 @@ async def handle_audit_export(request: web.Request) -> web.Response:
     body, err = await parse_json_body(request, context="audit_export")
     if err:
         return err
+    body = _require_body(body)
 
     # Validate required fields
     if not body.get("start_date"):
@@ -262,6 +276,7 @@ async def handle_audit_verify(request: web.Request) -> web.Response:
     body, err = await parse_json_body(request, context="audit_verify")
     if err:
         body = {}
+    body = _require_body(body)
 
     start_date = None
     end_date = None

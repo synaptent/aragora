@@ -9,9 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 const BeliefNetworkGraph = dynamic(() => import('./BeliefNetworkGraph'), {
   ssr: false,
   loading: () => (
-    <div className="p-4 text-center text-text-muted text-sm font-theme-data">
-      Loading graph...
-    </div>
+    <div className="p-4 text-center text-text-muted text-sm font-theme-data">Loading graph...</div>
   ),
 });
 
@@ -47,7 +45,10 @@ interface GraphStats {
   density: number;
   avg_degree: number;
   clustering_coefficient: number;
-  agent_stats: Record<string, { messages: number; critiques_given: number; critiques_received: number }>;
+  agent_stats: Record<
+    string,
+    { messages: number; critiques_given: number; critiques_received: number }
+  >;
   round_stats: Record<string, { messages: number; critiques: number }>;
 }
 
@@ -58,7 +59,10 @@ interface CruxPanelProps {
 
 const DEFAULT_API_BASE = API_BASE_URL;
 
-export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BASE }: CruxPanelProps) {
+export function CruxPanel({
+  debateId: initialDebateId,
+  apiBase = DEFAULT_API_BASE,
+}: CruxPanelProps) {
   const { tokens } = useAuth();
   const [debateId, setDebateId] = useState(initialDebateId || '');
   const [cruxes, setCruxes] = useState<Crux[]>([]);
@@ -68,127 +72,146 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'cruxes' | 'load-bearing' | 'contested' | 'graph' | 'stats'>('cruxes');
+  const [activeTab, setActiveTab] = useState<
+    'cruxes' | 'load-bearing' | 'contested' | 'graph' | 'stats'
+  >('cruxes');
 
-  const fetchCruxData = useCallback(async (id: string) => {
-    if (!id.trim()) {
-      setError('Please enter a debate ID');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
-    if (tokens?.access_token) {
-      headers['Authorization'] = `Bearer ${tokens.access_token}`;
-    }
-
-    try {
-      const [cruxesRes, lbRes, statsRes] = await Promise.all([
-        fetch(`${apiBase}/api/belief-network/${id}/cruxes?top_k=10`, { headers }),
-        fetch(`${apiBase}/api/belief-network/${id}/load-bearing-claims?limit=10`, { headers }),
-        fetch(`${apiBase}/api/debate/${id}/graph-stats`, { headers }),
-      ]);
-
-      if (!cruxesRes.ok) {
-        const data = await cruxesRes.json();
-        throw new Error(data.error || `HTTP ${cruxesRes.status}`);
+  const fetchCruxData = useCallback(
+    async (id: string) => {
+      if (!id.trim()) {
+        setError('Please enter a debate ID');
+        return;
       }
 
-      const cruxesData = await cruxesRes.json();
-      const allCruxes = cruxesData.cruxes || [];
-      setCruxes(allCruxes);
+      setLoading(true);
+      setError(null);
 
-      // Derive contested claims: high entropy claims
-      const contested = allCruxes
-        .filter((c: Crux) => c.entropy >= 0.5)
-        .map((c: Crux) => ({
-          ...c,
-          disagreement_score: c.entropy * (1 - Math.abs(c.current_belief?.true_prob - c.current_belief?.false_prob || 0)),
-        }))
-        .sort((a: ContestedClaim, b: ContestedClaim) => b.disagreement_score - a.disagreement_score);
-      setContestedClaims(contested);
-
-      if (lbRes.ok) {
-        const lbData = await lbRes.json();
-        setLoadBearingClaims(lbData.load_bearing_claims || []);
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (tokens?.access_token) {
+        headers['Authorization'] = `Bearer ${tokens.access_token}`;
       }
 
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setGraphStats(statsData);
+      try {
+        const [cruxesRes, lbRes, statsRes] = await Promise.all([
+          fetch(`${apiBase}/api/belief-network/${id}/cruxes?top_k=10`, { headers }),
+          fetch(`${apiBase}/api/belief-network/${id}/load-bearing-claims?limit=10`, { headers }),
+          fetch(`${apiBase}/api/debate/${id}/graph-stats`, { headers }),
+        ]);
+
+        if (!cruxesRes.ok) {
+          const data = await cruxesRes.json();
+          throw new Error(data.error || `HTTP ${cruxesRes.status}`);
+        }
+
+        const cruxesData = await cruxesRes.json();
+        const allCruxes = cruxesData.cruxes || [];
+        setCruxes(allCruxes);
+
+        // Derive contested claims: high entropy claims
+        const contested = allCruxes
+          .filter((c: Crux) => c.entropy >= 0.5)
+          .map((c: Crux) => ({
+            ...c,
+            disagreement_score:
+              c.entropy *
+              (1 - Math.abs(c.current_belief?.true_prob - c.current_belief?.false_prob || 0)),
+          }))
+          .sort(
+            (a: ContestedClaim, b: ContestedClaim) => b.disagreement_score - a.disagreement_score,
+          );
+        setContestedClaims(contested);
+
+        if (lbRes.ok) {
+          const lbData = await lbRes.json();
+          setLoadBearingClaims(lbData.load_bearing_claims || []);
+        }
+
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setGraphStats(statsData);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch crux data');
+        setCruxes([]);
+        setLoadBearingClaims([]);
+        setContestedClaims([]);
+        setGraphStats(null);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch crux data');
-      setCruxes([]);
-      setLoadBearingClaims([]);
-      setContestedClaims([]);
-      setGraphStats(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, tokens?.access_token]);
+    },
+    [apiBase, tokens?.access_token],
+  );
 
-  const handleExport = useCallback(async (format: 'json' | 'graphml' | 'csv') => {
-    if (!debateId.trim() || !tokens?.access_token) return;
+  const handleExport = useCallback(
+    async (format: 'json' | 'graphml' | 'csv') => {
+      if (!debateId.trim() || !tokens?.access_token) return;
 
-    setExporting(true);
-    try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokens.access_token}`,
-      };
-      const response = await fetch(`${apiBase}/api/belief-network/${debateId}/export?format=${format}`, { headers });
-      if (!response.ok) throw new Error(`Export failed: ${response.status}`);
+      setExporting(true);
+      try {
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens.access_token}`,
+        };
+        const response = await fetch(
+          `${apiBase}/api/belief-network/${debateId}/export?format=${format}`,
+          { headers },
+        );
+        if (!response.ok) throw new Error(`Export failed: ${response.status}`);
 
-      const data = await response.json();
+        const data = await response.json();
 
-      // Create downloadable file
-      let content: string;
-      let mimeType: string;
-      let filename: string;
+        // Create downloadable file
+        let content: string;
+        let mimeType: string;
+        let filename: string;
 
-      if (format === 'graphml') {
-        content = data.content;
-        mimeType = 'application/xml';
-        filename = `belief-network-${debateId}.graphml`;
-      } else if (format === 'csv') {
-        // Create CSV content for nodes
-        const nodesHeader = data.headers.nodes.join(',');
-        const nodesRows = data.nodes_csv.map((n: Record<string, unknown>) =>
-          data.headers.nodes.map((h: string) => JSON.stringify(n[h] ?? '')).join(',')
-        ).join('\n');
+        if (format === 'graphml') {
+          content = data.content;
+          mimeType = 'application/xml';
+          filename = `belief-network-${debateId}.graphml`;
+        } else if (format === 'csv') {
+          // Create CSV content for nodes
+          const nodesHeader = data.headers.nodes.join(',');
+          const nodesRows = data.nodes_csv
+            .map((n: Record<string, unknown>) =>
+              data.headers.nodes.map((h: string) => JSON.stringify(n[h] ?? '')).join(','),
+            )
+            .join('\n');
 
-        const edgesHeader = data.headers.edges.join(',');
-        const edgesRows = data.edges_csv.map((e: Record<string, unknown>) =>
-          data.headers.edges.map((h: string) => JSON.stringify(e[h] ?? '')).join(',')
-        ).join('\n');
+          const edgesHeader = data.headers.edges.join(',');
+          const edgesRows = data.edges_csv
+            .map((e: Record<string, unknown>) =>
+              data.headers.edges.map((h: string) => JSON.stringify(e[h] ?? '')).join(','),
+            )
+            .join('\n');
 
-        content = `# Nodes\n${nodesHeader}\n${nodesRows}\n\n# Edges\n${edgesHeader}\n${edgesRows}`;
-        mimeType = 'text/csv';
-        filename = `belief-network-${debateId}.csv`;
-      } else {
-        content = JSON.stringify(data, null, 2);
-        mimeType = 'application/json';
-        filename = `belief-network-${debateId}.json`;
+          content = `# Nodes\n${nodesHeader}\n${nodesRows}\n\n# Edges\n${edgesHeader}\n${edgesRows}`;
+          mimeType = 'text/csv';
+          filename = `belief-network-${debateId}.csv`;
+        } else {
+          content = JSON.stringify(data, null, 2);
+          mimeType = 'application/json';
+          filename = `belief-network-${debateId}.json`;
+        }
+
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Export failed');
+      } finally {
+        setExporting(false);
       }
-
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setExporting(false);
-    }
-  }, [apiBase, debateId, tokens?.access_token]);
+    },
+    [apiBase, debateId, tokens?.access_token],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -319,9 +342,7 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
                 </span>
               </div>
 
-              <p className="text-sm text-text mb-2 line-clamp-2">
-                {crux.statement}
-              </p>
+              <p className="text-sm text-text mb-2 line-clamp-2">{crux.statement}</p>
 
               <div className="flex items-center gap-4 text-xs font-theme-data">
                 <span className="text-text-muted">
@@ -376,9 +397,7 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
                 </span>
               </div>
 
-              <p className="text-sm text-text mb-2 line-clamp-2">
-                {claim.statement}
-              </p>
+              <p className="text-sm text-text mb-2 line-clamp-2">{claim.statement}</p>
 
               <div className="text-xs font-theme-data text-text-muted">
                 by: <span className="text-text">{claim.author}</span>
@@ -411,9 +430,7 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
                 </span>
               </div>
 
-              <p className="text-sm text-text mb-2 line-clamp-2">
-                {claim.statement}
-              </p>
+              <p className="text-sm text-text mb-2 line-clamp-2">{claim.statement}</p>
 
               <div className="flex items-center gap-4 text-xs font-theme-data">
                 <span className="text-text-muted">
@@ -469,30 +486,51 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
               {/* Overview */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="p-3 bg-bg border border-border rounded">
-                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">Nodes</div>
-                  <div className="text-xl font-theme-data text-[var(--accent)]">{graphStats.total_nodes}</div>
+                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">
+                    Nodes
+                  </div>
+                  <div className="text-xl font-theme-data text-[var(--accent)]">
+                    {graphStats.total_nodes}
+                  </div>
                 </div>
                 <div className="p-3 bg-bg border border-border rounded">
-                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">Edges</div>
-                  <div className="text-xl font-theme-data text-[var(--acid-cyan)]">{graphStats.total_edges}</div>
+                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">
+                    Edges
+                  </div>
+                  <div className="text-xl font-theme-data text-[var(--acid-cyan)]">
+                    {graphStats.total_edges}
+                  </div>
                 </div>
                 <div className="p-3 bg-bg border border-border rounded">
-                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">Density</div>
-                  <div className="text-xl font-theme-data text-yellow-400">{(graphStats.density * 100).toFixed(1)}%</div>
+                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">
+                    Density
+                  </div>
+                  <div className="text-xl font-theme-data text-yellow-400">
+                    {(graphStats.density * 100).toFixed(1)}%
+                  </div>
                 </div>
                 <div className="p-3 bg-bg border border-border rounded">
-                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">Avg Degree</div>
-                  <div className="text-xl font-theme-data text-text">{graphStats.avg_degree.toFixed(1)}</div>
+                  <div className="text-xs text-text-muted font-theme-data uppercase mb-1">
+                    Avg Degree
+                  </div>
+                  <div className="text-xl font-theme-data text-text">
+                    {graphStats.avg_degree.toFixed(1)}
+                  </div>
                 </div>
               </div>
 
               {/* Agent Stats */}
               {graphStats.agent_stats && Object.keys(graphStats.agent_stats).length > 0 && (
                 <div className="p-3 bg-bg border border-border rounded">
-                  <h4 className="text-xs font-theme-data text-text-muted uppercase mb-3">Agent Participation</h4>
+                  <h4 className="text-xs font-theme-data text-text-muted uppercase mb-3">
+                    Agent Participation
+                  </h4>
                   <div className="space-y-2">
                     {Object.entries(graphStats.agent_stats).map(([agent, stats]) => (
-                      <div key={agent} className="flex items-center justify-between text-sm font-theme-data">
+                      <div
+                        key={agent}
+                        className="flex items-center justify-between text-sm font-theme-data"
+                      >
                         <span className="text-text">{agent}</span>
                         <div className="flex gap-4 text-text-muted text-xs">
                           <span>{stats.messages} msgs</span>
@@ -508,12 +546,19 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
               {/* Round Stats */}
               {graphStats.round_stats && Object.keys(graphStats.round_stats).length > 0 && (
                 <div className="p-3 bg-bg border border-border rounded">
-                  <h4 className="text-xs font-theme-data text-text-muted uppercase mb-3">Round Activity</h4>
+                  <h4 className="text-xs font-theme-data text-text-muted uppercase mb-3">
+                    Round Activity
+                  </h4>
                   <div className="flex gap-2 flex-wrap">
                     {Object.entries(graphStats.round_stats).map(([round, stats]) => (
-                      <div key={round} className="px-3 py-2 bg-surface border border-border rounded text-xs font-theme-data">
+                      <div
+                        key={round}
+                        className="px-3 py-2 bg-surface border border-border rounded text-xs font-theme-data"
+                      >
                         <div className="text-text-muted">Round {round}</div>
-                        <div className="text-text">{stats.messages} msgs / {stats.critiques} crit</div>
+                        <div className="text-text">
+                          {stats.messages} msgs / {stats.critiques} crit
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -528,7 +573,9 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
       {debateId && (cruxes.length > 0 || loadBearingClaims.length > 0) && (
         <div className="mt-4 p-3 bg-bg border border-border rounded-lg">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-theme-data text-text-muted uppercase">Export Network</span>
+            <span className="text-xs font-theme-data text-text-muted uppercase">
+              Export Network
+            </span>
             <div className="flex gap-2">
               <button
                 onClick={() => handleExport('json')}
@@ -554,16 +601,27 @@ export function CruxPanel({ debateId: initialDebateId, apiBase = DEFAULT_API_BAS
             </div>
           </div>
           {exporting && (
-            <div className="mt-2 text-xs font-theme-data text-[var(--accent)] animate-pulse">Exporting...</div>
+            <div className="mt-2 text-xs font-theme-data text-[var(--accent)] animate-pulse">
+              Exporting...
+            </div>
           )}
         </div>
       )}
 
       {/* Help text */}
       <div className="mt-4 text-xs text-text-muted font-theme-data border-t border-border pt-3">
-        <p><span className="text-[var(--acid-cyan)]">Cruxes:</span> Claims with high uncertainty and high centrality - resolving these would most impact the debate outcome.</p>
-        <p className="mt-1"><span className="text-[var(--accent)]">Load-bearing:</span> Claims that many other claims depend on - foundational to the argument structure.</p>
-        <p className="mt-1"><span className="text-red-400">Contested:</span> Claims with high disagreement between agents - areas of active debate.</p>
+        <p>
+          <span className="text-[var(--acid-cyan)]">Cruxes:</span> Claims with high uncertainty and
+          high centrality - resolving these would most impact the debate outcome.
+        </p>
+        <p className="mt-1">
+          <span className="text-[var(--accent)]">Load-bearing:</span> Claims that many other claims
+          depend on - foundational to the argument structure.
+        </p>
+        <p className="mt-1">
+          <span className="text-red-400">Contested:</span> Claims with high disagreement between
+          agents - areas of active debate.
+        </p>
       </div>
     </div>
   );

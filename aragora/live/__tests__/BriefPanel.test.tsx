@@ -6,10 +6,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { BriefPanel } from '../src/components/review-queue/BriefPanel';
-import type {
-  BriefStateSnapshot,
-  ReviewQueueBrief,
-} from '../src/hooks/useReviewQueue';
+import type { BriefStateSnapshot, ReviewQueueBrief } from '../src/hooks/useReviewQueue';
 
 function makeReadyBrief(overrides: Partial<ReviewQueueBrief> = {}): ReviewQueueBrief {
   return {
@@ -98,31 +95,17 @@ describe('BriefPanel — Mode 3 lifecycle states', () => {
   });
 
   it('absent: falls back to legacy empty-slate when generation disabled', () => {
-    render(
-      <BriefPanel
-        brief={null}
-        state={makeSnapshot('absent')}
-        generationEnabled={false}
-      />,
-    );
+    render(<BriefPanel brief={null} state={makeSnapshot('absent')} generationEnabled={false} />);
     expect(screen.getByTestId('brief-panel-empty')).toBeInTheDocument();
     expect(screen.queryByTestId('brief-panel-absent')).toBeNull();
     expect(screen.queryByTestId('brief-panel-generate')).toBeNull();
   });
 
   it('queued: renders queued skeleton with starting-soon copy', () => {
-    render(
-      <BriefPanel
-        brief={null}
-        state={makeSnapshot('queued')}
-        generationEnabled
-      />,
-    );
+    render(<BriefPanel brief={null} state={makeSnapshot('queued')} generationEnabled />);
     expect(screen.getByTestId('brief-panel-queued')).toBeInTheDocument();
     expect(screen.getByTestId('brief-panel-spinner')).toBeInTheDocument();
-    expect(screen.getByTestId('brief-panel-progress-detail')).toHaveTextContent(
-      /Queued/i,
-    );
+    expect(screen.getByTestId('brief-panel-progress-detail')).toHaveTextContent(/Queued/i);
   });
 
   it('running: surfaces phase + roles + elapsed + cost in the progress row', () => {
@@ -148,25 +131,13 @@ describe('BriefPanel — Mode 3 lifecycle states', () => {
   });
 
   it('ready: renders role sections when brief body is loaded', () => {
-    render(
-      <BriefPanel
-        brief={makeReadyBrief()}
-        state={makeSnapshot('ready')}
-        generationEnabled
-      />,
-    );
+    render(<BriefPanel brief={makeReadyBrief()} state={makeSnapshot('ready')} generationEnabled />);
     expect(screen.getByTestId('brief-panel')).toBeInTheDocument();
     expect(screen.getByTestId('brief-verdict')).toHaveTextContent('approve_candidate');
   });
 
   it('ready: falls back to loading placeholder when body not yet fetched', () => {
-    render(
-      <BriefPanel
-        brief={null}
-        state={makeSnapshot('ready')}
-        generationEnabled
-      />,
-    );
+    render(<BriefPanel brief={null} state={makeSnapshot('ready')} generationEnabled />);
     expect(screen.getByTestId('brief-panel-loading')).toBeInTheDocument();
   });
 
@@ -186,9 +157,7 @@ describe('BriefPanel — Mode 3 lifecycle states', () => {
     );
     const panel = screen.getByTestId('brief-panel-failed');
     expect(panel).toHaveTextContent(/failed at findings/i);
-    expect(screen.getByTestId('brief-panel-failed-reason')).toHaveTextContent(
-      'model rate limited',
-    );
+    expect(screen.getByTestId('brief-panel-failed-reason')).toHaveTextContent('model rate limited');
     expect(screen.getByTestId('brief-panel-failed-cost')).toHaveTextContent('$0.07');
     fireEvent.click(screen.getByTestId('brief-panel-retry'));
     expect(onRetry).toHaveBeenCalledTimes(1);

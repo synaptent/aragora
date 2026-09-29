@@ -138,7 +138,8 @@ export function AuditLogViewer({ apiBase = '/api' }: AuditLogViewerProps) {
       }
 
       const blob = await response.blob();
-      const filename = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') ||
+      const filename =
+        response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') ||
         `audit_export.${format}`;
 
       const url = URL.createObjectURL(blob);
@@ -245,19 +246,29 @@ export function AuditLogViewer({ apiBase = '/api' }: AuditLogViewerProps) {
           <div className="flex items-center gap-6 flex-wrap">
             <div>
               <span className="text-xs font-theme-data text-text-muted">24H: </span>
-              <span className="text-xs font-theme-data text-[var(--accent)]">{stats.recent_events_24h}</span>
+              <span className="text-xs font-theme-data text-[var(--accent)]">
+                {stats.recent_events_24h}
+              </span>
             </div>
-            {Object.entries(stats.events_by_category || {}).slice(0, 4).map(([cat, count]) => (
-              <div key={cat}>
-                <span className="text-xs font-theme-data text-text-muted">{cat.toUpperCase()}: </span>
-                <span className={`text-xs font-theme-data ${CATEGORY_COLORS[cat]?.split(' ')[0] || 'text-text-primary'}`}>
-                  {count}
-                </span>
-              </div>
-            ))}
+            {Object.entries(stats.events_by_category || {})
+              .slice(0, 4)
+              .map(([cat, count]) => (
+                <div key={cat}>
+                  <span className="text-xs font-theme-data text-text-muted">
+                    {cat.toUpperCase()}:{' '}
+                  </span>
+                  <span
+                    className={`text-xs font-theme-data ${CATEGORY_COLORS[cat]?.split(' ')[0] || 'text-text-primary'}`}
+                  >
+                    {count}
+                  </span>
+                </div>
+              ))}
             <div>
               <span className="text-xs font-theme-data text-text-muted">INTEGRITY: </span>
-              <span className={`text-xs font-theme-data ${stats.integrity_verified ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}`}>
+              <span
+                className={`text-xs font-theme-data ${stats.integrity_verified ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}`}
+              >
                 {stats.integrity_verified ? 'OK' : 'CHECK'}
               </span>
             </div>
@@ -380,9 +391,7 @@ export function AuditLogViewer({ apiBase = '/api' }: AuditLogViewerProps) {
                 key={event.id}
                 event={event}
                 isSelected={selectedEvent?.id === event.id}
-                onClick={() =>
-                  setSelectedEvent(selectedEvent?.id === event.id ? null : event)
-                }
+                onClick={() => setSelectedEvent(selectedEvent?.id === event.id ? null : event)}
                 formatTimestamp={formatTimestamp}
               />
             ))}
@@ -447,7 +456,9 @@ function AuditEventRow({ event, isSelected, onClick, formatTimestamp }: AuditEve
       }`}
     >
       <div className="flex-shrink-0 w-32">
-        <span className="text-xs font-theme-data text-text-muted">{formatTimestamp(event.timestamp)}</span>
+        <span className="text-xs font-theme-data text-text-muted">
+          {formatTimestamp(event.timestamp)}
+        </span>
       </div>
 
       <div className="flex-shrink-0">
@@ -461,7 +472,9 @@ function AuditEventRow({ event, isSelected, onClick, formatTimestamp }: AuditEve
       </div>
 
       <div className="flex-1 min-w-0">
-        <span className="text-xs font-theme-data text-text-primary truncate block">{event.action}</span>
+        <span className="text-xs font-theme-data text-text-primary truncate block">
+          {event.action}
+        </span>
       </div>
 
       <div className="flex-shrink-0 w-24">
@@ -471,7 +484,9 @@ function AuditEventRow({ event, isSelected, onClick, formatTimestamp }: AuditEve
       </div>
 
       <div className="flex-shrink-0">
-        <span className={`text-xs font-theme-data ${OUTCOME_COLORS[event.outcome] || 'text-text-primary'}`}>
+        <span
+          className={`text-xs font-theme-data ${OUTCOME_COLORS[event.outcome] || 'text-text-primary'}`}
+        >
           {event.outcome.toUpperCase()}
         </span>
       </div>
@@ -549,7 +564,9 @@ function DetailField({ label, value, mono }: DetailFieldProps) {
   return (
     <div>
       <span className="text-xs font-theme-data text-text-muted block">{label}</span>
-      <span className={`text-xs font-theme-data text-text-primary ${mono ? 'font-theme-data' : ''}`}>
+      <span
+        className={`text-xs font-theme-data text-text-primary ${mono ? 'font-theme-data' : ''}`}
+      >
         {value}
       </span>
     </div>

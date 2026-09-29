@@ -25,18 +25,12 @@ describe('DecisionPackageView', () => {
             routing_applied: true,
             routing_strategy: 'provider_router_selection',
             routed_agent_names: ['claude', 'gpt'],
-            provider_matches: {
-              claude: 'anthropic',
-              gpt: 'openai',
-            },
-            provider_hint_scores: {
-              anthropic: 0.91,
-              openai: 0.73,
-            },
+            provider_matches: { claude: 'anthropic', gpt: 'openai' },
+            provider_hint_scores: { anthropic: 0.91, openai: 0.73 },
           },
           duration_seconds: 42,
         }}
-      />
+      />,
     );
 
     expect(screen.getByText(/provider routing/i)).toBeInTheDocument();
@@ -68,7 +62,7 @@ describe('DecisionPackageView', () => {
           provider_routing: null,
           duration_seconds: 0,
         }}
-      />
+      />,
     );
 
     expect(screen.getByText(/truth status/i)).toBeInTheDocument();

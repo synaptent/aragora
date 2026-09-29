@@ -75,7 +75,9 @@ export function CollapsibleSection({
   };
 
   return (
-    <div className={`border border-[var(--accent)]/20 rounded-lg overflow-hidden mb-3 bg-surface/30 ${priorityStyles[priority]}`}>
+    <div
+      className={`border border-[var(--accent)]/20 rounded-lg overflow-hidden mb-3 bg-surface/30 ${priorityStyles[priority]}`}
+    >
       <button
         onClick={() => {
           if (!isForced) {
@@ -121,9 +123,7 @@ export function CollapsibleSection({
           isExpanded ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="px-2 pb-2 space-y-3">
-          {children}
-        </div>
+        <div className="px-2 pb-2 space-y-3">{children}</div>
       </div>
     </div>
   );

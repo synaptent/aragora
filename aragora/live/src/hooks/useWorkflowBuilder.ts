@@ -156,7 +156,7 @@ export function useWorkflowBuilder({
         clearTimeout(saveTimerRef.current);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- saveWorkflow defined later
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveWorkflow defined later
   }, [autoSave, isDirty, currentWorkflow, autoSaveDelay]);
 
   // Keyboard shortcuts
@@ -191,7 +191,7 @@ export function useWorkflowBuilder({
 
     window.addEventListener('keydown', handleKeyboard);
     return () => window.removeEventListener('keydown', handleKeyboard);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- saveWorkflow defined later
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveWorkflow defined later
   }, [enableKeyboardShortcuts, undo, redo]);
 
   // Load a specific workflow
@@ -201,7 +201,7 @@ export function useWorkflowBuilder({
       setLoadError(null);
 
       try {
-        const data = await api.get(`/api/workflows/${id}`) as WorkflowDefinition;
+        const data = (await api.get(`/api/workflows/${id}`)) as WorkflowDefinition;
         setCurrentWorkflow(data);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load workflow';
@@ -211,7 +211,7 @@ export function useWorkflowBuilder({
         setLoading(false);
       }
     },
-    [api, setCurrentWorkflow, setLoading, setLoadError]
+    [api, setCurrentWorkflow, setLoading, setLoadError],
   );
 
   // Create a new workflow
@@ -224,7 +224,7 @@ export function useWorkflowBuilder({
         const workflow = createNewWorkflow(name, description);
 
         // Save to backend
-        const saved = await api.post('/api/workflows', workflow) as WorkflowDefinition;
+        const saved = (await api.post('/api/workflows', workflow)) as WorkflowDefinition;
         setCurrentWorkflow(saved);
         onSave?.(saved);
 
@@ -238,7 +238,7 @@ export function useWorkflowBuilder({
         setLoading(false);
       }
     },
-    [api, createNewWorkflow, setCurrentWorkflow, setLoading, setSaveError, onSave, onSaveError]
+    [api, createNewWorkflow, setCurrentWorkflow, setLoading, setSaveError, onSave, onSaveError],
   );
 
   // Save current workflow
@@ -249,10 +249,10 @@ export function useWorkflowBuilder({
     setSaveError(null);
 
     try {
-      const saved = await api.put(
+      const saved = (await api.put(
         `/api/workflows/${currentWorkflow.id}`,
-        currentWorkflow
-      ) as WorkflowDefinition;
+        currentWorkflow,
+      )) as WorkflowDefinition;
       setCurrentWorkflow(saved);
       markClean();
       onSave?.(saved);
@@ -290,7 +290,7 @@ export function useWorkflowBuilder({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadWorkflows defined later
-    [api, currentWorkflow, setCurrentWorkflow]
+    [api, currentWorkflow, setCurrentWorkflow],
   );
 
   // Duplicate a workflow
@@ -309,19 +309,19 @@ export function useWorkflowBuilder({
         updated_at: new Date().toISOString(),
       };
 
-      const saved = await api.post('/api/workflows', duplicate) as WorkflowDefinition;
+      const saved = (await api.post('/api/workflows', duplicate)) as WorkflowDefinition;
       await loadWorkflows();
 
       return saved;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadWorkflows defined later
-    [api, workflows]
+    [api, workflows],
   );
 
   // Load workflow templates
   const loadTemplates = useCallback(async (): Promise<void> => {
     try {
-      const data = await api.get('/api/workflow-templates') as { templates: WorkflowTemplate[] };
+      const data = (await api.get('/api/workflow-templates')) as { templates: WorkflowTemplate[] };
       setTemplates(data.templates || []);
     } catch (error) {
       logger.error('Failed to load templates:', error);
@@ -343,20 +343,20 @@ export function useWorkflowBuilder({
         created_at: new Date().toISOString(),
       };
 
-      const saved = await api.post('/api/workflows', workflow) as WorkflowDefinition;
+      const saved = (await api.post('/api/workflows', workflow)) as WorkflowDefinition;
       setCurrentWorkflow(saved);
       await loadWorkflows();
 
       return saved;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadWorkflows defined later
-    [api, templates, setCurrentWorkflow]
+    [api, templates, setCurrentWorkflow],
   );
 
   // Load all workflows
   const loadWorkflows = useCallback(async (): Promise<void> => {
     try {
-      const data = await api.get('/api/workflows') as { workflows: WorkflowDefinition[] };
+      const data = (await api.get('/api/workflows')) as { workflows: WorkflowDefinition[] };
       setWorkflows(data.workflows || []);
     } catch (error) {
       logger.error('Failed to load workflows:', error);
@@ -385,10 +385,9 @@ export function useWorkflowBuilder({
     setSimulationRunning(true);
 
     try {
-      const result = await api.post(
-        `/api/workflows/${currentWorkflow.id}/simulate`,
-        { workflow: currentWorkflow }
-      ) as WorkflowSimulationResult;
+      const result = (await api.post(`/api/workflows/${currentWorkflow.id}/simulate`, {
+        workflow: currentWorkflow,
+      })) as WorkflowSimulationResult;
       setSimulationResult(result);
       return result;
     } catch (error) {
@@ -411,14 +410,13 @@ export function useWorkflowBuilder({
         throw new Error('No workflow loaded');
       }
 
-      const result = await api.post(
-        `/api/workflows/${currentWorkflow.id}/execute`,
-        { inputs }
-      ) as { execution_id: string };
+      const result = (await api.post(`/api/workflows/${currentWorkflow.id}/execute`, {
+        inputs,
+      })) as { execution_id: string };
 
       return result.execution_id;
     },
-    [api, currentWorkflow]
+    [api, currentWorkflow],
   );
 
   return {

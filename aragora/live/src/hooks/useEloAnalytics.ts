@@ -31,20 +31,11 @@ export interface AgentEloDetail {
 }
 
 export interface AgentTrendData {
-  [agentName: string]: Array<{
-    period: string;
-    elo: number;
-    timestamp: string;
-  }>;
+  [agentName: string]: Array<{ period: string; elo: number; timestamp: string }>;
 }
 
 export interface AgentTrendsResponse {
-  data: {
-    trends: AgentTrendData;
-    agents: string[];
-    granularity: string;
-    generated_at: string;
-  };
+  data: { trends: AgentTrendData; agents: string[]; granularity: string; generated_at: string };
 }
 
 export interface DomainLeaderboardEntry {
@@ -82,18 +73,15 @@ export interface RankingStatsResponse {
 export function useEloTrends(
   agents?: string,
   granularity: string = 'daily',
-  options?: UseSWRFetchOptions<AgentTrendsResponse>
+  options?: UseSWRFetchOptions<AgentTrendsResponse>,
 ) {
   const params = new URLSearchParams({ granularity });
   if (agents) params.set('agents', agents);
 
-  const result = useSWRFetch<AgentTrendsResponse>(
-    `/api/v1/analytics/agents/trends?${params}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
-  );
+  const result = useSWRFetch<AgentTrendsResponse>(`/api/v1/analytics/agents/trends?${params}`, {
+    refreshInterval: 60000,
+    ...options,
+  });
 
   return {
     ...result,
@@ -108,40 +96,26 @@ export function useEloTrends(
  */
 export function useAgentEloDetail(
   agentId: string | null,
-  options?: UseSWRFetchOptions<{ data: AgentEloDetail }>
+  options?: UseSWRFetchOptions<{ data: AgentEloDetail }>,
 ) {
   const result = useSWRFetch<{ data: AgentEloDetail }>(
     agentId ? `/api/v1/analytics/agents/${encodeURIComponent(agentId)}` : null,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    agent: result.data?.data ?? null,
-  };
+  return { ...result, agent: result.data?.data ?? null };
 }
 
 /**
  * Fetch ranking stats (mean ELO, median, distribution, trending agents).
  */
-export function useRankingStats(
-  options?: UseSWRFetchOptions<RankingStatsResponse>
-) {
-  const result = useSWRFetch<RankingStatsResponse>(
-    '/api/ranking/stats',
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
-  );
+export function useRankingStats(options?: UseSWRFetchOptions<RankingStatsResponse>) {
+  const result = useSWRFetch<RankingStatsResponse>('/api/ranking/stats', {
+    refreshInterval: 60000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    stats: result.data?.data ?? null,
-  };
+  return { ...result, stats: result.data?.data ?? null };
 }
 
 /**
@@ -151,21 +125,21 @@ export function useRankingStats(
 export function useDomainLeaderboard(
   domain: string | null,
   limit: number = 10,
-  options?: UseSWRFetchOptions<{ data: { agents: DomainLeaderboardEntry[] } }>
+  options?: UseSWRFetchOptions<{ data: { agents: DomainLeaderboardEntry[] } }>,
 ) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (domain) params.set('domain', domain);
 
   const result = useSWRFetch<{ data: { agents: DomainLeaderboardEntry[] } }>(
     `/api/leaderboard?${params}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
   return {
     ...result,
-    agents: result.data?.data?.agents ?? (result.data as Record<string, unknown>)?.agents as DomainLeaderboardEntry[] ?? [],
+    agents:
+      result.data?.data?.agents ??
+      ((result.data as Record<string, unknown>)?.agents as DomainLeaderboardEntry[]) ??
+      [],
   };
 }

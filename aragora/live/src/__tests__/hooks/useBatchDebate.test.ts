@@ -5,7 +5,11 @@ import { useBatchDebate } from '@/hooks/useBatchDebate';
 // Provide an authenticated wrapper so useAuth() returns valid tokens
 const hookWrapper = createHookWrapper({
   isAuthenticated: true,
-  tokens: { access_token: 'test-token', refresh_token: 'test-refresh', token_type: 'bearer' } as never,
+  tokens: {
+    access_token: 'test-token',
+    refresh_token: 'test-refresh',
+    token_type: 'bearer',
+  } as never,
 });
 
 // Mock fetch
@@ -13,9 +17,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8080',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8080' }));
 
 describe('useBatchDebate', () => {
   beforeEach(() => {
@@ -61,10 +63,7 @@ describe('useBatchDebate', () => {
       let response: unknown;
       await act(async () => {
         response = await result.current.submitBatch({
-          items: [
-            { question: 'Is AI safe?' },
-            { question: 'What is consciousness?' },
-          ],
+          items: [{ question: 'Is AI safe?' }, { question: 'What is consciousness?' }],
         });
       });
 
@@ -73,7 +72,7 @@ describe('useBatchDebate', () => {
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
-        })
+        }),
       );
       expect(response).toEqual({
         success: true,
@@ -141,10 +140,7 @@ describe('useBatchDebate', () => {
         updated_at: '2024-01-01T00:01:00Z',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatus,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockStatus });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 
@@ -159,10 +155,7 @@ describe('useBatchDebate', () => {
     });
 
     it('handles 404 batch not found', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 
@@ -188,10 +181,7 @@ describe('useBatchDebate', () => {
         updated_at: '2024-01-01T00:01:00Z',
       };
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockStatus,
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => mockStatus });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 
@@ -222,10 +212,7 @@ describe('useBatchDebate', () => {
         updated_at: '2024-01-01T00:02:00Z',
       };
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => completedStatus,
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => completedStatus });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 
@@ -291,14 +278,25 @@ describe('useBatchDebate', () => {
   describe('listBatches', () => {
     it('lists batches successfully', async () => {
       const mockBatches = [
-        { batch_id: 'b1', status: 'completed', total_items: 5, completed_items: 5, failed_items: 0, created_at: '2024-01-01' },
-        { batch_id: 'b2', status: 'processing', total_items: 3, completed_items: 1, failed_items: 0, created_at: '2024-01-02' },
+        {
+          batch_id: 'b1',
+          status: 'completed',
+          total_items: 5,
+          completed_items: 5,
+          failed_items: 0,
+          created_at: '2024-01-01',
+        },
+        {
+          batch_id: 'b2',
+          status: 'processing',
+          total_items: 3,
+          completed_items: 1,
+          failed_items: 0,
+          created_at: '2024-01-02',
+        },
       ];
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ batches: mockBatches }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ batches: mockBatches }) });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 
@@ -311,10 +309,7 @@ describe('useBatchDebate', () => {
     });
 
     it('supports status filter', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ batches: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ batches: [] }) });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 
@@ -324,7 +319,7 @@ describe('useBatchDebate', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('status=completed'),
-        expect.anything()
+        expect.anything(),
       );
     });
   });
@@ -339,10 +334,7 @@ describe('useBatchDebate', () => {
         status_counts: { processing: 2, pending: 3, completed: 5 },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockQueueStatus,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockQueueStatus });
 
       const { result } = renderHook(() => useBatchDebate(), { wrapper: hookWrapper });
 

@@ -54,7 +54,13 @@ const nodeTypes: NodeTypes = {
   orchestrationNode: OrchestrationNode,
 };
 
-const ALL_STAGES: PipelineStageType[] = ['ideas', 'principles', 'goals', 'actions', 'orchestration'];
+const ALL_STAGES: PipelineStageType[] = [
+  'ideas',
+  'principles',
+  'goals',
+  'actions',
+  'orchestration',
+];
 
 const STAGE_OFFSET_X: Record<string, number> = {
   ideas: 0,
@@ -74,7 +80,10 @@ const STAGE_COLORS: Record<PipelineStageType, string> = {
 };
 
 /** Edge type visual configs */
-const EDGE_STYLES: Record<string, { stroke: string; strokeDasharray?: string; animated?: boolean }> = {
+const EDGE_STYLES: Record<
+  string,
+  { stroke: string; strokeDasharray?: string; animated?: boolean }
+> = {
   inspires: { stroke: '#3B82F6', strokeDasharray: '5 5' },
   derives: { stroke: '#10B981' },
   decomposes: { stroke: '#F59E0B' },
@@ -102,12 +111,18 @@ function getVisibleStages(zoom: number): Set<PipelineStageType> {
 
 function getStageForNodeType(type: string): PipelineStageType | null {
   switch (type) {
-    case 'ideaNode': return 'ideas';
-    case 'principleNode': return 'principles';
-    case 'goalNode': return 'goals';
-    case 'actionNode': return 'actions';
-    case 'orchestrationNode': return 'orchestration';
-    default: return null;
+    case 'ideaNode':
+      return 'ideas';
+    case 'principleNode':
+      return 'principles';
+    case 'goalNode':
+      return 'goals';
+    case 'actionNode':
+      return 'actions';
+    case 'orchestrationNode':
+      return 'orchestration';
+    default:
+      return null;
   }
 }
 
@@ -161,14 +176,7 @@ function humanizeLabel(value: string | null | undefined): string {
 }
 
 function createEmptyLiveCounts(): Record<LiveOrchestrationCountKey, number> {
-  return {
-    pending: 0,
-    in_progress: 0,
-    succeeded: 0,
-    failed: 0,
-    partial: 0,
-    awaiting_human: 0,
-  };
+  return { pending: 0, in_progress: 0, succeeded: 0, failed: 0, partial: 0, awaiting_human: 0 };
 }
 
 function normalizeLiveCountKey(status: unknown): LiveOrchestrationCountKey {
@@ -195,7 +203,7 @@ function deriveFallbackLiveState(
   let humanGates = 0;
   let mergeNodes = 0;
   const activeNodes = orchestrationNodes.slice(0, 5).map((node) => {
-    const data = ((node.data as Record<string, unknown> | undefined) ?? {});
+    const data = (node.data as Record<string, unknown> | undefined) ?? {};
     const orchType = String(data.orchType ?? data.orch_type ?? 'agent_task');
     const executionStatus = data.executionStatus ?? data.execution_status;
     const status = executionStatus ?? data.status ?? 'pending';
@@ -221,12 +229,7 @@ function deriveFallbackLiveState(
   });
 
   const transitions = initialData?.transitions ?? [];
-  const transitionCounts = {
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-    revised: 0,
-  };
+  const transitionCounts = { pending: 0, approved: 0, rejected: 0, revised: 0 };
   const pendingReviews = transitions
     .filter((transition) => transition.status === 'pending')
     .map((transition) => ({
@@ -249,8 +252,8 @@ function deriveFallbackLiveState(
   ).length;
   const pendingAgents = agentItems.filter(
     (agent) =>
-      isRecord(agent)
-      && ['pending', 'awaiting_review', 'awaiting_human'].includes(
+      isRecord(agent) &&
+      ['pending', 'awaiting_review', 'awaiting_human'].includes(
         String(agent.status ?? '').toLowerCase(),
       ),
   ).length;
@@ -260,29 +263,23 @@ function deriveFallbackLiveState(
     : isRecord(initialData?.repairs)
       ? initialData.repairs
       : {};
-  const repairItems = Array.isArray(repairSource.items)
-    ? repairSource.items.filter(isRecord)
-    : [];
+  const repairItems = Array.isArray(repairSource.items) ? repairSource.items.filter(isRecord) : [];
 
   const mergeGateSource = isRecord(initialData?.merge_gate) ? initialData.merge_gate : {};
   const execution = isRecord(initialData?.execution) ? initialData.execution : {};
   const blockedReasons = Array.isArray(mergeGateSource.blocked_reasons)
-    ? mergeGateSource.blocked_reasons
-        .map((reason) => String(reason).trim())
-        .filter(Boolean)
+    ? mergeGateSource.blocked_reasons.map((reason) => String(reason).trim()).filter(Boolean)
     : [];
   const expectedChecks = Array.isArray(mergeGateSource.expected_checks)
-    ? mergeGateSource.expected_checks
-        .map((check) => String(check).trim())
-        .filter(Boolean)
+    ? mergeGateSource.expected_checks.map((check) => String(check).trim()).filter(Boolean)
     : [];
 
   return {
     orchestration: {
       status: String(
-        execution.status
-        ?? initialData?.stage_status?.orchestration
-        ?? (counts.in_progress > 0 ? 'in_progress' : 'pending'),
+        execution.status ??
+          initialData?.stage_status?.orchestration ??
+          (counts.in_progress > 0 ? 'in_progress' : 'pending'),
       ),
       runtime: execution.runtime ? String(execution.runtime) : null,
       execution_id: execution.execution_id ? String(execution.execution_id) : null,
@@ -305,9 +302,9 @@ function deriveFallbackLiveState(
     },
     repair: {
       status: String(
-        repairSource.status
-        ?? repairSource.state
-        ?? (repairItems.length > 0 ? 'in_progress' : 'idle'),
+        repairSource.status ??
+          repairSource.state ??
+          (repairItems.length > 0 ? 'in_progress' : 'idle'),
       ),
       attempts:
         typeof repairSource.attempts === 'number'
@@ -348,10 +345,7 @@ function normalizeLiveState(
       agent_tasks: provided.orchestration?.agent_tasks ?? null,
       total_orchestration_nodes:
         provided.orchestration?.total_orchestration_nodes ?? orchestrationNodes.length,
-      counts: {
-        ...createEmptyLiveCounts(),
-        ...(provided.orchestration?.counts ?? {}),
-      },
+      counts: { ...createEmptyLiveCounts(), ...(provided.orchestration?.counts ?? {}) },
       active_nodes: provided.orchestration?.active_nodes ?? [],
     },
     review: {
@@ -428,9 +422,10 @@ function StageFilterSidebar({ enabledStages, onToggle, onFocus, nodeCounts }: St
                 className={`
                   w-full flex items-center justify-between px-3 py-2 rounded font-theme-data text-xs
                   transition-all duration-200 border
-                  ${enabled
-                    ? 'border-current opacity-100'
-                    : 'border-border opacity-40 hover:opacity-60'
+                  ${
+                    enabled
+                      ? 'border-current opacity-100'
+                      : 'border-border opacity-40 hover:opacity-60'
                   }
                 `}
                 style={{ color, borderColor: enabled ? color : undefined }}
@@ -439,9 +434,7 @@ function StageFilterSidebar({ enabledStages, onToggle, onFocus, nodeCounts }: St
                 <span className="font-bold uppercase">{config.label}</span>
                 <span
                   className="px-1.5 py-0.5 rounded-full text-xs font-theme-data"
-                  style={{
-                    backgroundColor: enabled ? `${color}33` : 'transparent',
-                  }}
+                  style={{ backgroundColor: enabled ? `${color}33` : 'transparent' }}
                   data-testid={`stage-count-${stage}`}
                 >
                   {count}
@@ -528,16 +521,16 @@ function AITransitionToolbar({
 interface ProvenanceSidebarProps {
   nodeId: string;
   nodeLabel: string;
-  provenanceChain: Array<{
-    stage: string;
-    nodeId: string;
-    label: string;
-    hash: string;
-  }>;
+  provenanceChain: Array<{ stage: string; nodeId: string; label: string; hash: string }>;
   onClose: () => void;
 }
 
-function ProvenanceSidebar({ nodeId, nodeLabel, provenanceChain, onClose }: ProvenanceSidebarProps) {
+function ProvenanceSidebar({
+  nodeId,
+  nodeLabel,
+  provenanceChain,
+  onClose,
+}: ProvenanceSidebarProps) {
   return (
     <div
       className="w-72 flex-shrink-0 bg-surface border-l border-border h-full overflow-y-auto p-4"
@@ -567,7 +560,11 @@ function ProvenanceSidebar({ nodeId, nodeLabel, provenanceChain, onClose }: Prov
           {provenanceChain.map((entry, i) => {
             const stageColor = STAGE_COLORS[entry.stage as PipelineStageType] || '#6b7280';
             return (
-              <div key={i} className="p-2 bg-bg rounded border border-border" data-testid="provenance-entry">
+              <div
+                key={i}
+                className="p-2 bg-bg rounded border border-border"
+                data-testid="provenance-entry"
+              >
                 <div className="flex items-center gap-2 mb-1">
                   <span
                     className="w-2 h-2 rounded-full inline-block"
@@ -609,10 +606,10 @@ function UnifiedLiveStatePanel({ liveState }: UnifiedLiveStatePanelProps) {
   const repairHeadline = repair.active_items[0];
   const repairLabel = isRecord(repairHeadline)
     ? String(
-        repairHeadline.title
-        ?? repairHeadline.problem_statement
-        ?? repairHeadline.blocker_kind
-        ?? 'Repair item queued',
+        repairHeadline.title ??
+          repairHeadline.problem_statement ??
+          repairHeadline.blocker_kind ??
+          'Repair item queued',
       )
     : 'Repair item queued';
 
@@ -649,7 +646,8 @@ function UnifiedLiveStatePanel({ liveState }: UnifiedLiveStatePanelProps) {
             </span>
           </div>
           <p className="mt-1 text-xs text-text">
-            {orchestration.agent_tasks ?? 0} agent tasks, {runningCount} running, {failedCount} failed
+            {orchestration.agent_tasks ?? 0} agent tasks, {runningCount} running, {failedCount}{' '}
+            failed
           </p>
           {orchestration.active_nodes.length > 0 && (
             <div className="mt-2 space-y-1">
@@ -682,12 +680,11 @@ function UnifiedLiveStatePanel({ liveState }: UnifiedLiveStatePanelProps) {
             <span className="text-[11px] font-theme-data uppercase tracking-wide text-text-muted">
               Review
             </span>
-            <span className="text-xs font-theme-data text-text">
-              {pendingReviews} pending
-            </span>
+            <span className="text-xs font-theme-data text-text">{pendingReviews} pending</span>
           </div>
           <p className="mt-1 text-xs text-text">
-            {review.reviewer_agents} reviewers, {review.pending_agents} waiting agents, {review.human_gates} human gates
+            {review.reviewer_agents} reviewers, {review.pending_agents} waiting agents,{' '}
+            {review.human_gates} human gates
           </p>
           {review.pending_reviews[0] && isRecord(review.pending_reviews[0]) && (
             <p className="mt-1 text-[11px] font-theme-data text-text-muted">
@@ -728,16 +725,18 @@ function UnifiedLiveStatePanel({ liveState }: UnifiedLiveStatePanelProps) {
               Merge Gate
             </span>
             <span className="text-xs font-theme-data text-text">
-              {mergeGate.merge_eligible ? 'eligible' : mergeGate.checks_passed ? 'ready' : 'blocked'}
+              {mergeGate.merge_eligible
+                ? 'eligible'
+                : mergeGate.checks_passed
+                  ? 'ready'
+                  : 'blocked'}
             </span>
           </div>
           <p className="mt-1 text-xs text-text">
             {mergeGate.expected_checks.length} expected checks, {mergeGate.merge_nodes} merge nodes
           </p>
           {blockedReason && (
-            <p className="mt-1 text-[11px] font-theme-data text-text-muted">
-              {blockedReason}
-            </p>
+            <p className="mt-1 text-[11px] font-theme-data text-text-muted">{blockedReason}</p>
           )}
         </section>
       </div>
@@ -754,14 +753,8 @@ function UnifiedPipelineCanvasInner({
   initialData,
   readOnly = false,
 }: UnifiedPipelineCanvasProps) {
-  const {
-    stageNodes,
-    stageEdges,
-    loading,
-    aiGenerate,
-    approveTransition,
-    rejectTransition,
-  } = usePipelineCanvas(pipelineId ?? null, initialData);
+  const { stageNodes, stageEdges, loading, aiGenerate, approveTransition, rejectTransition } =
+    usePipelineCanvas(pipelineId ?? null, initialData);
 
   const { fitView } = useReactFlow();
 
@@ -836,10 +829,7 @@ function UnifiedPipelineCanvasInner({
     for (const stage of ALL_STAGES) {
       for (const node of stageNodes[stage]) {
         const data = node.data as Record<string, unknown>;
-        lookup[node.id] = {
-          label: (data.label as string) || node.id,
-          stage,
-        };
+        lookup[node.id] = { label: (data.label as string) || node.id, stage };
       }
     }
     return lookup;
@@ -866,10 +856,7 @@ function UnifiedPipelineCanvasInner({
       if (!visibleStages.has(stage)) continue;
       const offsetX = STAGE_OFFSET_X[stage];
       for (const n of stageNodes[stage]) {
-        allNodes.push({
-          ...n,
-          position: { x: n.position.x + offsetX, y: n.position.y },
-        });
+        allNodes.push({ ...n, position: { x: n.position.x + offsetX, y: n.position.y } });
       }
       for (const e of stageEdges[stage]) {
         const edgeType = (e.data as Record<string, unknown>)?.edgeType as string | undefined;
@@ -931,7 +918,8 @@ function UnifiedPipelineCanvasInner({
       chain.unshift({
         stage: link.source_stage,
         nodeId: link.source_node_id,
-        label: (sourceNode?.data as Record<string, unknown>)?.label as string || link.source_node_id,
+        label:
+          ((sourceNode?.data as Record<string, unknown>)?.label as string) || link.source_node_id,
         hash: link.content_hash || '',
       });
       currentId = link.source_node_id;
@@ -943,7 +931,7 @@ function UnifiedPipelineCanvasInner({
   const selectedNodeLabel = useMemo(() => {
     if (!selectedNodeId) return '';
     const node = displayNodes.find((n) => n.id === selectedNodeId);
-    return (node?.data as Record<string, unknown>)?.label as string || selectedNodeId;
+    return ((node?.data as Record<string, unknown>)?.label as string) || selectedNodeId;
   }, [selectedNodeId, displayNodes]);
 
   const selectedIdeaNodes = useMemo(
@@ -952,9 +940,10 @@ function UnifiedPipelineCanvasInner({
   );
 
   const ideasToGoalsTransition = useMemo<StageTransition | null>(
-    () => initialData?.transitions?.find(
-      (transition) => transition.from_stage === 'ideas' && transition.to_stage === 'goals',
-    ) ?? null,
+    () =>
+      initialData?.transitions?.find(
+        (transition) => transition.from_stage === 'ideas' && transition.to_stage === 'goals',
+      ) ?? null,
     [initialData],
   );
 
@@ -962,7 +951,7 @@ function UnifiedPipelineCanvasInner({
     const baseLinks = (
       ideasToGoalsTransition?.provenance?.length
         ? ideasToGoalsTransition.provenance
-        : initialData?.provenance ?? []
+        : (initialData?.provenance ?? [])
     ) as ProvenanceLink[];
 
     const stageLinks = baseLinks.filter(
@@ -978,13 +967,14 @@ function UnifiedPipelineCanvasInner({
   }, [ideasToGoalsTransition, initialData, selectedIdeaNodes]);
 
   const focusedGoalLabels = useMemo(
-    () => Array.from(
-      new Set(
-        ideasToGoalsProvenance.map(
-          (link) => transitionNodeLookup[link.target_node_id]?.label ?? link.target_node_id,
+    () =>
+      Array.from(
+        new Set(
+          ideasToGoalsProvenance.map(
+            (link) => transitionNodeLookup[link.target_node_id]?.label ?? link.target_node_id,
+          ),
         ),
-      ),
-    ).slice(0, 3),
+      ).slice(0, 3),
     [ideasToGoalsProvenance, transitionNodeLookup],
   );
 
@@ -1006,23 +996,20 @@ function UnifiedPipelineCanvasInner({
   const showIdeasToGoalsPanel = !readOnly && selectedIdeaNodes.length > 0;
 
   // -- Node click -----------------------------------------------------------
-  const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      setSelectedNodeId(node.id);
-      setShowProvenance(true);
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+    setShowProvenance(true);
 
-      // Track selected nodes by stage for AI transition buttons
-      const stage = getStageForNodeType(node.type || '');
-      if (stage) {
-        setSelectedNodeIds((prev) => {
-          const next = new Set(prev);
-          next.add(node.id);
-          return next;
-        });
-      }
-    },
-    [],
-  );
+    // Track selected nodes by stage for AI transition buttons
+    const stage = getStageForNodeType(node.type || '');
+    if (stage) {
+      setSelectedNodeIds((prev) => {
+        const next = new Set(prev);
+        next.add(node.id);
+        return next;
+      });
+    }
+  }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
@@ -1046,12 +1033,18 @@ function UnifiedPipelineCanvasInner({
   // -- MiniMap color --------------------------------------------------------
   const miniMapNodeColor = useCallback((node: { type?: string }) => {
     switch (node.type) {
-      case 'ideaNode': return STAGE_COLORS.ideas;
-      case 'principleNode': return STAGE_COLORS.principles;
-      case 'goalNode': return STAGE_COLORS.goals;
-      case 'actionNode': return STAGE_COLORS.actions;
-      case 'orchestrationNode': return STAGE_COLORS.orchestration;
-      default: return '#6b7280';
+      case 'ideaNode':
+        return STAGE_COLORS.ideas;
+      case 'principleNode':
+        return STAGE_COLORS.principles;
+      case 'goalNode':
+        return STAGE_COLORS.goals;
+      case 'actionNode':
+        return STAGE_COLORS.actions;
+      case 'orchestrationNode':
+        return STAGE_COLORS.orchestration;
+      default:
+        return '#6b7280';
     }
   }, []);
 
@@ -1083,15 +1076,18 @@ function UnifiedPipelineCanvasInner({
             fitView
             snapToGrid
             snapGrid={[16, 16]}
-            defaultEdgeOptions={{
-              animated: true,
-              style: { stroke: '#6b7280', strokeWidth: 2 },
-            }}
+            defaultEdgeOptions={{ animated: true, style: { stroke: '#6b7280', strokeWidth: 2 } }}
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#333" />
-            <Controls className="bg-surface border border-border rounded" showInteractive={!readOnly} />
-            <MiniMap className="bg-surface border border-border rounded" nodeColor={miniMapNodeColor} />
+            <Controls
+              className="bg-surface border border-border rounded"
+              showInteractive={!readOnly}
+            />
+            <MiniMap
+              className="bg-surface border border-border rounded"
+              nodeColor={miniMapNodeColor}
+            />
 
             {/* AI Transition Toolbar */}
             {!readOnly && (
@@ -1153,13 +1149,12 @@ function UnifiedPipelineCanvasInner({
                             <p className="text-[11px] font-theme-data uppercase tracking-wide text-text-muted mb-1">
                               Goal Draft
                             </p>
-                            <p className="text-xs text-text">
-                              {focusedGoalLabels.join(', ')}
-                            </p>
+                            <p className="text-xs text-text">{focusedGoalLabels.join(', ')}</p>
                           </div>
                         ) : (
                           <p className="mt-3 text-xs text-text-muted font-theme-data">
-                            Generate or refresh the goal draft to inspect provenance before approval.
+                            Generate or refresh the goal draft to inspect provenance before
+                            approval.
                           </p>
                         )}
                       </div>
@@ -1189,7 +1184,10 @@ function UnifiedPipelineCanvasInner({
             )}
 
             {/* Stats + zoom info panel */}
-            <Panel position="bottom-left" className="bg-surface/90 border border-border rounded p-2">
+            <Panel
+              position="bottom-left"
+              className="bg-surface/90 border border-border rounded p-2"
+            >
               <div className="text-xs font-theme-data text-text-muted">
                 <span className="text-text">{displayNodes.length}</span> nodes |{' '}
                 <span className="text-text">{displayEdges.length}</span> edges |{' '}
@@ -1199,15 +1197,17 @@ function UnifiedPipelineCanvasInner({
                     ? 'all stages'
                     : zoomLevel >= ZOOM_PARTIAL
                       ? 'ideas + principles + goals + actions'
-                      : 'ideas + principles + goals'
-                  }
+                      : 'ideas + principles + goals'}
                 </span>
               </div>
             </Panel>
 
             {/* Pipeline ID + integrity */}
             {pipelineId && (
-              <Panel position="top-right" className="bg-surface/90 border border-border rounded p-2">
+              <Panel
+                position="top-right"
+                className="bg-surface/90 border border-border rounded p-2"
+              >
                 <div className="text-xs font-theme-data text-text-muted">
                   Pipeline: <span className="text-text">{pipelineId}</span>
                   {initialData?.integrity_hash && (

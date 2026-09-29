@@ -19,10 +19,7 @@ interface GeneratedReport {
   framework: string;
   generated_at: string;
   summary: string;
-  sections: Array<{
-    title: string;
-    content: string;
-  }>;
+  sections: Array<{ title: string; content: string }>;
 }
 
 const FRAMEWORKS: Array<{
@@ -31,36 +28,16 @@ const FRAMEWORKS: Array<{
   description: string;
   icon: string;
 }> = [
-  {
-    id: 'soc2',
-    name: 'SOC2',
-    description: 'Service Organization Control 2',
-    icon: '',
-  },
-  {
-    id: 'gdpr',
-    name: 'GDPR',
-    description: 'General Data Protection Regulation',
-    icon: '',
-  },
+  { id: 'soc2', name: 'SOC2', description: 'Service Organization Control 2', icon: '' },
+  { id: 'gdpr', name: 'GDPR', description: 'General Data Protection Regulation', icon: '' },
   {
     id: 'hipaa',
     name: 'HIPAA',
     description: 'Health Insurance Portability and Accountability',
     icon: '',
   },
-  {
-    id: 'iso27001',
-    name: 'ISO 27001',
-    description: 'Information Security Management',
-    icon: '',
-  },
-  {
-    id: 'general',
-    name: 'General',
-    description: 'Standard compliance report',
-    icon: '',
-  },
+  { id: 'iso27001', name: 'ISO 27001', description: 'Information Security Management', icon: '' },
+  { id: 'general', name: 'General', description: 'Standard compliance report', icon: '' },
 ];
 
 export function ReportBuilder({
@@ -84,20 +61,17 @@ export function ReportBuilder({
     setReport(null);
 
     try {
-      const response = await fetch(
-        `${apiBase}/api/compliance/reports/generate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            debate_id: debateId,
-            framework: selectedFramework,
-            include_evidence: includeEvidence,
-            include_chain: includeChain,
-            include_transcript: includeTranscript,
-          }),
-        }
-      );
+      const response = await fetch(`${apiBase}/api/compliance/reports/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          debate_id: debateId,
+          framework: selectedFramework,
+          include_evidence: includeEvidence,
+          include_chain: includeChain,
+          include_transcript: includeTranscript,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to generate report');
@@ -122,11 +96,13 @@ export function ReportBuilder({
           },
           {
             title: 'Decision Overview',
-            content: '**Winning Position:** Multi-agent consensus\n\n**Final Decision:** The agents reached agreement through structured multi-agent debate following established protocols.',
+            content:
+              '**Winning Position:** Multi-agent consensus\n\n**Final Decision:** The agents reached agreement through structured multi-agent debate following established protocols.',
           },
           {
             title: 'Participants',
-            content: '**Participating Agents (4):**\n- Claude\n- GPT-4\n- Gemini\n- Mistral\n\nAll agents participated in accordance with the debate protocol.',
+            content:
+              '**Participating Agents (4):**\n- Claude\n- GPT-4\n- Gemini\n- Mistral\n\nAll agents participated in accordance with the debate protocol.',
           },
           {
             title: `${selectedFramework.toUpperCase()} Compliance`,
@@ -155,7 +131,7 @@ export function ReportBuilder({
     try {
       const response = await fetch(
         `${apiBase}/api/compliance/reports/${report.report_id}/export?format=${exportFormat}`,
-        { method: 'GET' }
+        { method: 'GET' },
       );
 
       if (!response.ok) {
@@ -298,7 +274,7 @@ export function ReportBuilder({
 
           {error && (
             <div className="text-xs font-theme-data text-yellow-400 p-2 bg-yellow-500/10 border border-yellow-500/30">
-               Using demo data: {error}
+              Using demo data: {error}
             </div>
           )}
         </div>
@@ -314,13 +290,12 @@ export function ReportBuilder({
                 {report.report_id}
               </div>
               <div className="text-xs font-theme-data text-[var(--text-muted)]">
-                {report.framework.toUpperCase()} |{' '}
-                {new Date(report.generated_at).toLocaleString()}
+                {report.framework.toUpperCase()} | {new Date(report.generated_at).toLocaleString()}
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-1 text-xs font-theme-data bg-green-500/20 text-green-400 border border-green-500/30">
-                 GENERATED
+                GENERATED
               </span>
             </div>
           </div>
@@ -341,10 +316,7 @@ export function ReportBuilder({
               Report Sections
             </h4>
             {report.sections.map((section, i) => (
-              <details
-                key={i}
-                className="bg-[var(--bg)] border border-[var(--border)]"
-              >
+              <details key={i} className="bg-[var(--bg)] border border-[var(--border)]">
                 <summary className="px-3 py-2 text-xs font-theme-data text-[var(--text)] cursor-pointer hover:bg-[var(--surface)]">
                   {section.title}
                 </summary>
@@ -377,7 +349,7 @@ export function ReportBuilder({
               onClick={handleExport}
               className="ml-auto px-4 py-2 text-xs font-theme-data bg-[var(--acid-green)]/10 text-[var(--acid-green)] border border-[var(--acid-green)]/30 hover:bg-[var(--acid-green)]/20 transition-colors"
             >
-               DOWNLOAD
+              DOWNLOAD
             </button>
           </div>
 
@@ -386,7 +358,7 @@ export function ReportBuilder({
             onClick={() => setReport(null)}
             className="w-full px-3 py-2 text-xs font-theme-data text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors"
           >
-             GENERATE NEW REPORT
+            GENERATE NEW REPORT
           </button>
         </div>
       )}

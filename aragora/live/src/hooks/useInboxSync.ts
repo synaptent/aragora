@@ -17,7 +17,12 @@ export interface SyncProgress {
 }
 
 export interface InboxSyncEvent {
-  type: 'inbox_sync_start' | 'inbox_sync_progress' | 'inbox_sync_complete' | 'inbox_sync_error' | 'new_priority_email';
+  type:
+    | 'inbox_sync_start'
+    | 'inbox_sync_progress'
+    | 'inbox_sync_complete'
+    | 'inbox_sync_error'
+    | 'new_priority_email';
   user_id: string;
   data: {
     progress?: number;
@@ -25,12 +30,7 @@ export interface InboxSyncEvent {
     total_messages?: number;
     phase?: string;
     error?: string;
-    email?: {
-      id: string;
-      subject: string;
-      from_address: string;
-      priority: string;
-    };
+    email?: { id: string; subject: string; from_address: string; priority: string };
   };
 }
 
@@ -74,7 +74,7 @@ export function useInboxSync({
       reconnectTimeoutRef.current = null;
     }
 
-    setSyncProgress(prev => ({ ...prev, status: 'connecting' }));
+    setSyncProgress((prev) => ({ ...prev, status: 'connecting' }));
 
     try {
       // Build WebSocket URL with auth
@@ -89,7 +89,7 @@ export function useInboxSync({
 
       ws.onopen = () => {
         setIsConnected(true);
-        setSyncProgress(prev => ({
+        setSyncProgress((prev) => ({
           ...prev,
           status: prev.status === 'connecting' ? 'idle' : prev.status,
         }));
@@ -115,7 +115,7 @@ export function useInboxSync({
               break;
 
             case 'inbox_sync_progress':
-              setSyncProgress(prev => ({
+              setSyncProgress((prev) => ({
                 ...prev,
                 status: 'syncing',
                 progress: data.data.progress || prev.progress,
@@ -126,7 +126,7 @@ export function useInboxSync({
               break;
 
             case 'inbox_sync_complete':
-              setSyncProgress(prev => ({
+              setSyncProgress((prev) => ({
                 ...prev,
                 status: 'completed',
                 progress: 100,
@@ -137,7 +137,7 @@ export function useInboxSync({
               break;
 
             case 'inbox_sync_error':
-              setSyncProgress(prev => ({
+              setSyncProgress((prev) => ({
                 ...prev,
                 status: 'error',
                 error: data.data.error || 'Unknown error',
@@ -174,11 +174,7 @@ export function useInboxSync({
       };
     } catch (err) {
       logger.error('Failed to connect to inbox WebSocket:', err);
-      setSyncProgress(prev => ({
-        ...prev,
-        status: 'error',
-        error: 'Failed to connect',
-      }));
+      setSyncProgress((prev) => ({ ...prev, status: 'error', error: 'Failed to connect' }));
     }
   }, [wsUrl, userId, authToken, autoReconnect, reconnectInterval, onNewPriorityEmail]);
 
@@ -212,38 +208,35 @@ export function useInboxSync({
     };
   }, [connect, disconnect]);
 
-  return {
-    syncProgress,
-    isConnected,
-    connect,
-    disconnect,
-    resetProgress,
-  };
+  return { syncProgress, isConnected, connect, disconnect, resetProgress };
 }
 
 // Toast notification helper for new priority emails
 export function usePriorityEmailNotifications(
-  onNotification?: (email: InboxSyncEvent['data']['email']) => void
+  onNotification?: (email: InboxSyncEvent['data']['email']) => void,
 ) {
   const [notifications, setNotifications] = useState<InboxSyncEvent['data']['email'][]>([]);
 
-  const handleNewEmail = useCallback((email: InboxSyncEvent['data']['email']) => {
-    if (!email) return;
+  const handleNewEmail = useCallback(
+    (email: InboxSyncEvent['data']['email']) => {
+      if (!email) return;
 
-    setNotifications(prev => [email, ...prev].slice(0, 10)); // Keep last 10
-    onNotification?.(email);
+      setNotifications((prev) => [email, ...prev].slice(0, 10)); // Keep last 10
+      onNotification?.(email);
 
-    // Browser notification if permitted
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(`${email.priority?.toUpperCase()} Priority Email`, {
-        body: `From: ${email.from_address}\n${email.subject}`,
-        icon: '/icons/mail.png',
-      });
-    }
-  }, [onNotification]);
+      // Browser notification if permitted
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(`${email.priority?.toUpperCase()} Priority Email`, {
+          body: `From: ${email.from_address}\n${email.subject}`,
+          icon: '/icons/mail.png',
+        });
+      }
+    },
+    [onNotification],
+  );
 
   const dismissNotification = useCallback((emailId: string) => {
-    setNotifications(prev => prev.filter(n => n?.id !== emailId));
+    setNotifications((prev) => prev.filter((n) => n?.id !== emailId));
   }, []);
 
   const clearAll = useCallback(() => {
@@ -257,10 +250,5 @@ export function usePriorityEmailNotifications(
     }
   }, []);
 
-  return {
-    notifications,
-    handleNewEmail,
-    dismissNotification,
-    clearAll,
-  };
+  return { notifications, handleNewEmail, dismissNotification, clearAll };
 }

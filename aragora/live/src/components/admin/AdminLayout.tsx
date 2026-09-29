@@ -37,9 +37,7 @@ export function AdminLayout({
   const isAdmin = isAuthenticated && (user?.role === 'admin' || user?.role === 'owner');
 
   // Build default breadcrumbs from pathname
-  const defaultBreadcrumbs: BreadcrumbItem[] = [
-    { label: 'Admin', href: '/admin' },
-  ];
+  const defaultBreadcrumbs: BreadcrumbItem[] = [{ label: 'Admin', href: '/admin' }];
 
   if (pathname && pathname !== '/admin') {
     const segments = pathname.replace('/admin/', '').split('/');
@@ -96,9 +94,7 @@ export function AdminLayout({
         {/* Main Content */}
         <main
           className="transition-all duration-200"
-          style={{
-            marginLeft: sidebarCollapsed ? '64px' : '224px',
-          }}
+          style={{ marginLeft: sidebarCollapsed ? '64px' : '224px' }}
         >
           {/* Breadcrumbs */}
           <div className="border-b border-[var(--accent)]/20 bg-surface/40 px-6 py-2">
@@ -125,20 +121,12 @@ export function AdminLayout({
           <div className="px-6 py-6 border-b border-[var(--accent)]/10">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
-                  {title}
-                </h1>
+                <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">{title}</h1>
                 {description && (
-                  <p className="text-text-muted font-theme-data text-sm">
-                    {description}
-                  </p>
+                  <p className="text-text-muted font-theme-data text-sm">{description}</p>
                 )}
               </div>
-              {actions && (
-                <div className="flex items-center gap-2">
-                  {actions}
-                </div>
-              )}
+              {actions && <div className="flex items-center gap-2">{actions}</div>}
             </div>
           </div>
 
@@ -155,18 +143,12 @@ export function AdminLayout({
           )}
 
           {/* Page Content */}
-          <div className="px-6 py-6">
-            {children}
-          </div>
+          <div className="px-6 py-6">{children}</div>
 
           {/* Footer */}
           <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8 mx-6">
-            <div className="text-[var(--accent)]/50 mb-2">
-              {'='.repeat(40)}
-            </div>
-            <p className="text-text-muted">
-              {'>'} ARAGORA // ENTERPRISE ADMINISTRATION
-            </p>
+            <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+            <p className="text-text-muted">{'>'} ARAGORA // ENTERPRISE ADMINISTRATION</p>
           </footer>
         </main>
       </div>

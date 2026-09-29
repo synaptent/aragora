@@ -70,7 +70,13 @@ function LoginForm() {
           >
             Welcome back
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontFamily: 'var(--font-landing)' }}>
+          <p
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: '14px',
+              fontFamily: 'var(--font-landing)',
+            }}
+          >
             Sign in to your account
           </p>
         </div>
@@ -207,24 +213,23 @@ function LoginForm() {
           <Link
             href="/signup"
             className="transition-opacity hover:opacity-70"
-            style={{
-              fontSize: '14px',
-              fontFamily: 'var(--font-landing)',
-              color: 'var(--accent)',
-            }}
+            style={{ fontSize: '14px', fontFamily: 'var(--font-landing)', color: 'var(--accent)' }}
           >
             No account? Sign up free
           </Link>
         </div>
 
         <div
-          style={{
-            marginTop: '32px',
-            paddingTop: '24px',
-            borderTop: '1px solid var(--border)',
-          }}
+          style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--border)' }}
         >
-          <p style={{ fontSize: '12px', fontFamily: 'var(--font-landing)', color: 'var(--text-muted)', textAlign: 'center' }}>
+          <p
+            style={{
+              fontSize: '12px',
+              fontFamily: 'var(--font-landing)',
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+            }}
+          >
             Free tier: 10 debates/month with real AI models
           </p>
         </div>
@@ -248,12 +253,20 @@ export default function LoginPage() {
     >
       <Header />
 
-      <main className="flex-1 flex items-center justify-center px-4 py-16" style={{ minHeight: 'calc(100vh - 60px)' }}>
-        <Suspense fallback={
-          <div style={{ color: 'var(--accent)', fontFamily: 'var(--font-landing)' }} className="animate-pulse">
-            Loading...
-          </div>
-        }>
+      <main
+        className="flex-1 flex items-center justify-center px-4 py-16"
+        style={{ minHeight: 'calc(100vh - 60px)' }}
+      >
+        <Suspense
+          fallback={
+            <div
+              style={{ color: 'var(--accent)', fontFamily: 'var(--font-landing)' }}
+              className="animate-pulse"
+            >
+              Loading...
+            </div>
+          }
+        >
           <LoginForm />
         </Suspense>
       </main>

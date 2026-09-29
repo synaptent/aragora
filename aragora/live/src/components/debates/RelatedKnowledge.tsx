@@ -34,10 +34,10 @@ export function RelatedKnowledge({ query, limit = 5 }: RelatedKnowledgeProps) {
     ? `/api/v1/knowledge/search?q=${encodeURIComponent(query)}&limit=${limit}`
     : null;
 
-  const { data, error, isLoading } = useSWRFetch<KnowledgeSearchResponse>(
-    endpoint,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
-  );
+  const { data, error, isLoading } = useSWRFetch<KnowledgeSearchResponse>(endpoint, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000,
+  });
 
   const results = data?.results ?? [];
 

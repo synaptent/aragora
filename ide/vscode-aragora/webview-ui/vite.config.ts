@@ -15,11 +15,7 @@ export default defineConfig({
       fileName: () => 'main.js',
       cssFileName: 'main',
     },
-    rollupOptions: {
-      output: {
-        assetFileNames: 'main.[ext]',
-      },
-    },
+    rollupOptions: { output: { assetFileNames: 'main.[ext]' } },
     sourcemap: true,
     // Reduce chunk size for webview
     chunkSizeWarningLimit: 500,

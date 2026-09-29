@@ -71,7 +71,8 @@ export interface AgentState {
 export interface TaskState {
   id: string;
   task_type: string;
-  status: 'pending' | 'claimed' | 'running' | 'completed' | 'failed' | 'cancelled' | 'dead_lettered';
+  status:
+    'pending' | 'claimed' | 'running' | 'completed' | 'failed' | 'cancelled' | 'dead_lettered';
   priority: 'low' | 'normal' | 'high' | 'critical';
   assigned_agent_id?: string;
   required_capabilities: string[];
@@ -173,7 +174,11 @@ export interface UseControlPlaneWebSocketOptions {
   /** Callback when deliberation reaches consensus */
   onDeliberationConsensus?: (taskId: string, reached: boolean, confidence: number) => void;
   /** Callback when deliberation completes */
-  onDeliberationCompleted?: (taskId: string, success: boolean, data: Record<string, unknown>) => void;
+  onDeliberationCompleted?: (
+    taskId: string,
+    success: boolean,
+    data: Record<string, unknown>,
+  ) => void;
   /** Callback when deliberation SLA warning */
   onDeliberationSlaWarning?: (taskId: string, level: string, data: Record<string, unknown>) => void;
   /** Callback for any event */
@@ -609,7 +614,7 @@ export function useControlPlaneWebSocket({
       onDeliberationConsensus,
       onDeliberationCompleted,
       onDeliberationSlaWarning,
-    ]
+    ],
   );
 
   // Use base WebSocket hook

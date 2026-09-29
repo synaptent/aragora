@@ -35,14 +35,10 @@ export const MemoryReadNode = memo(function MemoryReadNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="flex flex-wrap gap-1 mb-2">
@@ -107,14 +103,10 @@ export const MemoryWriteNode = memo(function MemoryWriteNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="flex items-center gap-2">

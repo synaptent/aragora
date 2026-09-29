@@ -24,7 +24,15 @@ export interface WebSocketOptions {
 }
 
 export interface DebateEvent {
-  type: 'debate_start' | 'round_start' | 'agent_message' | 'critique' | 'vote' | 'consensus' | 'debate_end' | 'error';
+  type:
+    | 'debate_start'
+    | 'round_start'
+    | 'agent_message'
+    | 'critique'
+    | 'vote'
+    | 'consensus'
+    | 'debate_end'
+    | 'error';
   debate_id: string;
   payload: unknown;
   timestamp: string;
@@ -95,7 +103,7 @@ export class AragoraWebSocket {
         this.startHeartbeat();
 
         // Resubscribe to debates
-        this.subscribedDebates.forEach(debateId => {
+        this.subscribedDebates.forEach((debateId) => {
           this.send({ type: 'subscribe', debate_id: debateId });
         });
 
@@ -129,7 +137,7 @@ export class AragoraWebSocket {
       this.ws.onerror = (_error) => {
         this.setState('error');
         const err = new Error('WebSocket error');
-        this.errorHandlers.forEach(handler => handler(err));
+        this.errorHandlers.forEach((handler) => handler(err));
         reject(err);
       };
     });
@@ -238,15 +246,15 @@ export class AragoraWebSocket {
 
   private setState(state: WebSocketState): void {
     this.state = state;
-    this.stateHandlers.forEach(handler => handler(state));
+    this.stateHandlers.forEach((handler) => handler(state));
   }
 
   private handleEvent(event: DebateEvent): void {
     // Call type-specific handlers
-    this.eventHandlers.get(event.type)?.forEach(handler => handler(event));
+    this.eventHandlers.get(event.type)?.forEach((handler) => handler(event));
 
     // Call wildcard handlers
-    this.eventHandlers.get('*')?.forEach(handler => handler(event));
+    this.eventHandlers.get('*')?.forEach((handler) => handler(event));
   }
 
   private startHeartbeat(): void {

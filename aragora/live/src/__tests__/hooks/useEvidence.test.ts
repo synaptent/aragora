@@ -9,11 +9,7 @@ const mockEvidenceData: EvidenceData = {
   debate_id: 'debate-123',
   task: 'Is AI beneficial?',
   has_evidence: true,
-  grounded_verdict: {
-    grounding_score: 0.85,
-    verdict: 'Supported',
-    confidence: 0.9,
-  },
+  grounded_verdict: { grounding_score: 0.85, verdict: 'Supported', confidence: 0.9 },
   claims: [
     {
       claim_text: 'AI increases productivity',
@@ -62,10 +58,7 @@ describe('useEvidence', () => {
 
   describe('initial state', () => {
     it('starts with loading true and no evidence', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -80,10 +73,7 @@ describe('useEvidence', () => {
     });
 
     it('has correct initial derived values', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -101,10 +91,7 @@ describe('useEvidence', () => {
 
   describe('successful fetch', () => {
     it('fetches evidence data on mount', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -113,17 +100,14 @@ describe('useEvidence', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/debates/debate-123/evidence')
+        expect.stringContaining('/api/debates/debate-123/evidence'),
       );
       expect(result.current.evidence).toEqual(mockEvidenceData);
       expect(result.current.error).toBeNull();
     });
 
     it('sets derived values correctly', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -140,10 +124,7 @@ describe('useEvidence', () => {
 
   describe('error handling', () => {
     it('handles 404 response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
 
       const { result } = renderHook(() => useEvidence('nonexistent-id'));
 
@@ -156,10 +137,7 @@ describe('useEvidence', () => {
     });
 
     it('handles other HTTP errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -201,10 +179,7 @@ describe('useEvidence', () => {
 
   describe('refetch', () => {
     it('provides refetch function', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -216,10 +191,7 @@ describe('useEvidence', () => {
     });
 
     it('refetch updates data', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
       const { result } = renderHook(() => useEvidence('debate-123'));
 
@@ -229,10 +201,7 @@ describe('useEvidence', () => {
 
       // Update mock for refetch
       const updatedData = { ...mockEvidenceData, evidence_count: 10 };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(updatedData),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(updatedData) });
 
       await act(async () => {
         await result.current.refetch();
@@ -244,15 +213,11 @@ describe('useEvidence', () => {
 
   describe('debateId changes', () => {
     it('refetches when debateId changes', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockEvidenceData),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
 
-      const { result, rerender } = renderHook(
-        ({ id }) => useEvidence(id),
-        { initialProps: { id: 'debate-1' } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useEvidence(id), {
+        initialProps: { id: 'debate-1' },
+      });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -260,7 +225,7 @@ describe('useEvidence', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch).toHaveBeenLastCalledWith(
-        expect.stringContaining('/api/debates/debate-1/evidence')
+        expect.stringContaining('/api/debates/debate-1/evidence'),
       );
 
       // Change debateId
@@ -271,17 +236,14 @@ describe('useEvidence', () => {
       });
 
       expect(mockFetch).toHaveBeenLastCalledWith(
-        expect.stringContaining('/api/debates/debate-2/evidence')
+        expect.stringContaining('/api/debates/debate-2/evidence'),
       );
     });
   });
 
   describe('evidence without grounded_verdict', () => {
     it('handles null grounded_verdict', async () => {
-      const dataWithoutVerdict: EvidenceData = {
-        ...mockEvidenceData,
-        grounded_verdict: null,
-      };
+      const dataWithoutVerdict: EvidenceData = { ...mockEvidenceData, grounded_verdict: null };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,

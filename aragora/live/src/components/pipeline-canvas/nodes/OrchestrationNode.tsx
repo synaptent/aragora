@@ -40,11 +40,7 @@ export const OrchestrationNode = memo(function OrchestrationNode({
     'executionDuration',
     'execution_duration',
   );
-  const executionAgent = getMirroredNodeField<string>(
-    data,
-    'executionAgent',
-    'execution_agent',
-  );
+  const executionAgent = getMirroredNodeField<string>(data, 'executionAgent', 'execution_agent');
   const eloScore = getMirroredNodeField<number>(data, 'eloScore', 'elo_score');
   const selectionRationale = getMirroredNodeField<string>(
     data,
@@ -57,16 +53,14 @@ export const OrchestrationNode = memo(function OrchestrationNode({
     'alternative_agents',
   );
   const elapsedMs = getMirroredNodeField<number>(data, 'elapsedMs', 'elapsed_ms');
-  const outputPreview = getMirroredNodeField<string>(
-    data,
-    'outputPreview',
-    'output_preview',
-  );
+  const outputPreview = getMirroredNodeField<string>(data, 'outputPreview', 'output_preview');
 
   const isAgent = orchType === 'agent_task' || orchType === 'debate';
   const isHumanGate = orchType === 'human_gate';
 
-  const config = PIPELINE_NODE_TYPE_CONFIGS.orchestration[orchType] || PIPELINE_NODE_TYPE_CONFIGS.orchestration.agent_task;
+  const config =
+    PIPELINE_NODE_TYPE_CONFIGS.orchestration[orchType] ||
+    PIPELINE_NODE_TYPE_CONFIGS.orchestration.agent_task;
   const statusClass = ORCH_STATUS_COLORS[status] || ORCH_STATUS_COLORS.pending;
 
   return (
@@ -101,28 +95,18 @@ export const OrchestrationNode = memo(function OrchestrationNode({
       </div>
 
       {/* Label */}
-      <div className="text-sm font-medium text-text mb-1 line-clamp-2">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 line-clamp-2">{label}</div>
 
       {/* Description */}
       {description && (
-        <div className="text-xs text-text-muted mb-1 line-clamp-2">
-          {description}
-        </div>
+        <div className="text-xs text-text-muted mb-1 line-clamp-2">{description}</div>
       )}
 
       {/* Assigned agent */}
-      {assignedAgent && (
-        <div className="text-xs text-pink-300/80 mb-1">
-          agent: {assignedAgent}
-        </div>
-      )}
+      {assignedAgent && <div className="text-xs text-pink-300/80 mb-1">agent: {assignedAgent}</div>}
 
       {/* Agent type */}
-      {agentType && (
-        <div className="text-xs text-pink-300 font-theme-data mb-1">{agentType}</div>
-      )}
+      {agentType && <div className="text-xs text-pink-300 font-theme-data mb-1">{agentType}</div>}
 
       {/* Capabilities badges */}
       {capabilities && capabilities.length > 0 && (
@@ -150,7 +134,10 @@ export const OrchestrationNode = memo(function OrchestrationNode({
             ELO {eloScore}
           </span>
           {selectionRationale && (
-            <span className="text-xs text-text-muted truncate max-w-[120px]" title={selectionRationale}>
+            <span
+              className="text-xs text-text-muted truncate max-w-[120px]"
+              title={selectionRationale}
+            >
               {selectionRationale}
             </span>
           )}
@@ -166,32 +153,39 @@ export const OrchestrationNode = memo(function OrchestrationNode({
               className="px-1 py-0.5 text-xs bg-pink-500/10 text-pink-300/60 rounded font-theme-data"
               title={`Alternative: ${alt.name} (${alt.score ?? '?'})`}
             >
-              {alt.name}{alt.score != null ? ` ${alt.score}` : ''}
+              {alt.name}
+              {alt.score != null ? ` ${alt.score}` : ''}
             </span>
           ))}
           {alternativeAgents.length > 2 && (
-            <span className="text-xs text-pink-300/40 font-theme-data">+{alternativeAgents.length - 2}</span>
+            <span className="text-xs text-pink-300/40 font-theme-data">
+              +{alternativeAgents.length - 2}
+            </span>
           )}
         </div>
       )}
 
       {/* Execution status */}
       {executionStatus && (
-        <div className={`mt-2 flex items-center gap-1.5 text-xs font-theme-data ${EXECUTION_STATUS_COLORS[executionStatus]?.text || 'text-text-muted'}`}>
+        <div
+          className={`mt-2 flex items-center gap-1.5 text-xs font-theme-data ${EXECUTION_STATUS_COLORS[executionStatus]?.text || 'text-text-muted'}`}
+        >
           {executionStatus === 'in_progress' && (
             <span className="inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin" />
           )}
           {executionStatus === 'succeeded' && <span>✓</span>}
           {executionStatus === 'failed' && <span>✗</span>}
           <span>{executionStatus.replace('_', ' ')}</span>
-          {elapsedMs != null && <span className="text-text-muted">({(elapsedMs / 1000).toFixed(1)}s)</span>}
-          {!elapsedMs && executionDuration && <span className="text-text-muted">({executionDuration})</span>}
+          {elapsedMs != null && (
+            <span className="text-text-muted">({(elapsedMs / 1000).toFixed(1)}s)</span>
+          )}
+          {!elapsedMs && executionDuration && (
+            <span className="text-text-muted">({executionDuration})</span>
+          )}
         </div>
       )}
       {executionAgent && executionStatus && (
-        <div className="text-xs text-text-muted mt-0.5">
-          via {executionAgent}
-        </div>
+        <div className="text-xs text-text-muted mt-0.5">via {executionAgent}</div>
       )}
 
       {/* Output preview */}
@@ -202,11 +196,7 @@ export const OrchestrationNode = memo(function OrchestrationNode({
       )}
 
       {/* Lock indicator */}
-      {lockedBy && (
-        <div className="mt-1 text-xs text-amber-400">
-          Locked by {lockedBy}
-        </div>
-      )}
+      {lockedBy && <div className="mt-1 text-xs text-amber-400">Locked by {lockedBy}</div>}
 
       <Handle
         type="source"

@@ -54,45 +54,18 @@ export const DEFAULT_FEATURE_CONFIG: FeatureConfig = {
 
 export interface UserPreferences {
   theme: 'dark' | 'light' | 'system';
-  notifications: {
-    email_digest: boolean;
-    debate_completed: boolean;
-    weekly_summary: boolean;
-  };
-  display: {
-    compact_mode: boolean;
-    show_agent_icons: boolean;
-    auto_scroll_messages: boolean;
-  };
-  api_keys: {
-    name: string;
-    prefix: string;
-    created_at: string;
-    last_used: string | null;
-  }[];
-  integrations: {
-    slack_webhook: string | null;
-    discord_webhook: string | null;
-  };
+  notifications: { email_digest: boolean; debate_completed: boolean; weekly_summary: boolean };
+  display: { compact_mode: boolean; show_agent_icons: boolean; auto_scroll_messages: boolean };
+  api_keys: { name: string; prefix: string; created_at: string; last_used: string | null }[];
+  integrations: { slack_webhook: string | null; discord_webhook: string | null };
 }
 
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   theme: 'dark',
-  notifications: {
-    email_digest: true,
-    debate_completed: true,
-    weekly_summary: false,
-  },
-  display: {
-    compact_mode: false,
-    show_agent_icons: true,
-    auto_scroll_messages: true,
-  },
+  notifications: { email_digest: true, debate_completed: true, weekly_summary: false },
+  display: { compact_mode: false, show_agent_icons: true, auto_scroll_messages: true },
   api_keys: [],
-  integrations: {
-    slack_webhook: null,
-    discord_webhook: null,
-  },
+  integrations: { slack_webhook: null, discord_webhook: null },
 };
 
 export interface SlackNotifications {
@@ -109,7 +82,8 @@ export const DEFAULT_SLACK_NOTIFICATIONS: SlackNotifications = {
   notify_on_leaderboard: false,
 };
 
-export type SettingsTab = 'features' | 'debate' | 'appearance' | 'notifications' | 'api' | 'integrations' | 'account';
+export type SettingsTab =
+  'features' | 'debate' | 'appearance' | 'notifications' | 'api' | 'integrations' | 'account';
 
 export const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: 'features', label: 'FEATURES' },

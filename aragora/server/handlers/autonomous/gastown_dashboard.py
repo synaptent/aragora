@@ -105,7 +105,7 @@ class GasTownDashboardHandler(SecureHandler):
         "/api/v1/dashboard/gastown/metrics",
     ]
 
-    def _get_canonical_workspace_stores(self):
+    def _get_canonical_workspace_stores(self) -> Any:
         stores = getattr(self, "_canonical_workspace_stores", None)
         if stores is None:
             try:

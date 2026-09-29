@@ -12,13 +12,7 @@ export interface Dimension {
   id: string;
   name: string;
   description: string;
-  rubric: {
-    score_1: string;
-    score_2: string;
-    score_3: string;
-    score_4: string;
-    score_5: string;
-  };
+  rubric: { score_1: string; score_2: string; score_3: string; score_4: string; score_5: string };
 }
 
 export interface Profile {

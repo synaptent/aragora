@@ -53,7 +53,7 @@ export class DebateViewerPanel {
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
-    controlPlaneService?: ControlPlaneService
+    controlPlaneService?: ControlPlaneService,
   ) {
     this.panel = panel;
     this.extensionUri = extensionUri;
@@ -69,12 +69,12 @@ export class DebateViewerPanel {
     this.panel.webview.onDidReceiveMessage(
       (message) => this.handleWebviewMessage(message),
       null,
-      this.disposables
+      this.disposables,
     );
 
     // Subscribe to control plane events
     this.disposables.push(
-      this.controlPlaneService.subscribe((event) => this.handleControlPlaneEvent(event))
+      this.controlPlaneService.subscribe((event) => this.handleControlPlaneEvent(event)),
     );
 
     // Update connection status
@@ -87,7 +87,7 @@ export class DebateViewerPanel {
    */
   public static createOrShow(
     extensionUri: vscode.Uri,
-    controlPlaneService?: ControlPlaneService
+    controlPlaneService?: ControlPlaneService,
   ): DebateViewerPanel {
     const column = vscode.ViewColumn.Beside;
 
@@ -106,10 +106,14 @@ export class DebateViewerPanel {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview-ui', 'dist')],
-      }
+      },
     );
 
-    DebateViewerPanel.currentPanel = new DebateViewerPanel(panel, extensionUri, controlPlaneService);
+    DebateViewerPanel.currentPanel = new DebateViewerPanel(
+      panel,
+      extensionUri,
+      controlPlaneService,
+    );
     return DebateViewerPanel.currentPanel;
   }
 
@@ -238,7 +242,7 @@ export class DebateViewerPanel {
 
       case 'deliberation_sla_warning':
         this.state.slaWarnings.push(
-          `SLA Warning: ${event.data.elapsed_seconds}s / ${event.data.timeout_seconds}s`
+          `SLA Warning: ${event.data.elapsed_seconds}s / ${event.data.timeout_seconds}s`,
         );
         break;
     }
@@ -269,7 +273,7 @@ export class DebateViewerPanel {
         const id = await this.controlPlaneService.triggerDeliberation(
           message.question as string,
           message.agents as string[] | undefined,
-          message.rounds as number | undefined
+          message.rounds as number | undefined,
         );
         if (id) {
           await this.connect(id);
@@ -668,13 +672,13 @@ export class DebateViewerPanel {
  */
 export function registerDebateViewerCommands(
   context: vscode.ExtensionContext,
-  controlPlaneService?: ControlPlaneService
+  controlPlaneService?: ControlPlaneService,
 ): void {
   // Show debate viewer panel
   context.subscriptions.push(
     vscode.commands.registerCommand('aragora.showDebateViewer', () => {
       DebateViewerPanel.createOrShow(context.extensionUri, controlPlaneService);
-    })
+    }),
   );
 
   // Connect to specific deliberation
@@ -689,7 +693,7 @@ export function registerDebateViewerCommands(
         const panel = DebateViewerPanel.createOrShow(context.extensionUri, controlPlaneService);
         await panel.connect(deliberationId);
       }
-    })
+    }),
   );
 
   // Trigger a new deliberation from editor selection
@@ -718,6 +722,6 @@ export function registerDebateViewerCommands(
           await panel.connect(deliberationId);
         }
       }
-    })
+    }),
   );
 }

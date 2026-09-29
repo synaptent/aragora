@@ -18,11 +18,7 @@ const STAGE_COLORS: Record<PipelineStageType, string> = {
   orchestration: '#8B5CF6',
 };
 
-const STATUS_OPACITY: Record<string, number> = {
-  complete: 1.0,
-  in_progress: 0.7,
-  pending: 0.3,
-};
+const STATUS_OPACITY: Record<string, number> = { complete: 1.0, in_progress: 0.7, pending: 0.3 };
 
 interface FractalMiniMapProps {
   stageStatus: Record<PipelineStageType, string>;

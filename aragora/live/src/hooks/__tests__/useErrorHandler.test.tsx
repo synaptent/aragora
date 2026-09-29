@@ -58,9 +58,7 @@ describe('useErrorHandler', () => {
       const { result } = renderHook(() => useErrorHandler());
 
       act(() => {
-        result.current.handleError(new Error('Test error'), {
-          showToast: false,
-        });
+        result.current.handleError(new Error('Test error'), { showToast: false });
       });
 
       expect(mockShowError).not.toHaveBeenCalled();
@@ -75,7 +73,7 @@ describe('useErrorHandler', () => {
 
       expect(mockShowError).toHaveBeenCalledWith(
         'Connection failed. Please check your network and try again.',
-        5000
+        5000,
       );
     });
 
@@ -88,7 +86,7 @@ describe('useErrorHandler', () => {
 
       expect(mockShowError).toHaveBeenCalledWith(
         'Authentication required. Please log in and try again.',
-        5000
+        5000,
       );
     });
 
@@ -101,7 +99,7 @@ describe('useErrorHandler', () => {
 
       expect(mockShowError).toHaveBeenCalledWith(
         'Server error. Our team has been notified. Please try again later.',
-        5000
+        5000,
       );
     });
 
@@ -112,10 +110,7 @@ describe('useErrorHandler', () => {
         result.current.handleError(new Error('Request timeout'));
       });
 
-      expect(mockShowError).toHaveBeenCalledWith(
-        'Request timed out. Please try again.',
-        5000
-      );
+      expect(mockShowError).toHaveBeenCalledWith('Request timed out. Please try again.', 5000);
     });
 
     it('handles non-Error objects', () => {
@@ -162,9 +157,7 @@ describe('useErrorHandler', () => {
 
       let asyncResult: string | undefined;
       await act(async () => {
-        asyncResult = await result.current.handleAsync(
-          () => Promise.resolve('success')
-        );
+        asyncResult = await result.current.handleAsync(() => Promise.resolve('success'));
       });
 
       expect(asyncResult).toBe('success');
@@ -176,10 +169,7 @@ describe('useErrorHandler', () => {
       const onSuccess = jest.fn();
 
       await act(async () => {
-        await result.current.handleAsync(
-          () => Promise.resolve('success'),
-          { onSuccess }
-        );
+        await result.current.handleAsync(() => Promise.resolve('success'), { onSuccess });
       });
 
       expect(onSuccess).toHaveBeenCalledWith('success');
@@ -190,8 +180,8 @@ describe('useErrorHandler', () => {
 
       let asyncResult: string | undefined = 'should-be-undefined';
       await act(async () => {
-        asyncResult = await result.current.handleAsync(
-          () => Promise.reject(new Error('Async error'))
+        asyncResult = await result.current.handleAsync(() =>
+          Promise.reject(new Error('Async error')),
         );
       });
 
@@ -204,10 +194,9 @@ describe('useErrorHandler', () => {
       const onSuccess = jest.fn();
 
       await act(async () => {
-        await result.current.handleAsync(
-          () => Promise.reject(new Error('Async error')),
-          { onSuccess }
-        );
+        await result.current.handleAsync(() => Promise.reject(new Error('Async error')), {
+          onSuccess,
+        });
       });
 
       expect(onSuccess).not.toHaveBeenCalled();

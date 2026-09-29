@@ -101,7 +101,12 @@ describe('Extension Commands', () => {
       });
 
       it('should have debate-related keybindings', () => {
-        const debateCommands = ['showDebatePanel', 'runDebate', 'addToDebate', 'triggerDeliberation'];
+        const debateCommands = [
+          'showDebatePanel',
+          'runDebate',
+          'addToDebate',
+          'triggerDeliberation',
+        ];
         for (const cmd of debateCommands) {
           const found = keybindings.find((kb) => kb.command.endsWith(cmd));
           expect(found).toBeDefined();
@@ -121,16 +126,14 @@ describe('Extension Commands', () => {
       fileName: string,
       startLine: number,
       endLine: number,
-      content: string
+      content: string,
     ): string {
       return `\n### From ${fileName} (lines ${startLine}-${endLine}):\n\`\`\`\n${content}\n\`\`\``;
     }
 
-    function parseDebateContextEntry(entry: string): {
-      fileName: string;
-      startLine: number;
-      endLine: number;
-    } | null {
+    function parseDebateContextEntry(
+      entry: string,
+    ): { fileName: string; startLine: number; endLine: number } | null {
       const match = entry.match(/From (.+?) \(lines (\d+)-(\d+)\)/);
       if (!match) return null;
       return {
@@ -215,12 +218,7 @@ describe('Extension Commands', () => {
     });
 
     it('should handle empty summary', () => {
-      const result: ReviewResult = {
-        summary: '',
-        comments: [],
-        scope: 'file',
-        lineCount: 100,
-      };
+      const result: ReviewResult = { summary: '', comments: [], scope: 'file', lineCount: 100 };
 
       const notification = formatReviewNotification(result);
 
@@ -279,11 +277,7 @@ describe('Extension Commands', () => {
     });
 
     it('should reject empty question', () => {
-      const request: DeliberationRequest = {
-        question: '',
-        agents: ['claude'],
-        rounds: 3,
-      };
+      const request: DeliberationRequest = { question: '', agents: ['claude'], rounds: 3 };
 
       const errors = validateDeliberationRequest(request);
       expect(errors).toContain('Question is required');
@@ -301,11 +295,7 @@ describe('Extension Commands', () => {
     });
 
     it('should reject no agents', () => {
-      const request: DeliberationRequest = {
-        question: 'Valid question',
-        agents: [],
-        rounds: 3,
-      };
+      const request: DeliberationRequest = { question: 'Valid question', agents: [], rounds: 3 };
 
       const errors = validateDeliberationRequest(request);
       expect(errors).toContain('At least one agent is required');
@@ -323,17 +313,9 @@ describe('Extension Commands', () => {
     });
 
     it('should reject invalid rounds', () => {
-      const request1: DeliberationRequest = {
-        question: 'Valid',
-        agents: ['claude'],
-        rounds: 0,
-      };
+      const request1: DeliberationRequest = { question: 'Valid', agents: ['claude'], rounds: 0 };
 
-      const request2: DeliberationRequest = {
-        question: 'Valid',
-        agents: ['claude'],
-        rounds: 11,
-      };
+      const request2: DeliberationRequest = { question: 'Valid', agents: ['claude'], rounds: 11 };
 
       expect(validateDeliberationRequest(request1)).toContain('Rounds must be between 1 and 10');
       expect(validateDeliberationRequest(request2)).toContain('Rounds must be between 1 and 10');
@@ -356,17 +338,17 @@ describe('Extension Commands', () => {
       return state.reconnectAttempts < maxAttempts;
     }
 
-    function calculateReconnectDelay(attempts: number, baseDelay: number, maxDelay: number): number {
+    function calculateReconnectDelay(
+      attempts: number,
+      baseDelay: number,
+      maxDelay: number,
+    ): number {
       const delay = baseDelay * Math.pow(2, attempts);
       return Math.min(delay, maxDelay);
     }
 
     it('should not reconnect when connected', () => {
-      const state: ConnectionState = {
-        status: 'connected',
-        reconnectAttempts: 0,
-        lastError: null,
-      };
+      const state: ConnectionState = { status: 'connected', reconnectAttempts: 0, lastError: null };
 
       expect(shouldAttemptReconnect(state, 10)).toBe(false);
     });

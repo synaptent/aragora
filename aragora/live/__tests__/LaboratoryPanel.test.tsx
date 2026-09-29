@@ -19,11 +19,20 @@ import { LaboratoryPanel } from '../src/components/LaboratoryPanel';
 jest.mock('@/context/AuthContext', () => ({
   ...jest.requireActual('@/context/AuthContext'),
   useAuth: () => ({
-    user: null, organization: null, organizations: [], tokens: { access_token: 'test-token', refresh_token: 'r', token_type: 'bearer' },
-    isLoading: false, isAuthenticated: true, isLoadingOrganizations: false,
-    login: jest.fn(), register: jest.fn(), logout: jest.fn(),
-    refreshToken: jest.fn(), setTokens: jest.fn(),
-    switchOrganization: jest.fn(), refreshOrganizations: jest.fn(),
+    user: null,
+    organization: null,
+    organizations: [],
+    tokens: { access_token: 'test-token', refresh_token: 'r', token_type: 'bearer' },
+    isLoading: false,
+    isAuthenticated: true,
+    isLoadingOrganizations: false,
+    login: jest.fn(),
+    register: jest.fn(),
+    logout: jest.fn(),
+    refreshToken: jest.fn(),
+    setTokens: jest.fn(),
+    switchOrganization: jest.fn(),
+    refreshOrganizations: jest.fn(),
     getCurrentOrgRole: jest.fn(),
   }),
 }));
@@ -104,16 +113,10 @@ function setupSuccessfulFetch() {
       });
     }
     if (url.includes('/api/genesis/stats')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockGenesisStats),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockGenesisStats) });
     }
     if (url.includes('/api/critiques/patterns')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ patterns: mockPatterns }),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ patterns: mockPatterns }) });
     }
     return Promise.resolve({ ok: false });
   });
@@ -144,8 +147,12 @@ describe('LaboratoryPanel', () => {
       await waitFor(() => {
         // Check that all endpoints were called
         const calls = mockFetch.mock.calls.map((call: string[]) => call[0]);
-        expect(calls.some((url: string) => url.includes('/api/laboratory/emergent-traits'))).toBe(true);
-        expect(calls.some((url: string) => url.includes('/api/laboratory/cross-pollinations'))).toBe(true);
+        expect(calls.some((url: string) => url.includes('/api/laboratory/emergent-traits'))).toBe(
+          true,
+        );
+        expect(
+          calls.some((url: string) => url.includes('/api/laboratory/cross-pollinations')),
+        ).toBe(true);
         expect(calls.some((url: string) => url.includes('/api/genesis/stats'))).toBe(true);
         expect(calls.some((url: string) => url.includes('/api/critiques/patterns'))).toBe(true);
       });
@@ -335,10 +342,7 @@ describe('LaboratoryPanel', () => {
     it('shows empty state when no pollinations', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/laboratory/cross-pollinations')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ suggestions: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ suggestions: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });

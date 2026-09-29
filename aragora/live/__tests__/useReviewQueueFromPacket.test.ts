@@ -176,9 +176,7 @@ describe('mapReceiptToReviewQueueList', () => {
   });
 
   it('returns empty list when pinned_state is missing', () => {
-    const list = mapReceiptToReviewQueueList({
-      pinned_state: [],
-    } as SettlementReceipt);
+    const list = mapReceiptToReviewQueueList({ pinned_state: [] } as SettlementReceipt);
     expect(list.prs).toEqual([]);
     expect(list.total).toBe(0);
   });
@@ -252,9 +250,7 @@ describe('verifyReceiptSha256', () => {
   });
 
   it('flags mismatch when the payload is tampered after signing', async () => {
-    const payload: SettlementReceipt = {
-      pinned_state: [{ number: 1, head_sha: 'a' }],
-    };
+    const payload: SettlementReceipt = { pinned_state: [{ number: 1, head_sha: 'a' }] };
     const canonical = canonicalJson(payload);
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
     const sha = Array.from(new Uint8Array(hash))
@@ -299,9 +295,7 @@ describe('useReviewQueueFromPacket', () => {
   it('passes supplements through to the mapped PRs', () => {
     const receipt = sampleReceipt();
     const { result } = renderHook(() =>
-      useReviewQueueFromPacket(receipt, {
-        titles: { 7240: 'inspector', 7243: 'docs refresh' },
-      }),
+      useReviewQueueFromPacket(receipt, { titles: { 7240: 'inspector', 7243: 'docs refresh' } }),
     );
     expect(result.current.prs[0].title).toBe('inspector');
     expect(result.current.prs[1].title).toBe('docs refresh');

@@ -64,10 +64,7 @@ export interface ParsedEventData {
 /**
  * Event handler function signature
  */
-export type EventHandler = (
-  data: ParsedEventData,
-  ctx: EventHandlerContext
-) => void;
+export type EventHandler = (data: ParsedEventData, ctx: EventHandlerContext) => void;
 
 /**
  * Event handler registry mapping event types to handlers

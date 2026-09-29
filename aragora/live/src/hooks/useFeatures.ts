@@ -14,7 +14,7 @@ export interface FeatureInfo {
   endpoints?: string[];
   install_hint?: string;
   category?: string;
-  reason?: string;  // Reason if unavailable (e.g., "Requires configuration: Set API keys")
+  reason?: string; // Reason if unavailable (e.g., "Requires configuration: Set API keys")
 }
 
 /**
@@ -49,9 +49,7 @@ interface UseFeaturesState {
  * // Get feature info
  * const pulseInfo = features?.features?.pulse;
  */
-export function useFeatures(
-  apiBase: string = API_BASE_URL
-) {
+export function useFeatures(apiBase: string = API_BASE_URL) {
   const { isAuthenticated, isLoading: authLoading, tokens } = useAuth();
   const [state, setState] = useState<UseFeaturesState>({
     features: null,
@@ -78,10 +76,7 @@ export function useFeatures(
         if (tokens?.access_token) {
           headers['Authorization'] = `Bearer ${tokens.access_token}`;
         }
-        const response = await fetch(`${apiBase}/api/features`, {
-          method: 'GET',
-          headers,
-        });
+        const response = await fetch(`${apiBase}/api/features`, { method: 'GET', headers });
 
         if (!response.ok) {
           throw new Error(`Failed to fetch features: ${response.status}`);
@@ -90,8 +85,7 @@ export function useFeatures(
         const data: FeaturesResponse = await response.json();
         setState({ features: data, loading: false, error: null });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Failed to fetch features';
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch features';
         setState({ features: null, loading: false, error: errorMessage });
       }
     };
@@ -115,7 +109,7 @@ export function useFeatures(
       }
       return state.features.available.includes(featureId);
     },
-    [state.features, state.loading]
+    [state.features, state.loading],
   );
 
   /**
@@ -125,7 +119,7 @@ export function useFeatures(
     (featureId: string): FeatureInfo | undefined => {
       return state.features?.features?.[featureId];
     },
-    [state.features]
+    [state.features],
   );
 
   /**
@@ -148,17 +142,14 @@ export function useFeatures(
   const refetch = useCallback(async () => {
     if (!isAuthenticated) return;
     fetchedRef.current = false;
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const headers: HeadersInit = { 'Content-Type': 'application/json' };
       if (tokens?.access_token) {
         headers['Authorization'] = `Bearer ${tokens.access_token}`;
       }
-      const response = await fetch(`${apiBase}/api/features`, {
-        method: 'GET',
-        headers,
-      });
+      const response = await fetch(`${apiBase}/api/features`, { method: 'GET', headers });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch features: ${response.status}`);
@@ -168,8 +159,7 @@ export function useFeatures(
       setState({ features: data, loading: false, error: null });
       fetchedRef.current = true;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to fetch features';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch features';
       setState({ features: null, loading: false, error: errorMessage });
       fetchedRef.current = true;
     }

@@ -98,31 +98,14 @@ export interface DeliberationResult {
 
 export interface SystemHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  agents: {
-    total: number;
-    active: number;
-    unhealthy: number;
-  };
-  tasks: {
-    pending: number;
-    running: number;
-  };
+  agents: { total: number; active: number; unhealthy: number };
+  tasks: { pending: number; running: number };
   last_check: string;
 }
 
 export interface ControlPlaneStats {
-  agents: {
-    total: number;
-    active: number;
-    by_type: Record<string, number>;
-  };
-  tasks: {
-    total: number;
-    completed: number;
-    failed: number;
-    pending: number;
-    running: number;
-  };
+  agents: { total: number; active: number; by_type: Record<string, number> };
+  tasks: { total: number; completed: number; failed: number; pending: number; running: number };
   uptime_seconds: number;
   last_updated: string;
 }
@@ -135,14 +118,8 @@ export interface QueueStatus {
 }
 
 export interface DashboardMetrics {
-  throughput: {
-    tasks_per_minute: number;
-    tasks_per_hour: number;
-  };
-  latency: {
-    avg_task_duration_ms: number;
-    p95_task_duration_ms: number;
-  };
+  throughput: { tasks_per_minute: number; tasks_per_hour: number };
+  latency: { avg_task_duration_ms: number; p95_task_duration_ms: number };
   health: SystemHealth;
   recent_failures: Task[];
 }
@@ -166,11 +143,7 @@ export interface ViolationStats {
   by_severity: Record<ViolationSeverity, number>;
   by_status: Record<ViolationStatus, number>;
   by_policy: Record<string, number>;
-  trend: {
-    last_24h: number;
-    last_7d: number;
-    last_30d: number;
-  };
+  trend: { last_24h: number; last_7d: number; last_30d: number };
 }
 
 export interface ViolationUpdateRequest {
@@ -308,7 +281,9 @@ export class ControlPlaneAPI extends BaseAPI {
   /**
    * Get deliberation status (lightweight)
    */
-  async getDeliberationStatus(deliberationId: string): Promise<{ status: string; progress?: number }> {
+  async getDeliberationStatus(
+    deliberationId: string,
+  ): Promise<{ status: string; progress?: number }> {
     return this.http.get(`/api/v1/control-plane/deliberations/${deliberationId}/status`);
   }
 
@@ -380,7 +355,10 @@ export class ControlPlaneAPI extends BaseAPI {
   /**
    * Update violation status (acknowledge, resolve, dismiss)
    */
-  async updateViolation(violationId: string, update: ViolationUpdateRequest): Promise<PolicyViolation> {
+  async updateViolation(
+    violationId: string,
+    update: ViolationUpdateRequest,
+  ): Promise<PolicyViolation> {
     return this.http.patch(`/api/v1/control-plane/policies/violations/${violationId}`, update);
   }
 }

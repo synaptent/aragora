@@ -36,17 +36,13 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
     lastEvent: wsLastEvent,
     status: wsStatus,
     reconnect: wsReconnect,
-  } = useGraphDebateWebSocket({
-    debateId: selectedDebate?.debate_id,
-    enabled: !!selectedDebate,
-  });
+  } = useGraphDebateWebSocket({ debateId: selectedDebate?.debate_id, enabled: !!selectedDebate });
 
   // Listen for graph debate events from props
   const latestGraphEvent = useMemo(() => {
-    const relevant = events.filter(e =>
-      e.type === 'debate_branch' ||
-      e.type === 'debate_merge' ||
-      e.type === 'graph_node_added'
+    const relevant = events.filter(
+      (e) =>
+        e.type === 'debate_branch' || e.type === 'debate_merge' || e.type === 'graph_node_added',
     );
     return relevant[relevant.length - 1];
   }, [events]);
@@ -59,16 +55,12 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
     const refreshDebate = async () => {
       try {
         const apiUrl = API_BASE_URL;
-        const response = await fetch(
-          `${apiUrl}/api/debates/graph/${selectedDebate.debate_id}`
-        );
+        const response = await fetch(`${apiUrl}/api/debates/graph/${selectedDebate.debate_id}`);
         if (response.ok) {
           const data = await response.json();
           setSelectedDebate(data);
           // Also update in list
-          setDebates(prev =>
-            prev.map(d => d.debate_id === data.debate_id ? data : d)
-          );
+          setDebates((prev) => prev.map((d) => (d.debate_id === data.debate_id ? data : d)));
         }
       } catch {
         // Ignore refresh errors
@@ -84,16 +76,12 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
       const refreshDebate = async () => {
         try {
           const apiUrl = API_BASE_URL;
-          const response = await fetch(
-            `${apiUrl}/api/debates/graph/${selectedDebate.debate_id}`
-          );
+          const response = await fetch(`${apiUrl}/api/debates/graph/${selectedDebate.debate_id}`);
           if (response.ok) {
             const data = await response.json();
             setSelectedDebate(data);
             // Also update in list
-            setDebates(prev =>
-              prev.map(d => d.debate_id === data.debate_id ? data : d)
-            );
+            setDebates((prev) => prev.map((d) => (d.debate_id === data.debate_id ? data : d)));
           }
         } catch {
           // Ignore refresh errors
@@ -123,8 +111,10 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
           }
 
           if (current) {
-            return fetchedDebates.find((debate) => debate.debate_id === current.debate_id)
-              ?? fetchedDebates[0];
+            return (
+              fetchedDebates.find((debate) => debate.debate_id === current.debate_id) ??
+              fetchedDebates[0]
+            );
           }
 
           return fetchedDebates[0];
@@ -181,11 +171,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
       const response = await fetch(`${apiUrl}/api/debates/graph`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          task: newDebateTask,
-          agents: ['claude', 'gpt4'],
-          max_rounds: 5,
-        }),
+        body: JSON.stringify({ task: newDebateTask, agents: ['claude', 'gpt4'], max_rounds: 5 }),
       });
 
       if (!response.ok) {
@@ -203,9 +189,8 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
     }
   };
 
-  const selectedNode = selectedDebate && selectedNodeId
-    ? selectedDebate.graph.nodes[selectedNodeId]
-    : null;
+  const selectedNode =
+    selectedDebate && selectedNodeId ? selectedDebate.graph.nodes[selectedNodeId] : null;
 
   return (
     <div className="space-y-6">
@@ -222,8 +207,8 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
                     wsConnected
                       ? 'bg-[var(--accent)] animate-pulse'
                       : wsStatus === 'connecting'
-                      ? 'bg-gold animate-pulse'
-                      : 'bg-[var(--crimson)]'
+                        ? 'bg-gold animate-pulse'
+                        : 'bg-[var(--crimson)]'
                   }`}
                 />
                 <span className="text-[10px] font-theme-data text-text-muted">
@@ -319,7 +304,8 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
                 }`}
               >
                 <div className="text-sm font-theme-data text-text mb-1 truncate">
-                  {debate.task.slice(0, 50)}{debate.task.length > 50 ? '...' : ''}
+                  {debate.task.slice(0, 50)}
+                  {debate.task.length > 50 ? '...' : ''}
                 </div>
                 <div className="flex items-center gap-2 text-xs font-theme-data text-text-muted">
                   <span className="text-[var(--accent)]">{debate.node_count} nodes</span>
@@ -344,7 +330,8 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
                     data-testid="graph-debate-title"
                     className="hidden sm:inline text-xs font-theme-data text-text-muted truncate max-w-[200px] md:max-w-none"
                   >
-                    {selectedDebate.task.slice(0, 60)}{selectedDebate.task.length > 60 ? '...' : ''}
+                    {selectedDebate.task.slice(0, 60)}
+                    {selectedDebate.task.length > 60 ? '...' : ''}
                   </span>
                 )}
               </div>
@@ -406,7 +393,11 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
 
               {/* Branch legend - interactive */}
               <div className="px-4 py-2 border-t border-[var(--accent)]/20 bg-bg/30">
-                <div className="flex flex-wrap gap-3 text-xs font-theme-data" role="group" aria-label="Branch filters">
+                <div
+                  className="flex flex-wrap gap-3 text-xs font-theme-data"
+                  role="group"
+                  aria-label="Branch filters"
+                >
                   {Object.entries(selectedDebate.graph.branches).map(([id, branch]) => (
                     <button
                       key={id}
@@ -416,8 +407,8 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
                         highlightedBranch === branch.name
                           ? 'bg-[var(--accent)]/20 scale-105'
                           : highlightedBranch && highlightedBranch !== branch.name
-                          ? 'opacity-40'
-                          : 'hover:bg-surface'
+                            ? 'opacity-40'
+                            : 'hover:bg-surface'
                       }`}
                       onMouseEnter={() => setHighlightedBranch(branch.name)}
                       onMouseLeave={() => setHighlightedBranch(null)}
@@ -429,15 +420,9 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
                           highlightedBranch === branch.name ? 'ring-2 ring-white/50' : ''
                         }`}
                       />
-                      <span className={getBranchColor(branch.name)}>
-                        {branch.name}
-                      </span>
-                      <span className="text-text-muted">
-                        ({branch.node_count} nodes)
-                      </span>
-                      {branch.is_merged && (
-                        <span className="text-gold">[merged]</span>
-                      )}
+                      <span className={getBranchColor(branch.name)}>{branch.name}</span>
+                      <span className="text-text-muted">({branch.node_count} nodes)</span>
+                      {branch.is_merged && <span className="text-gold">[merged]</span>}
                       {branch.is_active && (
                         <span className="text-[var(--accent)] animate-pulse">[active]</span>
                       )}
@@ -448,10 +433,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
 
               {/* Node detail panel */}
               {selectedNode && (
-                <NodeDetailPanel
-                  node={selectedNode}
-                  onClose={() => setSelectedNodeId(null)}
-                />
+                <NodeDetailPanel node={selectedNode} onClose={() => setSelectedNodeId(null)} />
               )}
             </>
           ) : (
@@ -490,7 +472,8 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
                   </span>
                 </div>
                 <div className="text-xs font-theme-data text-text">
-                  {merge.synthesis.slice(0, 200)}{merge.synthesis.length > 200 ? '...' : ''}
+                  {merge.synthesis.slice(0, 200)}
+                  {merge.synthesis.length > 200 ? '...' : ''}
                 </div>
                 {merge.insights_preserved.length > 0 && (
                   <div className="mt-2 text-[10px] font-theme-data text-text-muted">

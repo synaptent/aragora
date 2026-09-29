@@ -26,13 +26,7 @@ jest.mock('@/components/BackendSelector', () => ({
 }));
 
 jest.mock('@/components/ErrorWithRetry', () => ({
-  ErrorWithRetry: ({
-    error,
-    onRetry,
-  }: {
-    error: string;
-    onRetry: () => void;
-  }) => (
+  ErrorWithRetry: ({ error, onRetry }: { error: string; onRetry: () => void }) => (
     <button type="button" onClick={onRetry}>
       {error}
     </button>
@@ -43,9 +37,7 @@ jest.mock('@/components/PanelErrorBoundary', () => ({
   PanelErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
 const mockUseSWRFetch = useSWRFetch as jest.Mock;
 const SwarmStatusPage = require('../page').default;
@@ -66,16 +58,9 @@ describe('SwarmStatusPage', () => {
         unique_issues_succeeded: 8,
         success_rate: 0.8,
         tick_success_rate: 0.75,
-        terminal_class_distribution: {
-          success_pr_created: 8,
-          blocked_auth_failure: 2,
-        },
-        failure_reason_distribution: {
-          missing_contract_slice: 2,
-        },
-        rescue_class_summary: {
-          rescue_timeout: 1,
-        },
+        terminal_class_distribution: { success_pr_created: 8, blocked_auth_failure: 2 },
+        failure_reason_distribution: { missing_contract_slice: 2 },
+        rescue_class_summary: { rescue_timeout: 1 },
         recent_blockers: [
           {
             issue_number: 123,
@@ -105,7 +90,7 @@ describe('SwarmStatusPage', () => {
     expect(screen.getByText('75.0%')).toBeInTheDocument();
     expect(screen.getByText('Persist missing credential envelope')).toBeInTheDocument();
     expect(
-      screen.getByText('validation_contract missing for dispatch_ready gate')
+      screen.getByText('validation_contract missing for dispatch_ready gate'),
     ).toBeInTheDocument();
     expect(screen.getAllByText('missing_contract_slice')).toHaveLength(2);
     expect(screen.getAllByText('blocked_auth_failure')).toHaveLength(3);
@@ -141,7 +126,9 @@ describe('SwarmStatusPage', () => {
     render(<SwarmStatusPage />);
 
     expect(screen.getByText('NO DATA')).toBeInTheDocument();
-    expect(screen.getByText('No blockers recorded in the current metrics window.')).toBeInTheDocument();
+    expect(
+      screen.getByText('No blockers recorded in the current metrics window.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('No latest tick metadata available yet.')).toBeInTheDocument();
   });
 });

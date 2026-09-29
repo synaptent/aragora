@@ -13,11 +13,7 @@ interface BeliefNode {
   is_crux?: boolean;
   crux_score?: number;
   entropy?: number;
-  belief?: {
-    true_prob: number;
-    false_prob: number;
-    uncertain_prob: number;
-  };
+  belief?: { true_prob: number; false_prob: number; uncertain_prob: number };
   x?: number;
   y?: number;
   vx?: number;
@@ -34,11 +30,7 @@ interface BeliefLink {
 interface BeliefGraphData {
   nodes: BeliefNode[];
   links: BeliefLink[];
-  metadata: {
-    debate_id: string;
-    total_claims: number;
-    crux_count: number;
-  };
+  metadata: { debate_id: string; total_claims: number; crux_count: number };
 }
 
 interface BeliefNetworkGraphProps {
@@ -94,7 +86,7 @@ export function BeliefNetworkGraph({
       }
       const response = await fetch(
         `${apiBase}/api/belief-network/${debateId}/graph?include_cruxes=true`,
-        { headers }
+        { headers },
       );
 
       if (!response.ok) {
@@ -162,7 +154,7 @@ export function BeliefNetworkGraph({
 
             if (node.id === sourceId || node.id === targetId) {
               const other = newNodes.find((n) =>
-                node.id === sourceId ? n.id === targetId : n.id === sourceId
+                node.id === sourceId ? n.id === targetId : n.id === sourceId,
               );
               if (other) {
                 const dx = (other.x || 0) - (node.x || 0);
@@ -249,9 +241,7 @@ export function BeliefNetworkGraph({
       <div className="flex items-center justify-between p-3 border-b border-border">
         <div className="flex items-center gap-2">
           <span className="text-lg">🧠</span>
-          <h3 className="text-sm font-theme-data font-bold text-text uppercase">
-            Belief Network
-          </h3>
+          <h3 className="text-sm font-theme-data font-bold text-text uppercase">Belief Network</h3>
         </div>
         <div className="text-xs text-text-muted font-theme-data">
           {data.metadata.total_claims} claims | {data.metadata.crux_count} cruxes
@@ -261,15 +251,14 @@ export function BeliefNetworkGraph({
       {/* Legend */}
       <div className="flex items-center gap-4 px-3 py-2 bg-surface/50 border-b border-border text-xs font-theme-data">
         <span className="text-text-muted">Authors:</span>
-        {Object.entries(authorColors).slice(0, 5).map(([author, color]) => (
-          <span key={author} className="flex items-center gap-1">
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: color }}
-            />
-            <span className="text-text-muted">{author}</span>
-          </span>
-        ))}
+        {Object.entries(authorColors)
+          .slice(0, 5)
+          .map(([author, color]) => (
+            <span key={author} className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+              <span className="text-text-muted">{author}</span>
+            </span>
+          ))}
       </div>
 
       {/* Graph SVG */}
@@ -400,9 +389,7 @@ export function BeliefNetworkGraph({
             </button>
           </div>
 
-          <p className="text-sm text-text mb-2 line-clamp-3">
-            {selectedNode.statement}
-          </p>
+          <p className="text-sm text-text mb-2 line-clamp-3">{selectedNode.statement}</p>
 
           <div className="flex items-center gap-4 text-xs font-theme-data text-text-muted">
             <span>
@@ -427,8 +414,8 @@ export function BeliefNetworkGraph({
                     selectedNode.entropy > 0.7
                       ? 'text-red-400'
                       : selectedNode.entropy > 0.4
-                      ? 'text-yellow-400'
-                      : 'text-green-400'
+                        ? 'text-yellow-400'
+                        : 'text-green-400'
                   }
                 >
                   {selectedNode.entropy.toFixed(2)}
@@ -455,8 +442,8 @@ export function BeliefNetworkGraph({
 
       {/* Help text */}
       <div className="px-3 py-2 border-t border-border text-xs text-text-muted font-theme-data">
-        <span className="text-yellow-400">★ Cruxes</span> = High-impact claims |
-        Node size = centrality | Click nodes for details
+        <span className="text-yellow-400">★ Cruxes</span> = High-impact claims | Node size =
+        centrality | Click nodes for details
       </div>
     </div>
   );

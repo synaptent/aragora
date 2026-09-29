@@ -130,46 +130,45 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}): UseWorkspaces
   // Load methods
   // =========================================================================
 
-  const loadWorkspaces = useCallback(async (orgId?: string) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
+  const loadWorkspaces = useCallback(
+    async (orgId?: string) => {
+      setState((s) => ({ ...s, loading: true, error: null }));
 
-    try {
-      const params = new URLSearchParams();
-      const filterOrgId = orgId || organizationId;
-      if (filterOrgId) params.set('organization_id', filterOrgId);
+      try {
+        const params = new URLSearchParams();
+        const filterOrgId = orgId || organizationId;
+        if (filterOrgId) params.set('organization_id', filterOrgId);
 
-      const query = params.toString();
-      const url = `${API_BASE}/api/workspaces${query ? `?${query}` : ''}`;
+        const query = params.toString();
+        const url = `${API_BASE}/api/workspaces${query ? `?${query}` : ''}`;
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Not authenticated');
+        const response = await fetch(url);
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error('Not authenticated');
+          }
+          throw new Error(`HTTP ${response.status}`);
         }
-        throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const workspaces = (data.workspaces || []).map(mapBackendWorkspace);
+
+        setState((s) => ({ ...s, workspaces, loading: false }));
+
+        // Auto-select first workspace if none selected
+        if (workspaces.length > 0 && !selectedId) {
+          setSelectedId(workspaces[0].id);
+        }
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: e instanceof Error ? e.message : 'Failed to load workspaces',
+        }));
       }
-
-      const data = await response.json();
-      const workspaces = (data.workspaces || []).map(mapBackendWorkspace);
-
-      setState((s) => ({
-        ...s,
-        workspaces,
-        loading: false,
-      }));
-
-      // Auto-select first workspace if none selected
-      if (workspaces.length > 0 && !selectedId) {
-        setSelectedId(workspaces[0].id);
-      }
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        loading: false,
-        error: e instanceof Error ? e.message : 'Failed to load workspaces',
-      }));
-    }
-  }, [organizationId, selectedId]);
+    },
+    [organizationId, selectedId],
+  );
 
   const loadWorkspace = useCallback(async (id: string): Promise<Workspace | null> => {
     try {
@@ -198,185 +197,182 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}): UseWorkspaces
   // Workspace CRUD
   // =========================================================================
 
-  const createWorkspace = useCallback(async (data: CreateWorkspaceData): Promise<Workspace | null> => {
-    try {
-      const response = await fetch(`${API_BASE}/api/workspaces`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+  const createWorkspace = useCallback(
+    async (data: CreateWorkspaceData): Promise<Workspace | null> => {
+      try {
+        const response = await fetch(`${API_BASE}/api/workspaces`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        const workspace = mapBackendWorkspace(result.workspace);
+
+        // Update local state
+        setState((s) => ({ ...s, workspaces: [...s.workspaces, workspace] }));
+
+        return workspace;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to create workspace',
+        }));
+        return null;
       }
+    },
+    [],
+  );
 
-      const result = await response.json();
-      const workspace = mapBackendWorkspace(result.workspace);
+  const updateWorkspace = useCallback(
+    async (id: string, data: UpdateWorkspaceData): Promise<Workspace | null> => {
+      try {
+        // Note: Backend uses PUT for updates on retention policies
+        // Workspaces may need PATCH - adjust based on actual API behavior
+        const response = await fetch(`${API_BASE}/api/workspaces/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
 
-      // Update local state
-      setState((s) => ({
-        ...s,
-        workspaces: [...s.workspaces, workspace],
-      }));
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
 
-      return workspace;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to create workspace',
-      }));
-      return null;
-    }
-  }, []);
+        const result = await response.json();
+        const workspace = mapBackendWorkspace(result.workspace);
 
-  const updateWorkspace = useCallback(async (
-    id: string,
-    data: UpdateWorkspaceData
-  ): Promise<Workspace | null> => {
-    try {
-      // Note: Backend uses PUT for updates on retention policies
-      // Workspaces may need PATCH - adjust based on actual API behavior
-      const response = await fetch(`${API_BASE}/api/workspaces/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+        // Update local state
+        setState((s) => ({
+          ...s,
+          workspaces: s.workspaces.map((w) => (w.id === id ? workspace : w)),
+        }));
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        return workspace;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to update workspace',
+        }));
+        return null;
       }
+    },
+    [],
+  );
 
-      const result = await response.json();
-      const workspace = mapBackendWorkspace(result.workspace);
+  const deleteWorkspace = useCallback(
+    async (id: string, force = false): Promise<boolean> => {
+      try {
+        const response = await fetch(`${API_BASE}/api/workspaces/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force }),
+        });
 
-      // Update local state
-      setState((s) => ({
-        ...s,
-        workspaces: s.workspaces.map((w) => (w.id === id ? workspace : w)),
-      }));
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
 
-      return workspace;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to update workspace',
-      }));
-      return null;
-    }
-  }, []);
+        // Update local state
+        setState((s) => ({ ...s, workspaces: s.workspaces.filter((w) => w.id !== id) }));
 
-  const deleteWorkspace = useCallback(async (id: string, force = false): Promise<boolean> => {
-    try {
-      const response = await fetch(`${API_BASE}/api/workspaces/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
-      });
+        // Clear selection if deleted
+        if (selectedId === id) {
+          setSelectedId(null);
+        }
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        return true;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to delete workspace',
+        }));
+        return false;
       }
-
-      // Update local state
-      setState((s) => ({
-        ...s,
-        workspaces: s.workspaces.filter((w) => w.id !== id),
-      }));
-
-      // Clear selection if deleted
-      if (selectedId === id) {
-        setSelectedId(null);
-      }
-
-      return true;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to delete workspace',
-      }));
-      return false;
-    }
-  }, [selectedId]);
+    },
+    [selectedId],
+  );
 
   // =========================================================================
   // Member management
   // =========================================================================
 
-  const addMember = useCallback(async (
-    workspaceId: string,
-    userId: string,
-    permissions: string[] = ['read']
-  ): Promise<boolean> => {
-    try {
-      const response = await fetch(`${API_BASE}/api/workspaces/${workspaceId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, permissions }),
-      });
+  const addMember = useCallback(
+    async (
+      workspaceId: string,
+      userId: string,
+      permissions: string[] = ['read'],
+    ): Promise<boolean> => {
+      try {
+        const response = await fetch(`${API_BASE}/api/workspaces/${workspaceId}/members`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, permissions }),
+        });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        // Refetch workspace to get updated members
+        const updated = await loadWorkspace(workspaceId);
+        if (updated) {
+          setState((s) => ({
+            ...s,
+            workspaces: s.workspaces.map((w) => (w.id === workspaceId ? updated : w)),
+          }));
+        }
+
+        return true;
+      } catch (e) {
+        setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to add member' }));
+        return false;
       }
+    },
+    [loadWorkspace],
+  );
 
-      // Refetch workspace to get updated members
-      const updated = await loadWorkspace(workspaceId);
-      if (updated) {
+  const removeMember = useCallback(
+    async (workspaceId: string, userId: string): Promise<boolean> => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/workspaces/${workspaceId}/members/${userId}`,
+          { method: 'DELETE' },
+        );
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        // Update local state - remove member from workspace
         setState((s) => ({
           ...s,
-          workspaces: s.workspaces.map((w) => (w.id === workspaceId ? updated : w)),
+          workspaces: s.workspaces.map((w) => {
+            if (w.id !== workspaceId) return w;
+            return { ...w, members: w.members.filter((m) => m.id !== userId) };
+          }),
         }));
+
+        return true;
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to remove member',
+        }));
+        return false;
       }
-
-      return true;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to add member',
-      }));
-      return false;
-    }
-  }, [loadWorkspace]);
-
-  const removeMember = useCallback(async (
-    workspaceId: string,
-    userId: string
-  ): Promise<boolean> => {
-    try {
-      const response = await fetch(
-        `${API_BASE}/api/workspaces/${workspaceId}/members/${userId}`,
-        { method: 'DELETE' }
-      );
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
-      }
-
-      // Update local state - remove member from workspace
-      setState((s) => ({
-        ...s,
-        workspaces: s.workspaces.map((w) => {
-          if (w.id !== workspaceId) return w;
-          return {
-            ...w,
-            members: w.members.filter((m) => m.id !== userId),
-          };
-        }),
-      }));
-
-      return true;
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to remove member',
-      }));
-      return false;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // =========================================================================
   // Selection
@@ -431,7 +427,10 @@ function mapBackendWorkspace(data: Record<string, unknown>): Workspace {
 
   // Backend members is a dict: { user_id: { permissions: [...], added_at, added_by } }
   if (data.members && typeof data.members === 'object') {
-    const membersDict = data.members as Record<string, { permissions?: string[]; added_at?: string; added_by?: string }>;
+    const membersDict = data.members as Record<
+      string,
+      { permissions?: string[]; added_at?: string; added_by?: string }
+    >;
     for (const [userId, memberData] of Object.entries(membersDict)) {
       const perms = memberData.permissions || [];
       // Determine role from permissions
@@ -464,7 +463,8 @@ function mapBackendWorkspace(data: Record<string, unknown>): Workspace {
     organization_id: (data.organization_id as string) || '',
     members,
     createdAt: (data.created_at as string) || new Date().toISOString(),
-    updatedAt: (data.updated_at as string) || (data.created_at as string) || new Date().toISOString(),
+    updatedAt:
+      (data.updated_at as string) || (data.created_at as string) || new Date().toISOString(),
     settings: {
       defaultVertical: (data.default_vertical as string) || undefined,
       complianceFrameworks: (data.compliance_frameworks as string[]) || [],

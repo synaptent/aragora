@@ -44,7 +44,7 @@ export interface SubmitJobPayload {
 }
 
 export function useQueueMonitoring(
-  options: UseQueueMonitoringOptions = {}
+  options: UseQueueMonitoringOptions = {},
 ): UseQueueMonitoringResult {
   const { autoRefresh = false, refreshInterval = 5000 } = options;
 
@@ -95,7 +95,7 @@ export function useQueueMonitoring(
           error: job.error as string | undefined,
           workerId: job.worker_id as string | undefined,
           metadata: job.metadata as Record<string, unknown>,
-        }))
+        })),
       );
     } catch (err) {
       logger.error('Failed to fetch jobs:', err);
@@ -116,7 +116,7 @@ export function useQueueMonitoring(
           group: worker.group as string,
           pending: worker.pending as number,
           idleMs: worker.idle_ms as number,
-        }))
+        })),
       );
     } catch (err) {
       logger.error('Failed to fetch workers:', err);
@@ -137,49 +137,52 @@ export function useQueueMonitoring(
   }, [fetchStats, fetchJobs, fetchWorkers]);
 
   // Retry a failed job
-  const retryJob = useCallback(async (jobId: string) => {
-    const response = await fetch(`${API_BASE}/api/queue/jobs/${jobId}/retry`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to retry job');
-    }
-    // Refresh after retry
-    await refresh();
-  }, [refresh]);
+  const retryJob = useCallback(
+    async (jobId: string) => {
+      const response = await fetch(`${API_BASE}/api/queue/jobs/${jobId}/retry`, { method: 'POST' });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to retry job');
+      }
+      // Refresh after retry
+      await refresh();
+    },
+    [refresh],
+  );
 
   // Cancel a pending job
-  const cancelJob = useCallback(async (jobId: string) => {
-    const response = await fetch(`${API_BASE}/api/queue/jobs/${jobId}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to cancel job');
-    }
-    // Refresh after cancel
-    await refresh();
-  }, [refresh]);
+  const cancelJob = useCallback(
+    async (jobId: string) => {
+      const response = await fetch(`${API_BASE}/api/queue/jobs/${jobId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to cancel job');
+      }
+      // Refresh after cancel
+      await refresh();
+    },
+    [refresh],
+  );
 
   // Submit a new job
-  const submitJob = useCallback(async (payload: SubmitJobPayload): Promise<string> => {
-    const response = await fetch(`${API_BASE}/api/queue/jobs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
+  const submitJob = useCallback(
+    async (payload: SubmitJobPayload): Promise<string> => {
+      const response = await fetch(`${API_BASE}/api/queue/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to submit job');
+      }
       const data = await response.json();
-      throw new Error(data.error || 'Failed to submit job');
-    }
-    const data = await response.json();
-    // Refresh after submit
-    await refresh();
-    return data.job_id;
-  }, [refresh]);
+      // Refresh after submit
+      await refresh();
+      return data.job_id;
+    },
+    [refresh],
+  );
 
   // Initial fetch
   useEffect(() => {

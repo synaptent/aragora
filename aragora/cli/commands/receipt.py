@@ -643,82 +643,95 @@ def _inspection_cosmetic(value: Any, field: str) -> str:
     return "(unrenderable)"
 
 
-def _validate_inspection_fields(data: dict[str, Any]) -> None:
-    """Check display inputs without normalizing decisions or verifying signatures."""
+def _require_inspection_type(value: Any, kind: type, field: str, *, nullable: bool = False) -> None:
+    if value is None and nullable:
+        return
+    if not isinstance(value, kind):
+        raise ValueError(f"{field} must be {kind.__name__}")
 
-    def require(value: Any, kind: type, field: str, *, nullable: bool = False) -> None:
-        if value is None and nullable:
-            return
-        if not isinstance(value, kind):
-            raise ValueError(f"{field} must be {kind.__name__}")
 
-    def number(value: Any, field: str) -> float:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError(f"{field} must be a finite number")
-        try:
-            numeric = float(value)
-        except (ValueError, OverflowError):
-            raise ValueError(f"{field} must be a finite number") from None
-        if not math.isfinite(numeric):
-            raise ValueError(f"{field} must be a finite number")
-        return numeric
-
-    def risk_count(value: Any, field: str) -> None:
-        if isinstance(value, int) and not isinstance(value, bool):
-            return
-        if isinstance(value, float) and math.isfinite(value):
-            return
-        if isinstance(value, str):
-            try:
-                # Preserve numeric-string syntax without imposing float's range.
-                float(value)
-                if Decimal(value).is_finite():
-                    return
-            except (ValueError, InvalidOperation):
-                pass
+def _inspection_number(value: Any, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field} must be a finite number")
+    try:
+        numeric = float(value)
+    except (ValueError, OverflowError):
+        raise ValueError(f"{field} must be a finite number") from None
+    if not math.isfinite(numeric):
+        raise ValueError(f"{field} must be a finite number")
+    return numeric
 
-    require(data.get("verdict", "UNKNOWN"), str, "verdict")
+
+def _inspection_risk_count(value: Any, field: str) -> None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return
+    if isinstance(value, float) and math.isfinite(value):
+        return
+    if isinstance(value, str):
+        try:
+            # Preserve numeric-string syntax without imposing float's range.
+            float(value)
+            if Decimal(value).is_finite():
+                return
+        except (ValueError, InvalidOperation):
+            pass
+    raise ValueError(f"{field} must be a finite number")
+
+
+def _validate_inspection_scores(data: dict[str, Any]) -> None:
     for field in ("confidence", "robustness_score"):
-        if not math.isfinite(number(data.get(field, 0), field) * 100):
+        if not math.isfinite(_inspection_number(data.get(field, 0), field) * 100):
             raise ValueError(f"{field} cannot be displayed as a finite percentage")
-    risk = data.get("risk_summary")
-    require(risk, dict, "risk_summary", nullable=True)
+
+
+def _validate_inspection_risk_summary(risk: Any) -> None:
+    _require_inspection_type(risk, dict, "risk_summary", nullable=True)
     if risk:
         for field in ("critical", "high", "medium", "low", "total"):
             if field in risk:
-                risk_count(risk[field], f"risk_summary.{field}")
+                _inspection_risk_count(risk[field], f"risk_summary.{field}")
 
-    consensus = data.get("consensus_proof")
-    require(consensus, dict, "consensus_proof", nullable=True)
+
+def _validate_inspection_consensus(consensus: Any) -> None:
+    _require_inspection_type(consensus, dict, "consensus_proof", nullable=True)
     if consensus:
         if "reached" in consensus:
             _inspection_consensus_reached(consensus["reached"])
         for field in ("supporting_agents", "dissenting_agents"):
             agents = consensus.get(field)
-            require(agents, list, f"consensus_proof.{field}", nullable=True)
+            _require_inspection_type(agents, list, f"consensus_proof.{field}", nullable=True)
             for i, agent in enumerate(agents or []):
-                require(agent, str, f"consensus_proof.{field}[{i}]")
+                _require_inspection_type(agent, str, f"consensus_proof.{field}[{i}]")
 
-    responses = data.get("agent_responses")
-    require(responses, list, "agent_responses", nullable=True)
+
+def _validate_inspection_agent_responses(responses: Any) -> None:
+    _require_inspection_type(responses, list, "agent_responses", nullable=True)
     for i, response in enumerate(responses or []):
         prefix = f"agent_responses[{i}]"
-        require(response, dict, prefix)
-        require(response.get("content", ""), str, f"{prefix}.content")
+        _require_inspection_type(response, dict, prefix)
+        _require_inspection_type(response.get("content", ""), str, f"{prefix}.content")
 
-    cost = data.get("cost_summary")
-    require(cost, dict, "cost_summary", nullable=True)
 
-    config = data.get("config_used", {})
-    require(config, dict, "config_used")
+def _validate_inspection_config(config: Any) -> None:
+    _require_inspection_type(config, dict, "config_used")
     critiques = config.get("critique_summaries")
-    require(critiques, list, "config_used.critique_summaries", nullable=True)
+    _require_inspection_type(critiques, list, "config_used.critique_summaries", nullable=True)
     for i, critique in enumerate(critiques or []):
         prefix = f"config_used.critique_summaries[{i}]"
-        require(critique, dict, prefix)
-        require(critique.get("issues", []), list, f"{prefix}.issues")
-    require(data.get("dissenting_views"), list, "dissenting_views", nullable=True)
+        _require_inspection_type(critique, dict, prefix)
+        _require_inspection_type(critique.get("issues", []), list, f"{prefix}.issues")
+
+
+def _validate_inspection_fields(data: dict[str, Any]) -> None:
+    """Check display inputs without normalizing decisions or verifying signatures."""
+    _require_inspection_type(data.get("verdict", "UNKNOWN"), str, "verdict")
+    _validate_inspection_scores(data)
+    _validate_inspection_risk_summary(data.get("risk_summary"))
+    _validate_inspection_consensus(data.get("consensus_proof"))
+    _validate_inspection_agent_responses(data.get("agent_responses"))
+    _require_inspection_type(data.get("cost_summary"), dict, "cost_summary", nullable=True)
+    _validate_inspection_config(data.get("config_used", {}))
+    _require_inspection_type(data.get("dissenting_views"), list, "dissenting_views", nullable=True)
 
 
 def cmd_receipt_inspect(args: argparse.Namespace) -> None:

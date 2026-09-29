@@ -26,65 +26,66 @@ export function FineTuningDashboard({
   className = '',
 }: FineTuningDashboardProps) {
   // Use the fine-tuning hook
-  const {
-    jobs,
-    stats,
-    loading,
-    error,
-    createJob,
-    startJob,
-    cancelJob,
-  } = useFineTuning({ autoLoad: true, pollInterval });
+  const { jobs, stats, loading, error, createJob, startJob, cancelJob } = useFineTuning({
+    autoLoad: true,
+    pollInterval,
+  });
 
   const [activeTab, setActiveTab] = useState<TabId>('jobs');
   const [selectedModel, setSelectedModel] = useState<AvailableModel | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   // Handle job creation
-  const handleStartTraining = useCallback(async (params: TrainingParameters) => {
-    if (!selectedModel) return;
+  const handleStartTraining = useCallback(
+    async (params: TrainingParameters) => {
+      if (!selectedModel) return;
 
-    setIsCreating(true);
-    try {
-      // Build the job creation data
-      const jobData: CreateJobData = {
-        name: params.jobName,
-        vertical: selectedModel.vertical,
-        base_model: selectedModel.id,
-        training_config: {
-          lora_r: params.loraR,
-          lora_alpha: params.loraAlpha,
-          lora_dropout: params.loraDropout,
-          num_epochs: params.numEpochs,
-          batch_size: params.batchSize,
-          learning_rate: params.learningRate,
-          max_seq_length: params.maxSeqLength,
-          quantization: params.quantization,
-          gradient_checkpointing: params.gradientCheckpointing,
-          dataset_path: params.datasetPath || undefined,
-        },
-      };
+      setIsCreating(true);
+      try {
+        // Build the job creation data
+        const jobData: CreateJobData = {
+          name: params.jobName,
+          vertical: selectedModel.vertical,
+          base_model: selectedModel.id,
+          training_config: {
+            lora_r: params.loraR,
+            lora_alpha: params.loraAlpha,
+            lora_dropout: params.loraDropout,
+            num_epochs: params.numEpochs,
+            batch_size: params.batchSize,
+            learning_rate: params.learningRate,
+            max_seq_length: params.maxSeqLength,
+            quantization: params.quantization,
+            gradient_checkpointing: params.gradientCheckpointing,
+            dataset_path: params.datasetPath || undefined,
+          },
+        };
 
-      const job = await createJob(jobData);
-      if (job) {
-        // Optionally start the job immediately
-        await startJob(job.id);
-        onJobCreated?.(job);
-        setActiveTab('jobs');
-        setSelectedModel(null);
+        const job = await createJob(jobData);
+        if (job) {
+          // Optionally start the job immediately
+          await startJob(job.id);
+          onJobCreated?.(job);
+          setActiveTab('jobs');
+          setSelectedModel(null);
+        }
+      } finally {
+        setIsCreating(false);
       }
-    } finally {
-      setIsCreating(false);
-    }
-  }, [selectedModel, createJob, startJob, onJobCreated]);
+    },
+    [selectedModel, createJob, startJob, onJobCreated],
+  );
 
   // Handle job cancellation
-  const handleCancelJob = useCallback(async (jobId: string) => {
-    const success = await cancelJob(jobId);
-    if (success) {
-      onJobCancelled?.(jobId);
-    }
-  }, [cancelJob, onJobCancelled]);
+  const handleCancelJob = useCallback(
+    async (jobId: string) => {
+      const success = await cancelJob(jobId);
+      if (success) {
+        onJobCancelled?.(jobId);
+      }
+    },
+    [cancelJob, onJobCancelled],
+  );
 
   return (
     <div className={`bg-surface border border-border rounded-lg overflow-hidden ${className}`}>
@@ -94,7 +95,11 @@ export function FineTuningDashboard({
           FINE-TUNING PIPELINE
         </h3>
         <p className="text-xs text-text-muted mt-1">
-          {loading ? 'Loading...' : error ? `Error: ${error}` : 'Train domain-specific models with LoRA adapters'}
+          {loading
+            ? 'Loading...'
+            : error
+              ? `Error: ${error}`
+              : 'Train domain-specific models with LoRA adapters'}
         </p>
       </div>
 
@@ -126,9 +131,10 @@ export function FineTuningDashboard({
             onClick={() => setActiveTab(tab)}
             className={`
               px-4 py-2 text-xs font-theme-data uppercase transition-colors
-              ${activeTab === tab
-                ? 'text-[var(--accent)] border-b-2 border-[var(--accent)] bg-bg'
-                : 'text-text-muted hover:text-text'
+              ${
+                activeTab === tab
+                  ? 'text-[var(--accent)] border-b-2 border-[var(--accent)] bg-bg'
+                  : 'text-text-muted hover:text-text'
               }
             `}
           >
@@ -146,16 +152,11 @@ export function FineTuningDashboard({
         )}
 
         {!loading && error && (
-          <div className="text-center py-8 text-red-400 font-theme-data">
-            Error: {error}
-          </div>
+          <div className="text-center py-8 text-red-400 font-theme-data">Error: {error}</div>
         )}
 
         {activeTab === 'jobs' && !loading && !error && (
-          <JobMonitor
-            jobs={jobs}
-            onCancelJob={handleCancelJob}
-          />
+          <JobMonitor jobs={jobs} onCancelJob={handleCancelJob} />
         )}
 
         {activeTab === 'new' && (
@@ -165,15 +166,9 @@ export function FineTuningDashboard({
                 <p className="font-theme-data text-[var(--accent)]">Creating training job...</p>
               </div>
             )}
-            <ModelSelector
-              selectedModel={selectedModel}
-              onSelectModel={setSelectedModel}
-            />
+            <ModelSelector selectedModel={selectedModel} onSelectModel={setSelectedModel} />
             {selectedModel && !isCreating && (
-              <TrainingConfig
-                model={selectedModel}
-                onStartTraining={handleStartTraining}
-              />
+              <TrainingConfig model={selectedModel} onStartTraining={handleStartTraining} />
             )}
           </div>
         )}

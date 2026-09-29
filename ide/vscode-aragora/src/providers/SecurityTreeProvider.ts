@@ -8,6 +8,9 @@
 import * as vscode from 'vscode';
 import type { SecurityFinding, Severity } from '../types/messages';
 import { SEVERITY_PRIORITY, compareSeverity } from '../types/messages';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 /**
  * Tree item representing a severity group or individual finding
@@ -18,7 +21,7 @@ class SecurityTreeItem extends vscode.TreeItem {
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
     public readonly finding?: SecurityFinding,
     public readonly severity?: Severity,
-    public readonly count?: number
+    public readonly count?: number,
   ) {
     super(label, collapsibleState);
 
@@ -34,9 +37,9 @@ class SecurityTreeItem extends vscode.TreeItem {
   private setupFindingItem(finding: SecurityFinding): void {
     this.tooltip = new vscode.MarkdownString(
       `**${finding.title}**\n\n${finding.description}\n\n` +
-      `📁 ${finding.location.file.split('/').pop()}:${finding.location.line}\n\n` +
-      (finding.cweId ? `🔗 ${finding.cweId}\n` : '') +
-      (finding.suggestion ? `\n💡 **Suggestion:** ${finding.suggestion}` : '')
+        `📁 ${finding.location.file.split('/').pop()}:${finding.location.line}\n\n` +
+        (finding.cweId ? `🔗 ${finding.cweId}\n` : '') +
+        (finding.suggestion ? `\n💡 **Suggestion:** ${finding.suggestion}` : ''),
     );
 
     this.description = `${finding.location.file.split('/').pop()}:${finding.location.line}`;
@@ -74,7 +77,7 @@ class SecurityTreeItem extends vscode.TreeItem {
     const config = iconMap[severity];
     return new vscode.ThemeIcon(
       config.icon,
-      config.color ? new vscode.ThemeColor(config.color) : undefined
+      config.color ? new vscode.ThemeColor(config.color) : undefined,
     );
   }
 
@@ -101,9 +104,7 @@ export class SecurityTreeProvider implements vscode.TreeDataProvider<SecurityTre
   private groupedFindings: Map<Severity, SecurityFinding[]> = new Map();
   private disposables: vscode.Disposable[] = [];
 
-  constructor(
-    private diagnosticsProvider?: { getAllFindings(): Map<string, SecurityFinding[]> }
-  ) {
+  constructor(private diagnosticsProvider?: { getAllFindings(): Map<string, SecurityFinding[]> }) {
     // Refresh when diagnostics change
     if (diagnosticsProvider) {
       this.refresh();
@@ -187,12 +188,7 @@ export class SecurityTreeProvider implements vscode.TreeDataProvider<SecurityTre
       // Severity group - show findings
       const findings = this.groupedFindings.get(element.severity) || [];
       return findings.map(
-        (f) =>
-          new SecurityTreeItem(
-            f.title,
-            vscode.TreeItemCollapsibleState.None,
-            f
-          )
+        (f) => new SecurityTreeItem(f.title, vscode.TreeItemCollapsibleState.None, f),
       );
     }
 
@@ -214,8 +210,8 @@ export class SecurityTreeProvider implements vscode.TreeDataProvider<SecurityTre
             vscode.TreeItemCollapsibleState.Expanded,
             undefined,
             severity,
-            findings.length
-          )
+            findings.length,
+          ),
         );
       }
     }
@@ -249,13 +245,7 @@ export class SecurityTreeProvider implements vscode.TreeDataProvider<SecurityTre
    * Get count by severity
    */
   getCountBySeverity(): Record<Severity, number> {
-    const counts: Record<Severity, number> = {
-      critical: 0,
-      high: 0,
-      medium: 0,
-      low: 0,
-      info: 0,
-    };
+    const counts: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
 
     for (const [severity, findings] of this.groupedFindings) {
       counts[severity] = findings.length;
@@ -285,24 +275,27 @@ export class SecurityTreeProvider implements vscode.TreeDataProvider<SecurityTre
  */
 export function registerSecurityTreeCommands(
   context: vscode.ExtensionContext,
-  treeProvider: SecurityTreeProvider
+  treeProvider: SecurityTreeProvider,
 ): void {
   // Navigate to finding
   context.subscriptions.push(
-    vscode.commands.registerCommand('aragora.navigateToFinding', async (finding: SecurityFinding) => {
-      const uri = vscode.Uri.file(finding.location.file);
-      const document = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(document);
+    vscode.commands.registerCommand(
+      'aragora.navigateToFinding',
+      async (finding: SecurityFinding) => {
+        const uri = vscode.Uri.file(finding.location.file);
+        const document = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(document);
 
-      const line = finding.location.line - 1;
-      const column = finding.location.column;
-      const endLine = finding.location.endLine ? finding.location.endLine - 1 : line;
-      const endColumn = finding.location.endColumn || column + 10;
+        const line = finding.location.line - 1;
+        const column = finding.location.column;
+        const endLine = finding.location.endLine ? finding.location.endLine - 1 : line;
+        const endColumn = finding.location.endColumn || column + 10;
 
-      const range = new vscode.Range(line, column, endLine, endColumn);
-      editor.selection = new vscode.Selection(range.start, range.end);
-      editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-    })
+        const range = new vscode.Range(line, column, endLine, endColumn);
+        editor.selection = new vscode.Selection(range.start, range.end);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+      },
+    ),
   );
 
   // Fix finding
@@ -316,15 +309,15 @@ export function registerSecurityTreeCommands(
           item.finding.location.line - 1,
           item.finding.location.column,
           item.finding.location.line - 1,
-          item.finding.location.column + 10
+          item.finding.location.column + 10,
         ),
         item.finding.description,
-        vscode.DiagnosticSeverity.Warning
+        vscode.DiagnosticSeverity.Warning,
       );
 
       await vscode.commands.executeCommand('aragora.fixIssue', uri, diagnostic);
       treeProvider.refresh();
-    })
+    }),
   );
 
   // Ignore finding
@@ -338,7 +331,7 @@ export function registerSecurityTreeCommands(
           { label: 'Entire workspace', value: 'workspace' },
           { label: 'Globally', value: 'global' },
         ],
-        { placeHolder: 'Ignore this finding in...' }
+        { placeHolder: 'Ignore this finding in...' },
       );
 
       if (!scope) return;
@@ -351,7 +344,7 @@ export function registerSecurityTreeCommands(
 
       vscode.window.showInformationMessage(`Finding ignored for ${scope.label.toLowerCase()}`);
       treeProvider.refresh();
-    })
+    }),
   );
 
   // Fix all in severity group
@@ -359,14 +352,12 @@ export function registerSecurityTreeCommands(
     vscode.commands.registerCommand('aragora.fixAllInGroup', async (item: SecurityTreeItem) => {
       if (!item.severity) return;
 
-      const findings = treeProvider.getAllFindings().filter(
-        (f) => f.severity === item.severity
-      );
+      const findings = treeProvider.getAllFindings().filter((f) => f.severity === item.severity);
 
       const choice = await vscode.window.showWarningMessage(
         `Fix all ${findings.length} ${item.severity} severity issues?`,
         'Yes, Fix All',
-        'Cancel'
+        'Cancel',
       );
 
       if (choice !== 'Yes, Fix All') return;
@@ -387,10 +378,10 @@ export function registerSecurityTreeCommands(
                   finding.location.line - 1,
                   finding.location.column,
                   finding.location.line - 1,
-                  finding.location.column + 10
+                  finding.location.column + 10,
                 ),
                 finding.description,
-                vscode.DiagnosticSeverity.Warning
+                vscode.DiagnosticSeverity.Warning,
               );
               await vscode.commands.executeCommand('aragora.fixIssue', uri, diagnostic);
               fixed++;
@@ -399,15 +390,15 @@ export function registerSecurityTreeCommands(
                 increment: (1 / findings.length) * 100,
               });
             } catch (error) {
-              console.error(`Failed to fix finding: ${error}`);
+              logger.error('Failed to fix finding:', error);
             }
           }
           vscode.window.showInformationMessage(`Fixed ${fixed}/${findings.length} issues`);
-        }
+        },
       );
 
       treeProvider.refresh();
-    })
+    }),
   );
 
   // Export findings
@@ -426,7 +417,7 @@ export function registerSecurityTreeCommands(
           { label: 'Markdown', value: 'markdown' },
           { label: 'CSV', value: 'csv' },
         ],
-        { placeHolder: 'Export format' }
+        { placeHolder: 'Export format' },
       );
 
       if (!format) return;
@@ -456,14 +447,14 @@ export function registerSecurityTreeCommands(
 
       const doc = await vscode.workspace.openTextDocument({ content, language });
       await vscode.window.showTextDocument(doc);
-    })
+    }),
   );
 
   // Refresh tree
   context.subscriptions.push(
     vscode.commands.registerCommand('aragora.refreshSecurityTree', () => {
       treeProvider.refresh();
-    })
+    }),
   );
 }
 
@@ -501,7 +492,7 @@ function generateMarkdownReport(findings: SecurityFinding[]): string {
       `**File:** ${finding.location.file}:${finding.location.line}`,
       '',
       finding.description,
-      ''
+      '',
     );
 
     if (finding.cweId) {

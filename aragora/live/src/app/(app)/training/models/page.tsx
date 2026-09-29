@@ -34,11 +34,7 @@ interface JobArtifacts {
   job_id: string;
   checkpoint_path: string | null;
   data_directory: string | null;
-  files: Array<{
-    name: string;
-    size_bytes: number;
-    type: string;
-  }>;
+  files: Array<{ name: string; size_bytes: number; type: string }>;
 }
 
 type TabType = 'all' | 'pending' | 'training' | 'completed' | 'failed';
@@ -58,60 +54,66 @@ export default function ModelRegistryPage() {
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
 
-  const fetchJobs = useCallback(async (statusFilter?: string) => {
-    setLoading(true);
-    setError(null);
+  const fetchJobs = useCallback(
+    async (statusFilter?: string) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const params = new URLSearchParams({ limit: '100' });
-      if (statusFilter && statusFilter !== 'all') {
-        params.set('status', statusFilter);
+      try {
+        const params = new URLSearchParams({ limit: '100' });
+        if (statusFilter && statusFilter !== 'all') {
+          params.set('status', statusFilter);
+        }
+
+        const response = await fetch(`${backendUrl}/api/training/jobs?${params}`);
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        setJobs(data.jobs || []);
+        setTotal(data.total || 0);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch training jobs');
+        setJobs([]);
+      } finally {
+        setLoading(false);
       }
+    },
+    [backendUrl],
+  );
 
-      const response = await fetch(`${backendUrl}/api/training/jobs?${params}`);
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
+  const fetchJobDetails = useCallback(
+    async (job: TrainingJob) => {
+      setSelectedJob(job);
+      setLoadingDetail(true);
+      setJobMetrics(null);
+      setJobArtifacts(null);
+
+      try {
+        const [metricsRes, artifactsRes] = await Promise.all([
+          fetch(`${backendUrl}/api/training/jobs/${job.id}/metrics`),
+          fetch(`${backendUrl}/api/training/jobs/${job.id}/artifacts`),
+        ]);
+
+        if (metricsRes.ok) {
+          const metricsData = await metricsRes.json();
+          setJobMetrics(metricsData);
+        }
+
+        if (artifactsRes.ok) {
+          const artifactsData = await artifactsRes.json();
+          setJobArtifacts(artifactsData);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch job details:', err);
+      } finally {
+        setLoadingDetail(false);
       }
-
-      const data = await response.json();
-      setJobs(data.jobs || []);
-      setTotal(data.total || 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch training jobs');
-      setJobs([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [backendUrl]);
-
-  const fetchJobDetails = useCallback(async (job: TrainingJob) => {
-    setSelectedJob(job);
-    setLoadingDetail(true);
-    setJobMetrics(null);
-    setJobArtifacts(null);
-
-    try {
-      const [metricsRes, artifactsRes] = await Promise.all([
-        fetch(`${backendUrl}/api/training/jobs/${job.id}/metrics`),
-        fetch(`${backendUrl}/api/training/jobs/${job.id}/artifacts`),
-      ]);
-
-      if (metricsRes.ok) {
-        const metricsData = await metricsRes.json();
-        setJobMetrics(metricsData);
-      }
-
-      if (artifactsRes.ok) {
-        const artifactsData = await artifactsRes.json();
-        setJobArtifacts(artifactsData);
-      }
-    } catch (err) {
-      logger.error('Failed to fetch job details:', err);
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, [backendUrl]);
+    },
+    [backendUrl],
+  );
 
   const handleStartJob = async (jobId: string) => {
     setActionLoading(jobId);
@@ -198,9 +200,7 @@ export default function ModelRegistryPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const filteredJobs = activeTab === 'all'
-    ? jobs
-    : jobs.filter(j => j.status === activeTab);
+  const filteredJobs = activeTab === 'all' ? jobs : jobs.filter((j) => j.status === activeTab);
 
   return (
     <div className="min-h-screen bg-bg text-text relative overflow-hidden">
@@ -227,7 +227,9 @@ export default function ModelRegistryPage() {
 
         {/* Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">Model Registry</h1>
+          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">
+            Model Registry
+          </h1>
           <p className="text-text-muted font-theme-data text-sm">
             Track fine-tuned specialist models and monitor training progress
           </p>
@@ -236,10 +238,7 @@ export default function ModelRegistryPage() {
         {/* Error */}
         {error && (
           <div className="mb-6">
-            <ErrorWithRetry
-              error={error}
-              onRetry={() => fetchJobs(activeTab)}
-            />
+            <ErrorWithRetry error={error} onRetry={() => fetchJobs(activeTab)} />
           </div>
         )}
 
@@ -266,7 +265,9 @@ export default function ModelRegistryPage() {
           <div className="lg:col-span-2 space-y-4">
             {loading ? (
               <div className="p-8 text-center">
-                <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading models...</div>
+                <div className="text-[var(--accent)] font-theme-data animate-pulse">
+                  Loading models...
+                </div>
               </div>
             ) : filteredJobs.length === 0 ? (
               <div className="p-8 text-center bg-surface border border-border rounded-lg">
@@ -288,10 +289,14 @@ export default function ModelRegistryPage() {
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex items-center gap-3">
-                      <span className={`px-2 py-1 text-xs font-theme-data rounded border ${getStatusColor(job.status)}`}>
+                      <span
+                        className={`px-2 py-1 text-xs font-theme-data rounded border ${getStatusColor(job.status)}`}
+                      >
                         {job.status.toUpperCase()}
                       </span>
-                      <span className={`text-sm font-theme-data font-bold ${getVerticalColor(job.vertical)}`}>
+                      <span
+                        className={`text-sm font-theme-data font-bold ${getVerticalColor(job.vertical)}`}
+                      >
                         {job.vertical}
                       </span>
                     </div>
@@ -324,14 +329,23 @@ export default function ModelRegistryPage() {
                   </div>
 
                   <div className="flex items-center gap-4 text-xs font-theme-data text-text-muted mb-2">
-                    <span>ID: <span className="text-text">{job.id.slice(0, 12)}...</span></span>
-                    <span>Base: <span className="text-text">{job.base_model}</span></span>
+                    <span>
+                      ID: <span className="text-text">{job.id.slice(0, 12)}...</span>
+                    </span>
+                    <span>
+                      Base: <span className="text-text">{job.base_model}</span>
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-4 text-xs font-theme-data text-text-muted">
-                    <span>Examples: <span className="text-[var(--acid-cyan)]">{job.training_data_examples}</span></span>
+                    <span>
+                      Examples:{' '}
+                      <span className="text-[var(--acid-cyan)]">{job.training_data_examples}</span>
+                    </span>
                     {job.adapter_name && (
-                      <span>Adapter: <span className="text-text">{job.adapter_name}</span></span>
+                      <span>
+                        Adapter: <span className="text-text">{job.adapter_name}</span>
+                      </span>
                     )}
                     {job.created_at && (
                       <span>Created: {new Date(job.created_at).toLocaleDateString()}</span>
@@ -358,13 +372,17 @@ export default function ModelRegistryPage() {
 
                 {loadingDetail ? (
                   <div className="py-4 text-center">
-                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">Loading...</div>
+                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">
+                      Loading...
+                    </div>
                   </div>
                 ) : (
                   <>
                     {/* Basic Info */}
                     <div className="p-3 bg-bg border border-border rounded">
-                      <div className="text-xs font-theme-data text-text-muted uppercase mb-2">Info</div>
+                      <div className="text-xs font-theme-data text-text-muted uppercase mb-2">
+                        Info
+                      </div>
                       <div className="space-y-1 text-sm font-theme-data">
                         <div className="flex justify-between">
                           <span className="text-text-muted">Status</span>
@@ -388,7 +406,9 @@ export default function ModelRegistryPage() {
                     {/* Metrics */}
                     {jobMetrics && (
                       <div className="p-3 bg-bg border border-border rounded">
-                        <div className="text-xs font-theme-data text-text-muted uppercase mb-2">Metrics</div>
+                        <div className="text-xs font-theme-data text-text-muted uppercase mb-2">
+                          Metrics
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                           {jobMetrics.elo_rating !== null && (
                             <div className="p-2 bg-surface rounded">
@@ -424,8 +444,8 @@ export default function ModelRegistryPage() {
                           )}
                         </div>
                         <div className="mt-2 text-xs font-theme-data text-text-muted">
-                          Examples: {jobMetrics.training_data_examples} |
-                          Debates: {jobMetrics.training_data_debates}
+                          Examples: {jobMetrics.training_data_examples} | Debates:{' '}
+                          {jobMetrics.training_data_debates}
                         </div>
                       </div>
                     )}
@@ -433,11 +453,15 @@ export default function ModelRegistryPage() {
                     {/* Artifacts */}
                     {jobArtifacts && (
                       <div className="p-3 bg-bg border border-border rounded">
-                        <div className="text-xs font-theme-data text-text-muted uppercase mb-2">Artifacts</div>
+                        <div className="text-xs font-theme-data text-text-muted uppercase mb-2">
+                          Artifacts
+                        </div>
                         {jobArtifacts.checkpoint_path ? (
                           <div className="text-xs font-theme-data mb-2">
                             <span className="text-text-muted">Checkpoint: </span>
-                            <span className="text-[var(--accent)] break-all">{jobArtifacts.checkpoint_path}</span>
+                            <span className="text-[var(--accent)] break-all">
+                              {jobArtifacts.checkpoint_path}
+                            </span>
                           </div>
                         ) : (
                           <div className="text-xs font-theme-data text-text-muted mb-2">
@@ -449,7 +473,9 @@ export default function ModelRegistryPage() {
                             {jobArtifacts.files.map((file, i) => (
                               <div key={i} className="flex justify-between text-xs font-theme-data">
                                 <span className="text-text truncate">{file.name}</span>
-                                <span className="text-text-muted">{formatBytes(file.size_bytes)}</span>
+                                <span className="text-text-muted">
+                                  {formatBytes(file.size_bytes)}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -493,7 +519,9 @@ export default function ModelRegistryPage() {
         {/* Summary Stats */}
         {jobs.length > 0 && (
           <div className="mt-8 p-4 bg-surface border border-border rounded-lg">
-            <h3 className="text-sm font-theme-data font-bold text-[var(--accent)] mb-4">Registry Summary</h3>
+            <h3 className="text-sm font-theme-data font-bold text-[var(--accent)] mb-4">
+              Registry Summary
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="p-3 bg-bg rounded text-center">
                 <div className="text-2xl font-theme-data text-text">{jobs.length}</div>
@@ -501,25 +529,25 @@ export default function ModelRegistryPage() {
               </div>
               <div className="p-3 bg-bg rounded text-center">
                 <div className="text-2xl font-theme-data text-yellow-400">
-                  {jobs.filter(j => j.status === 'pending').length}
+                  {jobs.filter((j) => j.status === 'pending').length}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Pending</div>
               </div>
               <div className="p-3 bg-bg rounded text-center">
                 <div className="text-2xl font-theme-data text-blue-400">
-                  {jobs.filter(j => j.status === 'training').length}
+                  {jobs.filter((j) => j.status === 'training').length}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Training</div>
               </div>
               <div className="p-3 bg-bg rounded text-center">
                 <div className="text-2xl font-theme-data text-green-400">
-                  {jobs.filter(j => j.status === 'completed').length}
+                  {jobs.filter((j) => j.status === 'completed').length}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Completed</div>
               </div>
               <div className="p-3 bg-bg rounded text-center">
                 <div className="text-2xl font-theme-data text-red-400">
-                  {jobs.filter(j => j.status === 'failed').length}
+                  {jobs.filter((j) => j.status === 'failed').length}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Failed</div>
               </div>

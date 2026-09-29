@@ -70,17 +70,8 @@ describe('AuditLogViewer', () => {
 
   const mockStats = {
     total_events: 1500,
-    events_by_category: {
-      auth: 500,
-      data: 800,
-      admin: 100,
-      system: 100,
-    },
-    events_by_outcome: {
-      success: 1400,
-      failure: 80,
-      error: 20,
-    },
+    events_by_category: { auth: 500, data: 800, admin: 100, system: 100 },
+    events_by_outcome: { success: 1400, failure: 80, error: 20 },
     recent_events_24h: 150,
     integrity_verified: true,
   };
@@ -101,10 +92,7 @@ describe('AuditLogViewer', () => {
         });
       }
       if (url.includes('/audit/stats')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(statsResponse),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(statsResponse) });
       }
       return Promise.reject(new Error('Unknown URL'));
     });
@@ -403,24 +391,16 @@ describe('AuditLogViewer', () => {
     it('triggers JSON export', async () => {
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ events: mockEvents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: mockEvents }) });
         }
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/export') && options?.method === 'POST') {
           return Promise.resolve({
             ok: true,
             blob: () => Promise.resolve(new Blob(['test'])),
-            headers: new Headers({
-              'Content-Disposition': 'attachment; filename="audit.json"',
-            }),
+            headers: new Headers({ 'Content-Disposition': 'attachment; filename="audit.json"' }),
           });
         }
         return Promise.reject(new Error('Unknown URL'));
@@ -440,7 +420,7 @@ describe('AuditLogViewer', () => {
           expect.objectContaining({
             method: 'POST',
             body: expect.stringContaining('"format":"json"'),
-          })
+          }),
         );
       });
     });
@@ -462,16 +442,10 @@ describe('AuditLogViewer', () => {
     it('triggers verify on click', async () => {
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ events: mockEvents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: mockEvents }) });
         }
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/verify') && options?.method === 'POST') {
           return Promise.resolve({
@@ -491,25 +465,17 @@ describe('AuditLogViewer', () => {
       fireEvent.click(screen.getByText('VERIFY'));
 
       await waitFor(() => {
-        expect(mockAlert).toHaveBeenCalledWith(
-          expect.stringContaining('verified successfully')
-        );
+        expect(mockAlert).toHaveBeenCalledWith(expect.stringContaining('verified successfully'));
       });
     });
 
     it('shows failure message when integrity check fails', async () => {
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ events: mockEvents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: mockEvents }) });
         }
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/verify') && options?.method === 'POST') {
           return Promise.resolve({
@@ -529,9 +495,7 @@ describe('AuditLogViewer', () => {
       fireEvent.click(screen.getByText('VERIFY'));
 
       await waitFor(() => {
-        expect(mockAlert).toHaveBeenCalledWith(
-          expect.stringContaining('5 errors found')
-        );
+        expect(mockAlert).toHaveBeenCalledWith(expect.stringContaining('5 errors found'));
       });
     });
   });

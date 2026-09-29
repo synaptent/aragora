@@ -16,6 +16,9 @@ import type {
   getAgentColor,
 } from '../types/messages';
 import type { StreamManager } from '../services/StreamManager';
+import { getLogger } from '../logger';
+
+const logger = getLogger();
 
 export class DebatePanel {
   public static currentPanel: DebatePanel | undefined;
@@ -30,7 +33,7 @@ export class DebatePanel {
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
-    streamManager?: StreamManager
+    streamManager?: StreamManager,
   ) {
     this.panel = panel;
     this.extensionUri = extensionUri;
@@ -46,24 +49,19 @@ export class DebatePanel {
     this.panel.webview.onDidReceiveMessage(
       (message: WebviewMessage) => this.handleWebviewMessage(message),
       null,
-      this.disposables
+      this.disposables,
     );
 
     // Subscribe to stream events
     if (this.streamManager) {
-      this.disposables.push(
-        this.streamManager.subscribe((event) => this.handleStreamEvent(event))
-      );
+      this.disposables.push(this.streamManager.subscribe((event) => this.handleStreamEvent(event)));
     }
   }
 
   /**
    * Create or show the debate panel
    */
-  public static createOrShow(
-    extensionUri: vscode.Uri,
-    streamManager?: StreamManager
-  ): DebatePanel {
+  public static createOrShow(extensionUri: vscode.Uri, streamManager?: StreamManager): DebatePanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
       : undefined;
@@ -83,7 +81,7 @@ export class DebatePanel {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview-ui', 'dist')],
-      }
+      },
     );
 
     DebatePanel.currentPanel = new DebatePanel(panel, extensionUri, streamManager);
@@ -104,10 +102,7 @@ export class DebatePanel {
       startTime: Date.now(),
     };
 
-    this.postMessage({
-      type: 'debate_started',
-      debate: this.debate,
-    });
+    this.postMessage({ type: 'debate_started', debate: this.debate });
 
     // Update title
     this.panel.title = `Debate: ${question.substring(0, 30)}...`;
@@ -123,10 +118,7 @@ export class DebatePanel {
       this.debate.status = 'running';
     }
 
-    this.postMessage({
-      type: 'agent_message',
-      message,
-    });
+    this.postMessage({ type: 'agent_message', message });
   }
 
   /**
@@ -139,10 +131,7 @@ export class DebatePanel {
       this.debate.endTime = Date.now();
     }
 
-    this.postMessage({
-      type: 'consensus_reached',
-      consensus,
-    });
+    this.postMessage({ type: 'consensus_reached', consensus });
   }
 
   /**
@@ -150,10 +139,7 @@ export class DebatePanel {
    */
   public updateDebate(debate: DebateState): void {
     this.debate = debate;
-    this.postMessage({
-      type: 'debate_updated',
-      debate,
-    });
+    this.postMessage({ type: 'debate_updated', debate });
   }
 
   private handleWebviewMessage(message: WebviewMessage): void {
@@ -267,12 +253,7 @@ export class DebatePanel {
         lines.push(`### Round ${currentRound}`, '');
       }
 
-      lines.push(
-        `**${message.agent.name}** (${message.agent.provider}):`,
-        '',
-        message.content,
-        '',
-      );
+      lines.push(`**${message.agent.name}** (${message.agent.provider}):`, '', message.content, '');
     }
 
     if (this.debate.consensus) {
@@ -305,19 +286,29 @@ export class DebatePanel {
 </head>
 <body>
   <h1>${this.debate?.question || 'Debate'}</h1>
-  ${this.debate?.messages.map(m => `
+  ${
+    this.debate?.messages
+      .map(
+        (m) => `
     <div class="message">
       <strong>${m.agent.name}</strong>
       <p>${m.content}</p>
     </div>
-  `).join('') || ''}
-  ${this.debate?.consensus ? `
+  `,
+      )
+      .join('') || ''
+  }
+  ${
+    this.debate?.consensus
+      ? `
     <div class="message consensus">
       <h2>Consensus</h2>
       <p>${this.debate.consensus.answer}</p>
       <p><em>Confidence: ${(this.debate.consensus.confidence * 100).toFixed(1)}%</em></p>
     </div>
-  ` : ''}
+  `
+      : ''
+  }
 </body>
 </html>`;
   }
@@ -343,7 +334,7 @@ export class DebatePanel {
         vscode.window.showInformationMessage('Thank you for your feedback!');
       }
     } catch (error) {
-      console.error('Failed to send feedback:', error);
+      logger.error('Failed to send feedback:', error);
     }
   }
 
@@ -366,10 +357,10 @@ export class DebatePanel {
   private getHtmlContent(): string {
     const webview = this.panel.webview;
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.js')
+      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.js'),
     );
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.css')
+      vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', 'main.css'),
     );
 
     const nonce = this.getNonce();
@@ -416,13 +407,13 @@ export class DebatePanel {
  */
 export function registerDebatePanelCommands(
   context: vscode.ExtensionContext,
-  streamManager?: StreamManager
+  streamManager?: StreamManager,
 ): void {
   // Show debate panel
   context.subscriptions.push(
     vscode.commands.registerCommand('aragora.showDebatePanel', () => {
       DebatePanel.createOrShow(context.extensionUri, streamManager);
-    })
+    }),
   );
 
   // Clear debate context
@@ -430,7 +421,7 @@ export function registerDebatePanelCommands(
     vscode.commands.registerCommand('aragora.clearDebateContext', async () => {
       await context.workspaceState.update('debateContext', []);
       vscode.window.showInformationMessage('Debate context cleared');
-    })
+    }),
   );
 
   // View debate context
@@ -449,6 +440,6 @@ export function registerDebatePanelCommands(
         language: 'markdown',
       });
       await vscode.window.showTextDocument(doc);
-    })
+    }),
   );
 }

@@ -44,11 +44,7 @@ const mockCacheData = {
   hit_rate: 0.85,
   hits: 850,
   misses: 150,
-  entries_by_prefix: {
-    debate_: 100,
-    agent_: 80,
-    ranking_: 76,
-  },
+  entries_by_prefix: { debate_: 100, agent_: 80, ranking_: 76 },
   oldest_entry_age_seconds: 3600,
   newest_entry_age_seconds: 10,
 };
@@ -59,10 +55,7 @@ const mockSystemData = {
   machine: 'arm64',
   processor: 'arm',
   pid: 12345,
-  memory: {
-    rss_mb: 256,
-    vms_mb: 512,
-  },
+  memory: { rss_mb: 256, vms_mb: 512 },
 };
 
 function setupSuccessfulFetch() {

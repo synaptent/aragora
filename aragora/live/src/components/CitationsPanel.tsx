@@ -36,12 +36,7 @@ type CitationType =
   | 'unknown';
 
 type CitationQuality =
-  | 'peer_reviewed'
-  | 'authoritative'
-  | 'reputable'
-  | 'mixed'
-  | 'unverified'
-  | 'questionable';
+  'peer_reviewed' | 'authoritative' | 'reputable' | 'mixed' | 'unverified' | 'questionable';
 
 const TYPE_CONFIG: Record<CitationType, { icon: string; label: string; color: string }> = {
   academic_paper: { icon: '📄', label: 'Paper', color: 'text-blue-400' },
@@ -57,12 +52,36 @@ const TYPE_CONFIG: Record<CitationType, { icon: string; label: string; color: st
 };
 
 const QUALITY_CONFIG: Record<CitationQuality, { icon: string; label: string; color: string }> = {
-  peer_reviewed: { icon: '✓✓', label: 'Peer Reviewed', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  authoritative: { icon: '✓', label: 'Authoritative', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  reputable: { icon: '○', label: 'Reputable', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  mixed: { icon: '~', label: 'Mixed', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  unverified: { icon: '?', label: 'Unverified', color: 'bg-zinc-500/20 text-zinc-500 dark:text-zinc-400 border-zinc-500/30' },
-  questionable: { icon: '!', label: 'Questionable', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  peer_reviewed: {
+    icon: '✓✓',
+    label: 'Peer Reviewed',
+    color: 'bg-green-500/20 text-green-400 border-green-500/30',
+  },
+  authoritative: {
+    icon: '✓',
+    label: 'Authoritative',
+    color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  },
+  reputable: {
+    icon: '○',
+    label: 'Reputable',
+    color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  },
+  mixed: {
+    icon: '~',
+    label: 'Mixed',
+    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  },
+  unverified: {
+    icon: '?',
+    label: 'Unverified',
+    color: 'bg-zinc-500/20 text-zinc-500 dark:text-zinc-400 border-zinc-500/30',
+  },
+  questionable: {
+    icon: '!',
+    label: 'Questionable',
+    color: 'bg-red-500/20 text-red-400 border-red-500/30',
+  },
 };
 
 export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProps) {
@@ -92,13 +111,13 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
           data.grounded_verdict.all_citations.forEach((c: Record<string, unknown>) => {
             fetchedCitations.push({
               id: (c.id as string) || `api-${c.title}-${c.year}`,
-              type: ((c.citation_type || c.type || 'unknown') as string) as CitationType,
+              type: (c.citation_type || c.type || 'unknown') as string as CitationType,
               title: (c.title as string) || 'Untitled',
               authors: (c.authors as string[]) || [],
               year: c.year as number | undefined,
               url: c.url as string | undefined,
               excerpt: (c.excerpt as string) || '',
-              quality: ((c.quality || 'unverified') as string) as CitationQuality,
+              quality: (c.quality || 'unverified') as string as CitationQuality,
               relevance: (c.relevance_score || c.relevance || 0.5) as number,
               claimId: c.claim_id as string | undefined,
             });
@@ -155,13 +174,13 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
             seen.add(id);
             citationList.push({
               id,
-              type: ((c.citation_type || c.type || 'unknown') as string) as CitationType,
+              type: (c.citation_type || c.type || 'unknown') as string as CitationType,
               title: (c.title as string) || 'Untitled',
               authors: (c.authors as string[]) || [],
               year: c.year as number | undefined,
               url: c.url as string | undefined,
               excerpt: (c.excerpt as string) || '',
-              quality: ((c.quality || 'unverified') as string) as CitationQuality,
+              quality: (c.quality || 'unverified') as string as CitationQuality,
               relevance: (c.relevance_score || c.relevance || 0.5) as number,
               claimId: c.claim_id as string | undefined,
             });
@@ -180,13 +199,13 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
               seen.add(id);
               citationList.push({
                 id,
-                type: ((c.citation_type || c.type || 'unknown') as string) as CitationType,
+                type: (c.citation_type || c.type || 'unknown') as string as CitationType,
                 title: (c.title as string) || 'Untitled',
                 authors: (c.authors as string[]) || [],
                 year: c.year as number | undefined,
                 url: c.url as string | undefined,
                 excerpt: (c.excerpt as string) || '',
-                quality: ((c.quality || 'unverified') as string) as CitationQuality,
+                quality: (c.quality || 'unverified') as string as CitationQuality,
                 relevance: (c.relevance_score || c.relevance || 0.5) as number,
                 claimId: c.claim_id as string | undefined,
               });
@@ -197,7 +216,8 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
 
       // Handle evidence_found events (real-time evidence collection)
       if (event.type === 'evidence_found') {
-        const snippets = eventData?.snippets as Array<{ content: string; source: string }> | undefined;
+        const snippets = eventData?.snippets as
+          Array<{ content: string; source: string }> | undefined;
         if (snippets && Array.isArray(snippets)) {
           snippets.forEach((snippet, idx) => {
             const id = `evidence-${eventData?.domain || 'general'}-${idx}-${Date.now()}`;
@@ -223,10 +243,10 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
 
   // Merge event citations with API citations (deduplicated)
   const allCitations = useMemo(() => {
-    const seen = new Set(citations.map(c => c.id));
+    const seen = new Set(citations.map((c) => c.id));
     const merged = [...citations];
 
-    apiCitations.forEach(c => {
+    apiCitations.forEach((c) => {
       if (!seen.has(c.id)) {
         seen.add(c.id);
         merged.push(c);
@@ -236,7 +256,8 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
     return merged.sort((a, b) => b.relevance - a.relevance);
   }, [citations, apiCitations]);
 
-  const filteredCitations = filter === 'all' ? allCitations : allCitations.filter((c) => c.type === filter);
+  const filteredCitations =
+    filter === 'all' ? allCitations : allCitations.filter((c) => c.type === filter);
 
   // Get unique types for filter
   const availableTypes = useMemo(() => {
@@ -252,7 +273,9 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
           {loading && <span className="text-xs text-text-muted animate-pulse">Loading...</span>}
         </h3>
         <div className="panel-empty">
-          {loading ? 'Fetching evidence...' : 'No citations yet. References will appear as agents cite sources.'}
+          {loading
+            ? 'Fetching evidence...'
+            : 'No citations yet. References will appear as agents cite sources.'}
         </div>
       </div>
     );
@@ -264,7 +287,9 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
         <h3 className="panel-title-sm flex items-center gap-2">
           <span>📚</span> Citations
           <span className="panel-badge">{allCitations.length}</span>
-          {loading && <span className="text-xs text-text-muted animate-pulse ml-2">Updating...</span>}
+          {loading && (
+            <span className="text-xs text-text-muted animate-pulse ml-2">Updating...</span>
+          )}
         </h3>
       </div>
 
@@ -308,10 +333,7 @@ export function CitationsPanel({ events, debateId, apiBase }: CitationsPanelProp
           const isExpanded = expandedId === citation.id;
 
           return (
-            <div
-              key={citation.id}
-              className="panel-item"
-            >
+            <div key={citation.id} className="panel-item">
               <button
                 onClick={() => setExpandedId(isExpanded ? null : citation.id)}
                 className="w-full text-left"

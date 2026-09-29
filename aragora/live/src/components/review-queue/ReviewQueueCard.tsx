@@ -4,12 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReviewQueuePR, SettlementAction } from '@/hooks/useReviewQueue';
 import { ApproveDecisionModal } from './ApproveDecisionModal';
 import { BriefPanel } from './BriefPanel';
-import {
-  ciGlyph,
-  formatAge,
-  toneColor,
-  verdictGlyph,
-} from './format';
+import { ciGlyph, formatAge, toneColor, verdictGlyph } from './format';
 import {
   cancelBriefGeneration,
   fetchBrief,
@@ -24,7 +19,10 @@ export interface ReviewQueueCardProps {
   expanded: boolean;
   onSelect: () => void;
   onToggleExpand: () => void;
-  onSettle: (action: SettlementAction, options?: { note?: string; reason?: string }) => Promise<void>;
+  onSettle: (
+    action: SettlementAction,
+    options?: { note?: string; reason?: string },
+  ) => Promise<void>;
 }
 
 /** Maximum ms between two `a` keystrokes to count as a "bypass" chord. */
@@ -143,8 +141,7 @@ export function ReviewQueueCard({
     setGenerateInFlight(true);
     setError(null);
     try {
-      const force =
-        snapshot?.state === 'failed' || snapshot?.state === 'stale';
+      const force = snapshot?.state === 'failed' || snapshot?.state === 'stale';
       const resp = await generateBrief(pr.number, force ? { force: true } : {});
       // Optimistically flip the snapshot to queued so the user sees
       // immediate feedback even before the next poll.
@@ -195,11 +192,10 @@ export function ReviewQueueCard({
     // Legacy path: warn only when a brief IS present and its verdict
     // disagrees with approval.
     if (pr.brief_present && pr.verdict && pr.verdict !== 'approve_candidate') {
-      const ok = typeof window !== 'undefined'
-        ? window.confirm(
-            `Brief verdict is ${pr.verdict}. Approve anyway?`,
-          )
-        : true;
+      const ok =
+        typeof window !== 'undefined'
+          ? window.confirm(`Brief verdict is ${pr.verdict}. Approve anyway?`)
+          : true;
       if (!ok) return;
     }
     performApprove();
@@ -245,8 +241,7 @@ export function ReviewQueueCard({
   const isRunning = snapshot?.state === 'running';
   const pulseTooltip = isRunning
     ? `Brief generation in progress${snapshot?.phase ? ` — ${snapshot.phase} phase` : ''}${
-        typeof snapshot?.rolesComplete === 'number' &&
-        typeof snapshot?.rolesTotal === 'number'
+        typeof snapshot?.rolesComplete === 'number' && typeof snapshot?.rolesTotal === 'number'
           ? ` (${snapshot.rolesComplete}/${snapshot.rolesTotal})`
           : ''
       }`
@@ -268,18 +263,14 @@ export function ReviewQueueCard({
         backgroundColor: 'var(--surface)',
         // Selected wins over hover (thicker accent border + glow).
         // Hover on non-selected cards picks up a subtle accent glow border.
-        borderColor: selected
-          ? 'var(--accent)'
-          : hovered
-          ? 'var(--accent)'
-          : 'var(--border)',
+        borderColor: selected ? 'var(--accent)' : hovered ? 'var(--accent)' : 'var(--border)',
         borderWidth: selected ? '2px' : '1px',
         padding: selected ? 'calc(1.5rem - 1px)' : '1.5rem',
         boxShadow: selected
           ? '0 0 0 1px var(--accent-glow)'
           : hovered
-          ? '0 0 0 1px var(--accent-glow), 0 4px 12px rgba(0, 0, 0, 0.08)'
-          : 'var(--shadow-panel)',
+            ? '0 0 0 1px var(--accent-glow), 0 4px 12px rgba(0, 0, 0, 0.08)'
+            : 'var(--shadow-panel)',
       }}
     >
       {/* Headline row: number badge + title + diff stats */}
@@ -293,19 +284,33 @@ export function ReviewQueueCard({
           }`}
           style={{
             minWidth: '4rem',
-            backgroundColor: (pr.brief_present ? verdict.tone : ci.tone) === 'ok' ? 'rgba(57, 255, 20, 0.14)'
-              : (pr.brief_present ? verdict.tone : ci.tone) === 'warn' ? 'rgba(218, 165, 32, 0.14)'
-              : (pr.brief_present ? verdict.tone : ci.tone) === 'fail' ? 'rgba(255, 0, 64, 0.12)'
-              : 'var(--surface-elevated)',
-            color: (pr.brief_present ? verdict.tone : ci.tone) === 'ok' ? 'var(--accent)'
-              : (pr.brief_present ? verdict.tone : ci.tone) === 'warn' ? 'var(--warning)'
-              : (pr.brief_present ? verdict.tone : ci.tone) === 'fail' ? 'var(--crimson)'
-              : 'var(--text-muted)',
-            border: `1px solid ${(pr.brief_present ? verdict.tone : ci.tone) === 'ok' ? 'rgba(57, 255, 20, 0.25)'
-              : (pr.brief_present ? verdict.tone : ci.tone) === 'warn' ? 'rgba(255, 255, 0, 0.25)'
-              : (pr.brief_present ? verdict.tone : ci.tone) === 'fail' ? 'rgba(255, 0, 64, 0.25)'
-              : 'var(--border)'}`,
-            animation: isRunning && selected ? 'review-queue-pulse 1.2s ease-in-out infinite' : undefined,
+            backgroundColor:
+              (pr.brief_present ? verdict.tone : ci.tone) === 'ok'
+                ? 'rgba(57, 255, 20, 0.14)'
+                : (pr.brief_present ? verdict.tone : ci.tone) === 'warn'
+                  ? 'rgba(218, 165, 32, 0.14)'
+                  : (pr.brief_present ? verdict.tone : ci.tone) === 'fail'
+                    ? 'rgba(255, 0, 64, 0.12)'
+                    : 'var(--surface-elevated)',
+            color:
+              (pr.brief_present ? verdict.tone : ci.tone) === 'ok'
+                ? 'var(--accent)'
+                : (pr.brief_present ? verdict.tone : ci.tone) === 'warn'
+                  ? 'var(--warning)'
+                  : (pr.brief_present ? verdict.tone : ci.tone) === 'fail'
+                    ? 'var(--crimson)'
+                    : 'var(--text-muted)',
+            border: `1px solid ${
+              (pr.brief_present ? verdict.tone : ci.tone) === 'ok'
+                ? 'rgba(57, 255, 20, 0.25)'
+                : (pr.brief_present ? verdict.tone : ci.tone) === 'warn'
+                  ? 'rgba(255, 255, 0, 0.25)'
+                  : (pr.brief_present ? verdict.tone : ci.tone) === 'fail'
+                    ? 'rgba(255, 0, 64, 0.25)'
+                    : 'var(--border)'
+            }`,
+            animation:
+              isRunning && selected ? 'review-queue-pulse 1.2s ease-in-out infinite' : undefined,
           }}
           title={pulseTooltip ?? (pr.brief_present ? verdict.label : ci.label)}
           aria-label={pulseTooltip ?? (pr.brief_present ? verdict.label : ci.label)}
@@ -317,10 +322,7 @@ export function ReviewQueueCard({
                 aria-hidden="true"
                 data-testid={`review-queue-badge-spinner-${pr.number}`}
                 className="inline-block h-2 w-2 animate-spin rounded-full border-2"
-                style={{
-                  borderColor: 'transparent',
-                  borderTopColor: 'currentColor',
-                }}
+                style={{ borderColor: 'transparent', borderTopColor: 'currentColor' }}
               />
             )}
           </div>
@@ -328,10 +330,7 @@ export function ReviewQueueCard({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div
-            className="text-base font-medium leading-snug"
-            style={{ color: 'var(--text)' }}
-          >
+          <div className="text-base font-medium leading-snug" style={{ color: 'var(--text)' }}>
             {pr.title}
           </div>
           <div
@@ -377,13 +376,19 @@ export function ReviewQueueCard({
         >
           {pr.touched_subsystems.slice(0, 6).map((sub, i) => (
             <span key={sub}>
-              {i > 0 && <span className="mr-2" aria-hidden="true">·</span>}
+              {i > 0 && (
+                <span className="mr-2" aria-hidden="true">
+                  ·
+                </span>
+              )}
               <span className="font-theme-data">{sub}</span>
             </span>
           ))}
           {pr.touched_subsystems.length > 6 && (
             <span>
-              <span className="mr-2" aria-hidden="true">·</span>
+              <span className="mr-2" aria-hidden="true">
+                ·
+              </span>
               +{pr.touched_subsystems.length - 6} more
             </span>
           )}
@@ -497,10 +502,7 @@ export function ReviewQueueCard({
         <div
           data-testid={`review-queue-reason-${pr.number}`}
           className="mt-3 flex flex-col gap-2 rounded-lg border p-3"
-          style={{
-            borderColor: 'var(--border)',
-            backgroundColor: 'var(--surface-elevated)',
-          }}
+          style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface-elevated)' }}
         >
           <label
             className="text-xs"
@@ -540,10 +542,7 @@ export function ReviewQueueCard({
               type="button"
               onClick={() => setReasonForAction(null)}
               className="rounded-lg border px-3 py-1.5 text-xs font-theme-data uppercase tracking-wider hover:opacity-80"
-              style={{
-                borderColor: 'var(--border)',
-                color: 'var(--text-muted)',
-              }}
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
             >
               Cancel
             </button>
@@ -598,8 +597,13 @@ export function ReviewQueueCard({
 
       <style jsx>{`
         @keyframes review-queue-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.6; }
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.6;
+          }
         }
       `}</style>
     </article>

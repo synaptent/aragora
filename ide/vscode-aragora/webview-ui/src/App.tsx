@@ -27,9 +27,7 @@ function App() {
     connectionStatus: 'disconnected',
   });
 
-  const [currentView] = useState<'debate' | 'review'>(
-    window.initialView || 'debate'
-  );
+  const [currentView] = useState<'debate' | 'review'>(window.initialView || 'debate');
 
   // Handle messages from extension
   useEffect(() => {
@@ -46,9 +44,7 @@ function App() {
           setState((prev) => ({
             ...prev,
             debates: prev.debates.some((d) => d.id === message.debate.id)
-              ? prev.debates.map((d) =>
-                  d.id === message.debate.id ? message.debate : d
-                )
+              ? prev.debates.map((d) => (d.id === message.debate.id ? message.debate : d))
               : [...prev.debates, message.debate],
           }));
           break;
@@ -58,9 +54,10 @@ function App() {
             ...prev,
             debates: prev.debates.map((d) => ({
               ...d,
-              messages: d.id === message.message.id.split('-')[0]
-                ? [...d.messages, message.message]
-                : d.messages,
+              messages:
+                d.id === message.message.id.split('-')[0]
+                  ? [...d.messages, message.message]
+                  : d.messages,
             })),
           }));
           break;
@@ -81,9 +78,7 @@ function App() {
           setState((prev) => ({
             ...prev,
             reviews: prev.reviews.some((r) => r.id === message.review.id)
-              ? prev.reviews.map((r) =>
-                  r.id === message.review.id ? message.review : r
-                )
+              ? prev.reviews.map((r) => (r.id === message.review.id ? message.review : r))
               : [...prev.reviews, message.review],
           }));
           break;
@@ -94,19 +89,14 @@ function App() {
             reviews: prev.reviews.map((r) => ({
               ...r,
               comments: r.comments.some((c) => c.id === message.comment.id)
-                ? r.comments.map((c) =>
-                    c.id === message.comment.id ? message.comment : c
-                  )
+                ? r.comments.map((c) => (c.id === message.comment.id ? message.comment : c))
                 : [...r.comments, message.comment],
             })),
           }));
           break;
 
         case 'settings_updated':
-          setState((prev) => ({
-            ...prev,
-            settings: message.settings,
-          }));
+          setState((prev) => ({ ...prev, settings: message.settings }));
           break;
       }
     };
@@ -119,13 +109,13 @@ function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, [vscode]);
 
-  const activeDebate = state.debates.find(
-    (d) => d.status === 'running' || d.status === 'completed'
-  ) || state.debates[state.debates.length - 1];
+  const activeDebate =
+    state.debates.find((d) => d.status === 'running' || d.status === 'completed') ||
+    state.debates[state.debates.length - 1];
 
-  const activeReview = state.reviews.find(
-    (r) => r.status === 'in_progress' || r.status === 'completed'
-  ) || state.reviews[state.reviews.length - 1];
+  const activeReview =
+    state.reviews.find((r) => r.status === 'in_progress' || r.status === 'completed') ||
+    state.reviews[state.reviews.length - 1];
 
   return (
     <div className="app">
@@ -134,12 +124,7 @@ function App() {
           debate={activeDebate}
           connectionStatus={state.connectionStatus}
           onStartDebate={(question, agents, rounds) => {
-            vscode.postMessage({
-              type: 'start_debate',
-              question,
-              agents,
-              rounds,
-            });
+            vscode.postMessage({ type: 'start_debate', question, agents, rounds });
           }}
           onStopDebate={(debateId) => {
             vscode.postMessage({ type: 'stop_debate', debateId });

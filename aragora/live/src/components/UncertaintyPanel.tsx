@@ -26,15 +26,19 @@ interface UncertaintyPanelProps {
   onFollowupCreated?: (followupId: string, task: string) => void;
 }
 
-export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: UncertaintyPanelProps) {
+export function UncertaintyPanel({
+  events = [],
+  debateId,
+  onFollowupCreated,
+}: UncertaintyPanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [exploringCrux, setExploringCrux] = useState<string | null>(null);
   const [exploreError, setExploreError] = useState<string | null>(null);
 
   // Extract uncertainty_analysis events from stream
-  const uncertaintyEvents = useMemo(() =>
-    events.filter(e => e.type === 'uncertainty_analysis'),
-    [events]
+  const uncertaintyEvents = useMemo(
+    () => events.filter((e) => e.type === 'uncertainty_analysis'),
+    [events],
   );
 
   // Get the latest analysis
@@ -83,52 +87,51 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
   };
 
   // Handle explore crux button click
-  const handleExploreCrux = useCallback(async (crux: Crux, idx: number) => {
-    if (!debateId) {
-      setExploreError('No debate ID available');
-      return;
-    }
-
-    const cruxId = crux.id || `crux-${idx}`;
-    setExploringCrux(cruxId);
-    setExploreError(null);
-
-    try {
-      const response = await fetch(`/api/debates/${debateId}/followup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          crux_id: crux.id,
-          task: `Resolve disagreement: ${crux.claim}`,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create follow-up debate');
+  const handleExploreCrux = useCallback(
+    async (crux: Crux, idx: number) => {
+      if (!debateId) {
+        setExploreError('No debate ID available');
+        return;
       }
 
-      const data = await response.json();
-      onFollowupCreated?.(data.followup_id, data.task);
-    } catch (err) {
-      setExploreError(err instanceof Error ? err.message : 'Failed to create follow-up');
-    } finally {
-      setExploringCrux(null);
-    }
-  }, [debateId, onFollowupCreated]);
+      const cruxId = crux.id || `crux-${idx}`;
+      setExploringCrux(cruxId);
+      setExploreError(null);
+
+      try {
+        const response = await fetch(`/api/debates/${debateId}/followup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crux_id: crux.id, task: `Resolve disagreement: ${crux.claim}` }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to create follow-up debate');
+        }
+
+        const data = await response.json();
+        onFollowupCreated?.(data.followup_id, data.task);
+      } catch (err) {
+        setExploreError(err instanceof Error ? err.message : 'Failed to create follow-up');
+      } finally {
+        setExploringCrux(null);
+      }
+    },
+    [debateId, onFollowupCreated],
+  );
 
   return (
     <div className="panel" style={{ padding: 0 }}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="panel-collapsible-header w-full"
-      >
+      <button onClick={() => setExpanded(!expanded)} className="panel-collapsible-header w-full">
         <div className="flex items-center gap-2">
           <span className="text-[var(--acid-cyan)] font-theme-data text-sm">[UNCERTAINTY]</span>
           <span className="text-text-muted text-xs">Disagreement analysis</span>
           {latestAnalysis && (
-            <span className={`text-xs px-1 border ${getDisagreementColor(latestAnalysis.disagreement_type)}`}>
+            <span
+              className={`text-xs px-1 border ${getDisagreementColor(latestAnalysis.disagreement_type)}`}
+            >
               {latestAnalysis.disagreement_type}
             </span>
           )}
@@ -150,7 +153,9 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
               <div className="grid grid-cols-3 gap-2">
                 <div className="border border-[var(--accent)]/20 p-2 text-center">
                   <div className="text-xs text-text-muted">Confidence</div>
-                  <div className={`text-lg font-theme-data ${getConfidenceColor(latestAnalysis.collective_confidence)}`}>
+                  <div
+                    className={`text-lg font-theme-data ${getConfidenceColor(latestAnalysis.collective_confidence)}`}
+                  >
                     {(latestAnalysis.collective_confidence * 100).toFixed(0)}%
                   </div>
                   <div className="text-xs text-text-muted/60">
@@ -159,7 +164,9 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
                 </div>
                 <div className="border border-[var(--accent)]/20 p-2 text-center">
                   <div className="text-xs text-text-muted">Disagreement</div>
-                  <div className={`text-sm font-theme-data capitalize ${getDisagreementColor(latestAnalysis.disagreement_type).split(' ')[1]}`}>
+                  <div
+                    className={`text-sm font-theme-data capitalize ${getDisagreementColor(latestAnalysis.disagreement_type).split(' ')[1]}`}
+                  >
                     {latestAnalysis.disagreement_type}
                   </div>
                   <div className="text-xs text-text-muted/60">
@@ -168,7 +175,9 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
                 </div>
                 <div className="border border-[var(--accent)]/20 p-2 text-center">
                   <div className="text-xs text-text-muted">Calibration</div>
-                  <div className={`text-lg font-theme-data ${getCalibrationColor(latestAnalysis.calibration_quality)}`}>
+                  <div
+                    className={`text-lg font-theme-data ${getCalibrationColor(latestAnalysis.calibration_quality)}`}
+                  >
                     {(latestAnalysis.calibration_quality * 100).toFixed(0)}%
                   </div>
                   <div className="text-xs text-text-muted/60">quality</div>
@@ -180,7 +189,7 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
                 <div className="text-xs text-text-muted">Confidence Range</div>
                 <div className="h-4 bg-bg/50 relative border border-[var(--accent)]/20">
                   {/* Background scale markers */}
-                  {[0.25, 0.5, 0.75].map(mark => (
+                  {[0.25, 0.5, 0.75].map((mark) => (
                     <div
                       key={mark}
                       className="absolute top-0 bottom-0 w-px bg-[var(--accent)]/10"
@@ -228,7 +237,9 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
                         >
                           <div className="flex justify-between items-start gap-2">
                             <span className="text-text flex-1">{crux.claim}</span>
-                            <span className={`shrink-0 ${getConfidenceColor(1 - crux.uncertainty)}`}>
+                            <span
+                              className={`shrink-0 ${getConfidenceColor(1 - crux.uncertainty)}`}
+                            >
                               {(crux.uncertainty * 100).toFixed(0)}% uncertain
                             </span>
                           </div>
@@ -268,18 +279,15 @@ export function UncertaintyPanel({ events = [], debateId, onFollowupCreated }: U
 
               {/* Explanation */}
               <div className="text-xs text-text-muted/50 text-center border-t border-[var(--accent)]/10 pt-2">
-                {latestAnalysis.disagreement_type === 'consensus' && (
-                  'Agents broadly agree on the conclusion.'
-                )}
-                {latestAnalysis.disagreement_type === 'mild' && (
-                  'Minor disagreements exist but overall direction is clear.'
-                )}
-                {latestAnalysis.disagreement_type === 'moderate' && (
-                  'Significant disagreements warrant further debate.'
-                )}
-                {(latestAnalysis.disagreement_type === 'severe' || latestAnalysis.disagreement_type === 'polarized') && (
-                  'Deep disagreement detected. Consider a follow-up debate on cruxes.'
-                )}
+                {latestAnalysis.disagreement_type === 'consensus' &&
+                  'Agents broadly agree on the conclusion.'}
+                {latestAnalysis.disagreement_type === 'mild' &&
+                  'Minor disagreements exist but overall direction is clear.'}
+                {latestAnalysis.disagreement_type === 'moderate' &&
+                  'Significant disagreements warrant further debate.'}
+                {(latestAnalysis.disagreement_type === 'severe' ||
+                  latestAnalysis.disagreement_type === 'polarized') &&
+                  'Deep disagreement detected. Consider a follow-up debate on cruxes.'}
               </div>
             </>
           )}

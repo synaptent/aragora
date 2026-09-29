@@ -8,10 +8,7 @@
  */
 
 // Re-export everything from the modular location
-export {
-  useDebateWebSocket,
-  default as default,
-} from './debate-websocket';
+export { useDebateWebSocket, default as default } from './debate-websocket';
 
 export type {
   TranscriptMessage,
@@ -38,8 +35,4 @@ export {
 } from './debate-websocket';
 
 // Re-export utilities
-export {
-  makeStreamingKey,
-  calculateReconnectDelay,
-  isRetryableError,
-} from './debate-websocket';
+export { makeStreamingKey, calculateReconnectDelay, isRetryableError } from './debate-websocket';

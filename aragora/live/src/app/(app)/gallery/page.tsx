@@ -17,36 +17,39 @@ export default function GalleryPage() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
-  const loadDebates = useCallback(async (targetPage: number, reset = false) => {
-    setLoading(true);
-    try {
-      const client = getClient();
-      const params: Record<string, string | number> = {
-        limit: 12,
-        offset: reset ? 0 : targetPage * 12,
-      };
+  const loadDebates = useCallback(
+    async (targetPage: number, reset = false) => {
+      setLoading(true);
+      try {
+        const client = getClient();
+        const params: Record<string, string | number> = {
+          limit: 12,
+          offset: reset ? 0 : targetPage * 12,
+        };
 
-      if (filter === 'featured') params.featured = 'true';
-      if (filter === 'popular') params.sort = 'popular';
-      if (searchQuery) params.search = searchQuery;
+        if (filter === 'featured') params.featured = 'true';
+        if (filter === 'popular') params.sort = 'popular';
+        if (searchQuery) params.search = searchQuery;
 
-      const response = await client.gallery.list(params);
-      const newDebates = response.entries || [];
+        const response = await client.gallery.list(params);
+        const newDebates = response.entries || [];
 
-      if (reset) {
-        setDebates(newDebates);
-        setPage(0);
-      } else {
-        setDebates(prev => [...prev, ...newDebates]);
-        setPage(targetPage);
+        if (reset) {
+          setDebates(newDebates);
+          setPage(0);
+        } else {
+          setDebates((prev) => [...prev, ...newDebates]);
+          setPage(targetPage);
+        }
+        setHasMore(newDebates.length === 12);
+      } catch (err) {
+        logger.error('Failed to load gallery:', err);
+      } finally {
+        setLoading(false);
       }
-      setHasMore(newDebates.length === 12);
-    } catch (err) {
-      logger.error('Failed to load gallery:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter, searchQuery]);
+    },
+    [filter, searchQuery],
+  );
 
   useEffect(() => {
     loadDebates(0, true);

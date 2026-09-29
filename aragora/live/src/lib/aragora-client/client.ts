@@ -208,21 +208,11 @@ export type {
   ConsensusResult,
 } from './apis/debates';
 
-export type {
-  AgentProfile,
-  LeaderboardEntry,
-} from './apis/agents';
+export type { AgentProfile, LeaderboardEntry } from './apis/agents';
 
-export type {
-  Workflow,
-  WorkflowTemplate,
-  WorkflowExecution,
-} from './apis/workflows';
+export type { Workflow, WorkflowTemplate, WorkflowExecution } from './apis/workflows';
 
-export type {
-  WebSocketState,
-  DebateEvent,
-} from './apis/websocket';
+export type { WebSocketState, DebateEvent } from './apis/websocket';
 
 export type {
   RevenueData,
@@ -280,9 +270,4 @@ export type {
   MoundStats,
 } from './apis/knowledge';
 
-export type {
-  Connector,
-  ConnectorType,
-  SyncOperation,
-  Integration,
-} from './apis/connectors';
+export type { Connector, ConnectorType, SyncOperation, Integration } from './apis/connectors';

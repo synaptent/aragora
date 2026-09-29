@@ -33,13 +33,9 @@ jest.mock('../src/context/AuthContext', () => ({
 // Mock config
 jest.mock('../src/config', () => ({
   DEFAULT_AGENTS: 'claude,gemini,gpt4',
-  DEFAULT_ROUNDS: 9,  // 9-round format default
+  DEFAULT_ROUNDS: 9, // 9-round format default
   DEFAULT_CONSENSUS: 'judge',
-  AGENT_DISPLAY_NAMES: {
-    claude: 'Claude',
-    gemini: 'Gemini',
-    gpt4: 'GPT-4',
-  },
+  AGENT_DISPLAY_NAMES: { claude: 'Claude', gemini: 'Gemini', gpt4: 'GPT-4' },
 }));
 
 describe('DebateInput', () => {
@@ -186,12 +182,7 @@ describe('DebateInput', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              debate_id: 'test-debate-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, debate_id: 'test-debate-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -341,9 +332,7 @@ describe('DebateInput', () => {
       fireEvent.click(submitButton);
 
       await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(
-          expect.stringContaining('Cannot reach the server')
-        );
+        expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot reach the server'));
       });
     });
   });
@@ -425,7 +414,7 @@ describe('DebateInput', () => {
                 { agent: 'codex', suitability: 0.9, domain_match: true },
                 { agent: 'claude', suitability: 0.8, domain_match: true },
               ],
-            })
+            }),
           );
         }
         return Promise.resolve(jsonResponse({}));

@@ -38,8 +38,7 @@ test.describe('OAuth Security', () => {
 
     test('rejects callback with invalid state parameter', async ({ page }) => {
       // Attempt callback with tampered state
-      const callbackUrl =
-        '/auth/callback?code=test-auth-code&state=tampered-invalid-state-xyz';
+      const callbackUrl = '/auth/callback?code=test-auth-code&state=tampered-invalid-state-xyz';
 
       await page.goto(callbackUrl);
       await page.waitForTimeout(2000);
@@ -74,11 +73,9 @@ test.describe('OAuth Security', () => {
       await page.goto('/');
 
       // Find OAuth login buttons (Google, GitHub, etc.)
-      const oauthButtons = page.locator(
-        'button, a'
-      ).filter({
-        hasText: /google|github|microsoft|sign in with|continue with/i,
-      });
+      const oauthButtons = page
+        .locator('button, a')
+        .filter({ hasText: /google|github|microsoft|sign in with|continue with/i });
 
       // Click multiple times (simulating multiple auth attempts)
       const buttonCount = await oauthButtons.count();
@@ -90,12 +87,9 @@ test.describe('OAuth Security', () => {
   });
 
   test.describe('Open Redirect Prevention', () => {
-    test('prevents redirect to external domain after auth', async ({
-      page,
-    }) => {
+    test('prevents redirect to external domain after auth', async ({ page }) => {
       // Attempt to use redirect_uri to external domain
-      const maliciousRedirectUrl =
-        '/auth/callback?redirect_uri=https://evil.com/steal-tokens';
+      const maliciousRedirectUrl = '/auth/callback?redirect_uri=https://evil.com/steal-tokens';
 
       // Mock successful auth but with malicious redirect
       await page.route('**/api/auth/**', async (route) => {
@@ -118,17 +112,11 @@ test.describe('OAuth Security', () => {
 
     test('allows redirect to safe internal paths', async ({ page }) => {
       // Test redirect to valid internal path
-      const safeRedirectUrl =
-        '/auth/callback?code=test-code&state=valid-state&redirect=/dashboard';
+      const safeRedirectUrl = '/auth/callback?code=test-code&state=valid-state&redirect=/dashboard';
 
       // Mock successful auth with safe redirect
       await page.route('**/api/auth/callback**', async (route) => {
-        await route.fulfill({
-          status: 302,
-          headers: {
-            Location: '/dashboard',
-          },
-        });
+        await route.fulfill({ status: 302, headers: { Location: '/dashboard' } });
       });
 
       await page.goto(safeRedirectUrl);
@@ -138,12 +126,9 @@ test.describe('OAuth Security', () => {
       await expect(page).toHaveURL(/\/(dashboard|callback|login|$)/);
     });
 
-    test('sanitizes redirect URL to prevent protocol injection', async ({
-      page,
-    }) => {
+    test('sanitizes redirect URL to prevent protocol injection', async ({ page }) => {
       // Attempt javascript: protocol injection
-      const jsInjectionUrl =
-        '/auth/callback?redirect=javascript:alert(document.cookie)';
+      const jsInjectionUrl = '/auth/callback?redirect=javascript:alert(document.cookie)';
 
       await page.goto(jsInjectionUrl);
       await page.waitForTimeout(1000);
@@ -165,7 +150,7 @@ test.describe('OAuth Security', () => {
             sub: 'user-123',
             exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
             iat: Math.floor(Date.now() / 1000) - 7200,
-          })
+          }),
         );
         const fakeToken = `${header}.${payload}.fake-signature`;
         localStorage.setItem('auth_token', fakeToken);
@@ -173,10 +158,7 @@ test.describe('OAuth Security', () => {
 
       // Mock API to return 401 for expired token
       await page.route('**/api/auth/me', async (route) => {
-        await route.fulfill({
-          status: 401,
-          body: JSON.stringify({ error: 'Token expired' }),
-        });
+        await route.fulfill({ status: 401, body: JSON.stringify({ error: 'Token expired' }) });
       });
 
       await page.goto('/dashboard');
@@ -207,7 +189,7 @@ test.describe('OAuth Security', () => {
             sub: 'user-123',
             exp: Math.floor(Date.now() / 1000) + 60, // Expires in 1 minute
             iat: Math.floor(Date.now() / 1000),
-          })
+          }),
         );
         const fakeToken = `${header}.${payload}.fake-signature`;
         localStorage.setItem('auth_token', fakeToken);
@@ -219,10 +201,7 @@ test.describe('OAuth Security', () => {
         _refreshAttempted = true;
         await route.fulfill({
           status: 200,
-          body: JSON.stringify({
-            access_token: 'new-access-token',
-            expires_in: 3600,
-          }),
+          body: JSON.stringify({ access_token: 'new-access-token', expires_in: 3600 }),
         });
       });
 
@@ -230,9 +209,7 @@ test.describe('OAuth Security', () => {
       await page.route('**/api/auth/me', async (route) => {
         await route.fulfill({
           status: 200,
-          body: JSON.stringify({
-            user: { id: 'user-123', email: 'test@example.com' },
-          }),
+          body: JSON.stringify({ user: { id: 'user-123', email: 'test@example.com' } }),
         });
       });
 
@@ -254,19 +231,14 @@ test.describe('OAuth Security', () => {
 
       // Mock logout endpoint
       await page.route('**/api/auth/logout', async (route) => {
-        await route.fulfill({
-          status: 200,
-          body: JSON.stringify({ success: true }),
-        });
+        await route.fulfill({ status: 200, body: JSON.stringify({ success: true }) });
       });
 
       await page.goto('/');
       await page.waitForTimeout(1000);
 
       // Trigger logout (click logout button if visible)
-      const logoutButton = page.locator('button, a').filter({
-        hasText: /log ?out|sign ?out/i,
-      });
+      const logoutButton = page.locator('button, a').filter({ hasText: /log ?out|sign ?out/i });
 
       if ((await logoutButton.count()) > 0 && (await logoutButton.first().isVisible())) {
         await logoutButton.first().click();
@@ -306,8 +278,7 @@ test.describe('OAuth Security', () => {
 
     test('handles OAuth cancelled by user', async ({ page }) => {
       // User cancelled OAuth flow
-      const cancelledUrl =
-        '/auth/callback?error=user_cancelled_login';
+      const cancelledUrl = '/auth/callback?error=user_cancelled_login';
 
       await page.goto(cancelledUrl);
       await page.waitForTimeout(1000);

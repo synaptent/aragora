@@ -1,0 +1,6 @@
+10036	IGNORE	HTTP Server Response Header: demo server fingerprint; production edge hardening is separate.
+10049	IGNORE	Content Cacheability: review cache directives separately for authenticated production responses.
+10055	IGNORE	CSP: existing demo policy directives; production browser policy hardening is separate.
+10063	IGNORE	Permissions Policy Header Not Set: browser feature policy is not configured on this demo API.
+90004	IGNORE	Insufficient Site Isolation Against Spectre: cross-origin isolation headers are deferred for the demo.
+100000	WARN	Server Error: inspect all 5xx; only documented accounting 503 not_configured is expected, never 500.

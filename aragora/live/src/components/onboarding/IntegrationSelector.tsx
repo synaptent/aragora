@@ -20,14 +20,63 @@ interface IntegrationSelectorProps {
 }
 
 const DEFAULT_PROVIDERS: ProviderStatus[] = [
-  { id: 'anthropic', name: 'Anthropic (Claude)', icon: 'A', category: 'ai', connected: false, required: true },
-  { id: 'openai', name: 'OpenAI (GPT)', icon: 'O', category: 'ai', connected: false, required: false },
-  { id: 'openrouter', name: 'OpenRouter', icon: 'R', category: 'ai', connected: false, required: false },
-  { id: 'mistral', name: 'Mistral AI', icon: 'M', category: 'ai', connected: false, required: false },
+  {
+    id: 'anthropic',
+    name: 'Anthropic (Claude)',
+    icon: 'A',
+    category: 'ai',
+    connected: false,
+    required: true,
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI (GPT)',
+    icon: 'O',
+    category: 'ai',
+    connected: false,
+    required: false,
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    icon: 'R',
+    category: 'ai',
+    connected: false,
+    required: false,
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    icon: 'M',
+    category: 'ai',
+    connected: false,
+    required: false,
+  },
   { id: 'slack', name: 'Slack', icon: 'S', category: 'channel', connected: false, required: false },
-  { id: 'github', name: 'GitHub', icon: 'G', category: 'channel', connected: false, required: false },
-  { id: 'email', name: 'Email (SMTP)', icon: 'E', category: 'channel', connected: false, required: false },
-  { id: 'supabase', name: 'Supabase', icon: 'D', category: 'data', connected: false, required: false },
+  {
+    id: 'github',
+    name: 'GitHub',
+    icon: 'G',
+    category: 'channel',
+    connected: false,
+    required: false,
+  },
+  {
+    id: 'email',
+    name: 'Email (SMTP)',
+    icon: 'E',
+    category: 'channel',
+    connected: false,
+    required: false,
+  },
+  {
+    id: 'supabase',
+    name: 'Supabase',
+    icon: 'D',
+    category: 'data',
+    connected: false,
+    required: false,
+  },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -54,10 +103,7 @@ export function IntegrationSelector({ onComplete, onSkip, onBack }: IntegrationS
           const data = await res.json();
           const statusMap: Record<string, boolean> = data.integrations ?? {};
           setProviders((prev) =>
-            prev.map((p) => ({
-              ...p,
-              connected: statusMap[p.id] ?? p.connected,
-            }))
+            prev.map((p) => ({ ...p, connected: statusMap[p.id] ?? p.connected })),
           );
         }
       } catch (err) {
@@ -87,8 +133,8 @@ export function IntegrationSelector({ onComplete, onSkip, onBack }: IntegrationS
           Connect Your Tools
         </h2>
         <p className="font-theme-data text-[var(--text-muted)] text-sm">
-          Aragora works best with multiple AI providers for diverse debate perspectives.
-          At least one AI provider is required.
+          Aragora works best with multiple AI providers for diverse debate perspectives. At least
+          one AI provider is required.
         </p>
       </div>
 
@@ -119,25 +165,33 @@ export function IntegrationSelector({ onComplete, onSkip, onBack }: IntegrationS
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`w-6 h-6 flex items-center justify-center text-xs font-theme-data font-bold ${
-                          provider.connected
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-[var(--border)] text-[var(--text-muted)]'
-                        }`}>
+                        <span
+                          className={`w-6 h-6 flex items-center justify-center text-xs font-theme-data font-bold ${
+                            provider.connected
+                              ? 'bg-green-500/20 text-green-400'
+                              : 'bg-[var(--border)] text-[var(--text-muted)]'
+                          }`}
+                        >
                           {provider.icon}
                         </span>
                         <div>
-                          <span className="text-sm font-theme-data text-[var(--text)]">{provider.name}</span>
+                          <span className="text-sm font-theme-data text-[var(--text)]">
+                            {provider.name}
+                          </span>
                           {provider.required && (
-                            <span className="ml-2 text-[10px] font-theme-data text-yellow-400">REQUIRED</span>
+                            <span className="ml-2 text-[10px] font-theme-data text-yellow-400">
+                              REQUIRED
+                            </span>
                           )}
                         </div>
                       </div>
-                      <span className={`text-xs font-theme-data px-2 py-0.5 ${
-                        provider.connected
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]'
-                      }`}>
+                      <span
+                        className={`text-xs font-theme-data px-2 py-0.5 ${
+                          provider.connected
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]'
+                        }`}
+                      >
                         {provider.connected ? 'CONNECTED' : 'NOT SET'}
                       </span>
                     </div>
@@ -150,11 +204,13 @@ export function IntegrationSelector({ onComplete, onSkip, onBack }: IntegrationS
       )}
 
       {/* Status summary */}
-      <div className={`p-3 border text-xs font-theme-data ${
-        hasRequiredProvider
-          ? 'border-green-500/30 bg-green-500/5 text-green-400'
-          : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-400'
-      }`}>
+      <div
+        className={`p-3 border text-xs font-theme-data ${
+          hasRequiredProvider
+            ? 'border-green-500/30 bg-green-500/5 text-green-400'
+            : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-400'
+        }`}
+      >
         {hasRequiredProvider
           ? `> ${connectedCount} provider${connectedCount > 1 ? 's' : ''} connected. You're ready to start debates.`
           : '! At least one AI provider is required. Configure API keys in Settings.'}

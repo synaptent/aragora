@@ -2,6 +2,33 @@
 // Docusaurus Configuration for Aragora Documentation Portal
 // See: https://docusaurus.io/docs/configuration
 
+// Analytics is a build-time decision: without a PostHog project key the plugin
+// is not registered at all, so the emitted HTML carries no PostHog snippet.
+const posthogApiKey = process.env.POSTHOG_API_KEY;
+
+/** @type {import('@docusaurus/types').PluginConfig[]} */
+const plugins = [
+  // OpenAPI documentation plugin
+  [
+    'docusaurus-plugin-openapi-docs',
+    {
+      id: 'api',
+      docsPluginId: 'classic',
+      config: {
+        aragora: {
+          specPath: '../docs/api/openapi.json',
+          outputDir: 'docs/api-reference',
+          sidebarOptions: { groupPathsBy: 'tag' },
+        },
+      },
+    },
+  ],
+];
+
+if (posthogApiKey) {
+  plugins.push([require.resolve('posthog-docusaurus'), { apiKey: posthogApiKey }]);
+}
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Aragora Documentation',
@@ -22,15 +49,10 @@ const config = {
   markdown: {
     preprocessor: ({ fileContent }) => fileContent,
     parseFrontMatter: undefined,
-    hooks: {
-      onBrokenMarkdownLinks: 'warn',
-    },
+    hooks: { onBrokenMarkdownLinks: 'warn' },
   },
 
-  i18n: {
-    defaultLocale: 'en',
-    locales: ['en'],
-  },
+  i18n: { defaultLocale: 'en', locales: ['en'] },
 
   presets: [
     [
@@ -43,37 +65,13 @@ const config = {
           showLastUpdateTime: true,
           showLastUpdateAuthor: true,
         },
-        blog: {
-          showReadingTime: true,
-          blogSidebarTitle: 'Recent posts',
-          blogSidebarCount: 5,
-        },
-        theme: {
-          customCss: './src/css/custom.css',
-        },
+        blog: { showReadingTime: true, blogSidebarTitle: 'Recent posts', blogSidebarCount: 5 },
+        theme: { customCss: './src/css/custom.css' },
       }),
     ],
   ],
 
-  plugins: [
-    // OpenAPI documentation plugin
-    [
-      'docusaurus-plugin-openapi-docs',
-      {
-        id: 'api',
-        docsPluginId: 'classic',
-        config: {
-          aragora: {
-            specPath: '../docs/api/openapi.json',
-            outputDir: 'docs/api-reference',
-            sidebarOptions: {
-              groupPathsBy: 'tag',
-            },
-          },
-        },
-      },
-    ],
-  ],
+  plugins,
 
   themes: ['docusaurus-theme-openapi-docs'],
 
@@ -81,10 +79,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       // Default to light/warm theme to match aragora.ai
-      colorMode: {
-        defaultMode: 'light',
-        respectPrefersColorScheme: true,
-      },
+      colorMode: { defaultMode: 'light', respectPrefersColorScheme: true },
 
       // Social card
       image: 'img/aragora-social-card.png',
@@ -92,10 +87,7 @@ const config = {
       // Navbar
       navbar: {
         title: 'Aragora',
-        logo: {
-          alt: 'Aragora Logo',
-          src: 'img/logo.svg',
-        },
+        logo: { alt: 'Aragora Logo', src: 'img/logo.svg' },
         items: [
           {
             type: 'docSidebar',
@@ -103,39 +95,17 @@ const config = {
             position: 'left',
             label: 'Getting Started',
           },
-          {
-            type: 'docSidebar',
-            sidebarId: 'guidesSidebar',
-            position: 'left',
-            label: 'Guides',
-          },
-          {
-            type: 'docSidebar',
-            sidebarId: 'apiSidebar',
-            position: 'left',
-            label: 'API Reference',
-          },
+          { type: 'docSidebar', sidebarId: 'guidesSidebar', position: 'left', label: 'Guides' },
+          { type: 'docSidebar', sidebarId: 'apiSidebar', position: 'left', label: 'API Reference' },
           {
             type: 'docSidebar',
             sidebarId: 'referenceSidebar',
             position: 'left',
             label: 'Reference',
           },
-          {
-            href: 'https://aragora.ai',
-            label: 'aragora.ai',
-            position: 'right',
-          },
-          {
-            href: 'https://github.com/synaptent/aragora',
-            label: 'GitHub',
-            position: 'right',
-          },
-          {
-            href: 'https://status.aragora.ai',
-            label: 'Status',
-            position: 'right',
-          },
+          { href: 'https://aragora.ai', label: 'aragora.ai', position: 'right' },
+          { href: 'https://github.com/synaptent/aragora', label: 'GitHub', position: 'right' },
+          { href: 'https://status.aragora.ai', label: 'Status', position: 'right' },
         ],
       },
 
@@ -146,18 +116,9 @@ const config = {
           {
             title: 'Docs',
             items: [
-              {
-                label: 'Getting Started',
-                to: '/docs/getting-started',
-              },
-              {
-                label: 'API Reference',
-                to: '/docs/api-reference',
-              },
-              {
-                label: 'SDK Guide',
-                to: '/docs/guides/sdk',
-              },
+              { label: 'Getting Started', to: '/docs/getting-started' },
+              { label: 'API Reference', to: '/docs/api-reference' },
+              { label: 'SDK Guide', to: '/docs/guides/sdk' },
             ],
           },
           {
@@ -167,31 +128,16 @@ const config = {
                 label: 'GitHub Discussions',
                 href: 'https://github.com/synaptent/aragora/discussions',
               },
-              {
-                label: 'Discord',
-                href: 'https://discord.gg/aragora',
-              },
-              {
-                label: 'Twitter',
-                href: 'https://twitter.com/aragora_ai',
-              },
+              { label: 'Discord', href: 'https://discord.gg/aragora' },
+              { label: 'Twitter', href: 'https://twitter.com/aragora_ai' },
             ],
           },
           {
             title: 'Company',
             items: [
-              {
-                label: 'Blog',
-                to: '/blog',
-              },
-              {
-                label: 'Privacy Policy',
-                href: 'https://aragora.ai/privacy',
-              },
-              {
-                label: 'Terms of Service',
-                href: 'https://aragora.ai/terms',
-              },
+              { label: 'Blog', to: '/blog' },
+              { label: 'Privacy Policy', href: 'https://aragora.ai/privacy' },
+              { label: 'Terms of Service', href: 'https://aragora.ai/terms' },
             ],
           },
         ],

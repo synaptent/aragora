@@ -48,9 +48,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     try {
-      const response = await fetch(`${apiUrl}?limit=20`, {
-        credentials: 'include',
-      });
+      const response = await fetch(`${apiUrl}?limit=20`, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch notifications');
       const data = await response.json();
       setNotifications(data.notifications || []);
@@ -63,9 +61,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   // Fetch unread count
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const response = await fetch(`${apiUrl}/count`, {
-        credentials: 'include',
-      });
+      const response = await fetch(`${apiUrl}/count`, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch count');
       const data = await response.json();
       setUnreadCount(data.unread_count || 0);
@@ -78,28 +74,22 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   const markAsRead = useCallback(
     async (notificationId: string) => {
       try {
-        await fetch(`${apiUrl}/${notificationId}/read`, {
-          method: 'POST',
-          credentials: 'include',
-        });
+        await fetch(`${apiUrl}/${notificationId}/read`, { method: 'POST', credentials: 'include' });
         setNotifications((prev) =>
-          prev.map((n) => (n.id === notificationId ? { ...n, status: 'read' as const } : n))
+          prev.map((n) => (n.id === notificationId ? { ...n, status: 'read' as const } : n)),
         );
         setUnreadCount((prev) => Math.max(0, prev - 1));
       } catch {
         // Silently fail
       }
     },
-    [apiUrl]
+    [apiUrl],
   );
 
   // Mark all as read
   const markAllAsRead = useCallback(async () => {
     try {
-      await fetch(`${apiUrl}/read-all`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await fetch(`${apiUrl}/read-all`, { method: 'POST', credentials: 'include' });
       setNotifications((prev) => prev.map((n) => ({ ...n, status: 'read' as const })));
       setUnreadCount(0);
     } catch {
@@ -120,7 +110,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
         // Silently fail
       }
     },
-    [apiUrl]
+    [apiUrl],
   );
 
   // Handle notification click
@@ -131,7 +121,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       }
       onNotificationClick?.(notification);
     },
-    [markAsRead, onNotificationClick]
+    [markAsRead, onNotificationClick],
   );
 
   // Initial fetch and polling
@@ -291,19 +281,34 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
           <div style={{ padding: '8px' }}>
             {loading ? (
               <div
-                style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}
+                style={{
+                  padding: '20px',
+                  textAlign: 'center',
+                  color: '#666',
+                  fontFamily: 'monospace',
+                }}
               >
                 Loading...
               </div>
             ) : error ? (
               <div
-                style={{ padding: '20px', textAlign: 'center', color: '#ff4444', fontFamily: 'monospace' }}
+                style={{
+                  padding: '20px',
+                  textAlign: 'center',
+                  color: '#ff4444',
+                  fontFamily: 'monospace',
+                }}
               >
                 {error}
               </div>
             ) : notifications.length === 0 ? (
               <div
-                style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}
+                style={{
+                  padding: '20px',
+                  textAlign: 'center',
+                  color: '#666',
+                  fontFamily: 'monospace',
+                }}
               >
                 No notifications
               </div>
@@ -317,9 +322,12 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                     borderRadius: '4px',
                     marginBottom: '4px',
                     cursor: 'pointer',
-                    background: notification.status === 'unread' ? 'rgba(0, 255, 0, 0.1)' : 'transparent',
+                    background:
+                      notification.status === 'unread' ? 'rgba(0, 255, 0, 0.1)' : 'transparent',
                     borderLeft:
-                      notification.status === 'unread' ? '3px solid #00ff00' : '3px solid transparent',
+                      notification.status === 'unread'
+                        ? '3px solid #00ff00'
+                        : '3px solid transparent',
                   }}
                 >
                   <div style={{ display: 'flex', gap: '12px' }}>
@@ -386,13 +394,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
 
           {/* Footer */}
           {notifications.length > 0 && (
-            <div
-              style={{
-                padding: '12px 16px',
-                borderTop: '1px solid #333',
-                textAlign: 'center',
-              }}
-            >
+            <div style={{ padding: '12px 16px', borderTop: '1px solid #333', textAlign: 'center' }}>
               <a
                 href="/knowledge/notifications"
                 style={{
