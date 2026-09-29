@@ -28,7 +28,7 @@ EXPECTED_EXACT_EXCLUDED_FILES = {
     "auth/signup_handlers.py",
     "auth/sso_handlers.py",
     "_oauth/oidc.py",
-    "oauth_wizard.py",
+    "oauth/oauth_wizard.py",
     "webhook_management.py",
     "features/email_webhooks.py",
     "base.py",
@@ -46,7 +46,7 @@ EXPECTED_EXACT_EXCLUDED_FILES = {
     "auth/store.py",
     "features/marketplace/store.py",
     "openclaw/store.py",
-    "explainability_store.py",
+    "decisions/explainability_store.py",
 }
 
 

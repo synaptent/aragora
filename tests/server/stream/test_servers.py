@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aragora.server.stream.servers import AiohttpUnifiedServer
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 from aragora.server.stream.state_manager import LoopInstance
 
 

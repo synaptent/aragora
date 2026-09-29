@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import dataclass
 
@@ -210,6 +211,45 @@ class TestRecordDebateTokens:
             # Should still aggregate tokens even if recording failed
             assert result["total_tokens"] == 1500
             assert result["agents_recorded"] == 0  # Recording failed
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("attributes", "expected_provider"),
+        [
+            ({"provider": None, "agent_type": None}, "unknown"),
+            ({"provider": "", "agent_type": None}, "unknown"),
+            ({"provider": None}, "unknown"),
+            ({}, "unknown"),
+            ({"provider": None, "agent_type": "openai"}, "openai"),
+            ({"agent_type": "gemini"}, "gemini"),
+            ({"provider": "anthropic", "agent_type": "api"}, "anthropic"),
+        ],
+    )
+    async def test_provider_is_always_a_string(self, mock_meter, attributes, expected_provider):
+        """Missing or None providers are recorded as "unknown"; real identifiers pass through."""
+        agent = SimpleNamespace(
+            name="plain-agent",
+            model="test-model",
+            metrics=None,
+            total_tokens_in=10,
+            total_tokens_out=5,
+            **attributes,
+        )
+
+        with patch(
+            "aragora.services.usage_metering.get_usage_meter",
+            return_value=mock_meter,
+        ):
+            result = await record_debate_tokens(
+                org_id="org-123",
+                debate_id="debate-456",
+                agents=[agent],
+            )
+
+        assert result["agents_recorded"] == 1
+        provider = mock_meter.record_token_usage.call_args.kwargs["provider"]
+        assert isinstance(provider, str)
+        assert provider == expected_provider
 
 
 class TestRecordAgentTokens:

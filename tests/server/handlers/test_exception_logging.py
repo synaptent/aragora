@@ -165,7 +165,7 @@ class TestInvoicesLogging:
         # Check that the logging statements exist in the source code
         from pathlib import Path
 
-        invoices_path = Path("aragora/server/handlers/invoices.py")
+        invoices_path = Path("aragora/server/handlers/finance/invoices.py")
         assert invoices_path.exists(), "Invoices handler should exist"
 
         content = invoices_path.read_text()

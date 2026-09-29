@@ -63,7 +63,7 @@ class TestCreateCheckpointTool:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.server.storage": mock_storage,
+                "aragora.storage.debate_storage": mock_storage,
                 "aragora.debate.checkpoint": mock_checkpoint_mod,
                 "aragora.core": mock_core,
                 "aragora.config.settings": mock_settings,
@@ -88,7 +88,7 @@ class TestCreateCheckpointTool:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.server.storage": mock_storage,
+                "aragora.storage.debate_storage": mock_storage,
                 "aragora.debate.checkpoint": mock_checkpoint_mod,
                 "aragora.core": mock_core,
                 "aragora.config.settings": mock_settings,
@@ -138,7 +138,7 @@ class TestCreateCheckpointTool:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.server.storage": mock_storage,
+                "aragora.storage.debate_storage": mock_storage,
                 "aragora.debate.checkpoint": mock_checkpoint_mod,
                 "aragora.core": mock_core,
                 "aragora.config.settings": mock_settings,
@@ -195,7 +195,7 @@ class TestCreateCheckpointTool:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.server.storage": mock_storage,
+                "aragora.storage.debate_storage": mock_storage,
                 "aragora.core": mock_core,
                 "aragora.debate.checkpoint": broken,
             },
