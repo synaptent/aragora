@@ -154,3 +154,13 @@ reports. It is independent of required-check umbrellas. The existing
   The tool regenerated the census to 35 entries with
   `frozen_from_ref=0074a58167555387aab1cbf026f03963e156fbcc` and
   `frozen_at=2026-09-05T19:59:22Z`. It is shrink-only again.
+- The operator's `v1alpha1` API keeps three `float64` status fields:
+  `AragoraClusterStatus` `requestsPerMinute` and `errorRate`
+  (`aragora-operator/api/v1alpha1/aragoracluster_types.go`) and
+  `AragoraInstanceStatus` `averageLatencyMs`
+  (`aragora-operator/api/v1alpha1/aragorainstance_types.go`).
+  controller-gen v0.22.0 refuses float fields in CRDs, so the operator
+  Makefile's `manifests` target passes `crd:allowDangerousTypes=true`.
+  Changing the field types now would break the published `v1alpha1` schema.
+  Retire the flag with a `v1alpha2` API that stores these values as
+  `resource.Quantity` or strings, plus a conversion from `v1alpha1`.

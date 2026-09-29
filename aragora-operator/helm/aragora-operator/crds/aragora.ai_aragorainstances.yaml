@@ -1,0 +1,429 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: aragorainstances.aragora.ai
+spec:
+  group: aragora.ai
+  names:
+    kind: AragoraInstance
+    listKind: AragoraInstanceList
+    plural: aragorainstances
+    shortNames:
+    - ai
+    singular: aragorainstance
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterRef
+      name: Cluster
+      type: string
+    - jsonPath: .spec.role
+      name: Role
+      type: string
+    - jsonPath: .status.currentReplicas
+      name: Replicas
+      type: integer
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AragoraInstance is the Schema for the aragorainstances API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AragoraInstanceSpec defines the desired state of AragoraInstance
+            properties:
+              capabilities:
+                description: Capabilities defines what this instance can handle
+                items:
+                  type: string
+                type: array
+              clusterRef:
+                description: ClusterRef references the parent AragoraCluster
+                type: string
+              labels:
+                additionalProperties:
+                  type: string
+                description: Labels for routing and filtering
+                type: object
+              maxConcurrentDebates:
+                default: 10
+                description: MaxConcurrentDebates limits concurrent debates on this
+                  instance
+                minimum: 1
+                type: integer
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector for scheduling
+                type: object
+              priority:
+                default: 50
+                description: Priority for task scheduling (higher = more priority)
+                maximum: 100
+                minimum: 0
+                type: integer
+              resources:
+                description: Resources overrides the cluster-level resources
+                properties:
+                  cpu:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    default: "1"
+                    description: CPU is the CPU limit
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  memory:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    default: 2Gi
+                    description: Memory is the memory limit
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  requestsCPU:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RequestsCPU is the CPU request
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  requestsMemory:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RequestsMemory is the memory request
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                type: object
+              role:
+                default: worker
+                description: Role specifies the instance role (worker, coordinator,
+                  gateway)
+                enum:
+                - worker
+                - coordinator
+                - gateway
+                type: string
+              scaling:
+                description: Scaling configures auto-scaling behavior
+                properties:
+                  behavior:
+                    description: Behavior customizes scaling behavior
+                    properties:
+                      scaleDown:
+                        description: ScaleDown defines scale-down policies
+                        properties:
+                          policies:
+                            description: Policies are the scaling policies
+                            items:
+                              description: ScalingPolicyRule defines a single scaling
+                                policy rule
+                              properties:
+                                periodSeconds:
+                                  description: PeriodSeconds is the period for this
+                                    policy
+                                  format: int32
+                                  type: integer
+                                type:
+                                  description: Type is the type of scaling (Pods or
+                                    Percent)
+                                  enum:
+                                  - Pods
+                                  - Percent
+                                  type: string
+                                value:
+                                  description: Value is the value for this policy
+                                  format: int32
+                                  type: integer
+                              required:
+                              - periodSeconds
+                              - type
+                              - value
+                              type: object
+                            type: array
+                          stabilizationWindowSeconds:
+                            description: StabilizationWindowSeconds is the stabilization
+                              window
+                            format: int32
+                            type: integer
+                        type: object
+                      scaleUp:
+                        description: ScaleUp defines scale-up policies
+                        properties:
+                          policies:
+                            description: Policies are the scaling policies
+                            items:
+                              description: ScalingPolicyRule defines a single scaling
+                                policy rule
+                              properties:
+                                periodSeconds:
+                                  description: PeriodSeconds is the period for this
+                                    policy
+                                  format: int32
+                                  type: integer
+                                type:
+                                  description: Type is the type of scaling (Pods or
+                                    Percent)
+                                  enum:
+                                  - Pods
+                                  - Percent
+                                  type: string
+                                value:
+                                  description: Value is the value for this policy
+                                  format: int32
+                                  type: integer
+                              required:
+                              - periodSeconds
+                              - type
+                              - value
+                              type: object
+                            type: array
+                          stabilizationWindowSeconds:
+                            description: StabilizationWindowSeconds is the stabilization
+                              window
+                            format: int32
+                            type: integer
+                        type: object
+                    type: object
+                  enabled:
+                    default: false
+                    description: Enabled enables auto-scaling
+                    type: boolean
+                  maxReplicas:
+                    default: 10
+                    description: MaxReplicas is the maximum replica count
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  metric:
+                    default: debates_per_second
+                    description: Metric is the scaling metric
+                    enum:
+                    - debates_per_second
+                    - cpu
+                    - memory
+                    - queue_depth
+                    type: string
+                  minReplicas:
+                    default: 1
+                    description: MinReplicas is the minimum replica count
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  scaleDownStabilizationWindowSeconds:
+                    default: 300
+                    description: ScaleDownStabilizationWindowSeconds is the stabilization
+                      window
+                    format: int32
+                    type: integer
+                  target:
+                    description: Target is the target value for the metric
+                    minimum: 1
+                    type: integer
+                type: object
+              tolerations:
+                description: Tolerations for scheduling
+                items:
+                  description: |-
+                    The pod this Toleration is attached to tolerates any taint that matches
+                    the triple <key,value,effect> using the matching operator <operator>.
+                  properties:
+                    effect:
+                      description: |-
+                        Effect indicates the taint effect to match. Empty means match all taint effects.
+                        When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                      type: string
+                    key:
+                      description: |-
+                        Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                        If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                      type: string
+                    operator:
+                      description: |-
+                        Operator represents a key's relationship to the value.
+                        Valid operators are Exists and Equal. Defaults to Equal.
+                        Exists is equivalent to wildcard for value, so that a pod can
+                        tolerate all taints of a particular category.
+                      type: string
+                    tolerationSeconds:
+                      description: |-
+                        TolerationSeconds represents the period of time the toleration (which must be
+                        of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                        it is not set, which means tolerate the taint forever (do not evict). Zero and
+                        negative values will be treated as 0 (evict immediately) by the system.
+                      format: int64
+                      type: integer
+                    value:
+                      description: |-
+                        Value is the taint value the toleration matches to.
+                        If the operator is Exists, the value should be empty, otherwise just a regular string.
+                      type: string
+                  type: object
+                type: array
+            required:
+            - clusterRef
+            type: object
+          status:
+            description: AragoraInstanceStatus defines the observed state of AragoraInstance
+            properties:
+              activeDebates:
+                description: ActiveDebates is the number of active debates
+                type: integer
+              averageLatencyMs:
+                description: AverageLatencyMs is the average debate latency in milliseconds
+                type: number
+              conditions:
+                description: Conditions represent the latest available observations
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              currentReplicas:
+                description: CurrentReplicas is the current number of replicas
+                format: int32
+                type: integer
+              desiredReplicas:
+                description: DesiredReplicas is the desired number of replicas
+                format: int32
+                type: integer
+              lastScaleTime:
+                description: LastScaleTime is when the instance was last scaled
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the last observed generation
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the current phase of the instance
+                enum:
+                - Pending
+                - Starting
+                - Running
+                - Draining
+                - Terminated
+                - Failed
+                type: string
+              podStatuses:
+                description: PodStatuses shows the status of individual pods
+                items:
+                  description: PodStatus represents the status of a single pod
+                  properties:
+                    activeDebates:
+                      description: ActiveDebates is the number of active debates on
+                        this pod
+                      type: integer
+                    ip:
+                      description: IP is the pod IP
+                      type: string
+                    name:
+                      description: Name is the pod name
+                      type: string
+                    node:
+                      description: Node is the node the pod is scheduled on
+                      type: string
+                    ready:
+                      description: Ready indicates if the pod is ready
+                      type: boolean
+                  required:
+                  - name
+                  - ready
+                  type: object
+                type: array
+              ready:
+                description: Ready indicates if the instance is ready
+                type: boolean
+              totalDebatesProcessed:
+                description: TotalDebatesProcessed is the total debates processed
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      scale:
+        labelSelectorPath: .status.selector
+        specReplicasPath: .spec.scaling.minReplicas
+        statusReplicasPath: .status.currentReplicas
+      status: {}

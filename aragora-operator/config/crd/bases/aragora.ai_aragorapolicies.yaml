@@ -1,0 +1,544 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: aragorapolicies.aragora.ai
+spec:
+  group: aragora.ai
+  names:
+    kind: AragoraPolicy
+    listKind: AragoraPolicyList
+    plural: aragorapolicies
+    shortNames:
+    - ap
+    singular: aragorapolicy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterRef
+      name: Cluster
+      type: string
+    - jsonPath: .spec.priority
+      name: Priority
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.applied
+      name: Applied
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AragoraPolicy is the Schema for the aragorapolicies API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AragoraPolicySpec defines the desired state of AragoraPolicy
+            properties:
+              accessControl:
+                description: AccessControl defines access control policies
+                properties:
+                  allowedNamespaces:
+                    description: AllowedNamespaces lists K8s namespaces that can access
+                      the cluster
+                    items:
+                      type: string
+                    type: array
+                  allowedRoles:
+                    description: AllowedRoles lists roles that can access the cluster
+                    items:
+                      type: string
+                    type: array
+                  allowedServiceAccounts:
+                    description: AllowedServiceAccounts lists service accounts that
+                      can access
+                    items:
+                      type: string
+                    type: array
+                  ipWhitelist:
+                    description: IPWhitelist lists allowed IP ranges
+                    items:
+                      type: string
+                    type: array
+                  mfaRequired:
+                    default: false
+                    description: MFARequired requires MFA for access
+                    type: boolean
+                  requireAuthentication:
+                    default: true
+                    description: RequireAuthentication requires authentication for
+                      all requests
+                    type: boolean
+                type: object
+              auditLogging:
+                description: AuditLogging configures audit logging
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled enables audit logging
+                    type: boolean
+                  externalSink:
+                    description: ExternalSink sends logs to external system
+                    properties:
+                      endpoint:
+                        description: Endpoint is the sink endpoint
+                        type: string
+                      secretRef:
+                        description: SecretRef references credentials
+                        type: string
+                      type:
+                        description: Type is the sink type (elasticsearch, splunk,
+                          s3, webhook)
+                        enum:
+                        - elasticsearch
+                        - splunk
+                        - s3
+                        - webhook
+                        type: string
+                    required:
+                    - endpoint
+                    - type
+                    type: object
+                  logLevel:
+                    default: metadata
+                    description: LogLevel sets the audit log level (none, metadata,
+                      request, requestresponse)
+                    enum:
+                    - none
+                    - metadata
+                    - request
+                    - requestresponse
+                    type: string
+                  retentionDays:
+                    default: 90
+                    description: RetentionDays is how long to retain audit logs
+                    minimum: 1
+                    type: integer
+                type: object
+              clusterRef:
+                description: ClusterRef references the target AragoraCluster
+                type: string
+              contentFilters:
+                description: ContentFilters defines content filtering policies
+                items:
+                  description: ContentFilter defines content filtering rules
+                  properties:
+                    action:
+                      default: log
+                      description: Action defines what happens on match (block, warn,
+                        log)
+                      enum:
+                      - block
+                      - warn
+                      - log
+                      type: string
+                    categories:
+                      description: Categories for ML-based filtering
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name is the filter name
+                      type: string
+                    pattern:
+                      description: Pattern is the filter pattern (for blocklist/regex)
+                      type: string
+                    threshold:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Threshold for ML-based filtering (0-1)
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    type:
+                      description: Type is the filter type (blocklist, regex, ml)
+                      enum:
+                      - blocklist
+                      - regex
+                      - ml
+                      type: string
+                  required:
+                  - name
+                  - type
+                  type: object
+                type: array
+              costLimits:
+                description: CostLimits defines cost control policies
+                properties:
+                  alertThresholdPercent:
+                    default: 80
+                    description: AlertThresholdPercent triggers an alert at this percentage
+                      of budget
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                  dailyLimitUSD:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: DailyLimitUSD is the daily cost limit in USD
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  hardLimit:
+                    default: false
+                    description: HardLimit enforces a hard limit (stops processing)
+                    type: boolean
+                  monthlyLimitUSD:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MonthlyLimitUSD is the monthly cost limit in USD
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  notificationChannels:
+                    description: NotificationChannels for cost alerts
+                    items:
+                      description: NotificationChannel defines a notification target
+                      properties:
+                        endpoint:
+                          description: Endpoint is the notification endpoint
+                          type: string
+                        secretRef:
+                          description: SecretRef references a secret for authentication
+                          type: string
+                        type:
+                          description: Type is the channel type (slack, email, webhook,
+                            pagerduty)
+                          enum:
+                          - slack
+                          - email
+                          - webhook
+                          - pagerduty
+                          type: string
+                      required:
+                      - endpoint
+                      - type
+                      type: object
+                    type: array
+                type: object
+              enabled:
+                default: true
+                description: Enabled controls whether this policy is active
+                type: boolean
+              modelRestrictions:
+                description: ModelRestrictions defines model usage restrictions
+                items:
+                  description: ModelRestriction defines restrictions for a specific
+                    model
+                  properties:
+                    allowed:
+                      default: true
+                      description: Allowed controls whether this model is allowed
+                      type: boolean
+                    allowedOperations:
+                      description: AllowedOperations limits which operations can use
+                        this model
+                      items:
+                        type: string
+                      type: array
+                    costMultiplier:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: CostMultiplier adjusts cost accounting for this
+                        model
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    maxRequestsPerHour:
+                      description: MaxRequestsPerHour limits requests per hour
+                      type: integer
+                    maxTokensPerRequest:
+                      description: MaxTokensPerRequest limits tokens per request
+                      type: integer
+                    name:
+                      description: Name is the model name (e.g., "claude-opus-4",
+                        "gpt-4")
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              priority:
+                default: 100
+                description: Priority determines policy precedence (higher = more
+                  priority)
+                maximum: 1000
+                minimum: 0
+                type: integer
+              rateLimits:
+                description: RateLimits defines rate limiting policies
+                properties:
+                  burstLimit:
+                    description: BurstLimit allows temporary burst above rate limit
+                    type: integer
+                  concurrentDebates:
+                    description: ConcurrentDebates limits concurrent debates
+                    type: integer
+                  debatesPerMinute:
+                    description: DebatesPerMinute limits debates per minute
+                    type: integer
+                  perWorkspace:
+                    default: true
+                    description: PerWorkspace enables per-workspace rate limiting
+                    type: boolean
+                  requestsPerMinute:
+                    description: RequestsPerMinute limits API requests per minute
+                    type: integer
+                  tokensPerMinute:
+                    description: TokensPerMinute limits total tokens per minute
+                    type: integer
+                type: object
+              resourceQuotas:
+                description: ResourceQuotas defines resource usage limits
+                properties:
+                  maxConcurrentAgents:
+                    description: MaxConcurrentAgents limits concurrent agents
+                    type: integer
+                  maxDebatesPerHour:
+                    description: MaxDebatesPerHour limits debates per hour
+                    type: integer
+                  maxMemoryEntries:
+                    description: MaxMemoryEntries limits memory entries
+                    format: int64
+                    type: integer
+                  maxStorageBytes:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxStorageBytes limits storage usage
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                type: object
+              selector:
+                description: Selector selects which workspaces/tenants this policy
+                  applies to
+                properties:
+                  labelSelector:
+                    description: LabelSelector selects by labels
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  matchAll:
+                    default: false
+                    description: MatchAll applies to all workspaces/tenants
+                    type: boolean
+                  tenants:
+                    description: Tenants lists specific tenant IDs
+                    items:
+                      type: string
+                    type: array
+                  workspaces:
+                    description: Workspaces lists specific workspace IDs
+                    items:
+                      type: string
+                    type: array
+                type: object
+            required:
+            - clusterRef
+            type: object
+          status:
+            description: AragoraPolicyStatus defines the observed state of AragoraPolicy
+            properties:
+              affectedWorkspaces:
+                description: AffectedWorkspaces lists workspaces affected by this
+                  policy
+                items:
+                  type: string
+                type: array
+              applied:
+                description: Applied indicates if the policy is currently applied
+                type: boolean
+              conditions:
+                description: Conditions represent the latest available observations
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              conflicts:
+                description: Conflicts lists conflicts with other policies
+                items:
+                  description: PolicyConflict represents a conflict with another policy
+                  properties:
+                    conflictType:
+                      description: ConflictType describes the conflict type
+                      type: string
+                    description:
+                      description: Description describes the conflict
+                      type: string
+                    policyName:
+                      description: PolicyName is the conflicting policy name
+                      type: string
+                  required:
+                  - conflictType
+                  - description
+                  - policyName
+                  type: object
+                type: array
+              lastAppliedTime:
+                description: LastAppliedTime is when the policy was last applied
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the last observed generation
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the current phase of the policy
+                enum:
+                - Pending
+                - Active
+                - Error
+                - Disabled
+                type: string
+              violations:
+                description: Violations lists current policy violations
+                items:
+                  description: PolicyViolation represents a policy violation
+                  properties:
+                    message:
+                      description: Message describes the violation
+                      type: string
+                    severity:
+                      description: Severity is the violation severity
+                      enum:
+                      - low
+                      - medium
+                      - high
+                      - critical
+                      type: string
+                    timestamp:
+                      description: Timestamp is when the violation occurred
+                      format: date-time
+                      type: string
+                    type:
+                      description: Type is the violation type
+                      type: string
+                    workspaceId:
+                      description: WorkspaceID is the affected workspace
+                      type: string
+                  required:
+                  - message
+                  - severity
+                  - timestamp
+                  - type
+                  - workspaceId
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
