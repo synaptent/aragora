@@ -8,8 +8,9 @@ from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from aragora.policy import operator_grant as g
 
@@ -194,7 +195,7 @@ def test_signed_malformed_payloads_reject(state, field, value):
         g.canonical_grant_payload(p)
 
 
-@pytest.mark.parametrize("field", list(g.CONTEXT_FIELDS) + ["scope", "budget", "approval_digest"])
+@pytest.mark.parametrize("field", sorted(g.CONTEXT_FIELDS) + ["scope", "budget", "approval_digest"])
 def test_missing_payload_fields_reject(state, field):
     p = dict(state["payload"])
     p.pop(field)
@@ -392,6 +393,14 @@ def test_crypto_unavailable_fails_closed(state, monkeypatch):
         raise ImportError("test: no cryptography")
 
     monkeypatch.setattr(g, "Ed25519Signer", unavailable)
+    denied(verify(state), g.VerificationCode.CRYPTO_UNAVAILABLE)
+
+
+def test_backend_without_ed25519_fails_closed_with_typed_code(state, monkeypatch):
+    def unsupported(data):
+        raise UnsupportedAlgorithm("test: backend lacks Ed25519")
+
+    monkeypatch.setattr(Ed25519PublicKey, "from_public_bytes", staticmethod(unsupported))
     denied(verify(state), g.VerificationCode.CRYPTO_UNAVAILABLE)
 
 

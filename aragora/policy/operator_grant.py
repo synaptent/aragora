@@ -326,14 +326,17 @@ def verify_operator_grant(
     if key.revoked or revocation.revoked:
         return invalid(VerificationCode.REVOKED)
     try:
+        from cryptography.exceptions import UnsupportedAlgorithm
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
+    except ImportError:
+        return invalid(VerificationCode.CRYPTO_UNAVAILABLE)
+    try:
         verifier = Ed25519Signer(
             public_key=Ed25519PublicKey.from_public_bytes(key.public_key), key_id=p["key_id"]
         )
         if not verifier.verify(canonical, signature):
             return invalid(VerificationCode.INVALID_SIGNATURE)
-    except (ImportError, RuntimeError):
+    except (ImportError, RuntimeError, UnsupportedAlgorithm):
         return invalid(VerificationCode.CRYPTO_UNAVAILABLE)
     except (ValueError, TypeError):
         return invalid(VerificationCode.INVALID_SIGNATURE)
