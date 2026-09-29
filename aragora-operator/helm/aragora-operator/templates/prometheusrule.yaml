@@ -1,0 +1,48 @@
+{{- if .Values.monitoring.alerts.enabled }}
+{{- /*
+Every selector is pinned to this operator's controllers and lease, because other
+controller-runtime operators scraped by the same Prometheus export the same
+metric families.
+*/}}
+{{- $controllers := "aragoracluster|aragorainstance|aragorapolicy" }}
+{{- $lease := "aragora-operator-leader-election" }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "aragora-operator.fullname" . }}
+  labels:
+    {{- include "aragora-operator.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.alerts.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: aragora.operator
+      rules:
+        - alert: AragoraOperatorReconcileErrors
+          expr: sum by (controller) (rate(controller_runtime_reconcile_errors_total{controller=~"{{ $controllers }}"}[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Aragora operator reconciles are failing
+            description: {{`The {{ $labels.controller }} controller has returned reconcile errors for 15 minutes ({{ $value | humanize }} errors/s). Check the operator logs.`}}
+        - alert: AragoraOperatorWorkqueueDepth
+          expr: max by (name) (workqueue_depth{name=~"{{ $controllers }}"}) > 10
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Aragora operator work queue is backing up
+            description: {{`The {{ $labels.name }} work queue has held more than 10 items for 15 minutes (now {{ $value }}). Reconciles are not keeping up.`}}
+        {{- if .Values.leaderElection.enabled }}
+        - alert: AragoraOperatorLeaderLost
+          expr: max(leader_election_master_status{name="{{ $lease }}"}) < 1 or absent(leader_election_master_status{name="{{ $lease }}"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Aragora operator has no leader
+            description: No Aragora operator replica has held the {{ $lease }} lease for 5 minutes, or no replica is reporting it. Nothing is being reconciled.
+        {{- end }}
+{{- end }}

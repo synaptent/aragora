@@ -76,6 +76,30 @@ go build -ldflags "-X github.com/synaptent/aragora-operator/internal/observabili
   `workqueue_depth`, `leader_election_master_status`, ...) and the operator's
   own `aragora_operator_*` metrics. `/healthz` and `/readyz` are on
   `--health-probe-bind-address`.
+- **Alert rules.** The Helm chart can install a `PrometheusRule` (a
+  Prometheus Operator resource) with one rule group, `aragora.operator`. It is
+  off by default; enable it with `--set monitoring.alerts.enabled=true`, and
+  put the labels your Prometheus `ruleSelector` matches under
+  `monitoring.alerts.labels`. The alerts query only metric families that
+  `/metrics` serves and `TestManagerHealthProbesAndMetrics` checks, limited to
+  this operator's three controllers and its lease so that other
+  controller-runtime operators in the cluster do not trigger them:
+  - `AragoraOperatorReconcileErrors` (warning): a controller has kept
+    returning reconcile errors for 15 minutes
+    (`rate(controller_runtime_reconcile_errors_total[5m])`).
+  - `AragoraOperatorWorkqueueDepth` (warning): a controller's work queue has
+    held more than 10 items for 15 minutes (`workqueue_depth`).
+  - `AragoraOperatorLeaderLost` (critical): for 5 minutes no replica has held
+    the `aragora-operator-leader-election` lease, or no replica reports it
+    (`leader_election_master_status`). Only rendered when
+    `leaderElection.enabled` is true, because without leader election the
+    operator never exports that metric.
+
+  To see the rendered rule without a cluster:
+
+  ```bash
+  helm template aragora-operator helm/aragora-operator --set monitoring.alerts.enabled=true
+  ```
 - **Profiling.** Set `--pprof-addr` and use the standard endpoints, for
   example `go tool pprof http://127.0.0.1:3145/debug/pprof/heap` or
   `curl 'http://127.0.0.1:3145/debug/pprof/goroutine?debug=1'`. Keep it on a

@@ -81,6 +81,20 @@ metrics:
     scrapeTimeout: 10s
     labels: {}
 
+# Prometheus alert rules for the operator itself
+monitoring:
+  alerts:
+    # Render a PrometheusRule (group "aragora.operator") with three alerts:
+    # AragoraOperatorReconcileErrors, AragoraOperatorWorkqueueDepth and
+    # AragoraOperatorLeaderLost (the last only when leaderElection.enabled).
+    # They query the controller-runtime metrics served on metrics.port.
+    # Off by default: the PrometheusRule kind needs the Prometheus Operator CRDs
+    # in the cluster, and a Prometheus that scrapes this operator.
+    enabled: false
+    # Extra labels on the PrometheusRule, for example the ones your Prometheus
+    # ruleSelector matches (kube-prometheus-stack defaults to release: <name>).
+    labels: {}
+
 # Health probe settings
 healthProbe:
   port: 8081
