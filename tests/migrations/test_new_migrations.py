@@ -669,19 +669,43 @@ RUNTIME_KNOWLEDGE_NODES = """
 class TestRuntimeCreatedTablesMissingColumns:
     """Migrations skip indexes whose columns a runtime-created table lacks."""
 
-    def test_km_visibility_skips_workspace_index_on_runtime_access_grants(self, backend, caplog):
+    def test_km_visibility_adds_workspace_id_to_runtime_access_grants(self, backend, caplog):
+        """The migration declares access_grants.workspace_id, so a runtime-shaped
+        table gets the column (and its index) instead of being recorded as
+        migrated without it."""
         from aragora.migrations.versions.v20260119000000_knowledge_mound_visibility import up_fn
 
         backend.execute_write(RUNTIME_ACCESS_GRANTS)
+        backend.execute_write(
+            "INSERT INTO access_grants (id, item_id, grantee_type, grantee_id) "
+            "VALUES ('g1', 'n1', 'user', 'u1')"
+        )
 
         with caplog.at_level("WARNING"):
             up_fn(backend)
 
-        assert backend.index_exists("idx_grants_item_id")
-        assert backend.index_exists("idx_grants_grantee")
-        assert backend.index_exists("idx_grants_expires")
-        assert not backend.index_exists("idx_grants_workspace")
-        assert "workspace_id" in caplog.text
+        assert "workspace_id" in backend.get_columns("access_grants")
+        for index in (
+            "idx_grants_item_id",
+            "idx_grants_grantee",
+            "idx_grants_workspace",
+            "idx_grants_expires",
+        ):
+            assert backend.index_exists(index), index
+        assert "Skipping index" not in caplog.text
+        # Existing grants keep their rows; the added column is NULL for them.
+        assert backend.fetch_all("SELECT id, workspace_id FROM access_grants") == [("g1", None)]
+
+    def test_km_visibility_is_idempotent_after_adding_workspace_id(self, backend):
+        from aragora.migrations.versions.v20260119000000_knowledge_mound_visibility import up_fn
+
+        backend.execute_write(RUNTIME_ACCESS_GRANTS)
+        up_fn(backend)
+        up_fn(backend)
+
+        columns = [row[1] for row in backend.fetch_all("PRAGMA table_info(access_grants)")]
+        assert columns.count("workspace_id") == 1
+        assert backend.index_exists("idx_grants_workspace")
 
     def test_km_visibility_indexes_access_grants_it_creates(self, backend):
         from aragora.migrations.versions.v20260119000000_knowledge_mound_visibility import up_fn
@@ -731,7 +755,8 @@ class TestRuntimeCreatedTablesMissingColumns:
 
         assert runner.get_pending_migrations() == []
         assert not backend.index_exists("idx_job_queue_pending_priority")
-        assert not backend.index_exists("idx_grants_workspace")
+        assert "workspace_id" in backend.get_columns("access_grants")
+        assert backend.index_exists("idx_grants_workspace")
         assert not backend.index_exists("idx_km_validation_staleness")
 
 

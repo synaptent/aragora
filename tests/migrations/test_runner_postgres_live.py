@@ -115,11 +115,14 @@ def test_upgrade_tolerates_tables_created_by_runtime_stores(isolated_database):
     upgraded = run_cli("upgrade", dsn)
     assert upgraded.returncode == 0, upgraded.stderr
     assert "scheduled_at" in upgraded.stderr
-    assert "workspace_id" in upgraded.stderr
     indexes = _public_indexes(dsn)
     assert "idx_job_queue_pending_priority" not in indexes
-    assert "idx_grants_workspace" not in indexes
-    assert {"idx_grants_item_id", "idx_gauntlet_results_verdict_created"} <= indexes
+    # access_grants.workspace_id is declared by 20260119000000, so it is added.
+    assert {
+        "idx_grants_item_id",
+        "idx_grants_workspace",
+        "idx_gauntlet_results_verdict_created",
+    } <= indexes
 
 
 def test_upgrade_indexes_job_queue_that_has_scheduled_at(isolated_database):

@@ -246,7 +246,10 @@ def test_full_migration_cycle(runner, backend):
 - Use `safe_*` pattern functions for schema changes
 - Index tables the migration did not create with `create_index_if_columns_exist`
   (or check `get_missing_columns`): the app's stores create tables at startup,
-  and their shape can lack columns the migration assumes
+  and their shape can lack columns the migration assumes. If the migration
+  itself declares the missing column (in its `CREATE TABLE IF NOT EXISTS`),
+  add it as a nullable column instead of skipping its index, so the migration
+  is never recorded as applied without its own schema
 - Test migrations on a copy of production data
 - Include data validation before applying constraints
 - Use batched updates for data migrations

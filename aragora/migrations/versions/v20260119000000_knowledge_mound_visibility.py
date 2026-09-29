@@ -12,7 +12,7 @@ Knowledge Mound system:
 
 import logging
 
-from aragora.migrations.patterns import create_index_if_columns_exist
+from aragora.migrations.patterns import create_index_if_columns_exist, get_missing_columns
 from aragora.migrations.runner import Migration
 from aragora.storage.backends import DatabaseBackend, PostgreSQLBackend
 
@@ -120,9 +120,16 @@ def up_fn(backend: DatabaseBackend) -> None:
             )
         """)
 
-    # Create indexes for access_grants. The table may predate this migration in
-    # a runtime shape (the Knowledge Mound store creates it without
-    # workspace_id), so an index on a missing column is skipped with a warning.
+    # The table may predate this migration in a runtime shape: the Knowledge
+    # Mound PostgreSQL store creates it without workspace_id. This migration
+    # declares that column, so add it (nullable, like the declared column)
+    # rather than record the migration as applied without it.
+    if get_missing_columns(backend, "access_grants", ["workspace_id"]):
+        logger.info("Adding workspace_id column to access_grants")
+        backend.execute_write("ALTER TABLE access_grants ADD COLUMN workspace_id TEXT")
+
+    # Create indexes for access_grants. Any other column a pre-existing table
+    # lacks is skipped with a warning.
     for index_name, columns in (
         ("idx_grants_item_id", ["item_id"]),
         ("idx_grants_grantee", ["grantee_type", "grantee_id"]),
