@@ -225,41 +225,41 @@ class TestErrorOutcome:
         assert pipeline.subscriber.stats["workflows_triggered"] == 0
 
 
+def _arena_hook_debate_end(emitter: SyncEventEmitter) -> None:
+    create_arena_hooks(emitter, loop_id=LOOP_ID)["on_debate_end"](12.5, 3)
+
+
+def _hook_manager_post_debate(emitter: SyncEventEmitter) -> None:
+    hooks = create_hook_manager_from_emitter(emitter, loop_id=LOOP_ID)
+    hooks.trigger_sync(
+        HookType.POST_DEBATE, result=SimpleNamespace(duration=12.5, rounds_completed=3)
+    )
+
+
+def _spectator_debate_end(emitter: SyncEventEmitter) -> None:
+    _SpectatorBridge(emitter)._notify_spectator(
+        "debate_end", details="Complete in 12.5s", metric=0.92
+    )
+
+
 class TestMinimalCompletionOutcome:
     """Completions without a consensus signal are ordinary, not ``no_consensus``."""
-
-    @staticmethod
-    def _arena_hook_debate_end(emitter: SyncEventEmitter) -> None:
-        create_arena_hooks(emitter, loop_id=LOOP_ID)["on_debate_end"](12.5, 3)
-
-    @staticmethod
-    def _hook_manager_post_debate(emitter: SyncEventEmitter) -> None:
-        hooks = create_hook_manager_from_emitter(emitter, loop_id=LOOP_ID)
-        hooks.trigger_sync(
-            HookType.POST_DEBATE, result=SimpleNamespace(duration=12.5, rounds_completed=3)
-        )
-
-    @staticmethod
-    def _spectator_debate_end(emitter: SyncEventEmitter) -> None:
-        _SpectatorBridge(emitter)._notify_spectator(
-            "debate_end", details="Complete in 12.5s", metric=0.92
-        )
 
     @pytest.mark.parametrize(
         ("emit", "expected_data"),
         [
             pytest.param(
-                _arena_hook_debate_end.__func__,
+                _arena_hook_debate_end,
                 {"duration": 12.5, "rounds": 3},
                 id="arena-hooks-on-debate-end",
             ),
             pytest.param(
-                _hook_manager_post_debate.__func__,
+                _hook_manager_post_debate,
                 {"duration": 12.5, "rounds": 3},
                 id="hook-manager-post-debate",
             ),
             pytest.param(
-                _spectator_debate_end.__func__,
+                _spectator_debate_end,
                 {"details": "Complete in 12.5s", "metric": 0.92, "event_source": "spectator"},
                 id="spectator-bridge",
             ),
