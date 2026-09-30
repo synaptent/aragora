@@ -8,6 +8,11 @@ the RBAC v2 checker is not patched (``no_auto_auth``).
 
 RBAC v2 grants ``knowledge.read`` to owner, admin and member (analyst and
 viewer have none), and ``knowledge.write`` / ``knowledge.delete`` to owner only.
+
+Until facts are scoped to an organization, every route that returns data derived
+from stored facts or touches an existing fact is closed: anonymous callers get
+401 and every authenticated caller, owner included, gets the closure 403.
+Creating a fact and the routes that never touch stored facts follow RBAC v2.
 """
 
 from __future__ import annotations
@@ -27,31 +32,43 @@ from aragora.server.handler_registry import HandlerRegistryMixin
 from aragora.server.handlers.knowledge_base.handler import _knowledge_limiter
 
 pytestmark = pytest.mark.no_auto_auth
+EXERCISES_FACT_CLOSURE = True
 
 READERS = ("owner", "admin", "member")
 NON_READERS = ("analyst", "viewer", "unknown-role")
-WRITERS = ("owner",)
+ALL_ROLES = READERS + NON_READERS
 READERS_WITHOUT_WRITE = ("admin", "member")
 
-# (method, path, body, status once authorized)
-_Request = tuple[str, str, dict[str, Any] | None, int]
+CLOSED = {
+    "error": {
+        "message": "Knowledge fact access is disabled until org scoping is available",
+        "code": "knowledge_fact_access_closed",
+    }
+}
 
-READ_REQUESTS: list[_Request] = [
-    ("GET", "/api/v1/knowledge/facts", None, 200),
-    ("GET", "/api/v1/facts", None, 200),
-    ("GET", "/api/v1/knowledge/facts/missing-fact", None, 404),
-    ("GET", "/api/v1/knowledge/facts/missing-fact/contradictions", None, 404),
-    ("GET", "/api/v1/knowledge/facts/missing-fact/relations", None, 404),
-    ("GET", "/api/v1/knowledge/search", None, 400),
-    ("GET", "/api/v1/knowledge/stats", None, 200),
-    ("POST", "/api/v1/knowledge/query", {}, 400),
+_Request = tuple[str, str, dict[str, Any] | None]
+
+CLOSED_REQUESTS: list[_Request] = [
+    ("GET", "/api/v1/knowledge/facts", None),
+    ("GET", "/api/v1/facts", None),
+    ("GET", "/api/v1/knowledge/facts/missing-fact", None),
+    ("GET", "/api/v1/facts/missing-fact", None),
+    ("GET", "/api/v1/knowledge/facts/missing-fact/contradictions", None),
+    ("GET", "/api/v1/knowledge/facts/missing-fact/relations", None),
+    ("GET", "/api/v1/knowledge/search", None),
+    ("GET", "/api/v1/knowledge/stats", None),
+    ("GET", "/api/v1/facts/stats", None),
+    ("POST", "/api/v1/knowledge/query", {}),
+    ("PUT", "/api/v1/knowledge/facts/missing-fact", {"confidence": 0.5}),
+    ("DELETE", "/api/v1/knowledge/facts/missing-fact", None),
+    ("POST", "/api/v1/knowledge/facts/missing-fact/verify", {}),
+    ("POST", "/api/v1/knowledge/facts/missing-fact/relations", {}),
+    ("POST", "/api/v1/knowledge/facts/relations", {}),
+    ("POST", "/api/v1/facts/batch", {}),
 ]
-WRITE_REQUESTS: list[_Request] = [
-    ("POST", "/api/v1/knowledge/facts", {"statement": "A fact", "workspace_id": "ws"}, 201),
-    ("PUT", "/api/v1/knowledge/facts/missing-fact", {"confidence": 0.5}, 404),
-    ("DELETE", "/api/v1/knowledge/facts/missing-fact", None, 404),
-    ("POST", "/api/v1/knowledge/facts/missing-fact/verify", {}, 404),
-    ("POST", "/api/v1/knowledge/facts/relations", {}, 400),
+CREATE_REQUESTS: list[_Request] = [
+    ("POST", "/api/v1/knowledge/facts", {"statement": "A fact", "workspace_id": "ws"}),
+    ("POST", "/api/v1/facts", {"statement": "A fact", "workspace_id": "ws"}),
 ]
 # The /api/v1/index family has no route body on this branch, so only the
 # cells that answer before the route body are pinned here.
@@ -91,6 +108,19 @@ def registry_cls() -> type[_RegistryMixin]:
     return _RegistryMixin
 
 
+@pytest.fixture(autouse=True, params=[False, True], ids=["auth-disabled", "auth-enabled"])
+def _auth_enabled(request, monkeypatch) -> bool:
+    """Run every case both ways: RBAC decorators skip a missing context only when auth is off.
+
+    Auth is on in any deployment that sets ARAGORA_API_TOKEN, where a decorator
+    that cannot find the request's context denies instead of skipping.
+    """
+    from aragora.server.auth import auth_config
+
+    monkeypatch.setattr(auth_config, "enabled", request.param)
+    return request.param
+
+
 @pytest.fixture(autouse=True)
 def _isolated_knowledge_state(registry_cls, monkeypatch):
     """A fresh in-memory fact store, an empty rate limiter and no cached RBAC decisions."""
@@ -116,6 +146,8 @@ def _dispatch(
     path: str,
     body: dict[str, Any] | None,
     role: str | None,
+    *,
+    bearer: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     instance: Any = registry_cls()
     raw = json.dumps(body).encode("utf-8") if body is not None else b""
@@ -123,7 +155,9 @@ def _dispatch(
     instance.path = path
     instance.headers = {"Content-Length": str(len(raw)), "Content-Type": "application/json"}
     if role is not None:
-        instance.headers["Authorization"] = f"Bearer {_token(role)}"
+        bearer = _token(role)
+    if bearer is not None:
+        instance.headers["Authorization"] = f"Bearer {bearer}"
     instance.rfile = io.BytesIO(raw)
     instance.wfile = io.BytesIO()
     instance.send_response = MagicMock()
@@ -149,52 +183,62 @@ def _dispatch(
     return status, json.loads(instance.wfile.getvalue() or b"{}")
 
 
-@pytest.mark.parametrize("role", READERS)
-@pytest.mark.parametrize(("method", "path", "body", "expected"), READ_REQUESTS)
-def test_readers_reach_read_routes(registry_cls, role, method, path, body, expected) -> None:
+@pytest.mark.parametrize("role", ALL_ROLES)
+@pytest.mark.parametrize(("method", "path", "body"), CLOSED_REQUESTS)
+def test_closed_fact_routes_answer_closure_403_to_every_role(
+    registry_cls, role, method, path, body
+) -> None:
     status, payload = _dispatch(registry_cls, method, path, body, role)
-    assert status == expected, payload
+    assert status == 403, payload
+    assert payload == CLOSED
 
 
-@pytest.mark.parametrize("role", NON_READERS)
-@pytest.mark.parametrize(("method", "path", "body", "expected"), READ_REQUESTS + WRITE_REQUESTS)
-def test_roles_without_knowledge_read_get_403_not_500(
-    registry_cls, role, method, path, body, expected
+@pytest.mark.parametrize(("method", "path", "body"), CLOSED_REQUESTS)
+def test_closed_fact_routes_answer_401_to_a_non_jwt_bearer(
+    registry_cls, method, path, body
+) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, None, bearer="static-api-token")
+    assert status == 401, payload
+    assert payload == {"error": "Authentication required"}
+
+
+@pytest.mark.parametrize(("method", "path", "body"), CREATE_REQUESTS)
+def test_owner_creates_facts(registry_cls, method, path, body) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, "owner")
+    assert status == 201, payload
+    assert payload["statement"] == "A fact"
+
+
+@pytest.mark.parametrize("role", READERS_WITHOUT_WRITE + NON_READERS)
+@pytest.mark.parametrize(("method", "path", "body"), CREATE_REQUESTS)
+def test_roles_without_knowledge_write_cannot_create_facts(
+    registry_cls, role, method, path, body
 ) -> None:
     status, payload = _dispatch(registry_cls, method, path, body, role)
     assert status == 403, payload
     assert payload == {"error": "Permission denied"}
 
 
-@pytest.mark.parametrize("role", WRITERS)
-@pytest.mark.parametrize(("method", "path", "body", "expected"), WRITE_REQUESTS)
-def test_writers_reach_write_routes(registry_cls, role, method, path, body, expected) -> None:
-    status, payload = _dispatch(registry_cls, method, path, body, role)
-    assert status == expected, payload
-
-
-@pytest.mark.parametrize("role", READERS_WITHOUT_WRITE)
-@pytest.mark.parametrize(("method", "path", "body", "expected"), WRITE_REQUESTS)
-def test_readers_without_write_permission_get_403_on_writes(
-    registry_cls, role, method, path, body, expected
-) -> None:
-    status, payload = _dispatch(registry_cls, method, path, body, role)
-    assert status == 403, payload
-    assert payload == {"error": "Permission denied"}
-
-
-def test_owner_created_fact_is_listed_for_a_member(registry_cls) -> None:
+def test_owner_created_fact_stays_unreadable_to_owner_and_member(registry_cls) -> None:
     status, created = _dispatch(
         registry_cls,
         "POST",
         "/api/v1/knowledge/facts",
-        {"statement": "Owners write, members read", "workspace_id": "ws"},
+        {"statement": "Owners write, nobody reads yet", "workspace_id": "ws"},
         "owner",
     )
     assert status == 201, created
-    status, listed = _dispatch(registry_cls, "GET", "/api/v1/knowledge/facts", None, "member")
-    assert status == 200, listed
-    assert [fact["id"] for fact in listed["facts"]] == [created["id"]]
+    for role in ("owner", "member"):
+        for path in ("/api/v1/knowledge/facts", f"/api/v1/knowledge/facts/{created['id']}"):
+            status, payload = _dispatch(registry_cls, "GET", path, None, role)
+            assert (status, payload) == (403, CLOSED)
+
+
+@pytest.mark.parametrize("role", READERS)
+@pytest.mark.parametrize(("method", "path", "body"), INDEX_REQUESTS)
+def test_index_routes_are_not_closed(registry_cls, role, method, path, body) -> None:
+    _status, payload = _dispatch(registry_cls, method, path, body, role)
+    assert payload != CLOSED
 
 
 @pytest.mark.parametrize("role", NON_READERS)
@@ -207,7 +251,8 @@ def test_index_routes_answer_403_to_roles_without_knowledge_read(
     assert payload == {"error": "Permission denied"}
 
 
-@pytest.mark.parametrize(("method", "path", "body", "expected"), READ_REQUESTS + WRITE_REQUESTS)
-def test_anonymous_requests_get_401(registry_cls, method, path, body, expected) -> None:
+@pytest.mark.parametrize(("method", "path", "body"), CLOSED_REQUESTS + CREATE_REQUESTS)
+def test_anonymous_requests_get_401(registry_cls, method, path, body) -> None:
     status, payload = _dispatch(registry_cls, method, path, body, None)
     assert status == 401, payload
+    assert payload == {"error": "Authentication required"}

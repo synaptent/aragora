@@ -55,10 +55,12 @@ logger = logging.getLogger(__name__)
 def _permission_denied_as_403(
     func: Callable[..., HandlerResult | None],
 ) -> Callable[..., HandlerResult | None]:
-    """Answer 403 when an RBAC decorator underneath denies the request.
+    """Answer 401/403 when an RBAC decorator underneath rejects the request.
 
     The handler registry does not recognize PermissionDeniedError and would
-    answer it with a 500 ``unexpected_exception``.
+    answer it with a 500 ``unexpected_exception``. The decorator raises without
+    a decision only when it finds no authorization context, which with auth
+    enabled means the request was not authenticated.
     """
 
     @wraps(func)
@@ -66,8 +68,58 @@ def _permission_denied_as_403(
         try:
             return func(*args, **kwargs)
         except PermissionDeniedError as exc:
+            if exc.decision is None:
+                logger.warning("Knowledge request without authorization context: %s", exc)
+                return error_response("Authentication required", 401)
             logger.info("Knowledge request denied: %s", exc)
             return error_response("Permission denied", 403)
+
+    return wrapper
+
+
+FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
+FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
+
+# Stored facts carry no organization, so any caller that can read them reads every
+# organization's facts. Until facts are org-scoped, routes that return data derived
+# from stored facts or act on an existing fact are closed to every authenticated caller.
+_CLOSED_FACT_DATA_PATHS = frozenset(
+    {
+        "/api/v1/knowledge/query",
+        "/api/v1/knowledge/search",
+        "/api/v1/knowledge/stats",
+    }
+)
+
+
+def _is_fact_access_closed(path: str, method: str) -> bool:
+    """Return True when the (already alias-normalized) route touches stored facts.
+
+    Creating a fact (POST to the facts collection) stays open to RBAC v2.
+    """
+    if path in _CLOSED_FACT_DATA_PATHS:
+        return True
+    if path == "/api/v1/knowledge/facts":
+        return method != "POST"
+    return path.startswith("/api/v1/knowledge/facts/")
+
+
+def _closed_until_org_scoping(
+    func: Callable[..., HandlerResult | None],
+) -> Callable[..., HandlerResult | None]:
+    """Answer closed fact routes before any permission check: 401 anonymous, 403 otherwise."""
+
+    @wraps(func)
+    def wrapper(
+        self: KnowledgeHandler, path: str, query_params: dict, handler: Any
+    ) -> HandlerResult | None:
+        method = getattr(handler, "command", "GET")
+        if _is_fact_access_closed(self._normalize_facts_path(path), method):
+            _user, err = self.require_auth_or_error(handler)
+            if err:
+                return err
+            return error_response(FACT_ACCESS_CLOSED_MESSAGE, 403, code=FACT_ACCESS_CLOSED_CODE)
+        return func(self, path, query_params, handler)
 
     return wrapper
 
@@ -215,6 +267,7 @@ class KnowledgeHandler(
             return error_response("Permission denied", 403)
         return None
 
+    @_closed_until_org_scoping
     @_permission_denied_as_403
     @require_permission("knowledge:read")
     def handle(self, path: str, query_params: dict, handler: Any) -> HandlerResult | None:
@@ -260,11 +313,11 @@ class KnowledgeHandler(
             method = getattr(handler, "command", "GET")
             if method == "POST":
                 return self._handle_create_fact(handler)
-            return self._handle_list_facts(query_params)
+            return self._handle_list_facts(query_params, handler)
 
         # Search chunks
         if path == "/api/v1/knowledge/search":
-            return self._handle_search(query_params)
+            return self._handle_search(query_params, handler)
 
         # Statistics
         if path == "/api/v1/knowledge/stats":

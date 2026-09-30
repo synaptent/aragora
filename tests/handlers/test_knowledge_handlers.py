@@ -564,13 +564,13 @@ class TestFactsCreateOperation:
         """Test creating a fact requires authentication (403, not a raised denial)."""
         handler = create_handler("POST", {"statement": "Test fact"})
 
-        # Without auth context, the @require_permission denial answers 403
+        # With auth enabled and no auth context, the request is unauthenticated: 401
         with patch("aragora.server.auth.auth_config") as mock_auth:
             mock_auth.enabled = True
             result = knowledge_handler.handle("/api/v1/knowledge/facts", {}, handler)
 
-        assert result.status_code == 403
-        assert json.loads(result.body) == {"error": "Permission denied"}
+        assert result.status_code == 401
+        assert json.loads(result.body) == {"error": "Authentication required"}
 
     def test_create_fact_success(self, knowledge_handler, mock_fact_store):
         """Test creating a fact with valid auth."""
@@ -646,13 +646,13 @@ class TestFactsUpdateOperation:
         """Test updating a fact requires authentication (403, not a raised denial)."""
         handler = create_handler("PUT", {"confidence": 0.95})
 
-        # Without auth context, the @require_permission denial answers 403
+        # With auth enabled and no auth context, the request is unauthenticated: 401
         with patch("aragora.server.auth.auth_config") as mock_auth:
             mock_auth.enabled = True
             result = knowledge_handler.handle("/api/v1/knowledge/facts/fact-1", {}, handler)
 
-        assert result.status_code == 403
-        assert json.loads(result.body) == {"error": "Permission denied"}
+        assert result.status_code == 401
+        assert json.loads(result.body) == {"error": "Authentication required"}
 
     def test_update_fact_success(self, knowledge_handler, mock_fact_store):
         """Test updating a fact with valid auth."""
@@ -697,13 +697,13 @@ class TestFactsDeleteOperation:
         """Test deleting a fact requires authentication (403, not a raised denial)."""
         handler = create_handler("DELETE")
 
-        # Without auth context, the @require_permission denial answers 403
+        # With auth enabled and no auth context, the request is unauthenticated: 401
         with patch("aragora.server.auth.auth_config") as mock_auth:
             mock_auth.enabled = True
             result = knowledge_handler.handle("/api/v1/knowledge/facts/fact-1", {}, handler)
 
-        assert result.status_code == 403
-        assert json.loads(result.body) == {"error": "Permission denied"}
+        assert result.status_code == 401
+        assert json.loads(result.body) == {"error": "Authentication required"}
 
     def test_delete_fact_success(self, knowledge_handler, mock_fact_store):
         """Test deleting a fact with valid auth."""
