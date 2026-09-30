@@ -511,7 +511,17 @@ def _validate_outcome(
                     "authoritative outcome evidence must not predate resolution",
                 )
 
-    cruxes = outcome.get("cruxes")
+    _validate_cruxes(outcome.get("cruxes"), path=path, report=report)
+
+    return case_id, resolved_at
+
+
+def _validate_cruxes(
+    cruxes: Any,
+    *,
+    path: str,
+    report: CorpusValidationReport,
+) -> None:
     if not isinstance(cruxes, list) or not 3 <= len(cruxes) <= 5:
         _issue(report, f"{path}.cruxes", "invalid_crux_count", "must contain 3 to 5 cruxes")
     else:
@@ -552,38 +562,32 @@ def _validate_outcome(
             elif crux_id is not None:
                 crux_ids.add(crux_id)
 
-    return case_id, resolved_at
 
-
-def validate_corpus_documents(
-    corpus: Any,
-    outcomes: Any,
+def _check_expected_outcomes_hash(
+    expected_outcomes_sha256: str,
     *,
-    allow_partial: bool = False,
-    expected_outcomes_sha256: str | None = None,
-) -> CorpusValidationReport:
-    """Validate the model-visible corpus and hash-bound outcome sidecar."""
-    report = CorpusValidationReport()
-    corpus_object = _as_object(corpus, path="$", report=report)
-    outcomes_object = _as_object(outcomes, path="$", report=report)
-    if corpus_object is None or outcomes_object is None:
-        return report
-
-    report.corpus_sha256 = corpus_sha256(corpus_object)
-    report.outcomes_sha256 = outcomes_sha256(outcomes_object)
-    if expected_outcomes_sha256 is not None:
-        expected_hash = _sha256(
-            expected_outcomes_sha256,
-            path="$expected_outcomes_sha256",
-            report=report,
+    report: CorpusValidationReport,
+) -> None:
+    expected_hash = _sha256(
+        expected_outcomes_sha256,
+        path="$expected_outcomes_sha256",
+        report=report,
+    )
+    if expected_hash is not None and expected_hash != report.outcomes_sha256:
+        _issue(
+            report,
+            "$expected_outcomes_sha256",
+            "outcomes_hash_mismatch",
+            "outcome sidecar does not match the frozen expected digest",
         )
-        if expected_hash is not None and expected_hash != report.outcomes_sha256:
-            _issue(
-                report,
-                "$expected_outcomes_sha256",
-                "outcomes_hash_mismatch",
-                "outcome sidecar does not match the frozen expected digest",
-            )
+
+
+def _validate_document_headers(
+    corpus_object: dict[str, Any],
+    outcomes_object: dict[str, Any],
+    *,
+    report: CorpusValidationReport,
+) -> datetime | None:
     _check_keys(corpus_object, allowed=_CORPUS_KEYS, path="$", report=report)
     _check_keys(outcomes_object, allowed=_OUTCOMES_KEYS, path="$", report=report)
 
@@ -638,15 +642,14 @@ def validate_corpus_documents(
             "corpus_hash_mismatch",
             "outcome sidecar is not bound to the canonical corpus document",
         )
+    return frozen_at
 
-    cases = corpus_object.get("cases")
-    if not isinstance(cases, list):
-        _issue(report, "$.cases", "invalid_type", "must be a JSON array")
-        cases = []
-    report.case_count = len(cases)
-    if report.case_count == 0:
-        _issue(report, "$.cases", "empty_corpus", "must contain at least one resolved case")
 
+def _validate_cases(
+    cases: list[Any],
+    *,
+    report: CorpusValidationReport,
+) -> tuple[dict[str, set[str]], dict[str, datetime], Counter[tuple[str, str]]]:
     case_options: dict[str, set[str]] = {}
     case_cutoffs: dict[str, datetime] = {}
     domains: list[str] = []
@@ -678,33 +681,47 @@ def validate_corpus_documents(
 
     report.domain_counts = dict(sorted(Counter(domains).items()))
     report.split_counts = dict(sorted(Counter(splits).items()))
-    if not allow_partial:
-        if report.case_count != 24:
-            _issue(report, "$.cases", "wrong_case_count", "must contain exactly 24 cases")
-        for domain in DOMAINS:
-            if report.domain_counts.get(domain, 0) != 6:
-                _issue(
-                    report,
-                    "$.cases",
-                    "wrong_domain_count",
-                    f"domain {domain!r} must contain exactly 6 cases",
-                )
-            if domain_splits[(domain, "development")] != 4:
-                _issue(
-                    report,
-                    "$.cases",
-                    "wrong_development_count",
-                    f"domain {domain!r} must contain exactly 4 development cases",
-                )
-            if domain_splits[(domain, "holdout")] != 2:
-                _issue(
-                    report,
-                    "$.cases",
-                    "wrong_holdout_count",
-                    f"domain {domain!r} must contain exactly 2 holdout cases",
-                )
+    return case_options, case_cutoffs, domain_splits
 
-    raw_outcomes = outcomes_object.get("outcomes")
+
+def _check_complete_corpus_counts(
+    domain_splits: Counter[tuple[str, str]],
+    *,
+    report: CorpusValidationReport,
+) -> None:
+    if report.case_count != 24:
+        _issue(report, "$.cases", "wrong_case_count", "must contain exactly 24 cases")
+    for domain in DOMAINS:
+        if report.domain_counts.get(domain, 0) != 6:
+            _issue(
+                report,
+                "$.cases",
+                "wrong_domain_count",
+                f"domain {domain!r} must contain exactly 6 cases",
+            )
+        if domain_splits[(domain, "development")] != 4:
+            _issue(
+                report,
+                "$.cases",
+                "wrong_development_count",
+                f"domain {domain!r} must contain exactly 4 development cases",
+            )
+        if domain_splits[(domain, "holdout")] != 2:
+            _issue(
+                report,
+                "$.cases",
+                "wrong_holdout_count",
+                f"domain {domain!r} must contain exactly 2 holdout cases",
+            )
+
+
+def _validate_outcomes(
+    raw_outcomes: Any,
+    *,
+    case_options: dict[str, set[str]],
+    case_cutoffs: dict[str, datetime],
+    report: CorpusValidationReport,
+) -> tuple[set[str], list[datetime]]:
     if not isinstance(raw_outcomes, list):
         _issue(report, "$.outcomes", "invalid_type", "must be a JSON array")
         raw_outcomes = []
@@ -731,7 +748,17 @@ def validate_corpus_documents(
             outcome_ids.add(case_id)
         if resolved_at is not None:
             resolution_times.append(resolved_at)
+    return outcome_ids, resolution_times
 
+
+def _check_outcome_coverage(
+    *,
+    case_options: dict[str, set[str]],
+    outcome_ids: set[str],
+    resolution_times: list[datetime],
+    frozen_at: datetime | None,
+    report: CorpusValidationReport,
+) -> None:
     missing_outcomes = sorted(case_options.keys() - outcome_ids)
     extra_outcomes = sorted(outcome_ids - case_options.keys())
     if missing_outcomes:
@@ -756,6 +783,52 @@ def validate_corpus_documents(
             "must be at or after every authoritative outcome resolution",
         )
 
+
+def validate_corpus_documents(
+    corpus: Any,
+    outcomes: Any,
+    *,
+    allow_partial: bool = False,
+    expected_outcomes_sha256: str | None = None,
+) -> CorpusValidationReport:
+    """Validate the model-visible corpus and hash-bound outcome sidecar."""
+    report = CorpusValidationReport()
+    corpus_object = _as_object(corpus, path="$", report=report)
+    outcomes_object = _as_object(outcomes, path="$", report=report)
+    if corpus_object is None or outcomes_object is None:
+        return report
+
+    report.corpus_sha256 = corpus_sha256(corpus_object)
+    report.outcomes_sha256 = outcomes_sha256(outcomes_object)
+    if expected_outcomes_sha256 is not None:
+        _check_expected_outcomes_hash(expected_outcomes_sha256, report=report)
+    frozen_at = _validate_document_headers(corpus_object, outcomes_object, report=report)
+
+    cases = corpus_object.get("cases")
+    if not isinstance(cases, list):
+        _issue(report, "$.cases", "invalid_type", "must be a JSON array")
+        cases = []
+    report.case_count = len(cases)
+    if report.case_count == 0:
+        _issue(report, "$.cases", "empty_corpus", "must contain at least one resolved case")
+
+    case_options, case_cutoffs, domain_splits = _validate_cases(cases, report=report)
+    if not allow_partial:
+        _check_complete_corpus_counts(domain_splits, report=report)
+
+    outcome_ids, resolution_times = _validate_outcomes(
+        outcomes_object.get("outcomes"),
+        case_options=case_options,
+        case_cutoffs=case_cutoffs,
+        report=report,
+    )
+    _check_outcome_coverage(
+        case_options=case_options,
+        outcome_ids=outcome_ids,
+        resolution_times=resolution_times,
+        frozen_at=frozen_at,
+        report=report,
+    )
     return report
 
 
