@@ -18,7 +18,11 @@ interface BudgetAlertsProps {
 
 const SEVERITY_CONFIG: Record<string, { color: string; bgColor: string; icon: string }> = {
   critical: { color: 'text-red-400', bgColor: 'bg-red-500/10 border-red-500/30', icon: '🚨' },
-  warning: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/10 border-yellow-500/30', icon: '⚠️' },
+  warning: {
+    color: 'text-yellow-400',
+    bgColor: 'bg-yellow-500/10 border-yellow-500/30',
+    icon: '⚠️',
+  },
   info: { color: 'text-blue-400', bgColor: 'bg-blue-500/10 border-blue-500/30', icon: 'ℹ️' },
 };
 
@@ -27,28 +31,28 @@ export function BudgetAlerts({ alerts, onDismiss }: BudgetAlertsProps) {
   const [expanded, setExpanded] = useState(true);
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
 
-  const visibleAlerts = alerts.filter(a => !dismissedAlerts.has(a.id));
+  const visibleAlerts = alerts.filter((a) => !dismissedAlerts.has(a.id));
 
   if (visibleAlerts.length === 0) return null;
 
   const dismissAlert = async (id: string) => {
     // Optimistic update - hide immediately
-    setDismissedAlerts(prev => new Set([...prev, id]));
+    setDismissedAlerts((prev) => new Set([...prev, id]));
 
     // Call API if provided
     if (onDismiss) {
-      setDismissing(prev => new Set([...prev, id]));
+      setDismissing((prev) => new Set([...prev, id]));
       try {
         await onDismiss(id);
       } catch {
         // Revert on error
-        setDismissedAlerts(prev => {
+        setDismissedAlerts((prev) => {
           const next = new Set(prev);
           next.delete(id);
           return next;
         });
       } finally {
-        setDismissing(prev => {
+        setDismissing((prev) => {
           const next = new Set(prev);
           next.delete(id);
           return next;
@@ -58,18 +62,20 @@ export function BudgetAlerts({ alerts, onDismiss }: BudgetAlertsProps) {
   };
 
   const dismissAll = async () => {
-    const ids = alerts.map(a => a.id);
+    const ids = alerts.map((a) => a.id);
     setDismissedAlerts(new Set(ids));
 
     // Call API for each if provided
     if (onDismiss) {
-      await Promise.all(ids.map(async id => {
-        try {
-          await onDismiss(id);
-        } catch {
-          // Ignore errors during bulk dismiss
-        }
-      }));
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            await onDismiss(id);
+          } catch {
+            // Ignore errors during bulk dismiss
+          }
+        }),
+      );
     }
   };
 
@@ -97,9 +103,7 @@ export function BudgetAlerts({ alerts, onDismiss }: BudgetAlertsProps) {
         <div className="flex items-center gap-3">
           <span className="text-xl">🔔</span>
           <div className="text-left">
-            <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-              BUDGET ALERTS
-            </h3>
+            <h3 className="text-sm font-theme-data text-[var(--acid-green)]">BUDGET ALERTS</h3>
             <p className="text-xs text-[var(--text-muted)]">
               {visibleAlerts.length} active alert{visibleAlerts.length !== 1 ? 's' : ''}
             </p>
@@ -115,9 +119,7 @@ export function BudgetAlerts({ alerts, onDismiss }: BudgetAlertsProps) {
           >
             Dismiss All
           </button>
-          <span className="text-[var(--text-muted)]">
-            {expanded ? '[-]' : '[+]'}
-          </span>
+          <span className="text-[var(--text-muted)]">{expanded ? '[-]' : '[+]'}</span>
         </div>
       </button>
 
@@ -128,10 +130,7 @@ export function BudgetAlerts({ alerts, onDismiss }: BudgetAlertsProps) {
             const config = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.info;
 
             return (
-              <div
-                key={alert.id}
-                className={`p-4 ${config.bgColor} border-l-4`}
-              >
+              <div key={alert.id} className={`p-4 ${config.bgColor} border-l-4`}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
                     <span className="text-lg">{config.icon}</span>

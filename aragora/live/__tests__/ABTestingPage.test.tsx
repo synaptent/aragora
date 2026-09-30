@@ -20,10 +20,7 @@ jest.mock('@/context/AuthContext', () => {
     organization: { tier: 'professional' },
   };
 
-  return {
-    ...actual,
-    useAuth: () => authState,
-  };
+  return { ...actual, useAuth: () => authState };
 });
 
 // Mock ProtectedRoute
@@ -32,15 +29,10 @@ jest.mock('@/components/auth/ProtectedRoute', () => ({
 }));
 
 // Mock MatrixRain
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 // Mock AsciiBanner
-jest.mock('@/components/AsciiBanner', () => ({
-  AsciiBannerCompact: () => <div>ARAGORA</div>,
-}));
+jest.mock('@/components/AsciiBanner', () => ({ AsciiBannerCompact: () => <div>ARAGORA</div> }));
 
 const mockTests = [
   {
@@ -98,10 +90,7 @@ describe('ABTestingPage', () => {
   });
 
   it('shows empty state when no tests exist', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ tests: [], count: 0 }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ tests: [], count: 0 }) });
 
     renderWithProviders(<ABTestingPage />);
 
@@ -154,17 +143,14 @@ describe('ABTestingPage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('status=active'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
 
   it('switches to create view and submits the form', async () => {
     mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ tests: [], count: 0 }),
-      })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tests: [], count: 0 }) })
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ message: 'A/B test created', test: mockTests[0] }),
@@ -184,22 +170,15 @@ describe('ABTestingPage', () => {
     fireEvent.change(screen.getByPlaceholderText(/e.g., claude-3-opus/i), {
       target: { value: 'test-agent' },
     });
-    fireEvent.change(screen.getByPlaceholderText(/e.g., 1/i), {
-      target: { value: '1' },
-    });
-    fireEvent.change(screen.getByPlaceholderText(/e.g., 2/i), {
-      target: { value: '2' },
-    });
+    fireEvent.change(screen.getByPlaceholderText(/e.g., 1/i), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText(/e.g., 2/i), { target: { value: '2' } });
 
     fireEvent.click(screen.getByText(/start a\/b test/i));
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/evolution/ab-tests'),
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.stringContaining('test-agent'),
-        })
+        expect.objectContaining({ method: 'POST', body: expect.stringContaining('test-agent') }),
       );
     });
   });

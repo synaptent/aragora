@@ -77,17 +77,16 @@ export function DebateThisModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-full max-w-lg mx-4 bg-surface border border-[var(--accent)]/30 rounded-lg shadow-2xl shadow-acid-green/5">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <span className="text-[var(--accent)] font-theme-data text-sm font-bold">DEBATE THIS</span>
+            <span className="text-[var(--accent)] font-theme-data text-sm font-bold">
+              DEBATE THIS
+            </span>
             {source && (
               <span className="px-2 py-0.5 text-[10px] font-theme-data text-text-muted border border-border rounded">
                 {SOURCE_LABELS[source] || source}

@@ -32,17 +32,11 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8080',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8080' }));
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
+  logger: { debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 describe('useAuthenticatedFetch', () => {
@@ -70,14 +64,9 @@ describe('useAuthenticatedFetch', () => {
 
     it('auto-fetches on mount', async () => {
       const responseData = { items: [1, 2, 3] };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => responseData,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => responseData });
 
-      const { result } = renderHook(() =>
-        useAuthenticatedFetch<{ items: number[] }>('/api/items')
-      );
+      const { result } = renderHook(() => useAuthenticatedFetch<{ items: number[] }>('/api/items'));
 
       expect(result.current.loading).toBe(true);
 
@@ -91,10 +80,7 @@ describe('useAuthenticatedFetch', () => {
     });
 
     it('includes Authorization header', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
       renderHook(() => useAuthenticatedFetch('/api/test'));
 
@@ -105,19 +91,14 @@ describe('useAuthenticatedFetch', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/test',
         expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: 'Bearer test-access-token',
-          }),
-        })
+          headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }),
+        }),
       );
     });
 
     it('uses the saved runtime backend for relative requests', async () => {
       localStorage.setItem('aragora-backend', 'production');
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
       renderHook(() => useAuthenticatedFetch('/api/test'));
 
@@ -125,10 +106,7 @@ describe('useAuthenticatedFetch', () => {
         expect(mockFetch).toHaveBeenCalled();
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.aragora.ai/api/test',
-        expect.any(Object)
-      );
+      expect(mockFetch).toHaveBeenCalledWith('https://api.aragora.ai/api/test', expect.any(Object));
     });
 
     it('handles HTTP errors', async () => {
@@ -164,14 +142,9 @@ describe('useAuthenticatedFetch', () => {
     it('calls onSuccess callback', async () => {
       const onSuccess = jest.fn();
       const responseData = { success: true };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => responseData,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => responseData });
 
-      renderHook(() =>
-        useAuthenticatedFetch('/api/test', { onSuccess })
-      );
+      renderHook(() => useAuthenticatedFetch('/api/test', { onSuccess }));
 
       await waitFor(() => {
         expect(onSuccess).toHaveBeenCalledWith(responseData);
@@ -182,9 +155,7 @@ describe('useAuthenticatedFetch', () => {
       const onError = jest.fn();
       mockFetch.mockRejectedValueOnce(new Error('Test error'));
 
-      renderHook(() =>
-        useAuthenticatedFetch('/api/test', { onError })
-      );
+      renderHook(() => useAuthenticatedFetch('/api/test', { onError }));
 
       await waitFor(() => {
         expect(onError).toHaveBeenCalled();
@@ -195,9 +166,7 @@ describe('useAuthenticatedFetch', () => {
     });
 
     it('supports manual mode (no auto-fetch)', async () => {
-      const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/test', { manual: true })
-      );
+      const { result } = renderHook(() => useAuthenticatedFetch('/api/test', { manual: true }));
 
       // Should not be loading since manual mode
       expect(result.current.loading).toBe(false);
@@ -205,14 +174,9 @@ describe('useAuthenticatedFetch', () => {
     });
 
     it('refetch works in manual mode', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ refetched: true }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ refetched: true }) });
 
-      const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/test', { manual: true })
-      );
+      const { result } = renderHook(() => useAuthenticatedFetch('/api/test', { manual: true }));
 
       await act(async () => {
         await result.current.refetch();
@@ -229,7 +193,7 @@ describe('useAuthenticatedFetch', () => {
       });
 
       const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/test', { requireAuth: true })
+        useAuthenticatedFetch('/api/test', { requireAuth: true }),
       );
 
       await waitFor(() => {
@@ -241,16 +205,10 @@ describe('useAuthenticatedFetch', () => {
     });
 
     it('uses defaultData when provided', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        json: async () => ({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
 
       const defaultData = { items: [] };
-      const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/test', { defaultData })
-      );
+      const { result } = renderHook(() => useAuthenticatedFetch('/api/test', { defaultData }));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -260,39 +218,25 @@ describe('useAuthenticatedFetch', () => {
     });
 
     it('handles absolute URLs', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
-      renderHook(() =>
-        useAuthenticatedFetch('https://external.api.com/data')
-      );
+      renderHook(() => useAuthenticatedFetch('https://external.api.com/data'));
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalled();
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://external.api.com/data',
-        expect.any(Object)
-      );
+      expect(mockFetch).toHaveBeenCalledWith('https://external.api.com/data', expect.any(Object));
     });
   });
 
   describe('when not authenticated', () => {
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        isLoading: false,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, tokens: null });
     });
 
     it('skips fetch when requireAuth is true (default)', async () => {
-      const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/protected')
-      );
+      const { result } = renderHook(() => useAuthenticatedFetch('/api/protected'));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -304,9 +248,7 @@ describe('useAuthenticatedFetch', () => {
 
     it('returns defaultData when skipped', async () => {
       const defaultData = { empty: true };
-      const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/test', { defaultData })
-      );
+      const { result } = renderHook(() => useAuthenticatedFetch('/api/test', { defaultData }));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -316,13 +258,10 @@ describe('useAuthenticatedFetch', () => {
     });
 
     it('fetches when requireAuth is false', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ public: true }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ public: true }) });
 
       const { result } = renderHook(() =>
-        useAuthenticatedFetch('/api/public', { requireAuth: false })
+        useAuthenticatedFetch('/api/public', { requireAuth: false }),
       );
 
       await waitFor(() => {
@@ -336,15 +275,9 @@ describe('useAuthenticatedFetch', () => {
 
   describe('when auth is loading', () => {
     it('waits for auth to finish loading', async () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        isLoading: true,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: true, tokens: null });
 
-      const { result, rerender } = renderHook(() =>
-        useAuthenticatedFetch('/api/test')
-      );
+      const { result, rerender } = renderHook(() => useAuthenticatedFetch('/api/test'));
 
       // Should still be in initial loading state
       expect(result.current.loading).toBe(true);
@@ -358,10 +291,7 @@ describe('useAuthenticatedFetch', () => {
         refreshToken: jest.fn().mockResolvedValue(false),
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ loaded: true }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ loaded: true }) });
 
       rerender();
 
@@ -405,10 +335,7 @@ describe('useAuthFetch', () => {
     });
 
     it('authFetch includes Authorization header', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ created: true }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ created: true }) });
 
       const { result } = renderHook(() => useAuthFetch());
 
@@ -424,16 +351,13 @@ describe('useAuthFetch', () => {
             Authorization: 'Bearer test-access-token',
             'Content-Type': 'application/json',
           }),
-        })
+        }),
       );
     });
 
     it('authFetch uses the saved runtime backend for relative requests', async () => {
       localStorage.setItem('aragora-backend', 'production');
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ created: true }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ created: true }) });
 
       const { result } = renderHook(() => useAuthFetch());
 
@@ -445,10 +369,8 @@ describe('useAuthFetch', () => {
         'https://api.aragora.ai/api/items',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            Authorization: 'Bearer test-access-token',
-          }),
-        })
+          headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }),
+        }),
       );
     });
 
@@ -462,9 +384,7 @@ describe('useAuthFetch', () => {
 
       const { result } = renderHook(() => useAuthFetch());
 
-      await expect(
-        result.current.authFetch('/api/error')
-      ).rejects.toThrow('Bad request');
+      await expect(result.current.authFetch('/api/error')).rejects.toThrow('Bad request');
     });
 
     it('getAuthHeaders returns headers with token', () => {
@@ -481,11 +401,7 @@ describe('useAuthFetch', () => {
 
   describe('when not authenticated', () => {
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        isLoading: false,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, tokens: null });
     });
 
     it('authFetch returns null', async () => {
@@ -502,9 +418,7 @@ describe('useAuthFetch', () => {
 
       const headers = result.current.getAuthHeaders();
 
-      expect(headers).toEqual({
-        'Content-Type': 'application/json',
-      });
+      expect(headers).toEqual({ 'Content-Type': 'application/json' });
       expect(headers).not.toHaveProperty('Authorization');
     });
 

@@ -13,7 +13,21 @@ import type { PipelineResultResponse, PipelineStageType } from '../types';
 // ---------------------------------------------------------------------------
 
 jest.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children, onNodeClick, _onPaneClick, onDrop, onDragOver, ...props }: Record<string, unknown> & { children?: React.ReactNode; onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void; _onPaneClick?: () => void; onDrop?: React.DragEventHandler; onDragOver?: React.DragEventHandler; nodes?: Array<Record<string, unknown>> }) => (
+  ReactFlow: ({
+    children,
+    onNodeClick,
+    _onPaneClick,
+    onDrop,
+    onDragOver,
+    ...props
+  }: Record<string, unknown> & {
+    children?: React.ReactNode;
+    onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void;
+    _onPaneClick?: () => void;
+    onDrop?: React.DragEventHandler;
+    onDragOver?: React.DragEventHandler;
+    nodes?: Array<Record<string, unknown>>;
+  }) => (
     <div data-testid="react-flow" {...{ onDrop, onDragOver }}>
       {children}
       {props.nodes?.map((n: Record<string, unknown>) => (
@@ -27,7 +41,9 @@ jest.mock('@xyflow/react', () => ({
   Controls: () => <div data-testid="controls" />,
   Background: () => <div data-testid="background" />,
   MiniMap: () => <div data-testid="minimap" />,
-  Panel: ({ children, position }: { children: React.ReactNode; position: string }) => <div data-testid={`panel-${position}`}>{children}</div>,
+  Panel: ({ children, position }: { children: React.ReactNode; position: string }) => (
+    <div data-testid={`panel-${position}`}>{children}</div>
+  ),
   BackgroundVariant: { Dots: 'dots' },
   useNodesState: (initial: unknown[]) => {
     const [nodes, setNodes] = require('react').useState(initial);
@@ -41,7 +57,10 @@ jest.mock('@xyflow/react', () => ({
     fitView: jest.fn(),
     screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
   }),
-  addEdge: jest.fn((connection: Record<string, unknown>, edges: unknown[]) => [...edges, { id: 'new-edge', ...connection }]),
+  addEdge: jest.fn((connection: Record<string, unknown>, edges: unknown[]) => [
+    ...edges,
+    { id: 'new-edge', ...connection },
+  ]),
 }));
 
 // ---------------------------------------------------------------------------
@@ -65,9 +84,7 @@ jest.mock('../PipelineToolbar', () => ({
 
 jest.mock('../editors/PipelinePropertyEditor', () => ({
   PipelinePropertyEditor: (props: Record<string, unknown>) => (
-    <div data-testid="pipeline-property-editor">
-      PropertyEditor: {props.stage as string}
-    </div>
+    <div data-testid="pipeline-property-editor">PropertyEditor: {props.stage as string}</div>
   ),
 }));
 
@@ -96,9 +113,7 @@ jest.mock('../StageNavigator', () => ({
 // ---------------------------------------------------------------------------
 
 import { usePipelineCanvas } from '../../../hooks/usePipelineCanvas';
-jest.mock('../../../hooks/usePipelineCanvas', () => ({
-  usePipelineCanvas: jest.fn(),
-}));
+jest.mock('../../../hooks/usePipelineCanvas', () => ({ usePipelineCanvas: jest.fn() }));
 
 const mockedUsePipelineCanvas = usePipelineCanvas as jest.MockedFunction<typeof usePipelineCanvas>;
 
@@ -245,10 +260,9 @@ describe('PipelineCanvas Interactive', () => {
 
   it('exports receipts from the selected backend', async () => {
     localStorage.setItem('aragora-backend', 'production');
-    const mockFetch = jest.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({ receipt_id: 'receipt-1' }),
-    } as Response);
+    const mockFetch = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue({ ok: true, json: async () => ({ receipt_id: 'receipt-1' }) } as Response);
     const originalCreateObjectUrl = URL.createObjectURL;
     const originalRevokeObjectUrl = URL.revokeObjectURL;
     Object.defineProperty(URL, 'createObjectURL', {
@@ -261,7 +275,9 @@ describe('PipelineCanvas Interactive', () => {
       writable: true,
       value: jest.fn(),
     });
-    const anchorClickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const anchorClickSpy = jest
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
 
     render(<PipelineCanvas pipelineId="pipe-1" />);
 
@@ -353,12 +369,7 @@ describe('PipelineCanvas Interactive', () => {
 
   it('clicking a node shows property editor in edit mode', () => {
     const nodeData = { label: 'My Idea', ideaType: 'concept', contentHash: '' };
-    const testNode = {
-      id: 'node-1',
-      type: 'ideaNode',
-      position: { x: 0, y: 0 },
-      data: nodeData,
-    };
+    const testNode = { id: 'node-1', type: 'ideaNode', position: { x: 0, y: 0 }, data: nodeData };
 
     const mockCanvas = makeMockCanvas({
       nodes: [testNode],
@@ -384,22 +395,11 @@ describe('PipelineCanvas Interactive', () => {
 
   it('clicking a node shows provenance sidebar in readOnly mode', () => {
     const nodeData = { label: 'Read-Only Node', ideaType: 'concept', contentHash: '' };
-    const testNode = {
-      id: 'node-ro',
-      type: 'ideaNode',
-      position: { x: 0, y: 0 },
-      data: nodeData,
-    };
+    const testNode = { id: 'node-ro', type: 'ideaNode', position: { x: 0, y: 0 }, data: nodeData };
 
     const mockCanvas = makeMockCanvas({
       nodes: [testNode],
-      stageNodes: {
-        ideas: [testNode],
-        principles: [],
-        goals: [],
-        actions: [],
-        orchestration: [],
-      },
+      stageNodes: { ideas: [testNode], principles: [], goals: [], actions: [], orchestration: [] },
       selectedNodeId: 'node-ro',
       selectedNodeData: nodeData,
     });
@@ -530,10 +530,18 @@ describe('PipelineCanvas Interactive', () => {
     );
 
     expect(screen.getByTestId('stage-transition-gate-trans-ideas-goals')).toBeInTheDocument();
-    expect(screen.getByTestId('transition-status-trans-ideas-goals')).toHaveTextContent('Awaiting approval');
-    expect(screen.getByTestId('transition-provenance-trans-ideas-goals')).toHaveTextContent('1 source -> 1 draft');
-    expect(screen.getByTestId('transition-provenance-trans-ideas-goals')).toHaveTextContent('Latency budget');
-    expect(screen.getByTestId('transition-provenance-trans-ideas-goals')).toHaveTextContent('Protect API latency');
+    expect(screen.getByTestId('transition-status-trans-ideas-goals')).toHaveTextContent(
+      'Awaiting approval',
+    );
+    expect(screen.getByTestId('transition-provenance-trans-ideas-goals')).toHaveTextContent(
+      '1 source -> 1 draft',
+    );
+    expect(screen.getByTestId('transition-provenance-trans-ideas-goals')).toHaveTextContent(
+      'Latency budget',
+    );
+    expect(screen.getByTestId('transition-provenance-trans-ideas-goals')).toHaveTextContent(
+      'Protect API latency',
+    );
     expect(screen.getByTestId('transition-questions-trans-ideas-goals')).toHaveTextContent(
       'Confirm "Latency budget" remains a hard constraint in goals.',
     );
@@ -547,11 +555,7 @@ describe('PipelineCanvas Interactive', () => {
   it('rejects a transition by transition id', () => {
     const rejectTransition = jest.fn();
 
-    mockedUsePipelineCanvas.mockReturnValue(
-      makeMockCanvas({
-        rejectTransition,
-      }),
-    );
+    mockedUsePipelineCanvas.mockReturnValue(makeMockCanvas({ rejectTransition }));
 
     render(
       <PipelineCanvas

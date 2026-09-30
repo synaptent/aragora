@@ -37,13 +37,9 @@ jest.mock('../src/context/AuthContext', () => ({
 // Mock config
 jest.mock('../src/config', () => ({
   DEFAULT_AGENTS: 'claude,gemini,gpt4',
-  DEFAULT_ROUNDS: 9,  // 9-round format default
+  DEFAULT_ROUNDS: 9, // 9-round format default
   DEFAULT_CONSENSUS: 'judge',
-  AGENT_DISPLAY_NAMES: {
-    claude: 'Claude',
-    gemini: 'Gemini',
-    gpt4: 'GPT-4',
-  },
+  AGENT_DISPLAY_NAMES: { claude: 'Claude', gemini: 'Gemini', gpt4: 'GPT-4' },
 }));
 
 // Import after mocks
@@ -148,13 +144,12 @@ describe('DebateInput Mode Switching', () => {
         if (url.includes('/api/health')) {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
-        if (url.includes('/api/v1/debates') && !url.includes('/graph') && !url.includes('/matrix')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              debate_id: 'standard-debate-123',
-            })
-          );
+        if (
+          url.includes('/api/v1/debates') &&
+          !url.includes('/graph') &&
+          !url.includes('/matrix')
+        ) {
+          return Promise.resolve(jsonResponse({ success: true, debate_id: 'standard-debate-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -173,9 +168,7 @@ describe('DebateInput Mode Switching', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/v1/debates'),
-          expect.objectContaining({
-            method: 'POST',
-          })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -186,12 +179,7 @@ describe('DebateInput Mode Switching', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              debate_id: 'standard-debate-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, debate_id: 'standard-debate-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -219,12 +207,7 @@ describe('DebateInput Mode Switching', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates/graph')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              debate_id: 'graph-debate-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, debate_id: 'graph-debate-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -247,9 +230,7 @@ describe('DebateInput Mode Switching', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/v1/debates/graph'),
-          expect.objectContaining({
-            method: 'POST',
-          })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -260,12 +241,7 @@ describe('DebateInput Mode Switching', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates/graph')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              debate_id: 'graph-debate-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, debate_id: 'graph-debate-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -298,12 +274,7 @@ describe('DebateInput Mode Switching', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates/matrix')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              matrix_id: 'matrix-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, matrix_id: 'matrix-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -326,9 +297,7 @@ describe('DebateInput Mode Switching', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/v1/debates/matrix'),
-          expect.objectContaining({
-            method: 'POST',
-          })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -339,12 +308,7 @@ describe('DebateInput Mode Switching', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates/matrix')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              matrix_id: 'matrix-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, matrix_id: 'matrix-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });
@@ -444,7 +408,7 @@ describe('DebateInput Mode Switching', () => {
         }
         if (url.includes('/api/v1/debates/graph')) {
           return Promise.resolve(
-            jsonResponse({ error: 'Graph debates require at least 2 agents' }, false, 400)
+            jsonResponse({ error: 'Graph debates require at least 2 agents' }, false, 400),
           );
         }
         return Promise.resolve(jsonResponse({}));
@@ -478,7 +442,7 @@ describe('DebateInput Mode Switching', () => {
         }
         if (url.includes('/api/v1/debates/matrix')) {
           return Promise.resolve(
-            jsonResponse({ error: 'Matrix debates require variables' }, false, 400)
+            jsonResponse({ error: 'Matrix debates require variables' }, false, 400),
           );
         }
         return Promise.resolve(jsonResponse({}));
@@ -513,12 +477,7 @@ describe('DebateInput Mode Switching', () => {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
         if (url.includes('/api/v1/debates/graph')) {
-          return Promise.resolve(
-            jsonResponse({
-              success: true,
-              debate_id: 'graph-debate-123',
-            })
-          );
+          return Promise.resolve(jsonResponse({ success: true, debate_id: 'graph-debate-123' }));
         }
         return Promise.resolve(jsonResponse({}));
       });

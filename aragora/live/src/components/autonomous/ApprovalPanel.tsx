@@ -38,7 +38,9 @@ export function ApprovalPanel({ apiBase }: ApprovalPanelProps) {
     try {
       setLoading(true);
       setError(null);
-      const result = await apiFetch<{ pending: ApprovalRequest[] }>(`${apiBase}/autonomous/approvals/pending`);
+      const result = await apiFetch<{ pending: ApprovalRequest[] }>(
+        `${apiBase}/autonomous/approvals/pending`,
+      );
       if (result.error) {
         throw new Error(result.error);
       }
@@ -94,7 +96,9 @@ export function ApprovalPanel({ apiBase }: ApprovalPanelProps) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
         {error}
-        <button onClick={fetchRequests} className="ml-4 text-sm underline">Retry</button>
+        <button onClick={fetchRequests} className="ml-4 text-sm underline">
+          Retry
+        </button>
       </div>
     );
   }
@@ -154,7 +158,9 @@ export function ApprovalPanel({ apiBase }: ApprovalPanelProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-4 mt-2 text-xs text-white/40">
-                  <span>{request.changes.length} file{request.changes.length !== 1 ? 's' : ''}</span>
+                  <span>
+                    {request.changes.length} file{request.changes.length !== 1 ? 's' : ''}
+                  </span>
                   <span>{new Date(request.requested_at).toLocaleString()}</span>
                 </div>
               </button>
@@ -167,11 +173,20 @@ export function ApprovalPanel({ apiBase }: ApprovalPanelProps) {
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {request.changes.map((change, i) => (
                         <div key={i} className="text-xs text-white/50 font-theme-data">
-                          <span className={
-                            change.action === 'create' ? 'text-[var(--accent)]' :
-                            change.action === 'delete' ? 'text-red-400' : 'text-yellow-500'
-                          }>
-                            {change.action === 'create' ? '+' : change.action === 'delete' ? '-' : '~'}
+                          <span
+                            className={
+                              change.action === 'create'
+                                ? 'text-[var(--accent)]'
+                                : change.action === 'delete'
+                                  ? 'text-red-400'
+                                  : 'text-yellow-500'
+                            }
+                          >
+                            {change.action === 'create'
+                              ? '+'
+                              : change.action === 'delete'
+                                ? '-'
+                                : '~'}
                           </span>{' '}
                           {change.file}
                         </div>

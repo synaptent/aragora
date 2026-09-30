@@ -71,10 +71,7 @@ export function PluginRunModal({ plugin, onClose, apiBase = API_BASE_URL }: Plug
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          input: input || undefined,
-          target_path: targetPath || undefined,
-        }),
+        body: JSON.stringify({ input: input || undefined, target_path: targetPath || undefined }),
       });
 
       const data = await response.json();
@@ -185,9 +182,13 @@ export function PluginRunModal({ plugin, onClose, apiBase = API_BASE_URL }: Plug
 
           {/* Result Display */}
           {result && (
-            <div className={`p-4 border ${result.success ? 'border-[var(--accent)]/30 bg-[var(--accent)]/5' : 'border-acid-red/30 bg-acid-red/5'}`}>
+            <div
+              className={`p-4 border ${result.success ? 'border-[var(--accent)]/30 bg-[var(--accent)]/5' : 'border-acid-red/30 bg-acid-red/5'}`}
+            >
               <div className="flex items-center justify-between mb-3">
-                <span className={`text-xs font-theme-data ${result.success ? 'text-[var(--accent)]' : 'text-acid-red'}`}>
+                <span
+                  className={`text-xs font-theme-data ${result.success ? 'text-[var(--accent)]' : 'text-acid-red'}`}
+                >
                   {result.success ? 'SUCCESS' : 'FAILED'}
                 </span>
                 {result.duration_ms !== undefined && (

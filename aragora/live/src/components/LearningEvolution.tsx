@@ -1,7 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from 'recharts';
 import { API_BASE_URL } from '@/config';
 
 interface PatternData {
@@ -90,32 +101,25 @@ export function LearningEvolution() {
   // Process data for charts
   type PatternChartPoint = { date: string; [issueType: string]: string | number };
   const patternChartData = data.patterns.reduce<PatternChartPoint[]>((acc, item) => {
-    const existing = acc.find(d => d.date === item.date);
+    const existing = acc.find((d) => d.date === item.date);
     if (existing) {
       existing[item.issue_type] = item.success_rate;
     } else {
-      acc.push({
-        date: item.date,
-        [item.issue_type]: item.success_rate,
-      });
+      acc.push({ date: item.date, [item.issue_type]: item.success_rate });
     }
     return acc;
   }, []);
 
   type AgentChartPoint = { date: string; agent: string; reputation_score: number };
   const agentChartData = data.agents.reduce<AgentChartPoint[]>((acc, item) => {
-    const existing = acc.find(d => d.date === item.date && d.agent === item.agent);
+    const existing = acc.find((d) => d.date === item.date && d.agent === item.agent);
     if (!existing) {
-      acc.push({
-        date: item.date,
-        agent: item.agent,
-        reputation_score: item.reputation_score,
-      });
+      acc.push({ date: item.date, agent: item.agent, reputation_score: item.reputation_score });
     }
     return acc;
   }, []);
 
-  const debateChartData = data.debates.map(item => ({
+  const debateChartData = data.debates.map((item) => ({
     ...item,
     date: new Date(item.date).toLocaleDateString(),
   }));
@@ -134,11 +138,13 @@ export function LearningEvolution() {
 
       {/* Tab Navigation */}
       <div className="flex space-x-1 bg-surface border border-border rounded p-1">
-        {([
-          { key: 'patterns', label: 'Pattern Success' },
-          { key: 'agents', label: 'Agent Reputation' },
-          { key: 'debates', label: 'Debate Outcomes' },
-        ] as const).map((tab) => (
+        {(
+          [
+            { key: 'patterns', label: 'Pattern Success' },
+            { key: 'agents', label: 'Agent Reputation' },
+            { key: 'debates', label: 'Debate Outcomes' },
+          ] as const
+        ).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -172,7 +178,7 @@ export function LearningEvolution() {
                 />
                 <Legend />
                 {/* Dynamic lines for each issue type */}
-                {Array.from(new Set(data.patterns.map(p => p.issue_type))).map((type, index) => (
+                {Array.from(new Set(data.patterns.map((p) => p.issue_type))).map((type, index) => (
                   <Line
                     key={type}
                     type="monotone"
@@ -244,20 +250,20 @@ export function LearningEvolution() {
         <div className="bg-surface border border-border rounded-lg p-4">
           <div className="text-text-muted text-sm">Total Patterns</div>
           <div className="text-2xl font-bold text-text">
-            {data.patterns.length > 0 ? new Set(data.patterns.map(p => p.date + p.issue_type)).size : 0}
+            {data.patterns.length > 0
+              ? new Set(data.patterns.map((p) => p.date + p.issue_type)).size
+              : 0}
           </div>
         </div>
         <div className="bg-surface border border-border rounded-lg p-4">
           <div className="text-text-muted text-sm">Active Agents</div>
           <div className="text-2xl font-bold text-text">
-            {new Set(data.agents.map(a => a.agent)).size}
+            {new Set(data.agents.map((a) => a.agent)).size}
           </div>
         </div>
         <div className="bg-surface border border-border rounded-lg p-4">
           <div className="text-text-muted text-sm">Total Debate Days</div>
-          <div className="text-2xl font-bold text-text">
-            {data.debates.length}
-          </div>
+          <div className="text-2xl font-bold text-text">{data.debates.length}</div>
         </div>
       </div>
     </div>

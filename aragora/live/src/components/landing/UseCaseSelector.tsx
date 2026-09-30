@@ -37,10 +37,32 @@ export const USE_CASES: UseCase[] = [
     color: 'text-red-400 bg-red-500/10 border-red-500/30',
     endpoints: ['/api/reviews/*', '/api/gauntlet/*', '/api/redteam/*'],
     items: [
-      { id: 'code-review', label: 'Code Review', description: 'Multi-agent security review of code changes', href: '/reviews' },
-      { id: 'api-scan', label: 'API Scan', description: 'Automated API vulnerability analysis', href: '/gauntlet?mode=api' },
-      { id: 'red-team', label: 'Red Team', description: 'Adversarial testing and attack simulation', href: '/red-team', advancedOnly: true },
-      { id: 'probes', label: 'Capability Probes', description: 'Test model capabilities and boundaries', href: '/probe', advancedOnly: true },
+      {
+        id: 'code-review',
+        label: 'Code Review',
+        description: 'Multi-agent security review of code changes',
+        href: '/reviews',
+      },
+      {
+        id: 'api-scan',
+        label: 'API Scan',
+        description: 'Automated API vulnerability analysis',
+        href: '/gauntlet?mode=api',
+      },
+      {
+        id: 'red-team',
+        label: 'Red Team',
+        description: 'Adversarial testing and attack simulation',
+        href: '/red-team',
+        advancedOnly: true,
+      },
+      {
+        id: 'probes',
+        label: 'Capability Probes',
+        description: 'Test model capabilities and boundaries',
+        href: '/probe',
+        advancedOnly: true,
+      },
     ],
   },
   {
@@ -51,10 +73,32 @@ export const USE_CASES: UseCase[] = [
     color: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
     endpoints: ['/api/gauntlet/gdpr', '/api/audit/*'],
     items: [
-      { id: 'gdpr', label: 'GDPR Check', description: 'European data protection compliance', href: '/gauntlet?mode=gdpr' },
-      { id: 'hipaa', label: 'HIPAA Audit', description: 'Healthcare data privacy review', href: '/gauntlet?mode=hipaa' },
-      { id: 'sox', label: 'SOX Compliance', description: 'Financial reporting controls', href: '/audit?type=sox', advancedOnly: true },
-      { id: 'audit-log', label: 'Audit Trail', description: 'View all compliance audit history', href: '/audit', advancedOnly: true },
+      {
+        id: 'gdpr',
+        label: 'GDPR Check',
+        description: 'European data protection compliance',
+        href: '/gauntlet?mode=gdpr',
+      },
+      {
+        id: 'hipaa',
+        label: 'HIPAA Audit',
+        description: 'Healthcare data privacy review',
+        href: '/gauntlet?mode=hipaa',
+      },
+      {
+        id: 'sox',
+        label: 'SOX Compliance',
+        description: 'Financial reporting controls',
+        href: '/audit?type=sox',
+        advancedOnly: true,
+      },
+      {
+        id: 'audit-log',
+        label: 'Audit Trail',
+        description: 'View all compliance audit history',
+        href: '/audit',
+        advancedOnly: true,
+      },
     ],
   },
   {
@@ -65,10 +109,32 @@ export const USE_CASES: UseCase[] = [
     color: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
     endpoints: ['/api/gauntlet/*', '/api/debates/graph/*'],
     items: [
-      { id: 'stress-test', label: 'Stress Test', description: 'Multi-perspective system stress analysis', href: '/gauntlet' },
-      { id: 'incident', label: 'Incident Analysis', description: 'Post-mortem and root cause debates', href: '/debates?type=incident' },
-      { id: 'graph-debate', label: 'Graph Debates', description: 'Visualize argument structure', href: '/debates/graph', advancedOnly: true },
-      { id: 'modes', label: 'Debate Modes', description: 'Configure debate protocols', href: '/modes', advancedOnly: true },
+      {
+        id: 'stress-test',
+        label: 'Stress Test',
+        description: 'Multi-perspective system stress analysis',
+        href: '/gauntlet',
+      },
+      {
+        id: 'incident',
+        label: 'Incident Analysis',
+        description: 'Post-mortem and root cause debates',
+        href: '/debates?type=incident',
+      },
+      {
+        id: 'graph-debate',
+        label: 'Graph Debates',
+        description: 'Visualize argument structure',
+        href: '/debates/graph',
+        advancedOnly: true,
+      },
+      {
+        id: 'modes',
+        label: 'Debate Modes',
+        description: 'Configure debate protocols',
+        href: '/modes',
+        advancedOnly: true,
+      },
     ],
   },
   {
@@ -79,10 +145,30 @@ export const USE_CASES: UseCase[] = [
     color: 'text-green-400 bg-green-500/10 border-green-500/30',
     endpoints: ['/api/knowledge/*', '/api/evidence/*'],
     items: [
-      { id: 'literature', label: 'Literature Review', description: 'Synthesize research from multiple sources', href: '/knowledge' },
-      { id: 'evidence', label: 'Evidence Collection', description: 'Gather and verify supporting data', href: '/evidence' },
-      { id: 'citations', label: 'Citation Check', description: 'Verify references and sources', href: '/verification' },
-      { id: 'pulse', label: 'Trending Topics', description: 'Discover what is being discussed', href: '/pulse' },
+      {
+        id: 'literature',
+        label: 'Literature Review',
+        description: 'Synthesize research from multiple sources',
+        href: '/knowledge',
+      },
+      {
+        id: 'evidence',
+        label: 'Evidence Collection',
+        description: 'Gather and verify supporting data',
+        href: '/evidence',
+      },
+      {
+        id: 'citations',
+        label: 'Citation Check',
+        description: 'Verify references and sources',
+        href: '/verification',
+      },
+      {
+        id: 'pulse',
+        label: 'Trending Topics',
+        description: 'Discover what is being discussed',
+        href: '/pulse',
+      },
     ],
   },
   {
@@ -93,10 +179,32 @@ export const USE_CASES: UseCase[] = [
     color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
     endpoints: ['/api/debates/matrix/*', '/api/receipts/*'],
     items: [
-      { id: 'vendor', label: 'Vendor Compare', description: 'Multi-criteria vendor evaluation', href: '/compare' },
-      { id: 'contract', label: 'Contract Review', description: 'Legal document analysis', href: '/debates?type=contract' },
-      { id: 'matrix', label: 'Matrix Debates', description: 'Multi-dimensional decision analysis', href: '/debates/matrix', advancedOnly: true },
-      { id: 'receipts', label: 'Decision Receipts', description: 'Documented reasoning trails', href: '/receipts', advancedOnly: true },
+      {
+        id: 'vendor',
+        label: 'Vendor Compare',
+        description: 'Multi-criteria vendor evaluation',
+        href: '/compare',
+      },
+      {
+        id: 'contract',
+        label: 'Contract Review',
+        description: 'Legal document analysis',
+        href: '/debates?type=contract',
+      },
+      {
+        id: 'matrix',
+        label: 'Matrix Debates',
+        description: 'Multi-dimensional decision analysis',
+        href: '/debates/matrix',
+        advancedOnly: true,
+      },
+      {
+        id: 'receipts',
+        label: 'Decision Receipts',
+        description: 'Documented reasoning trails',
+        href: '/receipts',
+        advancedOnly: true,
+      },
     ],
   },
   {
@@ -107,10 +215,30 @@ export const USE_CASES: UseCase[] = [
     color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
     endpoints: ['/api/verticals/*'],
     items: [
-      { id: 'healthcare', label: 'Healthcare', description: 'Clinical and HIPAA specialists', href: '/verticals?category=healthcare' },
-      { id: 'finance', label: 'Finance', description: 'Financial analysis and SOX', href: '/verticals?category=finance' },
-      { id: 'legal', label: 'Legal', description: 'Contract and compliance experts', href: '/verticals?category=legal' },
-      { id: 'all-verticals', label: 'All Verticals', description: 'Browse domain specialists', href: '/verticals' },
+      {
+        id: 'healthcare',
+        label: 'Healthcare',
+        description: 'Clinical and HIPAA specialists',
+        href: '/verticals?category=healthcare',
+      },
+      {
+        id: 'finance',
+        label: 'Finance',
+        description: 'Financial analysis and SOX',
+        href: '/verticals?category=finance',
+      },
+      {
+        id: 'legal',
+        label: 'Legal',
+        description: 'Contract and compliance experts',
+        href: '/verticals?category=legal',
+      },
+      {
+        id: 'all-verticals',
+        label: 'All Verticals',
+        description: 'Browse domain specialists',
+        href: '/verticals',
+      },
     ],
   },
 ];
@@ -145,11 +273,11 @@ export function UseCaseSelector({
 
   return (
     <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 ${className}`}>
-      {USE_CASES.map(useCase => {
+      {USE_CASES.map((useCase) => {
         const isExpanded = expandedId === useCase.id;
         const visibleItems = isAdvanced
           ? useCase.items
-          : useCase.items.filter(item => !item.advancedOnly);
+          : useCase.items.filter((item) => !item.advancedOnly);
 
         return (
           <div
@@ -159,10 +287,7 @@ export function UseCaseSelector({
             }`}
           >
             {/* Header */}
-            <button
-              onClick={() => handleCardClick(useCase)}
-              className="w-full p-6 text-left"
-            >
+            <button onClick={() => handleCardClick(useCase)} className="w-full p-6 text-left">
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl">{useCase.icon}</span>
                 <h3 className="text-xl font-bold">{useCase.title}</h3>
@@ -178,7 +303,12 @@ export function UseCaseSelector({
                     viewBox="0 0 24 24"
                     stroke="currentColor"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </div>
               )}
@@ -187,7 +317,7 @@ export function UseCaseSelector({
             {/* Expanded items */}
             {(isExpanded || !expandable) && (
               <div className="border-t border-current/20 p-4 space-y-2">
-                {visibleItems.map(item => (
+                {visibleItems.map((item) => (
                   <Link
                     key={item.id}
                     href={item.href}
@@ -195,8 +325,18 @@ export function UseCaseSelector({
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{item.label}</span>
-                      <svg className="w-4 h-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      <svg
+                        className="w-4 h-4 opacity-60"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
                       </svg>
                     </div>
                     <p className="text-xs opacity-60 mt-1">{item.description}</p>
@@ -216,15 +356,30 @@ export function UseCaseSelector({
  */
 export function QuickStartCards() {
   const quickStarts = [
-    { title: 'Code Security', description: 'Review code for vulnerabilities', href: '/reviews', icon: '🔐' },
-    { title: 'GDPR Check', description: 'Assess data protection compliance', href: '/gauntlet?mode=gdpr', icon: '🇪🇺' },
-    { title: 'Stress Test', description: 'Multi-agent stress analysis', href: '/gauntlet', icon: '🏋️' },
+    {
+      title: 'Code Security',
+      description: 'Review code for vulnerabilities',
+      href: '/reviews',
+      icon: '🔐',
+    },
+    {
+      title: 'GDPR Check',
+      description: 'Assess data protection compliance',
+      href: '/gauntlet?mode=gdpr',
+      icon: '🇪🇺',
+    },
+    {
+      title: 'Stress Test',
+      description: 'Multi-agent stress analysis',
+      href: '/gauntlet',
+      icon: '🏋️',
+    },
     { title: 'Research', description: 'Literature synthesis', href: '/knowledge', icon: '📚' },
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {quickStarts.map(qs => (
+      {quickStarts.map((qs) => (
         <Link
           key={qs.title}
           href={qs.href}

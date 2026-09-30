@@ -14,17 +14,8 @@ interface SessionSelectorProps {
  * Shows current session with ability to view all sessions
  * and navigate to session management.
  */
-export function SessionSelector({
-  onSessionSelect,
-  className = '',
-}: SessionSelectorProps) {
-  const {
-    sessions,
-    loading,
-    error,
-    currentSessionId,
-    getLastActivityAge,
-  } = useSession();
+export function SessionSelector({ onSessionSelect, className = '' }: SessionSelectorProps) {
+  const { sessions, loading, error, currentSessionId, getLastActivityAge } = useSession();
 
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -32,8 +23,8 @@ export function SessionSelector({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const currentSession = sessions.find(s => s.id === currentSessionId);
-  const otherSessions = sessions.filter(s => s.id !== currentSessionId);
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
+  const otherSessions = sessions.filter((s) => s.id !== currentSessionId);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -49,45 +40,48 @@ export function SessionSelector({
   }, []);
 
   // Handle keyboard navigation
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!isOpen) {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
-        event.preventDefault();
-        setIsOpen(true);
-        setFocusedIndex(0);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!isOpen) {
+        if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          setIsOpen(true);
+          setFocusedIndex(0);
+        }
+        return;
       }
-      return;
-    }
 
-    switch (event.key) {
-      case 'Escape':
-        event.preventDefault();
-        setIsOpen(false);
-        setFocusedIndex(-1);
-        buttonRef.current?.focus();
-        break;
-      case 'ArrowDown':
-        event.preventDefault();
-        setFocusedIndex((prev) => (prev + 1) % sessions.length);
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        setFocusedIndex((prev) => (prev - 1 + sessions.length) % sessions.length);
-        break;
-      case 'Home':
-        event.preventDefault();
-        setFocusedIndex(0);
-        break;
-      case 'End':
-        event.preventDefault();
-        setFocusedIndex(sessions.length - 1);
-        break;
-      case 'Tab':
-        setIsOpen(false);
-        setFocusedIndex(-1);
-        break;
-    }
-  }, [isOpen, sessions.length]);
+      switch (event.key) {
+        case 'Escape':
+          event.preventDefault();
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          buttonRef.current?.focus();
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          setFocusedIndex((prev) => (prev + 1) % sessions.length);
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          setFocusedIndex((prev) => (prev - 1 + sessions.length) % sessions.length);
+          break;
+        case 'Home':
+          event.preventDefault();
+          setFocusedIndex(0);
+          break;
+        case 'End':
+          event.preventDefault();
+          setFocusedIndex(sessions.length - 1);
+          break;
+        case 'Tab':
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          break;
+      }
+    },
+    [isOpen, sessions.length],
+  );
 
   // Focus menu item when focusedIndex changes
   useEffect(() => {
@@ -123,9 +117,7 @@ export function SessionSelector({
 
   if (error && sessions.length === 0) {
     return (
-      <div className={`text-xs font-theme-data text-warning ${className}`}>
-        [SESSION ERROR]
-      </div>
+      <div className={`text-xs font-theme-data text-warning ${className}`}>[SESSION ERROR]</div>
     );
   }
 
@@ -183,7 +175,9 @@ export function SessionSelector({
               {otherSessions.map((session, index) => (
                 <button
                   key={session.id}
-                  ref={(el) => { menuItemsRef.current[index] = el; }}
+                  ref={(el) => {
+                    menuItemsRef.current[index] = el;
+                  }}
                   role="menuitem"
                   tabIndex={focusedIndex === index ? 0 : -1}
                   onClick={() => handleSessionClick(session)}

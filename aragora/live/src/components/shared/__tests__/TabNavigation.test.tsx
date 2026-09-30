@@ -11,9 +11,7 @@ const mockTabs: Tab[] = [
 describe('TabNavigation', () => {
   describe('rendering', () => {
     it('renders all tabs', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       expect(screen.getByText('Overview')).toBeInTheDocument();
       expect(screen.getByText('Details')).toBeInTheDocument();
@@ -21,17 +19,13 @@ describe('TabNavigation', () => {
     });
 
     it('renders with tablist role', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       expect(screen.getByRole('tablist')).toBeInTheDocument();
     });
 
     it('renders tabs with tab role', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       const tabs = screen.getAllByRole('tab');
       expect(tabs).toHaveLength(3);
@@ -44,16 +38,14 @@ describe('TabNavigation', () => {
           activeTab="overview"
           onTabChange={() => {}}
           ariaLabel="Main navigation"
-        />
+        />,
       );
 
       expect(screen.getByRole('tablist')).toHaveAttribute('aria-label', 'Main navigation');
     });
 
     it('uses default aria-label when not provided', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       expect(screen.getByRole('tablist')).toHaveAttribute('aria-label', 'Tab navigation');
     });
@@ -61,18 +53,14 @@ describe('TabNavigation', () => {
 
   describe('active state', () => {
     it('marks active tab with aria-selected true', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="details" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="details" onTabChange={() => {}} />);
 
       const detailsTab = screen.getByRole('tab', { name: 'Details' });
       expect(detailsTab).toHaveAttribute('aria-selected', 'true');
     });
 
     it('marks inactive tabs with aria-selected false', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="details" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="details" onTabChange={() => {}} />);
 
       const overviewTab = screen.getByRole('tab', { name: 'Overview' });
       const settingsTab = screen.getByRole('tab', { name: 'Settings' });
@@ -82,9 +70,7 @@ describe('TabNavigation', () => {
     });
 
     it('applies active styling to selected tab', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       const overviewTab = screen.getByRole('tab', { name: 'Overview' });
       expect(overviewTab).toHaveClass('bg-accent');
@@ -96,9 +82,7 @@ describe('TabNavigation', () => {
       const onTabChange = jest.fn();
       const user = userEvent.setup();
 
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={onTabChange} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={onTabChange} />);
 
       await user.click(screen.getByRole('tab', { name: 'Details' }));
 
@@ -109,9 +93,7 @@ describe('TabNavigation', () => {
       const onTabChange = jest.fn();
       const user = userEvent.setup();
 
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={onTabChange} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={onTabChange} />);
 
       await user.click(screen.getByRole('tab', { name: 'Settings' }));
 
@@ -121,9 +103,7 @@ describe('TabNavigation', () => {
 
   describe('variants', () => {
     it('uses default variant by default', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       const tab = screen.getByRole('tab', { name: 'Overview' });
       expect(tab).toHaveClass('px-3', 'py-1', 'text-sm');
@@ -136,7 +116,7 @@ describe('TabNavigation', () => {
           activeTab="overview"
           onTabChange={() => {}}
           variant="compact"
-        />
+        />,
       );
 
       const tab = screen.getByRole('tab', { name: 'Overview' });
@@ -146,28 +126,18 @@ describe('TabNavigation', () => {
 
   describe('aria attributes', () => {
     it('sets correct id on tabs', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
-      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
-        'id',
-        'overview-tab'
-      );
-      expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute(
-        'id',
-        'details-tab'
-      );
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('id', 'overview-tab');
+      expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('id', 'details-tab');
     });
 
     it('sets aria-controls on tabs', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
         'aria-controls',
-        'overview-panel'
+        'overview-panel',
       );
     });
   });
@@ -179,17 +149,13 @@ describe('TabNavigation', () => {
         { id: 'profile', label: 'Profile' },
       ];
 
-      render(
-        <TabNavigation tabs={tabsWithIcon} activeTab="home" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={tabsWithIcon} activeTab="home" onTabChange={() => {}} />);
 
       expect(screen.getByTestId('home-icon')).toBeInTheDocument();
     });
 
     it('does not render icon container when not provided', () => {
-      render(
-        <TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />
-      );
+      render(<TabNavigation tabs={mockTabs} activeTab="overview" onTabChange={() => {}} />);
 
       // Tab should only contain label text, no icon span
       const tab = screen.getByRole('tab', { name: 'Overview' });
@@ -205,7 +171,7 @@ describe('TabNavigation', () => {
           activeTab="overview"
           onTabChange={() => {}}
           className="custom-class"
-        />
+        />,
       );
 
       expect(screen.getByRole('tablist')).toHaveClass('custom-class');

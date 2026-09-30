@@ -68,7 +68,7 @@ const runMatrix = async () => {
   await waitFor(() => {
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/debates/matrix'),
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 };
@@ -83,7 +83,7 @@ describe('ScenarioMatrixView', () => {
 
     expect(screen.getByRole('heading', { name: /scenario matrix/i })).toBeInTheDocument();
     expect(
-      screen.getByText(/configure scenarios above and run the matrix to see results/i)
+      screen.getByText(/configure scenarios above and run the matrix to see results/i),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /run scenario matrix/i })).toBeDisabled();
   });
@@ -101,10 +101,7 @@ describe('ScenarioMatrixView', () => {
   });
 
   it('runs the matrix and renders results', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockMatrixResult),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMatrixResult) });
 
     render(<ScenarioMatrixView />);
 
@@ -126,10 +123,7 @@ describe('ScenarioMatrixView', () => {
   });
 
   it('expands scenario details in list view', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockMatrixResult),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMatrixResult) });
 
     render(<ScenarioMatrixView />);
 
@@ -145,15 +139,12 @@ describe('ScenarioMatrixView', () => {
     fireEvent.click(baselineToggle);
 
     expect(
-      screen.getByText(/react handles fast iteration and team onboarding/i)
+      screen.getByText(/react handles fast iteration and team onboarding/i),
     ).toBeInTheDocument();
   });
 
   it('filters to consensus scenarios only', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockMatrixResult),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMatrixResult) });
 
     render(<ScenarioMatrixView />);
 
@@ -169,10 +160,7 @@ describe('ScenarioMatrixView', () => {
   });
 
   it('switches to grid view and supports comparisons', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockMatrixResult),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMatrixResult) });
 
     render(<ScenarioMatrixView />);
 
@@ -184,9 +172,7 @@ describe('ScenarioMatrixView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /grid/i }));
 
-    expect(
-      screen.getByText(/compare them/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/compare them/i)).toBeInTheDocument();
 
     const baselineCard = screen.getByRole('gridcell', {
       name: /baseline\s+\(baseline\): consensus reached,\s+82% confidence/i,

@@ -61,9 +61,7 @@ function StepIndicator({ current }: { current: OnboardingStep }) {
             {idx > 0 && (
               <div
                 className={`w-8 h-px mx-1 ${
-                  isCompleted
-                    ? 'bg-[var(--acid-green)]'
-                    : 'bg-[var(--border)]'
+                  isCompleted ? 'bg-[var(--acid-green)]' : 'bg-[var(--border)]'
                 }`}
               />
             )}
@@ -134,14 +132,7 @@ function _Spinner({ className = 'w-4 h-4' }: { className?: string }) {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
         className="opacity-75"
         fill="currentColor"
@@ -167,8 +158,7 @@ function DebateProgress({ elapsed }: { elapsed: number }) {
     { label: 'Building consensus', threshold: 90 },
   ];
 
-  const currentPhase =
-    phases.findLast((p) => pct >= p.threshold)?.label ?? 'Initializing debate';
+  const currentPhase = phases.findLast((p) => pct >= p.threshold)?.label ?? 'Initializing debate';
 
   return (
     <div className="space-y-2">
@@ -213,18 +203,12 @@ export default function GetStartedPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const response = await fetch(`${API_BASE_URL}/api/health`, {
-        signal: controller.signal,
-      });
+      const response = await fetch(`${API_BASE_URL}/api/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json().catch(() => ({}));
-        setHealth({
-          status: 'online',
-          serverVersion: data.version,
-          uptime: data.uptime_seconds,
-        });
+        setHealth({ status: 'online', serverVersion: data.version, uptime: data.uptime_seconds });
       } else {
         setHealth({ status: 'offline' });
       }
@@ -260,10 +244,7 @@ export default function GetStartedPage() {
         // If detailed health returns providers info, use it
         if (data.providers && typeof data.providers === 'object') {
           for (const p of knownProviders) {
-            providerList.push({
-              name: p.name,
-              configured: !!data.providers[p.key],
-            });
+            providerList.push({ name: p.name, configured: !!data.providers[p.key] });
           }
         } else {
           // Fallback: just show that the server is up (no per-key detail available)
@@ -304,12 +285,7 @@ export default function GetStartedPage() {
       const response = await fetch(`${API_BASE_URL}/api/v1/debates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question,
-          rounds: 4,
-          debate_format: 'light',
-          auto_select: true,
-        }),
+        body: JSON.stringify({ question, rounds: 4, debate_format: 'light', auto_select: true }),
       });
 
       if (!response.ok) {
@@ -317,18 +293,11 @@ export default function GetStartedPage() {
 
         // If server suggests playground fallback (no API keys), try that
         if (errorData.use_playground) {
-          const pgResponse = await fetch(
-            `${API_BASE_URL}/api/v1/playground/debate`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                topic: question,
-                rounds: 4,
-                agents: 3,
-              }),
-            }
-          );
+          const pgResponse = await fetch(`${API_BASE_URL}/api/v1/playground/debate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: question, rounds: 4, agents: 3 }),
+          });
           if (pgResponse.ok) {
             const pgData = await pgResponse.json();
             const debateId = pgData.debate_id || pgData.id;
@@ -350,9 +319,7 @@ export default function GetStartedPage() {
         }
 
         throw new Error(
-          errorData.error ||
-            errorData.message ||
-            `Server returned ${response.status}`
+          errorData.error || errorData.message || `Server returned ${response.status}`,
         );
       }
 
@@ -377,9 +344,7 @@ export default function GetStartedPage() {
     } catch (err) {
       clearInterval(timer);
       setDebateLoading(false);
-      setDebateError(
-        err instanceof Error ? err.message : 'Failed to start debate'
-      );
+      setDebateError(err instanceof Error ? err.message : 'Failed to start debate');
     }
   }, [userQuestion]);
 
@@ -402,12 +367,8 @@ export default function GetStartedPage() {
             >
               DASHBOARD
             </Link>
-            <span className="text-xs font-theme-data text-[var(--text-muted)]">
-              /
-            </span>
-            <span className="text-xs font-theme-data text-[var(--acid-green)]">
-              GET STARTED
-            </span>
+            <span className="text-xs font-theme-data text-[var(--text-muted)]">/</span>
+            <span className="text-xs font-theme-data text-[var(--acid-green)]">GET STARTED</span>
           </div>
 
           {/* Page header */}
@@ -416,8 +377,8 @@ export default function GetStartedPage() {
               {'>'} GET STARTED
             </h1>
             <p className="text-sm font-theme-data text-[var(--text-muted)] max-w-2xl">
-              Connect to the backend, run your first AI debate, and see the
-              results. Three steps to experience the Decision Integrity Platform.
+              Connect to the backend, run your first AI debate, and see the results. Three steps to
+              experience the Decision Integrity Platform.
             </p>
           </div>
 
@@ -429,9 +390,7 @@ export default function GetStartedPage() {
           {/* ============================================================ */}
           <section
             className={`bg-[var(--surface)] border p-5 transition-colors ${
-              currentStep === 1
-                ? 'border-[var(--acid-green)]/40'
-                : 'border-[var(--border)]'
+              currentStep === 1 ? 'border-[var(--acid-green)]/40' : 'border-[var(--border)]'
             }`}
           >
             <div className="flex items-center gap-3 mb-4">
@@ -501,18 +460,11 @@ export default function GetStartedPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {providers.map((provider) => (
-                      <div
-                        key={provider.name}
-                        className="flex items-center gap-2"
-                      >
-                        <StatusDot
-                          status={provider.configured ? 'ok' : 'error'}
-                        />
+                      <div key={provider.name} className="flex items-center gap-2">
+                        <StatusDot status={provider.configured ? 'ok' : 'error'} />
                         <span
                           className={`text-xs font-theme-data ${
-                            provider.configured
-                              ? 'text-[var(--text)]'
-                              : 'text-[var(--text-muted)]'
+                            provider.configured ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'
                           }`}
                         >
                           {provider.name}
@@ -523,13 +475,11 @@ export default function GetStartedPage() {
                   {!hasAnyProvider && health.status === 'online' && (
                     <div className="mt-2 space-y-1.5">
                       <p className="text-[10px] font-theme-data text-amber-400">
-                        No API keys detected. The playground will be used for
-                        your first debate.
+                        No API keys detected. The playground will be used for your first debate.
                       </p>
                       <p className="text-[10px] font-theme-data text-[var(--text-muted)]">
                         To use real AI providers, add keys to your{' '}
-                        <code className="text-[var(--acid-cyan)]">.env</code>{' '}
-                        file:
+                        <code className="text-[var(--acid-cyan)]">.env</code> file:
                       </p>
                       <code className="block text-[10px] font-theme-data bg-[var(--surface)] text-[var(--text-muted)] p-2 border border-[var(--border)]">
                         ANTHROPIC_API_KEY=sk-...{'\n'}
@@ -599,9 +549,7 @@ export default function GetStartedPage() {
               </span>
               <h2
                 className={`text-sm font-theme-data uppercase tracking-wider ${
-                  currentStep >= 2
-                    ? 'text-[var(--acid-green)]'
-                    : 'text-[var(--text-muted)]'
+                  currentStep >= 2 ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 Run Your First Debate
@@ -611,9 +559,8 @@ export default function GetStartedPage() {
             {currentStep >= 2 && (
               <div className="space-y-4">
                 <p className="text-xs font-theme-data text-[var(--text-muted)] max-w-2xl">
-                  Launch a multi-agent debate where AI models propose, critique,
-                  and synthesize a decision. Enter your own question or use the
-                  suggestion below.
+                  Launch a multi-agent debate where AI models propose, critique, and synthesize a
+                  decision. Enter your own question or use the suggestion below.
                 </p>
 
                 {/* Debate topic card */}
@@ -658,9 +605,7 @@ export default function GetStartedPage() {
                   {/* Error state */}
                   {debateError && (
                     <div className="bg-red-500/5 border border-red-500/20 p-3 mb-3">
-                      <p className="text-xs font-theme-data text-red-400">
-                        {debateError}
-                      </p>
+                      <p className="text-xs font-theme-data text-red-400">{debateError}</p>
                     </div>
                   )}
 
@@ -701,9 +646,7 @@ export default function GetStartedPage() {
               </span>
               <h2
                 className={`text-sm font-theme-data uppercase tracking-wider ${
-                  currentStep === 3
-                    ? 'text-[var(--acid-green)]'
-                    : 'text-[var(--text-muted)]'
+                  currentStep === 3 ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 View Results
@@ -844,8 +787,7 @@ export default function GetStartedPage() {
                     Debate Arena
                   </h3>
                   <p className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                    Ask your own question and customize agents, rounds, and
-                    debate format.
+                    Ask your own question and customize agents, rounds, and debate format.
                   </p>
                 </Link>
 
@@ -860,8 +802,7 @@ export default function GetStartedPage() {
                     Self-Improvement
                   </h3>
                   <p className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                    Use the Nomic Loop to let agents autonomously improve the
-                    platform.
+                    Use the Nomic Loop to let agents autonomously improve the platform.
                   </p>
                 </Link>
 
@@ -876,8 +817,7 @@ export default function GetStartedPage() {
                     Pipeline Canvas
                   </h3>
                   <p className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                    Transform ideas into goals, actions, and orchestrated agent
-                    workflows.
+                    Transform ideas into goals, actions, and orchestrated agent workflows.
                   </p>
                 </Link>
               </div>
@@ -886,9 +826,7 @@ export default function GetStartedPage() {
 
           {/* Footer navigation */}
           <div className="flex items-center gap-2 pt-4 border-t border-[var(--border)]">
-            <span className="text-xs font-theme-data text-[var(--text-muted)]">
-              Navigate:
-            </span>
+            <span className="text-xs font-theme-data text-[var(--text-muted)]">Navigate:</span>
             <Link
               href="/dashboard"
               className="px-3 py-1 text-xs font-theme-data bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 transition-colors"

@@ -168,7 +168,10 @@ test.describe('Critical Debate Lifecycle', () => {
       }
     });
 
-    test('should show debate creation API call with correct payload', async ({ page, aragoraPage }) => {
+    test('should show debate creation API call with correct payload', async ({
+      page,
+      aragoraPage,
+    }) => {
       let capturedPayload: Record<string, unknown> | null = null;
 
       await page.route('**/api/debate', async (route) => {
@@ -320,7 +323,8 @@ test.describe('Critical Debate Lifecycle', () => {
       const bodyText = await page.locator('body').textContent();
       expect(bodyText).toBeTruthy();
       // The consensus summary or debate topic should appear somewhere
-      const hasTopic = bodyText!.toLowerCase().includes('4-day') || bodyText!.toLowerCase().includes('work week');
+      const hasTopic =
+        bodyText!.toLowerCase().includes('4-day') || bodyText!.toLowerCase().includes('work week');
       const hasGenericContent = bodyText!.length > 100;
       expect(hasTopic || hasGenericContent).toBeTruthy();
     });
@@ -352,9 +356,7 @@ test.describe('Critical Debate Lifecycle', () => {
       await page.waitForLoadState('domcontentloaded');
 
       // Should now show completed state
-      const completedIndicator = page
-        .locator('text=/completed|consensus|finished|done/i')
-        .first();
+      const completedIndicator = page.locator('text=/completed|consensus|finished|done/i').first();
       const mainContent = page.locator('main').first();
       await expect(completedIndicator.or(mainContent)).toBeVisible({ timeout: 10000 });
     });

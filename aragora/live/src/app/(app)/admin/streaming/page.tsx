@@ -15,26 +15,27 @@ import {
   type SNSSQSConfig,
 } from '@/store/streamingStore';
 
-const CONNECTORS: Array<{ type: ConnectorType; label: string; icon: string; description: string }> = [
-  {
-    type: 'kafka',
-    label: 'Apache Kafka',
-    icon: 'K',
-    description: 'High-throughput distributed event streaming',
-  },
-  {
-    type: 'rabbitmq',
-    label: 'RabbitMQ',
-    icon: 'R',
-    description: 'Message broker with flexible routing',
-  },
-  {
-    type: 'snssqs',
-    label: 'AWS SNS/SQS',
-    icon: 'A',
-    description: 'AWS managed messaging services',
-  },
-];
+const CONNECTORS: Array<{ type: ConnectorType; label: string; icon: string; description: string }> =
+  [
+    {
+      type: 'kafka',
+      label: 'Apache Kafka',
+      icon: 'K',
+      description: 'High-throughput distributed event streaming',
+    },
+    {
+      type: 'rabbitmq',
+      label: 'RabbitMQ',
+      icon: 'R',
+      description: 'Message broker with flexible routing',
+    },
+    {
+      type: 'snssqs',
+      label: 'AWS SNS/SQS',
+      icon: 'A',
+      description: 'AWS managed messaging services',
+    },
+  ];
 
 export default function StreamingConfigPage() {
   const {
@@ -99,7 +100,9 @@ export default function StreamingConfigPage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Connectors</span>
-            <span className="text-sm font-theme-data text-[var(--acid-green)]">{connectors.length}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-green)]">
+              {connectors.length}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Connected</span>
@@ -201,7 +204,9 @@ export default function StreamingConfigPage() {
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">STREAMING CONFIGURATION</h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
+              STREAMING CONFIGURATION
+            </h1>
             <p className="text-text-muted text-sm font-theme-data">
               Configure enterprise streaming connectors for event ingestion into Knowledge Mound.
             </p>
@@ -245,7 +250,9 @@ export default function StreamingConfigPage() {
                         {conn.icon}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-theme-data text-text font-bold">{conn.label}</div>
+                        <div className="text-sm font-theme-data text-text font-bold">
+                          {conn.label}
+                        </div>
                         <div className="text-xs font-theme-data text-text-muted truncate">
                           {conn.description}
                         </div>
@@ -319,7 +326,9 @@ function KafkaConfigForm({ config, onChange, onReset }: KafkaConfigFormProps) {
   return (
     <div className="border border-[var(--accent)]/30 bg-surface/50">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--accent)]/20 bg-surface/80">
-        <span className="text-sm font-theme-data text-[var(--acid-cyan)]">Apache Kafka Configuration</span>
+        <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+          Apache Kafka Configuration
+        </span>
         <button
           onClick={onReset}
           className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
@@ -345,7 +354,12 @@ function KafkaConfigForm({ config, onChange, onReset }: KafkaConfigFormProps) {
               type="text"
               value={config.topics.join(', ')}
               onChange={(e) =>
-                onChange({ topics: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })
+                onChange({
+                  topics: e.target.value
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean),
+                })
               }
               placeholder="aragora-events, decisions"
               className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -367,7 +381,9 @@ function KafkaConfigForm({ config, onChange, onReset }: KafkaConfigFormProps) {
           <FormField label="Security Protocol">
             <select
               value={config.security_protocol}
-              onChange={(e) => onChange({ security_protocol: e.target.value as KafkaConfig['security_protocol'] })}
+              onChange={(e) =>
+                onChange({ security_protocol: e.target.value as KafkaConfig['security_protocol'] })
+              }
               className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none"
             >
               <option value="PLAINTEXT">PLAINTEXT</option>
@@ -381,7 +397,11 @@ function KafkaConfigForm({ config, onChange, onReset }: KafkaConfigFormProps) {
               <FormField label="SASL Mechanism">
                 <select
                   value={config.sasl_mechanism || ''}
-                  onChange={(e) => onChange({ sasl_mechanism: e.target.value as KafkaConfig['sasl_mechanism'] || null })}
+                  onChange={(e) =>
+                    onChange({
+                      sasl_mechanism: (e.target.value as KafkaConfig['sasl_mechanism']) || null,
+                    })
+                  }
                   className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none"
                 >
                   <option value="">Select mechanism</option>
@@ -417,7 +437,11 @@ function KafkaConfigForm({ config, onChange, onReset }: KafkaConfigFormProps) {
             <FormField label="Auto Offset Reset">
               <select
                 value={config.auto_offset_reset}
-                onChange={(e) => onChange({ auto_offset_reset: e.target.value as KafkaConfig['auto_offset_reset'] })}
+                onChange={(e) =>
+                  onChange({
+                    auto_offset_reset: e.target.value as KafkaConfig['auto_offset_reset'],
+                  })
+                }
                 className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none"
               >
                 <option value="earliest">Earliest</option>
@@ -437,7 +461,9 @@ function KafkaConfigForm({ config, onChange, onReset }: KafkaConfigFormProps) {
               <input
                 type="number"
                 value={config.session_timeout_ms}
-                onChange={(e) => onChange({ session_timeout_ms: parseInt(e.target.value) || 30000 })}
+                onChange={(e) =>
+                  onChange({ session_timeout_ms: parseInt(e.target.value) || 30000 })
+                }
                 className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </FormField>
@@ -496,7 +522,9 @@ function RabbitMQConfigForm({ config, onChange, onReset }: RabbitMQConfigFormPro
   return (
     <div className="border border-[var(--accent)]/30 bg-surface/50">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--accent)]/20 bg-surface/80">
-        <span className="text-sm font-theme-data text-[var(--acid-cyan)]">RabbitMQ Configuration</span>
+        <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+          RabbitMQ Configuration
+        </span>
         <button
           onClick={onReset}
           className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
@@ -541,7 +569,9 @@ function RabbitMQConfigForm({ config, onChange, onReset }: RabbitMQConfigFormPro
             <FormField label="Exchange Type">
               <select
                 value={config.exchange_type}
-                onChange={(e) => onChange({ exchange_type: e.target.value as RabbitMQConfig['exchange_type'] })}
+                onChange={(e) =>
+                  onChange({ exchange_type: e.target.value as RabbitMQConfig['exchange_type'] })
+                }
                 className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none"
               >
                 <option value="direct">Direct</option>
@@ -679,7 +709,9 @@ function SNSSQSConfigForm({ config, onChange, onReset }: SNSSQSConfigFormProps) 
   return (
     <div className="border border-[var(--accent)]/30 bg-surface/50">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--accent)]/20 bg-surface/80">
-        <span className="text-sm font-theme-data text-[var(--acid-cyan)]">AWS SNS/SQS Configuration</span>
+        <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+          AWS SNS/SQS Configuration
+        </span>
         <button
           onClick={onReset}
           className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
@@ -747,7 +779,9 @@ function SNSSQSConfigForm({ config, onChange, onReset }: SNSSQSConfigFormProps) 
               <input
                 type="number"
                 value={config.visibility_timeout_seconds}
-                onChange={(e) => onChange({ visibility_timeout_seconds: parseInt(e.target.value) || 300 })}
+                onChange={(e) =>
+                  onChange({ visibility_timeout_seconds: parseInt(e.target.value) || 300 })
+                }
                 className="w-full px-3 py-2 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </FormField>
@@ -794,7 +828,9 @@ function SNSSQSConfigForm({ config, onChange, onReset }: SNSSQSConfigFormProps) 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase tracking-wider mb-3">{title}</h3>
+      <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase tracking-wider mb-3">
+        {title}
+      </h3>
       <div className="space-y-3">{children}</div>
     </div>
   );

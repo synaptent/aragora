@@ -167,9 +167,21 @@ const DEMO_REPORT: MetricsReport = {
   metrics: [
     { type: 'complexity', value: 4.2, unit: 'cyclomatic', status: 'ok', details: { max: 18 } },
     { type: 'maintainability', value: 72.5, unit: 'index', status: 'ok' },
-    { type: 'lines_of_code', value: 21200, unit: 'lines', status: 'ok', details: { comments: 4120, blank: 3130, total: 28450 } },
+    {
+      type: 'lines_of_code',
+      value: 21200,
+      unit: 'lines',
+      status: 'ok',
+      details: { comments: 4120, blank: 3130, total: 28450 },
+    },
     { type: 'documentation', value: 19.4, unit: 'percent', status: 'ok' },
-    { type: 'duplication', value: 2.3, unit: 'percent', status: 'ok', details: { duplicate_blocks: 2 } },
+    {
+      type: 'duplication',
+      value: 2.3,
+      unit: 'percent',
+      status: 'ok',
+      details: { duplicate_blocks: 2 },
+    },
   ],
 };
 
@@ -222,9 +234,7 @@ export function MetricsDashboard({
     try {
       const response = await fetch(
         `${apiBase}/api/v1/codebase/${repositoryId || 'default'}/metrics`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
       );
 
       if (!response.ok) {
@@ -254,10 +264,8 @@ export function MetricsDashboard({
             'Content-Type': 'application/json',
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
-          body: JSON.stringify({
-            repo_path: '.',
-          }),
-        }
+          body: JSON.stringify({ repo_path: '.' }),
+        },
       );
 
       if (!response.ok) {
@@ -276,9 +284,7 @@ export function MetricsDashboard({
       const pollInterval = setInterval(async () => {
         const statusResponse = await fetch(
           `${apiBase}/api/v1/codebase/${repositoryId || 'default'}/metrics`,
-          {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          }
+          { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
         );
 
         if (statusResponse.ok) {
@@ -370,7 +376,7 @@ export function MetricsDashboard({
 
         {/* Tabs */}
         <div className="flex gap-2">
-          {(['overview', 'hotspots', 'duplicates', 'files'] as TabType[]).map(tab => (
+          {(['overview', 'hotspots', 'duplicates', 'files'] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -427,18 +433,26 @@ export function MetricsDashboard({
 
             {/* Maintainability Index */}
             <div className="border border-[var(--accent)]/30 rounded p-4 bg-surface/30">
-              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">Maintainability Index</h3>
+              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                Maintainability Index
+              </h3>
               <div className="flex items-center gap-6">
-                <div className={`text-5xl font-theme-data ${getMIColor(report.summary.maintainability_index)}`}>
+                <div
+                  className={`text-5xl font-theme-data ${getMIColor(report.summary.maintainability_index)}`}
+                >
                   {report.summary.maintainability_index.toFixed(1)}
                 </div>
                 <div className="flex-1">
                   <div className="h-4 bg-surface rounded-full overflow-hidden">
                     <div
                       className={`h-full transition-all ${
-                        report.summary.maintainability_index >= 80 ? 'bg-green-500' :
-                        report.summary.maintainability_index >= 65 ? 'bg-yellow-500' :
-                        report.summary.maintainability_index >= 50 ? 'bg-orange-500' : 'bg-red-500'
+                        report.summary.maintainability_index >= 80
+                          ? 'bg-green-500'
+                          : report.summary.maintainability_index >= 65
+                            ? 'bg-yellow-500'
+                            : report.summary.maintainability_index >= 50
+                              ? 'bg-orange-500'
+                              : 'bg-red-500'
                       }`}
                       style={{ width: `${report.summary.maintainability_index}%` }}
                     />
@@ -465,10 +479,15 @@ export function MetricsDashboard({
                 </div>
                 <div>
                   <div className="text-xs text-text-muted mb-1">Maximum Complexity</div>
-                  <div className={`text-3xl font-theme-data ${
-                    report.summary.max_complexity > 20 ? 'text-red-400' :
-                    report.summary.max_complexity > 10 ? 'text-yellow-400' : 'text-green-400'
-                  }`}>
+                  <div
+                    className={`text-3xl font-theme-data ${
+                      report.summary.max_complexity > 20
+                        ? 'text-red-400'
+                        : report.summary.max_complexity > 10
+                          ? 'text-yellow-400'
+                          : 'text-green-400'
+                    }`}
+                  >
                     {report.summary.max_complexity}
                   </div>
                 </div>
@@ -482,13 +501,16 @@ export function MetricsDashboard({
                 {report.metrics.map((metric, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 bg-bg/30 rounded">
                     <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full ${
-                        metric.status === 'ok' ? 'bg-green-500' :
-                        metric.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
-                      }`} />
-                      <span className="text-sm capitalize">
-                        {metric.type.replace(/_/g, ' ')}
-                      </span>
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          metric.status === 'ok'
+                            ? 'bg-green-500'
+                            : metric.status === 'warning'
+                              ? 'bg-yellow-500'
+                              : 'bg-red-500'
+                        }`}
+                      />
+                      <span className="text-sm capitalize">{metric.type.replace(/_/g, ' ')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`font-theme-data ${getStatusColor(metric.status)}`}>
@@ -517,7 +539,11 @@ export function MetricsDashboard({
               </div>
               <div className="border border-[var(--accent)]/30 rounded p-3 bg-surface/30 text-center">
                 <div className="text-lg font-theme-data text-blue-400">
-                  {((report.summary.total_comment_lines / report.summary.total_code_lines) * 100).toFixed(1)}%
+                  {(
+                    (report.summary.total_comment_lines / report.summary.total_code_lines) *
+                    100
+                  ).toFixed(1)}
+                  %
                 </div>
                 <div className="text-xs text-text-muted">Documentation</div>
               </div>
@@ -550,13 +576,18 @@ export function MetricsDashboard({
                         </div>
                         {hotspot.function_name && (
                           <div className="text-xs text-text-muted mt-1">
-                            Function: <span className="text-[var(--accent)]">{hotspot.function_name}</span>
-                            {hotspot.class_name && <span className="ml-2">in {hotspot.class_name}</span>}
+                            Function:{' '}
+                            <span className="text-[var(--accent)]">{hotspot.function_name}</span>
+                            {hotspot.class_name && (
+                              <span className="ml-2">in {hotspot.class_name}</span>
+                            )}
                           </div>
                         )}
                       </div>
                       <div className="text-right">
-                        <div className={`text-2xl font-theme-data ${getRiskColor(hotspot.risk_score)}`}>
+                        <div
+                          className={`text-2xl font-theme-data ${getRiskColor(hotspot.risk_score)}`}
+                        >
                           {hotspot.risk_score.toFixed(0)}
                         </div>
                         <div className="text-xs text-text-muted">Risk Score</div>
@@ -566,16 +597,23 @@ export function MetricsDashboard({
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
                         <div className="text-text-muted text-xs">Cyclomatic</div>
-                        <div className={`font-theme-data ${
-                          hotspot.complexity > 15 ? 'text-red-400' :
-                          hotspot.complexity > 10 ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
+                        <div
+                          className={`font-theme-data ${
+                            hotspot.complexity > 15
+                              ? 'text-red-400'
+                              : hotspot.complexity > 10
+                                ? 'text-yellow-400'
+                                : 'text-green-400'
+                          }`}
+                        >
                           {hotspot.complexity}
                         </div>
                       </div>
                       <div>
                         <div className="text-text-muted text-xs">Cognitive</div>
-                        <div className="font-theme-data">{hotspot.cognitive_complexity || 'N/A'}</div>
+                        <div className="font-theme-data">
+                          {hotspot.cognitive_complexity || 'N/A'}
+                        </div>
                       </div>
                       <div>
                         <div className="text-text-muted text-xs">Lines</div>
@@ -590,7 +628,7 @@ export function MetricsDashboard({
                     {hotspot.contributors.length > 0 && (
                       <div className="mt-3 flex items-center gap-2">
                         <span className="text-xs text-text-muted">Contributors:</span>
-                        {hotspot.contributors.map(contributor => (
+                        {hotspot.contributors.map((contributor) => (
                           <span
                             key={contributor}
                             className="px-2 py-0.5 text-xs bg-[var(--accent)]/10 text-[var(--accent)] rounded"
@@ -624,10 +662,7 @@ export function MetricsDashboard({
                   const isExpanded = expandedFile === dup.hash;
 
                   return (
-                    <div
-                      key={idx}
-                      className="border border-orange-500/30 rounded bg-surface/30"
-                    >
+                    <div key={idx} className="border border-orange-500/30 rounded bg-surface/30">
                       <button
                         onClick={() => setExpandedFile(isExpanded ? null : dup.hash)}
                         className="w-full p-4 text-left"
@@ -655,7 +690,9 @@ export function MetricsDashboard({
                                 key={occIdx}
                                 className="flex items-center justify-between p-2 bg-bg/30 rounded text-sm"
                               >
-                                <span className="font-theme-data text-[var(--acid-cyan)]">{occ.file}</span>
+                                <span className="font-theme-data text-[var(--acid-cyan)]">
+                                  {occ.file}
+                                </span>
                                 <span className="text-text-muted">
                                   Lines {occ.start}-{occ.end}
                                 </span>
@@ -675,13 +712,13 @@ export function MetricsDashboard({
         {/* Files Tab */}
         {activeTab === 'files' && report && (
           <div className="space-y-4">
-            <p className="text-sm text-text-muted mb-4">
-              Line count breakdown by category.
-            </p>
+            <p className="text-sm text-text-muted mb-4">Line count breakdown by category.</p>
 
             {/* Line Distribution */}
             <div className="border border-[var(--accent)]/30 rounded p-4 bg-surface/30">
-              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">Line Distribution</h3>
+              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                Line Distribution
+              </h3>
               <div className="flex h-8 rounded overflow-hidden mb-3">
                 <div
                   className="bg-[var(--accent)]"
@@ -723,7 +760,9 @@ export function MetricsDashboard({
 
             {/* Analysis Details */}
             <div className="border border-[var(--accent)]/30 rounded p-4 bg-surface/30">
-              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">Analysis Details</h3>
+              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+                Analysis Details
+              </h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-text-muted">Analysis ID:</span>
@@ -735,7 +774,9 @@ export function MetricsDashboard({
                 </div>
                 <div>
                   <span className="text-text-muted">Total Lines:</span>
-                  <span className="ml-2 font-theme-data">{formatNumber(report.summary.total_lines)}</span>
+                  <span className="ml-2 font-theme-data">
+                    {formatNumber(report.summary.total_lines)}
+                  </span>
                 </div>
                 <div>
                   <span className="text-text-muted">Files Analyzed:</span>

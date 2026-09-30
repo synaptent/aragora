@@ -47,7 +47,9 @@ export default function ArgumentAnalysisPage() {
 
     try {
       const [graphRes, statsRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/argument-graph?format=json`),
+        fetch(
+          `${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/argument-graph?format=json`,
+        ),
         fetch(`${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/graph/stats`),
       ]);
 
@@ -126,17 +128,18 @@ export default function ArgumentAnalysisPage() {
 
   const exportHTML = () => {
     if (!graphData) return;
-    const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const nodeRows = graphData.nodes
       .map(
         (n) =>
-          `<tr><td>${escHtml(n.agent)}</td><td>${escHtml(n.node_type)}</td><td>R${n.round_num}</td><td>${escHtml(n.summary)}</td></tr>`
+          `<tr><td>${escHtml(n.agent)}</td><td>${escHtml(n.node_type)}</td><td>R${n.round_num}</td><td>${escHtml(n.summary)}</td></tr>`,
       )
       .join('\n');
     const edgeRows = graphData.edges
       .map(
         (e) =>
-          `<tr><td>${escHtml(e.source_id)}</td><td>${escHtml(e.relation)}</td><td>${escHtml(e.target_id)}</td><td>${e.weight}</td></tr>`
+          `<tr><td>${escHtml(e.source_id)}</td><td>${escHtml(e.relation)}</td><td>${escHtml(e.target_id)}</td><td>${e.weight}</td></tr>`,
       )
       .join('\n');
     const html = [
@@ -258,7 +261,8 @@ export default function ArgumentAnalysisPage() {
                 <div className="border border-[var(--accent)]/20 bg-surface/30 p-1">
                   <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--accent)]/20">
                     <span className="text-xs text-[var(--accent)]">
-                      &gt; ARGUMENT MAP &mdash; {graphData.nodes.length} nodes, {graphData.edges.length} edges
+                      &gt; ARGUMENT MAP &mdash; {graphData.nodes.length} nodes,{' '}
+                      {graphData.edges.length} edges
                     </span>
                     <div className="flex gap-2">
                       <button
@@ -385,18 +389,17 @@ export default function ArgumentAnalysisPage() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        {([
-                          ['Nodes', stats.node_count],
-                          ['Edges', stats.edge_count],
-                          ['Depth', stats.depth],
-                          ['Clusters', stats.clusters],
-                          ['Avg Branching', stats.avg_branching_factor?.toFixed(2) ?? '-'],
-                          ['Avg Path Length', stats.avg_path_length?.toFixed(2) ?? '-'],
-                        ] as [string, string | number][]).map(([label, value]) => (
-                          <div
-                            key={label}
-                            className="p-3 border border-[var(--accent)]/20 bg-bg"
-                          >
+                        {(
+                          [
+                            ['Nodes', stats.node_count],
+                            ['Edges', stats.edge_count],
+                            ['Depth', stats.depth],
+                            ['Clusters', stats.clusters],
+                            ['Avg Branching', stats.avg_branching_factor?.toFixed(2) ?? '-'],
+                            ['Avg Path Length', stats.avg_path_length?.toFixed(2) ?? '-'],
+                          ] as [string, string | number][]
+                        ).map(([label, value]) => (
+                          <div key={label} className="p-3 border border-[var(--accent)]/20 bg-bg">
                             <div className="text-xs text-text-muted">{label}</div>
                             <div className="text-lg text-[var(--accent)]">{value}</div>
                           </div>

@@ -6,9 +6,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8080',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8080' }));
 
 describe('useDebateFork', () => {
   const debateId = 'debate-123';
@@ -85,9 +83,7 @@ describe('useDebateFork', () => {
         await result.current.loadForks();
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        `http://localhost:8080/api/debates/${debateId}/forks`
-      );
+      expect(mockFetch).toHaveBeenCalledWith(`http://localhost:8080/api/debates/${debateId}/forks`);
       expect(result.current.forks).toEqual(mockForks);
       expect(result.current.forkTree).toEqual(mockTree);
       expect(result.current.loading).toBe(false);
@@ -95,10 +91,7 @@ describe('useDebateFork', () => {
     });
 
     it('handles 404 gracefully (no forks yet)', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
 
       const { result } = renderHook(() => useDebateFork(debateId));
 
@@ -176,15 +169,9 @@ describe('useDebateFork', () => {
       };
 
       mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockForkResult,
-        })
+        .mockResolvedValueOnce({ ok: true, json: async () => mockForkResult })
         // loadForks is called after createFork
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ forks: [], tree: null }),
-        });
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ forks: [], tree: null }) });
 
       const { result } = renderHook(() => useDebateFork(debateId));
 
@@ -202,7 +189,7 @@ describe('useDebateFork', () => {
             branch_point: 3,
             modified_context: 'What if we assumed the opposite?',
           }),
-        })
+        }),
       );
       expect(forkResult).toEqual(mockForkResult);
       expect(result.current.forkResult).toEqual(mockForkResult);
@@ -328,12 +315,7 @@ describe('useDebateFork', () => {
 
   describe('clearSelection', () => {
     it('clears both selected nodes', () => {
-      const mockNode: ForkNode = {
-        id: 'fork-1',
-        type: 'fork',
-        branch_point: 3,
-        children: [],
-      };
+      const mockNode: ForkNode = { id: 'fork-1', type: 'fork', branch_point: 3, children: [] };
 
       const { result } = renderHook(() => useDebateFork(debateId));
 
@@ -494,10 +476,7 @@ describe('useDebateFork', () => {
             message: 'Fork created',
           }),
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ forks: [], tree: null }),
-        });
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ forks: [], tree: null }) });
 
       const { result } = renderHook(() => useDebateFork(debateId));
 

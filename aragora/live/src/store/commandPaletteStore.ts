@@ -30,14 +30,14 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
           set(
             { isOpen: true, query: '', selectedIndex: 0, results: [], searchError: null },
             false,
-            'open'
+            'open',
           ),
 
         close: () =>
           set(
             { isOpen: false, query: '', selectedIndex: 0, results: [], searchError: null },
             false,
-            'close'
+            'close',
           ),
 
         toggle: () => {
@@ -50,8 +50,7 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
         },
 
         // Search actions
-        setQuery: (query: string) =>
-          set({ query, selectedIndex: 0 }, false, 'setQuery'),
+        setQuery: (query: string) => set({ query, selectedIndex: 0 }, false, 'setQuery'),
 
         setActiveCategory: (category: SearchCategory) =>
           set({ activeCategory: category, selectedIndex: 0 }, false, 'setActiveCategory'),
@@ -63,8 +62,7 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
         setResults: (results: SearchResult[]) =>
           set({ results, selectedIndex: 0 }, false, 'setResults'),
 
-        setIsSearching: (isSearching: boolean) =>
-          set({ isSearching }, false, 'setIsSearching'),
+        setIsSearching: (isSearching: boolean) => set({ isSearching }, false, 'setIsSearching'),
 
         setSearchError: (error: string | null) =>
           set({ searchError: error }, false, 'setSearchError'),
@@ -73,9 +71,7 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
         moveUp: () => {
           const { selectedIndex, results, recentItems, query } = get();
           // When no query, include recent items in count
-          const totalItems = query.trim()
-            ? results.length
-            : recentItems.length + results.length;
+          const totalItems = query.trim() ? results.length : recentItems.length + results.length;
           if (totalItems === 0) return;
 
           const newIndex = selectedIndex <= 0 ? totalItems - 1 : selectedIndex - 1;
@@ -84,9 +80,7 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
 
         moveDown: () => {
           const { selectedIndex, results, recentItems, query } = get();
-          const totalItems = query.trim()
-            ? results.length
-            : recentItems.length + results.length;
+          const totalItems = query.trim() ? results.length : recentItems.length + results.length;
           if (totalItems === 0) return;
 
           const newIndex = selectedIndex >= totalItems - 1 ? 0 : selectedIndex + 1;
@@ -101,10 +95,7 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
           const filtered = recentItems.filter((r) => r.id !== item.id);
 
           // Add new item at the beginning
-          const newItem: RecentItem = {
-            ...item,
-            timestamp: Date.now(),
-          };
+          const newItem: RecentItem = { ...item, timestamp: Date.now() };
 
           // Keep only MAX_RECENT_ITEMS
           const updated = [newItem, ...filtered].slice(0, MAX_RECENT_ITEMS);
@@ -114,11 +105,7 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
 
         removeRecentItem: (id: string) => {
           const { recentItems } = get();
-          set(
-            { recentItems: recentItems.filter((r) => r.id !== id) },
-            false,
-            'removeRecentItem'
-          );
+          set({ recentItems: recentItems.filter((r) => r.id !== id) }, false, 'removeRecentItem');
         },
 
         clearRecentItems: () => set({ recentItems: [] }, false, 'clearRecentItems'),
@@ -136,19 +123,17 @@ export const useCommandPaletteStore = create<CommandPaletteStore>()(
               searchError: null,
             },
             false,
-            'reset'
+            'reset',
           ),
       }),
       {
         name: 'aragora-command-palette',
         // Only persist recent items
-        partialize: (state) => ({
-          recentItems: state.recentItems,
-        }),
-      }
+        partialize: (state) => ({ recentItems: state.recentItems }),
+      },
     ),
-    { name: 'command-palette-store' }
-  )
+    { name: 'command-palette-store' },
+  ),
 );
 
 // Selectors

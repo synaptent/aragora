@@ -7,7 +7,8 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { LiveEloRankingsPanel } from '@/components/leaderboard/LiveEloRankingsPanel';
 
 const EloTrendChart = dynamic(
-  () => import('@/components/leaderboard/EloTrendChart').then(m => ({ default: m.EloTrendChart })),
+  () =>
+    import('@/components/leaderboard/EloTrendChart').then((m) => ({ default: m.EloTrendChart })),
   {
     ssr: false,
     loading: () => (
@@ -15,11 +16,14 @@ const EloTrendChart = dynamic(
         <div className="h-[280px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 const DomainLeaderboard = dynamic(
-  () => import('@/components/leaderboard/DomainLeaderboard').then(m => ({ default: m.DomainLeaderboard })),
+  () =>
+    import('@/components/leaderboard/DomainLeaderboard').then((m) => ({
+      default: m.DomainLeaderboard,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -27,7 +31,7 @@ const DomainLeaderboard = dynamic(
         <div className="h-[300px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function LeaderboardPage() {
@@ -46,8 +50,8 @@ export default function LeaderboardPage() {
               {'>'} AGENT LEADERBOARD
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Live ELO rankings with calibration scores and debate counts sourced from the
-              canonical rankings API.
+              Live ELO rankings with calibration scores and debate counts sourced from the canonical
+              rankings API.
             </p>
           </div>
 
@@ -73,12 +77,8 @@ export default function LeaderboardPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // AGENT LEADERBOARD
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // AGENT LEADERBOARD</p>
         </footer>
       </main>
     </>

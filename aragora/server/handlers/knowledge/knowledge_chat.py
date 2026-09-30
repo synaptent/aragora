@@ -38,7 +38,7 @@ MAX_ITEMS_LIMIT = 100
 _bridge = None
 
 
-def _get_bridge():
+def _get_bridge() -> Any:
     """Get or create the Knowledge + Chat bridge."""
     global _bridge
     if _bridge is None:

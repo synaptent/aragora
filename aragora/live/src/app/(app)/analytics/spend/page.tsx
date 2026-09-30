@@ -10,11 +10,7 @@ import {
   type DataPoint,
   type CostCategory,
 } from '@/components/analytics';
-import {
-  useSpendAnalytics,
-  type SpendPeriod,
-  type SpendAnomaly,
-} from '@/hooks/useSpendAnalytics';
+import { useSpendAnalytics, type SpendPeriod, type SpendAnomaly } from '@/hooks/useSpendAnalytics';
 
 // ============================================================================
 // Helpers
@@ -93,9 +89,7 @@ function AnomalyAlerts({ anomalies }: { anomalies: SpendAnomaly[] }) {
             <div className="flex items-center gap-3">
               <span
                 className={
-                  a.severity === 'critical'
-                    ? 'text-[var(--crimson)]'
-                    : 'text-[var(--acid-yellow)]'
+                  a.severity === 'critical' ? 'text-[var(--crimson)]' : 'text-[var(--acid-yellow)]'
                 }
               >
                 {a.severity === 'critical' ? '!!' : '!'}
@@ -104,21 +98,15 @@ function AnomalyAlerts({ anomalies }: { anomalies: SpendAnomaly[] }) {
               <span className="text-text-muted">{a.description}</span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-text-muted">
-                expected {formatUsd(a.expected_usd)}
-              </span>
+              <span className="text-text-muted">expected {formatUsd(a.expected_usd)}</span>
               <span
                 className={
-                  a.severity === 'critical'
-                    ? 'text-[var(--crimson)]'
-                    : 'text-[var(--acid-yellow)]'
+                  a.severity === 'critical' ? 'text-[var(--crimson)]' : 'text-[var(--acid-yellow)]'
                 }
               >
                 actual {formatUsd(a.actual_usd)}
               </span>
-              <span className="text-text-muted">
-                z={a.z_score.toFixed(1)}
-              </span>
+              <span className="text-text-muted">z={a.z_score.toFixed(1)}</span>
             </div>
           </div>
         ))}
@@ -153,9 +141,7 @@ function SpendTable({
       const bv = b[sortKey];
       if (typeof av === 'string' && typeof bv === 'string')
         return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-      return sortAsc
-        ? (av as number) - (bv as number)
-        : (bv as number) - (av as number);
+      return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
 
     return entries;
@@ -170,8 +156,7 @@ function SpendTable({
     }
   };
 
-  const sortIndicator = (key: SortKey) =>
-    sortKey === key ? (sortAsc ? ' ^' : ' v') : '';
+  const sortIndicator = (key: SortKey) => (sortKey === key ? (sortAsc ? ' ^' : ' v') : '');
 
   if (rows.length === 0) {
     return (
@@ -213,9 +198,7 @@ function SpendTable({
               >
                 Share{sortIndicator('pct')}
               </th>
-              <th className="py-2 px-3 text-[var(--accent)] text-right">
-                Bar
-              </th>
+              <th className="py-2 px-3 text-[var(--accent)] text-right">Bar</th>
             </tr>
           </thead>
           <tbody>
@@ -227,12 +210,8 @@ function SpendTable({
                 }`}
               >
                 <td className="py-2 px-3 text-[var(--acid-cyan)]">{row.name}</td>
-                <td className="py-2 px-3 text-right text-text">
-                  {formatUsd(row.cost)}
-                </td>
-                <td className="py-2 px-3 text-right text-text-muted">
-                  {row.pct.toFixed(1)}%
-                </td>
+                <td className="py-2 px-3 text-right text-text">{formatUsd(row.cost)}</td>
+                <td className="py-2 px-3 text-right text-text-muted">{row.pct.toFixed(1)}%</td>
                 <td className="py-2 px-3 text-right">
                   <div className="w-24 h-2 bg-surface rounded overflow-hidden ml-auto">
                     <div
@@ -272,17 +251,10 @@ export default function SpendAnalyticsPage() {
   // Transform by_agent into CostCategory[] for the donut chart
   const agentCategories: CostCategory[] = useMemo(() => {
     if (!analytics?.by_agent) return [];
-    const total = Object.values(analytics.by_agent).reduce(
-      (s, c) => s + c,
-      0,
-    );
+    const total = Object.values(analytics.by_agent).reduce((s, c) => s + c, 0);
     return Object.entries(analytics.by_agent)
       .sort(([, a], [, b]) => b - a)
-      .map(([name, cost]) => ({
-        name,
-        cost,
-        percentage: total > 0 ? (cost / total) * 100 : 0,
-      }));
+      .map(([name, cost]) => ({ name, cost, percentage: total > 0 ? (cost / total) * 100 : 0 }));
   }, [analytics]);
 
   const agentTotal = useMemo(
@@ -326,9 +298,7 @@ export default function SpendAnalyticsPage() {
           {/* ---- Overview Cards ---- */}
           <PanelErrorBoundary panelName="Spend Overview">
             <section className="mb-6">
-              <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">
-                {'>'} OVERVIEW
-              </h2>
+              <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">{'>'} OVERVIEW</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <MetricCard
                   title="Total Spend (Period)"
@@ -366,9 +336,7 @@ export default function SpendAnalyticsPage() {
                       ? `${analytics.anomalies.filter((a) => a.severity === 'critical').length} critical`
                       : 'none'
                   }
-                  color={
-                    (analytics?.anomalies?.length ?? 0) > 0 ? 'red' : 'green'
-                  }
+                  color={(analytics?.anomalies?.length ?? 0) > 0 ? 'red' : 'green'}
                   loading={isLoading}
                   icon="!"
                 />
@@ -416,17 +384,13 @@ export default function SpendAnalyticsPage() {
                         .map(([name, cost]) => ({
                           name,
                           cost,
-                          percentage:
-                            mtdTotal > 0 ? (cost / mtdTotal) * 100 : 0,
+                          percentage: mtdTotal > 0 ? (cost / mtdTotal) * 100 : 0,
                         }))
                     : []
                 }
                 totalCost={
                   analytics?.by_provider
-                    ? Object.values(analytics.by_provider).reduce(
-                        (s, c) => s + c,
-                        0,
-                      )
+                    ? Object.values(analytics.by_provider).reduce((s, c) => s + c, 0)
                     : 0
                 }
                 title="SPEND BY PROVIDER"
@@ -453,10 +417,7 @@ export default function SpendAnalyticsPage() {
                 data={analytics?.by_provider ?? {}}
                 total={
                   analytics?.by_provider
-                    ? Object.values(analytics.by_provider).reduce(
-                        (s, c) => s + c,
-                        0,
-                      )
+                    ? Object.values(analytics.by_provider).reduce((s, c) => s + c, 0)
                     : 0
                 }
               />
@@ -481,17 +442,13 @@ export default function SpendAnalyticsPage() {
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-text-muted text-[10px] font-theme-data">
-                        DAILY AVG
-                      </div>
+                      <div className="text-text-muted text-[10px] font-theme-data">DAILY AVG</div>
                       <div className="text-[var(--acid-cyan)] font-theme-data text-lg">
                         {formatUsd(forecast.projected_daily_avg_usd)}
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-text-muted text-[10px] font-theme-data">
-                        TREND
-                      </div>
+                      <div className="text-text-muted text-[10px] font-theme-data">TREND</div>
                       <div
                         className={`font-theme-data text-lg ${
                           forecast.trend === 'increasing'
@@ -505,9 +462,7 @@ export default function SpendAnalyticsPage() {
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-text-muted text-[10px] font-theme-data">
-                        CONFIDENCE
-                      </div>
+                      <div className="text-text-muted text-[10px] font-theme-data">CONFIDENCE</div>
                       <div className="text-purple-400 font-theme-data text-lg">
                         {(forecast.confidence * 100).toFixed(0)}%
                       </div>
@@ -530,9 +485,7 @@ export default function SpendAnalyticsPage() {
           {/* Footer */}
           <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
             <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
-            <p className="text-text-muted">
-              {'>'} ARAGORA // SPEND ANALYTICS DASHBOARD
-            </p>
+            <p className="text-text-muted">{'>'} ARAGORA // SPEND ANALYTICS DASHBOARD</p>
           </footer>
         </div>
       </main>

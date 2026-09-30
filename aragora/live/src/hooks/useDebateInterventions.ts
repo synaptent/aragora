@@ -71,9 +71,7 @@ function getStoredAccessToken(): string | null {
 }
 
 function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = getStoredAccessToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -165,37 +163,24 @@ export function useDebateInterventions(debateId: string): UseDebateInterventions
 
   // --- Public methods ---
 
-  const pause = useCallback(
-    () => postIntervention('pause'),
-    [postIntervention],
-  );
+  const pause = useCallback(() => postIntervention('pause'), [postIntervention]);
 
-  const resume = useCallback(
-    () => postIntervention('resume'),
-    [postIntervention],
-  );
+  const resume = useCallback(() => postIntervention('resume'), [postIntervention]);
 
   const nudge = useCallback(
     (message: string, targetAgent?: string) =>
-      postIntervention('nudge', {
-        message,
-        ...(targetAgent ? { target_agent: targetAgent } : {}),
-      }),
+      postIntervention('nudge', { message, ...(targetAgent ? { target_agent: targetAgent } : {}) }),
     [postIntervention],
   );
 
   const challenge = useCallback(
-    (challengeText: string) =>
-      postIntervention('challenge', { challenge: challengeText }),
+    (challengeText: string) => postIntervention('challenge', { challenge: challengeText }),
     [postIntervention],
   );
 
   const injectEvidence = useCallback(
     (evidence: string, source?: string) =>
-      postIntervention('inject-evidence', {
-        evidence,
-        ...(source ? { source } : {}),
-      }),
+      postIntervention('inject-evidence', { evidence, ...(source ? { source } : {}) }),
     [postIntervention],
   );
 
@@ -203,9 +188,7 @@ export function useDebateInterventions(debateId: string): UseDebateInterventions
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${baseUrl}/intervention-log`, {
-        headers: authHeaders(),
-      });
+      const response = await fetch(`${baseUrl}/intervention-log`, { headers: authHeaders() });
       const data = await response.json();
 
       if (!response.ok) {

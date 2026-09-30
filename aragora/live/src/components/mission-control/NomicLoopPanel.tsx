@@ -2,7 +2,8 @@
 
 import { memo } from 'react';
 
-export type NomicPhase = 'idle' | 'planning' | 'decomposing' | 'executing' | 'verifying' | 'complete';
+export type NomicPhase =
+  'idle' | 'planning' | 'decomposing' | 'executing' | 'verifying' | 'complete';
 
 export interface NomicLoopPanelProps {
   phase: NomicPhase;
@@ -27,14 +28,19 @@ export const NomicLoopPanel = memo(function NomicLoopPanel({
   const activeIdx = PHASES.findIndex((p) => p.key === phase);
 
   return (
-    <div className="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg" data-testid="nomic-loop-panel">
+    <div
+      className="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg"
+      data-testid="nomic-loop-panel"
+    >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           <span className="text-sm">🔄</span>
           <span className="text-xs font-theme-data font-bold text-[var(--text)]">Nomic Loop</span>
         </div>
         {cycleId && (
-          <span className="text-xs font-theme-data text-[var(--text-muted)]">cycle: {cycleId.slice(0, 8)}</span>
+          <span className="text-xs font-theme-data text-[var(--text-muted)]">
+            cycle: {cycleId.slice(0, 8)}
+          </span>
         )}
       </div>
 
@@ -59,7 +65,11 @@ export const NomicLoopPanel = memo(function NomicLoopPanel({
                 <span>{p.label}</span>
               </div>
               {i < PHASES.length - 1 && (
-                <span className={`text-xs ${isComplete ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>→</span>
+                <span
+                  className={`text-xs ${isComplete ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
+                >
+                  →
+                </span>
               )}
             </div>
           );

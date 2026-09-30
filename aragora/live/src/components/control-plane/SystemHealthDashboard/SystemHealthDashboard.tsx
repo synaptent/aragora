@@ -35,11 +35,7 @@ export function SystemHealthDashboard({
   className = '',
 }: SystemHealthDashboardProps) {
   const { isAuthenticated, isLoading: authLoading, tokens } = useAuth();
-  const [data, setData] = useState<HealthData>({
-    system: null,
-    breakers: [],
-    queue: null,
-  });
+  const [data, setData] = useState<HealthData>({ system: null, breakers: [], queue: null });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -136,10 +132,15 @@ export function SystemHealthDashboard({
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center">
-            <div className={`text-lg font-theme-data ${
-              data.system?.status === 'healthy' ? 'text-success' :
-              data.system?.status === 'degraded' ? 'text-[var(--acid-yellow)]' : 'text-[var(--crimson)]'
-            }`}>
+            <div
+              className={`text-lg font-theme-data ${
+                data.system?.status === 'healthy'
+                  ? 'text-success'
+                  : data.system?.status === 'degraded'
+                    ? 'text-[var(--acid-yellow)]'
+                    : 'text-[var(--crimson)]'
+              }`}
+            >
               {data.system?.status?.toUpperCase() || 'UNKNOWN'}
             </div>
             <div className="text-xs font-theme-data text-text-muted">STATUS</div>
@@ -151,10 +152,14 @@ export function SystemHealthDashboard({
             <div className="text-xs font-theme-data text-text-muted">RUNNING</div>
           </div>
           <div className="text-center">
-            <div className={`text-lg font-theme-data ${
-              data.breakers.some(b => b.state === 'open') ? 'text-[var(--crimson)]' : 'text-success'
-            }`}>
-              {data.breakers.filter(b => b.state === 'open').length === 0 ? 'OK' : 'OPEN'}
+            <div
+              className={`text-lg font-theme-data ${
+                data.breakers.some((b) => b.state === 'open')
+                  ? 'text-[var(--crimson)]'
+                  : 'text-success'
+              }`}
+            >
+              {data.breakers.filter((b) => b.state === 'open').length === 0 ? 'OK' : 'OPEN'}
             </div>
             <div className="text-xs font-theme-data text-text-muted">BREAKERS</div>
           </div>

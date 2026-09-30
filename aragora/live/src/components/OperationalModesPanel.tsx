@@ -82,10 +82,7 @@ export function OperationalModesPanel({
   // Collapsed view
   if (!isExpanded) {
     return (
-      <div
-        className="panel panel-compact cursor-pointer"
-        onClick={() => setIsExpanded(true)}
-      >
+      <div className="panel panel-compact cursor-pointer" onClick={() => setIsExpanded(true)}>
         <div className="flex items-center justify-between">
           <h3 className="panel-title-sm flex items-center gap-2">
             <span className="text-accent">{'>'}</span>
@@ -119,10 +116,7 @@ export function OperationalModesPanel({
         <div className="bg-red-900/20 border border-red-800 rounded p-3 text-red-400 text-sm">
           {error}
         </div>
-        <button
-          onClick={fetchModes}
-          className="mt-2 text-sm text-accent hover:underline"
-        >
+        <button onClick={fetchModes} className="mt-2 text-sm text-accent hover:underline">
           Retry
         </button>
       </div>
@@ -136,10 +130,7 @@ export function OperationalModesPanel({
           <span className="text-accent">{'>'}</span>
           OPERATIONAL_MODES
         </h3>
-        <button
-          onClick={() => setIsExpanded(false)}
-          className="panel-toggle hover:text-accent"
-        >
+        <button onClick={() => setIsExpanded(false)} className="panel-toggle hover:text-accent">
           [COLLAPSE]
         </button>
       </div>
@@ -185,14 +176,13 @@ export function OperationalModesPanel({
               {/* Mode Header */}
               <div
                 className="p-3 flex items-center justify-between cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700/50"
-                onClick={() =>
-                  setExpandedMode(expandedMode === mode.name ? null : mode.name)
-                }
+                onClick={() => setExpandedMode(expandedMode === mode.name ? null : mode.name)}
               >
                 <div className="flex items-center gap-3">
                   <span
                     className={`px-2 py-0.5 rounded text-xs border ${
-                      CATEGORY_COLORS[mode.category] || 'text-zinc-400 bg-zinc-400/10 border-zinc-400/30'
+                      CATEGORY_COLORS[mode.category] ||
+                      'text-zinc-400 bg-zinc-400/10 border-zinc-400/30'
                     }`}
                   >
                     {mode.category}
@@ -211,20 +201,22 @@ export function OperationalModesPanel({
                       Select
                     </button>
                   )}
-                  <span className="text-zinc-500">
-                    {expandedMode === mode.name ? '▼' : '▶'}
-                  </span>
+                  <span className="text-zinc-500">{expandedMode === mode.name ? '▼' : '▶'}</span>
                 </div>
               </div>
 
               {/* Mode Details (Expanded) */}
               {expandedMode === mode.name && (
                 <div className="px-3 pb-3 border-t border-zinc-200 dark:border-zinc-700">
-                  <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-2">{mode.description}</p>
+                  <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-2">
+                    {mode.description}
+                  </p>
 
                   {mode.tool_groups && mode.tool_groups.length > 0 && (
                     <div className="mt-3">
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500 uppercase">Tool Groups:</span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500 uppercase">
+                        Tool Groups:
+                      </span>
                       <div className="flex gap-2 mt-1 flex-wrap">
                         {mode.tool_groups.map((group) => (
                           <span

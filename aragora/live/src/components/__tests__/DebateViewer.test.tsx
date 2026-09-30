@@ -47,22 +47,14 @@ jest.mock('@/components/TokenStreamViewer', () => ({
 }));
 
 // Mock Supabase fetch
-jest.mock('@/utils/supabase', () => ({
-  fetchDebateById: jest.fn(),
-}));
+jest.mock('@/utils/supabase', () => ({ fetchDebateById: jest.fn() }));
 
 // Mock useDebateWebSocket hook
-jest.mock('@/hooks/useDebateWebSocket', () => ({
-  useDebateWebSocket: jest.fn(),
-}));
+jest.mock('@/hooks/useDebateWebSocket', () => ({ useDebateWebSocket: jest.fn() }));
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    error: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-  },
+  logger: { error: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
 import { fetchDebateById } from '@/utils/supabase';
@@ -74,9 +66,7 @@ const mockUseDebateWebSocket = useDebateWebSocket as jest.MockedFunction<typeof 
 // Mock clipboard at module level
 const mockWriteText = jest.fn();
 Object.defineProperty(navigator, 'clipboard', {
-  value: {
-    writeText: mockWriteText,
-  },
+  value: { writeText: mockWriteText },
   writable: true,
   configurable: true,
 });
@@ -137,7 +127,13 @@ describe('DebateViewer', () => {
       task: 'Test archived debate task',
       agents: ['claude', 'gpt4'],
       transcript: [
-        { agent: 'claude', content: 'Hello from Claude', role: 'proposer', round: 1, timestamp: 1000 },
+        {
+          agent: 'claude',
+          content: 'Hello from Claude',
+          role: 'proposer',
+          round: 1,
+          timestamp: 1000,
+        },
         { agent: 'gpt4', content: 'Hello from GPT-4', role: 'critic', round: 1, timestamp: 1001 },
       ],
       consensus_reached: true,
@@ -215,10 +211,7 @@ describe('DebateViewer', () => {
     });
 
     it('handles no consensus state', async () => {
-      mockFetchDebateById.mockResolvedValue({
-        ...mockDebate,
-        consensus_reached: false,
-      });
+      mockFetchDebateById.mockResolvedValue({ ...mockDebate, consensus_reached: false });
 
       renderWithProviders(<DebateViewer debateId="123" />);
 
@@ -230,10 +223,7 @@ describe('DebateViewer', () => {
 
   describe('live debate view', () => {
     it('shows connecting status initially', () => {
-      mockUseDebateWebSocket.mockReturnValue({
-        ...defaultWebSocketState,
-        status: 'connecting',
-      });
+      mockUseDebateWebSocket.mockReturnValue({ ...defaultWebSocketState, status: 'connecting' });
 
       renderWithProviders(<DebateViewer debateId="adhoc_123" />);
 
@@ -267,10 +257,7 @@ describe('DebateViewer', () => {
     });
 
     it('shows error status on connection error', () => {
-      mockUseDebateWebSocket.mockReturnValue({
-        ...defaultWebSocketState,
-        status: 'error',
-      });
+      mockUseDebateWebSocket.mockReturnValue({ ...defaultWebSocketState, status: 'error' });
 
       renderWithProviders(<DebateViewer debateId="adhoc_123" />);
 
@@ -295,11 +282,7 @@ describe('DebateViewer', () => {
 
     it('shows streaming indicator for in-progress messages', () => {
       const streamingMap = new Map();
-      streamingMap.set('claude', {
-        agent: 'claude',
-        content: 'Typing...',
-        startTime: Date.now(),
-      });
+      streamingMap.set('claude', { agent: 'claude', content: 'Typing...', startTime: Date.now() });
 
       mockUseDebateWebSocket.mockReturnValue({
         ...defaultWebSocketState,

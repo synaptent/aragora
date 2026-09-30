@@ -4,11 +4,7 @@ import { useAgentBridgeEvents } from '@/hooks/useAgentBridgeEvents';
 import { useAgentBridgeRun } from '@/hooks/useAgentBridgeRun';
 import { useAgentBridgeTranscript } from '@/hooks/useAgentBridgeTranscript';
 
-import type {
-  AgentBridgeEvent,
-  AgentBridgeRunDetail,
-  AgentBridgeTurnRecord,
-} from '../types';
+import type { AgentBridgeEvent, AgentBridgeRunDetail, AgentBridgeTurnRecord } from '../types';
 import { BridgeRunDetail } from '../BridgeRunDetail';
 
 jest.mock('@/hooks/useAgentBridgeRun');
@@ -76,7 +72,9 @@ function buildRunDetail(overrides: Partial<AgentBridgeRunDetail> = {}): AgentBri
   };
 }
 
-function buildTranscriptTurn(overrides: Partial<AgentBridgeTurnRecord> = {}): AgentBridgeTurnRecord {
+function buildTranscriptTurn(
+  overrides: Partial<AgentBridgeTurnRecord> = {},
+): AgentBridgeTurnRecord {
   return {
     turn_index: 1,
     author_role: 'implementer',
@@ -183,11 +181,11 @@ describe('BridgeRunDetail', () => {
 
     expect(mockUseAgentBridgeEvents).toHaveBeenCalledWith(
       'bridge-run',
-      expect.objectContaining({ poll: false })
+      expect.objectContaining({ poll: false }),
     );
     expect(mockUseAgentBridgeTranscript).toHaveBeenCalledWith(
       'bridge-run',
-      expect.objectContaining({ poll: false })
+      expect.objectContaining({ poll: false }),
     );
   });
 });

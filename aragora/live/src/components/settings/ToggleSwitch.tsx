@@ -16,7 +16,9 @@ export function ToggleSwitch({
   disabled = false,
 }: ToggleSwitchProps) {
   return (
-    <label className={`flex items-center justify-between ${disabled ? 'opacity-50' : 'cursor-pointer'}`}>
+    <label
+      className={`flex items-center justify-between ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
+    >
       <div>
         <div className="font-theme-data text-sm text-text">{label}</div>
         {description && (

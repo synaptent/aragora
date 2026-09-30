@@ -102,7 +102,7 @@ class PrivacyHandler(SecureHandler):
     @rate_limit(requests_per_minute=5, limiter_name="privacy_export")
     @handle_errors("data export")
     @log_request("data export")
-    def _handle_export(self, handler, query_params: dict) -> HandlerResult:
+    def _handle_export(self, handler: Any, query_params: dict) -> HandlerResult:
         """
         Export all user data in GDPR-compliant format.
 
@@ -277,7 +277,7 @@ class PrivacyHandler(SecureHandler):
         )
 
     @handle_errors("data inventory")
-    def _handle_data_inventory(self, handler) -> HandlerResult:
+    def _handle_data_inventory(self, handler: Any) -> HandlerResult:
         """
         Get inventory of data categories collected about the user.
 
@@ -343,7 +343,7 @@ class PrivacyHandler(SecureHandler):
     @rate_limit(requests_per_minute=1, limiter_name="privacy_delete")
     @handle_errors("account deletion")
     @log_request("account deletion")
-    def _handle_delete_account(self, handler) -> HandlerResult:
+    def _handle_delete_account(self, handler: Any) -> HandlerResult:
         """
         Delete user account and associated data.
 
@@ -516,7 +516,7 @@ class PrivacyHandler(SecureHandler):
         return hashlib.sha256(value.encode()).hexdigest()[:16]
 
     @handle_errors("get privacy preferences")
-    def _handle_get_preferences(self, handler) -> HandlerResult:
+    def _handle_get_preferences(self, handler: Any) -> HandlerResult:
         """Get user's privacy preferences."""
         user_store = self._get_user_store()
         auth_ctx = extract_user_from_request(handler, user_store)
@@ -541,7 +541,7 @@ class PrivacyHandler(SecureHandler):
     @rate_limit(requests_per_minute=5, limiter_name="privacy_preferences")
     @handle_errors("update privacy preferences")
     @log_request("update privacy preferences")
-    def _handle_update_preferences(self, handler) -> HandlerResult:
+    def _handle_update_preferences(self, handler: Any) -> HandlerResult:
         """
         Update user's privacy preferences.
 

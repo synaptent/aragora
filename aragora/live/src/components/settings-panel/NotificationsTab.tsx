@@ -45,7 +45,10 @@ function TemplateRow({
   const [editBody, setEditBody] = useState(template.body);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [preview, setPreview] = useState<{ rendered_subject: string; rendered_body: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    rendered_subject: string;
+    rendered_body: string;
+  } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -133,7 +136,10 @@ function TemplateRow({
 
           {/* Subject */}
           <div>
-            <label className="block text-xs font-theme-data text-gray-400 mb-1" htmlFor={`subject-${template.id}`}>
+            <label
+              className="block text-xs font-theme-data text-gray-400 mb-1"
+              htmlFor={`subject-${template.id}`}
+            >
               Subject
             </label>
             <input
@@ -150,7 +156,10 @@ function TemplateRow({
 
           {/* Body */}
           <div>
-            <label className="block text-xs font-theme-data text-gray-400 mb-1" htmlFor={`body-${template.id}`}>
+            <label
+              className="block text-xs font-theme-data text-gray-400 mb-1"
+              htmlFor={`body-${template.id}`}
+            >
               Body
             </label>
             <textarea
@@ -198,7 +207,9 @@ function TemplateRow({
           {showPreview && preview && (
             <div className="mt-2 p-3 bg-gray-900 border border-gray-600 rounded space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-theme-data text-gray-400">Preview (sample values)</span>
+                <span className="text-xs font-theme-data text-gray-400">
+                  Preview (sample values)
+                </span>
                 <button
                   type="button"
                   className="text-xs text-gray-500 hover:text-gray-300"
@@ -208,7 +219,9 @@ function TemplateRow({
                 </button>
               </div>
               <p className="text-sm font-semibold text-white">{preview.rendered_subject}</p>
-              <pre className="text-xs text-gray-300 whitespace-pre-wrap font-theme-data">{preview.rendered_body}</pre>
+              <pre className="text-xs text-gray-300 whitespace-pre-wrap font-theme-data">
+                {preview.rendered_body}
+              </pre>
             </div>
           )}
         </div>
@@ -253,28 +266,21 @@ export function NotificationsTab({ preferences, updateNotification }: Notificati
     });
     if (!res.ok) throw new Error('Save failed');
     const data = await res.json();
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...data.template } : t))
-    );
+    setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...data.template } : t)));
   };
 
   const handleReset = async (id: string) => {
     const res = await fetch(`/api/v1/notifications/templates/${id}/reset`, { method: 'POST' });
     if (!res.ok) throw new Error('Reset failed');
     const data = await res.json();
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...data.template } : t))
-    );
+    setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...data.template } : t)));
   };
 
   const handlePreview = async (id: string) => {
     const res = await fetch(`/api/v1/notifications/templates/${id}/preview`, { method: 'POST' });
     if (!res.ok) return null;
     const data = await res.json();
-    return {
-      rendered_subject: data.rendered_subject,
-      rendered_body: data.rendered_body,
-    };
+    return { rendered_subject: data.rendered_subject, rendered_body: data.rendered_body };
   };
 
   return (
@@ -341,9 +347,7 @@ export function NotificationsTab({ preferences, updateNotification }: Notificati
           <p className="text-sm text-gray-500 font-theme-data">Loading templates…</p>
         )}
 
-        {templateError && (
-          <p className="text-sm text-red-400 font-theme-data">{templateError}</p>
-        )}
+        {templateError && <p className="text-sm text-red-400 font-theme-data">{templateError}</p>}
 
         {!loadingTemplates && !templateError && templates.length > 0 && (
           <div className="space-y-2">

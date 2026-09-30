@@ -54,9 +54,9 @@ const PAGES: AuditPage[] = [
     path: '/landing/',
     label: 'Landing',
     requiredSelectors: [
-      'h1, h2, [role="heading"]',          // hero heading
-      'a, button',                          // CTA / nav
-      'footer, [role="contentinfo"]',       // footer
+      'h1, h2, [role="heading"]', // hero heading
+      'a, button', // CTA / nav
+      'footer, [role="contentinfo"]', // footer
     ],
   },
   {
@@ -64,22 +64,22 @@ const PAGES: AuditPage[] = [
     label: 'Playground',
     requiredSelectors: [
       'textarea, input[type="text"], [contenteditable="true"]', // input form
-      'button, [role="button"]',                                // submit / action
+      'button, [role="button"]', // submit / action
     ],
   },
   {
     path: '/try/',
     label: 'Try (Debate)',
     requiredSelectors: [
-      'main, [role="main"], #__next',        // content area
-      'button, a, [role="button"]',          // interactive element
+      'main, [role="main"], #__next', // content area
+      'button, a, [role="button"]', // interactive element
     ],
   },
   {
     path: '/about/',
     label: 'About',
     requiredSelectors: [
-      'h1, h2, [role="heading"]',            // heading
+      'h1, h2, [role="heading"]', // heading
       'p, [class*="text"], [class*="prose"]', // body content
     ],
   },
@@ -87,16 +87,16 @@ const PAGES: AuditPage[] = [
     path: '/pricing/',
     label: 'Pricing',
     requiredSelectors: [
-      'h1, h2, [role="heading"]',            // heading
-      'button, a',                           // CTA buttons
+      'h1, h2, [role="heading"]', // heading
+      'button, a', // CTA buttons
     ],
   },
   {
     path: '/signup/',
     label: 'Sign Up',
     requiredSelectors: [
-      'input, textarea, [role="textbox"]',   // form field
-      'button, [role="button"]',             // submit
+      'input, textarea, [role="textbox"]', // form field
+      'button, [role="button"]', // submit
     ],
   },
 ];
@@ -123,9 +123,7 @@ async function dismissOverlays(page: Page): Promise<void> {
   const bootOverlay = page.locator('[aria-label*="Boot sequence"]');
   if (await bootOverlay.isVisible({ timeout: 2000 }).catch(() => false)) {
     await bootOverlay.click();
-    await bootOverlay
-      .waitFor({ state: 'hidden', timeout: 5000 })
-      .catch(() => {});
+    await bootOverlay.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
   }
 
   // Onboarding wizard skip button
@@ -162,7 +160,8 @@ async function getSmallestBodyFontSize(page: Page): Promise<number> {
     let smallest = Infinity;
     for (const el of els) {
       // Skip hidden or empty elements
-      if (!(el as HTMLElement).offsetParent && (el as HTMLElement).style.display !== 'fixed') continue;
+      if (!(el as HTMLElement).offsetParent && (el as HTMLElement).style.display !== 'fixed')
+        continue;
       if (!el.textContent?.trim()) continue;
       const size = parseFloat(getComputedStyle(el).fontSize);
       if (size > 0 && size < smallest) smallest = size;
@@ -181,7 +180,8 @@ async function findSmallTouchTargets(
   minSize: number,
 ): Promise<{ tag: string; text: string; width: number; height: number }[]> {
   return page.evaluate((min) => {
-    const selectors = 'a, button, [role="button"], [role="link"], input[type="submit"], input[type="button"]';
+    const selectors =
+      'a, button, [role="button"], [role="link"], input[type="submit"], input[type="button"]';
     const els = document.querySelectorAll(selectors);
     const violations: { tag: string; text: string; width: number; height: number }[] = [];
     for (const el of els) {
@@ -216,8 +216,8 @@ async function checkNavigationAccessible(page: Page): Promise<boolean> {
     // Hamburger / menu toggle button
     const menuBtn = document.querySelector(
       'button[aria-label*="menu" i], button[aria-label*="Menu" i], ' +
-      'button[aria-label*="navigation" i], button[aria-expanded], ' +
-      '[data-testid*="menu"], [data-testid*="hamburger"]',
+        'button[aria-label*="navigation" i], button[aria-expanded], ' +
+        '[data-testid*="menu"], [data-testid*="hamburger"]',
     );
     if (menuBtn && (menuBtn as HTMLElement).offsetParent !== null) return true;
 
@@ -266,7 +266,11 @@ interface PageAuditResult {
   viewport: string;
   horizontalOverflow: { pass: boolean; scrollWidth: number; viewportWidth: number };
   fontSizeCheck: { pass: boolean; smallestPx: number };
-  touchTargetCheck: { pass: boolean; violationCount: number; violations: { tag: string; text: string; width: number; height: number }[] };
+  touchTargetCheck: {
+    pass: boolean;
+    violationCount: number;
+    violations: { tag: string; text: string; width: number; height: number }[];
+  };
   requiredElements: { pass: boolean; results: { selector: string; visible: boolean }[] };
   navigationAccessible: boolean;
   overallPass: boolean;
@@ -295,10 +299,7 @@ for (const viewport of VIEWPORTS) {
 
         test.beforeEach(async ({ page: p }) => {
           page = p;
-          await page.goto(auditPage.path, {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000,
-          });
+          await page.goto(auditPage.path, { waitUntil: 'domcontentloaded', timeout: 30000 });
           await dismissOverlays(page);
           // Give dynamic content time to render
           await page.waitForTimeout(1000);
@@ -309,7 +310,7 @@ for (const viewport of VIEWPORTS) {
           if (!result.pass) {
             console.log(
               `[FAIL] ${auditPage.label} on ${viewport.name}: ` +
-              `scrollWidth=${result.scrollWidth} > viewportWidth=${viewport.width}`,
+                `scrollWidth=${result.scrollWidth} > viewportWidth=${viewport.width}`,
             );
           }
           // Record for summary
@@ -330,7 +331,7 @@ for (const viewport of VIEWPORTS) {
           if (!pass) {
             console.log(
               `[FAIL] ${auditPage.label} on ${viewport.name}: ` +
-              `smallest font-size=${smallest}px < ${MIN_FONT_SIZE_PX}px`,
+                `smallest font-size=${smallest}px < ${MIN_FONT_SIZE_PX}px`,
             );
           }
           recordPartial(auditPage.label, viewport.name, 'fontSizeCheck', {
@@ -349,7 +350,7 @@ for (const viewport of VIEWPORTS) {
           if (!pass) {
             console.log(
               `[WARN] ${auditPage.label} on ${viewport.name}: ` +
-              `${violations.length} touch target(s) below ${MIN_TOUCH_TARGET_PX}px`,
+                `${violations.length} touch target(s) below ${MIN_TOUCH_TARGET_PX}px`,
             );
             for (const v of violations.slice(0, 5)) {
               console.log(`  <${v.tag}> "${v.text}" ${v.width}x${v.height}`);
@@ -361,10 +362,12 @@ for (const viewport of VIEWPORTS) {
             violations: violations.slice(0, 10),
           });
           // Use soft assertion — small targets are a warning, not always blocking
-          expect.soft(
-            pass,
-            `${violations.length} touch target(s) smaller than ${MIN_TOUCH_TARGET_PX}px minimum`,
-          ).toBe(true);
+          expect
+            .soft(
+              pass,
+              `${violations.length} touch target(s) smaller than ${MIN_TOUCH_TARGET_PX}px minimum`,
+            )
+            .toBe(true);
         });
 
         test('key elements visible and not clipped', async () => {
@@ -374,7 +377,7 @@ for (const viewport of VIEWPORTS) {
             const missing = results.filter((r) => !r.visible);
             console.log(
               `[FAIL] ${auditPage.label} on ${viewport.name}: ` +
-              `${missing.length} required element(s) not visible`,
+                `${missing.length} required element(s) not visible`,
             );
             for (const m of missing) {
               console.log(`  Missing: ${m.selector}`);
@@ -398,7 +401,7 @@ for (const viewport of VIEWPORTS) {
           if (!accessible) {
             console.log(
               `[FAIL] ${auditPage.label} on ${viewport.name}: ` +
-              `no accessible navigation found (nav, hamburger, or internal links)`,
+                `no accessible navigation found (nav, hamburger, or internal links)`,
             );
           }
           recordPartial(auditPage.label, viewport.name, 'navigationAccessible', accessible);
@@ -469,9 +472,7 @@ test.afterAll(async () => {
       );
     }
     if (p.requiredElements && !p.requiredElements.pass) {
-      const missing = p.requiredElements.results
-        .filter((r) => !r.visible)
-        .map((r) => r.selector);
+      const missing = p.requiredElements.results.filter((r) => !r.visible).map((r) => r.selector);
       console.log(`  - Missing elements: ${missing.join(', ')}`);
     }
     if (p.navigationAccessible === false) {

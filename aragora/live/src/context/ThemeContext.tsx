@@ -121,11 +121,7 @@ interface ThemeProviderProps {
   defaultPreference?: string;
 }
 
-export function ThemeProvider({
-  children,
-  defaultTheme,
-  defaultPreference,
-}: ThemeProviderProps) {
+export function ThemeProvider({ children, defaultTheme, defaultPreference }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -165,14 +161,18 @@ export function ThemeProvider({
       }
     };
 
-    if (typeof mediaQuery.addEventListener === 'function' &&
-        typeof mediaQuery.removeEventListener === 'function') {
+    if (
+      typeof mediaQuery.addEventListener === 'function' &&
+      typeof mediaQuery.removeEventListener === 'function'
+    ) {
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
 
-    if (typeof mediaQuery.addListener === 'function' &&
-        typeof mediaQuery.removeListener === 'function') {
+    if (
+      typeof mediaQuery.addListener === 'function' &&
+      typeof mediaQuery.removeListener === 'function'
+    ) {
       mediaQuery.addListener(handleChange);
       return () => mediaQuery.removeListener(handleChange);
     }
@@ -195,21 +195,20 @@ export function ThemeProvider({
     applyTheme(resolved);
   }, []);
 
-  const value = useMemo<ThemeContextValue>(() => ({
-    theme,
-    setTheme,
-    isInitialized,
-    // Legacy compat properties
-    preference: theme,
-    effectiveTheme: theme === 'dark' ? 'dark' : 'light',
-    toggleTheme: () => setTheme(theme === 'dark' ? 'warm' : 'dark'),
-  }), [theme, setTheme, isInitialized]);
-
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      theme,
+      setTheme,
+      isInitialized,
+      // Legacy compat properties
+      preference: theme,
+      effectiveTheme: theme === 'dark' ? 'dark' : 'light',
+      toggleTheme: () => setTheme(theme === 'dark' ? 'warm' : 'dark'),
+    }),
+    [theme, setTheme, isInitialized],
   );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 // ============================================================================

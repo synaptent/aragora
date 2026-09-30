@@ -35,9 +35,7 @@ export function SubscriptionCard({
   const fetchSubscription = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/billing/subscription`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -74,9 +72,7 @@ export function SubscriptionCard({
         <span className={tierColors[subscription?.tier || 'free'] || 'text-text'}>
           {(subscription?.tier || 'FREE').toUpperCase()}
         </span>
-        {subscription?.cancel_at_period_end && (
-          <span className="text-warning">(canceling)</span>
-        )}
+        {subscription?.cancel_at_period_end && <span className="text-warning">(canceling)</span>}
       </div>
     );
   }
@@ -91,7 +87,9 @@ export function SubscriptionCard({
         <div className="space-y-3">
           {/* Tier display */}
           <div>
-            <div className={`text-lg font-theme-data uppercase ${tierColors[subscription?.tier || 'free']}`}>
+            <div
+              className={`text-lg font-theme-data uppercase ${tierColors[subscription?.tier || 'free']}`}
+            >
               {subscription?.tier || 'FREE'}
             </div>
             <div className="text-xs font-theme-data text-text-muted">

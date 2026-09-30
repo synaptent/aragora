@@ -132,9 +132,7 @@ export function RoundProgress({ events, totalRounds = 4 }: RoundProgressProps) {
             <div className="text-right text-xs text-text-muted">
               <div>{activeRound.agentCount} responses</div>
               {activeRound.startTime && (
-                <div>
-                  Started {new Date(activeRound.startTime * 1000).toLocaleTimeString()}
-                </div>
+                <div>Started {new Date(activeRound.startTime * 1000).toLocaleTimeString()}</div>
               )}
             </div>
           </div>
@@ -150,24 +148,9 @@ interface RoundBlockProps {
 
 function RoundBlock({ round }: RoundBlockProps) {
   const statusConfig = {
-    pending: {
-      bg: 'bg-surface',
-      border: 'border-border',
-      text: 'text-text-muted',
-      icon: '○',
-    },
-    active: {
-      bg: 'bg-accent/20',
-      border: 'border-accent',
-      text: 'text-accent',
-      icon: '●',
-    },
-    complete: {
-      bg: 'bg-success/20',
-      border: 'border-success',
-      text: 'text-success',
-      icon: '✓',
-    },
+    pending: { bg: 'bg-surface', border: 'border-border', text: 'text-text-muted', icon: '○' },
+    active: { bg: 'bg-accent/20', border: 'border-accent', text: 'text-accent', icon: '●' },
+    complete: { bg: 'bg-success/20', border: 'border-success', text: 'text-success', icon: '✓' },
   };
 
   const config = statusConfig[round.status];
@@ -216,8 +199,8 @@ export function RoundIndicator({ events, totalRounds = 4 }: RoundProgressProps) 
             round < currentRound
               ? 'bg-success'
               : round === currentRound
-              ? 'bg-accent animate-pulse'
-              : 'bg-border'
+                ? 'bg-accent animate-pulse'
+                : 'bg-border'
           }`}
           title={`Round ${round}`}
         />

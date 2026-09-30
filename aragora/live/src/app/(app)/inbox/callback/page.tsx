@@ -75,14 +75,21 @@ function GmailOAuthCallbackContent() {
         {status === 'processing' && (
           <>
             <div className="animate-pulse text-6xl mb-4">📧</div>
-            <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">
-              Connecting Gmail
-            </h2>
+            <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">Connecting Gmail</h2>
             <p className="text-text-muted font-theme-data text-sm">{message}</p>
             <div className="mt-6 flex justify-center gap-1">
-              <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div
+                className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                style={{ animationDelay: '0ms' }}
+              />
+              <div
+                className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                style={{ animationDelay: '150ms' }}
+              />
+              <div
+                className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                style={{ animationDelay: '300ms' }}
+              />
             </div>
           </>
         )}
@@ -90,22 +97,16 @@ function GmailOAuthCallbackContent() {
         {status === 'success' && (
           <>
             <div className="text-6xl mb-4">✅</div>
-            <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">
-              Connected!
-            </h2>
+            <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">Connected!</h2>
             <p className="text-text-muted font-theme-data text-sm">{message}</p>
-            <p className="text-text-muted font-theme-data text-xs mt-4">
-              Redirecting to inbox...
-            </p>
+            <p className="text-text-muted font-theme-data text-xs mt-4">Redirecting to inbox...</p>
           </>
         )}
 
         {status === 'error' && (
           <>
             <div className="text-6xl mb-4">❌</div>
-            <h2 className="text-xl font-theme-data text-acid-red mb-2">
-              Connection Failed
-            </h2>
+            <h2 className="text-xl font-theme-data text-acid-red mb-2">Connection Failed</h2>
             <p className="text-text-muted font-theme-data text-sm mb-6">{message}</p>
             <button
               onClick={() => router.push('/inbox')}
@@ -125,13 +126,20 @@ function LoadingFallback() {
     <div className="border border-[var(--accent)]/30 bg-surface/50 p-8 rounded max-w-md w-full mx-4">
       <div className="text-center">
         <div className="animate-pulse text-6xl mb-4">📧</div>
-        <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">
-          Loading...
-        </h2>
+        <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">Loading...</h2>
         <div className="mt-6 flex justify-center gap-1">
-          <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div
+            className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+            style={{ animationDelay: '0ms' }}
+          />
+          <div
+            className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+            style={{ animationDelay: '150ms' }}
+          />
+          <div
+            className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+            style={{ animationDelay: '300ms' }}
+          />
         </div>
       </div>
     </div>

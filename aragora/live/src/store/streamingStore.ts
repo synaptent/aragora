@@ -180,7 +180,10 @@ export const DEFAULT_SNSSQS_CONFIG: SNSSQSConfig = {
 };
 
 // Status styling
-export const STATUS_STYLES: Record<ConnectorStatus, { color: string; bgColor: string; label: string }> = {
+export const STATUS_STYLES: Record<
+  ConnectorStatus,
+  { color: string; bgColor: string; label: string }
+> = {
   connected: { color: 'text-green-400', bgColor: 'bg-green-500/10', label: 'CONNECTED' },
   disconnected: { color: 'text-gray-400', bgColor: 'bg-gray-500/10', label: 'DISCONNECTED' },
   connecting: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/10', label: 'CONNECTING' },
@@ -257,10 +260,7 @@ const API_URL = API_BASE_URL;
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
 
   if (!response.ok) {
@@ -310,9 +310,7 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
           const health = await fetchApi<HealthStatus>(`/api/streaming/connectors/${type}/health`);
           // Update the connector's health status
           set((state) => ({
-            connectors: state.connectors.map((c) =>
-              c.type === type ? { ...c, health } : c
-            ),
+            connectors: state.connectors.map((c) => (c.type === type ? { ...c, health } : c)),
           }));
           return health;
         } catch {
@@ -322,21 +320,15 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
 
       // Config actions
       setKafkaConfig: (config: Partial<KafkaConfig>) => {
-        set((state) => ({
-          kafkaConfig: { ...state.kafkaConfig, ...config },
-        }));
+        set((state) => ({ kafkaConfig: { ...state.kafkaConfig, ...config } }));
       },
 
       setRabbitMQConfig: (config: Partial<RabbitMQConfig>) => {
-        set((state) => ({
-          rabbitMQConfig: { ...state.rabbitMQConfig, ...config },
-        }));
+        set((state) => ({ rabbitMQConfig: { ...state.rabbitMQConfig, ...config } }));
       },
 
       setSNSSQSConfig: (config: Partial<SNSSQSConfig>) => {
-        set((state) => ({
-          snssqsConfig: { ...state.snssqsConfig, ...config },
-        }));
+        set((state) => ({ snssqsConfig: { ...state.snssqsConfig, ...config } }));
       },
 
       saveConfig: async (type: ConnectorType) => {
@@ -345,8 +337,8 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
           type === 'kafka'
             ? state.kafkaConfig
             : type === 'rabbitmq'
-            ? state.rabbitMQConfig
-            : state.snssqsConfig;
+              ? state.rabbitMQConfig
+              : state.snssqsConfig;
 
         set({ isSaving: true, error: null, successMessage: null });
         try {
@@ -370,13 +362,11 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
       connect: async (type: ConnectorType) => {
         set({ isLoading: true, error: null });
         try {
-          await fetchApi(`/api/streaming/connectors/${type}/connect`, {
-            method: 'POST',
-          });
+          await fetchApi(`/api/streaming/connectors/${type}/connect`, { method: 'POST' });
           // Update connector status
           set((state) => ({
             connectors: state.connectors.map((c) =>
-              c.type === type ? { ...c, status: 'connected' as ConnectorStatus } : c
+              c.type === type ? { ...c, status: 'connected' as ConnectorStatus } : c,
             ),
             isLoading: false,
             successMessage: `${type.toUpperCase()} connected successfully`,
@@ -392,13 +382,11 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
       disconnect: async (type: ConnectorType) => {
         set({ isLoading: true, error: null });
         try {
-          await fetchApi(`/api/streaming/connectors/${type}/disconnect`, {
-            method: 'POST',
-          });
+          await fetchApi(`/api/streaming/connectors/${type}/disconnect`, { method: 'POST' });
           // Update connector status
           set((state) => ({
             connectors: state.connectors.map((c) =>
-              c.type === type ? { ...c, status: 'disconnected' as ConnectorStatus } : c
+              c.type === type ? { ...c, status: 'disconnected' as ConnectorStatus } : c,
             ),
             isLoading: false,
             successMessage: `${type.toUpperCase()} disconnected`,
@@ -416,7 +404,7 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
         try {
           const result = await fetchApi<{ success: boolean; message: string }>(
             `/api/streaming/connectors/${type}/test`,
-            { method: 'POST' }
+            { method: 'POST' },
           );
           set({
             isLoading: false,
@@ -447,6 +435,6 @@ export const useStreamingStore = create<StreamingState & StreamingActions>()(
         set(initialState);
       },
     }),
-    { name: 'streaming-store' }
-  )
+    { name: 'streaming-store' },
+  ),
 );

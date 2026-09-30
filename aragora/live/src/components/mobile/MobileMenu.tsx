@@ -56,10 +56,7 @@ interface MobileMenuProviderProps {
   edgeSwipeEnabled?: boolean;
 }
 
-export function MobileMenuProvider({
-  children,
-  edgeSwipeEnabled = true,
-}: MobileMenuProviderProps) {
+export function MobileMenuProvider({ children, edgeSwipeEnabled = true }: MobileMenuProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const openMenu = useCallback(() => setIsOpen(true), []);
@@ -67,11 +64,7 @@ export function MobileMenuProvider({
   const toggleMenu = useCallback(() => setIsOpen((prev) => !prev), []);
 
   // Edge swipe to open
-  useEdgeSwipe({
-    edge: 'left',
-    onSwipe: openMenu,
-    enabled: edgeSwipeEnabled && !isOpen,
-  });
+  useEdgeSwipe({ edge: 'left', onSwipe: openMenu, enabled: edgeSwipeEnabled && !isOpen });
 
   return (
     <MobileMenuContext.Provider value={{ isOpen, openMenu, closeMenu, toggleMenu }}>
@@ -114,12 +107,7 @@ interface MobileMenuProps {
 // Styles
 // =============================================================================
 
-const widthClasses = {
-  sm: 'w-64',
-  md: 'w-80',
-  lg: 'w-96',
-  full: 'w-full',
-};
+const widthClasses = { sm: 'w-64', md: 'w-80', lg: 'w-96', full: 'w-full' };
 
 // =============================================================================
 // Haptic feedback
@@ -149,10 +137,7 @@ export function MobileMenu({
   const [mounted, setMounted] = useState(false);
 
   // Focus trap (handles escape key automatically)
-  const focusTrapRef = useFocusTrap<HTMLDivElement>({
-    isActive: isOpen,
-    onEscape: closeMenu,
-  });
+  const focusTrapRef = useFocusTrap<HTMLDivElement>({ isActive: isOpen, onEscape: closeMenu });
 
   // Mount animation
   useEffect(() => {
@@ -198,7 +183,7 @@ export function MobileMenu({
         className={cn(
           'fixed inset-0 z-40 bg-black/50',
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
-          !prefersReducedMotion && 'transition-opacity duration-300'
+          !prefersReducedMotion && 'transition-opacity duration-300',
         )}
         onClick={closeMenu}
         aria-hidden="true"
@@ -222,15 +207,11 @@ export function MobileMenu({
           // Animation
           !prefersReducedMotion && 'transition-transform duration-300 ease-out',
           slideClass,
-          className
+          className,
         )}
       >
         {/* Header */}
-        {header && (
-          <div className="flex-shrink-0 px-4 py-4 border-b">
-            {header}
-          </div>
-        )}
+        {header && <div className="flex-shrink-0 px-4 py-4 border-b">{header}</div>}
 
         {/* Menu items */}
         <nav className="flex-1 overflow-y-auto py-4" role="navigation">
@@ -242,11 +223,7 @@ export function MobileMenu({
         </nav>
 
         {/* Footer */}
-        {footer && (
-          <div className="flex-shrink-0 px-4 py-4 border-t">
-            {footer}
-          </div>
-        )}
+        {footer && <div className="flex-shrink-0 px-4 py-4 border-t">{footer}</div>}
       </div>
     </>
   );
@@ -292,19 +269,15 @@ function MenuItemComponent({ item, onClose, depth = 0 }: MenuItemComponentProps)
           'text-left',
           'transition-colors duration-150',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
-          item.disabled
-            ? 'opacity-50 cursor-not-allowed'
-            : 'hover:bg-muted active:bg-muted/80',
-          depth > 0 && 'pl-8'
+          item.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted active:bg-muted/80',
+          depth > 0 && 'pl-8',
         )}
         style={{ paddingLeft: depth > 0 ? `${(depth + 1) * 16}px` : undefined }}
         aria-expanded={hasChildren ? isExpanded : undefined}
       >
         {/* Icon */}
         {item.icon && (
-          <span className="flex-shrink-0 w-5 h-5 text-muted-foreground">
-            {item.icon}
-          </span>
+          <span className="flex-shrink-0 w-5 h-5 text-muted-foreground">{item.icon}</span>
         )}
 
         {/* Label */}
@@ -322,18 +295,13 @@ function MenuItemComponent({ item, onClose, depth = 0 }: MenuItemComponentProps)
           <svg
             className={cn(
               'w-4 h-4 text-muted-foreground transition-transform',
-              isExpanded && 'rotate-90'
+              isExpanded && 'rotate-90',
             )}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5l7 7-7 7"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         )}
       </Component>
@@ -342,12 +310,7 @@ function MenuItemComponent({ item, onClose, depth = 0 }: MenuItemComponentProps)
       {hasChildren && isExpanded && (
         <ul className="bg-muted/30">
           {item.children!.map((child) => (
-            <MenuItemComponent
-              key={child.id}
-              item={child}
-              onClose={onClose}
-              depth={depth + 1}
-            />
+            <MenuItemComponent key={child.id} item={child} onClose={onClose} depth={depth + 1} />
           ))}
         </ul>
       )}
@@ -378,7 +341,7 @@ export function HamburgerButton({
         'rounded-lg',
         'hover:bg-muted active:bg-muted/80',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-        className
+        className,
       )}
       aria-label={ariaLabel}
       aria-expanded={isOpen}
@@ -389,7 +352,7 @@ export function HamburgerButton({
           className={cn(
             'absolute left-0 right-0 h-0.5 bg-current rounded-full',
             'transition-all duration-300',
-            isOpen ? 'top-1/2 -translate-y-1/2 rotate-45' : 'top-0'
+            isOpen ? 'top-1/2 -translate-y-1/2 rotate-45' : 'top-0',
           )}
         />
         <span
@@ -397,14 +360,14 @@ export function HamburgerButton({
             'absolute left-0 right-0 h-0.5 bg-current rounded-full',
             'top-1/2 -translate-y-1/2',
             'transition-opacity duration-300',
-            isOpen && 'opacity-0'
+            isOpen && 'opacity-0',
           )}
         />
         <span
           className={cn(
             'absolute left-0 right-0 h-0.5 bg-current rounded-full',
             'transition-all duration-300',
-            isOpen ? 'top-1/2 -translate-y-1/2 -rotate-45' : 'bottom-0'
+            isOpen ? 'top-1/2 -translate-y-1/2 -rotate-45' : 'bottom-0',
           )}
         />
       </div>

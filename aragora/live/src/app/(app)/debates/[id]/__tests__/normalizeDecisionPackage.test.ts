@@ -3,12 +3,8 @@ import { normalizeDecisionPackage } from '../normalizeDecisionPackage';
 describe('normalizeDecisionPackage', () => {
   it('fills missing array fields with safe defaults', () => {
     const normalized = normalizeDecisionPackage(
-      {
-        id: 'debate-1',
-        question: 'Q',
-        confidence: 0.5,
-      },
-      'fallback-id'
+      { id: 'debate-1', question: 'Q', confidence: 0.5 },
+      'fallback-id',
     );
 
     expect(normalized.id).toBe('debate-1');
@@ -31,7 +27,7 @@ describe('normalizeDecisionPackage', () => {
         agents: ['claude', 7, null, 'gpt-5'],
         next_steps: ['step one', { bad: true }, 'step two'],
       },
-      'fallback-id'
+      'fallback-id',
     );
 
     expect(normalized.agents).toEqual(['claude', 'gpt-5']);
@@ -43,13 +39,8 @@ describe('normalizeDecisionPackage', () => {
 
   it('normalizes malformed receipt to null', () => {
     const normalized = normalizeDecisionPackage(
-      {
-        id: 'debate-3',
-        receipt: {
-          signers: ['a', 'b'],
-        },
-      },
-      'fallback-id'
+      { id: 'debate-3', receipt: { signers: ['a', 'b'] } },
+      'fallback-id',
     );
 
     expect(normalized.receipt).toBeNull();
@@ -69,13 +60,7 @@ describe('normalizeDecisionPackage', () => {
         explanation_summary: 'Agents aligned on shipping with minor caveats.',
         final_answer: 'Ship the release.',
         participants: ['claude', 'gpt-4'],
-        cost: {
-          total_cost_usd: 0.0042,
-          per_agent_cost: {
-            claude: 0.002,
-            'gpt-4': 0.0022,
-          },
-        },
+        cost: { total_cost_usd: 0.0042, per_agent_cost: { claude: 0.002, 'gpt-4': 0.0022 } },
         next_steps: [
           { action: 'Ship the release.', priority: 'high' },
           { action: 'Monitor logs.', priority: 'medium' },
@@ -87,7 +72,7 @@ describe('normalizeDecisionPackage', () => {
         },
         assembled_at: '2026-03-25T12:34:56Z',
       },
-      'fallback-id'
+      'fallback-id',
     );
 
     expect(normalized.id).toBe('debate-42');
@@ -136,9 +121,7 @@ describe('normalizeDecisionPackage', () => {
                 total_tokens_in: 1800,
                 total_tokens_out: 400,
                 call_count: 3,
-                models_used: {
-                  'claude-sonnet-4': 3,
-                },
+                models_used: { 'claude-sonnet-4': 3 },
               },
             },
             model_usage: {
@@ -154,7 +137,7 @@ describe('normalizeDecisionPackage', () => {
           },
         },
       },
-      'fallback-id'
+      'fallback-id',
     );
 
     const costSummary = normalized.receipt?.cost_summary;
@@ -168,21 +151,14 @@ describe('normalizeDecisionPackage', () => {
       }),
     ]);
     expect(costSummary?.model_usage).toEqual([
-      expect.objectContaining({
-        label: 'anthropic/claude-sonnet-4',
-        call_count: 4,
-      }),
+      expect.objectContaining({ label: 'anthropic/claude-sonnet-4', call_count: 4 }),
     ]);
   });
 
   it('derives synthetic truth metadata from the legacy mode flag when the explicit source is absent', () => {
     const normalized = normalizeDecisionPackage(
-      {
-        debate_id: 'debate-44',
-        mode: 'demo',
-        status: 'completed',
-      },
-      'fallback-id'
+      { debate_id: 'debate-44', mode: 'demo', status: 'completed' },
+      'fallback-id',
     );
 
     expect(normalized.debate_status).toBe('completed');

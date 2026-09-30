@@ -2,13 +2,7 @@ import { render, screen } from '@testing-library/react';
 import OutcomeDashboardPage from '../page';
 
 jest.mock('next/link', () => {
-  return function MockLink({
-    children,
-    href,
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) {
+  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
     return <a href={href}>{children}</a>;
   };
 });
@@ -32,12 +26,9 @@ jest.mock('@/components/BackendSelector', () => ({
 }));
 
 jest.mock('@/components/PanelErrorBoundary', () => ({
-  PanelErrorBoundary: ({
-    children,
-  }: {
-    panelName: string;
-    children: React.ReactNode;
-  }) => <div>{children}</div>,
+  PanelErrorBoundary: ({ children }: { panelName: string; children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 jest.mock('@/hooks/useOutcomeAnalytics', () => ({
@@ -51,18 +42,9 @@ jest.mock('@/hooks/useOutcomeAnalytics', () => ({
     },
     isLoading: false,
   }),
-  useOutcomeAgents: () => ({
-    leaderboard: { agents: [] },
-    isLoading: false,
-  }),
-  useDecisionHistory: () => ({
-    history: { decisions: [] },
-    isLoading: false,
-  }),
-  useCalibrationCurve: () => ({
-    calibration: { bins: [] },
-    isLoading: false,
-  }),
+  useOutcomeAgents: () => ({ leaderboard: { agents: [] }, isLoading: false }),
+  useDecisionHistory: () => ({ history: { decisions: [] }, isLoading: false }),
+  useCalibrationCurve: () => ({ calibration: { bins: [] }, isLoading: false }),
 }));
 
 jest.mock('@/hooks/useObservabilityDashboard', () => ({
@@ -70,18 +52,10 @@ jest.mock('@/hooks/useObservabilityDashboard', () => ({
     settlementReview: {
       running: true,
       interval_hours: 12,
-      stats: {
-        success_rate: 0.91,
-        total_receipts_updated: 14,
-      },
+      stats: { success_rate: 0.91, total_receipts_updated: 14 },
       available: true,
     },
-    oracleStream: {
-      active_sessions: 4,
-      stalls_total: 2,
-      ttft_avg_ms: 122.4,
-      available: true,
-    },
+    oracleStream: { active_sessions: 4, stalls_total: 2, ttft_avg_ms: 122.4, available: true },
     isLoading: false,
     error: null,
     mutate: jest.fn(),

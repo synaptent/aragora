@@ -30,7 +30,7 @@ const localStorageMock = {
     delete mockLocalStorage[key];
   }),
   clear: jest.fn(() => {
-    Object.keys(mockLocalStorage).forEach(key => delete mockLocalStorage[key]);
+    Object.keys(mockLocalStorage).forEach((key) => delete mockLocalStorage[key]);
   }),
 };
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -87,11 +87,8 @@ describe('AuthContext', () => {
     it('successfully logs in with valid credentials', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          tokens: mockTokens,
-          organization: mockOrganization,
-        }),
+        json: () =>
+          Promise.resolve({ user: mockUser, tokens: mockTokens, organization: mockOrganization }),
       });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -156,11 +153,8 @@ describe('AuthContext', () => {
     it('successfully registers a new user', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          tokens: mockTokens,
-          organization: mockOrganization,
-        }),
+        json: () =>
+          Promise.resolve({ user: mockUser, tokens: mockTokens, organization: mockOrganization }),
       });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -175,7 +169,7 @@ describe('AuthContext', () => {
           'new@example.com',
           'password123',
           'New User',
-          'New Org'
+          'New Org',
         );
       });
 
@@ -197,10 +191,7 @@ describe('AuthContext', () => {
 
       let registerResult: { success: boolean; error?: string };
       await act(async () => {
-        registerResult = await result.current.register(
-          'existing@example.com',
-          'password123'
-        );
+        registerResult = await result.current.register('existing@example.com', 'password123');
       });
 
       expect(registerResult!.success).toBe(false);
@@ -213,11 +204,8 @@ describe('AuthContext', () => {
       // Setup: Login first
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          tokens: mockTokens,
-          organization: mockOrganization,
-        }),
+        json: () =>
+          Promise.resolve({ user: mockUser, tokens: mockTokens, organization: mockOrganization }),
       });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -260,10 +248,7 @@ describe('AuthContext', () => {
       // Mock the /api/auth/me call during mount validation
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          organization: mockOrganization,
-        }),
+        json: () => Promise.resolve({ user: mockUser, organization: mockOrganization }),
       });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -294,10 +279,7 @@ describe('AuthContext', () => {
       // Mock the /api/auth/me call during mount validation
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          organization: mockOrganization,
-        }),
+        json: () => Promise.resolve({ user: mockUser, organization: mockOrganization }),
       });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -332,10 +314,7 @@ describe('AuthContext', () => {
       // Mock the /api/auth/me call during mount validation
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          organization: mockOrganization,
-        }),
+        json: () => Promise.resolve({ user: mockUser, organization: mockOrganization }),
       });
 
       const { result } = renderHook(() => useAuth(), { wrapper });

@@ -38,6 +38,12 @@ from aragora.rbac.decorators import require_permission
 logger = logging.getLogger(__name__)
 
 
+def _require_manager(manager: BackupManager | None, attribute: str) -> BackupManager:
+    if manager is None:
+        raise AttributeError(f"'NoneType' object has no attribute '{attribute}'")
+    return manager
+
+
 class DRHandler(BaseHandler):
     """
     HTTP handler for disaster recovery operations.
@@ -63,7 +69,7 @@ class DRHandler(BaseHandler):
         )
         self._manager = None  # Set by tests or lazy init
 
-    def _get_backup_manager(self) -> BackupManager:
+    def _get_backup_manager(self) -> BackupManager | None:
         """Get backup manager for DR operations."""
         if self._manager is None:
             self._manager = self._manager_factory.get()
@@ -97,7 +103,7 @@ class DRHandler(BaseHandler):
 
         The calling convention is detected by checking the arguments.
         """
-        resolved_body: dict[str, Any]
+        resolved_body: dict[str, Any] | None
         resolved_method: str
         resolved_path: str
 
@@ -179,6 +185,8 @@ class DRHandler(BaseHandler):
             - Issues and recommendations
         """
         manager = self._get_backup_manager()
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'list_backups'")
         backups = manager.list_backups()
 
         from aragora.backup.manager import BackupStatus
@@ -286,11 +294,15 @@ class DRHandler(BaseHandler):
 
         # Get backup to use
         if backup_id:
+            if manager is None:
+                raise AttributeError("'NoneType' object has no attribute 'list_backups'")
             backups = manager.list_backups()
             backup = next((b for b in backups if b.id == backup_id), None)
             if not backup:
                 return error_response(f"Backup not found: {backup_id}", 404)
         else:
+            if manager is None:
+                raise AttributeError("'NoneType' object has no attribute 'get_latest_backup'")
             backup = manager.get_latest_backup()
             if not backup:
                 return error_response("No verified backup available for drill", 400)
@@ -407,6 +419,8 @@ class DRHandler(BaseHandler):
             - Historical compliance data
         """
         manager = self._get_backup_manager()
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'list_backups'")
         backups = manager.list_backups()
         latest = manager.get_latest_backup()
 
@@ -553,6 +567,7 @@ class DRHandler(BaseHandler):
         if check_storage:
             check = {"name": "storage_access", "status": "checking"}
             try:
+                manager = _require_manager(manager, "backup_dir")
                 backup_dir = manager.backup_dir
                 if backup_dir.exists() and backup_dir.is_dir():
                     # Test write permission
@@ -573,6 +588,7 @@ class DRHandler(BaseHandler):
 
         # Check retention policy
         check = {"name": "retention_policy", "status": "checking"}
+        manager = _require_manager(manager, "retention_policy")
         policy = manager.retention_policy
         if policy.min_backups > 0:
             check["status"] = "passed"

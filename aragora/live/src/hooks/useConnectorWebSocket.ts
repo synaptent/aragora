@@ -240,7 +240,7 @@ export function useConnectorWebSocket({
           setRateLimitWarnings((prev) => {
             // Replace existing warning for same connector+type, or add new
             const idx = prev.findIndex(
-              (w) => w.connector_id === warning.connector_id && w.limit_type === warning.limit_type
+              (w) => w.connector_id === warning.connector_id && w.limit_type === warning.limit_type,
             );
             if (idx >= 0) {
               const updated = [...prev];
@@ -272,7 +272,7 @@ export function useConnectorWebSocket({
           break;
       }
     },
-    [onSyncUpdate, onConnectorStatusChange, onDocumentIngested, onRateLimitWarning]
+    [onSyncUpdate, onConnectorStatusChange, onDocumentIngested, onRateLimitWarning],
   );
 
   // Build subscription message
@@ -300,23 +300,17 @@ export function useConnectorWebSocket({
   // Cancel a sync operation
   const cancelSync = useCallback(
     (id: string) => {
-      send({
-        type: 'cancel_sync',
-        sync_id: id,
-      });
+      send({ type: 'cancel_sync', sync_id: id });
     },
-    [send]
+    [send],
   );
 
   // Trigger a sync
   const triggerSync = useCallback(
     (id: string) => {
-      send({
-        type: 'trigger_sync',
-        connector_id: id,
-      });
+      send({ type: 'trigger_sync', connector_id: id });
     },
-    [send]
+    [send],
   );
 
   return {

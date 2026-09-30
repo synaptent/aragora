@@ -39,7 +39,12 @@ const DEMO_QUALITY_DATA: QualityData = {
     { category: 'coverage', score: 75, maxScore: 100, issues: ['3 topics with gaps'] },
     { category: 'consistency', score: 82, maxScore: 100, issues: [] },
     { category: 'completeness', score: 60, maxScore: 100, issues: ['Missing metadata on 8 nodes'] },
-    { category: 'provenance', score: 62, maxScore: 100, issues: ['12 nodes without source attribution'] },
+    {
+      category: 'provenance',
+      score: 62,
+      maxScore: 100,
+      issues: ['12 nodes without source attribution'],
+    },
   ],
   stalenessBuckets: [
     { label: '< 1 week', count: 450, maxDays: 7, status: 'fresh' },
@@ -53,18 +58,81 @@ const DEMO_QUALITY_DATA: QualityData = {
   avgAgeDays: 18,
   recentUpdates: 42,
   topicCoverage: [
-    { topic: 'architecture', name: 'Architecture', nodeCount: 125, coverage: 85, quality: 90, isGap: false },
+    {
+      topic: 'architecture',
+      name: 'Architecture',
+      nodeCount: 125,
+      coverage: 85,
+      quality: 90,
+      isGap: false,
+    },
     { topic: 'api', name: 'API Design', nodeCount: 98, coverage: 78, quality: 82, isGap: false },
     { topic: 'security', name: 'Security', nodeCount: 76, coverage: 70, quality: 88, isGap: false },
     { topic: 'testing', name: 'Testing', nodeCount: 54, coverage: 45, quality: 75, isGap: false },
-    { topic: 'deployment', name: 'Deployment', nodeCount: 42, coverage: 38, quality: 70, isGap: false },
-    { topic: 'monitoring', name: 'Monitoring', nodeCount: 28, coverage: 25, quality: 65, isGap: true },
-    { topic: 'compliance', name: 'Compliance', nodeCount: 15, coverage: 18, quality: 60, isGap: true },
-    { topic: 'performance', name: 'Performance', nodeCount: 68, coverage: 62, quality: 78, isGap: false },
-    { topic: 'debugging', name: 'Debugging', nodeCount: 32, coverage: 30, quality: 72, isGap: false },
-    { topic: 'onboarding', name: 'Onboarding', nodeCount: 8, coverage: 12, quality: 55, isGap: true },
-    { topic: 'integrations', name: 'Integrations', nodeCount: 45, coverage: 52, quality: 80, isGap: false },
-    { topic: 'data-models', name: 'Data Models', nodeCount: 89, coverage: 75, quality: 85, isGap: false },
+    {
+      topic: 'deployment',
+      name: 'Deployment',
+      nodeCount: 42,
+      coverage: 38,
+      quality: 70,
+      isGap: false,
+    },
+    {
+      topic: 'monitoring',
+      name: 'Monitoring',
+      nodeCount: 28,
+      coverage: 25,
+      quality: 65,
+      isGap: true,
+    },
+    {
+      topic: 'compliance',
+      name: 'Compliance',
+      nodeCount: 15,
+      coverage: 18,
+      quality: 60,
+      isGap: true,
+    },
+    {
+      topic: 'performance',
+      name: 'Performance',
+      nodeCount: 68,
+      coverage: 62,
+      quality: 78,
+      isGap: false,
+    },
+    {
+      topic: 'debugging',
+      name: 'Debugging',
+      nodeCount: 32,
+      coverage: 30,
+      quality: 72,
+      isGap: false,
+    },
+    {
+      topic: 'onboarding',
+      name: 'Onboarding',
+      nodeCount: 8,
+      coverage: 12,
+      quality: 55,
+      isGap: true,
+    },
+    {
+      topic: 'integrations',
+      name: 'Integrations',
+      nodeCount: 45,
+      coverage: 52,
+      quality: 80,
+      isGap: false,
+    },
+    {
+      topic: 'data-models',
+      name: 'Data Models',
+      nodeCount: 89,
+      coverage: 75,
+      quality: 85,
+      isGap: false,
+    },
   ],
 };
 
@@ -79,7 +147,7 @@ export function QualityTab({
   onDrillDown,
 }: QualityTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<QualitySubTab>('overview');
-  const [data, setData] = useState<QualityData | null>(initialData as QualityData || null);
+  const [data, setData] = useState<QualityData | null>((initialData as QualityData) || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

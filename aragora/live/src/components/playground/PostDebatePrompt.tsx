@@ -197,12 +197,9 @@ export function PostDebatePrompt({ debateId, shareUrl, visible }: PostDebateProm
               fontSize: '14px',
               fontWeight: 600,
               color: action === 'share-copied' ? 'var(--accent)' : 'var(--bg)',
-              backgroundColor:
-                action === 'share-copied' ? 'transparent' : 'var(--accent)',
+              backgroundColor: action === 'share-copied' ? 'transparent' : 'var(--accent)',
               border:
-                action === 'share-copied'
-                  ? '1px solid var(--accent)'
-                  : '1px solid var(--accent)',
+                action === 'share-copied' ? '1px solid var(--accent)' : '1px solid var(--accent)',
               borderRadius: 'var(--radius-button)',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -226,11 +223,7 @@ export function PostDebatePrompt({ debateId, shareUrl, visible }: PostDebateProm
             action === 'email-form' || action === 'email-error' ? (
               <form
                 onSubmit={handleEmailSubmit}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                }}
+                style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
               >
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input

@@ -23,13 +23,7 @@ export function CostDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('7d');
   const [activeTab, setActiveTab] = useState<TabView>('overview');
 
-  const {
-    costData,
-    isLoading,
-    error,
-    dismissAlert,
-    refresh,
-  } = useCosts(timeRange);
+  const { costData, isLoading, error, dismissAlert, refresh } = useCosts(timeRange);
 
   // Spend analytics hooks
   const { trend: spendTrend, isLoading: trendLoading } = useSpendTrend(timeRange);
@@ -43,7 +37,7 @@ export function CostDashboard() {
       <div className="animate-pulse space-y-6">
         <div className="h-8 bg-[var(--surface)] rounded w-1/3" />
         <div className="grid grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-24 bg-[var(--surface)] rounded" />
           ))}
         </div>
@@ -80,19 +74,21 @@ export function CostDashboard() {
 
       {/* Tab Navigation */}
       <div className="flex border-b border-[var(--border)]">
-        {(['overview', 'analytics', 'recommendations', 'efficiency', 'forecast'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-theme-data transition-colors ${
-              activeTab === tab
-                ? 'text-[var(--acid-green)] border-b-2 border-[var(--acid-green)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
+        {(['overview', 'analytics', 'recommendations', 'efficiency', 'forecast'] as const).map(
+          (tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-theme-data transition-colors ${
+                activeTab === tab
+                  ? 'text-[var(--acid-green)] border-b-2 border-[var(--acid-green)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ),
+        )}
       </div>
 
       {/* Tab Content */}
@@ -121,7 +117,7 @@ export function CostDashboard() {
             />
             <SummaryCard
               label="Avg Cost/Call"
-              value={`$${(costData.totalCost / costData.apiCalls * 1000).toFixed(4)}`}
+              value={`$${((costData.totalCost / costData.apiCalls) * 1000).toFixed(4)}`}
               subtext="per 1K calls"
               color="text-yellow-400"
             />
@@ -133,18 +129,26 @@ export function CostDashboard() {
               <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
                 {'>'} BUDGET PROGRESS
               </h3>
-              <span className={`text-sm font-theme-data ${
-                budgetUsagePercent >= 90 ? 'text-red-400' :
-                budgetUsagePercent >= 75 ? 'text-yellow-400' : 'text-green-400'
-              }`}>
+              <span
+                className={`text-sm font-theme-data ${
+                  budgetUsagePercent >= 90
+                    ? 'text-red-400'
+                    : budgetUsagePercent >= 75
+                      ? 'text-yellow-400'
+                      : 'text-green-400'
+                }`}
+              >
                 {budgetUsagePercent.toFixed(1)}% used
               </span>
             </div>
             <div className="h-4 bg-[var(--bg)] rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-500 ${
-                  budgetUsagePercent >= 90 ? 'bg-red-500' :
-                  budgetUsagePercent >= 75 ? 'bg-yellow-500' : 'bg-[var(--acid-green)]'
+                  budgetUsagePercent >= 90
+                    ? 'bg-red-500'
+                    : budgetUsagePercent >= 75
+                      ? 'bg-yellow-500'
+                      : 'bg-[var(--acid-green)]'
                 }`}
                 style={{ width: `${Math.min(budgetUsagePercent, 100)}%` }}
               />
@@ -198,48 +202,27 @@ export function CostDashboard() {
       {activeTab === 'analytics' && (
         <>
           {/* Budget Utilization Gauge */}
-          <BudgetUtilizationGauge
-            utilization={utilization}
-            loading={utilizationLoading}
-          />
+          <BudgetUtilizationGauge utilization={utilization} loading={utilizationLoading} />
 
           {/* Spend Trend Chart */}
-          <SpendTrendChart
-            trend={spendTrend}
-            loading={trendLoading}
-          />
+          <SpendTrendChart trend={spendTrend} loading={trendLoading} />
 
           {/* Agent and Model Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <AgentBreakdownPanel
-              data={agentBreakdown}
-              loading={agentLoading}
-            />
-            <ModelBreakdownPanel
-              data={modelBreakdown}
-              loading={modelLoading}
-            />
+            <AgentBreakdownPanel data={agentBreakdown} loading={agentLoading} />
+            <ModelBreakdownPanel data={modelBreakdown} loading={modelLoading} />
           </div>
 
           {/* Recent Debates with Cost */}
-          <RecentDebatesPanel
-            data={debateBreakdown}
-            loading={debateLoading}
-          />
+          <RecentDebatesPanel data={debateBreakdown} loading={debateLoading} />
         </>
       )}
 
-      {activeTab === 'recommendations' && (
-        <OptimizationRecommendations />
-      )}
+      {activeTab === 'recommendations' && <OptimizationRecommendations />}
 
-      {activeTab === 'efficiency' && (
-        <EfficiencyMetrics timeRange={timeRange} />
-      )}
+      {activeTab === 'efficiency' && <EfficiencyMetrics timeRange={timeRange} />}
 
-      {activeTab === 'forecast' && (
-        <BudgetForecast />
-      )}
+      {activeTab === 'forecast' && <BudgetForecast />}
     </div>
   );
 }
@@ -297,14 +280,11 @@ function BudgetUtilizationGauge({
         {/* Gauge */}
         <div className="relative w-36 h-36 flex-shrink-0">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="60" fill="none" stroke="var(--bg)" strokeWidth="12" />
             <circle
-              cx="70" cy="70" r="60"
-              fill="none"
-              stroke="var(--bg)"
-              strokeWidth="12"
-            />
-            <circle
-              cx="70" cy="70" r="60"
+              cx="70"
+              cy="70"
+              r="60"
               fill="none"
               stroke={gaugeColor}
               strokeWidth="12"
@@ -359,13 +339,7 @@ function BudgetUtilizationGauge({
   );
 }
 
-function SpendTrendChart({
-  trend,
-  loading,
-}: {
-  trend: SpendTrend | null;
-  loading: boolean;
-}) {
+function SpendTrendChart({ trend, loading }: { trend: SpendTrend | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-6 animate-pulse">
@@ -378,21 +352,17 @@ function SpendTrendChart({
   if (!trend || trend.points.length === 0) {
     return (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-6">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)] mb-4">
-          {'>'} COST TREND
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)] mb-4">{'>'} COST TREND</h3>
         <p className="text-sm text-[var(--text-muted)]">No spend data available for this period.</p>
       </div>
     );
   }
 
-  const maxCost = Math.max(...trend.points.map(p => p.cost_usd), 0.01);
+  const maxCost = Math.max(...trend.points.map((p) => p.cost_usd), 0.01);
   const chartHeight = 160;
 
   // Build SVG polyline points
-  const stepX = trend.points.length > 1
-    ? 100 / (trend.points.length - 1)
-    : 50;
+  const stepX = trend.points.length > 1 ? 100 / (trend.points.length - 1) : 50;
   const linePoints = trend.points
     .map((p, i) => {
       const x = i * stepX;
@@ -407,27 +377,29 @@ function SpendTrendChart({
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} COST TREND
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} COST TREND</h3>
         <div className="flex items-center gap-4 text-xs font-theme-data text-[var(--text-muted)]">
-          <span>Total: <span className="text-[var(--acid-green)]">${trend.total_usd.toFixed(2)}</span></span>
-          <span>Avg/day: <span className="text-[var(--acid-cyan)]">${trend.avg_daily_usd.toFixed(2)}</span></span>
+          <span>
+            Total: <span className="text-[var(--acid-green)]">${trend.total_usd.toFixed(2)}</span>
+          </span>
+          <span>
+            Avg/day:{' '}
+            <span className="text-[var(--acid-cyan)]">${trend.avg_daily_usd.toFixed(2)}</span>
+          </span>
         </div>
       </div>
 
       {/* SVG Line Chart */}
       <div style={{ height: chartHeight }} className="relative">
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="w-full h-full"
-        >
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
           {/* Grid lines */}
-          {[0, 25, 50, 75].map(y => (
+          {[0, 25, 50, 75].map((y) => (
             <line
               key={y}
-              x1="0" y1={y} x2="100" y2={y}
+              x1="0"
+              y1={y}
+              x2="100"
+              y2={y}
               stroke="var(--border)"
               strokeWidth="0.3"
               strokeDasharray="2,2"
@@ -446,11 +418,7 @@ function SpendTrendChart({
           />
 
           {/* Fill area */}
-          <polygon
-            points={fillPoints}
-            fill="url(#trendGradient)"
-            opacity="0.3"
-          />
+          <polygon points={fillPoints} fill="url(#trendGradient)" opacity="0.3" />
 
           {/* Line */}
           <polyline
@@ -466,13 +434,7 @@ function SpendTrendChart({
           {trend.points.map((p, i) => {
             const x = i * stepX;
             const y = 100 - (p.cost_usd / maxCost) * 100;
-            return (
-              <circle
-                key={p.date}
-                cx={x} cy={y} r="1"
-                fill="#00ff9d"
-              />
-            );
+            return <circle key={p.date} cx={x} cy={y} r="1" fill="#00ff9d" />;
           })}
 
           <defs>
@@ -517,7 +479,7 @@ function AgentBreakdownPanel({
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4 animate-pulse">
         <div className="h-5 bg-[var(--bg)] rounded w-1/3 mb-4" />
         <div className="space-y-3">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3].map((i) => (
             <div key={i} className="h-6 bg-[var(--bg)] rounded" />
           ))}
         </div>
@@ -526,14 +488,21 @@ function AgentBreakdownPanel({
   }
 
   const agents = data?.agents ?? [];
-  const colors = ['#00ff9d', '#00d4ff', '#a855f7', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
+  const colors = [
+    '#00ff9d',
+    '#00d4ff',
+    '#a855f7',
+    '#f59e0b',
+    '#ef4444',
+    '#ec4899',
+    '#14b8a6',
+    '#8b5cf6',
+  ];
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} COST BY AGENT
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} COST BY AGENT</h3>
         <span className="text-xs font-theme-data text-[var(--text-muted)]">
           {agents.length} agents
         </span>
@@ -561,10 +530,7 @@ function AgentBreakdownPanel({
                 <div className="h-2 bg-[var(--bg)] rounded-full overflow-hidden">
                   <div
                     className="h-full transition-all duration-500 rounded-full"
-                    style={{
-                      width: `${agent.percentage}%`,
-                      backgroundColor: barColor,
-                    }}
+                    style={{ width: `${agent.percentage}%`, backgroundColor: barColor }}
                   />
                 </div>
               </div>
@@ -594,14 +560,21 @@ function ModelBreakdownPanel({
 
   const models = data?.models ?? [];
   const total = data?.total_usd ?? 0;
-  const colors = ['#00ff9d', '#00d4ff', '#a855f7', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
+  const colors = [
+    '#00ff9d',
+    '#00d4ff',
+    '#a855f7',
+    '#f59e0b',
+    '#ef4444',
+    '#ec4899',
+    '#14b8a6',
+    '#8b5cf6',
+  ];
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} COST BY MODEL
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} COST BY MODEL</h3>
         <span className="text-xs font-theme-data text-[var(--text-muted)]">
           {models.length} models
         </span>
@@ -617,7 +590,9 @@ function ModelBreakdownPanel({
               {total > 0 && <MiniDonut data={models} colors={colors} />}
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-sm font-theme-data text-[var(--text)]">${total.toFixed(0)}</div>
+                  <div className="text-sm font-theme-data text-[var(--text)]">
+                    ${total.toFixed(0)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -630,13 +605,13 @@ function ModelBreakdownPanel({
                     style={{ backgroundColor: colors[index % colors.length] }}
                   />
                   <span className="text-[var(--text)] truncate flex-1">{model.name}</span>
-                  <span className="font-theme-data text-[var(--text-muted)]">${model.cost_usd.toFixed(2)}</span>
+                  <span className="font-theme-data text-[var(--text-muted)]">
+                    ${model.cost_usd.toFixed(2)}
+                  </span>
                 </div>
               ))}
               {models.length > 5 && (
-                <div className="text-xs text-[var(--text-muted)]">
-                  +{models.length - 5} more
-                </div>
+                <div className="text-xs text-[var(--text-muted)]">+{models.length - 5} more</div>
               )}
             </div>
           </div>
@@ -672,7 +647,8 @@ function MiniDonut({
       style={{
         background: `conic-gradient(${stops.join(', ')})`,
         mask: 'radial-gradient(farthest-side, transparent calc(100% - 10px), black calc(100% - 9px))',
-        WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 10px), black calc(100% - 9px))',
+        WebkitMask:
+          'radial-gradient(farthest-side, transparent calc(100% - 10px), black calc(100% - 9px))',
       }}
     />
   );
@@ -690,7 +666,7 @@ function RecentDebatesPanel({
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4 animate-pulse">
         <div className="h-5 bg-[var(--bg)] rounded w-1/3 mb-4" />
         <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map(i => (
+          {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-10 bg-[var(--bg)] rounded" />
           ))}
         </div>
@@ -739,12 +715,8 @@ function RecentDebatesPanel({
                   <td className="py-2 pr-4 text-right text-[var(--acid-green)]">
                     ${debate.cost_usd.toFixed(4)}
                   </td>
-                  <td className="py-2 pr-4 text-right text-[var(--text)]">
-                    {debate.agent_count}
-                  </td>
-                  <td className="py-2 pr-4 text-right text-[var(--text)]">
-                    {debate.call_count}
-                  </td>
+                  <td className="py-2 pr-4 text-right text-[var(--text)]">{debate.agent_count}</td>
+                  <td className="py-2 pr-4 text-right text-[var(--text)]">{debate.call_count}</td>
                   <td className="py-2 text-right text-[var(--text-muted)]">
                     {formatDateLabel(debate.last_activity.split('T')[0])}
                   </td>
@@ -782,7 +754,7 @@ function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
 
   return (
     <div className="flex border border-[var(--border)] rounded overflow-hidden">
-      {ranges.map(range => (
+      {ranges.map((range) => (
         <button
           key={range.id}
           onClick={() => onChange(range.id)}

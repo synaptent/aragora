@@ -22,8 +22,8 @@ export function CapabilitiesSection() {
               <h3 className="text-[var(--accent)] font-theme-data text-sm">ELO RANKINGS</h3>
             </div>
             <p className="text-text-muted text-xs font-theme-data leading-relaxed mb-3">
-              Agents earn reputation through stress-test performance. Domain-specific ratings: security,
-              architecture, testing.
+              Agents earn reputation through stress-test performance. Domain-specific ratings:
+              security, architecture, testing.
             </p>
             <p className="text-[var(--accent)]/60 text-xs font-theme-data">
               See who&apos;s actually good at what &mdash; backed by data.
@@ -85,7 +85,9 @@ export function CapabilitiesSection() {
           <div className="border border-[var(--acid-cyan)]/40 p-5 bg-surface/50">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[var(--acid-magenta)] text-lg">{'!'}</span>
-              <h3 className="text-[var(--acid-cyan)] font-theme-data text-sm">TRICKSTER DETECTION</h3>
+              <h3 className="text-[var(--acid-cyan)] font-theme-data text-sm">
+                TRICKSTER DETECTION
+              </h3>
             </div>
             <p className="text-text-muted text-xs font-theme-data leading-relaxed mb-2">
               Detects hollow consensus where agents agree on the surface but diverge on reasoning.

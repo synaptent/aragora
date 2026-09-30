@@ -35,7 +35,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="pulse">
           <div>Pulse content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.getByText('Pulse content')).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="pulse" fallback={<div>Fallback</div>}>
           <div>Main content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.queryByText('Fallback')).not.toBeInTheDocument();
@@ -64,7 +64,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="pulse">
           <div>Pulse content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.queryByText('Pulse content')).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="pulse" fallback={<div>Custom fallback</div>}>
           <div>Pulse content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.queryByText('Pulse content')).not.toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('FeatureGuard', () => {
       const { container } = render(
         <FeatureGuard featureId="pulse" hideWhenUnavailable>
           <div>Pulse content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.queryByText('Pulse content')).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="pulse">
           <div>Content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.getByText('Trending Topics Unavailable')).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="memory">
           <div>Content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.getByText('Access to memory systems')).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="pulse">
           <div>Content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.getByText('How to enable')).toBeInTheDocument();
@@ -149,7 +149,7 @@ describe('FeatureGuard', () => {
       render(
         <FeatureGuard featureId="experimental-feature">
           <div>Content</div>
-        </FeatureGuard>
+        </FeatureGuard>,
       );
 
       expect(screen.getByText('experimental-feature Unavailable')).toBeInTheDocument();
@@ -162,9 +162,7 @@ describe('withFeatureGuard HOC', () => {
     jest.clearAllMocks();
   });
 
-  const TestComponent = ({ message }: { message: string }) => (
-    <div>Test: {message}</div>
-  );
+  const TestComponent = ({ message }: { message: string }) => <div>Test: {message}</div>;
 
   it('wraps component with FeatureGuard', () => {
     mockIsAvailable.mockReturnValue(true);

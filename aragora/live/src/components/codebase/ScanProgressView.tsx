@@ -59,14 +59,14 @@ export function ScanProgressView({ scanType }: ScanProgressViewProps) {
 
         for (let step = 0; step <= steps; step++) {
           if (cancelled) return;
-          await new Promise(resolve => setTimeout(resolve, stepDuration));
+          await new Promise((resolve) => setTimeout(resolve, stepDuration));
           setPhaseProgress((step / steps) * 100);
 
           // Simulate files and findings
           if (i >= 1) {
-            setFilesScanned(prev => Math.min(prev + Math.floor(Math.random() * 5), 500));
+            setFilesScanned((prev) => Math.min(prev + Math.floor(Math.random() * 5), 500));
             if (Math.random() > 0.8) {
-              setFindingsCount(prev => prev + 1);
+              setFindingsCount((prev) => prev + 1);
             }
           }
         }
@@ -106,7 +106,9 @@ export function ScanProgressView({ scanType }: ScanProgressViewProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
           <span>Overall Progress</span>
-          <span>Phase {currentPhase + 1} of {totalPhases}</span>
+          <span>
+            Phase {currentPhase + 1} of {totalPhases}
+          </span>
         </div>
         <div className="h-3 bg-[var(--bg)] rounded-full overflow-hidden">
           <div
@@ -127,24 +129,34 @@ export function ScanProgressView({ scanType }: ScanProgressViewProps) {
             <div
               key={phase.name}
               className={`flex items-center gap-3 p-3 rounded transition-colors ${
-                isCurrent ? 'bg-[var(--acid-green)]/10 border border-[var(--acid-green)]/30' :
-                isComplete ? 'bg-green-500/5' : 'bg-[var(--bg)]'
+                isCurrent
+                  ? 'bg-[var(--acid-green)]/10 border border-[var(--acid-green)]/30'
+                  : isComplete
+                    ? 'bg-green-500/5'
+                    : 'bg-[var(--bg)]'
               }`}
             >
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-theme-data ${
-                  isComplete ? 'bg-green-500 text-white' :
-                  isCurrent ? 'bg-[var(--acid-green)] text-[var(--bg)] animate-pulse' :
-                  'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]'
+                  isComplete
+                    ? 'bg-green-500 text-white'
+                    : isCurrent
+                      ? 'bg-[var(--acid-green)] text-[var(--bg)] animate-pulse'
+                      : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]'
                 }`}
               >
                 {isComplete ? '✓' : index + 1}
               </div>
               <div className="flex-1">
-                <div className={`text-sm font-theme-data ${
-                  isCurrent ? 'text-[var(--acid-green)]' :
-                  isComplete ? 'text-green-400' : 'text-[var(--text-muted)]'
-                }`}>
+                <div
+                  className={`text-sm font-theme-data ${
+                    isCurrent
+                      ? 'text-[var(--acid-green)]'
+                      : isComplete
+                        ? 'text-green-400'
+                        : 'text-[var(--text-muted)]'
+                  }`}
+                >
                   {phase.name}
                 </div>
                 {isCurrent && (
@@ -180,23 +192,27 @@ export function ScanProgressView({ scanType }: ScanProgressViewProps) {
       <div className="relative h-8 bg-[var(--bg)] rounded overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-xs font-theme-data text-[var(--text-muted)]">
-            {scanType === 'quick' ? 'Pattern matching...' :
-             scanType === 'full' ? 'Deep analysis...' :
-             'Scanning for secrets...'}
+            {scanType === 'quick'
+              ? 'Pattern matching...'
+              : scanType === 'full'
+                ? 'Deep analysis...'
+                : 'Scanning for secrets...'}
           </span>
         </div>
         <div
           className="absolute top-0 left-0 h-full w-1/4 bg-gradient-to-r from-transparent via-[var(--acid-green)]/20 to-transparent animate-pulse"
-          style={{
-            animation: 'scan 2s linear infinite',
-          }}
+          style={{ animation: 'scan 2s linear infinite' }}
         />
       </div>
 
       <style jsx>{`
         @keyframes scan {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(400%); }
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(400%);
+          }
         }
       `}</style>
     </div>

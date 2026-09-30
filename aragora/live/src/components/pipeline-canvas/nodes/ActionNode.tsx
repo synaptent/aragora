@@ -25,7 +25,8 @@ export const ActionNode = memo(function ActionNode({ data, selected }: ActionNod
   const assignee = data.assignee as string | undefined;
   const lockedBy = getMirroredNodeField<string>(data, 'lockedBy', 'locked_by');
 
-  const config = PIPELINE_NODE_TYPE_CONFIGS.actions[stepType] || PIPELINE_NODE_TYPE_CONFIGS.actions.task;
+  const config =
+    PIPELINE_NODE_TYPE_CONFIGS.actions[stepType] || PIPELINE_NODE_TYPE_CONFIGS.actions.task;
   const statusClass = ACTION_STATUS_COLORS[status] || ACTION_STATUS_COLORS.pending;
 
   return (
@@ -58,15 +59,11 @@ export const ActionNode = memo(function ActionNode({ data, selected }: ActionNod
       </div>
 
       {/* Label */}
-      <div className="text-sm font-medium text-text mb-1 line-clamp-2">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 line-clamp-2">{label}</div>
 
       {/* Description */}
       {description && (
-        <div className="text-xs text-text-muted mb-1 line-clamp-2">
-          {description}
-        </div>
+        <div className="text-xs text-text-muted mb-1 line-clamp-2">{description}</div>
       )}
 
       {/* Optional indicator */}
@@ -77,25 +74,15 @@ export const ActionNode = memo(function ActionNode({ data, selected }: ActionNod
       )}
 
       {/* Assignee */}
-      {assignee && (
-        <div className="text-xs text-amber-300/80 mb-1">
-          assigned: {assignee}
-        </div>
-      )}
+      {assignee && <div className="text-xs text-amber-300/80 mb-1">assigned: {assignee}</div>}
 
       {/* Timeout */}
       {timeout && timeout > 0 && (
-        <div className="text-xs font-theme-data text-amber-300">
-          timeout: {timeout}s
-        </div>
+        <div className="text-xs font-theme-data text-amber-300">timeout: {timeout}s</div>
       )}
 
       {/* Lock indicator */}
-      {lockedBy && (
-        <div className="mt-1 text-xs text-amber-400">
-          Locked by {lockedBy}
-        </div>
-      )}
+      {lockedBy && <div className="mt-1 text-xs text-amber-400">Locked by {lockedBy}</div>}
 
       <Handle
         type="source"

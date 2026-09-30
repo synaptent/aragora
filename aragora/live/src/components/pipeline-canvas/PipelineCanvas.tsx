@@ -67,7 +67,13 @@ const STAGE_OFFSET_X: Record<string, number> = {
   orchestration: 1800,
 };
 
-const PROVENANCE_STAGES: PipelineStageType[] = ['ideas', 'principles', 'goals', 'actions', 'orchestration'];
+const PROVENANCE_STAGES: PipelineStageType[] = [
+  'ideas',
+  'principles',
+  'goals',
+  'actions',
+  'orchestration',
+];
 
 function buildTransitionQuestions(
   provenance: ProvenanceLink[],
@@ -76,11 +82,15 @@ function buildTransitionQuestions(
   const prompts: string[] = [];
 
   for (const link of provenance) {
-    const sourceNode = (stageNodes[link.source_stage] ?? []).find((node) => node.id === link.source_node_id);
+    const sourceNode = (stageNodes[link.source_stage] ?? []).find(
+      (node) => node.id === link.source_node_id,
+    );
     const data = (sourceNode?.data as Record<string, unknown> | undefined) ?? {};
     const label = (data.label as string) || sourceNode?.id || link.source_node_id;
     const ideaType = String(data.ideaType ?? data.idea_type ?? '');
-    const description = String(data.fullContent ?? data.full_content ?? data.description ?? '').trim();
+    const description = String(
+      data.fullContent ?? data.full_content ?? data.description ?? '',
+    ).trim();
 
     if (ideaType === 'question' || label.includes('?')) {
       prompts.push(`Answer the open question "${label}" before approval.`);
@@ -256,10 +266,7 @@ function PipelineCanvasInner({
     for (const stage of ALL_STAGES) {
       const offsetX = STAGE_OFFSET_X[stage] || 0;
       for (const n of stageNodes[stage]) {
-        allNodes.push({
-          ...n,
-          position: { x: n.position.x + offsetX, y: n.position.y },
-        });
+        allNodes.push({ ...n, position: { x: n.position.x + offsetX, y: n.position.y } });
       }
       allEdges.push(...stageEdges[stage]);
     }
@@ -281,10 +288,7 @@ function PipelineCanvasInner({
     for (const stage of PROVENANCE_STAGES) {
       for (const n of stageNodes[stage]) {
         const data = n.data as Record<string, unknown>;
-        lookup[n.id] = {
-          label: (data?.label as string) || n.id,
-          stage,
-        };
+        lookup[n.id] = { label: (data?.label as string) || n.id, stage };
       }
     }
     return lookup;
@@ -341,13 +345,7 @@ function PipelineCanvasInner({
       }
 
       // Dim non-provenance edges when a node is selected
-      return {
-        ...edge,
-        style: {
-          ...edge.style,
-          opacity: 0.25,
-        },
-      };
+      return { ...edge, style: { ...edge.style, opacity: 0.25 } };
     });
   }, [baseEdges, selectedNodeId, provenanceHighlightIds]);
 
@@ -391,10 +389,7 @@ function PipelineCanvasInner({
         return;
       }
 
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       addNode(parsed.stage, parsed.subtype, position);
     },
     [screenToFlowPosition, addNode],
@@ -448,7 +443,10 @@ function PipelineCanvasInner({
     if (!pipelineId) return;
     try {
       const response = await fetch(
-        joinBackendPath(backendConfig.api, `/api/v1/canvas/pipeline/${encodeURIComponent(pipelineId)}/receipt`),
+        joinBackendPath(
+          backendConfig.api,
+          `/api/v1/canvas/pipeline/${encodeURIComponent(pipelineId)}/receipt`,
+        ),
       );
       if (!response.ok) {
         console.error('Failed to fetch receipt:', response.status);
@@ -481,22 +479,28 @@ function PipelineCanvasInner({
   );
 
   // -- Template selection handlers --------------------------------------------
-  const handleSelectTemplate = useCallback(async (templateName: string) => {
-    try {
-      const res = await fetch(joinBackendPath(backendConfig.api, '/api/v1/canvas/pipeline/from-template'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template_name: templateName, auto_advance: false }),
-      });
-      if (res.ok) {
-        setShowTemplates(false);
-        setRunNotification(`Pipeline created from "${templateName}" template`);
-        setTimeout(() => setRunNotification(null), 3000);
+  const handleSelectTemplate = useCallback(
+    async (templateName: string) => {
+      try {
+        const res = await fetch(
+          joinBackendPath(backendConfig.api, '/api/v1/canvas/pipeline/from-template'),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ template_name: templateName, auto_advance: false }),
+          },
+        );
+        if (res.ok) {
+          setShowTemplates(false);
+          setRunNotification(`Pipeline created from "${templateName}" template`);
+          setTimeout(() => setRunNotification(null), 3000);
+        }
+      } catch {
+        // Template creation failed silently, user can retry
       }
-    } catch {
-      // Template creation failed silently, user can retry
-    }
-  }, [backendConfig.api]);
+    },
+    [backendConfig.api],
+  );
 
   const handleStartBlank = useCallback(() => {
     setShowTemplates(false);
@@ -544,7 +548,7 @@ function PipelineCanvasInner({
     for (const t of wsNormalized) {
       const key = `${t.from_stage}-${t.to_stage}`;
       if (!seen.has(key)) {
-        merged.push(t as typeof staticPending[number]);
+        merged.push(t as (typeof staticPending)[number]);
         seen.add(key);
       }
     }
@@ -554,7 +558,7 @@ function PipelineCanvasInner({
   const selectedNodeLabel = useMemo(() => {
     if (!selectedNodeId) return '';
     const node = displayNodes.find((n) => n.id === selectedNodeId);
-    return (node?.data as Record<string, unknown>)?.label as string || selectedNodeId;
+    return ((node?.data as Record<string, unknown>)?.label as string) || selectedNodeId;
   }, [selectedNodeId, displayNodes]);
 
   // Stage of the selected node
@@ -565,9 +569,10 @@ function PipelineCanvasInner({
 
   // Transitions relevant to the selected node's stage
   const selectedTransitions = useMemo(
-    () => (initialData?.transitions || []).filter(
-      (t) => t.from_stage === selectedNodeStage || t.to_stage === selectedNodeStage,
-    ),
+    () =>
+      (initialData?.transitions || []).filter(
+        (t) => t.from_stage === selectedNodeStage || t.to_stage === selectedNodeStage,
+      ),
     [initialData, selectedNodeStage],
   );
 
@@ -577,16 +582,14 @@ function PipelineCanvasInner({
 
   // -- Right panel logic ------------------------------------------------------
   const showPropertyEditor = !!selectedNodeId && !showProvenance && isEditable;
-  const showProvenanceSidebar = !!selectedNodeId && (showProvenance || readOnly || viewMode === 'all') && !showPropertyEditor;
+  const showProvenanceSidebar =
+    !!selectedNodeId && (showProvenance || readOnly || viewMode === 'all') && !showPropertyEditor;
 
   // -- Template selector: shown when no pipeline is active -------------------
   if (showTemplates) {
     return (
       <div className="flex h-full bg-bg">
-        <TemplateSelector
-          onSelectTemplate={handleSelectTemplate}
-          onStartBlank={handleStartBlank}
-        />
+        <TemplateSelector onSelectTemplate={handleSelectTemplate} onStartBlank={handleStartBlank} />
       </div>
     );
   }
@@ -609,7 +612,9 @@ function PipelineCanvasInner({
               type="text"
               value={runInputText}
               onChange={(e) => setRunInputText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleRunPipeline(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRunPipeline();
+              }}
               placeholder="Describe your idea or problem..."
               className="flex-1 px-3 py-2 text-sm font-theme-data rounded bg-bg border border-border text-text placeholder:text-text-muted focus:outline-none focus:border-[var(--accent)] transition-colors"
             />
@@ -625,7 +630,15 @@ function PipelineCanvasInner({
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polygon points="5 3 19 12 5 21 5 3" />
                   </svg>
                   Run Pipeline
@@ -698,15 +711,18 @@ function PipelineCanvasInner({
             fitView
             snapToGrid
             snapGrid={[16, 16]}
-            defaultEdgeOptions={{
-              animated: true,
-              style: { stroke: edgeColor, strokeWidth: 2 },
-            }}
+            defaultEdgeOptions={{ animated: true, style: { stroke: edgeColor, strokeWidth: 2 } }}
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#333" />
-            <Controls className="bg-surface border border-border rounded" showInteractive={isEditable} />
-            <MiniMap className="bg-surface border border-border rounded" nodeColor={miniMapNodeColor} />
+            <Controls
+              className="bg-surface border border-border rounded"
+              showInteractive={isEditable}
+            />
+            <MiniMap
+              className="bg-surface border border-border rounded"
+              nodeColor={miniMapNodeColor}
+            />
 
             {/* Toolbar */}
             {isEditable && (
@@ -729,7 +745,10 @@ function PipelineCanvasInner({
             )}
 
             {/* Stats panel */}
-            <Panel position="bottom-left" className="bg-surface/90 border border-border rounded p-2">
+            <Panel
+              position="bottom-left"
+              className="bg-surface/90 border border-border rounded p-2"
+            >
               <div className="text-xs font-theme-data text-text-muted flex items-center gap-2">
                 <span>
                   <span className="text-text">{displayNodes.length}</span> nodes |{' '}
@@ -766,11 +785,16 @@ function PipelineCanvasInner({
 
             {/* Pipeline ID + integrity */}
             {pipelineId && (
-              <Panel position="top-right" className="bg-surface/90 border border-border rounded p-2">
+              <Panel
+                position="top-right"
+                className="bg-surface/90 border border-border rounded p-2"
+              >
                 <div className="text-xs font-theme-data text-text-muted">
                   Pipeline: <span className="text-text">{pipelineId}</span>
                   {initialData?.integrity_hash && (
-                    <span className="ml-2 text-emerald-400">#{initialData.integrity_hash.slice(0, 8)}</span>
+                    <span className="ml-2 text-emerald-400">
+                      #{initialData.integrity_hash.slice(0, 8)}
+                    </span>
                   )}
                 </div>
               </Panel>
@@ -791,31 +815,31 @@ function PipelineCanvasInner({
                   ) as ProvenanceLink[];
 
                   return (
-                  <StageTransitionGate
-                    key={(transition.id as string) || idx}
-                    transition={{
-                      id: transition.id as string,
-                      from_stage: transition.from_stage as string,
-                      to_stage: transition.to_stage as string,
-                      ai_rationale: transition.ai_rationale as string | undefined,
-                      confidence: transition.confidence as number | undefined,
-                      status: transition.status as string | undefined,
-                      human_notes: transition.human_notes as string | undefined,
-                      reviewed_at: transition.reviewed_at as number | null | undefined,
-                    }}
-                    pipelineId={pipelineId || ''}
-                    provenance={transitionProvenance}
-                    nodeLookup={nodeLookup}
-                    questions={buildTransitionQuestions(transitionProvenance, stageNodes)}
-                    onApprove={(pid, tid) => {
-                      approveTransition(tid);
-                      onTransitionApprove?.(pid, tid);
-                    }}
-                    onReject={(pid, tid) => {
-                      rejectTransition(tid);
-                      onTransitionReject?.(pid, tid);
-                    }}
-                  />
+                    <StageTransitionGate
+                      key={(transition.id as string) || idx}
+                      transition={{
+                        id: transition.id as string,
+                        from_stage: transition.from_stage as string,
+                        to_stage: transition.to_stage as string,
+                        ai_rationale: transition.ai_rationale as string | undefined,
+                        confidence: transition.confidence as number | undefined,
+                        status: transition.status as string | undefined,
+                        human_notes: transition.human_notes as string | undefined,
+                        reviewed_at: transition.reviewed_at as number | null | undefined,
+                      }}
+                      pipelineId={pipelineId || ''}
+                      provenance={transitionProvenance}
+                      nodeLookup={nodeLookup}
+                      questions={buildTransitionQuestions(transitionProvenance, stageNodes)}
+                      onApprove={(pid, tid) => {
+                        approveTransition(tid);
+                        onTransitionApprove?.(pid, tid);
+                      }}
+                      onReject={(pid, tid) => {
+                        rejectTransition(tid);
+                        onTransitionReject?.(pid, tid);
+                      }}
+                    />
                   );
                 })}
               </Panel>

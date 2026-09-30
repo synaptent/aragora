@@ -115,20 +115,14 @@ export type OutcomePeriod = '24h' | '7d' | '30d' | '90d' | '365d';
  */
 export function useOutcomeDashboard(
   period: OutcomePeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: OutcomeDashboardData }>
+  options?: UseSWRFetchOptions<{ data: OutcomeDashboardData }>,
 ) {
   const result = useSWRFetch<{ data: OutcomeDashboardData }>(
     `/api/v1/outcome-dashboard?period=${period}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    dashboard: result.data?.data ?? null,
-  };
+  return { ...result, dashboard: result.data?.data ?? null };
 }
 
 /**
@@ -136,20 +130,14 @@ export function useOutcomeDashboard(
  */
 export function useQualityScore(
   period: OutcomePeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: QualityScore }>
+  options?: UseSWRFetchOptions<{ data: QualityScore }>,
 ) {
   const result = useSWRFetch<{ data: QualityScore }>(
     `/api/v1/outcome-dashboard/quality?period=${period}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    quality: result.data?.data ?? null,
-  };
+  return { ...result, quality: result.data?.data ?? null };
 }
 
 /**
@@ -157,20 +145,14 @@ export function useQualityScore(
  */
 export function useOutcomeAgents(
   period: OutcomePeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: AgentLeaderboardData }>
+  options?: UseSWRFetchOptions<{ data: AgentLeaderboardData }>,
 ) {
   const result = useSWRFetch<{ data: AgentLeaderboardData }>(
     `/api/v1/outcome-dashboard/agents?period=${period}`,
-    {
-      refreshInterval: 120000,
-      ...options,
-    }
+    { refreshInterval: 120000, ...options },
   );
 
-  return {
-    ...result,
-    leaderboard: result.data?.data ?? null,
-  };
+  return { ...result, leaderboard: result.data?.data ?? null };
 }
 
 /**
@@ -180,20 +162,14 @@ export function useDecisionHistory(
   period: OutcomePeriod = '30d',
   limit: number = 50,
   offset: number = 0,
-  options?: UseSWRFetchOptions<{ data: DecisionHistoryData }>
+  options?: UseSWRFetchOptions<{ data: DecisionHistoryData }>,
 ) {
   const result = useSWRFetch<{ data: DecisionHistoryData }>(
     `/api/v1/outcome-dashboard/history?period=${period}&limit=${limit}&offset=${offset}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    history: result.data?.data ?? null,
-  };
+  return { ...result, history: result.data?.data ?? null };
 }
 
 /**
@@ -201,20 +177,14 @@ export function useDecisionHistory(
  */
 export function useCalibrationCurve(
   period: OutcomePeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: CalibrationData }>
+  options?: UseSWRFetchOptions<{ data: CalibrationData }>,
 ) {
   const result = useSWRFetch<{ data: CalibrationData }>(
     `/api/v1/outcome-dashboard/calibration?period=${period}`,
-    {
-      refreshInterval: 300000,
-      ...options,
-    }
+    { refreshInterval: 300000, ...options },
   );
 
-  return {
-    ...result,
-    calibration: result.data?.data ?? null,
-  };
+  return { ...result, calibration: result.data?.data ?? null };
 }
 
 // ============================================================================

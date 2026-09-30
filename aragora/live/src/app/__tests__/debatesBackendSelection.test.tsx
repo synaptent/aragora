@@ -12,27 +12,13 @@ const mockFetchRecentDebates = jest.fn();
 global.fetch = mockFetch as typeof fetch;
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    replace: jest.fn(),
-    prefetch: jest.fn(),
-  }),
-  useParams: () => ({
-    id: 'debate-123',
-  }),
-  useSearchParams: () => ({
-    get: () => null,
-  }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), prefetch: jest.fn() }),
+  useParams: () => ({ id: 'debate-123' }),
+  useSearchParams: () => ({ get: () => null }),
 }));
 
 jest.mock('next/link', () => {
-  return function MockLink({
-    children,
-    href,
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) {
+  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
     return <a href={href}>{children}</a>;
   };
 });
@@ -47,18 +33,11 @@ jest.mock('@/components/PanelErrorBoundary', () => ({
 }));
 
 jest.mock('@/context/RightSidebarContext', () => ({
-  useRightSidebar: () => ({
-    setContext: jest.fn(),
-    clearContext: jest.fn(),
-  }),
+  useRightSidebar: () => ({ setContext: jest.fn(), clearContext: jest.fn() }),
 }));
 
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
+  logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
 jest.mock('@/hooks/useAuthenticatedFetch', () => ({
@@ -155,9 +134,7 @@ function jsonResponse(data: unknown, init?: { status?: number; ok?: boolean }): 
   return {
     ok,
     status,
-    headers: {
-      get: () => 'application/json',
-    },
+    headers: { get: () => 'application/json' },
     json: async () => data,
     text: async () => JSON.stringify(data),
   } as Response;
@@ -194,9 +171,7 @@ describe('runtime backend selection for debate archive surfaces', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.aragora.ai/api/v1/debates?limit=20&offset=0&sort=created_at:desc',
-        expect.objectContaining({
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
       );
     });
   });
@@ -218,9 +193,7 @@ describe('runtime backend selection for debate archive surfaces', () => {
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
         'https://api.aragora.ai/api/v1/debates/debate-123',
-        expect.objectContaining({
-          signal: expect.any(AbortSignal),
-        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 
@@ -228,19 +201,13 @@ describe('runtime backend selection for debate archive surfaces', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.aragora.ai/api/v1/debates/debate-123/package',
         expect.objectContaining({
-          headers: {
-            Authorization: 'Bearer test-token',
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
         }),
       );
     });
 
     expect(useDebateWebSocket).toHaveBeenCalledWith(
-      expect.objectContaining({
-        debateId: 'debate-123',
-        wsUrl: 'wss://api.aragora.ai/ws',
-      }),
+      expect.objectContaining({ debateId: 'debate-123', wsUrl: 'wss://api.aragora.ai/ws' }),
     );
   });
 
@@ -280,8 +247,6 @@ describe('runtime backend selection for debate archive surfaces', () => {
     await user.click(screen.getByRole('button', { name: /compare b/i }));
     await user.click(screen.getByRole('button', { name: /compare selected/i }));
 
-    expect(mockPush).toHaveBeenCalledWith(
-      '/debates/compare?left=debate-123&right=debate-456',
-    );
+    expect(mockPush).toHaveBeenCalledWith('/debates/compare?left=debate-123&right=debate-456');
   });
 });

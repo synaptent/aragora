@@ -226,6 +226,8 @@ describe('ReviewQueueCard', () => {
       />,
     );
     await waitFor(() => expect(fetchBrief).toHaveBeenCalledWith(42));
-    await waitFor(() => expect(screen.getByTestId('brief-verdict')).toHaveTextContent('approve_candidate'));
+    await waitFor(() =>
+      expect(screen.getByTestId('brief-verdict')).toHaveTextContent('approve_candidate'),
+    );
   });
 });

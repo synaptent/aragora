@@ -33,12 +33,7 @@ describe('fetchBrief', () => {
     mockFetchOnce({
       okStatus: 200,
       jsonValue: {
-        brief: {
-          pr_number: 42,
-          head_sha: 'abc',
-          verdict: 'approve_candidate',
-          confidence: 4,
-        },
+        brief: { pr_number: 42, head_sha: 'abc', verdict: 'approve_candidate', confidence: 4 },
       },
     });
     const brief = await fetchBrief(42);
@@ -81,9 +76,7 @@ describe('settlePR', () => {
       status: 400,
       json: async () => ({ error: 'bad request' }),
     } as unknown as Response);
-    await expect(
-      settlePR(5, 'request-changes', { reason: '' }),
-    ).rejects.toThrow('bad request');
+    await expect(settlePR(5, 'request-changes', { reason: '' })).rejects.toThrow('bad request');
   });
 
   it('falls back to status code if response has no body', async () => {

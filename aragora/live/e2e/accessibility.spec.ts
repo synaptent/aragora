@@ -28,7 +28,10 @@ const CRITICAL_PAGES = [
 
 test.describe('Accessibility - Critical Pages', () => {
   for (const page of CRITICAL_PAGES) {
-    test(`${page.name} should have no critical accessibility violations`, async ({ page: browserPage, aragoraPage }) => {
+    test(`${page.name} should have no critical accessibility violations`, async ({
+      page: browserPage,
+      aragoraPage,
+    }) => {
       await browserPage.goto(page.path);
       await aragoraPage.dismissAllOverlays();
       await browserPage.waitForLoadState('domcontentloaded');
@@ -38,21 +41,21 @@ test.describe('Accessibility - Critical Pages', () => {
         // Exclude rules with known false positives or that require context
         .disableRules([
           'color-contrast', // Often gives false positives for styled components
-          'region',         // Layout regions may vary
+          'region', // Layout regions may vary
           'landmark-one-main', // Some pages use different layouts
         ])
         .analyze();
 
       // Filter to only critical violations (not serious)
-      const criticalViolations = results.violations.filter(
-        (v) => v.impact === 'critical'
-      );
+      const criticalViolations = results.violations.filter((v) => v.impact === 'critical');
 
       // Log violations for debugging
       if (criticalViolations.length > 0) {
         console.log(`\nAccessibility violations on ${page.name}:`);
         criticalViolations.forEach((violation) => {
-          console.log(`\n  [${violation.impact?.toUpperCase()}] ${violation.id}: ${violation.description}`);
+          console.log(
+            `\n  [${violation.impact?.toUpperCase()}] ${violation.id}: ${violation.description}`,
+          );
           console.log(`  Help: ${violation.helpUrl}`);
           violation.nodes.forEach((node, i) => {
             console.log(`    ${i + 1}. ${node.html.substring(0, 100)}...`);
@@ -62,7 +65,7 @@ test.describe('Accessibility - Critical Pages', () => {
 
       expect(
         criticalViolations,
-        `Found ${criticalViolations.length} critical accessibility violations on ${page.name}`
+        `Found ${criticalViolations.length} critical accessibility violations on ${page.name}`,
       ).toHaveLength(0);
     });
   }
@@ -80,12 +83,10 @@ test.describe('Accessibility - Interactive Components', () => {
       await signInButton.click();
       await page.waitForTimeout(500);
 
-      const results = await new AxeBuilder({ page })
-        .include('[role="dialog"]')
-        .analyze();
+      const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
 
       const criticalViolations = results.violations.filter(
-        (v) => v.impact === 'critical' || v.impact === 'serious'
+        (v) => v.impact === 'critical' || v.impact === 'serious',
       );
 
       expect(criticalViolations).toHaveLength(0);
@@ -119,7 +120,7 @@ test.describe('Accessibility - Interactive Components', () => {
       .analyze();
 
     const labelViolations = results.violations.filter(
-      (v) => v.id.includes('label') || v.id.includes('form')
+      (v) => v.id.includes('label') || v.id.includes('form'),
     );
 
     // Log violations for debugging
@@ -131,7 +132,7 @@ test.describe('Accessibility - Interactive Components', () => {
     }
 
     // Allow up to 5 label violations (some forms use aria-label or placeholder)
-    const totalNodes = labelViolations.flatMap(v => v.nodes).length;
+    const totalNodes = labelViolations.flatMap((v) => v.nodes).length;
     expect(totalNodes, `Found ${totalNodes} form label issues`).toBeLessThanOrEqual(5);
   });
 });
@@ -142,13 +143,9 @@ test.describe('Accessibility - Color Contrast', () => {
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2aa'])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).analyze();
 
-    const contrastViolations = results.violations.filter(
-      (v) => v.id === 'color-contrast'
-    );
+    const contrastViolations = results.violations.filter((v) => v.id === 'color-contrast');
 
     // Log contrast issues for debugging (but don't fail)
     if (contrastViolations.length > 0) {
@@ -158,11 +155,11 @@ test.describe('Accessibility - Color Contrast', () => {
           console.log(`  - ${node.html.substring(0, 80)}...`);
         });
       });
-      console.log(`  Total: ${contrastViolations.flatMap(v => v.nodes).length} elements`);
+      console.log(`  Total: ${contrastViolations.flatMap((v) => v.nodes).length} elements`);
     }
 
     // Allow up to 10 contrast violations (CRT theme may have intentional styling)
-    const totalNodes = contrastViolations.flatMap(v => v.nodes).length;
+    const totalNodes = contrastViolations.flatMap((v) => v.nodes).length;
     expect(totalNodes, `Found ${totalNodes} color contrast issues`).toBeLessThanOrEqual(10);
   });
 });
@@ -173,12 +170,10 @@ test.describe('Accessibility - ARIA', () => {
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['cat.aria'])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(['cat.aria']).analyze();
 
     const ariaViolations = results.violations.filter(
-      (v) => v.impact === 'critical' || v.impact === 'serious'
+      (v) => v.impact === 'critical' || v.impact === 'serious',
     );
 
     expect(ariaViolations).toHaveLength(0);
@@ -189,11 +184,10 @@ test.describe('Accessibility - ARIA', () => {
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');
 
-    const results = await new AxeBuilder({ page })
-      .analyze();
+    const results = await new AxeBuilder({ page }).analyze();
 
     const nameViolations = results.violations.filter(
-      (v) => v.id === 'button-name' || v.id === 'link-name' || v.id === 'image-alt'
+      (v) => v.id === 'button-name' || v.id === 'link-name' || v.id === 'image-alt',
     );
 
     expect(nameViolations).toHaveLength(0);
@@ -211,9 +205,7 @@ test.describe('Accessibility - Debates Page', () => {
       .disableRules(['color-contrast', 'region', 'select-name'])
       .analyze();
 
-    const criticalViolations = results.violations.filter(
-      (v) => v.impact === 'critical'
-    );
+    const criticalViolations = results.violations.filter((v) => v.impact === 'critical');
 
     expect(criticalViolations).toHaveLength(0);
   });
@@ -235,9 +227,7 @@ test.describe('Accessibility - Debates Page', () => {
         .disableRules(['color-contrast', 'region', 'select-name'])
         .analyze();
 
-      const criticalViolations = results.violations.filter(
-        (v) => v.impact === 'critical'
-      );
+      const criticalViolations = results.violations.filter((v) => v.impact === 'critical');
 
       expect(criticalViolations).toHaveLength(0);
     }
@@ -273,11 +263,7 @@ test.describe('Accessibility - Screen Reader Compatibility', () => {
       const main = document.querySelector('main, [role="main"]');
       const nav = document.querySelector('nav, [role="navigation"]');
       const skipLink = document.querySelector('a[href="#main"], a[href="#content"]');
-      return {
-        hasMain: !!main,
-        hasNav: !!nav,
-        hasSkipLink: !!skipLink,
-      };
+      return { hasMain: !!main, hasNav: !!nav, hasSkipLink: !!skipLink };
     });
 
     // Should have main landmark or skip link

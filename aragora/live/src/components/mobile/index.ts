@@ -47,11 +47,7 @@
 export { TouchButton, TouchIconButton } from './TouchButton';
 
 // Bottom navigation
-export {
-  BottomNavigation,
-  BottomNavigationSpacer,
-  type NavItem,
-} from './BottomNavigation';
+export { BottomNavigation, BottomNavigationSpacer, type NavItem } from './BottomNavigation';
 
 // Pull-to-refresh
 export { PullToRefresh } from './PullToRefresh';

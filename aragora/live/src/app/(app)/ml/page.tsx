@@ -7,7 +7,7 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { RelatedPages } from '@/components/ui/RelatedPages';
 
 const MLDashboard = dynamic(
-  () => import('@/components/MLDashboard').then(m => ({ default: m.MLDashboard })),
+  () => import('@/components/MLDashboard').then((m) => ({ default: m.MLDashboard })),
   {
     ssr: false,
     loading: () => (
@@ -15,7 +15,7 @@ const MLDashboard = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function MLPage() {
@@ -33,13 +33,15 @@ export default function MLPage() {
               {'>'} ML INTELLIGENCE
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Machine learning capabilities for agent routing, quality scoring,
-              consensus prediction, and training data management.
+              Machine learning capabilities for agent routing, quality scoring, consensus
+              prediction, and training data management.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">ML Capabilities</h3>
+            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+              ML Capabilities
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-theme-data text-text-muted">
               <div>
                 <span className="text-[var(--accent)]">Agent Routing</span>
@@ -78,12 +80,8 @@ export default function MLPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // ML INTELLIGENCE
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // ML INTELLIGENCE</p>
         </footer>
       </main>
     </>

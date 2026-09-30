@@ -21,7 +21,11 @@ export interface ApiKeysTabProps {
   singleKeyMode?: boolean;
 }
 
-function formatExpirationTime(dateString: string | null | undefined): { text: string; isExpiringSoon: boolean; isExpired: boolean } {
+function formatExpirationTime(dateString: string | null | undefined): {
+  text: string;
+  isExpiringSoon: boolean;
+  isExpired: boolean;
+} {
   if (!dateString) return { text: 'Never expires', isExpiringSoon: false, isExpired: false };
   const date = new Date(dateString);
   const now = new Date();
@@ -29,15 +33,17 @@ function formatExpirationTime(dateString: string | null | undefined): { text: st
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMs < 0) return { text: 'Expired', isExpiringSoon: false, isExpired: true };
-  if (diffDays < 7) return { text: `Expires in ${diffDays}d`, isExpiringSoon: true, isExpired: false };
-  if (diffDays < 30) return { text: `Expires in ${diffDays}d`, isExpiringSoon: false, isExpired: false };
+  if (diffDays < 7)
+    return { text: `Expires in ${diffDays}d`, isExpiringSoon: true, isExpired: false };
+  if (diffDays < 30)
+    return { text: `Expires in ${diffDays}d`, isExpiringSoon: false, isExpired: false };
   return { text: `Expires ${date.toLocaleDateString()}`, isExpiringSoon: false, isExpired: false };
 }
 
 function ApiKeyCard({
   apiKey,
   onRevoke,
-  apiBase
+  apiBase,
 }: {
   apiKey: ApiKey;
   onRevoke: () => Promise<void>;
@@ -73,11 +79,15 @@ function ApiKeyCard({
   };
 
   return (
-    <div className={`p-4 bg-surface rounded border ${
-      expiration.isExpired ? 'border-[var(--crimson)]/40' :
-      expiration.isExpiringSoon ? 'border-acid-yellow/40' :
-      'border-[var(--accent)]/20'
-    }`}>
+    <div
+      className={`p-4 bg-surface rounded border ${
+        expiration.isExpired
+          ? 'border-[var(--crimson)]/40'
+          : expiration.isExpiringSoon
+            ? 'border-acid-yellow/40'
+            : 'border-[var(--accent)]/20'
+      }`}
+    >
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
@@ -88,9 +98,7 @@ function ApiKeyCard({
             <code className="font-theme-data text-xs text-text-muted bg-bg px-1.5 py-0.5 rounded">
               {apiKey.prefix}...
             </code>
-            <span className="text-text-muted text-[10px]">
-              Created {createdAtLabel}
-            </span>
+            <span className="text-text-muted text-[10px]">Created {createdAtLabel}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -116,9 +124,11 @@ function ApiKeyCard({
           <div className="text-[10px] font-theme-data text-text-muted uppercase tracking-wide">
             Status
           </div>
-          <div className={`mt-1 font-theme-data text-sm ${
-            expiration.isExpired ? 'text-[var(--crimson)]' : 'text-[var(--accent)]'
-          }`}>
+          <div
+            className={`mt-1 font-theme-data text-sm ${
+              expiration.isExpired ? 'text-[var(--crimson)]' : 'text-[var(--accent)]'
+            }`}
+          >
             {expiration.isExpired ? 'Expired' : 'Active'}
           </div>
         </div>
@@ -126,13 +136,15 @@ function ApiKeyCard({
           <div className="text-[10px] font-theme-data text-text-muted uppercase tracking-wide">
             Expiration
           </div>
-          <div className={`mt-1 font-theme-data text-sm ${
-            expiration.isExpired
-              ? 'text-[var(--crimson)]'
-              : expiration.isExpiringSoon
-              ? 'text-[var(--acid-yellow)]'
-              : 'text-text'
-          }`}>
+          <div
+            className={`mt-1 font-theme-data text-sm ${
+              expiration.isExpired
+                ? 'text-[var(--crimson)]'
+                : expiration.isExpiringSoon
+                  ? 'text-[var(--acid-yellow)]'
+                  : 'text-text'
+            }`}
+          >
             {expiration.text}
           </div>
         </div>
@@ -140,9 +152,13 @@ function ApiKeyCard({
 
       {/* Expiration Warning */}
       {(expiration.isExpired || expiration.isExpiringSoon) && (
-        <div className={`text-xs font-theme-data px-2 py-1 rounded mb-3 ${
-          expiration.isExpired ? 'bg-[var(--crimson)]/10 text-[var(--crimson)]' : 'bg-acid-yellow/10 text-[var(--acid-yellow)]'
-        }`}>
+        <div
+          className={`text-xs font-theme-data px-2 py-1 rounded mb-3 ${
+            expiration.isExpired
+              ? 'bg-[var(--crimson)]/10 text-[var(--crimson)]'
+              : 'bg-acid-yellow/10 text-[var(--acid-yellow)]'
+          }`}
+        >
           {expiration.text}
         </div>
       )}
@@ -220,18 +236,14 @@ function ProviderKeyRow({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-theme-data text-sm text-text font-medium">
-              {provider.label}
-            </span>
+            <span className="font-theme-data text-sm text-text font-medium">{provider.label}</span>
             {hasSaved && (
               <span className="px-1.5 py-0.5 text-[10px] font-theme-data bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30 rounded">
                 SET
               </span>
             )}
           </div>
-          <code className="font-theme-data text-[10px] text-text-muted">
-            {provider.envVar}
-          </code>
+          <code className="font-theme-data text-[10px] text-text-muted">{provider.envVar}</code>
           {hasSaved && !editing && (
             <div className="mt-2">
               <code className="font-theme-data text-xs text-text-muted bg-bg px-1.5 py-0.5 rounded">
@@ -316,20 +328,26 @@ function ProviderKeysSection() {
     setProviderKeys(getStoredProviderKeys());
   }, []);
 
-  const handleSave = useCallback((providerId: string, value: string) => {
-    const updated = { ...providerKeys, [providerId]: value };
-    setProviderKeys(updated);
-    storeProviderKeys(updated);
-    setSaveFlash(providerId);
-    setTimeout(() => setSaveFlash(null), 1500);
-  }, [providerKeys]);
+  const handleSave = useCallback(
+    (providerId: string, value: string) => {
+      const updated = { ...providerKeys, [providerId]: value };
+      setProviderKeys(updated);
+      storeProviderKeys(updated);
+      setSaveFlash(providerId);
+      setTimeout(() => setSaveFlash(null), 1500);
+    },
+    [providerKeys],
+  );
 
-  const handleClear = useCallback((providerId: string) => {
-    const updated = { ...providerKeys };
-    delete updated[providerId];
-    setProviderKeys(updated);
-    storeProviderKeys(updated);
-  }, [providerKeys]);
+  const handleClear = useCallback(
+    (providerId: string) => {
+      const updated = { ...providerKeys };
+      delete updated[providerId];
+      setProviderKeys(updated);
+      storeProviderKeys(updated);
+    },
+    [providerKeys],
+  );
 
   const configuredCount = Object.values(providerKeys).filter(Boolean).length;
 
@@ -344,15 +362,13 @@ function ProviderKeysSection() {
         )}
       </div>
       <p className="mb-2 font-theme-data text-sm text-text-muted">
-        Enter your own LLM provider API keys so Aragora can run debates using
-        your accounts. Keys are stored in your browser only and passed to the
-        backend per-request.
+        Enter your own LLM provider API keys so Aragora can run debates using your accounts. Keys
+        are stored in your browser only and passed to the backend per-request.
       </p>
       <div className="mb-4 p-3 bg-[var(--acid-cyan)]/5 border border-[var(--acid-cyan)]/20 rounded">
         <p className="font-theme-data text-[10px] text-[var(--acid-cyan)]">
-          At least one key (Anthropic or OpenAI) is required. OpenRouter is
-          recommended as an automatic fallback when primary providers hit rate
-          limits.
+          At least one key (Anthropic or OpenAI) is required. OpenRouter is recommended as an
+          automatic fallback when primary providers hit rate limits.
         </p>
       </div>
 
@@ -407,7 +423,7 @@ export function ApiKeysTab({
   };
 
   const activeKeys = preferences.api_keys.filter(
-    key => !key.expires_at || new Date(key.expires_at) > new Date()
+    (key) => !key.expires_at || new Date(key.expires_at) > new Date(),
   ).length;
   const hasExistingKey = preferences.api_keys.length > 0;
 
@@ -471,9 +487,7 @@ export function ApiKeysTab({
           {singleKeyMode ? 'Active API Key' : `Your API Keys (${preferences.api_keys.length})`}
         </h3>
         {loading ? (
-          <p className="font-theme-data text-sm text-text-muted">
-            Loading API keys...
-          </p>
+          <p className="font-theme-data text-sm text-text-muted">Loading API keys...</p>
         ) : preferences.api_keys.length === 0 ? (
           <p className="font-theme-data text-sm text-text-muted">
             No API key generated yet. Create one to access the Aragora API programmatically.
@@ -506,14 +520,14 @@ export function ApiKeysTab({
             href="/docs/api"
             className="flex items-center gap-2 p-3 bg-surface border border-[var(--accent)]/20 rounded hover:border-[var(--accent)]/40 transition-colors"
           >
-            <span className="text-[var(--accent)]">{">"}</span>
+            <span className="text-[var(--accent)]">{'>'}</span>
             <span className="font-theme-data text-sm text-text">Full API Reference</span>
           </a>
           <a
             href="/docs/api#rate-limits"
             className="flex items-center gap-2 p-3 bg-surface border border-[var(--accent)]/20 rounded hover:border-[var(--accent)]/40 transition-colors"
           >
-            <span className="text-[var(--accent)]">{">"}</span>
+            <span className="text-[var(--accent)]">{'>'}</span>
             <span className="font-theme-data text-sm text-text">Rate Limits & Quotas</span>
           </a>
         </div>

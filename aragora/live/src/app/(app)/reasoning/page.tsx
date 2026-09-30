@@ -169,9 +169,7 @@ export default function ReasoningPage() {
 
       if (!anyOk) {
         const firstFailed =
-          cruxRes.status === 'fulfilled'
-            ? `HTTP ${cruxRes.value.status}`
-            : 'Network error';
+          cruxRes.status === 'fulfilled' ? `HTTP ${cruxRes.value.status}` : 'Network error';
         setError(`Failed to load reasoning data: ${firstFailed}`);
       }
 
@@ -192,7 +190,9 @@ export default function ReasoningPage() {
           &gt; CRUX CLAIMS ({cruxes.length})
         </h2>
         {cruxes.length === 0 ? (
-          <p className="text-text-muted font-theme-data text-sm">No crux claims found for this debate.</p>
+          <p className="text-text-muted font-theme-data text-sm">
+            No crux claims found for this debate.
+          </p>
         ) : (
           <div className="space-y-3">
             {cruxes.map((c, i) => (
@@ -288,7 +288,9 @@ export default function ReasoningPage() {
                     {c.type}
                   </span>
                   {c.agent && (
-                    <span className="text-[var(--acid-cyan)] text-xs font-theme-data">{c.agent}</span>
+                    <span className="text-[var(--acid-cyan)] text-xs font-theme-data">
+                      {c.agent}
+                    </span>
                   )}
                   {c.evidence_count !== undefined && c.evidence_count > 0 && (
                     <span className="text-text-muted text-xs font-theme-data">
@@ -319,7 +321,9 @@ export default function ReasoningPage() {
   const renderPositions = () => {
     if (!positions) {
       return (
-        <p className="text-text-muted font-theme-data text-sm">No position data found for this debate.</p>
+        <p className="text-text-muted font-theme-data text-sm">
+          No position data found for this debate.
+        </p>
       );
     }
 
@@ -332,16 +336,20 @@ export default function ReasoningPage() {
 
     return (
       <div className="space-y-6">
-        <h2 className="text-xs font-theme-data text-[var(--accent)] mb-3">&gt; POSITION EVOLUTION</h2>
+        <h2 className="text-xs font-theme-data text-[var(--accent)] mb-3">
+          &gt; POSITION EVOLUTION
+        </h2>
 
         {/* Summary stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {([
-            ['Convergence', `${(positions.summary.convergence_score * 100).toFixed(0)}%`],
-            ['Total Pivots', positions.summary.total_pivots],
-            ['Reversals', positions.summary.reversals],
-            ['Agents', agents.length],
-          ] as [string, string | number][]).map(([label, value]) => (
+          {(
+            [
+              ['Convergence', `${(positions.summary.convergence_score * 100).toFixed(0)}%`],
+              ['Total Pivots', positions.summary.total_pivots],
+              ['Reversals', positions.summary.reversals],
+              ['Agents', agents.length],
+            ] as [string, string | number][]
+          ).map(([label, value]) => (
             <div key={label} className="p-3 border border-[var(--accent)]/20 bg-bg">
               <div className="text-xs font-theme-data text-text-muted">{label}</div>
               <div className="text-lg font-theme-data text-[var(--accent)]">{value}</div>
@@ -380,7 +388,11 @@ export default function ReasoningPage() {
                       <div
                         key={r}
                         className="relative flex-1 group"
-                        title={rec ? `R${r}: ${label} (${(rec.confidence * 100).toFixed(0)}%)` : `R${r}: -`}
+                        title={
+                          rec
+                            ? `R${r}: ${label} (${(rec.confidence * 100).toFixed(0)}%)`
+                            : `R${r}: -`
+                        }
                       >
                         <div
                           className="h-6 rounded-sm"
@@ -421,8 +433,7 @@ export default function ReasoningPage() {
                   <span className="text-[var(--acid-cyan)]">{pivot.agent}</span>
                   <span className="text-text-muted mx-2">
                     R{pivot.from_round} {STANCE_LABELS[pivot.from_stance] ?? pivot.from_stance}
-                    {' -> '}
-                    R{pivot.to_round} {STANCE_LABELS[pivot.to_stance] ?? pivot.to_stance}
+                    {' -> '}R{pivot.to_round} {STANCE_LABELS[pivot.to_stance] ?? pivot.to_stance}
                   </span>
                   <span
                     className={`px-1 py-0.5 text-[10px] uppercase ${
@@ -502,9 +513,7 @@ export default function ReasoningPage() {
 
         <div className="container mx-auto px-4 py-6">
           {/* Title */}
-          <h1 className="text-2xl text-[var(--accent)] mb-4">
-            {'>'} REASONING ENGINE
-          </h1>
+          <h1 className="text-2xl text-[var(--accent)] mb-4">{'>'} REASONING ENGINE</h1>
 
           {/* Search */}
           <form
@@ -542,7 +551,9 @@ export default function ReasoningPage() {
             <div className="flex items-center justify-center h-96 border border-[var(--accent)]/20 bg-surface/30">
               <div className="text-center text-text-muted">
                 <p className="text-lg mb-2">&gt; REASONING ENGINE</p>
-                <p className="text-sm">Enter a debate ID to explore belief networks, claims, and position evolution</p>
+                <p className="text-sm">
+                  Enter a debate ID to explore belief networks, claims, and position evolution
+                </p>
               </div>
             </div>
           )}
@@ -587,12 +598,8 @@ export default function ReasoningPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // REASONING ENGINE
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // REASONING ENGINE</p>
         </footer>
       </main>
     </>

@@ -23,7 +23,10 @@ interface ArgumentGraphProps {
 const nodeTypes = { argumentNode: ArgumentNode };
 
 /** Map event type to argument type for node coloring */
-function eventToArgumentType(eventType: string, data: Record<string, unknown>): ArgumentType | null {
+function eventToArgumentType(
+  eventType: string,
+  data: Record<string, unknown>,
+): ArgumentType | null {
   switch (eventType) {
     case 'proposal':
       return 'proposal';
@@ -52,9 +55,9 @@ function eventToArgumentType(eventType: string, data: Record<string, unknown>): 
 
 /** Edge color based on relationship type */
 function edgeColor(sourceType: ArgumentType, targetType: ArgumentType): string {
-  if (targetType === 'critique') return '#FF073A';   // refutes
-  if (targetType === 'evidence') return '#39FF14';    // supports
-  return '#00F0FF';                                    // responds_to
+  if (targetType === 'critique') return '#FF073A'; // refutes
+  if (targetType === 'evidence') return '#39FF14'; // supports
+  return '#00F0FF'; // responds_to
 }
 
 const X_SPACING = 320;
@@ -116,8 +119,9 @@ export function ArgumentGraph({ events, className }: ArgumentGraphProps) {
       const responseTarget = (d.in_response_to as string) || (d.target_id as string);
       if (responseTarget && nodeIdMap.has(responseTarget)) {
         const sourceId = nodeIdMap.get(responseTarget)!;
-        const sourceNode = nodes.find(n => n.id === sourceId);
-        const sourceArgType = (sourceNode?.data as { argumentType?: ArgumentType })?.argumentType || 'proposal';
+        const sourceNode = nodes.find((n) => n.id === sourceId);
+        const sourceArgType =
+          (sourceNode?.data as { argumentType?: ArgumentType })?.argumentType || 'proposal';
         edges.push({
           id: `edge-${sourceId}-${nodeId}`,
           source: sourceId,
@@ -129,8 +133,9 @@ export function ArgumentGraph({ events, className }: ArgumentGraphProps) {
         // Connect sequentially within the same round
         const prevId = prevByRound.get(round);
         if (prevId) {
-          const prevNode = nodes.find(n => n.id === prevId);
-          const prevArgType = (prevNode?.data as { argumentType?: ArgumentType })?.argumentType || 'proposal';
+          const prevNode = nodes.find((n) => n.id === prevId);
+          const prevArgType =
+            (prevNode?.data as { argumentType?: ArgumentType })?.argumentType || 'proposal';
           edges.push({
             id: `edge-${prevId}-${nodeId}`,
             source: prevId,
@@ -168,7 +173,9 @@ export function ArgumentGraph({ events, className }: ArgumentGraphProps) {
   const hasNodes = initialNodes.length > 0;
 
   return (
-    <div className={`${className || 'h-[500px]'} w-full rounded border border-[var(--border)] bg-[var(--bg)]`}>
+    <div
+      className={`${className || 'h-[500px]'} w-full rounded border border-[var(--border)] bg-[var(--bg)]`}
+    >
       {!hasNodes ? (
         <div className="flex items-center justify-center h-full">
           <p className="font-theme-data text-sm text-[var(--text-muted)]">
@@ -189,9 +196,7 @@ export function ArgumentGraph({ events, className }: ArgumentGraphProps) {
           proOptions={{ hideAttribution: true }}
         >
           <Background color="var(--border)" gap={24} size={1} />
-          <Controls
-            className="!bg-[var(--surface)] !border-[var(--border)] !shadow-none [&_button]:!bg-[var(--surface)] [&_button]:!border-[var(--border)] [&_button]:!fill-[var(--text-muted)] [&_button:hover]:!fill-[var(--acid-green)]"
-          />
+          <Controls className="!bg-[var(--surface)] !border-[var(--border)] !shadow-none [&_button]:!bg-[var(--surface)] [&_button]:!border-[var(--border)] [&_button]:!fill-[var(--text-muted)] [&_button:hover]:!fill-[var(--acid-green)]" />
           <MiniMap
             nodeColor={minimapNodeColor}
             maskColor="rgba(0, 0, 0, 0.7)"

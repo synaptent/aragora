@@ -62,7 +62,7 @@ export function RLMStreamingPanel({ debateId, onContextReady }: RLMStreamingPane
         const event: RLMStreamEvent = JSON.parse(e.data);
         event.timestamp = Date.now();
 
-        setEvents(prev => [...prev, event]);
+        setEvents((prev) => [...prev, event]);
 
         switch (event.type) {
           case 'context_start':
@@ -72,14 +72,17 @@ export function RLMStreamingPanel({ debateId, onContextReady }: RLMStreamingPane
 
           case 'chunk_loaded':
             if (event.data.chunkId) {
-              setChunks(prev => [...prev, {
-                id: event.data.chunkId!,
-                level: event.data.level || 0,
-                tokens: event.data.tokensAfter || 0,
-                relevance: event.data.relevanceScore || 0,
-                source: event.data.source || 'unknown',
-                loadedAt: event.timestamp,
-              }]);
+              setChunks((prev) => [
+                ...prev,
+                {
+                  id: event.data.chunkId!,
+                  level: event.data.level || 0,
+                  tokens: event.data.tokensAfter || 0,
+                  relevance: event.data.relevanceScore || 0,
+                  source: event.data.source || 'unknown',
+                  loadedAt: event.timestamp,
+                },
+              ]);
             }
             break;
 
@@ -166,9 +169,7 @@ export function RLMStreamingPanel({ debateId, onContextReady }: RLMStreamingPane
           )}
         </h3>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-text-muted">
-            {totalTokens.toLocaleString()} tokens
-          </span>
+          <span className="text-xs text-text-muted">{totalTokens.toLocaleString()} tokens</span>
           <span className="text-text-muted">{expanded ? '\u25B2' : '\u25BC'}</span>
         </div>
       </div>
@@ -231,7 +232,8 @@ export function RLMStreamingPanel({ debateId, onContextReady }: RLMStreamingPane
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-secondary">Level {level}</span>
                       <span className="text-text-muted">
-                        {levelChunks.length} chunks, {levelChunks.reduce((s, c) => s + c.tokens, 0).toLocaleString()} tokens
+                        {levelChunks.length} chunks,{' '}
+                        {levelChunks.reduce((s, c) => s + c.tokens, 0).toLocaleString()} tokens
                       </span>
                     </div>
                     <div className="flex gap-0.5 flex-wrap">
@@ -257,14 +259,11 @@ export function RLMStreamingPanel({ debateId, onContextReady }: RLMStreamingPane
             <div>
               <h4 className="text-xs text-text-muted mb-2">Sources</h4>
               <div className="flex flex-wrap gap-2">
-                {Array.from(new Set(chunks.map(c => c.source))).map(source => {
-                  const sourceChunks = chunks.filter(c => c.source === source);
+                {Array.from(new Set(chunks.map((c) => c.source))).map((source) => {
+                  const sourceChunks = chunks.filter((c) => c.source === source);
                   const sourceTokens = sourceChunks.reduce((s, c) => s + c.tokens, 0);
                   return (
-                    <div
-                      key={source}
-                      className="px-2 py-1 bg-bg-primary rounded text-xs"
-                    >
+                    <div key={source} className="px-2 py-1 bg-bg-primary rounded text-xs">
                       <span className="text-text-secondary">{source}</span>
                       <span className="text-text-muted ml-1">
                         ({sourceTokens.toLocaleString()})
@@ -286,9 +285,14 @@ export function RLMStreamingPanel({ debateId, onContextReady }: RLMStreamingPane
                 {events.slice(-10).map((event, i) => (
                   <div key={i} className="text-text-muted">
                     <span className="text-purple-400">{event.type}</span>
-                    {event.data.chunkId && <span className="text-text-secondary"> {event.data.chunkId}</span>}
+                    {event.data.chunkId && (
+                      <span className="text-text-secondary"> {event.data.chunkId}</span>
+                    )}
                     {event.data.relevanceScore !== undefined && (
-                      <span className="text-cyan-400"> rel:{(event.data.relevanceScore * 100).toFixed(0)}%</span>
+                      <span className="text-cyan-400">
+                        {' '}
+                        rel:{(event.data.relevanceScore * 100).toFixed(0)}%
+                      </span>
                     )}
                   </div>
                 ))}

@@ -45,10 +45,7 @@ export function AgentReassignPopover({
       try {
         await apiFetch(
           `/api/v1/pipeline/graph/${encodeURIComponent(pipelineId)}/node/${encodeURIComponent(nodeId)}/reassign`,
-          {
-            method: 'POST',
-            body: JSON.stringify({ agent: agentName }),
-          },
+          { method: 'POST', body: JSON.stringify({ agent: agentName }) },
         );
         onReassign(agentName);
       } catch (err) {

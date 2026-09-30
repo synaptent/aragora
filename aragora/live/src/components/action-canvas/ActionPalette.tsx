@@ -10,20 +10,21 @@ const groups: { label: string; key: ActionTypeConfig['group']; types: ActionNode
 ];
 
 export function ActionPalette() {
-  const onDragStart = useCallback(
-    (e: React.DragEvent, actionType: ActionNodeType) => {
-      e.dataTransfer.setData('application/action-node-type', actionType);
-      e.dataTransfer.effectAllowed = 'move';
-    },
-    []
-  );
+  const onDragStart = useCallback((e: React.DragEvent, actionType: ActionNodeType) => {
+    e.dataTransfer.setData('application/action-node-type', actionType);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
 
   return (
     <div className="w-48 border-r border-[var(--border)] bg-[var(--surface)] p-3 overflow-y-auto">
-      <h3 className="text-xs font-theme-data uppercase text-text-muted mb-3 tracking-wider">Action Types</h3>
+      <h3 className="text-xs font-theme-data uppercase text-text-muted mb-3 tracking-wider">
+        Action Types
+      </h3>
       {groups.map((group) => (
         <div key={group.key} className="mb-4">
-          <div className="text-xs font-theme-data text-text-muted mb-2 uppercase tracking-wide">{group.label}</div>
+          <div className="text-xs font-theme-data text-text-muted mb-2 uppercase tracking-wide">
+            {group.label}
+          </div>
           <div className="space-y-1.5">
             {group.types.map((actionType) => {
               const config = ACTION_NODE_CONFIGS[actionType];

@@ -23,19 +23,9 @@ interface LandingSummary {
     share_rate: number | null;
     retry_rate: number | null;
   };
-  question_length: {
-    samples: number;
-    avg: number | null;
-    max: number | null;
-  };
-  preview: {
-    rendered_count: number;
-    avg_participant_count: number | null;
-  };
-  timeouts: {
-    count: number;
-    avg_timeout_seconds: number | null;
-  };
+  question_length: { samples: number; avg: number | null; max: number | null };
+  preview: { rendered_count: number; avg_participant_count: number | null };
+  timeouts: { count: number; avg_timeout_seconds: number | null };
   top_options: Array<{
     option_id: string;
     selected_count: number;
@@ -133,7 +123,9 @@ function Badge({
   tone?: string;
 }) {
   return (
-    <span className={`inline-flex items-center rounded border px-2 py-0.5 font-theme-data text-[10px] uppercase tracking-wide ${tone}`}>
+    <span
+      className={`inline-flex items-center rounded border px-2 py-0.5 font-theme-data text-[10px] uppercase tracking-wide ${tone}`}
+    >
       {children}
     </span>
   );
@@ -229,9 +221,7 @@ export default function LandingReviewPage() {
         await mutateFeedback();
       } catch (error) {
         setActionError(
-          error instanceof Error
-            ? error.message
-            : 'Failed to update landing review status.',
+          error instanceof Error ? error.message : 'Failed to update landing review status.',
         );
       } finally {
         setUpdatingReportId((current) => (current === reportId ? null : current));
@@ -250,7 +240,7 @@ export default function LandingReviewPage() {
     <AdminLayout
       title="Landing Review"
       description="Landing funnel telemetry plus a reviewable queue of wrong-answer reports from the public preview flow."
-      actions={(
+      actions={
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 font-theme-data text-xs text-text-muted">
             Window
@@ -282,14 +272,16 @@ export default function LandingReviewPage() {
             </span>
           )}
           <button
-            onClick={() => { void refresh(); }}
+            onClick={() => {
+              void refresh();
+            }}
             disabled={summaryLoading || summaryValidating || feedbackLoading || feedbackValidating}
             className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 font-theme-data text-sm text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20 disabled:opacity-50"
           >
             Refresh
           </button>
         </div>
-      )}
+      }
     >
       {summaryError && (
         <div className="card mb-6 border-acid-red/40 bg-acid-red/10 p-4">
@@ -300,8 +292,12 @@ export default function LandingReviewPage() {
       )}
 
       {feedbackError && (
-        <div className={`card mb-6 p-4 ${feedbackAuthRequired ? 'border-acid-yellow/40 bg-acid-yellow/10' : 'border-acid-red/40 bg-acid-red/10'}`}>
-          <p className={`font-theme-data text-sm ${feedbackAuthRequired ? 'text-[var(--acid-yellow)]' : 'text-acid-red'}`}>
+        <div
+          className={`card mb-6 p-4 ${feedbackAuthRequired ? 'border-acid-yellow/40 bg-acid-yellow/10' : 'border-acid-red/40 bg-acid-red/10'}`}
+        >
+          <p
+            className={`font-theme-data text-sm ${feedbackAuthRequired ? 'text-[var(--acid-yellow)]' : 'text-acid-red'}`}
+          >
             {feedbackAuthRequired
               ? 'Raw wrong-answer reports require admin auth. Summary cards remain visible, but the review queue is unavailable for this session.'
               : 'Failed to load raw wrong-answer reports. Summary cards remain visible, but the review queue is unavailable right now.'}
@@ -344,7 +340,9 @@ export default function LandingReviewPage() {
           value={feedbackUnavailable ? '--' : String(feedback?.total_reports ?? 0)}
           sublabel={
             feedbackUnavailable
-              ? (feedbackAuthRequired ? 'admin auth required' : 'load failed')
+              ? feedbackAuthRequired
+                ? 'admin auth required'
+                : 'load failed'
               : `${feedback?.returned_reports ?? 0} shown`
           }
           tone="text-[var(--acid-cyan)]"
@@ -371,19 +369,27 @@ export default function LandingReviewPage() {
               <div className="space-y-2 font-theme-data text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Preflight selection</span>
-                  <span className="text-[var(--accent)]">{formatPercent(summary?.rates.preflight_selection_rate)}</span>
+                  <span className="text-[var(--accent)]">
+                    {formatPercent(summary?.rates.preflight_selection_rate)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Clarification requests</span>
-                  <span className="text-[var(--acid-yellow)]">{formatPercent(summary?.rates.preview_clarification_rate)}</span>
+                  <span className="text-[var(--acid-yellow)]">
+                    {formatPercent(summary?.rates.preview_clarification_rate)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Share rate</span>
-                  <span className="text-[var(--acid-cyan)]">{formatPercent(summary?.rates.share_rate)}</span>
+                  <span className="text-[var(--acid-cyan)]">
+                    {formatPercent(summary?.rates.share_rate)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Retry rate</span>
-                  <span className="text-[var(--acid-magenta)]">{formatPercent(summary?.rates.retry_rate)}</span>
+                  <span className="text-[var(--acid-magenta)]">
+                    {formatPercent(summary?.rates.retry_rate)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -393,19 +399,27 @@ export default function LandingReviewPage() {
               <div className="space-y-2 font-theme-data text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Avg participants</span>
-                  <span className="text-[var(--acid-cyan)]">{formatNumber(summary?.preview.avg_participant_count)}</span>
+                  <span className="text-[var(--acid-cyan)]">
+                    {formatNumber(summary?.preview.avg_participant_count)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Avg timeout seconds</span>
-                  <span className="text-[var(--acid-yellow)]">{formatNumber(summary?.timeouts.avg_timeout_seconds)}</span>
+                  <span className="text-[var(--acid-yellow)]">
+                    {formatNumber(summary?.timeouts.avg_timeout_seconds)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Feedback rewritten</span>
-                  <span className="text-[var(--accent)]">{formatPercent(feedback?.stats.rewritten_rate)}</span>
+                  <span className="text-[var(--accent)]">
+                    {formatPercent(feedback?.stats.rewritten_rate)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">Preview-mode reports</span>
-                  <span className="text-[var(--acid-magenta)]">{formatPercent(feedback?.stats.preview_mode_rate)}</span>
+                  <span className="text-[var(--acid-magenta)]">
+                    {formatPercent(feedback?.stats.preview_mode_rate)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -446,7 +460,9 @@ export default function LandingReviewPage() {
       <section className="card mt-6 p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="font-theme-data text-lg text-[var(--accent)]">Wrong-Answer Review Queue</h2>
+            <h2 className="font-theme-data text-lg text-[var(--accent)]">
+              Wrong-Answer Review Queue
+            </h2>
             <p className="font-theme-data text-xs text-text-muted">
               Recent reports captured when visitors click “This answer seems wrong”.
             </p>
@@ -483,7 +499,9 @@ export default function LandingReviewPage() {
         )}
 
         {feedbackUnavailable ? (
-          <div className={`rounded border border-dashed p-8 font-theme-data text-sm ${feedbackAuthRequired ? 'border-acid-yellow/40 bg-acid-yellow/10 text-[var(--acid-yellow)]' : 'border-acid-red/40 bg-acid-red/10 text-acid-red'}`}>
+          <div
+            className={`rounded border border-dashed p-8 font-theme-data text-sm ${feedbackAuthRequired ? 'border-acid-yellow/40 bg-acid-yellow/10 text-[var(--acid-yellow)]' : 'border-acid-red/40 bg-acid-red/10 text-acid-red'}`}
+          >
             {feedbackAuthRequired
               ? 'Wrong-answer review queue unavailable for this session.'
               : 'Wrong-answer review queue failed to load for this session.'}
@@ -521,19 +539,23 @@ export default function LandingReviewPage() {
 
                 <div className="grid gap-4 lg:grid-cols-3">
                   <div>
-                    <div className="mb-1 font-theme-data text-[11px] uppercase tracking-wide text-text-muted">User Question</div>
-                    <p className="font-theme-data text-sm text-text">
-                      {report.question || '—'}
-                    </p>
+                    <div className="mb-1 font-theme-data text-[11px] uppercase tracking-wide text-text-muted">
+                      User Question
+                    </div>
+                    <p className="font-theme-data text-sm text-text">{report.question || '—'}</p>
                   </div>
                   <div>
-                    <div className="mb-1 font-theme-data text-[11px] uppercase tracking-wide text-text-muted">Aragora Debated</div>
+                    <div className="mb-1 font-theme-data text-[11px] uppercase tracking-wide text-text-muted">
+                      Aragora Debated
+                    </div>
                     <p className="font-theme-data text-sm text-text">
                       {report.interpreted_question || '—'}
                     </p>
                   </div>
                   <div>
-                    <div className="mb-1 font-theme-data text-[11px] uppercase tracking-wide text-text-muted">Answer Preview</div>
+                    <div className="mb-1 font-theme-data text-[11px] uppercase tracking-wide text-text-muted">
+                      Answer Preview
+                    </div>
                     <p className="font-theme-data text-sm text-text">
                       {report.final_answer_preview || '—'}
                     </p>
@@ -543,7 +565,9 @@ export default function LandingReviewPage() {
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   <button
                     type="button"
-                    onClick={() => { void updateReviewStatus(report.id, 'reviewed'); }}
+                    onClick={() => {
+                      void updateReviewStatus(report.id, 'reviewed');
+                    }}
                     disabled={updatingReportId === report.id || report.review_status === 'reviewed'}
                     className="rounded border border-[var(--acid-cyan)]/40 bg-[var(--acid-cyan)]/10 px-3 py-1.5 font-theme-data text-xs text-[var(--acid-cyan)] transition-colors hover:bg-[var(--acid-cyan)]/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -551,7 +575,9 @@ export default function LandingReviewPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { void updateReviewStatus(report.id, 'resolved'); }}
+                    onClick={() => {
+                      void updateReviewStatus(report.id, 'resolved');
+                    }}
                     disabled={updatingReportId === report.id || report.review_status === 'resolved'}
                     className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 py-1.5 font-theme-data text-xs text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -559,8 +585,12 @@ export default function LandingReviewPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { void updateReviewStatus(report.id, 'dismissed'); }}
-                    disabled={updatingReportId === report.id || report.review_status === 'dismissed'}
+                    onClick={() => {
+                      void updateReviewStatus(report.id, 'dismissed');
+                    }}
+                    disabled={
+                      updatingReportId === report.id || report.review_status === 'dismissed'
+                    }
                     className="rounded border border-acid-magenta/40 bg-acid-magenta/10 px-3 py-1.5 font-theme-data text-xs text-[var(--acid-magenta)] transition-colors hover:bg-acid-magenta/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Dismiss
@@ -570,7 +600,8 @@ export default function LandingReviewPage() {
                   )}
                   {(report.reviewed_by || report.reviewed_at) && (
                     <span className="ml-auto font-theme-data text-[11px] text-text-muted">
-                      Reviewed {report.reviewed_by || 'admin'} · {formatTimestamp(report.reviewed_at)}
+                      Reviewed {report.reviewed_by || 'admin'} ·{' '}
+                      {formatTimestamp(report.reviewed_at)}
                     </span>
                   )}
                 </div>

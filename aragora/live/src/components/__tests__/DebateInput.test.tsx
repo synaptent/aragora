@@ -7,11 +7,7 @@ import { DebateInput } from '../DebateInput';
 
 // Mock next/navigation
 const mockPush = jest.fn();
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
@@ -24,7 +20,7 @@ jest.mock('@/context/AuthContext', () => ({
 // Mock config
 jest.mock('@/config', () => ({
   DEFAULT_AGENTS: 'grok,anthropic-api,openai-api',
-  DEFAULT_ROUNDS: 9,  // 9-round format default
+  DEFAULT_ROUNDS: 9, // 9-round format default
   DEFAULT_CONSENSUS: 'judge',
   AGENT_DISPLAY_NAMES: {
     grok: 'Grok 4',
@@ -227,7 +223,7 @@ describe('DebateInput', () => {
       await waitFor(() => {
         expect(defaultProps.onDebateStarted).toHaveBeenCalledWith(
           'debate-123',
-          'What is the meaning of life?'
+          'What is the meaning of life?',
         );
       });
     });

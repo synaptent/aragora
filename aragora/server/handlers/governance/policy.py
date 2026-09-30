@@ -207,7 +207,7 @@ class PolicyHandler(BaseHandler):
 
         return None
 
-    def _get_policy_store(self):
+    def _get_policy_store(self) -> Any:
         """Get or create the policy store."""
         try:
             from aragora.compliance.policy_store import get_policy_store
@@ -217,7 +217,7 @@ class PolicyHandler(BaseHandler):
             logger.warning("Policy store module not available")
             return None
 
-    def _get_compliance_manager(self):
+    def _get_compliance_manager(self) -> Any:
         """Get the compliance framework manager."""
         try:
             from aragora.compliance.framework import ComplianceFrameworkManager

@@ -5,13 +5,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { Header } from '@/components/landing/Header';
 import { Footer } from '@/components/landing/Footer';
 
-function CodeBlock({
-  children,
-  lang,
-}: {
-  children: string;
-  lang?: string;
-}) {
+function CodeBlock({ children, lang }: { children: string; lang?: string }) {
   return (
     <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
       {lang && (
@@ -119,13 +113,7 @@ export default function QuickstartPage() {
     >
       <Header />
 
-      <main
-        style={{
-          maxWidth: '780px',
-          margin: '0 auto',
-          padding: '56px 24px 80px',
-        }}
-      >
+      <main style={{ maxWidth: '780px', margin: '0 auto', padding: '56px 24px 80px' }}>
         {/* Title */}
         <div style={{ textAlign: 'center', marginBottom: '48px' }}>
           <h1
@@ -176,9 +164,16 @@ arena = Arena(
 )
 result = asyncio.run(arena.run())
 print(result.receipt.to_markdown())`}</CodeBlock>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0, fontFamily: 'var(--font-landing)' }}>
-            Three agents debate, critique each other, vote, and produce an
-            audit-ready decision receipt.
+          <p
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: '14px',
+              margin: 0,
+              fontFamily: 'var(--font-landing)',
+            }}
+          >
+            Three agents debate, critique each other, vote, and produce an audit-ready decision
+            receipt.
           </p>
         </Step>
 
@@ -258,7 +253,14 @@ console.log(result.summary);`}</CodeBlock>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent)' }}>
                   {item.label}
                 </span>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)', marginLeft: '8px', fontFamily: "'JetBrains Mono', monospace" }}>
+                <span
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--text-muted)',
+                    marginLeft: '8px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
                   {item.url}
                 </span>
               </div>
@@ -293,10 +295,24 @@ console.log(result.summary);`}</CodeBlock>
                 display: 'block',
               }}
             >
-              <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent)', fontFamily: 'var(--font-landing)' }}>
+              <span
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: 'var(--accent)',
+                  fontFamily: 'var(--font-landing)',
+                }}
+              >
                 Try a debate now
               </span>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: '6px 0 0', fontFamily: 'var(--font-landing)' }}>
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: 'var(--text-muted)',
+                  margin: '6px 0 0',
+                  fontFamily: 'var(--font-landing)',
+                }}
+              >
                 No install needed — run in your browser
               </p>
             </Link>
@@ -310,10 +326,24 @@ console.log(result.summary);`}</CodeBlock>
                 display: 'block',
               }}
             >
-              <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--font-landing)' }}>
+              <span
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  fontFamily: 'var(--font-landing)',
+                }}
+              >
                 API Reference
               </span>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: '6px 0 0', fontFamily: 'var(--font-landing)' }}>
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: 'var(--text-muted)',
+                  margin: '6px 0 0',
+                  fontFamily: 'var(--font-landing)',
+                }}
+              >
                 Full REST API documentation
               </p>
             </Link>

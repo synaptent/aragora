@@ -388,10 +388,7 @@ describe('JobMonitor', () => {
       });
 
       expect(mockOnViewJob).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'ft_001',
-          name: 'Legal Specialist v2',
-        })
+        expect.objectContaining({ id: 'ft_001', name: 'Legal Specialist v2' }),
       );
     });
 
@@ -405,7 +402,7 @@ describe('JobMonitor', () => {
       await waitFor(() => {
         // Cancel should not be visible for completed jobs
         const buttons = screen.getAllByRole('button');
-        const cancelButtons = buttons.filter(b => b.textContent === 'Cancel');
+        const cancelButtons = buttons.filter((b) => b.textContent === 'Cancel');
         expect(cancelButtons).toHaveLength(0);
       });
     });
@@ -419,15 +416,17 @@ describe('JobMonitor', () => {
     });
 
     it('shows empty state when filter matches no jobs', async () => {
-      const singleJob: FineTuningJob[] = [{
-        id: 'ft_001',
-        name: 'Training Job',
-        vertical: 'software',
-        baseModel: 'codellama/CodeLlama-7b-Instruct-hf',
-        status: 'training',
-        progress: 0.5,
-        trainingExamples: 1000,
-      }];
+      const singleJob: FineTuningJob[] = [
+        {
+          id: 'ft_001',
+          name: 'Training Job',
+          vertical: 'software',
+          baseModel: 'codellama/CodeLlama-7b-Instruct-hf',
+          status: 'training',
+          progress: 0.5,
+          trainingExamples: 1000,
+        },
+      ];
 
       render(<JobMonitor jobs={singleJob} />);
 

@@ -86,11 +86,7 @@ export function DeliveryHistory({
   const fetchHistory = useCallback(async () => {
     // Skip if not authenticated - use demo data
     if (!isAuthenticated || authLoading) {
-      setHistory(
-        receiptId
-          ? DEMO_HISTORY.filter((h) => h.receiptId === receiptId)
-          : DEMO_HISTORY
-      );
+      setHistory(receiptId ? DEMO_HISTORY.filter((h) => h.receiptId === receiptId) : DEMO_HISTORY);
       setLoading(false);
       return;
     }
@@ -114,9 +110,7 @@ export function DeliveryHistory({
       if (!response.ok) {
         // Use demo data on error
         setHistory(
-          receiptId
-            ? DEMO_HISTORY.filter((h) => h.receiptId === receiptId)
-            : DEMO_HISTORY
+          receiptId ? DEMO_HISTORY.filter((h) => h.receiptId === receiptId) : DEMO_HISTORY,
         );
         return;
       }
@@ -125,11 +119,7 @@ export function DeliveryHistory({
       setHistory(data.deliveries || []);
     } catch {
       // Use demo data on error
-      setHistory(
-        receiptId
-          ? DEMO_HISTORY.filter((h) => h.receiptId === receiptId)
-          : DEMO_HISTORY
-      );
+      setHistory(receiptId ? DEMO_HISTORY.filter((h) => h.receiptId === receiptId) : DEMO_HISTORY);
     } finally {
       setLoading(false);
     }
@@ -170,10 +160,7 @@ export function DeliveryHistory({
     return (
       <div className="space-y-1">
         {history.map((record) => (
-          <div
-            key={record.id}
-            className="flex items-center gap-2 p-2 text-xs"
-          >
+          <div key={record.id} className="flex items-center gap-2 p-2 text-xs">
             <span>{CHANNEL_ICONS[record.channel]}</span>
             <span className="text-text-muted">{record.destinationName}</span>
             <span
@@ -246,9 +233,7 @@ function DeliveryRecordItem({ record }: DeliveryRecordItemProps) {
       )}
 
       {record.deliveredBy && (
-        <div className="mt-2 text-xs text-text-muted">
-          Delivered by: {record.deliveredBy}
-        </div>
+        <div className="mt-2 text-xs text-text-muted">Delivered by: {record.deliveredBy}</div>
       )}
     </div>
   );

@@ -85,14 +85,14 @@ test.describe('Oracle Stream Recovery', () => {
     await expect(resetButton).toBeHidden({ timeout: 5000 });
   });
 
-  test('falls back to batch mode when websocket initialization fails', async ({ page, aragoraPage }) => {
+  test('falls back to batch mode when websocket initialization fails', async ({
+    page,
+    aragoraPage,
+  }) => {
     await page.addInitScript(() => {
       const NativeWebSocket = window.WebSocket;
 
-      function FailingOracleWebSocket(
-        url: string | URL,
-        protocols?: string | string[],
-      ): WebSocket {
+      function FailingOracleWebSocket(url: string | URL, protocols?: string | string[]): WebSocket {
         const normalizedUrl = typeof url === 'string' ? url : url.toString();
         if (normalizedUrl.includes('/ws/oracle')) {
           throw new Error('ws unavailable');
@@ -132,9 +132,7 @@ test.describe('Oracle Stream Recovery', () => {
           verdict: 'APPROVED',
           duration_seconds: 0.4,
           participants: ['claude', 'gpt'],
-          proposals: {
-            claude: 'Initial batch response from claude.',
-          },
+          proposals: { claude: 'Initial batch response from claude.' },
           final_answer: 'Initial batch response from claude.',
           receipt_hash: null,
         }),

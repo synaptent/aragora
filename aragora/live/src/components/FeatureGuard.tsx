@@ -76,21 +76,18 @@ function FeatureUnavailable({ featureId }: FeatureUnavailableProps) {
   const info = useFeatureInfo(featureId);
 
   // Check if feature requires configuration (vs truly missing)
-  const requiresConfig = info?.reason?.toLowerCase().includes('requires configuration') ||
+  const requiresConfig =
+    info?.reason?.toLowerCase().includes('requires configuration') ||
     info?.reason?.toLowerCase().includes('set ') ||
     info?.reason?.toLowerCase().includes('api key');
 
-  const statusText = requiresConfig
-    ? 'Requires Configuration'
-    : 'Unavailable';
+  const statusText = requiresConfig ? 'Requires Configuration' : 'Unavailable';
 
   const statusColor = requiresConfig
     ? 'text-blue-400 border-blue-500/30'
     : 'text-amber-400 border-amber-500/30';
 
-  const bgColor = requiresConfig
-    ? 'bg-blue-900/10'
-    : 'bg-amber-900/10';
+  const bgColor = requiresConfig ? 'bg-blue-900/10' : 'bg-amber-900/10';
 
   return (
     <div className={`bg-surface border ${statusColor.split(' ')[1]} rounded-lg p-4`}>
@@ -103,14 +100,18 @@ function FeatureUnavailable({ featureId }: FeatureUnavailableProps) {
         </h3>
       </div>
       <p className="text-xs text-text-muted mb-2">
-        {info?.reason || info?.description || `The ${featureId} feature is not currently available.`}
+        {info?.reason ||
+          info?.description ||
+          `The ${featureId} feature is not currently available.`}
       </p>
       {info?.install_hint && (
         <details className="mt-2" open={requiresConfig}>
           <summary className="text-xs text-text-muted cursor-pointer hover:text-text">
             {requiresConfig ? 'Configuration steps' : 'How to enable'}
           </summary>
-          <p className={`mt-2 text-xs ${statusColor.split(' ')[0].replace('text-', 'text-')}/70 ${bgColor} p-2 rounded`}>
+          <p
+            className={`mt-2 text-xs ${statusColor.split(' ')[0].replace('text-', 'text-')}/70 ${bgColor} p-2 rounded`}
+          >
             {info.install_hint}
           </p>
         </details>
@@ -128,14 +129,11 @@ function FeatureUnavailable({ featureId }: FeatureUnavailableProps) {
 export function withFeatureGuard<P extends object>(
   WrappedComponent: React.ComponentType<P>,
   featureId: string,
-  options: { hideWhenUnavailable?: boolean } = {}
+  options: { hideWhenUnavailable?: boolean } = {},
 ) {
   return function WithFeatureGuard(props: P) {
     return (
-      <FeatureGuard
-        featureId={featureId}
-        hideWhenUnavailable={options.hideWhenUnavailable}
-      >
+      <FeatureGuard featureId={featureId} hideWhenUnavailable={options.hideWhenUnavailable}>
         <WrappedComponent {...props} />
       </FeatureGuard>
     );

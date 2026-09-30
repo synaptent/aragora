@@ -157,6 +157,50 @@ repos:
         files: ^aragora/live/src/.*\.(ts|tsx)$
         stages: [pre-push]
 
+  # Standalone packages: use the active toolchain, never read push stdin.
+  # verbose keeps successful SKIP reasons visible on machines without it.
+  - repo: local
+    hooks:
+      - id: packages-ruff
+        name: Ruff check and format (Python packages)
+        entry: >-
+          bash -c 'command -v ruff >/dev/null 2>&1 || {
+          echo "SKIP debate: ruff not found (activate the development environment)";
+          echo "SKIP verify: ruff not found (activate the development environment)"; exit 0; };
+          ruff check aragora-debate aragora-verify &&
+          ruff format --check aragora-debate aragora-verify'
+        language: system
+        pass_filenames: false
+        files: ^aragora-(debate|verify)/
+        stages: [pre-push]
+        verbose: true
+      - id: debate-strict-mypy
+        name: Strict mypy (debate)
+        entry: >-
+          bash -c 'command -v mypy >/dev/null 2>&1 || {
+          echo "SKIP debate: mypy not found (activate the development environment)"; exit 0; };
+          case "$(mypy --version)" in "mypy 2.1.0 "*) ;;
+          *) echo "debate: mypy 2.1.0 required (CI pin)"; exit 1 ;; esac;
+          cd aragora-debate && mypy --strict src'
+        language: system
+        pass_filenames: false
+        files: ^aragora-debate/
+        stages: [pre-push]
+        verbose: true
+      - id: verify-strict-mypy
+        name: Strict mypy (verify)
+        entry: >-
+          bash -c 'command -v mypy >/dev/null 2>&1 || {
+          echo "SKIP verify: mypy not found (activate the development environment)"; exit 0; };
+          case "$(mypy --version)" in "mypy 2.1.0 "*) ;;
+          *) echo "verify: mypy 2.1.0 required (CI pin)"; exit 1 ;; esac;
+          cd aragora-verify && mypy --strict src'
+        language: system
+        pass_filenames: false
+        files: ^aragora-verify/
+        stages: [pre-push]
+        verbose: true
+
   # Portability guard: block new hardcoded private/legacy references
   # (private home dirs, .venv/bin/python, an0mium/aragora slug). Baselined in
   # scripts/portability_baseline.json so it only fails on NEW violations.

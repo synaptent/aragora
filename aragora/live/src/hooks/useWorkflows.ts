@@ -136,7 +136,7 @@ export function useWorkflows() {
 
         const qs = query.toString();
         const result = (await api.get(
-          `/api/v1/workflows${qs ? `?${qs}` : ''}`
+          `/api/v1/workflows${qs ? `?${qs}` : ''}`,
         )) as WorkflowListResponse;
         const items = result?.workflows ?? result?.items ?? [];
         setWorkflows(items);
@@ -150,7 +150,7 @@ export function useWorkflows() {
         setLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -159,15 +159,13 @@ export function useWorkflows() {
   const getWorkflow = useCallback(
     async (workflowId: string): Promise<Workflow | null> => {
       try {
-        return (await api.get(
-          `/api/v1/workflows/${encodeURIComponent(workflowId)}`
-        )) as Workflow;
+        return (await api.get(`/api/v1/workflows/${encodeURIComponent(workflowId)}`)) as Workflow;
       } catch (err) {
         logger.error(`Failed to get workflow ${workflowId}:`, err);
         return null;
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -191,7 +189,7 @@ export function useWorkflows() {
         return null;
       }
     },
-    [api, fetchWorkflows]
+    [api, fetchWorkflows],
   );
 
   // -------------------------------------------------------------------------
@@ -202,7 +200,7 @@ export function useWorkflows() {
       try {
         const result = (await api.put(
           `/api/v1/workflows/${encodeURIComponent(workflowId)}`,
-          updates
+          updates,
         )) as Workflow;
         await fetchWorkflows();
         return result;
@@ -211,7 +209,7 @@ export function useWorkflows() {
         return null;
       }
     },
-    [api, fetchWorkflows]
+    [api, fetchWorkflows],
   );
 
   // -------------------------------------------------------------------------
@@ -228,7 +226,7 @@ export function useWorkflows() {
         return false;
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -237,19 +235,19 @@ export function useWorkflows() {
   const executeWorkflow = useCallback(
     async (
       workflowId: string,
-      inputs?: Record<string, unknown>
+      inputs?: Record<string, unknown>,
     ): Promise<Record<string, unknown> | null> => {
       try {
         return (await api.post(
           `/api/v1/workflows/${encodeURIComponent(workflowId)}/execute`,
-          inputs ? { inputs } : {}
+          inputs ? { inputs } : {},
         )) as Record<string, unknown>;
       } catch (err) {
         logger.error(`Failed to execute workflow ${workflowId}:`, err);
         return null;
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -258,19 +256,19 @@ export function useWorkflows() {
   const simulateWorkflow = useCallback(
     async (
       workflowId: string,
-      inputs?: Record<string, unknown>
+      inputs?: Record<string, unknown>,
     ): Promise<SimulationResult | null> => {
       try {
         return (await api.post(
           `/api/v1/workflows/${encodeURIComponent(workflowId)}/simulate`,
-          inputs ? { inputs } : {}
+          inputs ? { inputs } : {},
         )) as SimulationResult;
       } catch (err) {
         logger.error(`Failed to simulate workflow ${workflowId}:`, err);
         return null;
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -280,14 +278,14 @@ export function useWorkflows() {
     async (workflowId: string): Promise<Record<string, unknown> | null> => {
       try {
         return (await api.get(
-          `/api/v1/workflows/${encodeURIComponent(workflowId)}/status`
+          `/api/v1/workflows/${encodeURIComponent(workflowId)}/status`,
         )) as Record<string, unknown>;
       } catch (err) {
         logger.error(`Failed to get workflow status ${workflowId}:`, err);
         return null;
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -297,7 +295,7 @@ export function useWorkflows() {
     async (workflowId: string): Promise<WorkflowVersion[]> => {
       try {
         const result = (await api.get(
-          `/api/v1/workflows/${encodeURIComponent(workflowId)}/versions`
+          `/api/v1/workflows/${encodeURIComponent(workflowId)}/versions`,
         )) as VersionsResponse;
         return result?.versions ?? [];
       } catch (err) {
@@ -305,7 +303,7 @@ export function useWorkflows() {
         return [];
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -316,7 +314,7 @@ export function useWorkflows() {
       try {
         await api.post(
           `/api/v1/workflows/${encodeURIComponent(workflowId)}/versions/${version}/restore`,
-          {}
+          {},
         );
         return true;
       } catch (err) {
@@ -324,7 +322,7 @@ export function useWorkflows() {
         return false;
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -334,9 +332,7 @@ export function useWorkflows() {
     async (category?: string): Promise<WorkflowTemplate[]> => {
       try {
         const qs = category ? `?category=${encodeURIComponent(category)}` : '';
-        const result = (await api.get(
-          `/api/v1/workflow-templates${qs}`
-        )) as TemplatesResponse;
+        const result = (await api.get(`/api/v1/workflow-templates${qs}`)) as TemplatesResponse;
         const items = result?.templates ?? [];
         setTemplates(items);
         return items;
@@ -345,7 +341,7 @@ export function useWorkflows() {
         return [];
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -355,16 +351,14 @@ export function useWorkflows() {
     async (workflowId?: string): Promise<ApprovalRequest[]> => {
       try {
         const qs = workflowId ? `?workflow_id=${encodeURIComponent(workflowId)}` : '';
-        const result = (await api.get(
-          `/api/v1/workflow-approvals${qs}`
-        )) as ApprovalsResponse;
+        const result = (await api.get(`/api/v1/workflow-approvals${qs}`)) as ApprovalsResponse;
         return result?.approvals ?? [];
       } catch (err) {
         logger.error('Failed to fetch workflow approvals:', err);
         return [];
       }
     },
-    [api]
+    [api],
   );
 
   // -------------------------------------------------------------------------
@@ -374,20 +368,20 @@ export function useWorkflows() {
     async (
       requestId: string,
       status: 'approved' | 'rejected',
-      notes?: string
+      notes?: string,
     ): Promise<boolean> => {
       try {
-        await api.post(
-          `/api/v1/workflow-approvals/${encodeURIComponent(requestId)}/resolve`,
-          { status, notes: notes ?? '' }
-        );
+        await api.post(`/api/v1/workflow-approvals/${encodeURIComponent(requestId)}/resolve`, {
+          status,
+          notes: notes ?? '',
+        });
         return true;
       } catch (err) {
         logger.error(`Failed to resolve approval ${requestId}:`, err);
         return false;
       }
     },
-    [api]
+    [api],
   );
 
   // Fetch on mount

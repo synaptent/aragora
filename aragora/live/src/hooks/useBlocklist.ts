@@ -24,11 +24,7 @@ interface UseBlocklistOptions {
  * Hook for managing sender blocklist in email prioritization.
  * Blocked senders are filtered out in Tier 1 scoring with priority=BLOCKED.
  */
-export function useBlocklist({
-  apiBase,
-  userId,
-  authToken,
-}: UseBlocklistOptions) {
+export function useBlocklist({ apiBase, userId, authToken }: UseBlocklistOptions) {
   const [state, setState] = useState<BlocklistState>({
     blockedSenders: [],
     isLoading: false,
@@ -36,9 +32,7 @@ export function useBlocklist({
   });
 
   const getHeaders = useCallback(() => {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (authToken) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
@@ -47,25 +41,20 @@ export function useBlocklist({
 
   // Fetch the current blocklist
   const fetchBlocklist = useCallback(async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const response = await fetch(
-        `${apiBase}/api/v1/inbox/blocklist?user_id=${userId}`,
-        { headers: getHeaders() }
-      );
+      const response = await fetch(`${apiBase}/api/v1/inbox/blocklist?user_id=${userId}`, {
+        headers: getHeaders(),
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch blocklist: ${response.statusText}`);
       }
 
       const data = await response.json();
-      setState({
-        blockedSenders: data.blocked_senders || [],
-        isLoading: false,
-        error: null,
-      });
+      setState({ blockedSenders: data.blocked_senders || [], isLoading: false, error: null });
     } catch (err) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
         error: err instanceof Error ? err.message : 'Failed to fetch blocklist',
@@ -76,26 +65,20 @@ export function useBlocklist({
   // Check if a sender is blocked (local check)
   const isBlocked = useCallback(
     (sender: string): boolean => {
-      return state.blockedSenders.some(
-        b => b.sender.toLowerCase() === sender.toLowerCase()
-      );
+      return state.blockedSenders.some((b) => b.sender.toLowerCase() === sender.toLowerCase());
     },
-    [state.blockedSenders]
+    [state.blockedSenders],
   );
 
   // Block a sender
   const blockSender = useCallback(
     async (sender: string, reason: string = 'User blocked'): Promise<boolean> => {
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
       try {
         const response = await fetch(`${apiBase}/api/v1/inbox/blocklist`, {
           method: 'POST',
           headers: getHeaders(),
-          body: JSON.stringify({
-            user_id: userId,
-            sender,
-            reason,
-          }),
+          body: JSON.stringify({ user_id: userId, sender, reason }),
         });
 
         if (!response.ok) {
@@ -105,15 +88,11 @@ export function useBlocklist({
         const data = await response.json();
 
         // Optimistic update
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           blockedSenders: [
             ...prev.blockedSenders,
-            {
-              sender,
-              reason,
-              blocked_at: data.blocked_at || new Date().toISOString(),
-            },
+            { sender, reason, blocked_at: data.blocked_at || new Date().toISOString() },
           ],
           isLoading: false,
           error: null,
@@ -121,7 +100,7 @@ export function useBlocklist({
 
         return true;
       } catch (err) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
           error: err instanceof Error ? err.message : 'Failed to block sender',
@@ -129,21 +108,18 @@ export function useBlocklist({
         return false;
       }
     },
-    [apiBase, userId, getHeaders]
+    [apiBase, userId, getHeaders],
   );
 
   // Unblock a sender
   const unblockSender = useCallback(
     async (sender: string): Promise<boolean> => {
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
       try {
         const encodedSender = encodeURIComponent(sender);
         const response = await fetch(
           `${apiBase}/api/v1/inbox/blocklist/${encodedSender}?user_id=${userId}`,
-          {
-            method: 'DELETE',
-            headers: getHeaders(),
-          }
+          { method: 'DELETE', headers: getHeaders() },
         );
 
         if (!response.ok) {
@@ -151,10 +127,10 @@ export function useBlocklist({
         }
 
         // Optimistic update
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           blockedSenders: prev.blockedSenders.filter(
-            b => b.sender.toLowerCase() !== sender.toLowerCase()
+            (b) => b.sender.toLowerCase() !== sender.toLowerCase(),
           ),
           isLoading: false,
           error: null,
@@ -162,7 +138,7 @@ export function useBlocklist({
 
         return true;
       } catch (err) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
           error: err instanceof Error ? err.message : 'Failed to unblock sender',
@@ -170,12 +146,12 @@ export function useBlocklist({
         return false;
       }
     },
-    [apiBase, userId, getHeaders]
+    [apiBase, userId, getHeaders],
   );
 
   // Clear error
   const clearError = useCallback(() => {
-    setState(prev => ({ ...prev, error: null }));
+    setState((prev) => ({ ...prev, error: null }));
   }, []);
 
   // Fetch blocklist on mount

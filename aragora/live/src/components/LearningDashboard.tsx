@@ -79,17 +79,23 @@ export function LearningDashboard({ apiBase = DEFAULT_API_BASE }: LearningDashbo
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
-      case 'improving': return '↑';
-      case 'declining': return '↓';
-      default: return '→';
+      case 'improving':
+        return '↑';
+      case 'declining':
+        return '↓';
+      default:
+        return '→';
     }
   };
 
   const getTrendColor = (trend: string) => {
     switch (trend) {
-      case 'improving': return 'text-green-400';
-      case 'declining': return 'text-red-400';
-      default: return 'text-yellow-400';
+      case 'improving':
+        return 'text-green-400';
+      case 'declining':
+        return 'text-red-400';
+      default:
+        return 'text-yellow-400';
     }
   };
 
@@ -146,9 +152,11 @@ export function LearningDashboard({ apiBase = DEFAULT_API_BASE }: LearningDashbo
                   <span className="text-[var(--acid-cyan)] font-theme-data text-xs">
                     Cycle {cycle.cycle}
                   </span>
-                  <span className={`text-xs font-theme-data ${
-                    cycle.success ? 'text-green-400' : 'text-yellow-400'
-                  }`}>
+                  <span
+                    className={`text-xs font-theme-data ${
+                      cycle.success ? 'text-green-400' : 'text-yellow-400'
+                    }`}
+                  >
                     {cycle.success ? '✓ SUCCESS' : cycle.status.toUpperCase()}
                   </span>
                 </div>
@@ -176,7 +184,9 @@ export function LearningDashboard({ apiBase = DEFAULT_API_BASE }: LearningDashbo
         <div className="space-y-4">
           {/* Recurring Themes */}
           <div>
-            <h4 className="text-[var(--acid-cyan)] text-xs font-theme-data mb-2">RECURRING THEMES</h4>
+            <h4 className="text-[var(--acid-cyan)] text-xs font-theme-data mb-2">
+              RECURRING THEMES
+            </h4>
             <div className="flex flex-wrap gap-2">
               {patterns.recurring_themes.length === 0 ? (
                 <span className="text-text-muted text-xs">No themes detected</span>
@@ -204,7 +214,9 @@ export function LearningDashboard({ apiBase = DEFAULT_API_BASE }: LearningDashbo
                   .sort((a, b) => b[1] - a[1])
                   .map(([agent, wins]) => (
                     <div key={agent} className="flex items-center gap-2">
-                      <span className="text-xs font-theme-data text-[var(--accent)] w-16">{agent}</span>
+                      <span className="text-xs font-theme-data text-[var(--accent)] w-16">
+                        {agent}
+                      </span>
                       <div className="flex-1 h-2 bg-surface rounded overflow-hidden">
                         <div
                           className="h-full bg-[var(--accent)]"
@@ -252,8 +264,9 @@ export function LearningDashboard({ apiBase = DEFAULT_API_BASE }: LearningDashbo
                   <span>Cycles: {data.total_cycles}</span>
                   <span>Wins: {data.total_wins}</span>
                   <span>
-                    Win Rate: {data.total_cycles > 0
-                      ? `${Math.round(data.total_wins / data.total_cycles * 100)}%`
+                    Win Rate:{' '}
+                    {data.total_cycles > 0
+                      ? `${Math.round((data.total_wins / data.total_cycles) * 100)}%`
                       : 'N/A'}
                   </span>
                 </div>

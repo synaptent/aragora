@@ -34,11 +34,7 @@ interface MemberTableProps<T extends Member> {
   onSort?: (key: string, direction: SortDirection) => void;
   onRowClick?: (row: T) => void;
   onAction?: (action: string, row: T) => void;
-  actions?: Array<{
-    label: string;
-    value: string;
-    variant?: 'default' | 'danger' | 'success';
-  }>;
+  actions?: Array<{ label: string; value: string; variant?: 'default' | 'danger' | 'success' }>;
   selectable?: boolean;
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
@@ -54,7 +50,9 @@ function RoleBadge({ role }: { role: string }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[role] || colors.member}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[role] || colors.member}`}
+    >
       {role.toUpperCase()}
     </span>
   );
@@ -153,7 +151,9 @@ export function MemberTable<T extends Member>({
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
 
-  const totalPages = totalItems ? Math.ceil(totalItems / pageSize) : Math.ceil(data.length / pageSize);
+  const totalPages = totalItems
+    ? Math.ceil(totalItems / pageSize)
+    : Math.ceil(data.length / pageSize);
 
   const handleSort = (key: string) => {
     const newDirection = sortKey === key && sortDirection === 'asc' ? 'desc' : 'asc';
@@ -173,9 +173,7 @@ export function MemberTable<T extends Member>({
       if (bVal === undefined || bVal === null) return sortDirection === 'asc' ? -1 : 1;
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDirection === 'asc'
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
+        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }
 
       return sortDirection === 'asc'
@@ -194,13 +192,13 @@ export function MemberTable<T extends Member>({
     if (selectedIds.length === paginatedData.length) {
       onSelectionChange?.([]);
     } else {
-      onSelectionChange?.(paginatedData.map(row => row.id));
+      onSelectionChange?.(paginatedData.map((row) => row.id));
     }
   };
 
   const handleSelectRow = (id: string) => {
     if (selectedIds.includes(id)) {
-      onSelectionChange?.(selectedIds.filter(i => i !== id));
+      onSelectionChange?.(selectedIds.filter((i) => i !== id));
     } else {
       onSelectionChange?.([...selectedIds, id]);
     }
@@ -227,7 +225,9 @@ export function MemberTable<T extends Member>({
                 <th className="w-12 px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={paginatedData.length > 0 && selectedIds.length === paginatedData.length}
+                    checked={
+                      paginatedData.length > 0 && selectedIds.length === paginatedData.length
+                    }
                     onChange={handleSelectAll}
                     className="w-4 h-4 accent-acid-green"
                   />
@@ -262,79 +262,88 @@ export function MemberTable<T extends Member>({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={columns.length + (selectable ? 2 : 1)} className="px-4 py-8 text-center">
+                <td
+                  colSpan={columns.length + (selectable ? 2 : 1)}
+                  className="px-4 py-8 text-center"
+                >
                   <div className="font-theme-data text-text-muted animate-pulse">Loading...</div>
                 </td>
               </tr>
             )}
             {!loading && paginatedData.length === 0 && (
               <tr>
-                <td colSpan={columns.length + (selectable ? 2 : 1)} className="px-4 py-8 text-center">
+                <td
+                  colSpan={columns.length + (selectable ? 2 : 1)}
+                  className="px-4 py-8 text-center"
+                >
                   <div className="font-theme-data text-text-muted">No members found</div>
                 </td>
               </tr>
             )}
-            {!loading && paginatedData.map((row) => (
-              <tr
-                key={row.id}
-                className={`border-b border-[var(--accent)]/10 hover:bg-surface/50 ${
-                  onRowClick ? 'cursor-pointer' : ''
-                } ${selectedIds.includes(row.id) ? 'bg-[var(--accent)]/5' : ''}`}
-                onClick={() => onRowClick?.(row)}
-              >
-                {selectable && (
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(row.id)}
-                      onChange={() => handleSelectRow(row.id)}
-                      className="w-4 h-4 accent-acid-green"
-                    />
-                  </td>
-                )}
-                {columns.map((col) => (
-                  <td key={String(col.key)} className="px-4 py-3">
-                    {col.render
-                      ? col.render(row[col.key as keyof T], row)
-                      : String(row[col.key as keyof T] ?? '-')}
-                  </td>
-                ))}
-                {actions.length > 0 && (
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenActionMenu(openActionMenu === row.id ? null : row.id)}
-                        className="px-2 py-1 font-theme-data text-xs text-text-muted hover:text-text hover:bg-surface-elevated rounded transition-colors"
-                      >
-                        ...
-                      </button>
-                      {openActionMenu === row.id && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-40"
-                            onClick={() => setOpenActionMenu(null)}
-                          />
-                          <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-[var(--accent)]/40 rounded shadow-lg py-1 min-w-[120px]">
-                            {actions.map((action) => (
-                              <button
-                                key={action.value}
-                                onClick={() => {
-                                  onAction?.(action.value, row);
-                                  setOpenActionMenu(null);
-                                }}
-                                className={`w-full text-left px-3 py-2 font-theme-data text-xs transition-colors ${getActionButtonClass(action.variant)}`}
-                              >
-                                {action.label}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))}
+            {!loading &&
+              paginatedData.map((row) => (
+                <tr
+                  key={row.id}
+                  className={`border-b border-[var(--accent)]/10 hover:bg-surface/50 ${
+                    onRowClick ? 'cursor-pointer' : ''
+                  } ${selectedIds.includes(row.id) ? 'bg-[var(--accent)]/5' : ''}`}
+                  onClick={() => onRowClick?.(row)}
+                >
+                  {selectable && (
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(row.id)}
+                        onChange={() => handleSelectRow(row.id)}
+                        className="w-4 h-4 accent-acid-green"
+                      />
+                    </td>
+                  )}
+                  {columns.map((col) => (
+                    <td key={String(col.key)} className="px-4 py-3">
+                      {col.render
+                        ? col.render(row[col.key as keyof T], row)
+                        : String(row[col.key as keyof T] ?? '-')}
+                    </td>
+                  ))}
+                  {actions.length > 0 && (
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative">
+                        <button
+                          onClick={() =>
+                            setOpenActionMenu(openActionMenu === row.id ? null : row.id)
+                          }
+                          className="px-2 py-1 font-theme-data text-xs text-text-muted hover:text-text hover:bg-surface-elevated rounded transition-colors"
+                        >
+                          ...
+                        </button>
+                        {openActionMenu === row.id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-40"
+                              onClick={() => setOpenActionMenu(null)}
+                            />
+                            <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-[var(--accent)]/40 rounded shadow-lg py-1 min-w-[120px]">
+                              {actions.map((action) => (
+                                <button
+                                  key={action.value}
+                                  onClick={() => {
+                                    onAction?.(action.value, row);
+                                    setOpenActionMenu(null);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 font-theme-data text-xs transition-colors ${getActionButtonClass(action.variant)}`}
+                                >
+                                  {action.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -343,7 +352,9 @@ export function MemberTable<T extends Member>({
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--accent)]/20">
           <div className="font-theme-data text-xs text-text-muted">
-            Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems || data.length)} of {totalItems || data.length}
+            Showing {(currentPage - 1) * pageSize + 1} to{' '}
+            {Math.min(currentPage * pageSize, totalItems || data.length)} of{' '}
+            {totalItems || data.length}
           </div>
           <div className="flex items-center gap-2">
             <button

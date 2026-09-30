@@ -12,9 +12,7 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
         <div className="inline-block p-4 bg-[var(--accent)]/10 border border-[var(--accent)]/30 mb-4">
           <span className="text-4xl">&#x2694;</span>
         </div>
-        <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
-          Welcome to Aragora
-        </h2>
+        <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-2">Welcome to Aragora</h2>
         <p className="font-theme-data text-text-muted text-sm">
           AI models that debate your decisions
         </p>
@@ -22,9 +20,7 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
 
       <div className="space-y-4">
         <div className="p-4 bg-surface border border-[var(--accent)]/20">
-          <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-2">
-            How it works
-          </h3>
+          <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-2">How it works</h3>
           <ol className="space-y-2 font-theme-data text-text-muted text-sm">
             <li className="flex items-start gap-2">
               <span className="text-[var(--accent)]">1.</span>

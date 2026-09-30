@@ -53,7 +53,11 @@ const TRIGGER_TYPE_LABELS: Record<TriggerType, string> = {
 
 const STATUS_STYLES: Record<ScheduleStatus, { bg: string; text: string; dot: string }> = {
   active: { bg: 'bg-[var(--accent)]/10', text: 'text-[var(--accent)]', dot: 'bg-[var(--accent)]' },
-  running: { bg: 'bg-[var(--acid-cyan)]/10', text: 'text-[var(--acid-cyan)]', dot: 'bg-[var(--acid-cyan)] animate-pulse' },
+  running: {
+    bg: 'bg-[var(--acid-cyan)]/10',
+    text: 'text-[var(--acid-cyan)]',
+    dot: 'bg-[var(--acid-cyan)] animate-pulse',
+  },
   paused: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', dot: 'bg-yellow-500' },
   disabled: { bg: 'bg-gray-500/10', text: 'text-gray-500', dot: 'bg-gray-500' },
   error: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-500' },
@@ -90,7 +94,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
     setLoading(true);
     setError(null);
     const { data, error: fetchError } = await apiFetch<{ jobs: ScheduledJob[]; count: number }>(
-      '/api/scheduler/jobs'
+      '/api/scheduler/jobs',
     );
     if (fetchError) {
       setError(fetchError);
@@ -110,7 +114,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
   const fetchJobHistory = useCallback(async (jobId: string) => {
     setHistoryLoading(true);
     const { data, error: histError } = await apiFetch<{ runs: JobRun[] }>(
-      `/api/scheduler/jobs/${jobId}/history?limit=20`
+      `/api/scheduler/jobs/${jobId}/history?limit=20`,
     );
     if (histError) {
       setError(histError);
@@ -192,14 +196,15 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
       description: formData.description,
       trigger_type: formData.trigger_type,
       cron: formData.trigger_type === 'cron' ? formData.cron : undefined,
-      interval_minutes: formData.trigger_type === 'interval' ? formData.interval_minutes : undefined,
+      interval_minutes:
+        formData.trigger_type === 'interval' ? formData.interval_minutes : undefined,
       preset: formData.preset || undefined,
       audit_types: formData.audit_types.length > 0 ? formData.audit_types : undefined,
       workspace_id: formData.workspace_id || undefined,
       notify_on_complete: formData.notify_on_complete,
       notify_on_findings: formData.notify_on_findings,
       finding_severity_threshold: formData.finding_severity_threshold,
-      tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+      tags: formData.tags ? formData.tags.split(',').map((t) => t.trim()) : [],
     };
 
     const { error: createError } = await apiFetch('/api/scheduler/jobs', {
@@ -260,10 +265,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
       {error && (
         <div className="p-4 border border-red-500/30 bg-red-500/10 rounded text-red-400 text-sm font-theme-data">
           {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-4 text-red-500 hover:text-red-400"
-          >
+          <button onClick={() => setError(null)} className="ml-4 text-red-500 hover:text-red-400">
             [DISMISS]
           </button>
         </div>
@@ -298,7 +300,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-[var(--accent)]/30 pb-2">
-        {(['jobs', 'create', 'history'] as const).map(tab => (
+        {(['jobs', 'create', 'history'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -320,7 +322,9 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
           {jobs.length === 0 ? (
             <div className="text-center py-12 bg-surface border border-border rounded-lg">
               <div className="text-4xl mb-4">📅</div>
-              <h3 className="text-lg font-theme-data font-bold text-text mb-2">No scheduled jobs</h3>
+              <h3 className="text-lg font-theme-data font-bold text-text mb-2">
+                No scheduled jobs
+              </h3>
               <p className="text-text-muted mb-4">Create your first scheduled audit job</p>
               <button
                 onClick={() => setActiveTab('create')}
@@ -331,7 +335,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
             </div>
           ) : (
             <div className="space-y-2">
-              {jobs.map(job => {
+              {jobs.map((job) => {
                 const statusStyle = STATUS_STYLES[job.status];
                 return (
                   <div
@@ -349,7 +353,9 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
                         <div>
                           <h4 className="font-theme-data text-text">{job.name}</h4>
                           <div className="flex gap-2 mt-1">
-                            <span className={`px-2 py-0.5 text-xs rounded ${statusStyle.bg} ${statusStyle.text}`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs rounded ${statusStyle.bg} ${statusStyle.text}`}
+                            >
                               {job.status.toUpperCase()}
                             </span>
                             <span className="px-2 py-0.5 text-xs rounded bg-surface text-text-muted">
@@ -367,7 +373,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
 
                         <div className="flex gap-1">
                           <button
-                            onClick={e => {
+                            onClick={(e) => {
                               e.stopPropagation();
                               handleTrigger(job.job_id);
                             }}
@@ -378,7 +384,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
                           </button>
                           {job.status === 'active' ? (
                             <button
-                              onClick={e => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 handlePause(job.job_id);
                               }}
@@ -389,7 +395,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
                             </button>
                           ) : job.status === 'paused' ? (
                             <button
-                              onClick={e => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 handleResume(job.job_id);
                               }}
@@ -400,7 +406,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
                             </button>
                           ) : null}
                           <button
-                            onClick={e => {
+                            onClick={(e) => {
                               e.stopPropagation();
                               handleDelete(job.job_id);
                             }}
@@ -435,11 +441,13 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Job Name *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Job Name *
+              </label>
               <input
                 type="text"
                 value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Daily Security Scan"
                 required
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -447,24 +455,32 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Trigger Type</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Trigger Type
+              </label>
               <select
                 value={formData.trigger_type}
-                onChange={e => setFormData({ ...formData, trigger_type: e.target.value as TriggerType })}
+                onChange={(e) =>
+                  setFormData({ ...formData, trigger_type: e.target.value as TriggerType })
+                }
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               >
                 {Object.entries(TRIGGER_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-theme-data text-text-muted mb-1">Description</label>
+            <label className="block text-xs font-theme-data text-text-muted mb-1">
+              Description
+            </label>
             <textarea
               value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Describe what this job does..."
               className="w-full h-20 p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
             />
@@ -480,24 +496,29 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
               <input
                 type="text"
                 value={formData.cron}
-                onChange={e => setFormData({ ...formData, cron: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, cron: e.target.value })}
                 placeholder="0 2 * * *"
                 required
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
               <div className="mt-1 text-xs text-text-muted font-theme-data">
-                Examples: &quot;0 2 * * *&quot; (daily 2 AM), &quot;0 */6 * * *&quot; (every 6 hours), &quot;0 9 * * 1-5&quot; (weekdays 9 AM)
+                Examples: &quot;0 2 * * *&quot; (daily 2 AM), &quot;0 */6 * * *&quot; (every 6
+                hours), &quot;0 9 * * 1-5&quot; (weekdays 9 AM)
               </div>
             </div>
           )}
 
           {formData.trigger_type === 'interval' && (
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Interval (minutes) *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Interval (minutes) *
+              </label>
               <input
                 type="number"
                 value={formData.interval_minutes}
-                onChange={e => setFormData({ ...formData, interval_minutes: parseInt(e.target.value) || 60 })}
+                onChange={(e) =>
+                  setFormData({ ...formData, interval_minutes: parseInt(e.target.value) || 60 })
+                }
                 min={1}
                 required
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -507,10 +528,12 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Audit Preset</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Audit Preset
+              </label>
               <select
                 value={formData.preset}
-                onChange={e => setFormData({ ...formData, preset: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, preset: e.target.value })}
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="">Select preset...</option>
@@ -522,11 +545,13 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Workspace ID</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Workspace ID
+              </label>
               <input
                 type="text"
                 value={formData.workspace_id}
-                onChange={e => setFormData({ ...formData, workspace_id: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, workspace_id: e.target.value })}
                 placeholder="ws_123"
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -535,10 +560,14 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Severity Threshold</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Severity Threshold
+              </label>
               <select
                 value={formData.finding_severity_threshold}
-                onChange={e => setFormData({ ...formData, finding_severity_threshold: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, finding_severity_threshold: e.target.value })
+                }
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="low">Low</option>
@@ -549,11 +578,13 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Tags (comma-separated)</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Tags (comma-separated)
+              </label>
               <input
                 type="text"
                 value={formData.tags}
-                onChange={e => setFormData({ ...formData, tags: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
                 placeholder="security, daily, production"
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -565,7 +596,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
               <input
                 type="checkbox"
                 checked={formData.notify_on_complete}
-                onChange={e => setFormData({ ...formData, notify_on_complete: e.target.checked })}
+                onChange={(e) => setFormData({ ...formData, notify_on_complete: e.target.checked })}
                 className="rounded border-[var(--accent)]/30"
               />
               <span className="text-text-muted">Notify on completion</span>
@@ -575,7 +606,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
               <input
                 type="checkbox"
                 checked={formData.notify_on_findings}
-                onChange={e => setFormData({ ...formData, notify_on_findings: e.target.checked })}
+                onChange={(e) => setFormData({ ...formData, notify_on_findings: e.target.checked })}
                 className="rounded border-[var(--accent)]/30"
               />
               <span className="text-text-muted">Notify on findings</span>
@@ -619,7 +650,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
 
           {historyLoading ? (
             <div className="animate-pulse space-y-2">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <div key={i} className="h-16 bg-surface rounded" />
               ))}
             </div>
@@ -629,7 +660,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
             </div>
           ) : (
             <div className="space-y-2">
-              {jobHistory.map(run => (
+              {jobHistory.map((run) => (
                 <div
                   key={run.run_id}
                   className="p-3 border border-[var(--accent)]/20 rounded bg-surface"
@@ -664,15 +695,7 @@ export function SchedulerDashboard({ apiBase: _apiBase }: SchedulerDashboardProp
   );
 }
 
-function StatusBadge({
-  label,
-  value,
-  active,
-}: {
-  label: string;
-  value: string;
-  active?: boolean;
-}) {
+function StatusBadge({ label, value, active }: { label: string; value: string; active?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-theme-data text-text-muted">{label}:</span>
@@ -693,7 +716,9 @@ function RunStatusBadge({ status }: { status: string }) {
   const style = styles[status] || styles.error;
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded ${style.bg} ${style.text} font-theme-data uppercase`}>
+    <span
+      className={`px-2 py-0.5 text-xs rounded ${style.bg} ${style.text} font-theme-data uppercase`}
+    >
       {status}
     </span>
   );

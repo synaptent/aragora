@@ -13,7 +13,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aragora.server.handlers.base import (
     BaseHandler,
@@ -24,13 +24,16 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 
+if TYPE_CHECKING:
+    from aragora.privacy.deletion import GDPRDeletionScheduler
+
 logger = logging.getLogger(__name__)
 
 # Default grace period in days before data is actually deleted
 DEFAULT_GRACE_PERIOD_DAYS = 30
 
 
-def _get_scheduler():
+def _get_scheduler() -> GDPRDeletionScheduler:
     """Get the GDPR deletion scheduler (lazy import to avoid circular deps)."""
     from aragora.privacy.deletion import get_deletion_scheduler
 

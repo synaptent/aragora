@@ -37,9 +37,7 @@ export const IdeaNode = memo(function IdeaNode({
 
       {/* Body preview */}
       {data.body && (
-        <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 mb-1">
-          {data.body}
-        </p>
+        <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 mb-1">{data.body}</p>
       )}
 
       {/* Tags */}
@@ -54,9 +52,7 @@ export const IdeaNode = memo(function IdeaNode({
             </span>
           ))}
           {data.tags.length > 3 && (
-            <span className="text-[9px] text-[var(--text-muted)]">
-              +{data.tags.length - 3}
-            </span>
+            <span className="text-[9px] text-[var(--text-muted)]">+{data.tags.length - 3}</span>
           )}
         </div>
       )}

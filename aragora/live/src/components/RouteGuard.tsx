@@ -43,11 +43,7 @@ const PROTECTED_ROUTES_PREFIX = [
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: {
-    id: string;
-    email: string;
-    name?: string;
-  } | null;
+  user: { id: string; email: string; name?: string } | null;
 }
 
 export function RouteGuard({
@@ -93,18 +89,12 @@ export function RouteGuard({
 
       // Verify token with API
       const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
-        setAuthState({
-          isAuthenticated: true,
-          isLoading: false,
-          user: data.user,
-        });
+        setAuthState({ isAuthenticated: true, isLoading: false, user: data.user });
       } else {
         // Token invalid, clear it
         localStorage.removeItem('aragora_tokens');
@@ -173,12 +163,8 @@ export function RouteGuard({
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="panel p-8 max-w-md text-center">
-          <h2 className="text-xl font-semibold text-text mb-2">
-            Authentication Required
-          </h2>
-          <p className="text-text-muted mb-4">
-            Please sign in to access this page.
-          </p>
+          <h2 className="text-xl font-semibold text-text mb-2">Authentication Required</h2>
+          <p className="text-text-muted mb-4">Please sign in to access this page.</p>
           <button
             onClick={() => router.push(fallbackPath)}
             className="px-4 py-2 bg-accent hover:bg-accent/80 text-white font-medium rounded-lg transition-colors"
@@ -231,18 +217,12 @@ export function useAuth(): AuthState & { logout: () => void; refresh: () => Prom
       }
 
       const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
-        setAuthState({
-          isAuthenticated: true,
-          isLoading: false,
-          user: data.user,
-        });
+        setAuthState({ isAuthenticated: true, isLoading: false, user: data.user });
       } else {
         localStorage.removeItem('aragora_tokens');
         setAuthState({ isAuthenticated: false, isLoading: false, user: null });
@@ -264,11 +244,7 @@ export function useAuth(): AuthState & { logout: () => void; refresh: () => Prom
     await checkAuth();
   };
 
-  return {
-    ...authState,
-    logout,
-    refresh,
-  };
+  return { ...authState, logout, refresh };
 }
 
 // Route configuration export

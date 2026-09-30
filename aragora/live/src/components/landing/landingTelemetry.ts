@@ -45,10 +45,7 @@ export function trackLandingEvent(
   eventType: LandingTelemetryEvent,
   data: Record<string, LandingTelemetryValue | undefined> = {},
 ): void {
-  const payload = {
-    event_type: eventType,
-    data: sanitizePayload(data),
-  };
+  const payload = { event_type: eventType, data: sanitizePayload(data) };
 
   void fetch(`${apiBase.replace(/\/$/, '')}/api/v1/playground/landing/events`, {
     method: 'POST',
@@ -58,10 +55,7 @@ export function trackLandingEvent(
   }).catch(() => undefined);
 }
 
-export function submitLandingFeedback(
-  apiBase: string,
-  payload: LandingFeedbackPayload,
-): void {
+export function submitLandingFeedback(apiBase: string, payload: LandingFeedbackPayload): void {
   const cleaned: Record<string, LandingTelemetryValue> = {};
 
   for (const [key, value] of Object.entries(payload)) {

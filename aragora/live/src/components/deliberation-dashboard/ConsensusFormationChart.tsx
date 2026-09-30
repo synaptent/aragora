@@ -14,16 +14,13 @@ interface DataPoint {
   timestamp: number;
 }
 
-export function ConsensusFormationChart({
-  events,
-  height = 120,
-}: ConsensusFormationChartProps) {
+export function ConsensusFormationChart({ events, height = 120 }: ConsensusFormationChartProps) {
   const dataPoints = useMemo(() => {
     const points: DataPoint[] = [];
 
     events
-      .filter(e => e.type === 'consensus_progress' || e.type === 'round_complete')
-      .forEach(event => {
+      .filter((e) => e.type === 'consensus_progress' || e.type === 'round_complete')
+      .forEach((event) => {
         const data = event.data as { consensus_score?: number; round?: number };
         if (typeof data.consensus_score === 'number' && typeof data.round === 'number') {
           points.push({
@@ -53,7 +50,7 @@ export function ConsensusFormationChart({
     );
   }
 
-  const maxConsensus = Math.max(...dataPoints.map(p => p.consensus), 1);
+  const maxConsensus = Math.max(...dataPoints.map((p) => p.consensus), 1);
   const width = 280;
   const padding = { top: 10, right: 10, bottom: 20, left: 30 };
   const chartWidth = width - padding.left - padding.right;
@@ -78,18 +75,22 @@ export function ConsensusFormationChart({
         <span className="text-xs font-theme-data text-[var(--accent)] uppercase">
           {'>'} CONSENSUS FORMATION
         </span>
-        <span className={`text-sm font-theme-data ${
-          currentConsensus >= 0.8 ? 'text-success' :
-          currentConsensus >= 0.5 ? 'text-[var(--acid-yellow)]' :
-          'text-text-muted'
-        }`}>
+        <span
+          className={`text-sm font-theme-data ${
+            currentConsensus >= 0.8
+              ? 'text-success'
+              : currentConsensus >= 0.5
+                ? 'text-[var(--acid-yellow)]'
+                : 'text-text-muted'
+          }`}
+        >
           {Math.round(currentConsensus * 100)}%
         </span>
       </div>
 
       <svg width={width} height={height} className="w-full">
         {/* Grid lines */}
-        {[0.25, 0.5, 0.75, 1].map(threshold => (
+        {[0.25, 0.5, 0.75, 1].map((threshold) => (
           <g key={threshold}>
             <line
               x1={padding.left}
@@ -124,19 +125,10 @@ export function ConsensusFormationChart({
         />
 
         {/* Area under curve */}
-        <path
-          d={areaPathData}
-          fill="var(--acid-green)"
-          fillOpacity={0.1}
-        />
+        <path d={areaPathData} fill="var(--acid-green)" fillOpacity={0.1} />
 
         {/* Line */}
-        <path
-          d={pathData}
-          fill="none"
-          stroke="var(--acid-green)"
-          strokeWidth={2}
-        />
+        <path d={pathData} fill="none" stroke="var(--acid-green)" strokeWidth={2} />
 
         {/* Data points */}
         {dataPoints.map((point, i) => (

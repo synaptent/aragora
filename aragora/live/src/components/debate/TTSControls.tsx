@@ -63,9 +63,10 @@ function PlayPauseButton({
       disabled={disabled || isLoading}
       className={`
         px-3 py-1.5 text-xs font-theme-data border transition-colors
-        ${isPlaying
-          ? 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40 hover:bg-[var(--accent)]/30'
-          : 'bg-surface text-text-muted border-border hover:border-[var(--accent)]/40 hover:text-[var(--accent)]'
+        ${
+          isPlaying
+            ? 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40 hover:bg-[var(--accent)]/30'
+            : 'bg-surface text-text-muted border-border hover:border-[var(--accent)]/40 hover:text-[var(--accent)]'
         }
         ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
         ${isLoading ? 'animate-pulse' : ''}
@@ -77,13 +78,7 @@ function PlayPauseButton({
   );
 }
 
-function StopButton({
-  onStop,
-  disabled,
-}: {
-  onStop: () => void;
-  disabled: boolean;
-}) {
+function StopButton({ onStop, disabled }: { onStop: () => void; disabled: boolean }) {
   return (
     <button
       onClick={onStop}
@@ -100,21 +95,16 @@ function StopButton({
   );
 }
 
-function MuteButton({
-  isMuted,
-  onToggle,
-}: {
-  isMuted: boolean;
-  onToggle: () => void;
-}) {
+function MuteButton({ isMuted, onToggle }: { isMuted: boolean; onToggle: () => void }) {
   return (
     <button
       onClick={onToggle}
       className={`
         px-2 py-1.5 text-xs font-theme-data border transition-colors cursor-pointer
-        ${isMuted
-          ? 'bg-red-400/20 text-red-400 border-red-400/40'
-          : 'bg-surface text-text-muted border-border hover:border-[var(--acid-cyan)]/40'
+        ${
+          isMuted
+            ? 'bg-red-400/20 text-red-400 border-red-400/40'
+            : 'bg-surface text-text-muted border-border hover:border-[var(--acid-cyan)]/40'
         }
       `}
       title={isMuted ? 'Unmute' : 'Mute'}
@@ -128,30 +118,26 @@ function MuteButton({
 // Component
 // ---------------------------------------------------------------------------
 
-export function TTSControls({
-  tts,
-  isActive = true,
-  compact = false,
-}: TTSControlsProps) {
+export function TTSControls({ tts, isActive = true, compact = false }: TTSControlsProps) {
   const handleSpeedChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       tts.setSpeed(parseFloat(e.target.value));
     },
-    [tts]
+    [tts],
   );
 
   const handleVolumeChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       tts.setVolume(parseFloat(e.target.value));
     },
-    [tts]
+    [tts],
   );
 
   const handleVoiceChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       tts.setVoice(e.target.value);
     },
-    [tts]
+    [tts],
   );
 
   if (compact) {
@@ -170,9 +156,7 @@ export function TTSControls({
           </span>
         )}
         {tts.state === 'error' && (
-          <span className="text-[10px] font-theme-data text-red-400">
-            TTS ERROR
-          </span>
+          <span className="text-[10px] font-theme-data text-red-400">TTS ERROR</span>
         )}
       </div>
     );
@@ -197,9 +181,7 @@ export function TTSControls({
           </span>
         )}
         {tts.state === 'error' && (
-          <span className="text-[10px] font-theme-data text-red-400">
-            TTS UNAVAILABLE
-          </span>
+          <span className="text-[10px] font-theme-data text-red-400">TTS UNAVAILABLE</span>
         )}
       </div>
 
@@ -211,10 +193,7 @@ export function TTSControls({
           onPause={tts.pause}
           disabled={!isActive}
         />
-        <StopButton
-          onStop={tts.stop}
-          disabled={tts.state === 'idle'}
-        />
+        <StopButton onStop={tts.stop} disabled={tts.state === 'idle'} />
         <MuteButton isMuted={tts.isMuted} onToggle={tts.toggleMute} />
       </div>
 
@@ -259,9 +238,7 @@ export function TTSControls({
       {/* Volume control */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-[10px] font-theme-data text-text-muted uppercase">
-            Volume
-          </label>
+          <label className="text-[10px] font-theme-data text-text-muted uppercase">Volume</label>
           <span className="text-[10px] font-theme-data text-text-muted">
             {Math.round(tts.volume * 100)}%
           </span>

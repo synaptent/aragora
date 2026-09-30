@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 
-export type OutboundChannelType = 'slack' | 'teams' | 'discord' | 'telegram' | 'whatsapp' | 'voice' | 'email' | 'webhook';
+export type OutboundChannelType =
+  'slack' | 'teams' | 'discord' | 'telegram' | 'whatsapp' | 'voice' | 'email' | 'webhook';
 export type ChannelStatus = 'active' | 'inactive' | 'error' | 'rate_limited';
 
 export interface ChannelStats {
@@ -171,9 +172,7 @@ export function ChannelCard({
       </div>
 
       {/* Description */}
-      <p className="text-xs text-text-muted mb-3 line-clamp-2">
-        {channel.description}
-      </p>
+      <p className="text-xs text-text-muted mb-3 line-clamp-2">{channel.description}</p>
 
       {/* Default Thread */}
       {channel.default_thread && (

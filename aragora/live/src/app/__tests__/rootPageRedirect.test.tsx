@@ -1,6 +1,4 @@
-jest.mock('next/navigation', () => ({
-  redirect: jest.fn(),
-}));
+jest.mock('next/navigation', () => ({ redirect: jest.fn() }));
 
 import { redirect } from 'next/navigation';
 import RootPage from '../page';

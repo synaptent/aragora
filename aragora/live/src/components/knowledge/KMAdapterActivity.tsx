@@ -82,15 +82,7 @@ const ActivityItem: React.FC<{ event: ActivityEvent }> = ({ event }) => {
       }}
     >
       <span style={{ color: '#666', width: '70px' }}>{time}</span>
-      <span
-        style={{
-          color,
-          width: '80px',
-          fontWeight: 'bold',
-        }}
-      >
-        {typeLabels[event.type]}
-      </span>
+      <span style={{ color, width: '80px', fontWeight: 'bold' }}>{typeLabels[event.type]}</span>
       <span style={{ color: '#00ff00', width: '90px' }}>{event.source}</span>
       <span
         style={{
@@ -103,20 +95,14 @@ const ActivityItem: React.FC<{ event: ActivityEvent }> = ({ event }) => {
       >
         {event.preview || `${event.count || 0} items`}
       </span>
-      {!event.success && (
-        <span style={{ color: '#ff4444', marginLeft: '8px' }}>ERROR</span>
-      )}
+      {!event.success && <span style={{ color: '#ff4444', marginLeft: '8px' }}>ERROR</span>}
     </div>
   );
 };
 
 // Adapter status card
 const AdapterCard: React.FC<{ adapter: AdapterInfo }> = ({ adapter }) => {
-  const statusColor = adapter.enabled
-    ? adapter.errors > 0
-      ? '#ff6600'
-      : '#00ff00'
-    : '#666';
+  const statusColor = adapter.enabled ? (adapter.errors > 0 ? '#ff6600' : '#00ff00') : '#666';
 
   return (
     <div
@@ -161,26 +147,20 @@ const AdapterCard: React.FC<{ adapter: AdapterInfo }> = ({ adapter }) => {
 
       <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
         <div>
-          <div style={{ color: '#666', fontSize: '10px', fontFamily: 'monospace' }}>
-            FORWARD
-          </div>
+          <div style={{ color: '#666', fontSize: '10px', fontFamily: 'monospace' }}>FORWARD</div>
           <div style={{ color: '#00ff00', fontSize: '18px', fontFamily: 'monospace' }}>
             {adapter.forward_sync_count}
           </div>
         </div>
         <div>
-          <div style={{ color: '#666', fontSize: '10px', fontFamily: 'monospace' }}>
-            REVERSE
-          </div>
+          <div style={{ color: '#666', fontSize: '10px', fontFamily: 'monospace' }}>REVERSE</div>
           <div style={{ color: '#00ffff', fontSize: '18px', fontFamily: 'monospace' }}>
             {adapter.reverse_sync_count}
           </div>
         </div>
         {adapter.errors > 0 && (
           <div>
-            <div style={{ color: '#666', fontSize: '10px', fontFamily: 'monospace' }}>
-              ERRORS
-            </div>
+            <div style={{ color: '#666', fontSize: '10px', fontFamily: 'monospace' }}>ERRORS</div>
             <div style={{ color: '#ff4444', fontSize: '18px', fontFamily: 'monospace' }}>
               {adapter.errors}
             </div>
@@ -235,10 +215,7 @@ export const KMAdapterActivity: React.FC<KMAdapterActivityProps> = ({
     ws.onopen = () => {
       setWsConnected(true);
       // Subscribe to KM adapter events
-      ws.send(JSON.stringify({
-        type: 'subscribe',
-        channel: 'km_adapter',
-      }));
+      ws.send(JSON.stringify({ type: 'subscribe', channel: 'km_adapter' }));
     };
 
     ws.onmessage = (event) => {
@@ -284,9 +261,7 @@ export const KMAdapterActivity: React.FC<KMAdapterActivityProps> = ({
   if (loading && !stats) {
     return (
       <div className={`km-adapter-activity ${className}`} style={{ padding: '20px' }}>
-        <div style={{ color: '#00ff00', fontFamily: 'monospace' }}>
-          Loading adapter activity...
-        </div>
+        <div style={{ color: '#00ff00', fontFamily: 'monospace' }}>Loading adapter activity...</div>
       </div>
     );
   }
@@ -361,12 +336,7 @@ export const KMAdapterActivity: React.FC<KMAdapterActivityProps> = ({
 
       {error && (
         <div
-          style={{
-            background: '#331111',
-            padding: '8px 16px',
-            color: '#ff4444',
-            fontSize: '12px',
-          }}
+          style={{ background: '#331111', padding: '8px 16px', color: '#ff4444', fontSize: '12px' }}
         >
           {error}
         </div>
@@ -409,12 +379,7 @@ export const KMAdapterActivity: React.FC<KMAdapterActivityProps> = ({
           </div>
         ) : (
           <div
-            style={{
-              padding: '40px 20px',
-              textAlign: 'center',
-              color: '#666',
-              fontSize: '12px',
-            }}
+            style={{ padding: '40px 20px', textAlign: 'center', color: '#666', fontSize: '12px' }}
           >
             No recent activity
             {!wsUrl && (

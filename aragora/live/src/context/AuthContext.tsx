@@ -1,6 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  ReactNode,
+} from 'react';
 import { API_BASE_URL } from '@/config';
 import { logger } from '@/utils/logger';
 import { normalizeReturnUrl, RETURN_URL_STORAGE_KEY } from '@/utils/returnUrl';
@@ -56,12 +65,25 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, name?: string, organization?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (
+    email: string,
+    password: string,
+    name?: string,
+    organization?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
-  setTokens: (accessToken: string, refreshToken: string, signal?: AbortSignal, expiresIn?: number) => Promise<void>;
+  setTokens: (
+    accessToken: string,
+    refreshToken: string,
+    signal?: AbortSignal,
+    expiresIn?: number,
+  ) => Promise<void>;
   /** Switch to a different organization context */
-  switchOrganization: (orgId: string, setAsDefault?: boolean) => Promise<{ success: boolean; error?: string }>;
+  switchOrganization: (
+    orgId: string,
+    setAsDefault?: boolean,
+  ) => Promise<{ success: boolean; error?: string }>;
   /** Refresh the list of user's organizations */
   refreshOrganizations: () => Promise<void>;
   /** Get the user's role in the current organization */
@@ -164,30 +186,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const orgsFetchAttemptedRef = useRef(false);
 
   // Fetch user's organizations
-  const fetchOrganizations = useCallback(async (accessToken: string): Promise<UserOrganization[]> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  const fetchOrganizations = useCallback(
+    async (accessToken: string): Promise<UserOrganization[]> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/user/organizations`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        signal: controller.signal,
-      });
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/user/organizations`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const data = await response.json();
-        return data.organizations || [];
+        if (response.ok) {
+          const data = await response.json();
+          return data.organizations || [];
+        }
+        return [];
+      } catch {
+        clearTimeout(timeoutId);
+        return [];
       }
-      return [];
-    } catch {
-      clearTimeout(timeoutId);
-      return [];
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Refresh organizations list
   // NOTE: Uses getStoredTokens() instead of state.tokens to avoid
@@ -196,85 +219,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokens = getStoredTokens();
     if (!tokens?.access_token) return;
 
-    setState(prev => ({ ...prev, isLoadingOrganizations: true }));
+    setState((prev) => ({ ...prev, isLoadingOrganizations: true }));
 
     try {
       const orgs = await fetchOrganizations(tokens.access_token);
       storeUserOrgs(orgs);
       orgsFetchAttemptedRef.current = true;
-      setState(prev => ({
-        ...prev,
-        organizations: orgs,
-        isLoadingOrganizations: false,
-      }));
+      setState((prev) => ({ ...prev, organizations: orgs, isLoadingOrganizations: false }));
     } catch {
       orgsFetchAttemptedRef.current = true;
-      setState(prev => ({ ...prev, isLoadingOrganizations: false }));
+      setState((prev) => ({ ...prev, isLoadingOrganizations: false }));
     }
   }, [fetchOrganizations]);
 
   // Switch organization context
-  const switchOrganization = useCallback(async (orgId: string, setAsDefault = false): Promise<{ success: boolean; error?: string }> => {
-    const tokens = getStoredTokens();
-    if (!tokens?.access_token) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/user/organizations/switch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokens.access_token}`,
-        },
-        body: JSON.stringify({ org_id: orgId, set_as_default: setAsDefault }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || 'Failed to switch organization' };
+  const switchOrganization = useCallback(
+    async (orgId: string, setAsDefault = false): Promise<{ success: boolean; error?: string }> => {
+      const tokens = getStoredTokens();
+      if (!tokens?.access_token) {
+        return { success: false, error: 'Not authenticated' };
       }
 
-      const newOrg = data.organization;
-      storeActiveOrg(newOrg);
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/user/organizations/switch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens.access_token}`,
+          },
+          body: JSON.stringify({ org_id: orgId, set_as_default: setAsDefault }),
+        });
 
-      // Update organizations list if default was changed
-      setState(prev => {
-        if (setAsDefault && prev.organizations.length > 0) {
-          const updatedOrgs = prev.organizations.map(o => ({
-            ...o,
-            is_default: o.org_id === orgId,
-          }));
-          storeUserOrgs(updatedOrgs);
-          return { ...prev, organization: newOrg, organizations: updatedOrgs };
+        const data = await response.json();
+
+        if (!response.ok) {
+          return { success: false, error: data.error || 'Failed to switch organization' };
         }
-        return { ...prev, organization: newOrg };
-      });
 
-      // If a new token was issued with org context, update it
-      if (data.access_token) {
-        const newTokens = {
-          ...tokens,
-          access_token: data.access_token,
-        };
-        localStorage.setItem(TOKENS_KEY, JSON.stringify(newTokens));
-        setState(prev => ({
-          ...prev,
-          tokens: newTokens,
-        }));
+        const newOrg = data.organization;
+        storeActiveOrg(newOrg);
+
+        // Update organizations list if default was changed
+        setState((prev) => {
+          if (setAsDefault && prev.organizations.length > 0) {
+            const updatedOrgs = prev.organizations.map((o) => ({
+              ...o,
+              is_default: o.org_id === orgId,
+            }));
+            storeUserOrgs(updatedOrgs);
+            return { ...prev, organization: newOrg, organizations: updatedOrgs };
+          }
+          return { ...prev, organization: newOrg };
+        });
+
+        // If a new token was issued with org context, update it
+        if (data.access_token) {
+          const newTokens = { ...tokens, access_token: data.access_token };
+          localStorage.setItem(TOKENS_KEY, JSON.stringify(newTokens));
+          setState((prev) => ({ ...prev, tokens: newTokens }));
+        }
+
+        return { success: true };
+      } catch {
+        return { success: false, error: 'Network error. Please try again.' };
       }
-
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error. Please try again.' };
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Get current org role
   const getCurrentOrgRole = useCallback((): 'member' | 'admin' | 'owner' | null => {
     if (!state.organization) return null;
-    const membership = state.organizations.find(o => o.org_id === state.organization?.id);
+    const membership = state.organizations.find((o) => o.org_id === state.organization?.id);
     return membership?.role || null;
   }, [state.organization, state.organizations]);
 
@@ -290,7 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!tokens || !user) {
         if (active) {
-          setState(prev => ({ ...prev, isLoading: false }));
+          setState((prev) => ({ ...prev, isLoading: false }));
         }
         return;
       }
@@ -308,9 +324,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isAuthenticated: false,
             isLoadingOrganizations: false,
           });
-          window.dispatchEvent(new CustomEvent('auth:session-expired', {
-            detail: { reason: 'token_expired' },
-          }));
+          window.dispatchEvent(
+            new CustomEvent('auth:session-expired', { detail: { reason: 'token_expired' } }),
+          );
         }
         return;
       }
@@ -334,12 +350,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
       try {
-      const response = await fetch(`${API_BASE}/api/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access_token}`,
-        },
-        signal: controller.signal,
-      });
+        const response = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+          signal: controller.signal,
+        });
 
         clearTimeout(timeoutId);
 
@@ -375,9 +389,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           logger.warn('[AuthContext] Stored session invalid, clearing auth');
           clearAuth();
-          window.dispatchEvent(new CustomEvent('auth:session-expired', {
-            detail: { reason: 'validation_failed' },
-          }));
+          window.dispatchEvent(
+            new CustomEvent('auth:session-expired', { detail: { reason: 'validation_failed' } }),
+          );
           if (active) {
             setState({
               user: null,
@@ -405,11 +419,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the endpoint returns 403 or empty array (organizations.length stays 0)
   useEffect(() => {
     if (
-      !state.isLoading
-      && state.isAuthenticated
-      && state.tokens?.access_token
-      && state.organizations.length === 0
-      && !orgsFetchAttemptedRef.current
+      !state.isLoading &&
+      state.isAuthenticated &&
+      state.tokens?.access_token &&
+      state.organizations.length === 0 &&
+      !orgsFetchAttemptedRef.current
     ) {
       refreshOrganizations();
     }
@@ -459,57 +473,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (
-    email: string,
-    password: string,
-    name?: string,
-    organization?: string
-  ) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name, organization }),
-      });
+  const register = useCallback(
+    async (email: string, password: string, name?: string, organization?: string) => {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name, organization }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        return { success: false, error: data.error || 'Registration failed' };
+        if (!response.ok) {
+          return { success: false, error: data.error || 'Registration failed' };
+        }
+
+        const { user, tokens } = data;
+        const org = data.organization || null;
+        const orgs = data.organizations || [];
+
+        storeAuth(user, tokens);
+        storeActiveOrg(org);
+        storeUserOrgs(orgs);
+
+        setState({
+          user,
+          organization: org,
+          organizations: orgs,
+          tokens,
+          isLoading: false,
+          isAuthenticated: true,
+          isLoadingOrganizations: false,
+        });
+
+        return { success: true };
+      } catch {
+        return { success: false, error: 'Network error. Please try again.' };
       }
-
-      const { user, tokens } = data;
-      const org = data.organization || null;
-      const orgs = data.organizations || [];
-
-      storeAuth(user, tokens);
-      storeActiveOrg(org);
-      storeUserOrgs(orgs);
-
-      setState({
-        user,
-        organization: org,
-        organizations: orgs,
-        tokens,
-        isLoading: false,
-        isAuthenticated: true,
-        isLoadingOrganizations: false,
-      });
-
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error. Please try again.' };
-    }
-  }, []);
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
     try {
       if (state.tokens?.access_token) {
         await fetch(`${API_BASE}/api/auth/logout`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${state.tokens.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${state.tokens.access_token}` },
         });
       }
     } catch {
@@ -553,11 +563,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isAuthenticated: false,
             isLoadingOrganizations: false,
           });
-          window.dispatchEvent(new CustomEvent('auth:session-expired', {
-            detail: { reason: 'refresh_rejected' },
-          }));
+          window.dispatchEvent(
+            new CustomEvent('auth:session-expired', { detail: { reason: 'refresh_rejected' } }),
+          );
         } else {
-          logger.warn(`[AuthContext] Token refresh failed with ${response.status}, keeping session`);
+          logger.warn(
+            `[AuthContext] Token refresh failed with ${response.status}, keeping session`,
+          );
         }
         return false;
       }
@@ -565,7 +577,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const newTokens = data.tokens;
 
-      setState(prev => {
+      setState((prev) => {
         const user = prev.user || getStoredUser();
         if (user) {
           storeAuth(user, newTokens);
@@ -582,157 +594,177 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Set tokens from OAuth callback - fetches user profile from API
-  const setTokens = useCallback(async (accessToken: string, refreshTokenValue: string, signal?: AbortSignal, expiresIn?: number) => {
-    logger.debug('[AuthContext] setTokens called');
+  const setTokens = useCallback(
+    async (
+      accessToken: string,
+      refreshTokenValue: string,
+      signal?: AbortSignal,
+      expiresIn?: number,
+    ) => {
+      logger.debug('[AuthContext] setTokens called');
 
-    // Use server-provided expiry if available, default 1 hour
-    const expiresAt = new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString();
+      // Use server-provided expiry if available, default 1 hour
+      const expiresAt = new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString();
 
-    const tokens: Tokens = {
-      access_token: accessToken,
-      refresh_token: refreshTokenValue,
-      expires_at: expiresAt,
-    };
+      const tokens: Tokens = {
+        access_token: accessToken,
+        refresh_token: refreshTokenValue,
+        expires_at: expiresAt,
+      };
 
-    // IMPORTANT: Store tokens IMMEDIATELY (optimistically) before validation
-    // This ensures tokens survive page navigation even if validation is slow
-    logger.debug('[AuthContext] Storing tokens optimistically...');
-    localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+      // IMPORTANT: Store tokens IMMEDIATELY (optimistically) before validation
+      // This ensures tokens survive page navigation even if validation is slow
+      logger.debug('[AuthContext] Storing tokens optimistically...');
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
 
-    // Fetch user profile using the access token to validate and get user info
-    try {
-      logger.debug('[AuthContext] Fetching user profile to validate tokens...');
-      const PROFILE_FETCH_TIMEOUT_MS = 12_000;
+      // Fetch user profile using the access token to validate and get user info
+      try {
+        logger.debug('[AuthContext] Fetching user profile to validate tokens...');
+        const PROFILE_FETCH_TIMEOUT_MS = 12_000;
 
-      // Retry logic for network and transient server errors
-      let response: Response | null = null;
-      let lastError: Error | null = null;
+        // Retry logic for network and transient server errors
+        let response: Response | null = null;
+        let lastError: Error | null = null;
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        const attemptController = new AbortController();
-        const timeoutId = setTimeout(() => attemptController.abort(), PROFILE_FETCH_TIMEOUT_MS);
-        const onOuterAbort = () => attemptController.abort();
-        signal?.addEventListener('abort', onOuterAbort);
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+          const attemptController = new AbortController();
+          const timeoutId = setTimeout(() => attemptController.abort(), PROFILE_FETCH_TIMEOUT_MS);
+          const onOuterAbort = () => attemptController.abort();
+          signal?.addEventListener('abort', onOuterAbort);
 
-        try {
-          response = await fetch(`${API_BASE}/api/auth/me`, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-            signal: attemptController.signal,
-          });
+          try {
+            response = await fetch(`${API_BASE}/api/auth/me`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              signal: attemptController.signal,
+            });
 
-          clearTimeout(timeoutId);
-          signal?.removeEventListener('abort', onOuterAbort);
+            clearTimeout(timeoutId);
+            signal?.removeEventListener('abort', onOuterAbort);
 
-          // Retry on 500/502/503/504 (transient server errors)
-          if (response.status >= 500 && attempt < 3) {
-            logger.warn(`[AuthContext] /me returned ${response.status}, retrying (attempt ${attempt}/3)...`);
-            await new Promise(r => setTimeout(r, 1000 * attempt));
-            continue;
-          }
-          break; // Success or non-retryable status, exit loop
-        } catch (fetchErr) {
-          clearTimeout(timeoutId);
-          signal?.removeEventListener('abort', onOuterAbort);
-
-          // External abort (unmount/navigation) should stop immediately.
-          if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError' && signal?.aborted) {
-            throw fetchErr;
-          }
-
-          // Per-attempt timeout should retry like other transient failures.
-          if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError') {
-            lastError = new Error(`Token validation timed out after ${PROFILE_FETCH_TIMEOUT_MS}ms`);
-            logger.warn(`[AuthContext] /me fetch attempt ${attempt} timed out`);
-            if (attempt < 3) {
-              await new Promise(r => setTimeout(r, 1000 * attempt));
+            // Retry on 500/502/503/504 (transient server errors)
+            if (response.status >= 500 && attempt < 3) {
+              logger.warn(
+                `[AuthContext] /me returned ${response.status}, retrying (attempt ${attempt}/3)...`,
+              );
+              await new Promise((r) => setTimeout(r, 1000 * attempt));
+              continue;
             }
-            continue;
-          }
+            break; // Success or non-retryable status, exit loop
+          } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            signal?.removeEventListener('abort', onOuterAbort);
 
-          lastError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
-          logger.warn(`[AuthContext] /me fetch attempt ${attempt} failed:`, lastError.message);
-          if (attempt < 3) {
-            await new Promise(r => setTimeout(r, 1000 * attempt));
+            // External abort (unmount/navigation) should stop immediately.
+            if (
+              fetchErr instanceof DOMException &&
+              fetchErr.name === 'AbortError' &&
+              signal?.aborted
+            ) {
+              throw fetchErr;
+            }
+
+            // Per-attempt timeout should retry like other transient failures.
+            if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError') {
+              lastError = new Error(
+                `Token validation timed out after ${PROFILE_FETCH_TIMEOUT_MS}ms`,
+              );
+              logger.warn(`[AuthContext] /me fetch attempt ${attempt} timed out`);
+              if (attempt < 3) {
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
+              }
+              continue;
+            }
+
+            lastError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
+            logger.warn(`[AuthContext] /me fetch attempt ${attempt} failed:`, lastError.message);
+            if (attempt < 3) {
+              await new Promise((r) => setTimeout(r, 1000 * attempt));
+            }
           }
         }
-      }
 
-      if (!response) {
-        // All retries failed - but tokens are stored, user can retry
-        logger.error('[AuthContext] All /me fetch attempts failed:', lastError?.message);
-        throw new Error('Network error: Unable to validate tokens. Please try again.');
-      }
+        if (!response) {
+          // All retries failed - but tokens are stored, user can retry
+          logger.error('[AuthContext] All /me fetch attempts failed:', lastError?.message);
+          throw new Error('Network error: Unable to validate tokens. Please try again.');
+        }
 
-      logger.debug('[AuthContext] /me response:', {
-        status: response.status,
-        ok: response.ok,
-        contentType: response.headers.get('content-type'),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const user = data.user;
-        const organization = data.organization || null;
-        const organizations = data.organizations || [];
-
-        logger.debug('[AuthContext] User profile fetched successfully:', user?.email);
-
-        // Store user info alongside already-stored tokens
-        localStorage.setItem(USER_KEY, JSON.stringify(user));
-        storeActiveOrg(organization);
-        storeUserOrgs(organizations);
-
-        // Update state - use a callback to ensure state is properly merged
-        setState({
-          user,
-          organization,
-          organizations,
-          tokens,
-          isLoading: false,
-          isAuthenticated: true,
-          isLoadingOrganizations: false,
+        logger.debug('[AuthContext] /me response:', {
+          status: response.status,
+          ok: response.ok,
+          contentType: response.headers.get('content-type'),
         });
 
-        // Small delay to ensure React state update is processed
-        await new Promise(r => setTimeout(r, 50));
-      } else if (response.status === 401) {
-        // 401 means tokens are invalid - clear optimistically stored tokens
-        logger.error('[AuthContext] Token validation failed: 401 Unauthorized');
-        const contentType = response.headers.get('content-type') || '';
-        let errorDetail = '';
-        if (contentType.includes('application/json')) {
-          try {
-            const errData = await response.json();
-            errorDetail = errData.error || errData.message || '';
-          } catch { /* ignore */ }
-        }
-        logger.error('[AuthContext] Error detail:', errorDetail || '(no detail)');
+        if (response.ok) {
+          const data = await response.json();
+          const user = data.user;
+          const organization = data.organization || null;
+          const organizations = data.organizations || [];
 
-        // Clear the optimistically stored tokens
-        clearAuth();
-        throw new Error('Authentication failed: Invalid tokens');
-      } else {
-        // Other error (500, 404, etc.) - keep tokens but report error
-        // User may be able to retry or the backend may recover
-        let body = '';
-        try {
-          body = await response.text();
-        } catch { /* ignore */ }
-        logger.error('[AuthContext] /me error response:', { status: response.status, body });
-        // Don't clear tokens on server errors - let user retry
-        throw new Error(`Server error (${response.status}): ${body || 'No details'}. Please try again.`);
+          logger.debug('[AuthContext] User profile fetched successfully:', user?.email);
+
+          // Store user info alongside already-stored tokens
+          localStorage.setItem(USER_KEY, JSON.stringify(user));
+          storeActiveOrg(organization);
+          storeUserOrgs(organizations);
+
+          // Update state - use a callback to ensure state is properly merged
+          setState({
+            user,
+            organization,
+            organizations,
+            tokens,
+            isLoading: false,
+            isAuthenticated: true,
+            isLoadingOrganizations: false,
+          });
+
+          // Small delay to ensure React state update is processed
+          await new Promise((r) => setTimeout(r, 50));
+        } else if (response.status === 401) {
+          // 401 means tokens are invalid - clear optimistically stored tokens
+          logger.error('[AuthContext] Token validation failed: 401 Unauthorized');
+          const contentType = response.headers.get('content-type') || '';
+          let errorDetail = '';
+          if (contentType.includes('application/json')) {
+            try {
+              const errData = await response.json();
+              errorDetail = errData.error || errData.message || '';
+            } catch {
+              /* ignore */
+            }
+          }
+          logger.error('[AuthContext] Error detail:', errorDetail || '(no detail)');
+
+          // Clear the optimistically stored tokens
+          clearAuth();
+          throw new Error('Authentication failed: Invalid tokens');
+        } else {
+          // Other error (500, 404, etc.) - keep tokens but report error
+          // User may be able to retry or the backend may recover
+          let body = '';
+          try {
+            body = await response.text();
+          } catch {
+            /* ignore */
+          }
+          logger.error('[AuthContext] /me error response:', { status: response.status, body });
+          // Don't clear tokens on server errors - let user retry
+          throw new Error(
+            `Server error (${response.status}): ${body || 'No details'}. Please try again.`,
+          );
+        }
+      } catch (err) {
+        // Re-throw abort errors without logging (clean unmount)
+        if (err instanceof DOMException && err.name === 'AbortError') throw err;
+        logger.error('[AuthContext] setTokens error:', err);
+        // Re-throw so callback page can handle it
+        throw err;
       }
-    } catch (err) {
-      // Re-throw abort errors without logging (clean unmount)
-      if (err instanceof DOMException && err.name === 'AbortError') throw err;
-      logger.error('[AuthContext] setTokens error:', err);
-      // Re-throw so callback page can handle it
-      throw err;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Auto-refresh token before expiry
   useEffect(() => {
@@ -750,33 +782,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeout);
   }, [state.tokens?.expires_at, refreshToken]);
 
-  const contextValue = useMemo<AuthContextType>(() => ({
-    ...state,
-    login,
-    register,
-    logout,
-    refreshToken,
-    setTokens,
-    switchOrganization,
-    refreshOrganizations,
-    getCurrentOrgRole,
-  }), [
-    state,
-    login,
-    register,
-    logout,
-    refreshToken,
-    setTokens,
-    switchOrganization,
-    refreshOrganizations,
-    getCurrentOrgRole,
-  ]);
-
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+  const contextValue = useMemo<AuthContextType>(
+    () => ({
+      ...state,
+      login,
+      register,
+      logout,
+      refreshToken,
+      setTokens,
+      switchOrganization,
+      refreshOrganizations,
+      getCurrentOrgRole,
+    }),
+    [
+      state,
+      login,
+      register,
+      logout,
+      refreshToken,
+      setTokens,
+      switchOrganization,
+      refreshOrganizations,
+      getCurrentOrgRole,
+    ],
   );
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -9,7 +9,11 @@ interface AsciiBannerProps {
   connected?: boolean;
 }
 
-export function AsciiBanner({ subtitle = 'live', showStatus = true, connected = false }: AsciiBannerProps) {
+export function AsciiBanner({
+  subtitle = 'live',
+  showStatus = true,
+  connected = false,
+}: AsciiBannerProps) {
   const [mounted, setMounted] = useState(false);
   const [glitchIndex, setGlitchIndex] = useState(-1);
 
@@ -115,21 +119,17 @@ export function AsciiBannerCompact({
 }) {
   return (
     <div className="flex items-center gap-3">
-      {showLogo && (
-        <Logo size="sm" onClick={onLogoClick} />
-      )}
+      {showLogo && <Logo size="sm" onClick={onLogoClick} />}
       {showAsciiArt && (
         <pre className="font-theme-data text-[8px] leading-none text-[var(--accent)] glow-text-subtle hidden sm:block">
-{`    _    ____
+          {`    _    ____
    / \\  |  _ \\
   / _ \\ | |_) |
  / ___ \\|  _ <
 /_/   \\_\\_| \\_\\`}
         </pre>
       )}
-      <span className="text-[var(--accent)] font-theme-data font-bold">
-        [ARAGORA]
-      </span>
+      <span className="text-[var(--accent)] font-theme-data font-bold">[ARAGORA]</span>
       {showStatus && (
         <span
           className={`w-2 h-2 rounded-full ${

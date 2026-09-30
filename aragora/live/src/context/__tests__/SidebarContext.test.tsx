@@ -29,7 +29,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       expect(screen.getByTestId('status')).toHaveTextContent('closed');
@@ -39,7 +39,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       fireEvent.click(screen.getByText('Open'));
@@ -50,7 +50,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       fireEvent.click(screen.getByText('Open'));
@@ -64,7 +64,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       expect(screen.getByTestId('status')).toHaveTextContent('closed');
@@ -80,7 +80,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       fireEvent.click(screen.getByText('Open'));
@@ -94,7 +94,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       expect(screen.getByTestId('status')).toHaveTextContent('closed');
@@ -106,7 +106,7 @@ describe('SidebarContext', () => {
       render(
         <SidebarProvider>
           <TestConsumer />
-        </SidebarProvider>
+        </SidebarProvider>,
       );
 
       expect(document.body.style.overflow).toBe('');

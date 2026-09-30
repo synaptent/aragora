@@ -6,9 +6,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8080',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8080' }));
 
 describe('useAgentRouting', () => {
   beforeEach(() => {
@@ -84,7 +82,7 @@ describe('useAgentRouting', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ primary_domain: 'programming', limit: 5 }),
-        })
+        }),
       );
       expect(recommendations!).toEqual(mockRecommendations);
       expect(result.current.recommendations).toEqual(mockRecommendations);
@@ -93,10 +91,7 @@ describe('useAgentRouting', () => {
     });
 
     it('handles 503 service unavailable', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -163,19 +158,15 @@ describe('useAgentRouting', () => {
         rationale: 'Selected based on programming expertise',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResult,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockResult });
 
       const { result } = renderHook(() => useAgentRouting());
 
       let autoRouteResult: unknown;
       await act(async () => {
-        autoRouteResult = await result.current.autoRoute(
-          'Design a REST API',
-          { task_id: 'task-123' }
-        );
+        autoRouteResult = await result.current.autoRoute('Design a REST API', {
+          task_id: 'task-123',
+        });
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -183,7 +174,7 @@ describe('useAgentRouting', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ task: 'Design a REST API', task_id: 'task-123' }),
-        })
+        }),
       );
       expect(autoRouteResult).toEqual(mockResult);
       expect(result.current.autoRouteResult).toEqual(mockResult);
@@ -191,10 +182,7 @@ describe('useAgentRouting', () => {
     });
 
     it('handles 503 service unavailable', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -227,7 +215,7 @@ describe('useAgentRouting', () => {
         'http://localhost:8080/api/routing/auto-route',
         expect.objectContaining({
           body: JSON.stringify({ task: 'Test task', exclude: ['claude', 'gpt-4'] }),
-        })
+        }),
       );
     });
   });
@@ -240,10 +228,7 @@ describe('useAgentRouting', () => {
         { domain: 'architecture', confidence: 0.6 },
       ];
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ domains: mockDomains }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ domains: mockDomains }) });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -257,7 +242,7 @@ describe('useAgentRouting', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ task: 'How do I implement caching?', top_n: 3 }),
-        })
+        }),
       );
       expect(domains!).toEqual(mockDomains);
       expect(result.current.detectedDomains).toEqual(mockDomains);
@@ -265,10 +250,7 @@ describe('useAgentRouting', () => {
     });
 
     it('handles 503 service unavailable', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -280,10 +262,7 @@ describe('useAgentRouting', () => {
     });
 
     it('returns general as primary domain when empty', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ domains: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ domains: [] }) });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -298,18 +277,8 @@ describe('useAgentRouting', () => {
   describe('getBestTeams', () => {
     it('fetches best teams successfully', async () => {
       const mockTeams = [
-        {
-          agents: ['claude', 'gpt-4'],
-          win_rate: 0.85,
-          debates: 50,
-          avg_consensus_time: 120,
-        },
-        {
-          agents: ['claude', 'gemini'],
-          win_rate: 0.78,
-          debates: 35,
-          avg_consensus_time: 140,
-        },
+        { agents: ['claude', 'gpt-4'], win_rate: 0.85, debates: 50, avg_consensus_time: 120 },
+        { agents: ['claude', 'gemini'], win_rate: 0.78, debates: 35, avg_consensus_time: 140 },
       ];
 
       mockFetch.mockResolvedValueOnce({
@@ -325,17 +294,14 @@ describe('useAgentRouting', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/routing/best-teams?min_debates=5&limit=10'
+        'http://localhost:8080/api/routing/best-teams?min_debates=5&limit=10',
       );
       expect(teams!).toEqual(mockTeams);
       expect(result.current.bestTeams).toEqual(mockTeams);
     });
 
     it('handles 503 service unavailable', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -347,10 +313,7 @@ describe('useAgentRouting', () => {
     });
 
     it('uses default parameters', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ combinations: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ combinations: [] }) });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -359,7 +322,7 @@ describe('useAgentRouting', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/routing/best-teams?min_debates=3&limit=10'
+        'http://localhost:8080/api/routing/best-teams?min_debates=3&limit=10',
       );
     });
   });
@@ -367,20 +330,8 @@ describe('useAgentRouting', () => {
   describe('getDomainLeaderboard', () => {
     it('fetches domain leaderboard successfully', async () => {
       const mockLeaderboard = [
-        {
-          agent: 'claude',
-          score: 1850,
-          wins: 45,
-          losses: 12,
-          expertise: { programming: 0.95 },
-        },
-        {
-          agent: 'gpt-4',
-          score: 1780,
-          wins: 38,
-          losses: 15,
-          expertise: { programming: 0.88 },
-        },
+        { agent: 'claude', score: 1850, wins: 45, losses: 12, expertise: { programming: 0.95 } },
+        { agent: 'gpt-4', score: 1780, wins: 38, losses: 15, expertise: { programming: 0.88 } },
       ];
 
       mockFetch.mockResolvedValueOnce({
@@ -396,17 +347,14 @@ describe('useAgentRouting', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/routing/domain-leaderboard?domain=programming&limit=5'
+        'http://localhost:8080/api/routing/domain-leaderboard?domain=programming&limit=5',
       );
       expect(leaderboard!).toEqual(mockLeaderboard);
       expect(result.current.domainLeaderboard).toEqual(mockLeaderboard);
     });
 
     it('handles 503 service unavailable', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -418,10 +366,7 @@ describe('useAgentRouting', () => {
     });
 
     it('uses default parameters', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ leaderboard: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ leaderboard: [] }) });
 
       const { result } = renderHook(() => useAgentRouting());
 
@@ -430,7 +375,7 @@ describe('useAgentRouting', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/routing/domain-leaderboard?domain=general&limit=10'
+        'http://localhost:8080/api/routing/domain-leaderboard?domain=general&limit=10',
       );
     });
   });
@@ -449,9 +394,7 @@ describe('useAgentRouting', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({
-            domains: [{ domain: 'programming', confidence: 0.9 }],
-          }),
+          json: async () => ({ domains: [{ domain: 'programming', confidence: 0.9 }] }),
         });
 
       const { result } = renderHook(() => useAgentRouting());

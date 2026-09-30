@@ -12,7 +12,12 @@ const ACTION_COLORS: Record<string, string> = {
 export function RetentionDecisions() {
   const { decisions, stats, loading } = useRetentionDecisions();
 
-  if (loading) return <div className="animate-pulse p-4 text-[var(--text-muted)] font-theme-data">Loading retention decisions...</div>;
+  if (loading)
+    return (
+      <div className="animate-pulse p-4 text-[var(--text-muted)] font-theme-data">
+        Loading retention decisions...
+      </div>
+    );
 
   return (
     <div className="space-y-4">
@@ -24,23 +29,44 @@ export function RetentionDecisions() {
       </div>
 
       {decisions.length === 0 ? (
-        <p className="text-[var(--text-muted)] font-theme-data text-sm p-4">No retention decisions yet. Enable the RetentionGate to see surprise-driven memory management.</p>
+        <p className="text-[var(--text-muted)] font-theme-data text-sm p-4">
+          No retention decisions yet. Enable the RetentionGate to see surprise-driven memory
+          management.
+        </p>
       ) : (
         <div className="space-y-2">
           {decisions.map((d, i) => (
-            <div key={d.memory_id || i} className={`card p-3 border-l-2 ${ACTION_COLORS[d.action] || ''}`}>
+            <div
+              key={d.memory_id || i}
+              className={`card p-3 border-l-2 ${ACTION_COLORS[d.action] || ''}`}
+            >
               <div className="flex items-center justify-between mb-1">
-                <span className={`text-[10px] font-theme-data uppercase px-2 py-0.5 border rounded ${ACTION_COLORS[d.action] || ''}`}>{d.action}</span>
-                <span className="text-[10px] font-theme-data text-[var(--text-muted)]">{d.timestamp}</span>
+                <span
+                  className={`text-[10px] font-theme-data uppercase px-2 py-0.5 border rounded ${ACTION_COLORS[d.action] || ''}`}
+                >
+                  {d.action}
+                </span>
+                <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  {d.timestamp}
+                </span>
               </div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-theme-data text-[var(--text-muted)]">Surprise:</span>
+                <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Surprise:
+                </span>
                 <div className="flex-1 h-1.5 bg-[var(--bg)] rounded overflow-hidden max-w-[100px]">
-                  <div className="h-full bg-[var(--acid-green)]" style={{ width: `${d.surprise_score * 100}%` }} />
+                  <div
+                    className="h-full bg-[var(--acid-green)]"
+                    style={{ width: `${d.surprise_score * 100}%` }}
+                  />
                 </div>
-                <span className="text-[10px] font-theme-data text-[var(--acid-green)]">{(d.surprise_score * 100).toFixed(0)}%</span>
+                <span className="text-[10px] font-theme-data text-[var(--acid-green)]">
+                  {(d.surprise_score * 100).toFixed(0)}%
+                </span>
               </div>
-              {d.reason && <p className="text-xs font-theme-data text-[var(--text-muted)]">{d.reason}</p>}
+              {d.reason && (
+                <p className="text-xs font-theme-data text-[var(--text-muted)]">{d.reason}</p>
+              )}
             </div>
           ))}
         </div>

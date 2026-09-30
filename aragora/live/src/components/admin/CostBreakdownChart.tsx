@@ -238,7 +238,10 @@ export function CostBreakdownChart({
           <div>
             <div className="font-theme-data text-xs text-text-muted">AVG COST</div>
             <div className="font-theme-data text-lg text-text">
-              {formatCurrency(sortedData.length > 0 ? totalCost / sortedData.length : 0, currencySymbol)}
+              {formatCurrency(
+                sortedData.length > 0 ? totalCost / sortedData.length : 0,
+                currencySymbol,
+              )}
             </div>
           </div>
           <div>

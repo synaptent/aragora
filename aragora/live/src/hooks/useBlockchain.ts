@@ -55,56 +55,40 @@ export interface ValidationSummary {
 }
 
 export interface BlockchainHealth {
-  connector: {
-    name: string;
-    available: boolean;
-    healthy: boolean;
-    error?: string;
-  };
-  adapter: {
-    error?: string;
-  };
+  connector: { name: string; available: boolean; healthy: boolean; error?: string };
+  adapter: { error?: string };
 }
 
 // --- Hooks ---
 
 export function useBlockchainConfig() {
-  return useSWRFetch<ChainConfig>('/api/v1/blockchain/config', {
+  return useSWRFetch<ChainConfig>('/api/v1/blockchain/config', { refreshInterval: 60000 });
+}
+
+export function useBlockchainAgents(skip = 0, limit = 50) {
+  return useSWRFetch<AgentListResponse>(`/api/v1/blockchain/agents?skip=${skip}&limit=${limit}`, {
     refreshInterval: 60000,
   });
 }
 
-export function useBlockchainAgents(skip = 0, limit = 50) {
-  return useSWRFetch<AgentListResponse>(
-    `/api/v1/blockchain/agents?skip=${skip}&limit=${limit}`,
-    { refreshInterval: 60000 }
-  );
-}
-
 export function useBlockchainAgent(tokenId: number | null) {
   return useSWRFetch<OnChainAgent>(
-    tokenId !== null ? `/api/v1/blockchain/agents/${tokenId}` : null
+    tokenId !== null ? `/api/v1/blockchain/agents/${tokenId}` : null,
   );
 }
 
 export function useBlockchainReputation(tokenId: number | null) {
   return useSWRFetch<ReputationSummary>(
-    tokenId !== null
-      ? `/api/v1/blockchain/agents/${tokenId}/reputation`
-      : null
+    tokenId !== null ? `/api/v1/blockchain/agents/${tokenId}/reputation` : null,
   );
 }
 
 export function useBlockchainValidations(tokenId: number | null) {
   return useSWRFetch<ValidationSummary>(
-    tokenId !== null
-      ? `/api/v1/blockchain/agents/${tokenId}/validations`
-      : null
+    tokenId !== null ? `/api/v1/blockchain/agents/${tokenId}/validations` : null,
   );
 }
 
 export function useBlockchainHealth() {
-  return useSWRFetch<BlockchainHealth>('/api/v1/blockchain/health', {
-    refreshInterval: 30000,
-  });
+  return useSWRFetch<BlockchainHealth>('/api/v1/blockchain/health', { refreshInterval: 30000 });
 }

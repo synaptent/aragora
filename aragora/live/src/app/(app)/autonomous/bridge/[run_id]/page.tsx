@@ -67,10 +67,7 @@ export default function AgentBridgeRunDetailPage() {
       <div className="relative z-10 p-6">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div className="text-sm text-white/50">
-            <Link
-              href="/autonomous/bridge"
-              className="transition-colors hover:text-white"
-            >
+            <Link href="/autonomous/bridge" className="transition-colors hover:text-white">
               Agent Bridge
             </Link>
             <span className="mx-2 text-white/25">/</span>

@@ -47,12 +47,7 @@ interface BatchResult {
   results: VerificationResult[];
   status?: 'error' | 'success';
   error?: string;
-  summary?: {
-    total: number;
-    verified: number;
-    failed: number;
-    timeout: number;
-  };
+  summary?: { total: number; verified: number; failed: number; timeout: number };
 }
 
 interface TranslationResult {
@@ -82,10 +77,15 @@ const STATUS_COLORS: Record<string, { text: string; bg: string }> = {
   error: { text: 'text-acid-red', bg: 'bg-acid-red/20' },
 };
 
-export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: ProofVisualizerPanelProps) {
+export function ProofVisualizerPanel({
+  backendConfig,
+  debateId: _debateId,
+}: ProofVisualizerPanelProps) {
   const apiBase = backendConfig?.apiUrl || DEFAULT_API_BASE;
 
-  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'translate' | 'history'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'translate' | 'history'>(
+    'single',
+  );
   const [backendStatus, setBackendStatus] = useState<VerificationStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -119,7 +119,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
   const fetchStatus = useCallback(async () => {
     try {
       setStatusLoading(true);
-      const response = await fetchWithRetry(`${apiBase}/api/verify/status`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/verify/status`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setBackendStatus(data);
@@ -139,15 +141,14 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
   const fetchHistory = useCallback(async () => {
     try {
       setHistoryLoading(true);
-      const params = new URLSearchParams({
-        limit: '20',
-        offset: String(historyPage * 20),
-      });
+      const params = new URLSearchParams({ limit: '20', offset: String(historyPage * 20) });
       if (historyFilter) {
         params.append('status', historyFilter);
       }
 
-      const response = await fetchWithRetry(`${apiBase}/api/verify/history?${params}`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/verify/history?${params}`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setHistory(data.entries || []);
@@ -208,11 +209,7 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
       }
     } catch (err) {
       logger.error('Verification failed:', err);
-      setSingleResult({
-        status: 'error',
-        error_message: String(err),
-        is_verified: false,
-      });
+      setSingleResult({ status: 'error', error_message: String(err), is_verified: false });
     } finally {
       setLoading(false);
     }
@@ -220,22 +217,18 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
   // Batch verification
   const handleBatchVerify = async () => {
-    const lines = batchClaims.split('\n').filter(l => l.trim());
+    const lines = batchClaims.split('\n').filter((l) => l.trim());
     if (lines.length === 0) return;
 
     setLoading(true);
     setBatchResult(null);
 
     try {
-      const claims = lines.map(line => ({ claim: line.trim() }));
+      const claims = lines.map((line) => ({ claim: line.trim() }));
       const response = await fetch(`${apiBase}/api/verify/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          claims,
-          timeout_per_claim: 30,
-          max_concurrent: 3,
-        }),
+        body: JSON.stringify({ claims, timeout_per_claim: 30, max_concurrent: 3 }),
       });
 
       const data = await response.json();
@@ -263,20 +256,14 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
       const response = await fetch(`${apiBase}/api/verify/translate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          claim: translateClaim.trim(),
-          target_language: targetLanguage,
-        }),
+        body: JSON.stringify({ claim: translateClaim.trim(), target_language: targetLanguage }),
       });
 
       const data = await response.json();
       setTranslationResult(data);
     } catch (err) {
       logger.error('Translation failed:', err);
-      setTranslationResult({
-        status: 'error',
-        error: 'Translation failed. Please try again.',
-      });
+      setTranslationResult({ status: 'error', error: 'Translation failed. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -311,7 +298,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
         </div>
 
         {statusLoading ? (
-          <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading status...</div>
+          <div className="text-[var(--accent)] font-theme-data animate-pulse">
+            Loading status...
+          </div>
         ) : backendStatus ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {backendStatus.backends.map((backend) => (
@@ -323,9 +312,7 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                     : 'border-acid-red/40 bg-acid-red/10'
                 }`}
               >
-                <div className="font-theme-data text-sm mb-1">
-                  {backend.language.toUpperCase()}
-                </div>
+                <div className="font-theme-data text-sm mb-1">{backend.language.toUpperCase()}</div>
                 <div
                   className={`text-xs font-theme-data ${
                     backend.available ? 'text-[var(--accent)]' : 'text-acid-red'
@@ -345,7 +332,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
               <div className="font-theme-data text-sm mb-1">DEEPSEEK-PROVER</div>
               <div
                 className={`text-xs font-theme-data ${
-                  backendStatus.deepseek_prover_available ? 'text-[var(--acid-cyan)]' : 'text-text-muted'
+                  backendStatus.deepseek_prover_available
+                    ? 'text-[var(--acid-cyan)]'
+                    : 'text-text-muted'
                 }`}
               >
                 {backendStatus.deepseek_prover_available ? 'ONLINE' : 'OFFLINE'}
@@ -393,7 +382,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-theme-data text-text-muted mb-2">CLAIM TYPE (optional)</label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-2">
+                    CLAIM TYPE (optional)
+                  </label>
                   <select
                     value={claimType}
                     onChange={(e) => setClaimType(e.target.value)}
@@ -407,7 +398,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                 </div>
 
                 <div>
-                  <label className="block text-xs font-theme-data text-text-muted mb-2">TIMEOUT (seconds)</label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-2">
+                    TIMEOUT (seconds)
+                  </label>
                   <input
                     type="number"
                     value={timeout}
@@ -430,7 +423,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-2">CONTEXT (optional)</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-2">
+                  CONTEXT (optional)
+                </label>
                 <input
                   type="text"
                   value={context}
@@ -453,7 +448,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
               <div className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div className="p-2 bg-surface rounded">
-                    <div className={`text-lg font-theme-data ${singleResult.is_verified ? 'text-[var(--accent)]' : 'text-acid-red'}`}>
+                    <div
+                      className={`text-lg font-theme-data ${singleResult.is_verified ? 'text-[var(--accent)]' : 'text-acid-red'}`}
+                    >
                       {singleResult.is_verified ? 'YES' : 'NO'}
                     </div>
                     <div className="text-xs font-theme-data text-text-muted">verified</div>
@@ -480,7 +477,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
                 {singleResult.formal_statement && (
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-2">FORMAL STATEMENT</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-2">
+                      FORMAL STATEMENT
+                    </label>
                     <pre className="bg-surface p-3 rounded font-theme-data text-sm overflow-x-auto border border-[var(--accent)]/20">
                       {singleResult.formal_statement}
                     </pre>
@@ -489,7 +488,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
                 {singleResult.error_message && (
                   <div>
-                    <label className="block text-xs font-theme-data text-acid-red mb-2">ERROR</label>
+                    <label className="block text-xs font-theme-data text-acid-red mb-2">
+                      ERROR
+                    </label>
                     <pre className="bg-acid-red/10 p-3 rounded font-theme-data text-sm text-acid-red border border-acid-red/30">
                       {singleResult.error_message}
                     </pre>
@@ -505,10 +506,7 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                 {/* Proof Tree Visualization */}
                 {singleResult.history_id && singleResult.is_verified && (
                   <div className="mt-6 pt-4 border-t border-[var(--accent)]/20">
-                    <ProofTreeVisualization
-                      historyId={singleResult.history_id}
-                      apiBase={apiBase}
-                    />
+                    <ProofTreeVisualization historyId={singleResult.history_id} apiBase={apiBase} />
                   </div>
                 )}
               </div>
@@ -554,31 +552,44 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
               {/* Summary */}
               {batchResult.summary && (
-              <div className="grid grid-cols-4 gap-4 mb-6 text-center">
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-lg font-theme-data text-text">{batchResult.summary.total}</div>
-                  <div className="text-xs font-theme-data text-text-muted">total</div>
+                <div className="grid grid-cols-4 gap-4 mb-6 text-center">
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-lg font-theme-data text-text">
+                      {batchResult.summary.total}
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">total</div>
+                  </div>
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-lg font-theme-data text-[var(--accent)]">
+                      {batchResult.summary.verified}
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">verified</div>
+                  </div>
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-lg font-theme-data text-acid-red">
+                      {batchResult.summary.failed}
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">failed</div>
+                  </div>
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-lg font-theme-data text-[var(--acid-yellow)]">
+                      {batchResult.summary.timeout}
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">timeout</div>
+                  </div>
                 </div>
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-lg font-theme-data text-[var(--accent)]">{batchResult.summary.verified}</div>
-                  <div className="text-xs font-theme-data text-text-muted">verified</div>
-                </div>
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-lg font-theme-data text-acid-red">{batchResult.summary.failed}</div>
-                  <div className="text-xs font-theme-data text-text-muted">failed</div>
-                </div>
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-lg font-theme-data text-[var(--acid-yellow)]">{batchResult.summary.timeout}</div>
-                  <div className="text-xs font-theme-data text-text-muted">timeout</div>
-                </div>
-              </div>
               )}
 
               {/* Individual Results */}
               <div className="space-y-2">
                 {batchResult.results.map((result, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-surface rounded">
-                    <span className="font-theme-data text-sm text-text-muted">Claim {index + 1}</span>
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-surface rounded"
+                  >
+                    <span className="font-theme-data text-sm text-text-muted">
+                      Claim {index + 1}
+                    </span>
                     {renderStatusBadge(result.status)}
                   </div>
                 ))}
@@ -592,7 +603,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
       {activeTab === 'translate' && (
         <div className="space-y-4">
           <div className="card p-4">
-            <h4 className="font-theme-data text-[var(--acid-cyan)] mb-4">TRANSLATE TO FORMAL LANGUAGE</h4>
+            <h4 className="font-theme-data text-[var(--acid-cyan)] mb-4">
+              TRANSLATE TO FORMAL LANGUAGE
+            </h4>
             <p className="text-xs font-theme-data text-text-muted mb-4">
               Convert natural language claims to formal notation without verification
             </p>
@@ -607,7 +620,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <label className="block text-xs font-theme-data text-text-muted mb-2">TARGET LANGUAGE</label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-2">
+                    TARGET LANGUAGE
+                  </label>
                   <select
                     value={targetLanguage}
                     onChange={(e) => setTargetLanguage(e.target.value as 'lean4' | 'z3_smt')}
@@ -636,12 +651,18 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
             <div className="card p-4">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-theme-data text-[var(--acid-cyan)]">TRANSLATION RESULT</h4>
-                <span className={`px-2 py-0.5 rounded text-xs font-theme-data ${
-                  translationResult.status === 'error' || !translationResult.success
-                    ? 'bg-acid-red/20 text-acid-red'
-                    : 'bg-[var(--accent)]/20 text-[var(--accent)]'
-                }`}>
-                  {translationResult.status === 'error' ? 'ERROR' : translationResult.success ? 'SUCCESS' : 'FAILED'}
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-theme-data ${
+                    translationResult.status === 'error' || !translationResult.success
+                      ? 'bg-acid-red/20 text-acid-red'
+                      : 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                  }`}
+                >
+                  {translationResult.status === 'error'
+                    ? 'ERROR'
+                    : translationResult.success
+                      ? 'SUCCESS'
+                      : 'FAILED'}
                 </span>
               </div>
 
@@ -652,7 +673,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
               {translationResult.formal_statement && (
                 <div className="mb-4">
-                  <label className="block text-xs font-theme-data text-text-muted mb-2">FORMAL STATEMENT</label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-2">
+                    FORMAL STATEMENT
+                  </label>
                   <pre className="bg-surface p-3 rounded font-theme-data text-sm overflow-x-auto border border-[var(--accent)]/20">
                     {translationResult.formal_statement}
                   </pre>
@@ -661,26 +684,26 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
 
               {/* Only show metrics if we have valid data (not error state) */}
               {translationResult.language && (
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-sm font-theme-data text-[var(--acid-cyan)]">
-                    {translationResult.language.toUpperCase()}
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-sm font-theme-data text-[var(--acid-cyan)]">
+                      {translationResult.language.toUpperCase()}
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">language</div>
                   </div>
-                  <div className="text-xs font-theme-data text-text-muted">language</div>
-                </div>
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-sm font-theme-data text-text">
-                    {((translationResult.confidence ?? 0) * 100).toFixed(0)}%
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-sm font-theme-data text-text">
+                      {((translationResult.confidence ?? 0) * 100).toFixed(0)}%
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">confidence</div>
                   </div>
-                  <div className="text-xs font-theme-data text-text-muted">confidence</div>
-                </div>
-                <div className="p-2 bg-surface rounded">
-                  <div className="text-sm font-theme-data text-text">
-                    {(translationResult.translation_time_ms ?? 0).toFixed(0)}ms
+                  <div className="p-2 bg-surface rounded">
+                    <div className="text-sm font-theme-data text-text">
+                      {(translationResult.translation_time_ms ?? 0).toFixed(0)}ms
+                    </div>
+                    <div className="text-xs font-theme-data text-text-muted">time</div>
                   </div>
-                  <div className="text-xs font-theme-data text-text-muted">time</div>
                 </div>
-              </div>
               )}
 
               {translationResult.error_message && (
@@ -761,7 +784,8 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                 {/* Pagination */}
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--accent)]/20">
                   <div className="text-xs font-theme-data text-text-muted">
-                    Showing {historyPage * 20 + 1} - {Math.min((historyPage + 1) * 20, historyTotal)} of {historyTotal}
+                    Showing {historyPage * 20 + 1} -{' '}
+                    {Math.min((historyPage + 1) * 20, historyTotal)} of {historyTotal}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -814,7 +838,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
               <div className="space-y-4">
                 {/* Claim */}
                 <div>
-                  <label className="block text-xs font-theme-data text-text-muted mb-2">ORIGINAL CLAIM</label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-2">
+                    ORIGINAL CLAIM
+                  </label>
                   <div className="bg-surface p-3 rounded font-theme-data text-sm border border-[var(--accent)]/20">
                     {selectedHistoryEntry.claim}
                   </div>
@@ -823,7 +849,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                 {/* Result status and metrics */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div className="p-2 bg-surface rounded">
-                    <div className={`text-lg font-theme-data ${selectedHistoryEntry.result.is_verified ? 'text-[var(--accent)]' : 'text-acid-red'}`}>
+                    <div
+                      className={`text-lg font-theme-data ${selectedHistoryEntry.result.is_verified ? 'text-[var(--accent)]' : 'text-acid-red'}`}
+                    >
                       {selectedHistoryEntry.result.is_verified ? 'YES' : 'NO'}
                     </div>
                     <div className="text-xs font-theme-data text-text-muted">verified</div>
@@ -851,7 +879,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                 {/* Formal statement */}
                 {selectedHistoryEntry.result.formal_statement && (
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-2">FORMAL STATEMENT</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-2">
+                      FORMAL STATEMENT
+                    </label>
                     <pre className="bg-surface p-3 rounded font-theme-data text-sm overflow-x-auto border border-[var(--accent)]/20">
                       {selectedHistoryEntry.result.formal_statement}
                     </pre>
@@ -861,7 +891,9 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
                 {/* Error message */}
                 {selectedHistoryEntry.result.error_message && (
                   <div>
-                    <label className="block text-xs font-theme-data text-acid-red mb-2">ERROR</label>
+                    <label className="block text-xs font-theme-data text-acid-red mb-2">
+                      ERROR
+                    </label>
                     <pre className="bg-acid-red/10 p-3 rounded font-theme-data text-sm text-acid-red border border-acid-red/30">
                       {selectedHistoryEntry.result.error_message}
                     </pre>
@@ -884,10 +916,7 @@ export function ProofVisualizerPanel({ backendConfig, debateId: _debateId }: Pro
               {/* Proof Tree Visualization */}
               {showProofTree && selectedHistoryEntry.id && (
                 <div className="mt-6 pt-4 border-t border-[var(--accent)]/20">
-                  <ProofTreeVisualization
-                    historyId={selectedHistoryEntry.id}
-                    apiBase={apiBase}
-                  />
+                  <ProofTreeVisualization historyId={selectedHistoryEntry.id} apiBase={apiBase} />
                 </div>
               )}
             </div>

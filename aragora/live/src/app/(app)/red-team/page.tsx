@@ -9,7 +9,8 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const RedTeamAnalysisPanel = dynamic(
-  () => import('@/components/RedTeamAnalysisPanel').then(m => ({ default: m.RedTeamAnalysisPanel })),
+  () =>
+    import('@/components/RedTeamAnalysisPanel').then((m) => ({ default: m.RedTeamAnalysisPanel })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +18,7 @@ const RedTeamAnalysisPanel = dynamic(
         <div className="h-[600px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function RedTeamPage() {
@@ -69,12 +70,10 @@ export default function RedTeamPage() {
         {/* Content */}
         <div className="container mx-auto px-4 py-6">
           <div className="mb-6">
-            <h1 className="text-2xl font-theme-data text-warning mb-2">
-              {'>'} RED TEAM ANALYSIS
-            </h1>
+            <h1 className="text-2xl font-theme-data text-warning mb-2">{'>'} RED TEAM ANALYSIS</h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Security and robustness testing with adversarial attacks.
-              Stress-test arguments and find weaknesses in reasoning.
+              Security and robustness testing with adversarial attacks. Stress-test arguments and
+              find weaknesses in reasoning.
             </p>
           </div>
 
@@ -124,12 +123,8 @@ export default function RedTeamPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // RED TEAM ANALYSIS
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // RED TEAM ANALYSIS</p>
         </footer>
       </main>
     </>

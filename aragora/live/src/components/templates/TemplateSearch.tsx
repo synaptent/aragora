@@ -28,11 +28,11 @@ export function TemplateSearch({ onSelect }: TemplateSearchProps) {
     setIsSearching(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/templates/recommend?question=${encodeURIComponent(q)}`
+        `${API_BASE_URL}/api/v1/templates/recommend?question=${encodeURIComponent(q)}`,
       );
       if (response.ok) {
         const data = await response.json();
-        const items = Array.isArray(data) ? data : data.templates ?? [];
+        const items = Array.isArray(data) ? data : (data.templates ?? []);
         setResults(items.slice(0, 3));
       } else {
         setResults([]);
@@ -87,7 +87,9 @@ export function TemplateSearch({ onSelect }: TemplateSearchProps) {
                   {Math.round((result.relevance ?? 0) * 100)}% match
                 </span>
               </div>
-              <p className="text-xs font-theme-data text-text-muted line-clamp-1">{result.description}</p>
+              <p className="text-xs font-theme-data text-text-muted line-clamp-1">
+                {result.description}
+              </p>
             </button>
           ))}
         </div>

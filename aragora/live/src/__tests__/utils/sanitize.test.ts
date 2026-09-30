@@ -2,12 +2,7 @@
  * Tests for sanitize utilities
  */
 
-import {
-  escapeHtml,
-  sanitizeUrl,
-  validateFileUpload,
-  sanitizeSuggestion,
-} from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl, validateFileUpload, sanitizeSuggestion } from '@/utils/sanitize';
 
 describe('sanitize utilities', () => {
   describe('escapeHtml', () => {
@@ -33,7 +28,7 @@ describe('sanitize utilities', () => {
 
     it('escapes multiple special characters', () => {
       expect(escapeHtml('<script>alert("xss")</script>')).toBe(
-        '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'
+        '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;',
       );
     });
 
@@ -53,7 +48,7 @@ describe('sanitize utilities', () => {
 
     it('allows https URLs', () => {
       expect(sanitizeUrl('https://example.com/path?query=1')).toBe(
-        'https://example.com/path?query=1'
+        'https://example.com/path?query=1',
       );
     });
 

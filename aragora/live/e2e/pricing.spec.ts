@@ -28,7 +28,9 @@ test.describe('Pricing Page', () => {
       await aragoraPage.dismissAllOverlays();
 
       // Should have pricing-related header text
-      await expect(page.locator('text=/pricing|plans|choose your plan/i').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('text=/pricing|plans|choose your plan/i').first()).toBeVisible({
+        timeout: 10000,
+      });
     });
   });
 
@@ -76,7 +78,9 @@ test.describe('Pricing Page', () => {
       await aragoraPage.dismissAllOverlays();
 
       // Should show feature items (stress-tests, agents, etc.)
-      await expect(page.locator('text=/stress-test|debates/i').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('text=/stress-test|debates/i').first()).toBeVisible({
+        timeout: 10000,
+      });
       await expect(page.locator('text=/agent/i').first()).toBeVisible();
     });
 
@@ -86,7 +90,11 @@ test.describe('Pricing Page', () => {
 
       // Should have visual indicators for included features (checkmarks, etc.)
       // and excluded features (X, strikethrough, etc.)
-      const hasFeatureIndicators = await page.locator('[class*="check"], [class*="include"], svg').first().isVisible().catch(() => false);
+      const hasFeatureIndicators = await page
+        .locator('[class*="check"], [class*="include"], svg')
+        .first()
+        .isVisible()
+        .catch(() => false);
       expect(hasFeatureIndicators || true).toBe(true); // Pass if any indicator exists
     });
   });
@@ -97,12 +105,17 @@ test.describe('Pricing Page', () => {
       await aragoraPage.dismissAllOverlays();
 
       // Should have upgrade/subscribe buttons
-      const ctaButtons = page.locator('button:has-text(/upgrade|get started|subscribe|current plan|contact/i), a:has-text(/upgrade|get started|subscribe|current plan|contact/i)');
+      const ctaButtons = page.locator(
+        'button:has-text(/upgrade|get started|subscribe|current plan|contact/i), a:has-text(/upgrade|get started|subscribe|current plan|contact/i)',
+      );
       const buttonCount = await ctaButtons.count();
       expect(buttonCount).toBeGreaterThanOrEqual(3); // At least 3 plans should have CTAs
     });
 
-    test('should show "Current Plan" for free tier when not logged in', async ({ page, aragoraPage }) => {
+    test('should show "Current Plan" for free tier when not logged in', async ({
+      page,
+      aragoraPage,
+    }) => {
       await page.goto('/pricing');
       await aragoraPage.dismissAllOverlays();
 
@@ -125,15 +138,18 @@ test.describe('Pricing Page', () => {
     test('should navigate to checkout when clicking upgrade', async ({ page, aragoraPage }) => {
       // Mock authentication
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       // Mock checkout endpoint
@@ -143,9 +159,7 @@ test.describe('Pricing Page', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            checkout: { url: 'https://checkout.stripe.com/session/test' },
-          }),
+          body: JSON.stringify({ checkout: { url: 'https://checkout.stripe.com/session/test' } }),
         });
       });
 
@@ -162,7 +176,10 @@ test.describe('Pricing Page', () => {
       }
     });
 
-    test('should redirect to login when clicking upgrade without auth', async ({ page, aragoraPage }) => {
+    test('should redirect to login when clicking upgrade without auth', async ({
+      page,
+      aragoraPage,
+    }) => {
       await page.goto('/pricing');
       await aragoraPage.dismissAllOverlays();
 
@@ -174,7 +191,10 @@ test.describe('Pricing Page', () => {
         // Should redirect to login or show auth modal
         await page.waitForTimeout(1000);
         const onLoginPage = page.url().includes('login');
-        const hasAuthModal = await page.locator('text=/sign in|log in/i').isVisible().catch(() => false);
+        const hasAuthModal = await page
+          .locator('text=/sign in|log in/i')
+          .isVisible()
+          .catch(() => false);
 
         // One of these should be true
         expect(onLoginPage || hasAuthModal || true).toBe(true);
@@ -189,9 +209,9 @@ test.describe('Pricing Page', () => {
 
       // Plans should be displayed side by side for comparison
       // Check that multiple plan cards are visible
-      const planCards = page.locator('[class*="card"], [class*="plan"], [class*="pricing"]').filter({
-        has: page.locator('text=/\\$/'),
-      });
+      const planCards = page
+        .locator('[class*="card"], [class*="plan"], [class*="pricing"]')
+        .filter({ has: page.locator('text=/\\$/') });
       const cardCount = await planCards.count();
       expect(cardCount).toBeGreaterThanOrEqual(2);
     });
@@ -257,15 +277,18 @@ test.describe('Pricing Page', () => {
 
     test('should have link to billing for authenticated users', async ({ page, aragoraPage }) => {
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/pricing');

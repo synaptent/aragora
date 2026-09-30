@@ -14,9 +14,7 @@ export function YourTurnStep() {
   return (
     <div className="space-y-6 text-center py-4">
       <div>
-        <h2 className="text-xl font-theme-data text-[var(--acid-green)] mb-2">
-          Your Turn
-        </h2>
+        <h2 className="text-xl font-theme-data text-[var(--acid-green)] mb-2">Your Turn</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
           You have seen how AI agents collaborate. Now run your own debate in the arena.
         </p>

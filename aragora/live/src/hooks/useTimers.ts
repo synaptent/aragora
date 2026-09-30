@@ -51,7 +51,7 @@ export function useTimeout() {
 export function useTimeoutEffect(
   callback: () => void,
   delay: number | null,
-  deps: React.DependencyList = []
+  deps: React.DependencyList = [],
 ) {
   const callbackRef = useRef(callback);
 
@@ -118,7 +118,7 @@ export function useInterval() {
 export function useIntervalEffect(
   callback: () => void,
   delay: number | null,
-  deps: React.DependencyList = []
+  deps: React.DependencyList = [],
 ) {
   const callbackRef = useRef(callback);
 
@@ -170,7 +170,6 @@ export function useDebounce<T>(value: T, delay: number): T {
   return valueRef.current;
 }
 
-
 /**
  * Hook for throttling a callback. Returns a throttled version of the callback
  * that can only be called once per the specified delay.
@@ -180,7 +179,7 @@ export function useDebounce<T>(value: T, delay: number): T {
  */
 export function useThrottle<T extends (...args: unknown[]) => unknown>(
   callback: T,
-  delay: number
+  delay: number,
 ): T {
   const lastRan = useRef(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -200,7 +199,6 @@ export function useThrottle<T extends (...args: unknown[]) => unknown>(
     };
   }, []);
 
-
   return useCallback(
     ((...args) => {
       const now = Date.now();
@@ -217,6 +215,6 @@ export function useThrottle<T extends (...args: unknown[]) => unknown>(
         }, remaining);
       }
     }) as T,
-    [delay]
+    [delay],
   );
 }

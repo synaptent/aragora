@@ -97,23 +97,24 @@ function ProbeReportsPanelInner({
     }
   }, [apiBase, agentFilter, offset]);
 
-  const fetchReportDetails = useCallback(async (reportId: string) => {
-    setLoadingDetails(true);
-    try {
-      const response = await fetchWithRetry(
-        `${apiBase}/api/probes/reports/${reportId}`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+  const fetchReportDetails = useCallback(
+    async (reportId: string) => {
+      setLoadingDetails(true);
+      try {
+        const response = await fetchWithRetry(`${apiBase}/api/probes/reports/${reportId}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data: ProbeReport = await response.json();
+        setSelectedReport(data);
+      } catch (err) {
+        logger.error('Failed to load report details:', err);
+      } finally {
+        setLoadingDetails(false);
       }
-      const data: ProbeReport = await response.json();
-      setSelectedReport(data);
-    } catch (err) {
-      logger.error('Failed to load report details:', err);
-    } finally {
-      setLoadingDetails(false);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     fetchReports();
@@ -155,9 +156,7 @@ function ProbeReportsPanelInner({
         {/* Reports List */}
         <div className="space-y-2">
           {reports.length === 0 && !loading && (
-            <div className="text-gray-500 text-center py-8">
-              No probe reports found
-            </div>
+            <div className="text-gray-500 text-center py-8">No probe reports found</div>
           )}
 
           {reports.map((report) => (
@@ -173,17 +172,13 @@ function ProbeReportsPanelInner({
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-white/80">{report.target_agent}</div>
-                  <div className="text-gray-500 text-xs">
-                    {formatDate(report.created_at)}
-                  </div>
+                  <div className="text-gray-500 text-xs">{formatDate(report.created_at)}</div>
                 </div>
                 <div className="text-right">
                   <div className={getPassRateColor(1 - report.vulnerability_rate)}>
                     {((1 - report.vulnerability_rate) * 100).toFixed(0)}% pass
                   </div>
-                  <div className="text-gray-500 text-xs">
-                    {report.probes_run} probes
-                  </div>
+                  <div className="text-gray-500 text-xs">{report.probes_run} probes</div>
                 </div>
               </div>
             </div>
@@ -239,19 +234,13 @@ function ProbeReportsPanelInner({
                     </span>
                   )}
                   {selectedReport.summary.high > 0 && (
-                    <span className="text-orange-400">
-                      High: {selectedReport.summary.high}
-                    </span>
+                    <span className="text-orange-400">High: {selectedReport.summary.high}</span>
                   )}
                   {selectedReport.summary.medium > 0 && (
-                    <span className="text-yellow-400">
-                      Medium: {selectedReport.summary.medium}
-                    </span>
+                    <span className="text-yellow-400">Medium: {selectedReport.summary.medium}</span>
                   )}
                   {selectedReport.summary.low > 0 && (
-                    <span className="text-blue-400">
-                      Low: {selectedReport.summary.low}
-                    </span>
+                    <span className="text-blue-400">Low: {selectedReport.summary.low}</span>
                   )}
                 </div>
               )}
@@ -263,10 +252,12 @@ function ProbeReportsPanelInner({
                   <div key={type} className="border border-green-500/10 p-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-white/80 capitalize">{type.replace('_', ' ')}</span>
-                      <span className={getPassRateColor(
-                        results.filter(r => r.passed).length / results.length
-                      )}>
-                        {results.filter(r => r.passed).length}/{results.length} passed
+                      <span
+                        className={getPassRateColor(
+                          results.filter((r) => r.passed).length / results.length,
+                        )}
+                      >
+                        {results.filter((r) => r.passed).length}/{results.length} passed
                       </span>
                     </div>
                     <div className="space-y-1">
@@ -284,9 +275,7 @@ function ProbeReportsPanelInner({
                         </div>
                       ))}
                       {results.length > 3 && (
-                        <div className="text-gray-500 text-xs">
-                          +{results.length - 3} more
-                        </div>
+                        <div className="text-gray-500 text-xs">+{results.length - 3} more</div>
                       )}
                     </div>
                   </div>
@@ -306,9 +295,7 @@ function ProbeReportsPanelInner({
               )}
             </div>
           ) : (
-            <div className="text-gray-500 text-center py-8">
-              Select a report to view details
-            </div>
+            <div className="text-gray-500 text-center py-8">Select a report to view details</div>
           )}
         </div>
       </div>
@@ -341,9 +328,6 @@ function ProbeReportsPanelInner({
   );
 }
 
-export const ProbeReportsPanel = withErrorBoundary(
-  ProbeReportsPanelInner,
-  'ProbeReportsPanel'
-);
+export const ProbeReportsPanel = withErrorBoundary(ProbeReportsPanelInner, 'ProbeReportsPanel');
 
 export default ProbeReportsPanel;

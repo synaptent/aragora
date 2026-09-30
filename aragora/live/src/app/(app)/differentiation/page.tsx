@@ -76,11 +76,7 @@ interface MemoryData {
       slow_tier: number;
       glacial_tier: number;
     };
-    knowledge_mound: {
-      total_artifacts: number;
-      adapter_count: number;
-      cross_debate_links: number;
-    };
+    knowledge_mound: { total_artifacts: number; adapter_count: number; cross_debate_links: number };
     learning_indicators: {
       decisions_informing_future: number;
       knowledge_reuse_rate: number;
@@ -171,7 +167,9 @@ function EloDistribution({ agents }: { agents: CalibrationAgent[] }) {
   if (agents.length === 0) {
     return (
       <div className="border border-[var(--acid-cyan)]/20 bg-surface/50 rounded p-4">
-        <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">{'>'} ELO DISTRIBUTION</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">
+          {'>'} ELO DISTRIBUTION
+        </h3>
         <p className="text-text-muted font-theme-data text-xs">No agent data available</p>
       </div>
     );
@@ -183,7 +181,9 @@ function EloDistribution({ agents }: { agents: CalibrationAgent[] }) {
 
   return (
     <div className="border border-[var(--acid-cyan)]/20 bg-surface/50 rounded p-4">
-      <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">{'>'} ELO DISTRIBUTION</h3>
+      <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">
+        {'>'} ELO DISTRIBUTION
+      </h3>
       <div className="space-y-1">
         {agents.slice(0, 10).map((agent) => {
           const pct = ((agent.elo - minElo) / range) * 100;
@@ -211,11 +211,7 @@ function EloDistribution({ agents }: { agents: CalibrationAgent[] }) {
 
 // ── Memory Tier Visualization ──────────────────────────────────────
 
-function MemoryTiers({
-  memory,
-}: {
-  memory: MemoryData['data']['memory'];
-}) {
+function MemoryTiers({ memory }: { memory: MemoryData['data']['memory'] }) {
   const tiers = [
     { label: 'FAST', count: memory.fast_tier, color: '#39ff14', ttl: '1 min' },
     { label: 'MEDIUM', count: memory.medium_tier, color: '#00ffff', ttl: '1 hour' },
@@ -282,19 +278,12 @@ function VettingTable({ evidence }: { evidence: VettingEvidence[] }) {
         </thead>
         <tbody>
           {evidence.slice(0, 15).map((e) => (
-            <tr
-              key={e.receipt_id}
-              className="border-b border-surface/50 hover:bg-surface/30"
-            >
-              <td className="p-2 text-text max-w-[200px] truncate">
-                {e.question || e.receipt_id}
-              </td>
+            <tr key={e.receipt_id} className="border-b border-surface/50 hover:bg-surface/30">
+              <td className="p-2 text-text max-w-[200px] truncate">{e.question || e.receipt_id}</td>
               <td className="p-2 text-center">
                 <span
                   className={
-                    e.dissenting_views_count > 0
-                      ? 'text-[var(--acid-yellow)]'
-                      : 'text-text-muted'
+                    e.dissenting_views_count > 0 ? 'text-[var(--acid-yellow)]' : 'text-text-muted'
                   }
                 >
                   {e.dissenting_views_count}
@@ -303,9 +292,7 @@ function VettingTable({ evidence }: { evidence: VettingEvidence[] }) {
               <td className="p-2 text-center">
                 <span
                   className={
-                    e.unresolved_tensions_count > 0
-                      ? 'text-[var(--crimson)]'
-                      : 'text-text-muted'
+                    e.unresolved_tensions_count > 0 ? 'text-[var(--crimson)]' : 'text-text-muted'
                   }
                 >
                   {e.unresolved_tensions_count}
@@ -354,14 +341,9 @@ function ComparisonCard({
   unit: string;
   higherIsBetter: boolean;
 }) {
-  const aragoraBetter = higherIsBetter
-    ? aragora > singleAgent
-    : aragora < singleAgent;
-  const diff = higherIsBetter
-    ? aragora - singleAgent
-    : singleAgent - aragora;
-  const pctImprovement =
-    singleAgent !== 0 ? (diff / Math.abs(singleAgent)) * 100 : 0;
+  const aragoraBetter = higherIsBetter ? aragora > singleAgent : aragora < singleAgent;
+  const diff = higherIsBetter ? aragora - singleAgent : singleAgent - aragora;
+  const pctImprovement = singleAgent !== 0 ? (diff / Math.abs(singleAgent)) * 100 : 0;
 
   return (
     <div className="border border-[var(--accent)]/20 bg-surface/50 rounded p-3">
@@ -372,13 +354,15 @@ function ComparisonCard({
         <div>
           <div className="text-[10px] font-theme-data text-text-muted">ARAGORA</div>
           <div className="text-lg font-theme-data text-[var(--accent)]">
-            {aragora.toFixed(unit === '%' ? 1 : 0)}{unit}
+            {aragora.toFixed(unit === '%' ? 1 : 0)}
+            {unit}
           </div>
         </div>
         <div>
           <div className="text-[10px] font-theme-data text-text-muted">SINGLE AGENT</div>
           <div className="text-lg font-theme-data text-text-muted">
-            {singleAgent.toFixed(unit === '%' ? 1 : 0)}{unit}
+            {singleAgent.toFixed(unit === '%' ? 1 : 0)}
+            {unit}
           </div>
         </div>
       </div>
@@ -397,28 +381,25 @@ export default function DifferentiationPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const { config: _backendConfig } = useBackend();
 
-  const { data: summaryRaw, isLoading: summaryLoading } =
-    useSWRFetch<SummaryData>('/api/v1/differentiation/summary', {
-      refreshInterval: 30000,
-    });
+  const { data: summaryRaw, isLoading: summaryLoading } = useSWRFetch<SummaryData>(
+    '/api/v1/differentiation/summary',
+    { refreshInterval: 30000 },
+  );
 
-  const { data: vettingRaw, isLoading: vettingLoading } =
-    useSWRFetch<VettingData>('/api/v1/differentiation/vetting', {
-      refreshInterval: 60000,
-      enabled: activeTab === 'overview' || activeTab === 'vetting',
-    });
+  const { data: vettingRaw, isLoading: vettingLoading } = useSWRFetch<VettingData>(
+    '/api/v1/differentiation/vetting',
+    { refreshInterval: 60000, enabled: activeTab === 'overview' || activeTab === 'vetting' },
+  );
 
-  const { data: calibrationRaw, isLoading: calibrationLoading } =
-    useSWRFetch<CalibrationData>('/api/v1/differentiation/calibration', {
-      refreshInterval: 60000,
-      enabled: activeTab === 'overview' || activeTab === 'calibration',
-    });
+  const { data: calibrationRaw, isLoading: calibrationLoading } = useSWRFetch<CalibrationData>(
+    '/api/v1/differentiation/calibration',
+    { refreshInterval: 60000, enabled: activeTab === 'overview' || activeTab === 'calibration' },
+  );
 
-  const { data: memoryRaw, isLoading: memoryLoading } =
-    useSWRFetch<MemoryData>('/api/v1/differentiation/memory', {
-      refreshInterval: 60000,
-      enabled: activeTab === 'overview' || activeTab === 'memory',
-    });
+  const { data: memoryRaw, isLoading: memoryLoading } = useSWRFetch<MemoryData>(
+    '/api/v1/differentiation/memory',
+    { refreshInterval: 60000, enabled: activeTab === 'overview' || activeTab === 'memory' },
+  );
 
   const summary = summaryRaw?.data;
   const vetting = vettingRaw?.data;
@@ -469,8 +450,8 @@ export default function DifferentiationPage() {
               {'>'} DIFFERENTIATION DASHBOARD
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Why multi-agent adversarial debate outperforms single-model decisions.
-              Live evidence from your decision data.
+              Why multi-agent adversarial debate outperforms single-model decisions. Live evidence
+              from your decision data.
             </p>
           </div>
 
@@ -502,15 +483,11 @@ export default function DifferentiationPage() {
                 loading={summaryLoading}
               />
             )}
-            {activeTab === 'vetting' && (
-              <VettingTab vetting={vetting} loading={vettingLoading} />
-            )}
+            {activeTab === 'vetting' && <VettingTab vetting={vetting} loading={vettingLoading} />}
             {activeTab === 'calibration' && (
               <CalibrationTab calibration={calibration} loading={calibrationLoading} />
             )}
-            {activeTab === 'memory' && (
-              <MemoryTab memory={memory} loading={memoryLoading} />
-            )}
+            {activeTab === 'memory' && <MemoryTab memory={memory} loading={memoryLoading} />}
           </PanelErrorBoundary>
         </div>
       </main>
@@ -575,9 +552,7 @@ function OverviewTab({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Pillar 1: Adversarial Vetting */}
         <div className="border border-[var(--accent)]/20 bg-surface/30 rounded p-4">
-          <h3 className="text-sm font-theme-data text-[var(--accent)] mb-1">
-            ADVERSARIAL VETTING
-          </h3>
+          <h3 className="text-sm font-theme-data text-[var(--accent)] mb-1">ADVERSARIAL VETTING</h3>
           <p className="text-[10px] font-theme-data text-text-muted mb-3">
             Every decision stress-tested by opposing agents
           </p>
@@ -639,18 +614,14 @@ function OverviewTab({
 
         {/* Pillar 3: Institutional Memory */}
         <div className="border border-purple-500/20 bg-surface/30 rounded p-4">
-          <h3 className="text-sm font-theme-data text-purple-400 mb-1">
-            INSTITUTIONAL MEMORY
-          </h3>
+          <h3 className="text-sm font-theme-data text-purple-400 mb-1">INSTITUTIONAL MEMORY</h3>
           <p className="text-[10px] font-theme-data text-text-muted mb-3">
             Past decisions inform future ones through multi-tier memory
           </p>
           <div className="space-y-2 text-xs font-theme-data">
             <div className="flex justify-between">
               <span className="text-text-muted">Memory entries</span>
-              <span className="text-purple-400">
-                {memory?.memory.total_entries ?? 0}
-              </span>
+              <span className="text-purple-400">{memory?.memory.total_entries ?? 0}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">KM artifacts</span>
@@ -660,9 +631,7 @@ function OverviewTab({
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">KM adapters</span>
-              <span className="text-text">
-                {memory?.knowledge_mound.adapter_count ?? 41}
-              </span>
+              <span className="text-text">{memory?.knowledge_mound.adapter_count ?? 41}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Knowledge reuse</span>
@@ -682,32 +651,34 @@ function OverviewTab({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <ComparisonCard
             title="Blind Spot Detection"
-            aragora={vetting?.aggregates.adversarial_rate
-              ? vetting.aggregates.adversarial_rate * 100 : 85}
+            aragora={
+              vetting?.aggregates.adversarial_rate ? vetting.aggregates.adversarial_rate * 100 : 85
+            }
             singleAgent={0}
             unit="%"
             higherIsBetter={true}
           />
           <ComparisonCard
             title="Calibration Error"
-            aragora={summary?.avg_calibration_error
-              ? summary.avg_calibration_error * 100 : 5}
+            aragora={summary?.avg_calibration_error ? summary.avg_calibration_error * 100 : 5}
             singleAgent={15}
             unit="%"
             higherIsBetter={false}
           />
           <ComparisonCard
             title="Decision Robustness"
-            aragora={summary?.avg_robustness_score
-              ? summary.avg_robustness_score * 100 : 78}
+            aragora={summary?.avg_robustness_score ? summary.avg_robustness_score * 100 : 78}
             singleAgent={45}
             unit="%"
             higherIsBetter={true}
           />
           <ComparisonCard
             title="Knowledge Reuse"
-            aragora={memory?.learning_indicators.knowledge_reuse_rate
-              ? memory.learning_indicators.knowledge_reuse_rate * 100 : 60}
+            aragora={
+              memory?.learning_indicators.knowledge_reuse_rate
+                ? memory.learning_indicators.knowledge_reuse_rate * 100
+                : 60
+            }
             singleAgent={0}
             unit="%"
             higherIsBetter={true}
@@ -720,13 +691,7 @@ function OverviewTab({
 
 // ── Vetting Tab ────────────────────────────────────────────────────
 
-function VettingTab({
-  vetting,
-  loading,
-}: {
-  vetting?: VettingData['data'];
-  loading: boolean;
-}) {
+function VettingTab({ vetting, loading }: { vetting?: VettingData['data']; loading: boolean }) {
   if (loading) {
     return (
       <div className="space-y-4">
@@ -786,10 +751,14 @@ function VettingTab({
 
       {/* Explanation */}
       <div className="border border-surface bg-surface/20 rounded p-4">
-        <h4 className="text-xs font-theme-data text-[var(--accent)] mb-2">HOW ADVERSARIAL VETTING WORKS</h4>
+        <h4 className="text-xs font-theme-data text-[var(--accent)] mb-2">
+          HOW ADVERSARIAL VETTING WORKS
+        </h4>
         <div className="text-[11px] font-theme-data text-text-muted space-y-1">
           <p>1. Multiple agents independently analyze the question from different perspectives</p>
-          <p>2. Agents critique each other&apos;s proposals, identifying weaknesses and blind spots</p>
+          <p>
+            2. Agents critique each other&apos;s proposals, identifying weaknesses and blind spots
+          </p>
           <p>3. Dissenting views are preserved in the decision receipt, not silenced</p>
           <p>4. Unresolved tensions are flagged for human review</p>
           <p>5. Claims are cross-verified against knowledge sources</p>
@@ -876,15 +845,10 @@ function CalibrationTab({
             </thead>
             <tbody>
               {agents.map((agent, idx) => (
-                <tr
-                  key={agent.agent_id}
-                  className="border-b border-surface/50 hover:bg-surface/30"
-                >
+                <tr key={agent.agent_id} className="border-b border-surface/50 hover:bg-surface/30">
                   <td className="p-2 text-[var(--acid-cyan)]">#{idx + 1}</td>
                   <td className="p-2 text-text">{agent.agent_id}</td>
-                  <td className="p-2 text-right text-[var(--accent)]">
-                    {agent.elo.toFixed(0)}
-                  </td>
+                  <td className="p-2 text-right text-[var(--accent)]">{agent.elo.toFixed(0)}</td>
                   <td className="p-2 text-right">
                     <span
                       className={
@@ -898,9 +862,7 @@ function CalibrationTab({
                       {(agent.win_rate * 100).toFixed(1)}%
                     </span>
                   </td>
-                  <td className="p-2 text-right text-text-muted">
-                    {agent.games_played}
-                  </td>
+                  <td className="p-2 text-right text-text-muted">{agent.games_played}</td>
                 </tr>
               ))}
             </tbody>
@@ -910,11 +872,19 @@ function CalibrationTab({
 
       {/* Explanation */}
       <div className="border border-surface bg-surface/20 rounded p-4">
-        <h4 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2">WHY MULTI-AGENT CONSENSUS IS BETTER CALIBRATED</h4>
+        <h4 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2">
+          WHY MULTI-AGENT CONSENSUS IS BETTER CALIBRATED
+        </h4>
         <div className="text-[11px] font-theme-data text-text-muted space-y-1">
           <p>1. Individual models have systematic biases. Ensemble consensus cancels these out.</p>
-          <p>2. ELO ratings track each agent&apos;s accuracy over time, weighting reliable agents higher.</p>
-          <p>3. Diversity of model architectures (Claude, GPT, Gemini, Mistral) reduces correlated errors.</p>
+          <p>
+            2. ELO ratings track each agent&apos;s accuracy over time, weighting reliable agents
+            higher.
+          </p>
+          <p>
+            3. Diversity of model architectures (Claude, GPT, Gemini, Mistral) reduces correlated
+            errors.
+          </p>
           <p>4. Calibration feedback loops continuously improve confidence estimates.</p>
         </div>
       </div>
@@ -924,13 +894,7 @@ function CalibrationTab({
 
 // ── Memory Tab ─────────────────────────────────────────────────────
 
-function MemoryTab({
-  memory,
-  loading,
-}: {
-  memory?: MemoryData['data'];
-  loading: boolean;
-}) {
+function MemoryTab({ memory, loading }: { memory?: MemoryData['data']; loading: boolean }) {
   if (loading) {
     return (
       <div className="space-y-4">
@@ -1015,13 +979,17 @@ function MemoryTab({
 
       {/* Explanation */}
       <div className="border border-surface bg-surface/20 rounded p-4">
-        <h4 className="text-xs font-theme-data text-purple-400 mb-2">HOW INSTITUTIONAL MEMORY WORKS</h4>
+        <h4 className="text-xs font-theme-data text-purple-400 mb-2">
+          HOW INSTITUTIONAL MEMORY WORKS
+        </h4>
         <div className="text-[11px] font-theme-data text-text-muted space-y-1">
           <p>1. Every debate outcome is stored in multi-tier memory (fast/medium/slow/glacial).</p>
           <p>2. The Knowledge Mound aggregates insights across 41 adapter systems.</p>
           <p>3. Cross-debate links connect related decisions, building organizational knowledge.</p>
           <p>4. Future debates automatically retrieve relevant past decisions for context.</p>
-          <p>5. Unlike single-model systems, Aragora builds cumulative organizational intelligence.</p>
+          <p>
+            5. Unlike single-model systems, Aragora builds cumulative organizational intelligence.
+          </p>
         </div>
       </div>
     </div>

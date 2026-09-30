@@ -18,7 +18,7 @@ function formatLoopId(loopId: string): string {
       parseInt(month) - 1,
       parseInt(day),
       parseInt(hour),
-      parseInt(minute)
+      parseInt(minute),
     );
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -62,7 +62,10 @@ export function HistoryPanel() {
 
       {/* Show warning when Supabase not configured */}
       {supabaseWarning && !useSupabase && (
-        <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-600/50 text-yellow-200 text-xs font-theme-data" role="alert">
+        <div
+          className="mb-4 p-2 bg-yellow-900/20 border border-yellow-600/50 text-yellow-200 text-xs font-theme-data"
+          role="alert"
+        >
           <span className="text-yellow-300">!</span> {supabaseWarning}
         </div>
       )}
@@ -76,16 +79,19 @@ export function HistoryPanel() {
       {/* Loop selector - only for Supabase mode */}
       {useSupabase && (
         <div className="mb-4">
-          <label htmlFor="loop-selector" className="text-xs text-text-muted block mb-1 font-theme-data">SELECT_LOOP</label>
+          <label
+            htmlFor="loop-selector"
+            className="text-xs text-text-muted block mb-1 font-theme-data"
+          >
+            SELECT_LOOP
+          </label>
           <select
             id="loop-selector"
             value={selectedLoopId || ''}
             onChange={(e) => selectLoop(e.target.value)}
             className="w-full bg-bg border border-border px-2 py-1 text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
           >
-            {recentLoops.length === 0 && (
-              <option value="">No loops found</option>
-            )}
+            {recentLoops.length === 0 && <option value="">No loops found</option>}
             {recentLoops.map((loopId) => (
               <option key={loopId} value={loopId}>
                 {formatLoopId(loopId)}
@@ -100,7 +106,9 @@ export function HistoryPanel() {
         <div className="mb-4 p-2 bg-bg border border-border text-xs font-theme-data text-text-muted">
           <span className="text-[var(--accent)]">&gt;</span> Using local API
           {localHistory.summary.recent_loop_id && (
-            <span className="ml-2 text-text">• {formatLoopId(localHistory.summary.recent_loop_id)}</span>
+            <span className="ml-2 text-text">
+              • {formatLoopId(localHistory.summary.recent_loop_id)}
+            </span>
           )}
         </div>
       )}
@@ -113,7 +121,9 @@ export function HistoryPanel() {
       {/* Cycles list */}
       {cycles.length > 0 && (
         <div className="mb-4">
-          <h4 id="phases-heading" className="text-xs font-theme-data text-text-muted mb-2">PHASES</h4>
+          <h4 id="phases-heading" className="text-xs font-theme-data text-text-muted mb-2">
+            PHASES
+          </h4>
           <div
             role="list"
             aria-labelledby="phases-heading"
@@ -134,16 +144,12 @@ export function HistoryPanel() {
                     cycle.success === true
                       ? 'text-[var(--accent)]'
                       : cycle.success === false
-                      ? 'text-[var(--crimson)]'
-                      : 'text-warning'
+                        ? 'text-[var(--crimson)]'
+                        : 'text-warning'
                   }
                   aria-hidden="true"
                 >
-                  {cycle.success === true
-                    ? '[OK]'
-                    : cycle.success === false
-                    ? '[FAIL]'
-                    : '[...]'}
+                  {cycle.success === true ? '[OK]' : cycle.success === false ? '[FAIL]' : '[...]'}
                 </span>
               </div>
             ))}
@@ -173,9 +179,7 @@ export function HistoryPanel() {
                   {new Date(event.timestamp).toLocaleTimeString()}
                 </span>{' '}
                 <span className="text-[var(--acid-cyan)]">{event.event_type}</span>
-                {event.agent && (
-                  <span className="text-purple"> [{event.agent}]</span>
-                )}
+                {event.agent && <span className="text-purple"> [{event.agent}]</span>}
               </div>
             ))}
           </div>
@@ -185,7 +189,9 @@ export function HistoryPanel() {
       {/* Debates preview */}
       {debates.length > 0 && (
         <div className="mt-4">
-          <h4 id="debates-heading" className="text-xs font-theme-data text-text-muted mb-2">DEBATES</h4>
+          <h4 id="debates-heading" className="text-xs font-theme-data text-text-muted mb-2">
+            DEBATES
+          </h4>
           <div
             role="list"
             aria-labelledby="debates-heading"
@@ -203,11 +209,7 @@ export function HistoryPanel() {
                     {debate.phase} (C{debate.cycle_number})
                   </span>
                   <span
-                    className={
-                      debate.consensus_reached
-                        ? 'text-[var(--accent)]'
-                        : 'text-warning'
-                    }
+                    className={debate.consensus_reached ? 'text-[var(--accent)]' : 'text-warning'}
                     aria-hidden="true"
                   >
                     {debate.consensus_reached

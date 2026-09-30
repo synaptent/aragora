@@ -88,7 +88,7 @@ export function isInputFocused(): boolean {
 export function matchesKeyBinding(
   event: ParsedKeyEvent,
   binding: KeyBinding,
-  pendingSequence: string[]
+  pendingSequence: string[],
 ): 'match' | 'partial' | 'none' {
   const keys = Array.isArray(binding.key) ? binding.key : [binding.key];
   const modifiers = binding.modifiers || [];
@@ -143,7 +143,7 @@ export function findMatchingShortcut(
   event: ParsedKeyEvent,
   shortcuts: ShortcutWithAction[],
   pendingSequence: string[],
-  context: string = 'global'
+  context: string = 'global',
 ): ShortcutMatch {
   let matchedShortcut: ShortcutWithAction | null = null;
   const possibleMatches: ShortcutWithAction[] = [];
@@ -244,7 +244,7 @@ export function isShortcutAvailable(shortcut: ShortcutWithAction): boolean {
  * Group shortcuts by category for display
  */
 export function groupShortcutsByCategory(
-  shortcuts: ShortcutWithAction[]
+  shortcuts: ShortcutWithAction[],
 ): Map<string, ShortcutWithAction[]> {
   const groups = new Map<string, ShortcutWithAction[]>();
 

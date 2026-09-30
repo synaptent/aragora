@@ -46,37 +46,30 @@ const defaultLinks: SkipLinkItem[] = [
 // =============================================================================
 
 export function SkipLinks({ links = defaultLinks, className }: SkipLinksProps) {
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
-      e.preventDefault();
-      const target = document.getElementById(targetId);
-      if (target) {
-        // Focus the target element
-        target.setAttribute('tabindex', '-1');
-        target.focus();
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const handleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
+    e.preventDefault();
+    const target = document.getElementById(targetId);
+    if (target) {
+      // Focus the target element
+      target.setAttribute('tabindex', '-1');
+      target.focus();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        // Remove tabindex after blur
-        target.addEventListener(
-          'blur',
-          () => {
-            target.removeAttribute('tabindex');
-          },
-          { once: true }
-        );
-      }
-    },
-    []
-  );
+      // Remove tabindex after blur
+      target.addEventListener(
+        'blur',
+        () => {
+          target.removeAttribute('tabindex');
+        },
+        { once: true },
+      );
+    }
+  }, []);
 
   return (
     <nav
       aria-label="Skip links"
-      className={cn(
-        'fixed top-0 left-0 z-[100]',
-        'flex flex-col gap-1 p-2',
-        className
-      )}
+      className={cn('fixed top-0 left-0 z-[100]', 'flex flex-col gap-1 p-2', className)}
     >
       {links.map((link) => (
         <a
@@ -97,7 +90,7 @@ export function SkipLinks({ links = defaultLinks, className }: SkipLinksProps) {
             'focus:shadow-lg',
             'focus:outline-none focus:ring-2 focus:ring-primary',
             // Font
-            'focus:font-medium focus:text-sm'
+            'focus:font-medium focus:text-sm',
           )}
         >
           {link.label}

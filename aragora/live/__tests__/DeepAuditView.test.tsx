@@ -8,7 +8,9 @@ jest.mock('../src/components/RoleBadge', () => ({
 }));
 
 jest.mock('../src/components/CitationsPanel', () => ({
-  CitationBadge: ({ count }: { count: number }) => <span data-testid="citation-badge">{count}</span>,
+  CitationBadge: ({ count }: { count: number }) => (
+    <span data-testid="citation-badge">{count}</span>
+  ),
 }));
 
 // Helper to create mock events
@@ -23,11 +25,7 @@ const createEvent = (overrides: Partial<StreamEvent> = {}): StreamEvent => ({
 });
 
 describe('DeepAuditView', () => {
-  const defaultProps = {
-    events: [] as StreamEvent[],
-    isActive: true,
-    onToggle: jest.fn(),
-  };
+  const defaultProps = { events: [] as StreamEvent[], isActive: true, onToggle: jest.fn() };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -89,9 +87,24 @@ describe('DeepAuditView', () => {
   describe('round tracking', () => {
     it('marks rounds as complete based on events', () => {
       const events: StreamEvent[] = [
-        createEvent({ round: 1, type: 'agent_message', agent: 'claude', data: { content: 'Analysis 1' } }),
-        createEvent({ round: 2, type: 'agent_message', agent: 'gpt4', data: { content: 'Review 1' } }),
-        createEvent({ round: 3, type: 'agent_message', agent: 'gemini', data: { content: 'Exploration' } }),
+        createEvent({
+          round: 1,
+          type: 'agent_message',
+          agent: 'claude',
+          data: { content: 'Analysis 1' },
+        }),
+        createEvent({
+          round: 2,
+          type: 'agent_message',
+          agent: 'gpt4',
+          data: { content: 'Review 1' },
+        }),
+        createEvent({
+          round: 3,
+          type: 'agent_message',
+          agent: 'gemini',
+          data: { content: 'Exploration' },
+        }),
       ];
 
       render(<DeepAuditView {...defaultProps} events={events} />);
@@ -125,7 +138,12 @@ describe('DeepAuditView', () => {
   describe('round expansion', () => {
     it('expands round when clicked', () => {
       const events: StreamEvent[] = [
-        createEvent({ round: 1, type: 'agent_message', agent: 'claude', data: { content: 'Test content' } }),
+        createEvent({
+          round: 1,
+          type: 'agent_message',
+          agent: 'claude',
+          data: { content: 'Test content' },
+        }),
       ];
 
       render(<DeepAuditView {...defaultProps} events={events} />);
@@ -139,7 +157,12 @@ describe('DeepAuditView', () => {
 
     it('collapses round when clicked again', () => {
       const events: StreamEvent[] = [
-        createEvent({ round: 1, type: 'agent_message', agent: 'claude', data: { content: 'Test content' } }),
+        createEvent({
+          round: 1,
+          type: 'agent_message',
+          agent: 'claude',
+          data: { content: 'Test content' },
+        }),
       ];
 
       render(<DeepAuditView {...defaultProps} events={events} />);
@@ -161,8 +184,8 @@ describe('DeepAuditView', () => {
       // All buttons should be disabled when no events
       const buttons = screen.getAllByRole('button');
       // Exit button should not be disabled, but round buttons should be
-      const roundButtons = buttons.filter(btn => btn.textContent?.includes('Round'));
-      roundButtons.forEach(btn => {
+      const roundButtons = buttons.filter((btn) => btn.textContent?.includes('Round'));
+      roundButtons.forEach((btn) => {
         expect(btn).toBeDisabled();
       });
     });
@@ -206,11 +229,7 @@ describe('DeepAuditView', () => {
         }),
         createEvent({
           type: 'audit_finding',
-          data: {
-            category: 'risk',
-            summary: 'Potential security issue',
-            severity: 0.8,
-          },
+          data: { category: 'risk', summary: 'Potential security issue', severity: 0.8 },
         }),
       ];
 
@@ -311,9 +330,7 @@ describe('DeepAuditView', () => {
       const events: StreamEvent[] = [
         createEvent({
           type: 'audit_cross_exam',
-          data: {
-            notes: 'Key questions raised during cross-examination',
-          },
+          data: { notes: 'Key questions raised during cross-examination' },
         }),
       ];
 

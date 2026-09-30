@@ -346,6 +346,70 @@ def test_list_returns_items(handler):
     assert "items" in data
 ```
 
+### Typed handler characterization suites
+
+The admin, analytics, compliance, identity/auth, OAuth and security handler
+modules whose type annotations were tightened carry characterization suites
+(`tests/handlers/test_*_typing_contracts.py` and
+`tests/handlers/test_spend_analytics.py`) that pin their runtime behaviour.
+Run the four suites focused, from the repository root with the project
+environment active (`pip install -e ".[dev,test]"`):
+
+```bash
+python -m pytest tests/handlers/test_admin_typing_contracts.py tests/handlers/test_spend_analytics.py tests/handlers/test_compliance_identity_typing_contracts.py tests/handlers/test_security_typing_contracts.py -q -p no:randomly -n 4 --timeout=120
+```
+
+`-p no:randomly` keeps parametrized case order deterministic (`pytest-randomly`
+is installed by the `test` extra), `-n 4` matches the CI worker count and
+`--timeout=120` bounds any single case. The suites make no network calls:
+every service they exercise is a real in-process object backed by a temporary
+SQLite store or directory under `tmp_path`.
+
+Type-check the whole `aragora/` import graph from an empty mypy cache (a warm
+`.mypy_cache` can hide line-attribution drift). The tier requires mypy 2.1.0 on
+a CPython 3.11 host and exits `0` only when no finding lies outside
+`scripts/baselines/root-mypy-full.json`; set `TYPECHECK_PYTHON` to the
+interpreter to use when `python` on `PATH` is not the project environment:
+
+```bash
+MYPY_CACHE_DIR="$(mktemp -d)" bash scripts/test_tiers.sh typecheck
+```
+
+When writing or extending these suites:
+
+- **Await decorated results before inspecting them.** Entry points wrapped by
+  the decorators in `utils/decorators.py` can hand back a coroutine even when
+  the wrapped method is synchronous. Call the handler, `asyncio.run()` the
+  result when `inspect.iscoroutine()` reports one, and only then read
+  `status_code` and the body.
+- **Patch the defining module object.** Resolve the module with
+  `importlib.import_module("aragora.server.handlers.<name>")` and patch
+  attributes on the object it returns (`monkeypatch.setattr(module, ...)` or
+  `patch.object(module, ...)`). On trees where the handler lives at
+  `aragora/server/handlers/<package>/<name>.py`, the package's moved-module
+  finder resolves the legacy name to the same module object as
+  `aragora.server.handlers.<package>.<name>`, so a patch applied to that object
+  is visible through both import names; a string patch target assembled from
+  either name, or a re-export on the `aragora.server.handlers` package, is not.
+  The `TYPEALIAS_001` cases assert this identity (same module and symbol
+  objects, `__file__` inside the tree under test) for every covered module;
+  set `TYPING_SNAPSHOT_ROOT=<tree root>` when the interpreter could import
+  `aragora` from somewhere other than the tree being tested.
+- **Retained legacy semantics are the contract.** Lazy manager accessors such
+  as `_get_manager()` and `_get_backup_manager()` may return `None` when the
+  subsystem is unavailable, and callers surface the original `AttributeError`
+  text rather than a new error response. `DRHandler.handle` accepts three call
+  forms (`(path, query_params, request)`, `("GET", path, None)` and
+  `(method=..., path=...)`) and answers `400` with
+  `Invalid request: no path or method provided` when given none.
+  `ThreatIntelHandler.handle` runs its permission check and returns `None`
+  (its routes are served through `register_threat_intel_routes`). The audit
+  verify endpoint treats an absent, malformed or non-object body as `{}` and
+  verifies the full range. Spend analytics resolves an absent, `None` or
+  empty-list `workspace_id` query value to `"default"`. New cases characterize
+  the existing observation; a behaviour change is a separate change with its
+  own tests and review.
+
 ## Key Files
 
 | File | Purpose |

@@ -107,8 +107,8 @@ function SeverityMeter({ level }: { level: ClassificationLevel }) {
               ? severity >= 3
                 ? 'bg-red-400'
                 : severity >= 2
-                ? 'bg-yellow-400'
-                : 'bg-[var(--acid-green)]'
+                  ? 'bg-yellow-400'
+                  : 'bg-[var(--acid-green)]'
               : 'bg-[var(--border)]'
           }`}
         />
@@ -117,13 +117,19 @@ function SeverityMeter({ level }: { level: ClassificationLevel }) {
   );
 }
 
-function BoolIndicator({ value, trueLabel, falseLabel }: {
+function BoolIndicator({
+  value,
+  trueLabel,
+  falseLabel,
+}: {
   value: boolean;
   trueLabel?: string;
   falseLabel?: string;
 }) {
   return (
-    <span className={`text-xs font-theme-data ${value ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}`}>
+    <span
+      className={`text-xs font-theme-data ${value ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}`}
+    >
       {value ? (trueLabel ?? 'YES') : (falseLabel ?? 'NO')}
     </span>
   );
@@ -159,8 +165,11 @@ export default function DataClassificationPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('policy');
 
   // Fetch active policy
-  const { data: policyResponse, isLoading: policyLoading, error: policyError } =
-    useSWRFetch<{ data: ActivePolicy }>(`${API_BASE}/policy`);
+  const {
+    data: policyResponse,
+    isLoading: policyLoading,
+    error: policyError,
+  } = useSWRFetch<{ data: ActivePolicy }>(`${API_BASE}/policy`);
 
   const policy = policyResponse?.data;
 
@@ -181,7 +190,9 @@ export default function DataClassificationPage() {
                 Compliance
               </Link>
               <span className="text-[var(--text-muted)]">/</span>
-              <span className="text-xs font-theme-data text-[var(--acid-green)]">Data Classification</span>
+              <span className="text-xs font-theme-data text-[var(--acid-green)]">
+                Data Classification
+              </span>
             </div>
             <h1 className="text-xl font-theme-data text-[var(--acid-green)]">
               {'>'} DATA CLASSIFICATION
@@ -195,18 +206,19 @@ export default function DataClassificationPage() {
           {/* Error State */}
           {policyError && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 font-theme-data text-sm">
-              Failed to load classification policy. The data classification module may not be available.
+              Failed to load classification policy. The data classification module may not be
+              available.
             </div>
           )}
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6 flex-wrap">
-            {([
+            {[
               { key: 'policy' as const, label: 'POLICY' },
               { key: 'classify' as const, label: 'CLASSIFY' },
               { key: 'validate' as const, label: 'VALIDATE' },
               { key: 'enforce' as const, label: 'ENFORCE' },
-            ]).map(({ key, label }) => (
+            ].map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -222,9 +234,7 @@ export default function DataClassificationPage() {
           </div>
 
           <PanelErrorBoundary panelName="Data Classification">
-            {activeTab === 'policy' && (
-              <PolicyTab policy={policy} loading={policyLoading} />
-            )}
+            {activeTab === 'policy' && <PolicyTab policy={policy} loading={policyLoading} />}
             {activeTab === 'classify' && <ClassifyTab />}
             {activeTab === 'validate' && <ValidateTab />}
             {activeTab === 'enforce' && <EnforceTab />}
@@ -258,9 +268,7 @@ export default function DataClassificationPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // DATA CLASSIFICATION
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // DATA CLASSIFICATION</p>
         </footer>
       </main>
     </>
@@ -303,9 +311,7 @@ function PolicyTab({ policy, loading }: { policy: ActivePolicy | undefined; load
       {/* Policy Metadata */}
       <div className="flex gap-4 mb-6 text-xs font-theme-data text-[var(--text-muted)]">
         {policy.version && <span>Version: {policy.version}</span>}
-        {policy.updated_at && (
-          <span>Updated: {new Date(policy.updated_at).toLocaleString()}</span>
-        )}
+        {policy.updated_at && <span>Updated: {new Date(policy.updated_at).toLocaleString()}</span>}
         <span>{levels.length} levels configured</span>
       </div>
 
@@ -328,7 +334,9 @@ function PolicyTab({ policy, loading }: { policy: ActivePolicy | undefined; load
               <div className="space-y-2 text-xs font-theme-data">
                 {/* Allowed Operations */}
                 <div>
-                  <span className="text-[var(--text-muted)] uppercase text-[10px]">Operations:</span>
+                  <span className="text-[var(--text-muted)] uppercase text-[10px]">
+                    Operations:
+                  </span>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {(typedRule.allowed_operations ?? []).map((op) => (
                       <span
@@ -338,7 +346,8 @@ function PolicyTab({ policy, loading }: { policy: ActivePolicy | undefined; load
                         {op}
                       </span>
                     ))}
-                    {(!typedRule.allowed_operations || typedRule.allowed_operations.length === 0) && (
+                    {(!typedRule.allowed_operations ||
+                      typedRule.allowed_operations.length === 0) && (
                       <span className="text-[var(--text-muted)]">None</span>
                     )}
                   </div>
@@ -347,12 +356,22 @@ function PolicyTab({ policy, loading }: { policy: ActivePolicy | undefined; load
                 {/* Requirements */}
                 <div className="flex gap-4">
                   <div>
-                    <span className="text-[var(--text-muted)] uppercase text-[10px]">Encryption:</span>{' '}
-                    <BoolIndicator value={typedRule.requires_encryption} trueLabel="REQUIRED" falseLabel="OPTIONAL" />
+                    <span className="text-[var(--text-muted)] uppercase text-[10px]">
+                      Encryption:
+                    </span>{' '}
+                    <BoolIndicator
+                      value={typedRule.requires_encryption}
+                      trueLabel="REQUIRED"
+                      falseLabel="OPTIONAL"
+                    />
                   </div>
                   <div>
                     <span className="text-[var(--text-muted)] uppercase text-[10px]">Consent:</span>{' '}
-                    <BoolIndicator value={typedRule.requires_consent} trueLabel="REQUIRED" falseLabel="OPTIONAL" />
+                    <BoolIndicator
+                      value={typedRule.requires_consent}
+                      trueLabel="REQUIRED"
+                      falseLabel="OPTIONAL"
+                    />
                   </div>
                 </div>
 
@@ -369,7 +388,9 @@ function PolicyTab({ policy, loading }: { policy: ActivePolicy | undefined; load
                 {/* Retention */}
                 {typedRule.retention_days != null && (
                   <div>
-                    <span className="text-[var(--text-muted)] uppercase text-[10px]">Retention:</span>{' '}
+                    <span className="text-[var(--text-muted)] uppercase text-[10px]">
+                      Retention:
+                    </span>{' '}
                     <span className="text-[var(--text)]">{typedRule.retention_days} days</span>
                   </div>
                 )}
@@ -382,7 +403,9 @@ function PolicyTab({ policy, loading }: { policy: ActivePolicy | undefined; load
       {/* Raw policy fallback when levels not structured */}
       {levels.length === 0 && (
         <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-          <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">Raw Policy</h3>
+          <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">
+            Raw Policy
+          </h3>
           <pre className="text-xs font-theme-data text-[var(--text-muted)] overflow-x-auto whitespace-pre-wrap">
             {JSON.stringify(policy, null, 2)}
           </pre>
@@ -433,7 +456,9 @@ function ClassifyTab() {
     <div className="space-y-6">
       {/* Input */}
       <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">Classify Data</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">
+          Classify Data
+        </h3>
         <p className="text-xs font-theme-data text-[var(--text-muted)] mb-4">
           Paste JSON data or plain text to classify. The classifier detects PII patterns,
           sensitivity markers, and content characteristics.
@@ -484,43 +509,59 @@ function ClassifyTab() {
       {/* Result */}
       {result && (
         <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-          <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">Classification Result</h3>
+          <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-4">
+            Classification Result
+          </h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="text-center">
               <div className="mb-1">
                 <LevelBadge level={result.classification} />
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Level</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Level
+              </div>
             </div>
             <div className="text-center">
-              <div className={`text-lg font-theme-data ${
-                (result.confidence ?? 0) >= 0.9
-                  ? 'text-[var(--acid-green)]'
-                  : (result.confidence ?? 0) >= 0.7
-                  ? 'text-yellow-400'
-                  : 'text-red-400'
-              }`}>
+              <div
+                className={`text-lg font-theme-data ${
+                  (result.confidence ?? 0) >= 0.9
+                    ? 'text-[var(--acid-green)]'
+                    : (result.confidence ?? 0) >= 0.7
+                      ? 'text-yellow-400'
+                      : 'text-red-400'
+                }`}
+              >
                 {result.confidence != null ? `${(result.confidence * 100).toFixed(1)}%` : '--'}
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Confidence</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Confidence
+              </div>
             </div>
             <div className="text-center">
-              <div className={`text-lg font-theme-data ${result.has_pii ? 'text-red-400' : 'text-[var(--acid-green)]'}`}>
+              <div
+                className={`text-lg font-theme-data ${result.has_pii ? 'text-red-400' : 'text-[var(--acid-green)]'}`}
+              >
                 {result.has_pii ? 'DETECTED' : 'NONE'}
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">PII</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                PII
+              </div>
             </div>
             <div className="text-center">
               <SeverityMeter level={result.classification} />
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mt-1">Severity</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mt-1">
+                Severity
+              </div>
             </div>
           </div>
 
           {/* Matched Patterns */}
           {result.matched_patterns && result.matched_patterns.length > 0 && (
             <div className="mb-3">
-              <span className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Matched Patterns:</span>
+              <span className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Matched Patterns:
+              </span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {result.matched_patterns.map((p) => (
                   <span
@@ -537,10 +578,15 @@ function ClassifyTab() {
           {/* Recommendations */}
           {result.recommendations && result.recommendations.length > 0 && (
             <div>
-              <span className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Recommendations:</span>
+              <span className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Recommendations:
+              </span>
               <ul className="mt-1 space-y-1">
                 {result.recommendations.map((r, i) => (
-                  <li key={i} className="text-xs font-theme-data text-[var(--acid-cyan)] flex items-start gap-2">
+                  <li
+                    key={i}
+                    className="text-xs font-theme-data text-[var(--acid-cyan)] flex items-start gap-2"
+                  >
                     <span className="text-[var(--text-muted)]">-</span> {r}
                   </li>
                 ))}
@@ -593,10 +639,12 @@ function ValidateTab() {
     <div className="space-y-6">
       {/* Input */}
       <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">Validate Handling Operation</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">
+          Validate Handling Operation
+        </h3>
         <p className="text-xs font-theme-data text-[var(--text-muted)] mb-4">
-          Check whether a specific operation is permitted for a given classification level
-          and handling context.
+          Check whether a specific operation is permitted for a given classification level and
+          handling context.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -610,7 +658,9 @@ function ValidateTab() {
               className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] text-xs font-theme-data rounded focus:outline-none focus:border-[var(--acid-green)]/50"
             >
               {CLASSIFICATION_LEVELS.map((l) => (
-                <option key={l} value={l}>{l.toUpperCase()}</option>
+                <option key={l} value={l}>
+                  {l.toUpperCase()}
+                </option>
               ))}
             </select>
           </div>
@@ -686,26 +736,37 @@ function ValidateTab() {
 
       {/* Result */}
       {result && (
-        <div className={`p-4 border ${
-          result.allowed
-            ? 'bg-[var(--acid-green)]/5 border-[var(--acid-green)]/30'
-            : 'bg-red-500/5 border-red-500/30'
-        }`}>
+        <div
+          className={`p-4 border ${
+            result.allowed
+              ? 'bg-[var(--acid-green)]/5 border-[var(--acid-green)]/30'
+              : 'bg-red-500/5 border-red-500/30'
+          }`}
+        >
           <div className="flex items-center gap-3 mb-4">
-            <span className={`text-xl font-theme-data ${result.allowed ? 'text-[var(--acid-green)]' : 'text-red-400'}`}>
+            <span
+              className={`text-xl font-theme-data ${result.allowed ? 'text-[var(--acid-green)]' : 'text-red-400'}`}
+            >
               {result.allowed ? '[ALLOWED]' : '[DENIED]'}
             </span>
             <LevelBadge level={result.classification} />
-            <span className="text-xs font-theme-data text-[var(--text-muted)]">{result.operation}</span>
+            <span className="text-xs font-theme-data text-[var(--text-muted)]">
+              {result.operation}
+            </span>
           </div>
 
           {/* Violations */}
           {result.violations && result.violations.length > 0 && (
             <div className="mb-3">
-              <span className="text-[10px] font-theme-data text-red-400 uppercase">Violations:</span>
+              <span className="text-[10px] font-theme-data text-red-400 uppercase">
+                Violations:
+              </span>
               <ul className="mt-1 space-y-1">
                 {result.violations.map((v, i) => (
-                  <li key={i} className="text-xs font-theme-data text-red-400 flex items-start gap-2">
+                  <li
+                    key={i}
+                    className="text-xs font-theme-data text-red-400 flex items-start gap-2"
+                  >
                     <span className="text-red-400/50">!</span> {v}
                   </li>
                 ))}
@@ -716,11 +777,15 @@ function ValidateTab() {
           {/* Requirements Met */}
           {result.requirements_met && Object.keys(result.requirements_met).length > 0 && (
             <div>
-              <span className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Requirements:</span>
+              <span className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Requirements:
+              </span>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
                 {Object.entries(result.requirements_met).map(([req, met]) => (
                   <div key={req} className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${met ? 'bg-[var(--acid-green)]' : 'bg-red-400'}`} />
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${met ? 'bg-[var(--acid-green)]' : 'bg-red-400'}`}
+                    />
                     <span className="text-xs font-theme-data text-[var(--text)]">{req}</span>
                   </div>
                 ))}
@@ -775,7 +840,9 @@ function EnforceTab() {
     <div className="space-y-6">
       {/* Input */}
       <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">Enforce Cross-Context Access</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)] uppercase mb-3">
+          Enforce Cross-Context Access
+        </h3>
         <p className="text-xs font-theme-data text-[var(--text-muted)] mb-4">
           Validate whether data can flow between classification contexts. Checks if the
           source-to-target transfer meets all policy requirements.
@@ -792,7 +859,9 @@ function EnforceTab() {
               className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] text-xs font-theme-data rounded focus:outline-none focus:border-[var(--acid-green)]/50"
             >
               {CLASSIFICATION_LEVELS.map((l) => (
-                <option key={l} value={l}>{l.toUpperCase()}</option>
+                <option key={l} value={l}>
+                  {l.toUpperCase()}
+                </option>
               ))}
             </select>
           </div>
@@ -807,7 +876,9 @@ function EnforceTab() {
               className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] text-xs font-theme-data rounded focus:outline-none focus:border-[var(--acid-green)]/50"
             >
               {CLASSIFICATION_LEVELS.map((l) => (
-                <option key={l} value={l}>{l.toUpperCase()}</option>
+                <option key={l} value={l}>
+                  {l.toUpperCase()}
+                </option>
               ))}
             </select>
           </div>
@@ -891,13 +962,17 @@ function EnforceTab() {
 
       {/* Result */}
       {result && (
-        <div className={`p-4 border ${
-          result.allowed
-            ? 'bg-[var(--acid-green)]/5 border-[var(--acid-green)]/30'
-            : 'bg-red-500/5 border-red-500/30'
-        }`}>
+        <div
+          className={`p-4 border ${
+            result.allowed
+              ? 'bg-[var(--acid-green)]/5 border-[var(--acid-green)]/30'
+              : 'bg-red-500/5 border-red-500/30'
+          }`}
+        >
           <div className="flex items-center gap-3 mb-4">
-            <span className={`text-xl font-theme-data ${result.allowed ? 'text-[var(--acid-green)]' : 'text-red-400'}`}>
+            <span
+              className={`text-xl font-theme-data ${result.allowed ? 'text-[var(--acid-green)]' : 'text-red-400'}`}
+            >
               {result.allowed ? '[ACCESS GRANTED]' : '[ACCESS DENIED]'}
             </span>
           </div>
@@ -915,10 +990,15 @@ function EnforceTab() {
           {/* Violations */}
           {result.violations && result.violations.length > 0 && (
             <div>
-              <span className="text-[10px] font-theme-data text-red-400 uppercase">Policy Violations:</span>
+              <span className="text-[10px] font-theme-data text-red-400 uppercase">
+                Policy Violations:
+              </span>
               <ul className="mt-1 space-y-1">
                 {result.violations.map((v, i) => (
-                  <li key={i} className="text-xs font-theme-data text-red-400 flex items-start gap-2">
+                  <li
+                    key={i}
+                    className="text-xs font-theme-data text-red-400 flex items-start gap-2"
+                  >
                     <span className="text-red-400/50">!</span> {v}
                   </li>
                 ))}

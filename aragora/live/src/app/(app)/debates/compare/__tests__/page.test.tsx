@@ -9,12 +9,8 @@ const mockSearchParamsGet = jest.fn();
 global.fetch = mockFetch as typeof fetch;
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    replace: mockReplace,
-  }),
-  useSearchParams: () => ({
-    get: mockSearchParamsGet,
-  }),
+  useRouter: () => ({ replace: mockReplace }),
+  useSearchParams: () => ({ get: mockSearchParamsGet }),
 }));
 
 jest.mock('next/link', () => ({
@@ -24,31 +20,16 @@ jest.mock('next/link', () => ({
   ),
 }));
 
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: {
-      api: 'http://backend.test',
-    },
-  }),
+  useBackend: () => ({ config: { api: 'http://backend.test' } }),
 }));
 
-jest.mock('@/utils/logger', () => ({
-  logger: {
-    error: jest.fn(),
-  },
-}));
+jest.mock('@/utils/logger', () => ({ logger: { error: jest.fn() } }));
 
 function jsonResponse(data: unknown, ok = true, status = 200): Response {
-  return {
-    ok,
-    status,
-    json: async () => data,
-  } as Response;
+  return { ok, status, json: async () => data } as Response;
 }
 
 describe('DebateComparePage', () => {
@@ -114,18 +95,14 @@ describe('DebateComparePage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         'http://backend.test/api/v1/debates/debate-alpha/package',
-        expect.objectContaining({
-          signal: expect.any(AbortSignal),
-        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         'http://backend.test/api/v1/debates/debate-beta/package',
-        expect.objectContaining({
-          signal: expect.any(AbortSignal),
-        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 

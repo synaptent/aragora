@@ -110,9 +110,7 @@ export function ToolCatalog({ tools, categories }: ToolCatalogProps) {
               key={tool.name}
               tool={tool}
               expanded={expandedTool === tool.name}
-              onToggle={() =>
-                setExpandedTool((prev) => (prev === tool.name ? null : tool.name))
-              }
+              onToggle={() => setExpandedTool((prev) => (prev === tool.name ? null : tool.name))}
             />
           ))}
         </div>

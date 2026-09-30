@@ -4,16 +4,10 @@
  * Provides utilities for detecting screen size and adjusting UI accordingly.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from 'react';
 
 // Breakpoint values (matches Tailwind defaults)
-export const BREAKPOINTS = {
-  sm: 640,
-  md: 768,
-  lg: 1024,
-  xl: 1280,
-  "2xl": 1536,
-} as const;
+export const BREAKPOINTS = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 } as const;
 
 type BreakpointKey = keyof typeof BREAKPOINTS;
 
@@ -25,7 +19,7 @@ export function useMediaQuery(query: string): boolean {
 
   useEffect(() => {
     // Check if we're in a browser environment
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
 
     const mediaQuery = window.matchMedia(query);
     setMatches(mediaQuery.matches);
@@ -36,8 +30,8 @@ export function useMediaQuery(query: string): boolean {
 
     // Modern browsers
     if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
     }
     // Legacy browsers
     mediaQuery.addListener(handler);
@@ -50,14 +44,14 @@ export function useMediaQuery(query: string): boolean {
 /**
  * Hook to check if viewport is below a breakpoint (mobile-first).
  */
-export function useIsMobile(breakpoint: BreakpointKey = "md"): boolean {
+export function useIsMobile(breakpoint: BreakpointKey = 'md'): boolean {
   return useMediaQuery(`(max-width: ${BREAKPOINTS[breakpoint] - 1}px)`);
 }
 
 /**
  * Hook to check if viewport is above a breakpoint.
  */
-export function useIsDesktop(breakpoint: BreakpointKey = "lg"): boolean {
+export function useIsDesktop(breakpoint: BreakpointKey = 'lg'): boolean {
   return useMediaQuery(`(min-width: ${BREAKPOINTS[breakpoint]}px)`);
 }
 
@@ -65,29 +59,25 @@ export function useIsDesktop(breakpoint: BreakpointKey = "lg"): boolean {
  * Hook to check if viewport is in tablet range.
  */
 export function useIsTablet(): boolean {
-  return useMediaQuery(
-    `(min-width: ${BREAKPOINTS.md}px) and (max-width: ${
-      BREAKPOINTS.lg - 1
-    }px)`
-  );
+  return useMediaQuery(`(min-width: ${BREAKPOINTS.md}px) and (max-width: ${BREAKPOINTS.lg - 1}px)`);
 }
 
 /**
  * Hook to get the current breakpoint.
  */
-export function useBreakpoint(): BreakpointKey | "xs" {
+export function useBreakpoint(): BreakpointKey | 'xs' {
   const isSm = useMediaQuery(`(min-width: ${BREAKPOINTS.sm}px)`);
   const isMd = useMediaQuery(`(min-width: ${BREAKPOINTS.md}px)`);
   const isLg = useMediaQuery(`(min-width: ${BREAKPOINTS.lg}px)`);
   const isXl = useMediaQuery(`(min-width: ${BREAKPOINTS.xl}px)`);
-  const is2xl = useMediaQuery(`(min-width: ${BREAKPOINTS["2xl"]}px)`);
+  const is2xl = useMediaQuery(`(min-width: ${BREAKPOINTS['2xl']}px)`);
 
-  if (is2xl) return "2xl";
-  if (isXl) return "xl";
-  if (isLg) return "lg";
-  if (isMd) return "md";
-  if (isSm) return "sm";
-  return "xs";
+  if (is2xl) return '2xl';
+  if (isXl) return 'xl';
+  if (isLg) return 'lg';
+  if (isMd) return 'md';
+  if (isSm) return 'sm';
+  return 'xs';
 }
 
 /**
@@ -97,14 +87,14 @@ export function useIsTouchDevice(): boolean {
   const [isTouch, setIsTouch] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
 
     const checkTouch = () => {
       setIsTouch(
-        "ontouchstart" in window ||
+        'ontouchstart' in window ||
           navigator.maxTouchPoints > 0 ||
           // Check for older IE touch support
-          ((navigator as { msMaxTouchPoints?: number }).msMaxTouchPoints ?? 0) > 0
+          ((navigator as { msMaxTouchPoints?: number }).msMaxTouchPoints ?? 0) > 0,
       );
     };
 
@@ -117,16 +107,16 @@ export function useIsTouchDevice(): boolean {
 /**
  * Hook to detect orientation.
  */
-export function useOrientation(): "portrait" | "landscape" {
-  const isPortrait = useMediaQuery("(orientation: portrait)");
-  return isPortrait ? "portrait" : "landscape";
+export function useOrientation(): 'portrait' | 'landscape' {
+  const isPortrait = useMediaQuery('(orientation: portrait)');
+  return isPortrait ? 'portrait' : 'landscape';
 }
 
 /**
  * Hook to detect reduced motion preference.
  */
 export function usePrefersReducedMotion(): boolean {
-  return useMediaQuery("(prefers-reduced-motion: reduce)");
+  return useMediaQuery('(prefers-reduced-motion: reduce)');
 }
 
 /**
@@ -143,18 +133,13 @@ export function useResponsive() {
 
   // Utility for responsive values
   const responsive = useCallback(
-    <T>(values: {
-      mobile?: T;
-      tablet?: T;
-      desktop?: T;
-      default: T;
-    }): T => {
+    <T>(values: { mobile?: T; tablet?: T; desktop?: T; default: T }): T => {
       if (isMobile && values.mobile !== undefined) return values.mobile;
       if (isTablet && values.tablet !== undefined) return values.tablet;
       if (isDesktop && values.desktop !== undefined) return values.desktop;
       return values.default;
     },
-    [isMobile, isTablet, isDesktop]
+    [isMobile, isTablet, isDesktop],
   );
 
   return {

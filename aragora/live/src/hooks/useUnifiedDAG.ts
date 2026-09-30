@@ -60,10 +60,10 @@ const STAGE_X: Record<DAGStage, number> = {
 
 // Stage → color hint
 export const STAGE_COLORS: Record<DAGStage, string> = {
-  ideas: '#6366f1',       // indigo
-  principles: '#8b5cf6',  // violet
-  goals: '#10b981',       // emerald
-  actions: '#f59e0b',     // amber
+  ideas: '#6366f1', // indigo
+  principles: '#8b5cf6', // violet
+  goals: '#10b981', // emerald
+  actions: '#f59e0b', // amber
   orchestration: '#ec4899', // pink
 };
 
@@ -100,9 +100,7 @@ function getStringList(value: unknown): string[] {
     return [];
   }
 
-  return value
-    .map((item) => String(item).trim())
-    .filter(Boolean);
+  return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
 function normalizeStage(value: unknown): DAGStage {
@@ -130,26 +128,21 @@ function getBaselineSortIndex(node: ServerGraphNode): [number, number, number, s
   const createdAt = getNumericValue(node.created_at) ?? Number.MAX_SAFE_INTEGER;
   const label = getNodeLabel(node, data).toLowerCase();
 
-  return [
-    explicitY ?? Number.MAX_SAFE_INTEGER,
-    priority * -1,
-    createdAt,
-    label,
-  ];
+  return [explicitY ?? Number.MAX_SAFE_INTEGER, priority * -1, createdAt, label];
 }
 
 export function normalizeDagStatus(node: ServerGraphNode): string {
   const data = isRecord(node.data) ? node.data : {};
   const rawStatus =
-    node.execution_status
-    ?? data.execution_status
-    ?? data.executionStatus
-    ?? node.status
-    ?? data.status
-    ?? node.approval_status
-    ?? data.approval_status
-    ?? data.approvalStatus
-    ?? 'pending';
+    node.execution_status ??
+    data.execution_status ??
+    data.executionStatus ??
+    node.status ??
+    data.status ??
+    node.approval_status ??
+    data.approval_status ??
+    data.approvalStatus ??
+    'pending';
 
   switch (String(rawStatus).toLowerCase()) {
     case 'active':
@@ -323,7 +316,7 @@ function computeNodePositions(
         nodeId,
         downstreamRanks.length > 0
           ? downstreamRanks.reduce((sum, rank) => sum + rank, 0) / downstreamRanks.length
-          : fallbackOrder.get(nodeId) ?? null,
+          : (fallbackOrder.get(nodeId) ?? null),
       );
     }
 
@@ -347,21 +340,15 @@ function computeNodePositions(
       const explicitX = getNumericValue(node.position_x ?? data.position_x ?? data.positionX);
       const explicitY = getNumericValue(node.position_y ?? data.position_y ?? data.positionY);
       const hasExplicitX =
-        hasOwn(node, 'position_x')
-        || hasOwn(data, 'position_x')
-        || hasOwn(data, 'positionX');
+        hasOwn(node, 'position_x') || hasOwn(data, 'position_x') || hasOwn(data, 'positionX');
       const hasExplicitY =
-        hasOwn(node, 'position_y')
-        || hasOwn(data, 'position_y')
-        || hasOwn(data, 'positionY');
+        hasOwn(node, 'position_y') || hasOwn(data, 'position_y') || hasOwn(data, 'positionY');
 
       const preferredY =
         hasExplicitY && explicitY !== null
           ? explicitY
           : NODE_TOP_PADDING + index * NODE_VERTICAL_GAP;
-      const y = index === 0
-        ? Math.max(NODE_TOP_PADDING, preferredY)
-        : Math.max(nextY, preferredY);
+      const y = index === 0 ? Math.max(NODE_TOP_PADDING, preferredY) : Math.max(nextY, preferredY);
       const x = hasExplicitX && explicitX !== null ? explicitX : STAGE_X[stage];
 
       positions.set(id, { x, y });
@@ -394,11 +381,12 @@ function serverNodeToReactFlow(
     data: {
       ...data,
       label: getNodeLabel(node, data),
-      description: typeof node.description === 'string'
-        ? node.description
-        : typeof data.description === 'string'
-          ? data.description
-          : '',
+      description:
+        typeof node.description === 'string'
+          ? node.description
+          : typeof data.description === 'string'
+            ? data.description
+            : '',
       stage,
       subtype,
       status: normalizeDagStatus(node),
@@ -414,10 +402,7 @@ function serverNodeToReactFlow(
   };
 }
 
-function serverEdgeToReactFlow(
-  edge: ServerGraphEdge,
-  stageByNodeId: Map<string, DAGStage>,
-): Edge {
+function serverEdgeToReactFlow(edge: ServerGraphEdge, stageByNodeId: Map<string, DAGStage>): Edge {
   const rawData = isRecord(edge.data) ? edge.data : {};
   const source = String(edge.source ?? edge.source_id ?? '');
   const target = String(edge.target ?? edge.target_id ?? '');
@@ -425,9 +410,7 @@ function serverEdgeToReactFlow(
   const targetStage = stageByNodeId.get(target);
   const edgeType = String(edge.edge_type ?? rawData.edgeType ?? edge.type ?? 'default');
   const crossStage = Boolean(
-    edge.cross_stage
-    ?? rawData.crossStage
-    ?? (targetStage ? sourceStage !== targetStage : false),
+    edge.cross_stage ?? rawData.crossStage ?? (targetStage ? sourceStage !== targetStage : false),
   );
 
   return {
@@ -436,38 +419,25 @@ function serverEdgeToReactFlow(
     target,
     type: crossStage ? 'crossStage' : String(edge.type ?? 'default'),
     label: edge.label ? String(edge.label) : edgeType || undefined,
-    animated: Boolean(
-      edge.animated
-      ?? (crossStage || edgeType.toLowerCase() === 'similarity'),
-    ),
-    data: {
-      edgeType,
-      crossStage,
-      ...rawData,
-    },
+    animated: Boolean(edge.animated ?? (crossStage || edgeType.toLowerCase() === 'similarity')),
+    data: { edgeType, crossStage, ...rawData },
     style: crossStage
-      ? {
-          stroke: STAGE_COLORS[sourceStage],
-          strokeDasharray: '6 4',
-        }
-      : {
-          stroke: STAGE_COLORS[sourceStage],
-        },
+      ? { stroke: STAGE_COLORS[sourceStage], strokeDasharray: '6 4' }
+      : { stroke: STAGE_COLORS[sourceStage] },
   };
 }
 
 export function mapServerGraphToReactFlow(graph: Record<string, unknown>): GraphSnapshot {
-  const serverNodes = Array.isArray(graph.nodes)
-    ? graph.nodes.filter(isRecord)
-    : [];
-  const serverEdges = Array.isArray(graph.edges)
-    ? graph.edges.filter(isRecord)
-    : [];
+  const serverNodes = Array.isArray(graph.nodes) ? graph.nodes.filter(isRecord) : [];
+  const serverEdges = Array.isArray(graph.edges) ? graph.edges.filter(isRecord) : [];
   const positions = computeNodePositions(serverNodes, serverEdges);
   const nodes = serverNodes.map((node) =>
     serverNodeToReactFlow(
       node,
-      positions.get(String(node.id || '')) ?? { x: STAGE_X[normalizeStage(node.stage)], y: NODE_TOP_PADDING },
+      positions.get(String(node.id || '')) ?? {
+        x: STAGE_X[normalizeStage(node.stage)],
+        y: NODE_TOP_PADDING,
+      },
     ),
   );
   const stageByNodeId = new Map(nodes.map((node) => [node.id, node.data.stage]));
@@ -478,10 +448,7 @@ export function mapServerGraphToReactFlow(graph: Record<string, unknown>): Graph
   return { nodes, edges };
 }
 
-export function validateDagGraph(
-  nodes: Node<DAGNodeData>[],
-  edges: Edge[],
-): string[] {
+export function validateDagGraph(nodes: Node<DAGNodeData>[], edges: Edge[]): string[] {
   const errors: string[] = [];
   if (nodes.length === 0) {
     errors.push('Graph is empty — add at least one idea node');
@@ -556,7 +523,7 @@ export function useUnifiedDAG(graphId: string | null) {
 
   // Fetch initial graph
   const { data: graphData, mutate: mutateGraph } = useSWRFetch<{ data: Record<string, unknown> }>(
-    graphId ? `${API_PREFIX}/${graphId}` : null
+    graphId ? `${API_PREFIX}/${graphId}` : null,
   );
 
   // Sync server graph → React Flow
@@ -596,126 +563,167 @@ export function useUnifiedDAG(graphId: string | null) {
   // Graph CRUD
   // -------------------------------------------------------------------------
 
-  const addNode = useCallback((node: Node<DAGNodeData>) => {
-    pushUndo();
-    setNodes((prev) => [...prev, node]);
-  }, [pushUndo]);
+  const addNode = useCallback(
+    (node: Node<DAGNodeData>) => {
+      pushUndo();
+      setNodes((prev) => [...prev, node]);
+    },
+    [pushUndo],
+  );
 
-  const updateNode = useCallback((id: string, data: Partial<DAGNodeData>) => {
-    pushUndo();
-    setNodes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...data } } : n))
-    );
-  }, [pushUndo]);
+  const updateNode = useCallback(
+    (id: string, data: Partial<DAGNodeData>) => {
+      pushUndo();
+      setNodes((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...data } } : n)),
+      );
+    },
+    [pushUndo],
+  );
 
-  const deleteNode = useCallback((id: string) => {
-    pushUndo();
-    setNodes((prev) => prev.filter((n) => n.id !== id));
-    setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
-  }, [pushUndo]);
+  const deleteNode = useCallback(
+    (id: string) => {
+      pushUndo();
+      setNodes((prev) => prev.filter((n) => n.id !== id));
+      setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
+    },
+    [pushUndo],
+  );
 
-  const addEdge = useCallback((edge: Edge) => {
-    pushUndo();
-    setEdges((prev) => [...prev, edge]);
-  }, [pushUndo]);
+  const addEdge = useCallback(
+    (edge: Edge) => {
+      pushUndo();
+      setEdges((prev) => [...prev, edge]);
+    },
+    [pushUndo],
+  );
 
-  const deleteEdge = useCallback((id: string) => {
-    pushUndo();
-    setEdges((prev) => prev.filter((e) => e.id !== id));
-  }, [pushUndo]);
+  const deleteEdge = useCallback(
+    (id: string) => {
+      pushUndo();
+      setEdges((prev) => prev.filter((e) => e.id !== id));
+    },
+    [pushUndo],
+  );
 
   // -------------------------------------------------------------------------
   // AI Operations
   // -------------------------------------------------------------------------
 
-  const runOperation = useCallback(async (
-    nodeId: string,
-    operation: string,
-    body?: Record<string, unknown>,
-  ): Promise<DAGOperationResult | null> => {
-    if (!graphId) return null;
-    setOperationLoading(true);
-    setOperationError(null);
-    try {
-      const result = await apiFetch<{ data: DAGOperationResult }>(
-        `${API_PREFIX}/${graphId}/nodes/${nodeId}/${operation}`,
-        { method: 'POST', body: JSON.stringify(body || {}) },
-      );
-      pushUndo();
-      await mutateGraph();
-      return result.data ?? null;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Operation failed';
-      setOperationError(msg);
-      return null;
-    } finally {
-      setOperationLoading(false);
-    }
-  }, [graphId, pushUndo, mutateGraph]);
+  const runOperation = useCallback(
+    async (
+      nodeId: string,
+      operation: string,
+      body?: Record<string, unknown>,
+    ): Promise<DAGOperationResult | null> => {
+      if (!graphId) return null;
+      setOperationLoading(true);
+      setOperationError(null);
+      try {
+        const result = await apiFetch<{ data: DAGOperationResult }>(
+          `${API_PREFIX}/${graphId}/nodes/${nodeId}/${operation}`,
+          { method: 'POST', body: JSON.stringify(body || {}) },
+        );
+        pushUndo();
+        await mutateGraph();
+        return result.data ?? null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Operation failed';
+        setOperationError(msg);
+        return null;
+      } finally {
+        setOperationLoading(false);
+      }
+    },
+    [graphId, pushUndo, mutateGraph],
+  );
 
-  const debateNode = useCallback((nodeId: string, agents?: string[], rounds?: number) =>
-    runOperation(nodeId, 'debate', { agents, rounds }), [runOperation]);
+  const debateNode = useCallback(
+    (nodeId: string, agents?: string[], rounds?: number) =>
+      runOperation(nodeId, 'debate', { agents, rounds }),
+    [runOperation],
+  );
 
-  const decomposeNode = useCallback((nodeId: string) =>
-    runOperation(nodeId, 'decompose'), [runOperation]);
+  const decomposeNode = useCallback(
+    (nodeId: string) => runOperation(nodeId, 'decompose'),
+    [runOperation],
+  );
 
-  const prioritizeChildren = useCallback((nodeId: string) =>
-    runOperation(nodeId, 'prioritize'), [runOperation]);
+  const prioritizeChildren = useCallback(
+    (nodeId: string) => runOperation(nodeId, 'prioritize'),
+    [runOperation],
+  );
 
-  const assignAgents = useCallback((nodeId: string) =>
-    runOperation(nodeId, 'assign-agents'), [runOperation]);
+  const assignAgents = useCallback(
+    (nodeId: string) => runOperation(nodeId, 'assign-agents'),
+    [runOperation],
+  );
 
-  const executeNode = useCallback((nodeId: string) =>
-    runOperation(nodeId, 'execute'), [runOperation]);
+  const executeNode = useCallback(
+    (nodeId: string) => runOperation(nodeId, 'execute'),
+    [runOperation],
+  );
 
-  const findPrecedents = useCallback((nodeId: string, maxResults?: number) =>
-    runOperation(nodeId, 'find-precedents', { max_results: maxResults }), [runOperation]);
+  const findPrecedents = useCallback(
+    (nodeId: string, maxResults?: number) =>
+      runOperation(nodeId, 'find-precedents', { max_results: maxResults }),
+    [runOperation],
+  );
 
   // -------------------------------------------------------------------------
   // Bulk Operations
   // -------------------------------------------------------------------------
 
-  const clusterIdeas = useCallback(async (ideas: string[], threshold?: number): Promise<DAGOperationResult | null> => {
-    if (!graphId) return null;
-    setOperationLoading(true);
-    setOperationError(null);
-    try {
-      const result = await apiFetch<{ data: DAGOperationResult }>(
-        `${API_PREFIX}/${graphId}/cluster-ideas`,
-        { method: 'POST', body: JSON.stringify({ ideas, threshold }) },
-      );
-      pushUndo();
-      await mutateGraph();
-      return result.data ?? null;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Clustering failed';
-      setOperationError(msg);
-      return null;
-    } finally {
-      setOperationLoading(false);
-    }
-  }, [graphId, pushUndo, mutateGraph]);
+  const clusterIdeas = useCallback(
+    async (ideas: string[], threshold?: number): Promise<DAGOperationResult | null> => {
+      if (!graphId) return null;
+      setOperationLoading(true);
+      setOperationError(null);
+      try {
+        const result = await apiFetch<{ data: DAGOperationResult }>(
+          `${API_PREFIX}/${graphId}/cluster-ideas`,
+          { method: 'POST', body: JSON.stringify({ ideas, threshold }) },
+        );
+        pushUndo();
+        await mutateGraph();
+        return result.data ?? null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Clustering failed';
+        setOperationError(msg);
+        return null;
+      } finally {
+        setOperationLoading(false);
+      }
+    },
+    [graphId, pushUndo, mutateGraph],
+  );
 
-  const autoFlow = useCallback(async (ideas: string[], config?: Record<string, unknown>): Promise<DAGOperationResult | null> => {
-    if (!graphId) return null;
-    setOperationLoading(true);
-    setOperationError(null);
-    try {
-      const result = await apiFetch<{ data: DAGOperationResult }>(
-        `${API_PREFIX}/${graphId}/auto-flow`,
-        { method: 'POST', body: JSON.stringify({ ideas, config }) },
-      );
-      pushUndo();
-      await mutateGraph();
-      return result.data ?? null;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Auto-flow failed';
-      setOperationError(msg);
-      return null;
-    } finally {
-      setOperationLoading(false);
-    }
-  }, [graphId, pushUndo, mutateGraph]);
+  const autoFlow = useCallback(
+    async (
+      ideas: string[],
+      config?: Record<string, unknown>,
+    ): Promise<DAGOperationResult | null> => {
+      if (!graphId) return null;
+      setOperationLoading(true);
+      setOperationError(null);
+      try {
+        const result = await apiFetch<{ data: DAGOperationResult }>(
+          `${API_PREFIX}/${graphId}/auto-flow`,
+          { method: 'POST', body: JSON.stringify({ ideas, config }) },
+        );
+        pushUndo();
+        await mutateGraph();
+        return result.data ?? null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Auto-flow failed';
+        setOperationError(msg);
+        return null;
+      } finally {
+        setOperationLoading(false);
+      }
+    },
+    [graphId, pushUndo, mutateGraph],
+  );
 
   // -------------------------------------------------------------------------
   // Validation
@@ -734,9 +742,7 @@ export function useUnifiedDAG(graphId: string | null) {
 
   const executeAllReady = useCallback(async (): Promise<void> => {
     if (!graphId) return;
-    const readyNodes = nodes.filter(
-      (n) => (n.data as unknown as DAGNodeData).status === 'ready'
-    );
+    const readyNodes = nodes.filter((n) => (n.data as unknown as DAGNodeData).status === 'ready');
     if (readyNodes.length === 0) return;
 
     setBatchExecuting(true);
@@ -749,14 +755,16 @@ export function useUnifiedDAG(graphId: string | null) {
           return { ...n, data: { ...n.data, status: 'running' } as DAGNodeData };
         }
         return n;
-      })
+      }),
     );
 
     try {
-      const result = await apiFetch<{ data: { results: Array<{ node_id: string; status: string; duration_ms: number }> } }>(
-        `${API_PREFIX}/${graphId}/execute-batch`,
-        { method: 'POST', body: JSON.stringify({ node_ids: readyNodes.map((n) => n.id) }) },
-      );
+      const result = await apiFetch<{
+        data: { results: Array<{ node_id: string; status: string; duration_ms: number }> };
+      }>(`${API_PREFIX}/${graphId}/execute-batch`, {
+        method: 'POST',
+        body: JSON.stringify({ node_ids: readyNodes.map((n) => n.id) }),
+      });
 
       const batchResults = result?.data?.results || [];
       const newHistory: ExecutionHistoryEntry[] = batchResults.map((r) => {
@@ -780,7 +788,7 @@ export function useUnifiedDAG(graphId: string | null) {
             return { ...n, data: { ...n.data, status: batchResult.status } as DAGNodeData };
           }
           return n;
-        })
+        }),
       );
 
       await mutateGraph();
@@ -792,7 +800,7 @@ export function useUnifiedDAG(graphId: string | null) {
             return { ...n, data: { ...n.data, status: 'ready' } as DAGNodeData };
           }
           return n;
-        })
+        }),
       );
       setOperationError(err instanceof Error ? err.message : 'Batch execution failed');
     } finally {
@@ -805,10 +813,10 @@ export function useUnifiedDAG(graphId: string | null) {
     setBatchExecuting(true);
     setOperationError(null);
     try {
-      await apiFetch<{ data: DAGOperationResult }>(
-        `${API_PREFIX}/${graphId}/auto-advance`,
-        { method: 'POST', body: JSON.stringify({}) },
-      );
+      await apiFetch<{ data: DAGOperationResult }>(`${API_PREFIX}/${graphId}/auto-advance`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
       pushUndo();
       await mutateGraph();
     } catch (err) {
@@ -821,11 +829,24 @@ export function useUnifiedDAG(graphId: string | null) {
   // Computed stats
   const graphStats = useMemo(() => {
     const total = nodes.length;
-    const succeeded = nodes.filter((n) => (n.data as unknown as DAGNodeData).status === 'succeeded').length;
+    const succeeded = nodes.filter(
+      (n) => (n.data as unknown as DAGNodeData).status === 'succeeded',
+    ).length;
     const ready = nodes.filter((n) => (n.data as unknown as DAGNodeData).status === 'ready').length;
-    const running = nodes.filter((n) => (n.data as unknown as DAGNodeData).status === 'running').length;
-    const failed = nodes.filter((n) => (n.data as unknown as DAGNodeData).status === 'failed').length;
-    return { total, succeeded, ready, running, failed, completionPct: total > 0 ? Math.round((succeeded / total) * 100) : 0 };
+    const running = nodes.filter(
+      (n) => (n.data as unknown as DAGNodeData).status === 'running',
+    ).length;
+    const failed = nodes.filter(
+      (n) => (n.data as unknown as DAGNodeData).status === 'failed',
+    ).length;
+    return {
+      total,
+      succeeded,
+      ready,
+      running,
+      failed,
+      completionPct: total > 0 ? Math.round((succeeded / total) * 100) : 0,
+    };
   }, [nodes]);
 
   return {

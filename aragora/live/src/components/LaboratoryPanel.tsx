@@ -50,7 +50,10 @@ interface LaboratoryPanelProps {
 
 const DEFAULT_API_BASE = API_BASE_URL;
 
-function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: LaboratoryPanelProps) {
+function LaboratoryPanelComponent({
+  apiBase = DEFAULT_API_BASE,
+  events = [],
+}: LaboratoryPanelProps) {
   const { tokens, isAuthenticated, isLoading: authLoading } = useAuth();
   const [apiTraits, setApiTraits] = useState<EmergentTrait[]>([]);
   const [pollinations, setPollinations] = useState<CrossPollination[]>([]);
@@ -59,32 +62,32 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
   const [loading, setLoading] = useState(true);
 
   // Extract trait_emerged events from stream
-  const eventTraits = useMemo(() =>
-    events
-      .filter(e => e.type === 'trait_emerged')
-      .map(e => ({
-        agent: (e.data as { agent?: string }).agent || 'unknown',
-        trait: (e.data as { trait?: string }).trait || '',
-        domain: (e.data as { domain?: string }).domain || 'general',
-        confidence: (e.data as { confidence?: number }).confidence || 0.5,
-        evidence: (e.data as { evidence?: string[] }).evidence || [],
-        detected_at: new Date(e.timestamp * 1000).toISOString(),
-      })),
-    [events]
+  const eventTraits = useMemo(
+    () =>
+      events
+        .filter((e) => e.type === 'trait_emerged')
+        .map((e) => ({
+          agent: (e.data as { agent?: string }).agent || 'unknown',
+          trait: (e.data as { trait?: string }).trait || '',
+          domain: (e.data as { domain?: string }).domain || 'general',
+          confidence: (e.data as { confidence?: number }).confidence || 0.5,
+          evidence: (e.data as { evidence?: string[] }).evidence || [],
+          detected_at: new Date(e.timestamp * 1000).toISOString(),
+        })),
+    [events],
   );
 
   // Merge API traits with event traits (events are more recent)
   const traits = useMemo(() => {
     // Create a Set of event trait identifiers to deduplicate
-    const eventKeys = new Set(eventTraits.map(t => `${t.agent}:${t.trait}`));
+    const eventKeys = new Set(eventTraits.map((t) => `${t.agent}:${t.trait}`));
     // Keep API traits not superseded by events, then add event traits
-    return [
-      ...eventTraits,
-      ...apiTraits.filter(t => !eventKeys.has(`${t.agent}:${t.trait}`)),
-    ];
+    return [...eventTraits, ...apiTraits.filter((t) => !eventKeys.has(`${t.agent}:${t.trait}`))];
   }, [apiTraits, eventTraits]);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'traits' | 'pollinations' | 'evolution' | 'patterns'>('traits');
+  const [activeTab, setActiveTab] = useState<'traits' | 'pollinations' | 'evolution' | 'patterns'>(
+    'traits',
+  );
   const [expanded, setExpanded] = useState(true); // Show by default
 
   const fetchData = useCallback(async () => {
@@ -105,10 +108,22 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
 
     // Use allSettled to handle partial failures gracefully
     const results = await Promise.allSettled([
-      fetchWithRetry(`${apiBase}/api/laboratory/emergent-traits?min_confidence=0.3&limit=10`, { headers }, { maxRetries: 2 }),
-      fetchWithRetry(`${apiBase}/api/laboratory/cross-pollinations/suggest`, { headers }, { maxRetries: 2 }),
+      fetchWithRetry(
+        `${apiBase}/api/laboratory/emergent-traits?min_confidence=0.3&limit=10`,
+        { headers },
+        { maxRetries: 2 },
+      ),
+      fetchWithRetry(
+        `${apiBase}/api/laboratory/cross-pollinations/suggest`,
+        { headers },
+        { maxRetries: 2 },
+      ),
       fetchWithRetry(`${apiBase}/api/genesis/stats`, { headers }, { maxRetries: 2 }),
-      fetchWithRetry(`${apiBase}/api/critiques/patterns?limit=15&min_success=0.5`, { headers }, { maxRetries: 2 }),
+      fetchWithRetry(
+        `${apiBase}/api/critiques/patterns?limit=15&min_success=0.5`,
+        { headers },
+        { maxRetries: 2 },
+      ),
     ]);
 
     const [traitsResult, pollinationsResult, genesisResult, patternsResult] = results;
@@ -219,8 +234,14 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
         {genesisStats && (
           <>
             <span>
-              Population: <span className={genesisStats.net_population_change >= 0 ? 'text-green-400' : 'text-red-400'}>
-                {genesisStats.net_population_change >= 0 ? '+' : ''}{genesisStats.net_population_change}
+              Population:{' '}
+              <span
+                className={
+                  genesisStats.net_population_change >= 0 ? 'text-green-400' : 'text-red-400'
+                }
+              >
+                {genesisStats.net_population_change >= 0 ? '+' : ''}
+                {genesisStats.net_population_change}
               </span>
             </span>
             <span>
@@ -230,14 +251,16 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
         )}
       </div>
 
-      {error && (
-        <ErrorWithRetry error={error} onRetry={fetchData} className="mb-4" />
-      )}
+      {error && <ErrorWithRetry error={error} onRetry={fetchData} className="mb-4" />}
 
       {expanded && (
         <>
           {/* Tab Navigation */}
-          <div role="tablist" aria-label="Laboratory sections" className="flex space-x-1 bg-bg border border-border rounded p-1 mb-4">
+          <div
+            role="tablist"
+            aria-label="Laboratory sections"
+            className="flex space-x-1 bg-bg border border-border rounded p-1 mb-4"
+          >
             <button
               role="tab"
               id="lab-traits-tab"
@@ -298,7 +321,12 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
 
           {/* Traits Tab */}
           {activeTab === 'traits' && (
-            <div id="lab-traits-panel" role="tabpanel" aria-labelledby="lab-traits-tab" className="space-y-3 max-h-80 overflow-y-auto">
+            <div
+              id="lab-traits-panel"
+              role="tabpanel"
+              aria-labelledby="lab-traits-tab"
+              className="space-y-3 max-h-80 overflow-y-auto"
+            >
               {loading && traits.length === 0 && (
                 <div className="text-center text-text-muted py-4 font-theme-data text-sm">
                   Detecting emergent traits...
@@ -307,7 +335,8 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
 
               {!loading && traits.length === 0 && (
                 <div className="text-center text-text-muted py-4 font-theme-data text-sm">
-                  No emergent traits detected yet. Run more debates to discover agent specializations.
+                  No emergent traits detected yet. Run more debates to discover agent
+                  specializations.
                 </div>
               )}
 
@@ -321,18 +350,20 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
                       <span className="text-xs font-theme-data text-[var(--acid-cyan)] font-bold">
                         {trait.agent}
                       </span>
-                      <span className={`px-2 py-0.5 text-xs rounded border ${getDomainColor(trait.domain)}`}>
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded border ${getDomainColor(trait.domain)}`}
+                      >
                         {trait.domain}
                       </span>
                     </div>
-                    <span className={`text-xs font-theme-data ${getConfidenceColor(trait.confidence)}`}>
+                    <span
+                      className={`text-xs font-theme-data ${getConfidenceColor(trait.confidence)}`}
+                    >
                       {(trait.confidence * 100).toFixed(0)}%
                     </span>
                   </div>
 
-                  <p className="text-sm text-text font-medium mb-2">
-                    {trait.trait}
-                  </p>
+                  <p className="text-sm text-text font-medium mb-2">{trait.trait}</p>
 
                   {trait.evidence && trait.evidence.length > 0 && (
                     <div className="space-y-1">
@@ -359,7 +390,12 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
 
           {/* Pollinations Tab */}
           {activeTab === 'pollinations' && (
-            <div id="lab-pollinations-panel" role="tabpanel" aria-labelledby="lab-pollinations-tab" className="space-y-3 max-h-80 overflow-y-auto">
+            <div
+              id="lab-pollinations-panel"
+              role="tabpanel"
+              aria-labelledby="lab-pollinations-tab"
+              className="space-y-3 max-h-80 overflow-y-auto"
+            >
               {loading && pollinations.length === 0 && (
                 <div className="text-center text-text-muted py-4 font-theme-data text-sm">
                   Analyzing cross-pollination opportunities...
@@ -387,9 +423,7 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
                     Transfer: {pollination.trait}
                   </p>
 
-                  <p className="text-xs text-text-muted mb-2">
-                    {pollination.rationale}
-                  </p>
+                  <p className="text-xs text-text-muted mb-2">{pollination.rationale}</p>
 
                   <div className="flex items-center justify-between text-xs font-theme-data">
                     <span className="text-text-muted">Expected improvement:</span>
@@ -404,7 +438,12 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
 
           {/* Evolution Tab */}
           {activeTab === 'evolution' && (
-            <div id="lab-evolution-panel" role="tabpanel" aria-labelledby="lab-evolution-tab" className="space-y-4 max-h-80 overflow-y-auto">
+            <div
+              id="lab-evolution-panel"
+              role="tabpanel"
+              aria-labelledby="lab-evolution-tab"
+              className="space-y-4 max-h-80 overflow-y-auto"
+            >
               {loading && !genesisStats && (
                 <div className="text-center text-text-muted py-4 font-theme-data text-sm">
                   Loading evolution data...
@@ -422,16 +461,23 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
                   {/* Population Stats */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="p-3 bg-bg border border-border rounded-lg text-center">
-                      <div className="text-2xl font-theme-data text-green-400">{genesisStats.total_births}</div>
+                      <div className="text-2xl font-theme-data text-green-400">
+                        {genesisStats.total_births}
+                      </div>
                       <div className="text-xs text-text-muted">Births</div>
                     </div>
                     <div className="p-3 bg-bg border border-border rounded-lg text-center">
-                      <div className="text-2xl font-theme-data text-red-400">{genesisStats.total_deaths}</div>
+                      <div className="text-2xl font-theme-data text-red-400">
+                        {genesisStats.total_deaths}
+                      </div>
                       <div className="text-xs text-text-muted">Deaths</div>
                     </div>
                     <div className="p-3 bg-bg border border-border rounded-lg text-center">
-                      <div className={`text-2xl font-theme-data ${genesisStats.net_population_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {genesisStats.net_population_change >= 0 ? '+' : ''}{genesisStats.net_population_change}
+                      <div
+                        className={`text-2xl font-theme-data ${genesisStats.net_population_change >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                      >
+                        {genesisStats.net_population_change >= 0 ? '+' : ''}
+                        {genesisStats.net_population_change}
                       </div>
                       <div className="text-xs text-text-muted">Net Change</div>
                     </div>
@@ -440,41 +486,58 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
                   {/* Fitness Trend */}
                   <div className="p-3 bg-bg border border-border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-theme-data text-text-muted">Avg Fitness Change (Recent)</span>
-                      <span className={`text-lg font-theme-data ${genesisStats.avg_fitness_change_recent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {genesisStats.avg_fitness_change_recent >= 0 ? '+' : ''}{genesisStats.avg_fitness_change_recent.toFixed(4)}
+                      <span className="text-sm font-theme-data text-text-muted">
+                        Avg Fitness Change (Recent)
+                      </span>
+                      <span
+                        className={`text-lg font-theme-data ${genesisStats.avg_fitness_change_recent >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                      >
+                        {genesisStats.avg_fitness_change_recent >= 0 ? '+' : ''}
+                        {genesisStats.avg_fitness_change_recent.toFixed(4)}
                       </span>
                     </div>
                     <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
                       <div
                         className={`h-full ${genesisStats.avg_fitness_change_recent >= 0 ? 'bg-green-400' : 'bg-red-400'}`}
-                        style={{ width: `${Math.min(100, Math.abs(genesisStats.avg_fitness_change_recent) * 500)}%` }}
+                        style={{
+                          width: `${Math.min(100, Math.abs(genesisStats.avg_fitness_change_recent) * 500)}%`,
+                        }}
                       />
                     </div>
                   </div>
 
                   {/* Event Breakdown */}
-                  {genesisStats.event_counts && Object.keys(genesisStats.event_counts).length > 0 && (
-                    <div className="p-3 bg-bg border border-border rounded-lg">
-                      <div className="text-sm font-theme-data text-text-muted mb-3">Event Types</div>
-                      <div className="space-y-2">
-                        {Object.entries(genesisStats.event_counts)
-                          .filter(([_, count]) => count > 0)
-                          .sort(([_, a], [__, b]) => b - a)
-                          .map(([type, count]) => (
-                            <div key={type} className="flex items-center justify-between text-xs font-theme-data">
-                              <span className="text-text-muted">{type.replace(/_/g, ' ')}</span>
-                              <span className="text-yellow-400">{count}</span>
-                            </div>
-                          ))}
+                  {genesisStats.event_counts &&
+                    Object.keys(genesisStats.event_counts).length > 0 && (
+                      <div className="p-3 bg-bg border border-border rounded-lg">
+                        <div className="text-sm font-theme-data text-text-muted mb-3">
+                          Event Types
+                        </div>
+                        <div className="space-y-2">
+                          {Object.entries(genesisStats.event_counts)
+                            .filter(([_, count]) => count > 0)
+                            .sort(([_, a], [__, b]) => b - a)
+                            .map(([type, count]) => (
+                              <div
+                                key={type}
+                                className="flex items-center justify-between text-xs font-theme-data"
+                              >
+                                <span className="text-text-muted">{type.replace(/_/g, ' ')}</span>
+                                <span className="text-yellow-400">{count}</span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {/* Integrity Status */}
                   <div className="flex items-center justify-between p-2 bg-bg border border-border rounded-lg text-xs font-theme-data">
                     <span className="text-text-muted">Ledger Integrity</span>
-                    <span className={genesisStats.integrity_verified ? 'text-green-400' : 'text-red-400'}>
+                    <span
+                      className={
+                        genesisStats.integrity_verified ? 'text-green-400' : 'text-red-400'
+                      }
+                    >
                       {genesisStats.integrity_verified ? 'VERIFIED' : 'UNVERIFIED'}
                     </span>
                   </div>
@@ -485,7 +548,12 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
 
           {/* Patterns Tab */}
           {activeTab === 'patterns' && (
-            <div id="lab-patterns-panel" role="tabpanel" aria-labelledby="lab-patterns-tab" className="space-y-3 max-h-80 overflow-y-auto">
+            <div
+              id="lab-patterns-panel"
+              role="tabpanel"
+              aria-labelledby="lab-patterns-tab"
+              className="space-y-3 max-h-80 overflow-y-auto"
+            >
               {loading && patterns.length === 0 && (
                 <div className="text-center text-text-muted py-4 font-theme-data text-sm">
                   Discovering critique patterns...
@@ -504,26 +572,33 @@ function LaboratoryPanelComponent({ apiBase = DEFAULT_API_BASE, events = [] }: L
                   className="p-3 bg-bg border border-border rounded-lg hover:border-purple-500/50 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className={`px-2 py-0.5 text-xs rounded border bg-purple-500/20 text-purple-400 border-purple-500/30`}>
+                    <span
+                      className={`px-2 py-0.5 text-xs rounded border bg-purple-500/20 text-purple-400 border-purple-500/30`}
+                    >
                       {pattern.issue_type || 'general'}
                     </span>
                     <div className="flex items-center gap-2 text-xs font-theme-data">
-                      <span className={pattern.success_rate >= 0.7 ? 'text-green-400' : pattern.success_rate >= 0.5 ? 'text-yellow-400' : 'text-orange-400'}>
+                      <span
+                        className={
+                          pattern.success_rate >= 0.7
+                            ? 'text-green-400'
+                            : pattern.success_rate >= 0.5
+                              ? 'text-yellow-400'
+                              : 'text-orange-400'
+                        }
+                      >
                         {(pattern.success_rate * 100).toFixed(0)}% success
                       </span>
-                      <span className="text-text-muted">
-                        {pattern.usage_count} uses
-                      </span>
+                      <span className="text-text-muted">{pattern.usage_count} uses</span>
                     </div>
                   </div>
 
-                  <p className="text-sm text-text font-medium mb-2">
-                    {pattern.pattern}
-                  </p>
+                  <p className="text-sm text-text font-medium mb-2">{pattern.pattern}</p>
 
                   {pattern.suggested_rebuttal && (
                     <div className="text-xs text-text-muted p-2 bg-surface rounded border border-border">
-                      <span className="text-purple-400 font-theme-data">Rebuttal:</span> {pattern.suggested_rebuttal}
+                      <span className="text-purple-400 font-theme-data">Rebuttal:</span>{' '}
+                      {pattern.suggested_rebuttal}
                     </div>
                   )}
                 </div>

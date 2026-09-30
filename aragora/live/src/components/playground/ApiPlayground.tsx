@@ -40,10 +40,7 @@ const ENDPOINTS: Endpoint[] = [
     body: {
       task: 'What is the best programming paradigm?',
       agents: ['claude', 'gpt-4'],
-      protocol: {
-        rounds: 2,
-        consensus: 'majority',
-      },
+      protocol: { rounds: 2, consensus: 'majority' },
     },
   },
   {
@@ -52,41 +49,30 @@ const ENDPOINTS: Endpoint[] = [
     description: 'List all debates',
     parameters: [
       { name: 'limit', type: 'number', required: false, description: 'Max results', default: 10 },
-      { name: 'offset', type: 'number', required: false, description: 'Pagination offset', default: 0 },
+      {
+        name: 'offset',
+        type: 'number',
+        required: false,
+        description: 'Pagination offset',
+        default: 0,
+      },
     ],
   },
   {
     method: 'GET',
     path: '/api/debates/{debate_id}',
     description: 'Get debate details',
-    parameters: [
-      { name: 'debate_id', type: 'string', required: true, description: 'Debate ID' },
-    ],
+    parameters: [{ name: 'debate_id', type: 'string', required: true, description: 'Debate ID' }],
   },
-  {
-    method: 'GET',
-    path: '/api/agents',
-    description: 'List available agents',
-  },
+  { method: 'GET', path: '/api/agents', description: 'List available agents' },
   {
     method: 'POST',
     path: '/api/agents/recommend',
     description: 'Get agent recommendations for a task',
-    body: {
-      task: 'Review this code for security issues',
-      count: 3,
-    },
+    body: { task: 'Review this code for security issues', count: 3 },
   },
-  {
-    method: 'GET',
-    path: '/api/capabilities',
-    description: 'Get API capabilities and version',
-  },
-  {
-    method: 'GET',
-    path: '/health/ready',
-    description: 'Health check endpoint',
-  },
+  { method: 'GET', path: '/api/capabilities', description: 'Get API capabilities and version' },
+  { method: 'GET', path: '/health/ready', description: 'Health check endpoint' },
 ];
 
 export const ApiPlayground: React.FC = () => {
@@ -139,18 +125,13 @@ export const ApiPlayground: React.FC = () => {
     const url = buildUrl();
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
 
-      const options: RequestInit = {
-        method: selectedEndpoint.method,
-        headers,
-      };
+      const options: RequestInit = { method: selectedEndpoint.method, headers };
 
       if (['POST', 'PUT', 'PATCH'].includes(selectedEndpoint.method) && requestBody) {
         options.body = requestBody;
@@ -223,7 +204,9 @@ export const ApiPlayground: React.FC = () => {
                       : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
                   }`}
                 >
-                  <span className={`${getMethodColor(endpoint.method)} text-white text-xs px-2 py-0.5 rounded font-theme-data`}>
+                  <span
+                    className={`${getMethodColor(endpoint.method)} text-white text-xs px-2 py-0.5 rounded font-theme-data`}
+                  >
                     {endpoint.method}
                   </span>
                   <span className="text-sm truncate">{endpoint.path}</span>
@@ -265,7 +248,9 @@ export const ApiPlayground: React.FC = () => {
 
             {/* URL Preview */}
             <div className="flex items-center gap-2">
-              <span className={`${getMethodColor(selectedEndpoint.method)} text-white px-3 py-1 rounded font-theme-data text-sm`}>
+              <span
+                className={`${getMethodColor(selectedEndpoint.method)} text-white px-3 py-1 rounded font-theme-data text-sm`}
+              >
                 {selectedEndpoint.method}
               </span>
               <code className="flex-1 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded text-sm text-gray-700 dark:text-gray-300">
@@ -286,7 +271,9 @@ export const ApiPlayground: React.FC = () => {
             {/* Request panel */}
             <div className="w-1/2 border-r border-gray-200 dark:border-gray-700 flex flex-col">
               <div className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Request Body</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Request Body
+                </h3>
               </div>
               <div className="flex-1 p-4 overflow-auto">
                 {['POST', 'PUT', 'PATCH'].includes(selectedEndpoint.method) ? (
@@ -310,11 +297,15 @@ export const ApiPlayground: React.FC = () => {
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Response</h3>
                 {requestState.status !== null && (
                   <div className="flex items-center gap-2 text-sm">
-                    <span className={`px-2 py-0.5 rounded ${
-                      requestState.status < 300 ? 'bg-green-100 text-green-700' :
-                      requestState.status < 400 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded ${
+                        requestState.status < 300
+                          ? 'bg-green-100 text-green-700'
+                          : requestState.status < 400
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-red-100 text-red-700'
+                      }`}
+                    >
                       {requestState.status}
                     </span>
                     {requestState.duration && (

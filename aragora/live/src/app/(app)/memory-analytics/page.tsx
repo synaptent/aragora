@@ -9,7 +9,8 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const MemoryAnalyticsPanel = dynamic(
-  () => import('@/components/MemoryAnalyticsPanel').then(m => ({ default: m.MemoryAnalyticsPanel })),
+  () =>
+    import('@/components/MemoryAnalyticsPanel').then((m) => ({ default: m.MemoryAnalyticsPanel })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +18,7 @@ const MemoryAnalyticsPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function MemoryAnalyticsPage() {
@@ -73,8 +74,8 @@ export default function MemoryAnalyticsPage() {
               {'>'} MEMORY ANALYTICS
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Monitor memory tier distribution, promotion statistics,
-              learning velocity trends, and retrieval analytics.
+              Monitor memory tier distribution, promotion statistics, learning velocity trends, and
+              retrieval analytics.
             </p>
           </div>
 
@@ -87,15 +88,11 @@ export default function MemoryAnalyticsPage() {
             </div>
             <div className="p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
               <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-1">Medium Tier</h3>
-              <p className="text-xs font-theme-data text-text-muted">
-                1 hour TTL - Session memory
-              </p>
+              <p className="text-xs font-theme-data text-text-muted">1 hour TTL - Session memory</p>
             </div>
             <div className="p-4 border border-gold/30 bg-gold/5 rounded">
               <h3 className="text-sm font-theme-data text-gold mb-1">Slow Tier</h3>
-              <p className="text-xs font-theme-data text-text-muted">
-                1 day TTL - Cross-session
-              </p>
+              <p className="text-xs font-theme-data text-text-muted">1 day TTL - Cross-session</p>
             </div>
             <div className="p-4 border border-acid-purple/30 bg-acid-purple/5 rounded">
               <h3 className="text-sm font-theme-data text-acid-purple mb-1">Glacial Tier</h3>
@@ -106,12 +103,26 @@ export default function MemoryAnalyticsPage() {
           </div>
 
           <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Analytics Metrics</h3>
+            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+              Analytics Metrics
+            </h3>
             <ul className="text-xs font-theme-data text-text-muted space-y-1">
-              <li>- <span className="text-[var(--accent)]">Tier Distribution</span>: Memory allocation across tiers</li>
-              <li>- <span className="text-[var(--accent)]">Promotion Rate</span>: How often memories move to slower tiers</li>
-              <li>- <span className="text-[var(--accent)]">Learning Velocity</span>: Rate of new knowledge acquisition</li>
-              <li>- <span className="text-[var(--accent)]">Retrieval Efficiency</span>: Cache hit rates and latency</li>
+              <li>
+                - <span className="text-[var(--accent)]">Tier Distribution</span>: Memory allocation
+                across tiers
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Promotion Rate</span>: How often memories
+                move to slower tiers
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Learning Velocity</span>: Rate of new
+                knowledge acquisition
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Retrieval Efficiency</span>: Cache hit
+                rates and latency
+              </li>
             </ul>
           </div>
 
@@ -122,12 +133,8 @@ export default function MemoryAnalyticsPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // MEMORY ANALYTICS
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // MEMORY ANALYTICS</p>
         </footer>
       </main>
     </>

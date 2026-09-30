@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import {
-  TEMPLATES,
-  CATEGORY_META,
-  type TemplateData,
-  type TemplateCategory,
-} from './templateData';
+import { TEMPLATES, CATEGORY_META, type TemplateData, type TemplateCategory } from './templateData';
 
 interface WorkflowGalleryProps {
   /** Callback when user selects a template to run */
@@ -42,9 +37,7 @@ function TemplateCard({
       <h4 className="text-sm font-theme-data text-text mb-1 group-hover:text-[var(--accent)] transition-colors">
         {template.name}
       </h4>
-      <p className="text-xs text-text-muted line-clamp-2 mb-3">
-        {template.description}
-      </p>
+      <p className="text-xs text-text-muted line-clamp-2 mb-3">{template.description}</p>
 
       {/* Tags */}
       <div className="flex gap-1 flex-wrap mb-3">
@@ -107,7 +100,7 @@ function TemplateCard({
 export function WorkflowGallery({ onSelectTemplate, initialCategory }: WorkflowGalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | 'all'>(
-    initialCategory ?? 'all'
+    initialCategory ?? 'all',
   );
 
   // Category counts
@@ -133,7 +126,7 @@ export function WorkflowGallery({ onSelectTemplate, initialCategory }: WorkflowG
         (t) =>
           t.name.toLowerCase().includes(q) ||
           t.description.toLowerCase().includes(q) ||
-          t.tags.some((tag) => tag.includes(q))
+          t.tags.some((tag) => tag.includes(q)),
       );
     }
 
