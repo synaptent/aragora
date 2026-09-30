@@ -1530,6 +1530,44 @@ try:
 except ImportError:
     _BaseHandler = None
 
+_RUN_ASYNC_MODULE_PREFIXES = ("aragora.server.", "aragora.utils.")
+_RUN_ASYNC_ATTRS = ("run_async", "_run_async")
+_SYS_MODULES_SNAPSHOT_ATTEMPTS = 3
+
+
+def _snapshot_sys_modules(modules: dict[str, Any] | None = None) -> list[tuple[str, Any]]:
+    """Return the ``sys.modules`` items as a list detached from the live dict.
+
+    Walking the live dict (``list(sys.modules.items())``) is not safe on
+    CPython 3.11: every item tuple is a GC allocation, so a collection can
+    start mid-walk, and an import made by a GC callback, a finalizer, or
+    another thread scheduled during that collection resizes the dict and
+    raises ``RuntimeError: dictionary changed size during iteration``.
+    ``dict.copy`` clones the table without running Python code between
+    entries.  Earlier attempts retry a resize observed by the copy itself;
+    the final attempt is unguarded so a persistent failure propagates.
+    """
+    source = sys.modules if modules is None else modules
+    for _ in range(_SYS_MODULES_SNAPSHOT_ATTEMPTS - 1):
+        try:
+            return list(source.copy().items())
+        except RuntimeError:
+            continue
+    return list(source.copy().items())
+
+
+def _restore_polluted_run_async() -> None:
+    """Point every loaded ``run_async``/``_run_async`` back at the real function."""
+    if _real_run_async is None:
+        return
+    for mod_name, mod in _snapshot_sys_modules():
+        if mod is None or not mod_name.startswith(_RUN_ASYNC_MODULE_PREFIXES):
+            continue
+        for attr in _RUN_ASYNC_ATTRS:
+            current = getattr(mod, attr, None)
+            if current is not None and current is not _real_run_async:
+                setattr(mod, attr, _real_run_async)
+
 
 @pytest.fixture(autouse=True)
 def _restore_module_level_functions():
@@ -1551,26 +1589,16 @@ def _restore_module_level_functions():
     a test accidentally set ``MagicMock.side_effect`` on the CLASS (e.g.
     via ``spec.adapter_class = MagicMock; spec.adapter_class.side_effect = ...``).
     """
-    import sys
-
     # Guard: repair MagicMock.side_effect property if destroyed
     if _real_side_effect_descriptor is not None:
         current_descriptor = _NCMock.__dict__.get("side_effect")
         if current_descriptor is not _real_side_effect_descriptor:
             _NCMock.side_effect = _real_side_effect_descriptor
 
-    if _real_run_async is not None:
-        # Scan ALL loaded aragora modules for polluted run_async references.
-        # 51+ handler modules import run_async at module level; rather than
-        # maintaining a hardcoded list, we dynamically find and restore them.
-        _prefixes = ("aragora.server.", "aragora.utils.")
-        for mod_name, mod in list(sys.modules.items()):
-            if mod is None or not mod_name.startswith(_prefixes):
-                continue
-            for attr in ("run_async", "_run_async"):
-                current = getattr(mod, attr, None)
-                if current is not None and current is not _real_run_async:
-                    setattr(mod, attr, _real_run_async)
+    # Scan ALL loaded aragora modules for polluted run_async references.
+    # 51+ handler modules import run_async at module level; rather than
+    # maintaining a hardcoded list, we dynamically find and restore them.
+    _restore_polluted_run_async()
 
     # Reset the cached has_permission in control_plane.health
     # This global caches whatever callable it finds on the control_plane
@@ -1607,14 +1635,7 @@ def _restore_module_level_functions():
         if current_descriptor is not _real_side_effect_descriptor:
             _NCMock.side_effect = _real_side_effect_descriptor
 
-    if _real_run_async is not None:
-        for mod_name, mod in list(sys.modules.items()):
-            if mod is None or not mod_name.startswith(_prefixes):
-                continue
-            for attr in ("run_async", "_run_async"):
-                current = getattr(mod, attr, None)
-                if current is not None and current is not _real_run_async:
-                    setattr(mod, attr, _real_run_async)
+    _restore_polluted_run_async()
 
     try:
         import aragora.server.handlers.control_plane.health as _cp_health
