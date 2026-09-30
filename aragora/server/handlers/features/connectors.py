@@ -513,9 +513,32 @@ class ConnectorsHandler(SecureHandler):
 
         return self._json_response(201, connector)
 
+    async def _load_connector(
+        self, connector_id: str
+    ) -> tuple[SyncStore | None, dict[str, Any] | None]:
+        """Return the store and the connector, loading a stored one into memory if needed."""
+        store = await _get_store()
+        connector = _connectors.get(connector_id)
+        if connector is None and store is not None:
+            stored = await store.get_connector(connector_id)
+            if stored is not None:
+                connector = {
+                    "id": stored.id,
+                    "type": stored.connector_type,
+                    "name": stored.name,
+                    "status": stored.status,
+                    "config": dict(stored.config),
+                    "created_at": stored.created_at.isoformat(),
+                    "updated_at": stored.updated_at.isoformat(),
+                    "items_synced": stored.items_indexed,
+                    "last_sync": stored.last_sync_at.isoformat() if stored.last_sync_at else None,
+                }
+                _connectors[connector_id] = connector
+        return store, connector
+
     async def _update_connector(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Update connector configuration."""
-        connector = _connectors.get(connector_id)
+        store, connector = await self._load_connector(connector_id)
         if not connector:
             return self._error_response(404, f"Connector {connector_id} not found")
 
@@ -538,6 +561,13 @@ class ConnectorsHandler(SecureHandler):
             connector["status"] = "configuring"
 
         _connectors[connector_id] = connector
+        if store:
+            await store.save_connector(
+                connector_id=connector_id,
+                connector_type=connector["type"],
+                name=connector["name"],
+                config=connector["config"],
+            )
 
         logger.info("Updated connector %s", connector_id)
 
@@ -546,7 +576,8 @@ class ConnectorsHandler(SecureHandler):
     @require_permission("connectors:delete")
     async def _delete_connector(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Remove a connector (doesn't delete synced data)."""
-        if connector_id not in _connectors:
+        store, connector = await self._load_connector(connector_id)
+        if not connector:
             return self._error_response(404, f"Connector {connector_id} not found")
 
         # Cancel any active syncs
@@ -555,7 +586,9 @@ class ConnectorsHandler(SecureHandler):
                 sync_job["status"] = "cancelled"
                 sync_job["completed_at"] = datetime.now(timezone.utc).isoformat()
 
-        del _connectors[connector_id]
+        if store:
+            await store.delete_connector(connector_id)
+        _connectors.pop(connector_id, None)
 
         logger.info("Deleted connector %s", connector_id)
 

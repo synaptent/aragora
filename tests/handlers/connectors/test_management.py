@@ -26,6 +26,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.billing.auth.context import UserAuthContext
 from aragora.connectors.runtime_registry import (
     ConnectorInfo,
     ConnectorRegistry,
@@ -101,6 +102,19 @@ def handler(mock_registry):
 def mock_http_handler():
     """Minimal mock HTTP handler (used for auth bypass)."""
     return MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def _owner_caller(request, monkeypatch):
+    """Per-connector health and test authorize with RBAC v2, where only owners hold connectors.test."""
+    if request.node.get_closest_marker("no_auto_auth"):
+        return
+    owner = UserAuthContext(
+        authenticated=True, user_id="test-owner", email="owner@example.com", role="owner"
+    )
+    monkeypatch.setattr(
+        ConnectorManagementHandler, "require_auth_or_error", lambda self, handler: (owner, None)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +474,8 @@ class TestHealth:
 
     def test_health_invalid_name(self, handler, mock_http_handler, mock_registry):
         result = handler.handle(_PREFIX + "/bad-name/health", {}, mock_http_handler)
-        assert _status(result) == 400
+        assert _status(result) == 501
+        assert _body(result)["error"]["code"] == "not_implemented"
 
     def test_health_returns_last_check_and_metadata(
         self, handler, mock_http_handler, mock_registry
@@ -558,7 +573,8 @@ class TestTestConnectivity:
 
     def test_test_invalid_name(self, handler, mock_http_handler, mock_registry):
         result = handler.handle_post(_PREFIX + "/bad-name/test", {}, mock_http_handler)
-        assert _status(result) == 400
+        assert _status(result) == 501
+        assert _body(result)["error"]["code"] == "not_implemented"
 
     def test_test_invalid_json_returns_400(self, handler, mock_registry):
         bad_http_handler = MagicMock()

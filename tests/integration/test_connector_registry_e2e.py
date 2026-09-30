@@ -12,6 +12,7 @@ import time
 
 import pytest
 
+from aragora.billing.auth.context import UserAuthContext
 from aragora.connectors.runtime_registry import (
     ConnectorInfo,
     ConnectorRegistry,
@@ -19,6 +20,17 @@ from aragora.connectors.runtime_registry import (
     get_connector_registry,
 )
 from aragora.server.handlers.connectors.management import ConnectorManagementHandler
+
+
+@pytest.fixture(autouse=True)
+def _owner_caller(monkeypatch):
+    """Per-connector health and test authorize with RBAC v2, where only owners hold connectors.test."""
+    owner = UserAuthContext(
+        authenticated=True, user_id="test-owner", email="owner@example.com", role="owner"
+    )
+    monkeypatch.setattr(
+        ConnectorManagementHandler, "require_auth_or_error", lambda self, handler: (owner, None)
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ permission checks are all exercised.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import itertools
 import json
@@ -27,6 +28,7 @@ from aragora.server.handlers.connectors.management import ConnectorManagementHan
 from aragora.server.handlers.features import analytics_platforms as analytics_module
 from aragora.server.handlers.features import connectors as connectors_module
 from aragora.server.handlers.features.connectors import ConnectorsHandler
+from aragora.storage.sync_store import ConnectorConfig
 
 CALLERS = ("owner", "admin", "member", "analyst", "viewer", "anon")
 
@@ -185,6 +187,8 @@ _ALL_403 = {"owner": 403, "admin": 403, "member": 403, "analyst": 403, "viewer":
 # Status per caller with a real JWT (role only, as production tokens carry).
 # connectors:configure, analytics:configure and analytics:query are not registered
 # RBAC permissions, so every authenticated caller gets 403 on the routes they guard.
+# Per-connector health and test follow the RBAC v2 role grants: connectors.read is
+# held by owner and admin, connectors.test by owner only.
 EXPECTED: dict[str, dict[str, int]] = {
     "connectors.create": {
         "owner": 201,
@@ -224,14 +228,14 @@ EXPECTED: dict[str, dict[str, int]] = {
     "connectors.getHealth": {
         "owner": 404,
         "admin": 404,
-        "member": 404,
+        "member": 403,
         "analyst": 403,
         "viewer": 403,
         "anon": 401,
     },
     "connectors.testConnection": {
         "owner": 404,
-        "admin": 404,
+        "admin": 403,
         "member": 403,
         "analyst": 403,
         "viewer": 403,
@@ -285,6 +289,82 @@ def test_real_jwt_callers_get_the_route_permission_answer(
         assert payload["error"]["code"] == "not_implemented"
 
 
+# POST /api/v1/connectors gives stored connectors hyphenated UUID ids, which the
+# runtime registry's name rule rejects.
+_STORE_ID = "0b6f3c2e-8d1a-4e5b-9f7c-3a2d1e0f9b8c"
+
+PER_CONNECTOR_CELLS: dict[tuple[str, str], dict[str, int]] = {
+    ("GET", "/api/v1/connectors/known_conn/health"): {
+        "owner": 200,
+        "admin": 200,
+        "member": 403,
+        "analyst": 403,
+        "viewer": 403,
+        "anon": 401,
+    },
+    ("GET", f"/api/v1/connectors/{_STORE_ID}/health"): {
+        "owner": 501,
+        "admin": 501,
+        "member": 403,
+        "analyst": 403,
+        "viewer": 403,
+        "anon": 401,
+    },
+    ("POST", "/api/v1/connectors/known_conn/test"): {
+        "owner": 200,
+        "admin": 403,
+        "member": 403,
+        "analyst": 403,
+        "viewer": 403,
+        "anon": 401,
+    },
+    ("POST", f"/api/v1/connectors/{_STORE_ID}/test"): {
+        "owner": 501,
+        "admin": 403,
+        "member": 403,
+        "analyst": 403,
+        "viewer": 403,
+        "anon": 401,
+    },
+}
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize(("method", "path"), sorted(PER_CONNECTOR_CELLS))
+def test_per_connector_health_and_test_check_rbac_before_the_connector_name(
+    registry_cls, method: str, path: str, caller: str
+) -> None:
+    status, payload = _dispatch(registry_cls, method, path, caller=caller)
+    assert status == PER_CONNECTOR_CELLS[(method, path)][caller], (path, caller, payload)
+    if status == 501:
+        assert payload["error"]["code"] == "not_implemented"
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize(
+    ("caller", "name", "expected"),
+    [("member", "unknown_conn", 404), ("member", _STORE_ID, 400), ("viewer", "unknown_conn", 403)],
+)
+def test_connector_detail_keeps_its_own_permission_and_name_checks(
+    caller: str, name: str, expected: int
+) -> None:
+    # The route index gives GET /api/v1/connectors/{id} to ConnectorsHandler, so the
+    # management handler's detail route is only reachable by calling it directly.
+    token = create_access_token(
+        user_id=f"jwt-{caller}", email=f"{caller}@example.com", org_id="org-1", role=caller
+    )
+    request = SimpleNamespace(
+        command="GET",
+        headers={"Authorization": f"Bearer {token}"},
+        client_address=("10.255.0.1", 12345),
+    )
+    with patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False):
+        result = ConnectorManagementHandler().handle(f"/api/v1/connectors/{name}", {}, request)
+    assert result is not None
+    assert result.status_code == expected, result.body
+
+
 def test_connector_lifecycle_through_the_sdk_paths(registry_cls) -> None:
     status, created = _dispatch(
         registry_cls, "POST", "/api/v1/connectors", {"type": "github", "name": "Repo sync"}
@@ -305,6 +385,87 @@ def test_connector_lifecycle_through_the_sdk_paths(registry_cls) -> None:
     status, deleted = _dispatch(registry_cls, "DELETE", f"/api/v1/connectors/{connector_id}")
     assert status == 200, deleted
     assert connector_id not in connectors_module._connectors
+
+
+class _MemorySyncStore:
+    """The SyncStore connector methods the connectors handler calls, kept in a dict."""
+
+    def __init__(self) -> None:
+        self.rows: dict[str, ConnectorConfig] = {}
+
+    async def save_connector(
+        self, connector_id: str, connector_type: str, name: str, config: dict[str, Any]
+    ) -> ConnectorConfig:
+        row = ConnectorConfig(
+            id=connector_id, connector_type=connector_type, name=name, config=dict(config)
+        )
+        self.rows[connector_id] = row
+        return row
+
+    async def get_connector(self, connector_id: str) -> ConnectorConfig | None:
+        return self.rows.get(connector_id)
+
+    async def list_connectors(self, status=None, connector_type=None) -> list[ConnectorConfig]:
+        return list(self.rows.values())
+
+    async def delete_connector(self, connector_id: str) -> bool:
+        return self.rows.pop(connector_id, None) is not None
+
+    async def get_sync_history(self, connector_id=None, limit: int = 50) -> list[Any]:
+        return []
+
+
+@pytest.fixture
+def memory_store(monkeypatch) -> _MemorySyncStore:
+    store = _MemorySyncStore()
+
+    async def _store() -> _MemorySyncStore:
+        return store
+
+    monkeypatch.setattr(connectors_module, "_get_store", _store)
+    return store
+
+
+def test_update_and_delete_reach_the_persistent_store(registry_cls, memory_store) -> None:
+    status, created = _dispatch(
+        registry_cls, "POST", "/api/v1/connectors", {"type": "github", "name": "Repo sync"}
+    )
+    assert status == 201, created
+    connector_id = created["id"]
+
+    status, updated = _dispatch(
+        registry_cls, "PATCH", f"/api/v1/connectors/{connector_id}", {"name": "Renamed"}
+    )
+    assert status == 200, updated
+    assert memory_store.rows[connector_id].name == "Renamed"
+
+    status, deleted = _dispatch(registry_cls, "DELETE", f"/api/v1/connectors/{connector_id}")
+    assert status == 200, deleted
+    assert connector_id not in memory_store.rows
+
+    status, listed = _dispatch(registry_cls, "GET", "/api/v1/connectors")
+    assert status == 200, listed
+    assert [c["id"] for c in listed["connectors"]] == []
+
+
+def test_stored_connector_can_be_updated_and_deleted_after_a_restart(
+    registry_cls, memory_store
+) -> None:
+    asyncio.run(memory_store.save_connector("stored-1", "github", "Stored", {"org": "a"}))
+    assert "stored-1" not in connectors_module._connectors
+
+    status, updated = _dispatch(
+        registry_cls, "PATCH", "/api/v1/connectors/stored-1", {"config": {"repo": "b"}}
+    )
+    assert status == 200, updated
+    assert memory_store.rows["stored-1"].config == {"org": "a", "repo": "b"}
+
+    status, deleted = _dispatch(registry_cls, "DELETE", "/api/v1/connectors/stored-1")
+    assert status == 200, deleted
+    assert memory_store.rows == {}
+
+    status, missing = _dispatch(registry_cls, "DELETE", "/api/v1/connectors/stored-1")
+    assert status == 404, missing
 
 
 def test_cancel_sync_accepts_the_sdk_path_and_checks_the_connector(registry_cls) -> None:
