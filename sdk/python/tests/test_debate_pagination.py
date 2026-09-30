@@ -221,6 +221,40 @@ async def test_later_page_supplying_fresh_total_replaces_known_total(client_api:
     assert paginator.total == 3
 
 
+@pytest.mark.parametrize("metadata", [{"has_more": False}, {}])
+async def test_empty_later_page_reporting_shrunk_total_exhausts(
+    client_api: Any, metadata: Any
+) -> None:
+    client, api = client_api
+    # Debates deleted between requests (the server caches each offset separately) leave a
+    # later page that is empty and reports a total below the offset already delivered.
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}, {"id": "b"}], "total": 3, "has_more": True},
+        {"debates": [], "total": 1, **metadata},
+    ]
+    paginator = api.list_all()
+    assert await collect(paginator) == [{"id": "a"}, {"id": "b"}]
+    assert paginator.total == 1
+    assert await collect(paginator) == []
+    assert client.request.call_count == 2
+
+
+async def test_later_page_with_items_beyond_its_own_total_is_rejected(client_api: Any) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}, {"id": "b"}], "total": 3, "has_more": True},
+        {"debates": [{"id": "private-payload"}], "total": 1, "has_more": False},
+    ]
+    paginator = api.list_all()
+    assert await pull(paginator) == {"id": "a"}
+    assert await pull(paginator) == {"id": "b"}
+    with pytest.raises(AragoraError) as error:
+        await pull(paginator)
+    assert "private-payload" not in str(error.value)
+    assert paginator.total == 3
+    assert paginator._offset == 2
+
+
 @pytest.mark.parametrize(
     "page",
     [
