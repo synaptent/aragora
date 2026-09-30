@@ -1468,6 +1468,23 @@ def register_accounting_routes(app: web.Application) -> None:
     )
 
 
+def _integration_not_configured() -> HandlerResult:
+    return json_response(
+        {"error": "accounting integration not configured", "code": "not_configured"},
+        status=503,
+    )
+
+
+@require_permission("finance:read")
+def _integration_read_route(handler: Any = None) -> HandlerResult:
+    return _integration_not_configured()
+
+
+@require_permission("admin:system")
+def _integration_admin_route(handler: Any = None) -> HandlerResult:
+    return _integration_not_configured()
+
+
 class AccountingIntegrationHandler(BaseHandler):
     """Fail closed for integrations unavailable on the modular HTTP server.
 
@@ -1503,14 +1520,20 @@ class AccountingIntegrationHandler(BaseHandler):
         "/api/v1/ap/optimize",
     ]
 
+    # OAuth providers redirect here without an Aragora session.
+    CALLBACK_ROUTES = frozenset(
+        {"/api/v1/accounting/callback", "/api/v1/accounting/gusto/callback"}
+    )
+
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
-        """Return an explicit unavailable result instead of the registry's 500."""
+        """Authorize like the aiohttp routes, then report the integration unavailable."""
         if not self.can_handle(path):
             return error_response("Route not found", status=404)
-        return json_response(
-            {"error": "accounting integration not configured", "code": "not_configured"},
-            status=503,
-        )
+        if path in self.CALLBACK_ROUTES:
+            return _integration_not_configured()
+        if path.rsplit("/", 1)[-1] in ("connect", "disconnect"):
+            return _integration_admin_route(handler=handler)
+        return _integration_read_route(handler=handler)
 
     def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
         """Keep integration mutations unavailable on the modular server too."""

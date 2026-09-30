@@ -46,6 +46,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.validation.query_params import parse_date_range_params
 
 logger = logging.getLogger(__name__)
 
@@ -246,16 +247,9 @@ async def handle_list_invoices(
         priority = PaymentPriority(data["priority"]) if data.get("priority") else None
     except ValueError:
         return error_response("Invalid payment priority", status=400)
-    start_date = None
-    end_date = None
-
-    try:
-        if data.get("start_date"):
-            start_date = datetime.fromisoformat(data["start_date"])
-        if data.get("end_date"):
-            end_date = datetime.fromisoformat(data["end_date"])
-    except (TypeError, ValueError):
-        return error_response("Dates must be in ISO format", status=400)
+    start_date, end_date, date_error = parse_date_range_params(data)
+    if date_error:
+        return error_response(date_error, status=400)
 
     try:
         limit = int(data.get("limit", 100))
@@ -498,8 +492,8 @@ async def handle_optimize_payments(
                     if inv:
                         invoices.append(inv)
             else:
-                # Get all unpaid invoices
-                invoices = await ap.list_invoices(status="unpaid")
+                # The service lists only invoices with an outstanding balance.
+                invoices = await ap.list_invoices()
 
             if not invoices:
                 return success_response(

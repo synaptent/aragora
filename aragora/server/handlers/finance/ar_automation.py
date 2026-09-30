@@ -47,6 +47,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.validation.query_params import parse_date_range_params
 
 logger = logging.getLogger(__name__)
 
@@ -211,16 +212,9 @@ async def handle_list_invoices(
             status = InvoiceStatus(data["status"]) if data.get("status") else None
         except ValueError:
             return error_response("Invalid invoice status", status=400)
-        start_date = None
-        end_date = None
-
-        try:
-            if data.get("start_date"):
-                start_date = datetime.fromisoformat(data["start_date"])
-            if data.get("end_date"):
-                end_date = datetime.fromisoformat(data["end_date"])
-        except (TypeError, ValueError):
-            return error_response("Invalid date format. Use ISO 8601.", status=400)
+        start_date, end_date, date_error = parse_date_range_params(data)
+        if date_error:
+            return error_response(date_error, status=400)
 
         try:
             limit = int(data.get("limit", 100))

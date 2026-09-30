@@ -48,7 +48,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
-from aragora.server.validation.query_params import safe_query_int
+from aragora.server.validation.query_params import parse_date_range_params
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,7 @@ def get_invoice_processor():
 async def handle_upload_invoice(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Upload and extract data from an invoice document.
@@ -199,6 +200,7 @@ async def handle_upload_invoice(
 async def handle_create_invoice(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Create an invoice manually.
@@ -288,6 +290,7 @@ async def handle_create_invoice(
 async def handle_list_invoices(
     query_params: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     List invoices with filters.
@@ -298,9 +301,23 @@ async def handle_list_invoices(
         vendor: str
         start_date: str (ISO format)
         end_date: str (ISO format)
-        limit: int (default 100)
-        offset: int (default 0)
+        limit: int (default 100, clamped to 1-1000)
+        offset: int (default 0, clamped to 0-100000)
     """
+    start_date, end_date, date_error = parse_date_range_params(query_params)
+    if date_error:
+        return error_response(date_error, status=400)
+
+    page: dict[str, int] = {}
+    for key, default, low, high in (("limit", 100, 1, 1000), ("offset", 0, 0, 100000)):
+        try:
+            # A repeated key arrives as a list, which int() rejects with TypeError.
+            value = int(query_params.get(key, default))
+        except (TypeError, ValueError):
+            return error_response(f"{key} must be a single integer", status=400)
+        page[key] = max(low, min(value, high))
+    limit, offset = page["limit"], page["offset"]
+
     # Check circuit breaker
     if err := _check_circuit_breaker():
         return err
@@ -320,26 +337,6 @@ async def handle_list_invoices(
                 status = InvoiceStatus(status_str)
             except ValueError:
                 pass
-
-        # Parse date filters
-        start_date = None
-        if query_params.get("start_date"):
-            try:
-                start_date = datetime.fromisoformat(
-                    query_params["start_date"].replace("Z", "+00:00")
-                )
-            except ValueError:
-                pass
-
-        end_date = None
-        if query_params.get("end_date"):
-            try:
-                end_date = datetime.fromisoformat(query_params["end_date"].replace("Z", "+00:00"))
-            except ValueError:
-                pass
-
-        limit = safe_query_int(query_params, "limit", default=100, max_val=1000)
-        offset = safe_query_int(query_params, "offset", default=0, max_val=100000)
 
         invoices, total = await processor.list_invoices(
             status=status,
@@ -379,6 +376,7 @@ async def handle_list_invoices(
 async def handle_get_invoice(
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get invoice by ID.
@@ -426,6 +424,7 @@ async def handle_approve_invoice(
     invoice_id: str,
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Approve an invoice for payment.
@@ -478,6 +477,7 @@ async def handle_reject_invoice(
     invoice_id: str,
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Reject an invoice.
@@ -528,6 +528,7 @@ async def handle_reject_invoice(
 @require_permission("finance:read")
 async def handle_get_pending_approvals(
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get invoices pending approval.
@@ -577,6 +578,7 @@ async def handle_get_pending_approvals(
 async def handle_match_to_po(
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Match invoice to purchase order.
@@ -630,6 +632,7 @@ async def handle_match_to_po(
 async def handle_get_anomalies(
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get anomalies for an invoice.
@@ -684,6 +687,7 @@ async def handle_schedule_payment(
     invoice_id: str,
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Schedule payment for an invoice.
@@ -746,6 +750,7 @@ async def handle_schedule_payment(
 async def handle_get_scheduled_payments(
     query_params: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get scheduled payments.
@@ -755,6 +760,10 @@ async def handle_get_scheduled_payments(
         start_date: str (ISO format)
         end_date: str (ISO format)
     """
+    start_date, end_date, date_error = parse_date_range_params(query_params)
+    if date_error:
+        return error_response(date_error, status=400)
+
     # Check circuit breaker
     if err := _check_circuit_breaker():
         return err
@@ -763,22 +772,6 @@ async def handle_get_scheduled_payments(
 
     try:
         processor = get_invoice_processor()
-
-        start_date = None
-        if query_params.get("start_date"):
-            try:
-                start_date = datetime.fromisoformat(
-                    query_params["start_date"].replace("Z", "+00:00")
-                )
-            except ValueError:
-                logger.debug("Invalid start_date format: %s", query_params.get("start_date"))
-
-        end_date = None
-        if query_params.get("end_date"):
-            try:
-                end_date = datetime.fromisoformat(query_params["end_date"].replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid end_date format: %s", query_params.get("end_date"))
 
         payments = await processor.get_scheduled_payments(
             start_date=start_date,
@@ -820,6 +813,7 @@ async def handle_get_scheduled_payments(
 async def handle_create_purchase_order(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Add a purchase order for matching.
@@ -911,6 +905,7 @@ async def handle_create_purchase_order(
 @require_permission("finance:read")
 async def handle_get_invoice_stats(
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get invoice processing statistics.
@@ -949,6 +944,7 @@ async def handle_get_invoice_stats(
 @require_permission("finance:read")
 async def handle_get_overdue_invoices(
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get overdue invoices.
@@ -998,6 +994,7 @@ async def handle_get_overdue_invoices(
 @require_permission("finance:read")
 async def handle_get_invoice_handler_status(
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get invoice handler status including circuit breaker state.
@@ -1090,42 +1087,43 @@ class InvoiceHandler(BaseHandler):
 
     async def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
         """Bridge the modular registry's GET entry point to the existing handler."""
-        return await self.handle_get(path, query_params)
+        return await self.handle_get(path, query_params, handler=handler)
 
     @require_permission("finance:read")
     async def handle_get(
         self,
         path: str,
         query_params: dict[str, Any] | None = None,
+        handler: Any = None,
     ) -> HandlerResult:
         """Handle GET requests."""
         query_params = query_params or {}
 
         if path == "/api/v1/accounting/invoices":
-            return await handle_list_invoices(query_params)
+            return await handle_list_invoices(query_params, handler=handler)
 
         if path == "/api/v1/accounting/invoices/pending":
-            return await handle_get_pending_approvals()
+            return await handle_get_pending_approvals(handler=handler)
 
         if path == "/api/v1/accounting/invoices/overdue":
-            return await handle_get_overdue_invoices()
+            return await handle_get_overdue_invoices(handler=handler)
 
         if path == "/api/v1/accounting/invoices/stats":
-            return await handle_get_invoice_stats()
+            return await handle_get_invoice_stats(handler=handler)
 
         if path == "/api/v1/accounting/invoices/status":
-            return await handle_get_invoice_handler_status()
+            return await handle_get_invoice_handler_status(handler=handler)
 
         if path == "/api/v1/accounting/payments/scheduled":
-            return await handle_get_scheduled_payments(query_params)
+            return await handle_get_scheduled_payments(query_params, handler=handler)
 
         # Dynamic routes
         invoice_id = self._extract_invoice_id(path)
         if invoice_id:
             if "/anomalies" in path:
-                return await handle_get_anomalies(invoice_id)
+                return await handle_get_anomalies(invoice_id, handler=handler)
             elif "/status" not in path:  # Avoid matching /status as invoice_id
-                return await handle_get_invoice(invoice_id)
+                return await handle_get_invoice(invoice_id, handler=handler)
 
         return error_response("Route not found", status=404)
 
@@ -1141,24 +1139,24 @@ class InvoiceHandler(BaseHandler):
         data: dict[str, Any] = query_params or {}
 
         if path == "/api/v1/accounting/invoices/upload":
-            return await handle_upload_invoice(data)
+            return await handle_upload_invoice(data, handler=handler)
 
         if path == "/api/v1/accounting/invoices":
-            return await handle_create_invoice(data)
+            return await handle_create_invoice(data, handler=handler)
 
         if path == "/api/v1/accounting/purchase-orders":
-            return await handle_create_purchase_order(data)
+            return await handle_create_purchase_order(data, handler=handler)
 
         # Dynamic routes
         invoice_id = self._extract_invoice_id(path)
         if invoice_id:
             if "/approve" in path:
-                return await handle_approve_invoice(invoice_id, data)
+                return await handle_approve_invoice(invoice_id, data, handler=handler)
             if "/reject" in path:
-                return await handle_reject_invoice(invoice_id, data)
+                return await handle_reject_invoice(invoice_id, data, handler=handler)
             if "/match" in path:
-                return await handle_match_to_po(invoice_id)
+                return await handle_match_to_po(invoice_id, handler=handler)
             if "/schedule" in path:
-                return await handle_schedule_payment(invoice_id, data)
+                return await handle_schedule_payment(invoice_id, data, handler=handler)
 
         return error_response("Route not found", status=404)
