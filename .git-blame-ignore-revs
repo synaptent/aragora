@@ -1,0 +1,9 @@
+# Commits to skip in `git blame`: format-only reformatting (ruff format,
+# prettier) that rewrites whitespace without changing behaviour.
+#
+# One full 40-character SHA per line; `#` lines are comments.
+# Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub's blame view reads this file automatically.
+#
+# Add a SHA only for commits titled `style(<app>): apply <formatter> (no-op)`.
