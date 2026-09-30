@@ -161,6 +161,7 @@ class TestInitializeSharedPool:
         mock_ps_mod = MagicMock()
         mock_ps_mod._pool = None
         mock_ps_mod.get_postgres_pool = AsyncMock(return_value=mock_pool)
+        original_asyncio_run = asyncio.run
 
         with (
             patch.dict("os.environ", {"ARAGORA_USE_SHARED_POOL": "true"}),
@@ -178,6 +179,8 @@ class TestInitializeSharedPool:
 
             assert result is mock_pool
             assert is_pool_initialized() is True
+
+        assert asyncio.run is original_asyncio_run
 
     @pytest.mark.asyncio
     async def test_retries_on_failure(self):
