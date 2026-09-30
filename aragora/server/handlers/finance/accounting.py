@@ -1475,16 +1475,6 @@ def _integration_not_configured() -> HandlerResult:
     )
 
 
-@require_permission("finance:read")
-def _integration_read_route(handler: Any = None) -> HandlerResult:
-    return _integration_not_configured()
-
-
-@require_permission("admin:system")
-def _integration_admin_route(handler: Any = None) -> HandlerResult:
-    return _integration_not_configured()
-
-
 class AccountingIntegrationHandler(BaseHandler):
     """Fail closed for integrations unavailable on the modular HTTP server.
 
@@ -1532,9 +1522,17 @@ class AccountingIntegrationHandler(BaseHandler):
         if path in self.CALLBACK_ROUTES:
             return _integration_not_configured()
         if path.rsplit("/", 1)[-1] in ("connect", "disconnect"):
-            return _integration_admin_route(handler=handler)
-        return _integration_read_route(handler=handler)
+            return self._admin_route(handler=handler)
+        return self._read_route(handler=handler)
 
     def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
         """Keep integration mutations unavailable on the modular server too."""
         return self.handle(path, query_params, handler)
+
+    @require_permission("finance:read")
+    def _read_route(self, handler: Any = None) -> HandlerResult:
+        return _integration_not_configured()
+
+    @require_permission("admin:system")
+    def _admin_route(self, handler: Any = None) -> HandlerResult:
+        return _integration_not_configured()

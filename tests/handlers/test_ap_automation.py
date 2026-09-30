@@ -21,6 +21,7 @@ import json
 import threading
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -82,6 +83,8 @@ class MockInvoice:
         self.invoice_id = invoice_id
         self.vendor_id = vendor_id
         self.amount = amount
+        self.amount_paid = Decimal("0.00")
+        self.invoice_date = datetime(2026, 1, 15)
 
     def to_dict(self):
         return {
@@ -541,13 +544,9 @@ class TestListInvoices:
         data = {"vendor_id": "v-001", "status": "unpaid", "priority": "high"}
         result = await handle_list_invoices(data)
         assert _status(result) == 200
-        mock_ap.list_invoices.assert_called_once_with(
-            vendor_id="v-001",
-            status="unpaid",
-            priority="high",
-            start_date=None,
-            end_date=None,
-        )
+        # The service takes no status or date arguments; the handler filters those locally.
+        mock_ap.list_invoices.assert_called_once_with(vendor_id="v-001", priority="high")
+        assert _body(result)["data"]["total"] == 2
 
     @pytest.mark.asyncio
     async def test_list_invoices_with_dates(self, mock_ap):
@@ -1451,8 +1450,6 @@ class TestParameterPassThrough:
 
     @pytest.mark.asyncio
     async def test_list_invoices_passes_all_filters(self, mock_ap):
-        from datetime import datetime as dt
-
         data = {
             "vendor_id": "v-x",
             "status": "partial",
@@ -1460,13 +1457,12 @@ class TestParameterPassThrough:
             "start_date": "2026-01-01",
             "end_date": "2026-06-30",
         }
-        await handle_list_invoices(data)
+        result = await handle_list_invoices(data)
+        assert _status(result) == 200
         kw = mock_ap.list_invoices.call_args.kwargs
-        assert kw["vendor_id"] == "v-x"
-        assert kw["status"] == "partial"
-        assert kw["priority"] == "low"
-        assert isinstance(kw["start_date"], dt)
-        assert isinstance(kw["end_date"], dt)
+        assert kw == {"vendor_id": "v-x", "priority": "low"}
+        # status and dates are applied by the handler, not the service.
+        assert _body(result)["data"]["total"] == 0
 
     @pytest.mark.asyncio
     async def test_optimize_passes_cash_decimal(self, mock_ap):
@@ -1512,10 +1508,10 @@ class TestParameterPassThrough:
 
     @pytest.mark.asyncio
     async def test_optimize_fetches_all_unpaid_when_no_ids(self, mock_ap):
-        """When no invoice_ids, list_invoices(status='unpaid') is called."""
+        """When no invoice_ids, all outstanding invoices are listed."""
         data = {}
         await handle_optimize_payments(data)
-        mock_ap.list_invoices.assert_called_once_with(status="unpaid")
+        mock_ap.list_invoices.assert_called_once_with()
 
 
 # ============================================================================
