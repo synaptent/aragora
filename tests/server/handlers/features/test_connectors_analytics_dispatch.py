@@ -187,8 +187,8 @@ _ALL_403 = {"owner": 403, "admin": 403, "member": 403, "analyst": 403, "viewer":
 # Status per caller with a real JWT (role only, as production tokens carry).
 # connectors:configure, analytics:configure and analytics:query are not registered
 # RBAC permissions, so every authenticated caller gets 403 on the routes they guard.
-# Per-connector health and test follow the RBAC v2 role grants: connectors.read is
-# held by owner and admin, connectors.test by owner only.
+# Per-connector health and test follow the RBAC v2 role grants: connectors.read
+# and connectors.test are both held by owner and admin.
 EXPECTED: dict[str, dict[str, int]] = {
     "connectors.create": {
         "owner": 201,
@@ -235,7 +235,7 @@ EXPECTED: dict[str, dict[str, int]] = {
     },
     "connectors.testConnection": {
         "owner": 404,
-        "admin": 403,
+        "admin": 404,
         "member": 403,
         "analyst": 403,
         "viewer": 403,
@@ -312,7 +312,7 @@ PER_CONNECTOR_CELLS: dict[tuple[str, str], dict[str, int]] = {
     },
     ("POST", "/api/v1/connectors/known_conn/test"): {
         "owner": 200,
-        "admin": 403,
+        "admin": 200,
         "member": 403,
         "analyst": 403,
         "viewer": 403,
@@ -320,7 +320,7 @@ PER_CONNECTOR_CELLS: dict[tuple[str, str], dict[str, int]] = {
     },
     ("POST", f"/api/v1/connectors/{_STORE_ID}/test"): {
         "owner": 501,
-        "admin": 403,
+        "admin": 501,
         "member": 403,
         "analyst": 403,
         "viewer": 403,

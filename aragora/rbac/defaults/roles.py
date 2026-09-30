@@ -91,6 +91,7 @@ from .permissions import (
     PERM_CONNECTOR_READ,
     PERM_CONNECTOR_CREATE,
     PERM_CONNECTOR_DELETE,
+    PERM_CONNECTOR_TEST,
     # Bot & Feedback
     PERM_BOTS_READ,
     PERM_FEEDBACK_READ,
@@ -366,6 +367,7 @@ ROLE_ADMIN = Role(
         PERM_CONNECTOR_READ.key,
         PERM_CONNECTOR_CREATE.key,
         PERM_CONNECTOR_DELETE.key,
+        PERM_CONNECTOR_TEST.key,
         # Bots
         PERM_BOTS_READ.key,
         # Feedback (all operations including admin)

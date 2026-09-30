@@ -24,7 +24,7 @@ from aragora.server.handlers.connectors.management import ConnectorManagementHan
 
 @pytest.fixture(autouse=True)
 def _owner_caller(monkeypatch):
-    """Per-connector health and test authorize with RBAC v2, where only owners hold connectors.test."""
+    """Per-connector health and test authorize with RBAC v2; owners hold both permissions."""
     owner = UserAuthContext(
         authenticated=True, user_id="test-owner", email="owner@example.com", role="owner"
     )

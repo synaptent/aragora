@@ -106,7 +106,7 @@ def mock_http_handler():
 
 @pytest.fixture(autouse=True)
 def _owner_caller(request, monkeypatch):
-    """Per-connector health and test authorize with RBAC v2, where only owners hold connectors.test."""
+    """Per-connector health and test authorize with RBAC v2; owners hold both permissions."""
     if request.node.get_closest_marker("no_auto_auth"):
         return
     owner = UserAuthContext(

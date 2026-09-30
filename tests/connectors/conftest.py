@@ -30,8 +30,8 @@ def _bypass_connector_management_rbac(monkeypatch):
     mock_user.user_id = "test-user"
     mock_user.email = "test-user@example.com"
     mock_user.org_id = None
-    # Per-connector health and test check the RBAC v2 role grants, where only
-    # owners hold connectors.test.
+    # Per-connector health and test check the RBAC v2 role grants; owners hold
+    # both connectors.read and connectors.test.
     mock_user.role = "owner"
     mock_user.is_authenticated = True
     mock_user.permissions = {"connectors:read", "connectors:test"}
