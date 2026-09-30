@@ -167,7 +167,9 @@ def test_v02_signer_normalizes_utc_output(timestamp, engine):
     assert engine(doc, public_key=key.public_key()).ok
     assert not any("expire" in w for w in engine(doc).warnings)
     assert not engine(doc, public_key=key.public_key(), strict_expiry=True).ok
-    legacy = decision_receipt_to_odr(DecisionReceipt.from_dict({"receipt_id": "legacy"}))
+    legacy = decision_receipt_to_odr(
+        DecisionReceipt.from_dict({"receipt_id": "legacy"}), odr_version="0.1"
+    )
     assert engine(sign_odr_receipt(legacy, key), public_key=key.public_key()).ok
 
 

@@ -6,7 +6,7 @@ multi-model review in, a verifiable Decision Receipt out.**
 It coordinates heterogeneous models to adversarially review a change or a
 decision, preserves the dissent and provenance, stops truthfully when evidence
 is thin, and emits a portable receipt anyone can verify offline with the
-standalone verifier ([`pip install -U 'aragora-verify>=0.1.1'`](https://pypi.org/project/aragora-verify/)).
+standalone verifier ([`pip install -U 'aragora-verify>=0.2.0'`](https://pypi.org/project/aragora-verify/)).
 
 [![PyPI](https://img.shields.io/pypi/v/aragora)](https://pypi.org/project/aragora/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -18,7 +18,7 @@ standalone verifier ([`pip install -U 'aragora-verify>=0.1.1'`](https://pypi.org
 | I want to… | Command |
 |------------|---------|
 | Run the standalone debate engine | `pip install aragora-debate` |
-| Verify an Open Decision Receipt with the standalone verifier | `pip install -U 'aragora-verify>=0.1.1' && aragora-verify receipt.odr.json` |
+| Verify an Open Decision Receipt with the standalone verifier | `pip install -U 'aragora-verify>=0.2.0' && aragora-verify receipt.odr.json` |
 | Run the current PyPI zero-key receipt demo | `pip install -U 'aragora>=2.9.0' && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
 | Audit this source checkout's exact CLI | `python3 -m pip install -e . && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
 | Call the Aragora API from Python | `pip install aragora-sdk` |
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: synaptent/aragora@8b600a3a8dbf076f4027ae27f3dcbbf48e75409f
+      - uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -78,7 +78,7 @@ an auditor, a customer — can then verify that receipt independently with the
 standalone `aragora-verify` verifier (no Aragora dependency):
 
 ```bash
-pip install -U 'aragora-verify>=0.1.1'
+pip install -U 'aragora-verify>=0.2.0'
 aragora-verify decision-receipt.odr.json
 
 # Add a public key when you need issuer authenticity, not just structure/digest:
@@ -88,9 +88,12 @@ aragora-verify decision-receipt.odr.json --pubkey signing-key.pem
 pip install ./aragora-verify
 ```
 
-> Use **0.1.1+** (`pip install -U 'aragora-verify>=0.1.1'`): it binds each
-> signature's recorded `key_id` to the key you supply, so a relabeled signer
-> fails as tampering. 0.1.0 lacks that binding — upgrade if you have it.
+> Use **0.2.0+** (`pip install -U 'aragora-verify>=0.2.0'`): it is the first
+> line that verifies ODR v0.2, the default output since Aragora 2.11.0 (0.1.x
+> rejects v0.2 documents at `schema_conformance`), and it still verifies v0.1
+> receipts. Like 0.1.1, it binds each signature's recorded `key_id` to the key
+> you supply, so a relabeled signer fails as tampering. 0.1.0 lacks that
+> binding — upgrade if you have it.
 
 See the [full Action setup guide](docs/GITHUB_ACTION_SETUP.md#emitting-a-verifiable-decision-receipt)
 for the receipt-specific inputs/outputs, secret-dependent limits (receipts are
@@ -346,8 +349,8 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 > Scale (canonical counts in [`docs/METRICS.md`](docs/METRICS.md), rounded):
 > **~4,300 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
 > functions across ~5,600 files · 3,205 API operations across 2,912 paths ·
-> 35+ allowlisted agent types across 12+ providers · 41 Knowledge Mound adapter specs
-> (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.10.0.**
+> 35+ allowlisted agent types across 12+ providers · 42 Knowledge Mound adapter specs
+> (47 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.11.1.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw
 > count — see docs/HONEST_ASSESSMENT.md.)
 <!-- metrics:end -->
@@ -498,7 +501,7 @@ metric. *(docs/plans/ agent-civilization designs)*
   assumptions decay, epistemic decay signals proposing bounded repair, and a read-only
   organizational truth map. Initial shape is manifest-based and read-only.
 - **Trust-Compound plan (🔄 TCP-1..7).** Make the large surface *legible without
-  deletion*: a canonical-metrics manifest verified in CI (so a claim like "46 adapters"
+  deletion*: a canonical-metrics manifest verified in CI (so a claim like "47 adapters"
   passes or fails the build), packaging clarity, hotspot-file splits, wire/showcase/
   shelve classification per subsystem, generated artifacts as build outputs, this README
   rewrite, and public CruxSets at `aragora.ai/cruxes`.
