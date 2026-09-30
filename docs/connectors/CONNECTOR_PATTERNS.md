@@ -326,6 +326,18 @@ if is_retryable_error(error):
     await asyncio.sleep(delay)
 ```
 
+### Changing a Connector's Search/Fetch Error Contract
+
+Connectors do not share one failure contract for `search`, `fetch` and
+`resolve_reference`: some re-raise after logging (for example ServiceNow), while
+others log and return `[]` or `None`. Each connector's choice is pinned by its
+own contract tests (for example `test_search_handles_api_errors` and
+`test_fetch_handles_api_errors` in
+`tests/connectors/enterprise/itsm/test_servicenow.py`). A PR that changes
+whether a connector raises or swallows a failure MUST update those sibling
+contract tests and the method docstrings in the same PR. A contract change that
+ships without its tests leaves the old assertions failing on `main`.
+
 ---
 
 ## Credential Management
