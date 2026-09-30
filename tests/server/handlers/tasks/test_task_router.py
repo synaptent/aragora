@@ -1,8 +1,8 @@
-"""Tests for aragora.tasks.router module."""
+"""Tests for task routing in the task execution handler."""
 
 import pytest
 
-from aragora.tasks.router import (
+from aragora.server.handlers.tasks.execution import (
     VALID_TASK_TYPES,
     TaskRoute,
     TaskRouter,

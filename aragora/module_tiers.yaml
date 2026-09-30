@@ -26,9 +26,9 @@ thresholds:
 summary:
   core: 21
   integrated: 93
-  experimental: 28
+  experimental: 27
   deprecated: 3
-  total: 145
+  total: 144
 
 modules:
   # --- core (21) ---
@@ -616,7 +616,7 @@ modules:
     importer_count: 16
     test_file_count: 11
 
-  # --- experimental (28) ---
+  # --- experimental (27) ---
   - name: advocates
     tier: experimental
     py_files: 2
@@ -707,11 +707,6 @@ modules:
     py_files: 4
     importer_count: 0
     test_file_count: 2
-  - name: tasks
-    tier: experimental
-    py_files: 2
-    importer_count: 1
-    test_file_count: 4
   - name: telemetry
     tier: experimental
     py_files: 3
