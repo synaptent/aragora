@@ -60,7 +60,7 @@ def _body(result: HandlerResult) -> dict:
 def _status(result: HandlerResult) -> int:
     """Extract HTTP status code from a HandlerResult."""
     if isinstance(result, dict):
-        return result.get("status_code", result.get("status", 200))
+        return int(result.get("status_code") or result.get("status") or 200)
     return result.status_code
 
 
@@ -1519,10 +1519,23 @@ class TestEmailServicesHandlerInit:
     def test_route_patterns_compiled(self, handler):
         assert len(handler._compiled_patterns) > 0
 
-    def test_handle_returns_none(self, handler):
-        """The sync handle() method returns None (routes go through async)."""
-        result = handler.handle("/api/v1/email/categories", {}, MagicMock())
+    @pytest.mark.asyncio
+    async def test_handle_returns_none_for_non_get_requests(self, handler):
+        """handle() serves GET only; the other methods have their own hooks."""
+        request = MagicMock()
+        request.command = "PATCH"
+        result = await handler.handle("/api/v1/email/categories", {}, request)
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_handle_delegates_get_to_handle_get(self, handler):
+        request = MagicMock()
+        request.command = "GET"
+        sentinel = MagicMock()
+        with patch.object(handler, "handle_get", AsyncMock(return_value=sentinel)) as handle_get:
+            result = await handler.handle("/api/v1/email/snoozed", {"a": "1"}, request)
+        assert result is sentinel
+        handle_get.assert_awaited_once_with("/api/v1/email/snoozed", {"a": "1"}, request)
 
 
 # ============================================================================

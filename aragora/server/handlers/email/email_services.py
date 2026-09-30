@@ -960,8 +960,13 @@ class EmailServicesHandler(SecureHandler):
                 return True
         return False
 
-    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
+    async def handle(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
         """Route email services endpoint requests."""
+        # The modular dispatcher calls ``handle`` for GET; it has no ``handle_get`` hook.
+        if getattr(handler, "command", "GET") == "GET":
+            return await self.handle_get(path, query_params, handler)
         return None
 
     @handle_errors("email services creation")
