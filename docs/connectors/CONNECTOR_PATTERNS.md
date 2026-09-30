@@ -336,7 +336,10 @@ own contract tests (for example `test_search_handles_api_errors` and
 `tests/connectors/enterprise/itsm/test_servicenow.py`). A PR that changes
 whether a connector raises or swallows a failure MUST update those sibling
 contract tests and the method docstrings in the same PR. A contract change that
-ships without its tests leaves the old assertions failing on `main`.
+ships without its tests leaves the old assertions failing on `main`. The
+pull-request test shards do not run `tests/connectors/` (only the scheduled and
+push-to-main "Optional Deps (Full)" job does), so run the connector's test file
+locally before pushing.
 
 ---
 
