@@ -43,7 +43,8 @@ class ConnectorTypeMeta(TypedDict, total=False):
 
 from aragora.server.handlers.secure import SecureHandler, ForbiddenError, UnauthorizedError
 from aragora.server.handlers.utils import parse_json_body
-from aragora.server.handlers.utils.responses import error_response
+from aragora.server.handlers.utils.responses import HandlerResult, error_response
+from aragora.server.handlers.utils.routing import call_request_handler
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +213,20 @@ class ConnectorsHandler(SecureHandler):
 
     def can_handle(self, path: str, method: str = "GET") -> bool:
         """Check if this handler can handle the given path."""
-        return path.startswith("/api/v1/connectors/")
+        if not path.startswith("/api/v1/connectors/"):
+            return False
+        # Per-connector health and test are ConnectorManagementHandler's routes;
+        # declining them lets the route index fall through to it.
+        segments = path[len("/api/v1/connectors/") :].split("/")
+        return not (len(segments) == 2 and segments[1] in ("health", "test"))
+
+    async def handle(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Serve modular-dispatch requests through handle_request."""
+        return await call_request_handler(
+            self.handle_request, path, query_params, handler, self.read_json_body
+        )
 
     async def handle_request(self, request: Any) -> dict[str, Any]:
         """Route request to appropriate handler."""
@@ -222,6 +236,7 @@ class ConnectorsHandler(SecureHandler):
         # Parse IDs from path
         connector_id = None
         sync_id = None
+        remaining: list[str] = []
 
         if "/connectors/" in path:
             parts = path.split("/connectors/")
@@ -230,6 +245,31 @@ class ConnectorsHandler(SecureHandler):
                 # First segment after /connectors/ is the connector_id (unless it's a special route)
                 if remaining[0] not in ("sync-history", "stats", "health", "test", "types", "sync"):
                     connector_id = remaining[0]
+
+        is_connector_item = connector_id is not None and len(remaining) == 1
+
+        # SDK sync routes: /connectors/{id}/syncs[/{sync_id}[/cancel]]
+        if connector_id and len(remaining) > 1 and remaining[1] == "syncs":
+            if method == "POST" and len(remaining) == 4 and remaining[3] == "cancel":
+                if err := await self._check_permission(request, "connectors:configure"):
+                    return err
+                sync_job = _sync_jobs.get(remaining[2])
+                if sync_job is not None and sync_job.get("connector_id") != connector_id:
+                    return self._error_response(404, f"Sync job {remaining[2]} not found")
+                return await self._cancel_sync(request, remaining[2])
+            if method == "GET" and len(remaining) in (2, 3):
+                if err := await self._check_permission(request, "connectors:read"):
+                    return err
+                return self._json_response(
+                    501,
+                    {
+                        "error": {
+                            "message": "Per-connector sync records are not implemented",
+                            "code": "not_implemented",
+                        }
+                    },
+                )
+            return self._error_response(404, "Endpoint not found")
 
         # For sync cancel operations, parse sync_id from /sync/{sync_id}/cancel
         if "/connectors/sync/" in path:
@@ -270,19 +310,19 @@ class ConnectorsHandler(SecureHandler):
             if err := await self._check_permission(request, "connectors:configure"):
                 return err
             return await self._cancel_sync(request, sync_id)
-        elif connector_id and path.endswith("/sync") and method == "POST":
+        elif connector_id and remaining[1:] == ["sync"] and method == "POST":
             if err := await self._check_permission(request, "connectors:configure"):
                 return err
             return await self._start_sync(request, connector_id)
-        elif connector_id and method == "GET":
+        elif connector_id and is_connector_item and method == "GET":
             if err := await self._check_permission(request, "connectors:read"):
                 return err
             return await self._get_connector(request, connector_id)
-        elif connector_id and method == "PUT":
+        elif connector_id and is_connector_item and method in ("PUT", "PATCH"):
             if err := await self._check_permission(request, "connectors:configure"):
                 return err
             return await self._update_connector(request, connector_id)
-        elif connector_id and method == "DELETE":
+        elif connector_id and is_connector_item and method == "DELETE":
             if err := await self._check_permission(request, "connectors:delete"):
                 return err
             return await self._delete_connector(request, connector_id)
