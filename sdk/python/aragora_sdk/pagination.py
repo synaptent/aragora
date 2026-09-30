@@ -42,7 +42,11 @@ def _named_page(
     if total is None:
         total = known_total
     next_offset = offset + len(items)
-    if total is not None and (next_offset > total or (not items and next_offset < total)):
+    # An empty page may report a total below the offset already delivered when items were
+    # deleted between requests; only a page that carries items beyond its own total contradicts it.
+    if total is not None and (
+        (items and next_offset > total) or (not items and next_offset < total)
+    ):
         raise AragoraError("Invalid pagination response: inconsistent total")
     has_more: bool | None = None
     if "has_more" in response:
