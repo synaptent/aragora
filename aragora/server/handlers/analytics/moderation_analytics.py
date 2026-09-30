@@ -9,7 +9,7 @@ Provides API endpoints for moderation analytics:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.base import (
@@ -19,10 +19,13 @@ from aragora.server.handlers.base import (
     json_response,
 )
 
+if TYPE_CHECKING:
+    from aragora.moderation import ModerationQueueItem, SpamModerationIntegration
+
 logger = logging.getLogger(__name__)
 
 
-def _get_moderation():
+def _get_moderation() -> SpamModerationIntegration | None:
     """Lazy-load moderation singleton."""
     try:
         from aragora.moderation import get_spam_moderation
@@ -32,7 +35,7 @@ def _get_moderation():
         return None
 
 
-def _get_queue_size():
+def _get_queue_size() -> int:
     """Get review queue size."""
     try:
         from aragora.moderation import review_queue_size
@@ -42,7 +45,7 @@ def _get_queue_size():
         return 0
 
 
-def _list_queue(limit=50, offset=0):
+def _list_queue(limit: int = 50, offset: int = 0) -> list[ModerationQueueItem]:
     """List review queue items."""
     try:
         from aragora.moderation import list_review_queue
@@ -129,7 +132,7 @@ class ModerationAnalyticsHandler(BaseHandler):
 
         items = _list_queue(limit=limit, offset=offset)
 
-        serialized = []
+        serialized: list[dict[str, Any] | str] = []
         for item in items:
             if hasattr(item, "to_dict"):
                 serialized.append(item.to_dict())

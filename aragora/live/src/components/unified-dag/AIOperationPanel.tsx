@@ -46,12 +46,16 @@ export function AIOperationPanel({ loading, error, result, onDismiss }: AIOperat
         {/* Result */}
         {result && (
           <div className="space-y-3">
-            <div className={`p-3 rounded border ${
-              result.success
-                ? 'bg-emerald-500/10 border-emerald-500/30'
-                : 'bg-red-500/10 border-red-500/30'
-            }`}>
-              <p className={`text-sm font-theme-data ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div
+              className={`p-3 rounded border ${
+                result.success
+                  ? 'bg-emerald-500/10 border-emerald-500/30'
+                  : 'bg-red-500/10 border-red-500/30'
+              }`}
+            >
+              <p
+                className={`text-sm font-theme-data ${result.success ? 'text-emerald-400' : 'text-red-400'}`}
+              >
                 {result.message}
               </p>
             </div>

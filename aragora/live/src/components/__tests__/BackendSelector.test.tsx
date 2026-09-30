@@ -20,11 +20,7 @@ describe('useBackend', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('backend-probe')).toHaveTextContent(
-        JSON.stringify({
-          backend: 'development',
-          api: '',
-          ws: 'ws://localhost:8765/ws',
-        }),
+        JSON.stringify({ backend: 'development', api: '', ws: 'ws://localhost:8765/ws' }),
       );
     });
   });
@@ -50,19 +46,12 @@ describe('useBackend', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('backend-probe')).toHaveTextContent(
-        JSON.stringify({
-          backend: 'development',
-          api: '',
-          ws: 'ws://localhost:8765/ws',
-        }),
+        JSON.stringify({ backend: 'development', api: '', ws: 'ws://localhost:8765/ws' }),
       );
     });
 
     window.dispatchEvent(
-      new StorageEvent('storage', {
-        key: 'aragora-backend',
-        newValue: 'production',
-      }),
+      new StorageEvent('storage', { key: 'aragora-backend', newValue: 'production' }),
     );
 
     await waitFor(() => {
@@ -90,10 +79,7 @@ describe('BackendSelector', () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith(
         'development',
-        expect.objectContaining({
-          api: '',
-          ws: 'ws://localhost:8765/ws',
-        }),
+        expect.objectContaining({ api: '', ws: 'ws://localhost:8765/ws' }),
       );
     });
   });

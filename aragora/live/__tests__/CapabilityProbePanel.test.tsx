@@ -33,37 +33,63 @@ const mockProbeReport = {
   probes_configured: 6,
   by_type: {
     contradiction: [
-      { probe_id: 'p1', type: 'contradiction', passed: true, description: 'Consistent position on AI safety', severity: 'low' },
-      { probe_id: 'p2', type: 'contradiction', passed: false, description: 'Conflicting views on regulation', severity: 'medium', details: 'Position shifted between rounds' },
-      { probe_id: 'p3', type: 'contradiction', passed: true, description: 'Stable technical reasoning', severity: 'low' },
+      {
+        probe_id: 'p1',
+        type: 'contradiction',
+        passed: true,
+        description: 'Consistent position on AI safety',
+        severity: 'low',
+      },
+      {
+        probe_id: 'p2',
+        type: 'contradiction',
+        passed: false,
+        description: 'Conflicting views on regulation',
+        severity: 'medium',
+        details: 'Position shifted between rounds',
+      },
+      {
+        probe_id: 'p3',
+        type: 'contradiction',
+        passed: true,
+        description: 'Stable technical reasoning',
+        severity: 'low',
+      },
     ],
     hallucination: [
-      { probe_id: 'p4', type: 'hallucination', passed: true, description: 'Accurate citation of sources', severity: 'low' },
-      { probe_id: 'p5', type: 'hallucination', passed: true, description: 'No fabricated statistics', severity: 'low' },
-      { probe_id: 'p6', type: 'hallucination', passed: true, description: 'Correct technical facts', severity: 'low' },
+      {
+        probe_id: 'p4',
+        type: 'hallucination',
+        passed: true,
+        description: 'Accurate citation of sources',
+        severity: 'low',
+      },
+      {
+        probe_id: 'p5',
+        type: 'hallucination',
+        passed: true,
+        description: 'No fabricated statistics',
+        severity: 'low',
+      },
+      {
+        probe_id: 'p6',
+        type: 'hallucination',
+        passed: true,
+        description: 'Correct technical facts',
+        severity: 'low',
+      },
     ],
   },
-  summary: {
-    total: 6,
-    passed: 5,
-    failed: 1,
-    pass_rate: 0.833,
-  },
+  summary: { total: 6, passed: 5, failed: 1, pass_rate: 0.833 },
 };
 
 function setupSuccessfulFetch() {
   mockFetch.mockImplementation((url: string, _options?: RequestInit) => {
     if (url.includes('/api/leaderboard')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ agents: mockAgents }),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: mockAgents }) });
     }
     if (url.includes('/api/probes/run') && _options?.method === 'POST') {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockProbeReport),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProbeReport) });
     }
     return Promise.resolve({ ok: false });
   });
@@ -320,7 +346,7 @@ describe('CapabilityProbePanel', () => {
       await waitFor(() => {
         const postCall = mockFetch.mock.calls.find(
           (call: [string, RequestInit?]) =>
-            call[0].includes('/api/probes/run') && call[1]?.method === 'POST'
+            call[0].includes('/api/probes/run') && call[1]?.method === 'POST',
         );
         expect(postCall).toBeDefined();
 
@@ -334,10 +360,7 @@ describe('CapabilityProbePanel', () => {
     it('shows loading state during probe', async () => {
       mockFetch.mockImplementation((url: string, _options?: RequestInit) => {
         if (url.includes('/api/leaderboard')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: mockAgents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: mockAgents }) });
         }
         if (url.includes('/api/probes/run')) {
           return new Promise(() => {}); // Never resolves
@@ -363,10 +386,7 @@ describe('CapabilityProbePanel', () => {
     it('disables button when no agent selected', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/leaderboard')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: [] }) });
         }
         return Promise.resolve({ ok: false });
       });
@@ -483,10 +503,7 @@ describe('CapabilityProbePanel', () => {
     it('shows error on probe failure', async () => {
       mockFetch.mockImplementation((url: string, _options?: RequestInit) => {
         if (url.includes('/api/leaderboard')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ agents: mockAgents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ agents: mockAgents }) });
         }
         if (url.includes('/api/probes/run')) {
           return Promise.resolve({

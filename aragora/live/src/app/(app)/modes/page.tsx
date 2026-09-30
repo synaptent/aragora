@@ -9,7 +9,10 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const OperationalModesPanel = dynamic(
-  () => import('@/components/OperationalModesPanel').then(m => ({ default: m.OperationalModesPanel })),
+  () =>
+    import('@/components/OperationalModesPanel').then((m) => ({
+      default: m.OperationalModesPanel,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +20,7 @@ const OperationalModesPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function ModesPage() {
@@ -73,8 +76,8 @@ export default function ModesPage() {
               {'>'} OPERATIONAL MODES
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Configure debate operational modes: standard, red-team, cooperative,
-              adversarial, and tournament settings.
+              Configure debate operational modes: standard, red-team, cooperative, adversarial, and
+              tournament settings.
             </p>
           </div>
 
@@ -82,29 +85,31 @@ export default function ModesPage() {
             <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded">
               <h3 className="text-sm font-theme-data text-[var(--accent)] mb-2">Standard Mode</h3>
               <p className="text-xs font-theme-data text-text-muted">
-                Balanced debate with consensus-seeking behavior. Agents argue positions
-                and converge on supported conclusions.
+                Balanced debate with consensus-seeking behavior. Agents argue positions and converge
+                on supported conclusions.
               </p>
             </div>
             <div className="p-4 border border-warning/30 bg-warning/5 rounded">
               <h3 className="text-sm font-theme-data text-warning mb-2">Red Team Mode</h3>
               <p className="text-xs font-theme-data text-text-muted">
-                Adversarial testing with devil&apos;s advocate agents. Stress-test arguments
-                and find weaknesses in reasoning.
+                Adversarial testing with devil&apos;s advocate agents. Stress-test arguments and
+                find weaknesses in reasoning.
               </p>
             </div>
             <div className="p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-              <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Cooperative Mode</h3>
+              <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+                Cooperative Mode
+              </h3>
               <p className="text-xs font-theme-data text-text-muted">
-                Collaborative problem-solving where agents build on each other&apos;s ideas.
-                Focus on constructive synthesis.
+                Collaborative problem-solving where agents build on each other&apos;s ideas. Focus
+                on constructive synthesis.
               </p>
             </div>
             <div className="p-4 border border-gold/30 bg-gold/5 rounded">
               <h3 className="text-sm font-theme-data text-gold mb-2">Tournament Mode</h3>
               <p className="text-xs font-theme-data text-text-muted">
-                Competitive debates with ELO rankings. Agents compete to win arguments
-                and improve their standing.
+                Competitive debates with ELO rankings. Agents compete to win arguments and improve
+                their standing.
               </p>
             </div>
           </div>
@@ -116,12 +121,8 @@ export default function ModesPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // OPERATIONAL MODES
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // OPERATIONAL MODES</p>
         </footer>
       </main>
     </>

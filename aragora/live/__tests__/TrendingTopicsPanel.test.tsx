@@ -9,16 +9,18 @@ describe('TrendingTopicsPanel', () => {
   const mockTopics = [
     { topic: 'AI Safety Research', source: 'hackernews', score: 0.85, category: 'ai' },
     { topic: 'Quantum Computing Breakthrough', source: 'arxiv', score: 0.72, debate_count: 3 },
-    { topic: 'React 19 Release', source: 'reddit', score: 0.65, last_active: new Date().toISOString() },
+    {
+      topic: 'React 19 Release',
+      source: 'reddit',
+      score: 0.65,
+      last_active: new Date().toISOString(),
+    },
     { topic: 'OpenAI Update', source: 'twitter', score: 0.45 },
   ];
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ topics: mockTopics }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ topics: mockTopics }) });
   });
 
   describe('collapsed state', () => {
@@ -57,7 +59,7 @@ describe('TrendingTopicsPanel', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/pulse/trending?limit=10',
-          expect.anything()
+          expect.anything(),
         );
       });
     });
@@ -133,10 +135,7 @@ describe('TrendingTopicsPanel', () => {
 
   describe('error handling', () => {
     it('displays error message on fetch failure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       renderWithProviders(<TrendingTopicsPanel apiBase="http://localhost:8080" />);
 
@@ -162,10 +161,7 @@ describe('TrendingTopicsPanel', () => {
 
   describe('empty state', () => {
     it('shows empty message when no topics', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ topics: [] }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ topics: [] }) });
 
       renderWithProviders(<TrendingTopicsPanel apiBase="http://localhost:8080" />);
 
@@ -246,7 +242,7 @@ describe('TrendingTopicsPanel', () => {
           apiBase="http://localhost:8080"
           autoRefresh={true}
           refreshInterval={5000}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByRole('button'));
@@ -271,7 +267,7 @@ describe('TrendingTopicsPanel', () => {
           apiBase="http://localhost:8080"
           autoRefresh={false}
           refreshInterval={5000}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByRole('button'));

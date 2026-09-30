@@ -46,12 +46,8 @@ export function FeatureCard({
   }
 
   // Separate features into visible (current mode) and expandable (higher modes)
-  const visibleFeatures = features.filter(
-    f => !f.minMode || isFeatureVisible(f.minMode)
-  );
-  const expandableFeatures = features.filter(
-    f => f.minMode && !isFeatureVisible(f.minMode)
-  );
+  const visibleFeatures = features.filter((f) => !f.minMode || isFeatureVisible(f.minMode));
+  const expandableFeatures = features.filter((f) => f.minMode && !isFeatureVisible(f.minMode));
 
   const hasExpandable = expandableFeatures.length > 0;
 
@@ -66,14 +62,10 @@ export function FeatureCard({
       {/* Header */}
       <div className="border-b border-[var(--accent)]/20 px-4 py-3">
         <div className="flex items-center gap-2">
-          {icon && (
-            <span className="text-[var(--accent)] font-theme-data text-lg">{icon}</span>
-          )}
+          {icon && <span className="text-[var(--accent)] font-theme-data text-lg">{icon}</span>}
           <h3 className="text-text font-bold font-theme-data">{title}</h3>
         </div>
-        {description && (
-          <p className="text-text-muted text-sm mt-1">{description}</p>
-        )}
+        {description && <p className="text-text-muted text-sm mt-1">{description}</p>}
       </div>
 
       {/* Feature list */}
@@ -105,9 +97,7 @@ export function FeatureCard({
             >
               <span>{expanded ? '[-]' : '[+]'}</span>
               <span>
-                {expanded
-                  ? 'Show less'
-                  : `Show ${expandableFeatures.length} more features`}
+                {expanded ? 'Show less' : `Show ${expandableFeatures.length} more features`}
               </span>
             </button>
           </>
@@ -120,21 +110,12 @@ export function FeatureCard({
 /**
  * Individual feature link within a card
  */
-function FeatureLink({
-  feature,
-  locked = false,
-}: {
-  feature: FeatureItem;
-  locked?: boolean;
-}) {
+function FeatureLink({ feature, locked = false }: { feature: FeatureItem; locked?: boolean }) {
   const content = (
     <div
       className={`
         flex items-center gap-3 px-3 py-2 rounded
-        ${locked
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-[var(--accent)]/10 cursor-pointer'
-        }
+        ${locked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[var(--accent)]/10 cursor-pointer'}
         transition-colors
       `}
     >
@@ -148,9 +129,7 @@ function FeatureLink({
           {feature.label}
         </span>
         {feature.description && (
-          <p className="text-xs text-text-muted truncate">
-            {feature.description}
-          </p>
+          <p className="text-xs text-text-muted truncate">{feature.description}</p>
         )}
       </div>
       {locked && (
@@ -210,15 +189,16 @@ export function ModeSelector({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
       <div className="flex border border-[var(--accent)]/30 rounded overflow-hidden">
-        {modes.map(m => (
+        {modes.map((m) => (
           <button
             key={m.value}
             onClick={() => setMode(m.value)}
             className={`
               px-2 py-1 text-xs font-theme-data
-              ${mode === m.value
-                ? 'bg-[var(--accent)] text-bg'
-                : 'text-[var(--accent)]/70 hover:bg-[var(--accent)]/10'
+              ${
+                mode === m.value
+                  ? 'bg-[var(--accent)] text-bg'
+                  : 'text-[var(--accent)]/70 hover:bg-[var(--accent)]/10'
               }
               transition-colors
             `}
@@ -233,15 +213,16 @@ export function ModeSelector({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      {modes.map(m => (
+      {modes.map((m) => (
         <button
           key={m.value}
           onClick={() => setMode(m.value)}
           className={`
             px-3 py-1.5 text-sm font-theme-data border
-            ${mode === m.value
-              ? 'bg-[var(--accent)] text-bg border-[var(--accent)]'
-              : 'border-[var(--accent)]/30 text-[var(--accent)]/70 hover:border-[var(--accent)]/50 hover:text-[var(--accent)]'
+            ${
+              mode === m.value
+                ? 'bg-[var(--accent)] text-bg border-[var(--accent)]'
+                : 'border-[var(--accent)]/30 text-[var(--accent)]/70 hover:border-[var(--accent)]/50 hover:text-[var(--accent)]'
             }
             transition-colors
           `}

@@ -24,9 +24,25 @@ interface FileUploaderProps {
 }
 
 const DEFAULT_ACCEPT = [
-  '.pdf', '.txt', '.md', '.doc', '.docx', '.xls', '.xlsx',
-  '.ppt', '.pptx', '.csv', '.json', '.xml', '.html', '.htm',
-  '.rtf', '.odt', '.ods', '.odp', '.epub'
+  '.pdf',
+  '.txt',
+  '.md',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.csv',
+  '.json',
+  '.xml',
+  '.html',
+  '.htm',
+  '.rtf',
+  '.odt',
+  '.ods',
+  '.odp',
+  '.epub',
 ];
 
 const formatFileSize = (bytes: number): string => {
@@ -67,76 +83,80 @@ export function FileUploader({
 
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  const validateFile = useCallback((file: File): string | null => {
-    // Check file size
-    if (file.size > maxSize) {
-      return `File too large (max ${formatFileSize(maxSize)})`;
-    }
-
-    // Check file type
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    const mimeMatch = accept.some(a =>
-      a.startsWith('.') ? ext === a.toLowerCase() : file.type.startsWith(a)
-    );
-    if (!mimeMatch && accept.length > 0) {
-      return `File type not supported`;
-    }
-
-    return null;
-  }, [accept, maxSize]);
-
-  const processFiles = useCallback(async (fileList: FileList | File[]) => {
-    const newFiles: UploadFile[] = [];
-    const filesArray = Array.from(fileList);
-
-    // Limit number of files
-    const filesToProcess = filesArray.slice(0, maxFiles - files.length);
-
-    for (const file of filesToProcess) {
-      const error = validateFile(file);
-      newFiles.push({
-        file,
-        id: generateId(),
-        status: error ? 'error' : 'pending',
-        progress: 0,
-        error: error || undefined,
-      });
-    }
-
-    setFiles(prev => [...prev, ...newFiles]);
-
-    // Auto-upload valid files
-    const validFiles = newFiles.filter(f => f.status === 'pending').map(f => f.file);
-    if (validFiles.length > 0) {
-      setIsUploading(true);
-      try {
-        await onUpload(validFiles);
-        // Mark as completed
-        setFiles(prev =>
-          prev.map(f =>
-            validFiles.includes(f.file)
-              ? { ...f, status: 'completed', progress: 100 }
-              : f
-          )
-        );
-      } catch (err) {
-        // Mark as error
-        setFiles(prev =>
-          prev.map(f =>
-            validFiles.includes(f.file)
-              ? {
-                  ...f,
-                  status: 'error',
-                  error: err instanceof Error ? err.message : 'Upload failed',
-                }
-              : f
-          )
-        );
-      } finally {
-        setIsUploading(false);
+  const validateFile = useCallback(
+    (file: File): string | null => {
+      // Check file size
+      if (file.size > maxSize) {
+        return `File too large (max ${formatFileSize(maxSize)})`;
       }
-    }
-  }, [files.length, maxFiles, onUpload, validateFile]);
+
+      // Check file type
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      const mimeMatch = accept.some((a) =>
+        a.startsWith('.') ? ext === a.toLowerCase() : file.type.startsWith(a),
+      );
+      if (!mimeMatch && accept.length > 0) {
+        return `File type not supported`;
+      }
+
+      return null;
+    },
+    [accept, maxSize],
+  );
+
+  const processFiles = useCallback(
+    async (fileList: FileList | File[]) => {
+      const newFiles: UploadFile[] = [];
+      const filesArray = Array.from(fileList);
+
+      // Limit number of files
+      const filesToProcess = filesArray.slice(0, maxFiles - files.length);
+
+      for (const file of filesToProcess) {
+        const error = validateFile(file);
+        newFiles.push({
+          file,
+          id: generateId(),
+          status: error ? 'error' : 'pending',
+          progress: 0,
+          error: error || undefined,
+        });
+      }
+
+      setFiles((prev) => [...prev, ...newFiles]);
+
+      // Auto-upload valid files
+      const validFiles = newFiles.filter((f) => f.status === 'pending').map((f) => f.file);
+      if (validFiles.length > 0) {
+        setIsUploading(true);
+        try {
+          await onUpload(validFiles);
+          // Mark as completed
+          setFiles((prev) =>
+            prev.map((f) =>
+              validFiles.includes(f.file) ? { ...f, status: 'completed', progress: 100 } : f,
+            ),
+          );
+        } catch (err) {
+          // Mark as error
+          setFiles((prev) =>
+            prev.map((f) =>
+              validFiles.includes(f.file)
+                ? {
+                    ...f,
+                    status: 'error',
+                    error: err instanceof Error ? err.message : 'Upload failed',
+                  }
+                : f,
+            ),
+          );
+        } finally {
+          setIsUploading(false);
+        }
+      }
+    },
+    [files.length, maxFiles, onUpload, validateFile],
+  );
 
   const handleDragEnter = useCallback((e: ReactDragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -161,19 +181,22 @@ export function FileUploader({
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e: ReactDragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCountRef.current = 0;
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: ReactDragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCountRef.current = 0;
+      setIsDragging(false);
 
-    if (disabled || isUploading) return;
+      if (disabled || isUploading) return;
 
-    const droppedFiles = e.dataTransfer.files;
-    if (droppedFiles.length > 0) {
-      processFiles(droppedFiles);
-    }
-  }, [disabled, isUploading, processFiles]);
+      const droppedFiles = e.dataTransfer.files;
+      if (droppedFiles.length > 0) {
+        processFiles(droppedFiles);
+      }
+    },
+    [disabled, isUploading, processFiles],
+  );
 
   const handleClick = useCallback(() => {
     if (!disabled && !isUploading) {
@@ -181,17 +204,20 @@ export function FileUploader({
     }
   }, [disabled, isUploading]);
 
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files;
-    if (selectedFiles && selectedFiles.length > 0) {
-      processFiles(selectedFiles);
-    }
-    // Reset input to allow selecting same file again
-    e.target.value = '';
-  }, [processFiles]);
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFiles = e.target.files;
+      if (selectedFiles && selectedFiles.length > 0) {
+        processFiles(selectedFiles);
+      }
+      // Reset input to allow selecting same file again
+      e.target.value = '';
+    },
+    [processFiles],
+  );
 
   const removeFile = useCallback((id: string) => {
-    setFiles(prev => prev.filter(f => f.id !== id));
+    setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
 
   const clearFiles = useCallback(() => {
@@ -223,9 +249,10 @@ export function FileUploader({
           relative border-2 border-dashed rounded-lg p-6 text-center
           transition-all duration-200 cursor-pointer
           focus:outline-none focus:ring-2 focus:ring-acid-green focus:ring-offset-2 focus:ring-offset-background
-          ${isDragging
-            ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-            : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/5'
+          ${
+            isDragging
+              ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+              : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/5'
           }
           ${disabled || isUploading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
@@ -243,15 +270,13 @@ export function FileUploader({
 
         {children || (
           <>
-            <div className="text-3xl mb-2 text-[var(--accent)]/70">
-              {isDragging ? '>' : '+'}
-            </div>
+            <div className="text-3xl mb-2 text-[var(--accent)]/70">{isDragging ? '>' : '+'}</div>
             <div className="font-theme-data text-sm text-text">
               {isDragging
                 ? 'DROP FILES HERE'
                 : isUploading
-                ? 'UPLOADING...'
-                : 'DRAG & DROP OR CLICK TO UPLOAD'}
+                  ? 'UPLOADING...'
+                  : 'DRAG & DROP OR CLICK TO UPLOAD'}
             </div>
             <div className="text-xs text-text-muted mt-1">
               Max {formatFileSize(maxSize)} per file
@@ -277,12 +302,8 @@ export function FileUploader({
             </button>
           </div>
 
-          {files.map(f => (
-            <FileItem
-              key={f.id}
-              file={f}
-              onRemove={() => removeFile(f.id)}
-            />
+          {files.map((f) => (
+            <FileItem key={f.id} file={f} onRemove={() => removeFile(f.id)} />
           ))}
         </div>
       )}
@@ -293,13 +314,7 @@ export function FileUploader({
 /**
  * Individual file item in the upload list
  */
-function FileItem({
-  file,
-  onRemove,
-}: {
-  file: UploadFile;
-  onRemove: () => void;
-}) {
+function FileItem({ file, onRemove }: { file: UploadFile; onRemove: () => void }) {
   const statusColors = {
     pending: 'text-text-muted',
     uploading: 'text-[var(--acid-cyan)]',
@@ -307,12 +322,7 @@ function FileItem({
     error: 'text-[var(--crimson)]',
   };
 
-  const statusIcons = {
-    pending: '...',
-    uploading: '>>',
-    completed: 'OK',
-    error: '!!',
-  };
+  const statusIcons = { pending: '...', uploading: '>>', completed: 'OK', error: '!!' };
 
   return (
     <div className="flex items-center gap-3 p-2 bg-surface border border-[var(--accent)]/20 rounded text-sm font-theme-data">
@@ -324,9 +334,7 @@ function FileItem({
         <div className="truncate text-text">{file.file.name}</div>
         <div className="text-xs text-text-muted">
           {formatFileSize(file.file.size)}
-          {file.error && (
-            <span className="text-[var(--crimson)] ml-2">{file.error}</span>
-          )}
+          {file.error && <span className="text-[var(--crimson)] ml-2">{file.error}</span>}
         </div>
       </div>
 

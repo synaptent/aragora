@@ -20,11 +20,7 @@ export default function AboutPage() {
       {/* Hero */}
       <section
         className="px-4"
-        style={{
-          paddingTop: '100px',
-          paddingBottom: '80px',
-          fontFamily: 'var(--font-landing)',
-        }}
+        style={{ paddingTop: '100px', paddingBottom: '80px', fontFamily: 'var(--font-landing)' }}
       >
         <div className="max-w-3xl mx-auto text-center">
           <div className="flex justify-center mb-6">
@@ -64,8 +60,8 @@ export default function AboutPage() {
               marginBottom: '24px',
             }}
           >
-            Multiple AI models debate your decisions. Ask any question and get a verdict
-            with confidence scores, minority opinions, and a full audit trail.
+            Multiple AI models debate your decisions. Ask any question and get a verdict with
+            confidence scores, minority opinions, and a full audit trail.
           </p>
 
           {/* Etymology */}
@@ -167,12 +163,21 @@ export default function AboutPage() {
               >
                 <div
                   className="font-bold"
-                  style={{ fontSize: '24px', color: 'var(--accent)', fontFamily: 'var(--font-landing)' }}
+                  style={{
+                    fontSize: '24px',
+                    color: 'var(--accent)',
+                    fontFamily: 'var(--font-landing)',
+                  }}
                 >
                   {cap.value}
                 </div>
                 <div
-                  style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', marginTop: '4px' }}
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-landing)',
+                    marginTop: '4px',
+                  }}
                 >
                   {cap.label}
                 </div>
@@ -235,11 +240,21 @@ export default function AboutPage() {
                   <div>
                     <h3
                       className="font-semibold"
-                      style={{ fontSize: '14px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
+                      style={{
+                        fontSize: '14px',
+                        color: 'var(--text)',
+                        fontFamily: 'var(--font-landing)',
+                      }}
                     >
                       {uc.title}
                     </h3>
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}>
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--text-muted)',
+                        fontFamily: 'var(--font-landing)',
+                      }}
+                    >
                       {uc.subtitle}
                     </p>
                   </div>

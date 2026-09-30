@@ -26,7 +26,7 @@ export type ApiError = components['schemas']['Error'];
 // Helper type to extract response data from a path
 export type ApiResponse<
   Path extends keyof import('./api.generated').paths,
-  Method extends keyof import('./api.generated').paths[Path]
+  Method extends keyof import('./api.generated').paths[Path],
 > = import('./api.generated').paths[Path][Method] extends {
   responses: { 200: { content: { 'application/json': infer R } } };
 }
@@ -36,7 +36,7 @@ export type ApiResponse<
 // Helper type to extract request body from a path
 export type ApiRequestBody<
   Path extends keyof import('./api.generated').paths,
-  Method extends keyof import('./api.generated').paths[Path]
+  Method extends keyof import('./api.generated').paths[Path],
 > = import('./api.generated').paths[Path][Method] extends {
   requestBody: { content: { 'application/json': infer B } };
 }

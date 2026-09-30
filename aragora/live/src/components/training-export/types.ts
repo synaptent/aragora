@@ -7,13 +7,7 @@ export type OutputFormat = 'json' | 'jsonl';
 
 // Pipeline status types
 export type PipelineStage =
-  | 'idle'
-  | 'collecting'
-  | 'filtering'
-  | 'transforming'
-  | 'exporting'
-  | 'complete'
-  | 'error';
+  'idle' | 'collecting' | 'filtering' | 'transforming' | 'exporting' | 'complete' | 'error';
 
 export interface PipelineStatus {
   stage: PipelineStage;
@@ -42,11 +36,7 @@ export interface ExportFormat {
 }
 
 export interface FormatsResponse {
-  formats: {
-    sft: ExportFormat;
-    dpo: ExportFormat;
-    gauntlet: ExportFormat;
-  };
+  formats: { sft: ExportFormat; dpo: ExportFormat; gauntlet: ExportFormat };
   output_formats: string[];
   endpoints: Record<string, string>;
 }

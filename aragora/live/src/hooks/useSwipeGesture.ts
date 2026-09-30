@@ -41,7 +41,7 @@ interface TouchState {
  * ```
  */
 export function useSwipeGesture<T extends HTMLElement = HTMLElement>(
-  options: SwipeGestureOptions = {}
+  options: SwipeGestureOptions = {},
 ) {
   const {
     threshold = 50,
@@ -61,13 +61,9 @@ export function useSwipeGesture<T extends HTMLElement = HTMLElement>(
     (e: TouchEvent) => {
       if (!enabled) return;
       const touch = e.touches[0];
-      touchState.current = {
-        startX: touch.clientX,
-        startY: touch.clientY,
-        startTime: Date.now(),
-      };
+      touchState.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
     },
-    [enabled]
+    [enabled],
   );
 
   const handleTouchEnd = useCallback(
@@ -123,7 +119,7 @@ export function useSwipeGesture<T extends HTMLElement = HTMLElement>(
 
       touchState.current = null;
     },
-    [enabled, threshold, maxTime, onSwipe, onSwipeLeft, onSwipeRight, onSwipeUp, onSwipeDown]
+    [enabled, threshold, maxTime, onSwipe, onSwipeLeft, onSwipeRight, onSwipeUp, onSwipeDown],
   );
 
   useEffect(() => {
@@ -163,13 +159,7 @@ export function useEdgeSwipe(options: {
   threshold?: number;
   enabled?: boolean;
 }) {
-  const {
-    edge,
-    onSwipe,
-    edgeWidth = 20,
-    threshold = 50,
-    enabled = true,
-  } = options;
+  const { edge, onSwipe, edgeWidth = 20, threshold = 50, enabled = true } = options;
 
   const touchState = useRef<{ startX: number; startY: number } | null>(null);
 
@@ -186,10 +176,7 @@ export function useEdgeSwipe(options: {
       const isRightEdge = edge === 'right' && x > windowWidth - edgeWidth;
 
       if (isLeftEdge || isRightEdge) {
-        touchState.current = {
-          startX: x,
-          startY: touch.clientY,
-        };
+        touchState.current = { startX: x, startY: touch.clientY };
       }
     };
 
@@ -204,8 +191,7 @@ export function useEdgeSwipe(options: {
       if (diffY < Math.abs(diffX) && Math.abs(diffX) > threshold) {
         // Left edge: swipe right opens
         // Right edge: swipe left opens
-        const isValidSwipe =
-          (edge === 'left' && diffX > 0) || (edge === 'right' && diffX < 0);
+        const isValidSwipe = (edge === 'left' && diffX > 0) || (edge === 'right' && diffX < 0);
 
         if (isValidSwipe) {
           onSwipe();

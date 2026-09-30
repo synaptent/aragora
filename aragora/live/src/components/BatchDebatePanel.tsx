@@ -24,7 +24,9 @@ const STATUS_COLORS: Record<BatchStatusValue, { text: string; bg: string }> = {
 function StatusBadge({ status }: { status: BatchStatusValue }) {
   const colors = STATUS_COLORS[status] || STATUS_COLORS.pending;
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data uppercase ${colors.text} ${colors.bg} rounded`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data uppercase ${colors.text} ${colors.bg} rounded`}
+    >
       {status}
     </span>
   );
@@ -69,52 +71,53 @@ function BatchSubmitForm({ onSubmit, submitting, error }: BatchSubmitFormProps) 
   const [webhookUrl, setWebhookUrl] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    setParseError(null);
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setParseError(null);
 
-    let items: BatchItem[] = [];
+      let items: BatchItem[] = [];
 
-    if (inputMode === 'text') {
-      // Parse text input - one question per line
-      const lines = textInput.split('\n').filter(l => l.trim());
-      if (lines.length === 0) {
-        setParseError('Enter at least one question');
-        return;
-      }
-      items = lines.map(question => ({ question: question.trim() }));
-    } else {
-      // Parse JSON input
-      try {
-        const parsed = JSON.parse(jsonInput);
-        if (Array.isArray(parsed)) {
-          items = parsed.map(item =>
-            typeof item === 'string' ? { question: item } : item
-          );
-        } else if (parsed.items && Array.isArray(parsed.items)) {
-          items = parsed.items;
-        } else {
-          setParseError('JSON must be an array of items or { items: [...] }');
+      if (inputMode === 'text') {
+        // Parse text input - one question per line
+        const lines = textInput.split('\n').filter((l) => l.trim());
+        if (lines.length === 0) {
+          setParseError('Enter at least one question');
           return;
         }
-      } catch {
-        setParseError('Invalid JSON format');
+        items = lines.map((question) => ({ question: question.trim() }));
+      } else {
+        // Parse JSON input
+        try {
+          const parsed = JSON.parse(jsonInput);
+          if (Array.isArray(parsed)) {
+            items = parsed.map((item) => (typeof item === 'string' ? { question: item } : item));
+          } else if (parsed.items && Array.isArray(parsed.items)) {
+            items = parsed.items;
+          } else {
+            setParseError('JSON must be an array of items or { items: [...] }');
+            return;
+          }
+        } catch {
+          setParseError('Invalid JSON format');
+          return;
+        }
+      }
+
+      if (items.length === 0) {
+        setParseError('No valid items to submit');
         return;
       }
-    }
 
-    if (items.length === 0) {
-      setParseError('No valid items to submit');
-      return;
-    }
+      if (items.length > 1000) {
+        setParseError('Maximum 1000 items per batch');
+        return;
+      }
 
-    if (items.length > 1000) {
-      setParseError('Maximum 1000 items per batch');
-      return;
-    }
-
-    await onSubmit(items, webhookUrl || undefined);
-  }, [inputMode, textInput, jsonInput, webhookUrl, onSubmit]);
+      await onSubmit(items, webhookUrl || undefined);
+    },
+    [inputMode, textInput, jsonInput, webhookUrl, onSubmit],
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,7 +152,10 @@ function BatchSubmitForm({ onSubmit, submitting, error }: BatchSubmitFormProps) 
       {/* Input Area */}
       {inputMode === 'text' ? (
         <div>
-          <label htmlFor="batch-questions-input" className="block text-xs font-theme-data text-text-muted mb-1">
+          <label
+            htmlFor="batch-questions-input"
+            className="block text-xs font-theme-data text-text-muted mb-1"
+          >
             Questions (one per line)
           </label>
           <textarea
@@ -163,7 +169,10 @@ function BatchSubmitForm({ onSubmit, submitting, error }: BatchSubmitFormProps) 
         </div>
       ) : (
         <div>
-          <label htmlFor="batch-json-input" className="block text-xs font-theme-data text-text-muted mb-1">
+          <label
+            htmlFor="batch-json-input"
+            className="block text-xs font-theme-data text-text-muted mb-1"
+          >
             JSON Items
           </label>
           <textarea
@@ -183,7 +192,10 @@ function BatchSubmitForm({ onSubmit, submitting, error }: BatchSubmitFormProps) 
           <span aria-hidden="true">[+]</span> Webhook Configuration
         </summary>
         <div className="mt-2">
-          <label htmlFor="batch-webhook-url" className="block text-xs font-theme-data text-text-muted mb-1">
+          <label
+            htmlFor="batch-webhook-url"
+            className="block text-xs font-theme-data text-text-muted mb-1"
+          >
             Webhook URL (optional)
           </label>
           <input
@@ -257,7 +269,9 @@ function BatchStatusCard({
         </div>
         <div className="flex items-center gap-2">
           {isPolling && (
-            <span className="text-xs font-theme-data text-[var(--acid-cyan)] animate-pulse">POLLING</span>
+            <span className="text-xs font-theme-data text-[var(--acid-cyan)] animate-pulse">
+              POLLING
+            </span>
           )}
           <button
             onClick={onRefresh}
@@ -437,7 +451,9 @@ function BatchHistoryList({ onSelectBatch }: BatchHistoryListProps) {
                 <StatusBadge status={batch.status} />
               </div>
               <div className="mt-1 flex items-center gap-3 text-xs font-theme-data text-text-muted">
-                <span>{batch.completed_items}/{batch.total_items} done</span>
+                <span>
+                  {batch.completed_items}/{batch.total_items} done
+                </span>
                 {batch.failed_items > 0 && (
                   <span className="text-acid-red">{batch.failed_items} failed</span>
                 )}
@@ -473,7 +489,9 @@ function QueueStatusDisplay() {
     <div className="p-3 bg-surface/50 border border-[var(--accent)]/20">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-theme-data text-[var(--accent)]">QUEUE STATUS</span>
-        <span className={`text-xs font-theme-data ${queueStatus.active ? 'text-[var(--accent)]' : 'text-acid-red'}`}>
+        <span
+          className={`text-xs font-theme-data ${queueStatus.active ? 'text-[var(--accent)]' : 'text-acid-red'}`}
+        >
           {queueStatus.active ? 'ACTIVE' : 'INACTIVE'}
         </span>
       </div>
@@ -505,18 +523,24 @@ export function BatchDebatePanel() {
   const batch = useBatchDebate();
   const [activeTab, setActiveTab] = useState<'submit' | 'status' | 'history'>('submit');
 
-  const handleSubmit = useCallback(async (items: BatchItem[], webhookUrl?: string) => {
-    const result = await batch.submitBatch({ items, webhook_url: webhookUrl });
-    if (result) {
-      setActiveTab('status');
-      batch.pollBatchStatus(result.batch_id);
-    }
-  }, [batch]);
+  const handleSubmit = useCallback(
+    async (items: BatchItem[], webhookUrl?: string) => {
+      const result = await batch.submitBatch({ items, webhook_url: webhookUrl });
+      if (result) {
+        setActiveTab('status');
+        batch.pollBatchStatus(result.batch_id);
+      }
+    },
+    [batch],
+  );
 
-  const handleSelectBatch = useCallback((batchId: string) => {
-    batch.pollBatchStatus(batchId);
-    setActiveTab('status');
-  }, [batch]);
+  const handleSelectBatch = useCallback(
+    (batchId: string) => {
+      batch.pollBatchStatus(batchId);
+      setActiveTab('status');
+    },
+    [batch],
+  );
 
   return (
     <div className="border border-[var(--accent)]/30 bg-surface/50">
@@ -612,9 +636,7 @@ export function BatchDebatePanel() {
           </div>
         )}
 
-        {activeTab === 'history' && (
-          <BatchHistoryList onSelectBatch={handleSelectBatch} />
-        )}
+        {activeTab === 'history' && <BatchHistoryList onSelectBatch={handleSelectBatch} />}
       </div>
     </div>
   );

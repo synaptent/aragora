@@ -96,11 +96,7 @@ export function VoiceInput({
     try {
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
 
       streamRef.current = stream;
@@ -190,7 +186,7 @@ export function VoiceInput({
 
     // Stop audio tracks
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
 
@@ -221,10 +217,7 @@ export function VoiceInput({
       }
 
       // Send to backend
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await fetch(apiEndpoint, { method: 'POST', body: formData });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -268,18 +261,19 @@ export function VoiceInput({
           state === 'recording'
             ? 'Stop voice recording'
             : state === 'processing'
-            ? 'Processing audio transcription'
-            : 'Start voice recording'
+              ? 'Processing audio transcription'
+              : 'Start voice recording'
         }
         aria-pressed={state === 'recording'}
         className={`
           relative w-10 h-10 rounded-full border-2 transition-all
           flex items-center justify-center font-theme-data
-          ${state === 'recording'
-            ? 'border-[var(--crimson)] bg-[var(--crimson)]/20 text-[var(--crimson)] animate-pulse'
-            : state === 'processing' || state === 'requesting'
-            ? 'border-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] cursor-wait'
-            : 'border-[var(--accent)]/50 text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/10'
+          ${
+            state === 'recording'
+              ? 'border-[var(--crimson)] bg-[var(--crimson)]/20 text-[var(--crimson)] animate-pulse'
+              : state === 'processing' || state === 'requesting'
+                ? 'border-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] cursor-wait'
+                : 'border-[var(--accent)]/50 text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/10'
           }
           disabled:opacity-50 disabled:cursor-not-allowed
         `}
@@ -287,8 +281,8 @@ export function VoiceInput({
           state === 'recording'
             ? 'Stop recording'
             : state === 'processing'
-            ? 'Processing...'
-            : 'Start recording'
+              ? 'Processing...'
+              : 'Start recording'
         }
       >
         {state === 'recording' ? (
@@ -366,10 +360,13 @@ export function VoiceInputExpanded({
 }: Omit<VoiceInputProps, 'showWaveform' | 'onInterimResult'>) {
   const [transcript, setTranscript] = useState('');
 
-  const handleTranscript = useCallback((text: string) => {
-    setTranscript(text);
-    onTranscript(text);
-  }, [onTranscript]);
+  const handleTranscript = useCallback(
+    (text: string) => {
+      setTranscript(text);
+      onTranscript(text);
+    },
+    [onTranscript],
+  );
 
   return (
     <div className={`space-y-3 ${className}`}>

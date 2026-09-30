@@ -22,11 +22,7 @@ interface ScanResult {
     extension: string;
     mimeType: string;
   }>;
-  excludedFiles: Array<{
-    path: string;
-    reason: string;
-    details: string;
-  }>;
+  excludedFiles: Array<{ path: string; reason: string; details: string }>;
   warnings: string[];
 }
 
@@ -82,7 +78,9 @@ export function FolderUploadDialog({
   const [folderPath, setFolderPath] = useState<string>('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'uploading' | 'completed' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'uploading' | 'completed' | 'error'>(
+    'idle',
+  );
   const [error, setError] = useState<string | null>(null);
   const [showExcluded, setShowExcluded] = useState(false);
 
@@ -119,7 +117,7 @@ export function FolderUploadDialog({
     setFolderPath(folderName);
 
     // Convert FileList to array of FolderFile
-    const folderFiles: FolderFile[] = Array.from(files).map(file => ({
+    const folderFiles: FolderFile[] = Array.from(files).map((file) => ({
       path: file.webkitRelativePath || file.name,
       name: file.name,
       size: file.size,
@@ -189,11 +187,7 @@ export function FolderUploadDialog({
       }
 
       if (excluded) {
-        excludedFiles.push({
-          path,
-          reason: excludeReason,
-          details: excludeDetails,
-        });
+        excludedFiles.push({ path, reason: excludeReason, details: excludeDetails });
       } else {
         const ext = '.' + file.name.split('.').pop()?.toLowerCase();
         includedFiles.push({
@@ -230,7 +224,9 @@ export function FolderUploadDialog({
       .replace(/\?/g, '.');
 
     try {
-      const regex = new RegExp(`^${regexPattern}$|/${regexPattern}$|^${regexPattern}/|/${regexPattern}/`);
+      const regex = new RegExp(
+        `^${regexPattern}$|/${regexPattern}$|^${regexPattern}/|/${regexPattern}/`,
+      );
       return regex.test(path);
     } catch {
       return false;
@@ -256,7 +252,7 @@ export function FolderUploadDialog({
   };
 
   const removePattern = (pattern: string) => {
-    setExcludePatterns(excludePatterns.filter(p => p !== pattern));
+    setExcludePatterns(excludePatterns.filter((p) => p !== pattern));
   };
 
   const startUpload = useCallback(async () => {
@@ -279,7 +275,7 @@ export function FolderUploadDialog({
       }
 
       // Filter to only included files
-      const includedPaths = new Set(scanResult.includedFiles.map(f => f.path));
+      const includedPaths = new Set(scanResult.includedFiles.map((f) => f.path));
       const filesToUpload: File[] = [];
 
       for (let i = 0; i < input.files.length; i++) {
@@ -297,17 +293,14 @@ export function FolderUploadDialog({
 
       // Add metadata
       formData.append('folder_name', folderPath);
-      formData.append('config', JSON.stringify({
-        maxDepth,
-        excludePatterns,
-        maxFileSizeMb,
-        maxTotalSizeMb,
-        maxFileCount,
-      }));
+      formData.append(
+        'config',
+        JSON.stringify({ maxDepth, excludePatterns, maxFileSizeMb, maxTotalSizeMb, maxFileCount }),
+      );
 
       const response = await fetch(`${apiBase}/api/documents/batch`, {
         method: 'POST',
-        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         body: formData,
       });
 
@@ -346,7 +339,18 @@ export function FolderUploadDialog({
       setError(err instanceof Error ? err.message : 'Upload failed');
       setStatus('error');
     }
-  }, [scanResult, apiBase, authToken, folderPath, maxDepth, excludePatterns, maxFileSizeMb, maxTotalSizeMb, maxFileCount, onComplete]);
+  }, [
+    scanResult,
+    apiBase,
+    authToken,
+    folderPath,
+    maxDepth,
+    excludePatterns,
+    maxFileSizeMb,
+    maxTotalSizeMb,
+    maxFileCount,
+    onComplete,
+  ]);
 
   const handleClose = () => {
     if (pollIntervalRef.current) {
@@ -373,14 +377,27 @@ export function FolderUploadDialog({
       <div className="bg-surface border border-border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-border flex items-center justify-between">
-          <h2 id="folder-upload-title" className="text-lg font-theme-data font-bold">FOLDER UPLOAD</h2>
+          <h2 id="folder-upload-title" className="text-lg font-theme-data font-bold">
+            FOLDER UPLOAD
+          </h2>
           <button
             onClick={handleClose}
             className="text-muted hover:text-foreground"
             aria-label="Close folder upload dialog"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -392,7 +409,9 @@ export function FolderUploadDialog({
             <div
               className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-accent/50 transition-colors focus:outline-none focus:border-accent"
               onClick={() => folderInputRef.current?.click()}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && folderInputRef.current?.click()}
+              onKeyDown={(e) =>
+                (e.key === 'Enter' || e.key === ' ') && folderInputRef.current?.click()
+              }
               role="button"
               tabIndex={0}
               aria-label="Select folder to upload"
@@ -407,7 +426,9 @@ export function FolderUploadDialog({
                 className="hidden"
                 aria-label="Folder file picker"
               />
-              <div className="text-4xl mb-3" aria-hidden="true">📂</div>
+              <div className="text-4xl mb-3" aria-hidden="true">
+                📂
+              </div>
               <div className="text-lg font-theme-data mb-2">SELECT FOLDER</div>
               <div className="text-sm text-muted">Click to select a folder to upload</div>
             </div>
@@ -493,7 +514,13 @@ export function FolderUploadDialog({
                       placeholder="e.g. **/*.log"
                       className="input flex-1"
                     />
-                    <button onClick={addPattern} className="btn btn-secondary" aria-label="Add exclude pattern">Add</button>
+                    <button
+                      onClick={addPattern}
+                      className="btn btn-secondary"
+                      aria-label="Add exclude pattern"
+                    >
+                      Add
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {excludePatterns.map((pattern) => (
@@ -530,15 +557,21 @@ export function FolderUploadDialog({
                   <div className="text-xs text-muted">Total Found</div>
                 </div>
                 <div className="card p-3 text-center">
-                  <div className="text-2xl font-bold text-[var(--accent)]">{scanResult.includedCount}</div>
+                  <div className="text-2xl font-bold text-[var(--accent)]">
+                    {scanResult.includedCount}
+                  </div>
                   <div className="text-xs text-muted">To Upload</div>
                 </div>
                 <div className="card p-3 text-center">
-                  <div className="text-2xl font-bold text-[var(--acid-yellow)]">{scanResult.excludedCount}</div>
+                  <div className="text-2xl font-bold text-[var(--acid-yellow)]">
+                    {scanResult.excludedCount}
+                  </div>
                   <div className="text-xs text-muted">Excluded</div>
                 </div>
                 <div className="card p-3 text-center">
-                  <div className="text-2xl font-bold">{formatSize(scanResult.includedSizeBytes)}</div>
+                  <div className="text-2xl font-bold">
+                    {formatSize(scanResult.includedSizeBytes)}
+                  </div>
                   <div className="text-xs text-muted">Total Size</div>
                 </div>
               </div>
@@ -546,20 +579,32 @@ export function FolderUploadDialog({
               {/* File List Preview */}
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-theme-data font-bold">FILES TO UPLOAD ({scanResult.includedCount})</div>
+                  <div className="text-sm font-theme-data font-bold">
+                    FILES TO UPLOAD ({scanResult.includedCount})
+                  </div>
                   {scanResult.excludedCount > 0 && (
                     <button
                       onClick={() => setShowExcluded(!showExcluded)}
                       className="text-xs text-muted hover:text-foreground"
                     >
-                      {showExcluded ? 'Show included' : `Show excluded (${scanResult.excludedCount})`}
+                      {showExcluded
+                        ? 'Show included'
+                        : `Show excluded (${scanResult.excludedCount})`}
                     </button>
                   )}
                 </div>
                 <div className="max-h-48 overflow-y-auto space-y-1">
-                  {(showExcluded ? scanResult.excludedFiles : scanResult.includedFiles.slice(0, 50)).map((file, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs font-theme-data py-1 border-b border-border last:border-0">
-                      <span className={`truncate flex-1 ${showExcluded ? 'text-muted line-through' : ''}`}>
+                  {(showExcluded
+                    ? scanResult.excludedFiles
+                    : scanResult.includedFiles.slice(0, 50)
+                  ).map((file, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between text-xs font-theme-data py-1 border-b border-border last:border-0"
+                    >
+                      <span
+                        className={`truncate flex-1 ${showExcluded ? 'text-muted line-through' : ''}`}
+                      >
                         {file.path}
                       </span>
                       {showExcluded && 'details' in file && (
@@ -571,7 +616,9 @@ export function FolderUploadDialog({
                     </div>
                   ))}
                   {!showExcluded && scanResult.includedFiles.length > 50 && (
-                    <div className="text-xs text-muted py-1">... and {scanResult.includedFiles.length - 50} more files</div>
+                    <div className="text-xs text-muted py-1">
+                      ... and {scanResult.includedFiles.length - 50} more files
+                    </div>
                   )}
                 </div>
               </div>
@@ -579,9 +626,13 @@ export function FolderUploadDialog({
               {/* Warnings */}
               {scanResult.warnings.length > 0 && (
                 <div className="bg-acid-yellow/10 border border-acid-yellow/30 rounded p-3">
-                  <div className="text-sm font-theme-data font-bold text-[var(--acid-yellow)] mb-1">WARNINGS</div>
+                  <div className="text-sm font-theme-data font-bold text-[var(--acid-yellow)] mb-1">
+                    WARNINGS
+                  </div>
                   {scanResult.warnings.map((warning, i) => (
-                    <div key={i} className="text-xs text-[var(--acid-yellow)]">{warning}</div>
+                    <div key={i} className="text-xs text-[var(--acid-yellow)]">
+                      {warning}
+                    </div>
                   ))}
                 </div>
               )}
@@ -605,13 +656,18 @@ export function FolderUploadDialog({
               <div className="text-sm text-muted">
                 {uploadProgress.progress.filesUploaded} files uploaded successfully
                 {uploadProgress.progress.filesFailed > 0 && (
-                  <span className="text-acid-red"> ({uploadProgress.progress.filesFailed} failed)</span>
+                  <span className="text-acid-red">
+                    {' '}
+                    ({uploadProgress.progress.filesFailed} failed)
+                  </span>
                 )}
               </div>
               {uploadProgress.results.errorCount > 0 && (
                 <div className="mt-2 text-xs text-acid-red">
                   {uploadProgress.results.errors.slice(0, 3).map((err, i) => (
-                    <div key={i}>{err.file}: {err.error}</div>
+                    <div key={i}>
+                      {err.file}: {err.error}
+                    </div>
                   ))}
                 </div>
               )}

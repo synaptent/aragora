@@ -25,7 +25,7 @@ const TRUST_POINTS = [
     title: 'TRACK RECORDS',
     accent: 'acid-cyan',
     content:
-      "Agent personas built from verified stress-test outcomes. Not self-reported traits — empirical performance.",
+      'Agent personas built from verified stress-test outcomes. Not self-reported traits — empirical performance.',
   },
 ];
 
@@ -39,7 +39,9 @@ export function TrustSection() {
           {TRUST_POINTS.map((point) => (
             <div key={point.title} className={`border-l-2 border-${point.accent} pl-4 py-2`}>
               <h3 className={`text-${point.accent} font-theme-data text-xs mb-2`}>{point.title}</h3>
-              <p className="text-text-muted text-xs font-theme-data leading-relaxed">{point.content}</p>
+              <p className="text-text-muted text-xs font-theme-data leading-relaxed">
+                {point.content}
+              </p>
             </div>
           ))}
         </div>

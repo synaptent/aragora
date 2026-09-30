@@ -33,7 +33,8 @@ export interface Spec {
   context_summary: string;
 }
 
-export type InterrogationStage = 'idle' | 'decomposing' | 'questioning' | 'crystallizing' | 'complete';
+export type InterrogationStage =
+  'idle' | 'decomposing' | 'questioning' | 'crystallizing' | 'complete';
 
 export function useInterrogation() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -70,24 +71,31 @@ export function useInterrogation() {
     }
   }, []);
 
-  const answer = useCallback(async (questionText: string, answerText: string) => {
-    if (!sessionId) return;
-    setAnswers(prev => ({ ...prev, [questionText]: answerText }));
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/interrogation/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, question: questionText, answer: answerText }),
-      });
-      if (!res.ok) throw new Error('Failed to answer');
-      const json = await res.json();
-      if (json.data.is_complete) {
-        setStage('crystallizing');
+  const answer = useCallback(
+    async (questionText: string, answerText: string) => {
+      if (!sessionId) return;
+      setAnswers((prev) => ({ ...prev, [questionText]: answerText }));
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/interrogation/answer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            question: questionText,
+            answer: answerText,
+          }),
+        });
+        if (!res.ok) throw new Error('Failed to answer');
+        const json = await res.json();
+        if (json.data.is_complete) {
+          setStage('crystallizing');
+        }
+      } catch {
+        setError('Failed to submit answer');
       }
-    } catch {
-      setError('Failed to submit answer');
-    }
-  }, [sessionId]);
+    },
+    [sessionId],
+  );
 
   const crystallize = useCallback(async () => {
     if (!sessionId) return;
@@ -122,7 +130,17 @@ export function useInterrogation() {
   }, []);
 
   return {
-    sessionId, dimensions, questions, answers, spec, stage, error, loading,
-    start, answer, crystallize, reset,
+    sessionId,
+    dimensions,
+    questions,
+    answers,
+    spec,
+    stage,
+    error,
+    loading,
+    start,
+    answer,
+    crystallize,
+    reset,
   };
 }

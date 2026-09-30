@@ -24,37 +24,75 @@ export default function ROIDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [breakdownType, setBreakdownType] = useState<BreakdownType>('feature');
 
-  const {
-    summary,
-    roi,
-    budget,
-    forecast,
-    isLoading,
-    error,
-  } = useUsageDashboard(timeRange);
+  const { summary, roi, budget, forecast, isLoading, error } = useUsageDashboard(timeRange);
 
   // Transform usage data for charts
-  const usageChartData = summary ? [
-    { label: 'Week 1', value: Math.round(summary.debates.this_month * 0.2), date: '2026-01-07' },
-    { label: 'Week 2', value: Math.round(summary.debates.this_month * 0.25), date: '2026-01-14' },
-    { label: 'Week 3', value: Math.round(summary.debates.this_month * 0.27), date: '2026-01-21' },
-    { label: 'Week 4', value: Math.round(summary.debates.this_month * 0.28), date: '2026-01-28' },
-  ] : [];
+  const usageChartData = summary
+    ? [
+        {
+          label: 'Week 1',
+          value: Math.round(summary.debates.this_month * 0.2),
+          date: '2026-01-07',
+        },
+        {
+          label: 'Week 2',
+          value: Math.round(summary.debates.this_month * 0.25),
+          date: '2026-01-14',
+        },
+        {
+          label: 'Week 3',
+          value: Math.round(summary.debates.this_month * 0.27),
+          date: '2026-01-21',
+        },
+        {
+          label: 'Week 4',
+          value: Math.round(summary.debates.this_month * 0.28),
+          date: '2026-01-28',
+        },
+      ]
+    : [];
 
-  const costChartData = summary ? [
-    { label: 'Week 1', value: summary.costs.this_month_usd * 0.2, date: '2026-01-07' },
-    { label: 'Week 2', value: summary.costs.this_month_usd * 0.24, date: '2026-01-14' },
-    { label: 'Week 3', value: summary.costs.this_month_usd * 0.28, date: '2026-01-21' },
-    { label: 'Week 4', value: summary.costs.this_month_usd * 0.28, date: '2026-01-28' },
-  ] : [];
+  const costChartData = summary
+    ? [
+        { label: 'Week 1', value: summary.costs.this_month_usd * 0.2, date: '2026-01-07' },
+        { label: 'Week 2', value: summary.costs.this_month_usd * 0.24, date: '2026-01-14' },
+        { label: 'Week 3', value: summary.costs.this_month_usd * 0.28, date: '2026-01-21' },
+        { label: 'Week 4', value: summary.costs.this_month_usd * 0.28, date: '2026-01-28' },
+      ]
+    : [];
 
   // Cost breakdown data (would come from API in production)
   const costBreakdownData: CostItem[] = [
-    { id: '1', label: 'Debate Processing', cost: (summary?.costs.total_usd ?? 0) * 0.45, category: 'debate' },
-    { id: '2', label: 'Agent Compute', cost: (summary?.costs.total_usd ?? 0) * 0.30, category: 'agent' },
-    { id: '3', label: 'Knowledge Storage', cost: (summary?.costs.total_usd ?? 0) * 0.12, category: 'storage' },
-    { id: '4', label: 'Workflow Automation', cost: (summary?.costs.total_usd ?? 0) * 0.08, category: 'workflow' },
-    { id: '5', label: 'API & Integrations', cost: (summary?.costs.total_usd ?? 0) * 0.05, category: 'api' },
+    {
+      id: '1',
+      label: 'Debate Processing',
+      cost: (summary?.costs.total_usd ?? 0) * 0.45,
+      category: 'debate',
+    },
+    {
+      id: '2',
+      label: 'Agent Compute',
+      cost: (summary?.costs.total_usd ?? 0) * 0.3,
+      category: 'agent',
+    },
+    {
+      id: '3',
+      label: 'Knowledge Storage',
+      cost: (summary?.costs.total_usd ?? 0) * 0.12,
+      category: 'storage',
+    },
+    {
+      id: '4',
+      label: 'Workflow Automation',
+      cost: (summary?.costs.total_usd ?? 0) * 0.08,
+      category: 'workflow',
+    },
+    {
+      id: '5',
+      label: 'API & Integrations',
+      cost: (summary?.costs.total_usd ?? 0) * 0.05,
+      category: 'api',
+    },
   ];
 
   const handleTimeRangeChange = (range: TimeRange) => {
@@ -174,7 +212,9 @@ export default function ROIDashboard() {
             </div>
           </button>
           <button className="p-3 bg-[var(--surface-elevated)] border border-[var(--border)] rounded hover:border-[var(--acid-yellow)]/40 transition-colors text-left">
-            <div className="font-theme-data text-xs text-[var(--acid-yellow)]">CONFIGURE ALERTS</div>
+            <div className="font-theme-data text-xs text-[var(--acid-yellow)]">
+              CONFIGURE ALERTS
+            </div>
             <div className="font-theme-data text-[10px] text-[var(--text-muted)] mt-1">
               Set spending thresholds
             </div>

@@ -36,13 +36,7 @@
 // =============================================================================
 
 // Main client
-export {
-  AragoraClient,
-  createClient,
-  getClient,
-  clearClient,
-  AragoraError,
-} from './client';
+export { AragoraClient, createClient, getClient, clearClient, AragoraError } from './client';
 
 export type { ClientConfig } from './client';
 export type { AragoraClientConfig } from './apis/base';

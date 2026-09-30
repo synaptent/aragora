@@ -35,7 +35,9 @@ jest.mock('@/components/ErrorWithRetry', () => ({
   ErrorWithRetry: ({ error, onRetry }: { error: string; onRetry: () => void }) => (
     <div data-testid="error-display">
       <span>{error}</span>
-      <button onClick={onRetry} data-testid="retry-button">Retry</button>
+      <button onClick={onRetry} data-testid="retry-button">
+        Retry
+      </button>
     </div>
   ),
 }));
@@ -58,10 +60,7 @@ describe('SocialPage', () => {
 
   describe('initial render', () => {
     it('renders visual effects', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -70,10 +69,7 @@ describe('SocialPage', () => {
     });
 
     it('renders header elements', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -83,10 +79,7 @@ describe('SocialPage', () => {
     });
 
     it('renders page title', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -102,10 +95,7 @@ describe('SocialPage', () => {
     });
 
     it('renders tab navigation', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -121,10 +111,7 @@ describe('SocialPage', () => {
 
   describe('connector status tab', () => {
     it('fetches connector status on mount', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -139,23 +126,14 @@ describe('SocialPage', () => {
         if (url.includes('/youtube/status')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              is_configured: true,
-              is_connected: true,
-              quota_remaining: 9500,
-            }),
+            json: () =>
+              Promise.resolve({ is_configured: true, is_connected: true, quota_remaining: 9500 }),
           });
         }
         if (url.includes('/connectors')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ connectors: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ connectors: [] }) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ debates: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ debates: [] }) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -172,10 +150,7 @@ describe('SocialPage', () => {
         if (url.includes('/youtube/status')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              is_configured: false,
-              is_connected: false,
-            }),
+            json: () => Promise.resolve({ is_configured: false, is_connected: false }),
           });
         }
         return Promise.resolve({
@@ -198,10 +173,7 @@ describe('SocialPage', () => {
         if (url.includes('/youtube/status')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              is_configured: true,
-              is_connected: false,
-            }),
+            json: () => Promise.resolve({ is_configured: true, is_connected: false }),
           });
         }
         return Promise.resolve({
@@ -223,18 +195,13 @@ describe('SocialPage', () => {
         if (url.includes('/youtube/auth')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              auth_url: 'https://accounts.google.com/oauth',
-            }),
+            json: () => Promise.resolve({ auth_url: 'https://accounts.google.com/oauth' }),
           });
         }
         if (url.includes('/youtube/status')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              is_configured: true,
-              is_connected: false,
-            }),
+            json: () => Promise.resolve({ is_configured: true, is_connected: false }),
           });
         }
         return Promise.resolve({
@@ -255,17 +222,12 @@ describe('SocialPage', () => {
 
       // Verify the OAuth auth URL was fetched
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/youtube/auth')
-        );
+        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/youtube/auth'));
       });
     });
 
     it('displays Twitter/X placeholder', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -275,10 +237,7 @@ describe('SocialPage', () => {
     });
 
     it('displays configuration instructions', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -293,11 +252,8 @@ describe('SocialPage', () => {
         if (url.includes('/youtube/status')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              is_configured: true,
-              is_connected: false,
-              error: 'Token expired',
-            }),
+            json: () =>
+              Promise.resolve({ is_configured: true, is_connected: false, error: 'Token expired' }),
           });
         }
         return Promise.resolve({
@@ -317,10 +273,7 @@ describe('SocialPage', () => {
   describe('publish tab', () => {
     it('switches to publish tab', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ debates: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
       renderWithProviders(<SocialPage />);
 
@@ -341,18 +294,16 @@ describe('SocialPage', () => {
         if (url.includes('/debates')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              debates: [
-                { id: 'debate-1', task: 'AI Ethics Discussion', metadata: { has_audio: true } },
-                { id: 'debate-2', task: 'Code Review Session', metadata: {} },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                debates: [
+                  { id: 'debate-1', task: 'AI Ethics Discussion', metadata: { has_audio: true } },
+                  { id: 'debate-2', task: 'Code Review Session', metadata: {} },
+                ],
+              }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -371,10 +322,7 @@ describe('SocialPage', () => {
 
     it('displays platform selection buttons', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ debates: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
       renderWithProviders(<SocialPage />);
 
@@ -388,18 +336,17 @@ describe('SocialPage', () => {
 
       // Platform buttons may include "(not connected)" suffix
       const buttons = screen.getAllByRole('button');
-      const twitterButton = buttons.find(b => b.textContent?.includes('Twitter'));
-      const youtubeButton = buttons.find(b => b.textContent?.includes('YouTube') && !b.textContent?.includes('Connect'));
+      const twitterButton = buttons.find((b) => b.textContent?.includes('Twitter'));
+      const youtubeButton = buttons.find(
+        (b) => b.textContent?.includes('YouTube') && !b.textContent?.includes('Connect'),
+      );
       expect(twitterButton).toBeTruthy();
       expect(youtubeButton).toBeTruthy();
     });
 
     it('disables publish button when no debate selected', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ debates: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
       renderWithProviders(<SocialPage />);
 
@@ -409,7 +356,7 @@ describe('SocialPage', () => {
 
       // Click the Publish tab
       const tabs = screen.getAllByRole('button');
-      const publishTab = tabs.find(b => b.textContent === 'Publish');
+      const publishTab = tabs.find((b) => b.textContent === 'Publish');
       await act(async () => {
         await user.click(publishTab!);
       });
@@ -417,7 +364,9 @@ describe('SocialPage', () => {
       // Find the submit button (not the tab)
       await waitFor(() => {
         const allButtons = screen.getAllByRole('button');
-        const submitButton = allButtons.find(b => b.textContent === 'Publish' && b !== publishTab);
+        const submitButton = allButtons.find(
+          (b) => b.textContent === 'Publish' && b !== publishTab,
+        );
         expect(submitButton).toBeTruthy();
         expect(submitButton).toBeDisabled();
       });
@@ -446,7 +395,7 @@ describe('SocialPage', () => {
 
       // Click the Publish tab
       const tabs = screen.getAllByRole('button');
-      const publishTab = tabs.find(b => b.textContent === 'Publish');
+      const publishTab = tabs.find((b) => b.textContent === 'Publish');
       await act(async () => {
         await user.click(publishTab!);
       });
@@ -464,30 +413,21 @@ describe('SocialPage', () => {
         if (url.includes('/publish/youtube') && options?.method === 'POST') {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              job_id: 'job-123',
-              url: 'https://youtube.com/watch?v=abc123',
-            }),
+            json: () =>
+              Promise.resolve({ job_id: 'job-123', url: 'https://youtube.com/watch?v=abc123' }),
           });
         }
         if (url.includes('/youtube/status')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ is_connected: true }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ is_connected: true }) });
         }
         if (url.includes('/debates')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              debates: [{ id: 'debate-1', task: 'Test Debate', metadata: {} }],
-            }),
+            json: () =>
+              Promise.resolve({ debates: [{ id: 'debate-1', task: 'Test Debate', metadata: {} }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ connectors: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ connectors: [] }) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -506,7 +446,11 @@ describe('SocialPage', () => {
       });
 
       // Select platform (click YouTube button)
-      const youtubeButton = screen.getAllByRole('button').find(b => b.textContent?.includes('YouTube') && !b.textContent?.includes('not connected'));
+      const youtubeButton = screen
+        .getAllByRole('button')
+        .find(
+          (b) => b.textContent?.includes('YouTube') && !b.textContent?.includes('not connected'),
+        );
       if (youtubeButton) {
         await act(async () => {
           await user.click(youtubeButton);
@@ -514,7 +458,7 @@ describe('SocialPage', () => {
       }
 
       // Click publish
-      const publishButton = screen.getAllByRole('button').find(b => b.textContent === 'Publish');
+      const publishButton = screen.getAllByRole('button').find((b) => b.textContent === 'Publish');
       if (publishButton && !publishButton.hasAttribute('disabled')) {
         await act(async () => {
           await user.click(publishButton);
@@ -524,10 +468,7 @@ describe('SocialPage', () => {
 
     it('displays publish notes', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ debates: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
       renderWithProviders(<SocialPage />);
 
@@ -547,10 +488,7 @@ describe('SocialPage', () => {
   describe('history tab', () => {
     it('switches to history tab', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -567,10 +505,7 @@ describe('SocialPage', () => {
 
     it('shows empty state when no history', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
       renderWithProviders(<SocialPage />);
 
@@ -591,30 +526,21 @@ describe('SocialPage', () => {
         if (url.includes('/publish/youtube') && options?.method === 'POST') {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              job_id: 'job-123',
-              url: 'https://youtube.com/watch?v=abc123',
-            }),
+            json: () =>
+              Promise.resolve({ job_id: 'job-123', url: 'https://youtube.com/watch?v=abc123' }),
           });
         }
         if (url.includes('/youtube/status')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ is_connected: true }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ is_connected: true }) });
         }
         if (url.includes('/debates')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              debates: [{ id: 'debate-1', task: 'Test', metadata: {} }],
-            }),
+            json: () =>
+              Promise.resolve({ debates: [{ id: 'debate-1', task: 'Test', metadata: {} }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ connectors: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ connectors: [] }) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -642,10 +568,7 @@ describe('SocialPage', () => {
         if (url.includes('/youtube/status') || url.includes('/connectors')) {
           return Promise.reject(new Error('Network error'));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ debates: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ debates: [] }) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -664,10 +587,7 @@ describe('SocialPage', () => {
         if (url.includes('/debates')) {
           return Promise.reject(new Error('Network error'));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -692,23 +612,16 @@ describe('SocialPage', () => {
           });
         }
         if (url.includes('/youtube/status')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ is_connected: true }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ is_connected: true }) });
         }
         if (url.includes('/debates')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              debates: [{ id: 'debate-1', task: 'Test', metadata: {} }],
-            }),
+            json: () =>
+              Promise.resolve({ debates: [{ id: 'debate-1', task: 'Test', metadata: {} }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ connectors: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ connectors: [] }) });
       });
 
       renderWithProviders(<SocialPage />);
@@ -731,10 +644,7 @@ describe('SocialPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/youtube/auth')) {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
         if (url.includes('/youtube/status')) {
           return Promise.resolve({

@@ -4,10 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { IdeaCanvasMeta } from '@/components/idea-canvas/types';
 
-const IdeaCanvas = dynamic(
-  () => import('@/components/idea-canvas/IdeaCanvas'),
-  { ssr: false }
-);
+const IdeaCanvas = dynamic(() => import('@/components/idea-canvas/IdeaCanvas'), { ssr: false });
 
 const API_BASE = '/api/v1/ideas';
 
@@ -97,9 +94,7 @@ export default function IdeasPage() {
         </button>
       </div>
 
-      {loading && (
-        <p className="text-xs text-[var(--text-muted)]">Loading...</p>
-      )}
+      {loading && <p className="text-xs text-[var(--text-muted)]">Loading...</p>}
 
       {!loading && canvases.length === 0 && (
         <div className="text-center py-12">
@@ -123,9 +118,7 @@ export default function IdeasPage() {
             onClick={() => setSelectedId(canvas.id)}
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold text-[var(--text)] truncate">
-                {canvas.name}
-              </h3>
+              <h3 className="text-sm font-bold text-[var(--text)] truncate">{canvas.name}</h3>
               <button
                 onClick={(e) => {
                   e.stopPropagation();

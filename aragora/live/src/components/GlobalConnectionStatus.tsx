@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useOptionalConnection, type OverallConnectionStatus, type ServiceConnection } from '@/context/ConnectionContext';
+import {
+  useOptionalConnection,
+  type OverallConnectionStatus,
+  type ServiceConnection,
+} from '@/context/ConnectionContext';
 
 /**
  * Global connection status indicator that appears in the layout.
@@ -12,13 +16,10 @@ import { useOptionalConnection, type OverallConnectionStatus, type ServiceConnec
  * Uses ConnectionContext to aggregate status from multiple WebSocket services.
  */
 
-const STATUS_CONFIG: Record<OverallConnectionStatus, {
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  label: string;
-  icon: string;
-}> = {
+const STATUS_CONFIG: Record<
+  OverallConnectionStatus,
+  { color: string; bgColor: string; borderColor: string; label: string; icon: string }
+> = {
   connected: {
     color: 'text-[var(--accent)]',
     bgColor: 'bg-[var(--accent)]/10',
@@ -101,7 +102,7 @@ export function GlobalConnectionStatus() {
 
   // Update relative times every 10 seconds
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 10000);
+    const interval = setInterval(() => setTick((t) => t + 1), 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -118,7 +119,7 @@ export function GlobalConnectionStatus() {
     isReconnecting,
     lastAllConnected,
     reconnectAll,
-    requestReconnect
+    requestReconnect,
   } = connection;
   const config = STATUS_CONFIG[overallStatus];
 
@@ -127,7 +128,7 @@ export function GlobalConnectionStatus() {
 
   // Count disconnected services for retry all
   const disconnectedServices = Array.from(services.values()).filter(
-    s => s.status !== 'connected' && s.status !== 'streaming'
+    (s) => s.status !== 'connected' && s.status !== 'streaming',
   );
 
   return (
@@ -140,20 +141,30 @@ export function GlobalConnectionStatus() {
           title="Click for connection details"
         >
           <span className="animate-pulse">{config.icon}</span>
-          <span>{connectedCount}/{totalServices}</span>
+          <span>
+            {connectedCount}/{totalServices}
+          </span>
         </button>
       )}
 
       {/* Expanded view */}
       {shouldShowDetails && (
-        <div className={`${config.bgColor} border ${config.borderColor} rounded-lg shadow-lg overflow-hidden min-w-[280px]`}>
+        <div
+          className={`${config.bgColor} border ${config.borderColor} rounded-lg shadow-lg overflow-hidden min-w-[280px]`}
+        >
           {/* Header */}
           <div
             className={`flex items-center justify-between px-3 py-2 border-b ${config.borderColor} cursor-pointer`}
             onClick={() => overallStatus === 'connected' && setIsExpanded(false)}
           >
             <div className={`flex items-center gap-2 ${config.color}`}>
-              <span className={overallStatus === 'connecting' || isReconnecting ? 'animate-spin' : 'animate-pulse'}>
+              <span
+                className={
+                  overallStatus === 'connecting' || isReconnecting
+                    ? 'animate-spin'
+                    : 'animate-pulse'
+                }
+              >
                 {config.icon}
               </span>
               <span>{config.label}</span>
@@ -180,25 +191,25 @@ export function GlobalConnectionStatus() {
               const latency = isConnected ? getLatencyIndicator(service) : null;
 
               return (
-                <div
-                  key={service.name}
-                  className="flex items-center justify-between gap-2"
-                >
+                <div key={service.name} className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      isConnected ? 'bg-[var(--accent)]' :
-                      hasError ? 'bg-[var(--crimson)]' :
-                      isConnecting ? 'bg-[var(--acid-cyan)] animate-pulse' :
-                      'bg-text-muted'
-                    }`} />
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isConnected
+                          ? 'bg-[var(--accent)]'
+                          : hasError
+                            ? 'bg-[var(--crimson)]'
+                            : isConnecting
+                              ? 'bg-[var(--acid-cyan)] animate-pulse'
+                              : 'bg-text-muted'
+                      }`}
+                    />
                     <span className="text-text">{service.displayName}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Latency/Quality indicator for connected services */}
                     {latency && (
-                      <span className={`text-[10px] ${latency.color}`}>
-                        {latency.label}
-                      </span>
+                      <span className={`text-[10px] ${latency.color}`}>{latency.label}</span>
                     )}
                     {/* Reconnect attempt indicator */}
                     {service.reconnectAttempt > 0 && (
@@ -208,7 +219,10 @@ export function GlobalConnectionStatus() {
                     )}
                     {/* Error message */}
                     {hasError && service.error && (
-                      <span className="text-[var(--crimson)] text-[10px] truncate max-w-[100px]" title={service.error}>
+                      <span
+                        className="text-[var(--crimson)] text-[10px] truncate max-w-[100px]"
+                        title={service.error}
+                      >
                         {service.error}
                       </span>
                     )}
@@ -266,9 +280,7 @@ export function GlobalConnectionStatus() {
 
             {/* Connection info for non-connected states */}
             {overallStatus !== 'connected' && disconnectedServices.length === 0 && (
-              <div className="flex-1 px-3 py-2 text-text-muted text-center">
-                Connecting...
-              </div>
+              <div className="flex-1 px-3 py-2 text-text-muted text-center">Connecting...</div>
             )}
           </div>
         </div>

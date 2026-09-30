@@ -20,7 +20,16 @@ import { ContradictionsTab } from './ContradictionsTab';
 import type { VisibilityLevel } from './VisibilitySelector';
 import type { KnowledgeNode, GraphNode } from '@/store/knowledgeExplorerStore';
 
-export type ExplorerTab = 'search' | 'browse' | 'graph' | 'stale' | 'shared' | 'federation' | 'quality' | 'adapters' | 'contradictions';
+export type ExplorerTab =
+  | 'search'
+  | 'browse'
+  | 'graph'
+  | 'stale'
+  | 'shared'
+  | 'federation'
+  | 'quality'
+  | 'adapters'
+  | 'contradictions';
 
 export interface KnowledgeExplorerProps {
   /** Initial tab to show */
@@ -104,9 +113,7 @@ export function KnowledgeExplorer({
     stats,
     statsLoading,
     loadStats,
-  } = useKnowledgeQuery({
-    autoLoadStats: showStats,
-  });
+  } = useKnowledgeQuery({ autoLoadStats: showStats });
 
   // Handle search
   const handleSearch = useCallback(
@@ -119,7 +126,7 @@ export function KnowledgeExplorer({
         return [text, ...filtered].slice(0, 5);
       });
     },
-    [executeQuery]
+    [executeQuery],
   );
 
   // Handle node selection
@@ -127,7 +134,7 @@ export function KnowledgeExplorer({
     (node: KnowledgeNode) => {
       onSelectNode?.(node);
     },
-    [onSelectNode]
+    [onSelectNode],
   );
 
   // Handle view in graph
@@ -136,7 +143,7 @@ export function KnowledgeExplorer({
       setActiveTab('graph');
       await loadGraph(node.id, 2, 'both');
     },
-    [setActiveTab, loadGraph]
+    [setActiveTab, loadGraph],
   );
 
   // Handle graph node click
@@ -144,9 +151,8 @@ export function KnowledgeExplorer({
     (node: GraphNode) => {
       onSelectNode?.(node);
     },
-    [onSelectNode]
+    [onSelectNode],
   );
-
 
   // Handle share dialog submit
   const handleShare = useCallback(
@@ -157,7 +163,7 @@ export function KnowledgeExplorer({
       setShareDialogOpen(false);
       setSelectedNodeForShare(null);
     },
-    [selectedNodeForShare, onShare]
+    [selectedNodeForShare, onShare],
   );
 
   // Load shared items and federation status on mount and tab change
@@ -182,7 +188,7 @@ export function KnowledgeExplorer({
         logger.error(`Failed to sync ${direction} with region ${regionId}:`, error);
       }
     },
-    [syncPush, syncPull]
+    [syncPush, syncPull],
   );
 
   // Stats summary
@@ -207,9 +213,7 @@ export function KnowledgeExplorer({
         <div className="text-xs text-text-muted">Avg Confidence</div>
       </div>
       <div className="text-center">
-        <div className="text-2xl font-theme-data text-yellow-400">
-          {stats.stale_nodes_count}
-        </div>
+        <div className="text-2xl font-theme-data text-yellow-400">{stats.stale_nodes_count}</div>
         <div className="text-xs text-text-muted">Stale Nodes</div>
       </div>
     </div>
@@ -235,9 +239,7 @@ export function KnowledgeExplorer({
 
         {queryResults.length > 0 && (
           <div>
-            <div className="text-xs text-text-muted mb-2">
-              Found {queryResults.length} results
-            </div>
+            <div className="text-xs text-text-muted mb-2">Found {queryResults.length} results</div>
             <div style={{ maxHeight: height - 200, overflowY: 'auto' }}>
               <NodeBrowser
                 nodes={queryResults}
@@ -383,13 +385,9 @@ export function KnowledgeExplorer({
       />
     ),
 
-    adapters: (
-      <AdaptersTab />
-    ),
+    adapters: <AdaptersTab />,
 
-    contradictions: (
-      <ContradictionsTab />
-    ),
+    contradictions: <ContradictionsTab />,
 
     quality: (
       <QualityTab
@@ -423,7 +421,12 @@ export function KnowledgeExplorer({
     { id: 'contradictions', label: 'Conflicts', content: tabContent.contradictions },
     { id: 'quality', label: 'Quality', content: tabContent.quality },
     { id: 'stale', label: 'Stale', badge: stats?.stale_nodes_count, content: tabContent.stale },
-    { id: 'shared', label: 'Shared', badge: sharedItems.length || undefined, content: tabContent.shared },
+    {
+      id: 'shared',
+      label: 'Shared',
+      badge: sharedItems.length || undefined,
+      content: tabContent.shared,
+    },
   ];
 
   // Add federation tab for admins

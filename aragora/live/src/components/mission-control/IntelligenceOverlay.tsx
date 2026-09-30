@@ -58,7 +58,9 @@ export const IntelligenceOverlay = memo(function IntelligenceOverlay({
       className="flex flex-col gap-1 p-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg"
       data-testid="intelligence-overlay"
     >
-      <div className="text-xs font-theme-data font-bold text-[var(--text-muted)] px-1 mb-1">Intelligence</div>
+      <div className="text-xs font-theme-data font-bold text-[var(--text-muted)] px-1 mb-1">
+        Intelligence
+      </div>
       {OVERLAY_OPTIONS.map((opt) => {
         const active = overlays[opt.key];
         return (
@@ -71,12 +73,16 @@ export const IntelligenceOverlay = memo(function IntelligenceOverlay({
             data-testid={`intelligence-toggle-${opt.key}`}
           >
             <span className={`${opt.color} text-sm`}>{opt.icon}</span>
-            <span className={`font-theme-data ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
+            <span
+              className={`font-theme-data ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}
+            >
               {opt.label}
             </span>
             <span
               className={`ml-auto w-3 h-3 rounded-sm border ${
-                active ? 'bg-[var(--acid-green)] border-[var(--acid-green)]' : 'border-[var(--text-muted)]'
+                active
+                  ? 'bg-[var(--acid-green)] border-[var(--acid-green)]'
+                  : 'border-[var(--text-muted)]'
               }`}
             />
           </button>

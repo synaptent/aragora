@@ -3,7 +3,7 @@
 
 Purpose
 -------
-Fails any tracked ``aragora/**/*.py`` file longer than ``LIMIT`` (2,000) lines
+Fails any tracked or untracked (not ignored) ``aragora/**/*.py`` file longer than ``LIMIT`` (2,000) lines
 that is not recorded in the frozen adoption baseline at
 ``scripts/baselines/file_size_baseline.json``. It follows the same shrink-only
 model as ``.mypy-baseline`` and ``scripts/ci/check_import_contracts.py``:
@@ -24,6 +24,8 @@ Usage
     python3 scripts/ci/check_file_sizes.py --json
     python3 scripts/ci/check_file_sizes.py --freeze --adopt # initial census
     python3 scripts/ci/check_file_sizes.py --freeze         # shrink-only re-freeze
+    python3 scripts/ci/check_file_sizes.py --glob 'app/src/**/*.ts' \\
+        --glob 'app/src/**/*.tsx' --baseline scripts/baselines/app-file-size.json
 
 Exit codes
 ----------
@@ -38,6 +40,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -57,21 +60,39 @@ class CheckerError(RuntimeError):
 # --- Measurement ------------------------------------------------------------
 
 
-def list_tracked_py_files(package: str = PACKAGE_DIR) -> list[str]:
-    """Return tracked ``<package>/**/*.py`` paths (POSIX style).
+def _expand_glob(pattern: str) -> list[str]:
+    """Expand brace alternatives, e.g. ``*.{ts,tsx}``, before Git globbing."""
+    match = re.search(r"\{([^{}]+)\}", pattern)
+    if not match:
+        return [pattern]
+    return [
+        expanded
+        for choice in match[1].split(",")
+        for expanded in _expand_glob(pattern[: match.start()] + choice + pattern[match.end() :])
+    ]
 
-    Uses ``git ls-files`` so the set reflects the index, which means a freshly
-    ``git add``-ed (but not committed) file -- e.g. a tamper newcomer -- is
-    included, and a ``git rm --cached`` file is excluded.
+
+def list_source_files(globs: list[str] | None = None) -> list[str]:
+    """Return sorted tracked and untracked-not-ignored paths, relative to the repo.
+
+    Explicit globs replace the default Python scope. Git's glob pathspec magic
+    makes ``**/`` include zero or more directories, including top-level files.
     """
+    paths = (
+        [f":(glob){expanded}" for pattern in globs for expanded in _expand_glob(pattern)]
+        if globs
+        else [PACKAGE_DIR]
+    )
     result = subprocess.run(
-        ["git", "ls-files", "--", package],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", *paths],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
     )
-    return [line for line in result.stdout.splitlines() if line.endswith(".py")]
+    return sorted(
+        {path for path in result.stdout.split("\0") if path and (globs or path.endswith(".py"))}
+    )
 
 
 def count_lines(path: Path) -> int:
@@ -83,7 +104,7 @@ def count_lines(path: Path) -> int:
 
 
 def measure_oversized(files: list[str], limit: int = LIMIT) -> dict[str, int]:
-    """Map each tracked file over ``limit`` lines to its line count."""
+    """Map each selected file over ``limit`` lines to its line count."""
     oversized: dict[str, int] = {}
     for rel in files:
         lines = count_lines(REPO_ROOT / rel)
@@ -134,7 +155,7 @@ def write_baseline(path: Path, oversized: dict[str, int], limit: int = LIMIT) ->
     # as an entry. "aragora package" (no slash) is safe.
     payload = {
         "_comment": (
-            "Shrink-only baseline of tracked Python files in the aragora package "
+            "Shrink-only baseline of selected tracked and untracked (not ignored) files "
             f"longer than {limit} lines at adoption, frozen by "
             "scripts/ci/check_file_sizes.py --freeze. A NEW oversized file not "
             "listed here fails the checker (fail-on-new); this baseline may only "
@@ -156,7 +177,7 @@ def write_baseline(path: Path, oversized: dict[str, int], limit: int = LIMIT) ->
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Fail any tracked aragora/**/*.py file over 2,000 lines that is not "
+            "Fail any tracked or untracked (not ignored) aragora/**/*.py file over 2,000 lines that is not "
             "recorded in the shrink-only baseline "
             "scripts/baselines/file_size_baseline.json (fail-on-new)."
         ),
@@ -165,8 +186,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--baseline",
         type=Path,
         default=BASELINE_PATH,
+        help=("Per-app baseline path (default: scripts/baselines/file_size_baseline.json)."),
+    )
+    parser.add_argument(
+        "--glob",
+        action="append",
+        metavar="PATTERN",
         help=(
-            "Path to file_size_baseline.json (default: scripts/baselines/file_size_baseline.json)."
+            "Repository-relative Git glob (repeatable; replaces the default aragora/**/*.py "
+            "scope). Quote patterns; **/ includes zero or more directories, and brace "
+            "alternatives such as *.{ts,tsx} are supported. Use --baseline for a per-app census."
         ),
     )
     parser.add_argument(
@@ -192,11 +221,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run_freeze(args: argparse.Namespace) -> int:
-    oversized = measure_oversized(list_tracked_py_files())
-    if args.baseline.exists() and not args.adopt:
+    oversized = measure_oversized(list_source_files(args.glob))
+    if args.baseline.exists():
         existing = load_baseline(args.baseline)
+        if existing == oversized:
+            print(
+                f"Baseline unchanged ({len(oversized)} oversized file(s) > {LIMIT} lines); "
+                f"not rewritten -> {args.baseline}"
+            )
+            return 0
         added = sorted(set(oversized) - set(existing))
-        if added:
+        if added and not args.adopt:
             for path in added:
                 print(
                     f"REFUSED (would grow baseline): {path} ({oversized[path]} lines)",
@@ -217,13 +252,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.freeze:
             return _run_freeze(args)
-        oversized = measure_oversized(list_tracked_py_files())
+        oversized = measure_oversized(list_source_files(args.glob))
         baseline = load_baseline(args.baseline)
         offenders = find_offenders(oversized, set(baseline))
     except CheckerError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
+    scope = ", ".join(args.glob) if args.glob else "aragora/**/*.py"
     if args.json:
         print(
             json.dumps(
@@ -237,10 +273,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     elif offenders:
-        print(
-            f"FAIL: {len(offenders)} tracked aragora/**/*.py file(s) over "
-            f"{LIMIT} lines not in the baseline:"
-        )
+        print(f"FAIL: {len(offenders)} {scope} file(s) over {LIMIT} lines not in the baseline:")
         for path, lines in sorted(offenders.items()):
             print(f"  NEW {path} ({lines} lines)")
         print(
@@ -249,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
             "re-freeze with 'python3 scripts/ci/check_file_sizes.py --freeze'."
         )
     else:
-        print(f"OK: no new aragora/**/*.py files over {LIMIT} lines.")
+        print(f"OK: no new {scope} files over {LIMIT} lines.")
         print(f"     baseline grandfathers {len(baseline)} oversized file(s).")
 
     return 1 if offenders else 0

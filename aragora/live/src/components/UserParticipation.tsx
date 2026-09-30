@@ -15,7 +15,13 @@ interface UserParticipationProps {
 
 type SubmissionState = 'idle' | 'pending' | 'success' | 'error' | 'rate_limited';
 
-export function UserParticipation({ events, onVote, onSuggest, onAck, onError }: UserParticipationProps) {
+export function UserParticipation({
+  events,
+  onVote,
+  onSuggest,
+  onAck,
+  onError,
+}: UserParticipationProps) {
   const [voteChoice, setVoteChoice] = useState('');
   const [suggestion, setSuggestion] = useState('');
   const [hasVoted, setHasVoted] = useState(false);
@@ -35,7 +41,7 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
 
   // Get the latest audience summary from events
   const audienceSummary = useMemo(() => {
-    const summaryEvents = events.filter(e => e.type === 'audience_summary');
+    const summaryEvents = events.filter((e) => e.type === 'audience_summary');
     if (summaryEvents.length === 0) return null;
     const latest = summaryEvents[summaryEvents.length - 1];
     return latest.data as unknown as AudienceSummaryData;
@@ -43,7 +49,7 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
 
   // Get the latest audience metrics (for conviction heatmap)
   const audienceMetrics = useMemo(() => {
-    const metricsEvents = events.filter(e => e.type === 'audience_metrics');
+    const metricsEvents = events.filter((e) => e.type === 'audience_metrics');
     if (metricsEvents.length === 0) return null;
     const latest = metricsEvents[metricsEvents.length - 1];
     return latest.data as unknown as AudienceMetricsData;
@@ -83,11 +89,14 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
         setErrorMessage(message);
       }
 
-      setTimeout(() => {
-        setVoteState((s) => s === newState ? 'idle' : s);
-        setSuggestionState((s) => s === newState ? 'idle' : s);
-        setErrorMessage(null);
-      }, isRateLimited ? 5000 : 3000);
+      setTimeout(
+        () => {
+          setVoteState((s) => (s === newState ? 'idle' : s));
+          setSuggestionState((s) => (s === newState ? 'idle' : s));
+          setErrorMessage(null);
+        },
+        isRateLimited ? 5000 : 3000,
+      );
     });
 
     return unsubscribeError;
@@ -96,9 +105,9 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
   // Extract current proposals from recent agent messages
   const recentProposals = events
     .filter(isAgentMessage)
-    .filter(e => e.data.role === 'proposer')
+    .filter((e) => e.data.role === 'proposer')
     .slice(-4) // Last 4 proposals
-    .map(e => ({
+    .map((e) => ({
       agent: e.data.agent,
       content: e.data.content, // Full content, no truncation
     }));
@@ -123,9 +132,7 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
 
   return (
     <div className="panel">
-      <h2 className="panel-title-sm mb-3">
-        User Participation
-      </h2>
+      <h2 className="panel-title-sm mb-3">User Participation</h2>
 
       {/* Vote Section */}
       <div className="mb-4">
@@ -145,7 +152,9 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
                 />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-accent">{proposal.agent}</div>
-                  <div className="agent-output text-text-muted whitespace-pre-wrap break-words max-h-48 overflow-y-auto">{proposal.content}</div>
+                  <div className="agent-output text-text-muted whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                    {proposal.content}
+                  </div>
                 </div>
               </div>
             ))}
@@ -159,11 +168,15 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
           <div className="mb-3 p-3 bg-surface rounded border border-border">
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm text-text-muted">Your conviction level</label>
-              <span className={`text-xs px-2 py-0.5 rounded ${
-                intensity <= 3 ? 'bg-yellow-500/20 text-yellow-400' :
-                intensity <= 7 ? 'bg-blue-500/20 text-blue-400' :
-                'bg-green-500/20 text-green-400'
-              }`}>
+              <span
+                className={`text-xs px-2 py-0.5 rounded ${
+                  intensity <= 3
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : intensity <= 7
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-green-500/20 text-green-400'
+                }`}
+              >
                 {getConvictionLabel(intensity)}
               </span>
             </div>
@@ -195,17 +208,23 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
             voteState === 'success'
               ? 'bg-success text-white'
               : voteState === 'error' || voteState === 'rate_limited'
-              ? 'bg-warning text-white'
-              : voteState === 'pending'
-              ? 'bg-surface text-text animate-pulse'
-              : 'bg-accent text-white hover:bg-accent/90'
+                ? 'bg-warning text-white'
+                : voteState === 'pending'
+                  ? 'bg-surface text-text animate-pulse'
+                  : 'bg-accent text-white hover:bg-accent/90'
           }`}
         >
-          {voteState === 'pending' ? 'Submitting...' :
-           voteState === 'success' ? 'Vote Submitted ✓' :
-           voteState === 'rate_limited' ? 'Rate Limited - Wait' :
-           voteState === 'error' ? 'Failed - Try Again' :
-           hasVoted ? 'Vote Submitted ✓' : 'Submit Vote'}
+          {voteState === 'pending'
+            ? 'Submitting...'
+            : voteState === 'success'
+              ? 'Vote Submitted ✓'
+              : voteState === 'rate_limited'
+                ? 'Rate Limited - Wait'
+                : voteState === 'error'
+                  ? 'Failed - Try Again'
+                  : hasVoted
+                    ? 'Vote Submitted ✓'
+                    : 'Submit Vote'}
         </button>
         {voteState === 'error' && errorMessage && (
           <p className="text-xs text-warning mt-1">{errorMessage}</p>
@@ -231,24 +250,30 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
               suggestionState === 'success'
                 ? 'bg-success text-white'
                 : suggestionState === 'error' || suggestionState === 'rate_limited'
-                ? 'bg-warning text-white'
-                : suggestionState === 'pending'
-                ? 'bg-surface text-text animate-pulse'
-                : 'bg-secondary text-white hover:bg-secondary/90'
+                  ? 'bg-warning text-white'
+                  : suggestionState === 'pending'
+                    ? 'bg-surface text-text animate-pulse'
+                    : 'bg-secondary text-white hover:bg-secondary/90'
             }`}
           >
-            {suggestionState === 'pending' ? '...' :
-             suggestionState === 'success' ? 'Sent ✓' :
-             suggestionState === 'rate_limited' ? 'Wait' :
-             suggestionState === 'error' ? 'Failed' :
-             'Suggest'}
+            {suggestionState === 'pending'
+              ? '...'
+              : suggestionState === 'success'
+                ? 'Sent ✓'
+                : suggestionState === 'rate_limited'
+                  ? 'Wait'
+                  : suggestionState === 'error'
+                    ? 'Failed'
+                    : 'Suggest'}
           </button>
         </div>
         {suggestionState === 'error' && errorMessage && (
           <p className="text-xs text-warning mt-1">{errorMessage}</p>
         )}
         {suggestionState === 'rate_limited' && (
-          <p className="text-xs text-warning mt-1">Rate limited. Please wait before submitting again.</p>
+          <p className="text-xs text-warning mt-1">
+            Rate limited. Please wait before submitting again.
+          </p>
         )}
       </div>
 
@@ -264,10 +289,7 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
           </h3>
           <div className="space-y-2">
             {audienceSummary.clusters.slice(0, 3).map((cluster, index) => (
-              <div
-                key={index}
-                className="text-sm p-2 bg-surface rounded border border-border"
-              >
+              <div key={index} className="text-sm p-2 bg-surface rounded border border-border">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-text-muted flex-1">
                     &ldquo;{cluster.representative}&rdquo;
@@ -299,10 +321,14 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
             <div className="flex gap-0.5 h-8">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => {
                 const count = audienceMetrics.conviction_distribution?.[level] || 0;
-                const maxCount = Math.max(1, ...Object.values(audienceMetrics.conviction_distribution || {}));
+                const maxCount = Math.max(
+                  1,
+                  ...Object.values(audienceMetrics.conviction_distribution || {}),
+                );
                 const height = count > 0 ? Math.max(20, (count / maxCount) * 100) : 0;
                 const opacity = count > 0 ? 0.4 + (count / maxCount) * 0.6 : 0.1;
-                const bgColor = level <= 3 ? 'bg-yellow-500' : level <= 7 ? 'bg-blue-500' : 'bg-green-500';
+                const bgColor =
+                  level <= 3 ? 'bg-yellow-500' : level <= 7 ? 'bg-blue-500' : 'bg-green-500';
 
                 return (
                   <div
@@ -327,42 +353,51 @@ export function UserParticipation({ events, onVote, onSuggest, onAck, onError }:
           {/* Per-choice histograms */}
           {audienceMetrics.histograms && Object.keys(audienceMetrics.histograms).length > 0 && (
             <div className="space-y-2">
-              {Object.entries(audienceMetrics.histograms).slice(0, 4).map(([choice, histogram]) => {
-                const totalVotes = Object.values(histogram).reduce((a, b) => a + b, 0);
-                const weightedVote = audienceMetrics.weighted_votes?.[choice] || 0;
+              {Object.entries(audienceMetrics.histograms)
+                .slice(0, 4)
+                .map(([choice, histogram]) => {
+                  const totalVotes = Object.values(histogram).reduce((a, b) => a + b, 0);
+                  const weightedVote = audienceMetrics.weighted_votes?.[choice] || 0;
 
-                return (
-                  <div key={choice} className="p-2 bg-surface rounded border border-border">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium truncate max-w-[60%]">{choice}</span>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-text-muted">{totalVotes} votes</span>
-                        <span className="text-accent font-theme-data">{weightedVote.toFixed(1)}w</span>
+                  return (
+                    <div key={choice} className="p-2 bg-surface rounded border border-border">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium truncate max-w-[60%]">{choice}</span>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-text-muted">{totalVotes} votes</span>
+                          <span className="text-accent font-theme-data">
+                            {weightedVote.toFixed(1)}w
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-px h-4">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => {
+                          const count = histogram[level] || 0;
+                          const maxCount = Math.max(1, ...Object.values(histogram));
+                          const width = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
+                          const bgColor =
+                            level <= 3
+                              ? 'bg-yellow-500'
+                              : level <= 7
+                                ? 'bg-blue-500'
+                                : 'bg-green-500';
+
+                          return (
+                            <div
+                              key={level}
+                              className={`${bgColor} rounded-sm transition-all duration-300`}
+                              style={{
+                                width: `${Math.max(width, count > 0 ? 5 : 0)}%`,
+                                opacity: count > 0 ? 0.5 + (count / maxCount) * 0.5 : 0.1,
+                              }}
+                              title={`Intensity ${level}: ${count}`}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
-                    <div className="flex gap-px h-4">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => {
-                        const count = histogram[level] || 0;
-                        const maxCount = Math.max(1, ...Object.values(histogram));
-                        const width = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
-                        const bgColor = level <= 3 ? 'bg-yellow-500' : level <= 7 ? 'bg-blue-500' : 'bg-green-500';
-
-                        return (
-                          <div
-                            key={level}
-                            className={`${bgColor} rounded-sm transition-all duration-300`}
-                            style={{
-                              width: `${Math.max(width, count > 0 ? 5 : 0)}%`,
-                              opacity: count > 0 ? 0.5 + (count / maxCount) * 0.5 : 0.1,
-                            }}
-                            title={`Intensity ${level}: ${count}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </div>

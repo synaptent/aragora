@@ -36,11 +36,7 @@ export interface EvidenceData {
   debate_id: string;
   task: string;
   has_evidence: boolean;
-  grounded_verdict: {
-    grounding_score: number;
-    verdict?: string;
-    confidence?: number;
-  } | null;
+  grounded_verdict: { grounding_score: number; verdict?: string; confidence?: number } | null;
   claims: CitedClaim[];
   citations: EvidenceCitation[];
   related_evidence: RelatedEvidence[];
@@ -79,22 +75,14 @@ export function useEvidence(debateId: string) {
 
       if (!response.ok) {
         if (response.status === 404) {
-          setState({
-            evidence: null,
-            loading: false,
-            error: 'Debate not found',
-          });
+          setState({ evidence: null, loading: false, error: 'Debate not found' });
           return;
         }
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data: EvidenceData = await response.json();
-      setState({
-        evidence: data,
-        loading: false,
-        error: null,
-      });
+      setState({ evidence: data, loading: false, error: null });
     } catch (e) {
       setState({
         evidence: null,

@@ -45,7 +45,9 @@ export function BridgeTranscriptView({
   }
 
   if (orderedTurns.length === 0) {
-    return <EmptyState title="No transcript turns yet" description="Bridge turns will appear here." />;
+    return (
+      <EmptyState title="No transcript turns yet" description="Bridge turns will appear here." />
+    );
   }
 
   return (
@@ -62,7 +64,8 @@ export function BridgeTranscriptView({
               </div>
               <h3 className="mt-1 text-lg text-white">{turn.author_role}</h3>
               <div className="mt-1 text-xs text-white/45">
-                {formatBridgeTimestamp(turn.started_at)} to {formatBridgeTimestamp(turn.completed_at)}
+                {formatBridgeTimestamp(turn.started_at)} to{' '}
+                {formatBridgeTimestamp(turn.completed_at)}
               </div>
             </div>
             <StatusBadge
@@ -107,9 +110,7 @@ export function BridgeTranscriptView({
                     variant={turn.footer.done ? 'success' : 'neutral'}
                   />
                   <StatusBadge
-                    label={
-                      turn.footer.needs_human ? 'needs_human: true' : 'needs_human: false'
-                    }
+                    label={turn.footer.needs_human ? 'needs_human: true' : 'needs_human: false'}
                     variant={turn.footer.needs_human ? 'warning' : 'neutral'}
                   />
                 </div>
@@ -119,9 +120,7 @@ export function BridgeTranscriptView({
                       Artifacts
                     </div>
                     <div className="mt-1 text-white/70">
-                      {turn.footer.artifacts.length > 0
-                        ? turn.footer.artifacts.join(', ')
-                        : 'None'}
+                      {turn.footer.artifacts.length > 0 ? turn.footer.artifacts.join(', ') : 'None'}
                     </div>
                   </div>
                   <div>
@@ -129,9 +128,7 @@ export function BridgeTranscriptView({
                       Tests Run
                     </div>
                     <div className="mt-1 text-white/70">
-                      {turn.footer.tests_run.length > 0
-                        ? turn.footer.tests_run.join(', ')
-                        : 'None'}
+                      {turn.footer.tests_run.length > 0 ? turn.footer.tests_run.join(', ') : 'None'}
                     </div>
                   </div>
                 </div>

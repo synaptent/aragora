@@ -3,12 +3,7 @@
   "question": "Should we adopt microservices or keep our monolith?",
   "verdict": "consensus",
   "confidence": 0.74,
-  "agents": [
-    "Analyst",
-    "Critic",
-    "Synthesizer",
-    "Devil's Advocate"
-  ],
+  "agents": ["Analyst", "Critic", "Synthesizer", "Devil's Advocate"],
   "rounds": 2,
   "summary": "Proceed with a phased rollout, explicit success metrics, and a defined rollback trigger before scaling the change.",
   "dissent": [],
@@ -17,12 +12,7 @@
     "reached": true,
     "method": "majority",
     "confidence": 0.74,
-    "supporting_agents": [
-      "Analyst",
-      "Critic",
-      "Synthesizer",
-      "Devil's Advocate"
-    ],
+    "supporting_agents": ["Analyst", "Critic", "Synthesizer", "Devil's Advocate"],
     "dissenting_agents": []
   },
   "artifact_hash": "bcdfc27a428d4a72294cd4274c31e85f274756ddbc240f7df1e3953cba5f3218",

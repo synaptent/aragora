@@ -46,7 +46,7 @@ export function AdminOnly({ children, fallback = null }: AdminOnlyProps) {
  */
 export function withAdminOnly<P extends object>(
   WrappedComponent: React.ComponentType<P>,
-  options: { fallback?: ReactNode } = {}
+  options: { fallback?: ReactNode } = {},
 ) {
   return function WithAdminOnly(props: P) {
     return (

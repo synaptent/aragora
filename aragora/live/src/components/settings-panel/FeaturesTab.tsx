@@ -19,10 +19,10 @@ export function FeaturesTab({
   const supermemoryInfo = useFeatureInfo('supermemory');
 
   const supermemoryBase =
-    supermemoryInfo?.description ||
-    'External cross-session memory sync and context injection';
-  const supermemoryHint =
-    supermemoryAvailable ? '' : (supermemoryInfo?.reason || supermemoryInfo?.install_hint || '');
+    supermemoryInfo?.description || 'External cross-session memory sync and context injection';
+  const supermemoryHint = supermemoryAvailable
+    ? ''
+    : supermemoryInfo?.reason || supermemoryInfo?.install_hint || '';
   const supermemoryDescription = supermemoryHint
     ? `${supermemoryBase} — ${supermemoryHint}`
     : supermemoryBase;
@@ -74,13 +74,17 @@ export function FeaturesTab({
             label="Continuum Memory"
             description="Multi-tier memory with surprise-based consolidation"
             checked={featureConfig.continuum_memory}
-            onChange={() => updateFeatureConfig('continuum_memory', !featureConfig.continuum_memory)}
+            onChange={() =>
+              updateFeatureConfig('continuum_memory', !featureConfig.continuum_memory)
+            }
           />
           <ToggleSwitch
             label="Consensus Memory"
             description="Store historical debate outcomes"
             checked={featureConfig.consensus_memory}
-            onChange={() => updateFeatureConfig('consensus_memory', !featureConfig.consensus_memory)}
+            onChange={() =>
+              updateFeatureConfig('consensus_memory', !featureConfig.consensus_memory)
+            }
           />
           <ToggleSwitch
             label="Supermemory (External)"
@@ -126,7 +130,9 @@ export function FeaturesTab({
             label="Show Advanced Metrics"
             description="Display detailed telemetry in panels"
             checked={featureConfig.show_advanced_metrics}
-            onChange={() => updateFeatureConfig('show_advanced_metrics', !featureConfig.show_advanced_metrics)}
+            onChange={() =>
+              updateFeatureConfig('show_advanced_metrics', !featureConfig.show_advanced_metrics)
+            }
           />
         </div>
       </div>

@@ -10,11 +10,15 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DebateThisButton } from '@/components/DebateThisButton';
 
 const InsightsPanel = dynamic(
-  () => import('@/components/InsightsPanel').then(m => ({ default: m.InsightsPanel })),
+  () => import('@/components/InsightsPanel').then((m) => ({ default: m.InsightsPanel })),
   {
     ssr: false,
-    loading: () => <div className="card p-4 animate-pulse"><div className="h-96 bg-surface rounded" /></div>,
-  }
+    loading: () => (
+      <div className="card p-4 animate-pulse">
+        <div className="h-96 bg-surface rounded" />
+      </div>
+    ),
+  },
 );
 
 export default function InsightsPage() {
@@ -87,12 +91,8 @@ export default function InsightsPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // INSIGHTS VIEW
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // INSIGHTS VIEW</p>
         </footer>
       </main>
     </>

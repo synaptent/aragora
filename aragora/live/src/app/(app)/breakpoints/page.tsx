@@ -9,11 +9,15 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const BreakpointsPanel = dynamic(
-  () => import('@/components/BreakpointsPanel').then(m => ({ default: m.BreakpointsPanel })),
+  () => import('@/components/BreakpointsPanel').then((m) => ({ default: m.BreakpointsPanel })),
   {
     ssr: false,
-    loading: () => <div className="card p-4 animate-pulse"><div className="h-96 bg-surface rounded" /></div>,
-  }
+    loading: () => (
+      <div className="card p-4 animate-pulse">
+        <div className="h-96 bg-surface rounded" />
+      </div>
+    ),
+  },
 );
 
 export default function BreakpointsPage() {
@@ -67,8 +71,8 @@ export default function BreakpointsPage() {
           <div className="mb-6">
             <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">Breakpoints</h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Human-in-the-loop intervention points. Review and resolve pending breakpoints
-              from running debates.
+              Human-in-the-loop intervention points. Review and resolve pending breakpoints from
+              running debates.
             </p>
           </div>
 
@@ -93,12 +97,8 @@ export default function BreakpointsPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // BREAKPOINTS VIEW
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // BREAKPOINTS VIEW</p>
         </footer>
       </main>
     </>

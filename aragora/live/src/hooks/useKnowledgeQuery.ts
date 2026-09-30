@@ -51,7 +51,7 @@ function normalizeNodeArray(payload: unknown): KnowledgeNode[] {
     (candidate): candidate is KnowledgeNode =>
       isRecord(candidate) &&
       typeof candidate.id === 'string' &&
-      typeof candidate.content === 'string'
+      typeof candidate.content === 'string',
   );
 }
 
@@ -75,7 +75,7 @@ function normalizeRelationships(payload: unknown): KnowledgeRelationship[] {
     (candidate): candidate is KnowledgeRelationship =>
       isRecord(candidate) &&
       typeof candidate.id === 'string' &&
-      typeof candidate.strength === 'number'
+      typeof candidate.strength === 'number',
   );
 }
 
@@ -133,7 +133,11 @@ export interface UseKnowledgeQueryReturn {
   deleteNode: (id: string) => Promise<void>;
 
   // Graph operations
-  loadGraph: (nodeId: string, depth?: number, direction?: 'outgoing' | 'incoming' | 'both') => Promise<void>;
+  loadGraph: (
+    nodeId: string,
+    depth?: number,
+    direction?: 'outgoing' | 'incoming' | 'both',
+  ) => Promise<void>;
   clearGraph: () => void;
 
   // Relationship operations
@@ -141,7 +145,7 @@ export interface UseKnowledgeQueryReturn {
     fromId: string,
     toId: string,
     type: string,
-    strength?: number
+    strength?: number,
   ) => Promise<string>;
   deleteRelationship: (id: string) => Promise<void>;
   getNodeRelationships: (nodeId: string) => Promise<KnowledgeRelationship[]>;
@@ -226,7 +230,7 @@ export function useKnowledgeQuery({
         clearTimeout(searchTimerRef.current);
       }
     },
-    [setStoreQueryText]
+    [setStoreQueryText],
   );
 
   // Execute semantic query
@@ -241,16 +245,13 @@ export function useKnowledgeQuery({
       setQueryError(null);
 
       try {
-        const response = await api.post(
-          `${KNOWLEDGE_API_PREFIX}/query`,
-          {
-            query: queryString,
-            workspace_id: options?.workspaceId || 'default',
-            limit: options?.limit || 20,
-            node_types: options?.nodeTypes,
-            min_confidence: options?.minConfidence || 0,
-          }
-        ) as unknown;
+        const response = (await api.post(`${KNOWLEDGE_API_PREFIX}/query`, {
+          query: queryString,
+          workspace_id: options?.workspaceId || 'default',
+          limit: options?.limit || 20,
+          node_types: options?.nodeTypes,
+          min_confidence: options?.minConfidence || 0,
+        })) as unknown;
 
         const nodes = normalizeNodeArray(response);
         setQueryResults(nodes, normalizeCount(response, nodes.length));
@@ -262,7 +263,7 @@ export function useKnowledgeQuery({
         return [];
       }
     },
-    [api, clearStoreQueryResults, query.text, setQueryExecuting, setQueryResults, setQueryError]
+    [api, clearStoreQueryResults, query.text, setQueryExecuting, setQueryResults, setQueryError],
   );
 
   // Clear query results
@@ -284,9 +285,9 @@ export function useKnowledgeQuery({
         if (filters?.tier) params.append('tier', filters.tier);
         if (filters?.topics?.length) params.append('topics', filters.topics.join(','));
 
-        const response = await api.get(
-          `${KNOWLEDGE_API_PREFIX}/nodes${params.size > 0 ? `?${params.toString()}` : ''}`
-        ) as unknown;
+        const response = (await api.get(
+          `${KNOWLEDGE_API_PREFIX}/nodes${params.size > 0 ? `?${params.toString()}` : ''}`,
+        )) as unknown;
 
         const nodes = normalizeNodeArray(response);
         setBrowserNodes(nodes, normalizeCount(response, nodes.length));
@@ -296,22 +297,22 @@ export function useKnowledgeQuery({
         setBrowserError(message);
       }
     },
-    [api, setBrowserNodes, setBrowserLoading, setBrowserError]
+    [api, setBrowserNodes, setBrowserLoading, setBrowserError],
   );
 
   // Get a single node
   const getNode = useCallback(
     async (id: string): Promise<KnowledgeNode> => {
-      const response = await api.get(`${KNOWLEDGE_API_PREFIX}/nodes/${id}`) as KnowledgeNode;
+      const response = (await api.get(`${KNOWLEDGE_API_PREFIX}/nodes/${id}`)) as KnowledgeNode;
       return response;
     },
-    [api]
+    [api],
   );
 
   // Create a new node
   const createNode = useCallback(
     async (node: Partial<KnowledgeNode>): Promise<string> => {
-      const response = await api.post(`${KNOWLEDGE_API_PREFIX}/nodes`, {
+      const response = (await api.post(`${KNOWLEDGE_API_PREFIX}/nodes`, {
         node_type: node.node_type || 'fact',
         content: node.content,
         confidence: node.confidence || 0.5,
@@ -319,11 +320,11 @@ export function useKnowledgeQuery({
         workspace_id: node.workspace_id || 'default',
         topics: node.topics || [],
         metadata: node.metadata || {},
-      }) as { id: string };
+      })) as { id: string };
 
       return response.id;
     },
-    [api]
+    [api],
   );
 
   // Update a node
@@ -331,7 +332,7 @@ export function useKnowledgeQuery({
     async (id: string, updates: Partial<KnowledgeNode>): Promise<void> => {
       await api.put(`${KNOWLEDGE_API_PREFIX}/nodes/${id}`, updates);
     },
-    [api]
+    [api],
   );
 
   // Delete a node
@@ -339,7 +340,7 @@ export function useKnowledgeQuery({
     async (id: string): Promise<void> => {
       await api.delete(`${KNOWLEDGE_API_PREFIX}/nodes/${id}`);
     },
-    [api]
+    [api],
   );
 
   // Load graph from a node
@@ -347,15 +348,15 @@ export function useKnowledgeQuery({
     async (
       nodeId: string,
       depth: number = 2,
-      direction: 'outgoing' | 'incoming' | 'both' = 'both'
+      direction: 'outgoing' | 'incoming' | 'both' = 'both',
     ): Promise<void> => {
       setGraphLoading(true);
       setGraphError(null);
 
       try {
-        const response = await api.get(
-          `${KNOWLEDGE_API_PREFIX}/graph/${nodeId}?depth=${depth}&direction=${direction}`
-        ) as { nodes: GraphNode[]; edges: GraphEdge[] };
+        const response = (await api.get(
+          `${KNOWLEDGE_API_PREFIX}/graph/${nodeId}?depth=${depth}&direction=${direction}`,
+        )) as { nodes: GraphNode[]; edges: GraphEdge[] };
 
         // Process nodes to ensure they have position data for D3
         const processedNodes = (response.nodes || []).map((node) => ({
@@ -372,7 +373,7 @@ export function useKnowledgeQuery({
         setGraphError(message);
       }
     },
-    [api, setGraphData, setGraphLoading, setGraphError]
+    [api, setGraphData, setGraphLoading, setGraphError],
   );
 
   // Clear graph
@@ -382,22 +383,17 @@ export function useKnowledgeQuery({
 
   // Create a relationship
   const createRelationship = useCallback(
-    async (
-      fromId: string,
-      toId: string,
-      type: string,
-      strength: number = 0.5
-    ): Promise<string> => {
-      const response = await api.post(`${KNOWLEDGE_API_PREFIX}/relationships`, {
+    async (fromId: string, toId: string, type: string, strength: number = 0.5): Promise<string> => {
+      const response = (await api.post(`${KNOWLEDGE_API_PREFIX}/relationships`, {
         from_node_id: fromId,
         to_node_id: toId,
         relationship_type: type,
         strength,
-      }) as { id: string };
+      })) as { id: string };
 
       return response.id;
     },
-    [api]
+    [api],
   );
 
   // Delete a relationship
@@ -405,18 +401,18 @@ export function useKnowledgeQuery({
     async (id: string): Promise<void> => {
       await api.delete(`${KNOWLEDGE_API_PREFIX}/relationships/${id}`);
     },
-    [api]
+    [api],
   );
 
   // Get relationships for a node
   const getNodeRelationships = useCallback(
     async (nodeId: string): Promise<KnowledgeRelationship[]> => {
-      const response = await api.get(
-        `${KNOWLEDGE_API_PREFIX}/nodes/${nodeId}/relationships`
-      ) as unknown;
+      const response = (await api.get(
+        `${KNOWLEDGE_API_PREFIX}/nodes/${nodeId}/relationships`,
+      )) as unknown;
       return normalizeRelationships(response);
     },
-    [api]
+    [api],
   );
 
   // Load statistics
@@ -424,7 +420,7 @@ export function useKnowledgeQuery({
     setStatsLoading(true);
 
     try {
-      const response = await api.get(`${KNOWLEDGE_API_PREFIX}/stats`) as MoundStats;
+      const response = (await api.get(`${KNOWLEDGE_API_PREFIX}/stats`)) as MoundStats;
       setStats(response);
     } catch (error) {
       logger.error('Failed to load knowledge mound stats:', error);

@@ -70,7 +70,7 @@ const DEFAULT_CHANNELS: ChannelOption[] = [
 
 function mergeChannelHealth(
   defaults: ChannelOption[],
-  channels: Record<string, { status?: string }> | undefined
+  channels: Record<string, { status?: string }> | undefined,
 ): ChannelOption[] {
   if (!channels) {
     return defaults;
@@ -78,10 +78,7 @@ function mergeChannelHealth(
 
   return defaults.map((channel) => {
     const status = channels[channel.type]?.status;
-    return {
-      ...channel,
-      configured: status ? status !== 'unconfigured' : channel.configured,
-    };
+    return { ...channel, configured: status ? status !== 'unconfigured' : channel.configured };
   });
 }
 
@@ -162,11 +159,7 @@ export function DeliveryModal({
       const response = await fetch(`${apiUrl}/api/v1/receipts/${receiptId}/deliver`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          channel_type: selectedChannel,
-          destination,
-          options,
-        }),
+        body: JSON.stringify({ channel_type: selectedChannel, destination, options }),
       });
 
       if (!response.ok) {
@@ -186,17 +179,23 @@ export function DeliveryModal({
     } finally {
       setLoading(false);
     }
-  }, [apiUrl, receiptId, selectedChannel, selectedDestination, options, onDeliverySuccess, onClose, tokens?.access_token]);
+  }, [
+    apiUrl,
+    receiptId,
+    selectedChannel,
+    selectedDestination,
+    options,
+    onDeliverySuccess,
+    onClose,
+    tokens?.access_token,
+  ]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-full max-w-lg mx-4 bg-bg border border-border rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
@@ -207,9 +206,7 @@ export function DeliveryModal({
               Deliver Receipt
             </h2>
             {receiptSummary && (
-              <p className="text-xs text-text-muted mt-1 truncate max-w-sm">
-                {receiptSummary}
-              </p>
+              <p className="text-xs text-text-muted mt-1 truncate max-w-sm">{receiptSummary}</p>
             )}
           </div>
           <button
@@ -243,9 +240,7 @@ export function DeliveryModal({
             <>
               {/* Channel Selector */}
               <div>
-                <h3 className="text-sm font-theme-data font-medium mb-3">
-                  Select Channel
-                </h3>
+                <h3 className="text-sm font-theme-data font-medium mb-3">Select Channel</h3>
                 <ChannelSelector
                   channels={channels}
                   selectedChannel={selectedChannel}
@@ -261,17 +256,13 @@ export function DeliveryModal({
 
               {/* Delivery Options */}
               <div className="p-4 bg-surface rounded-lg border border-border">
-                <h3 className="text-sm font-theme-data font-medium mb-3">
-                  Delivery Options
-                </h3>
+                <h3 className="text-sm font-theme-data font-medium mb-3">Delivery Options</h3>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={options.includeDetails}
-                      onChange={(e) =>
-                        setOptions({ ...options, includeDetails: e.target.checked })
-                      }
+                      onChange={(e) => setOptions({ ...options, includeDetails: e.target.checked })}
                       className="w-4 h-4 accent-acid-green"
                     />
                     <span className="text-sm">Include full details</span>
@@ -302,9 +293,7 @@ export function DeliveryModal({
                     <input
                       type="checkbox"
                       checked={options.compact}
-                      onChange={(e) =>
-                        setOptions({ ...options, compact: e.target.checked })
-                      }
+                      onChange={(e) => setOptions({ ...options, compact: e.target.checked })}
                       className="w-4 h-4 accent-acid-green"
                     />
                     <span className="text-sm">Use compact format</span>
@@ -318,9 +307,7 @@ export function DeliveryModal({
                   </label>
                   <textarea
                     value={options.message}
-                    onChange={(e) =>
-                      setOptions({ ...options, message: e.target.value })
-                    }
+                    onChange={(e) => setOptions({ ...options, message: e.target.value })}
                     placeholder="Add a note to include with the delivery..."
                     className="w-full px-3 py-2 text-sm bg-bg border border-border rounded
                                focus:border-[var(--accent)] focus:outline-none resize-none h-20"

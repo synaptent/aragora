@@ -77,29 +77,40 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
 
   const getSeverityColor = (severity: SecurityFinding['severity']) => {
     switch (severity) {
-      case 'critical': return 'text-red-500 border-red-500/50 bg-red-500/10';
-      case 'high': return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
-      case 'medium': return 'text-yellow-500 border-yellow-500/50 bg-yellow-500/10';
-      case 'low': return 'text-blue-400 border-blue-400/50 bg-blue-400/10';
-      case 'info': return 'text-text-muted border-text-muted/50 bg-text-muted/10';
-      default: return 'text-text-muted border-text-muted/50';
+      case 'critical':
+        return 'text-red-500 border-red-500/50 bg-red-500/10';
+      case 'high':
+        return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
+      case 'medium':
+        return 'text-yellow-500 border-yellow-500/50 bg-yellow-500/10';
+      case 'low':
+        return 'text-blue-400 border-blue-400/50 bg-blue-400/10';
+      case 'info':
+        return 'text-text-muted border-text-muted/50 bg-text-muted/10';
+      default:
+        return 'text-text-muted border-text-muted/50';
     }
   };
 
   const getSeverityBadgeColor = (severity: SecurityFinding['severity']) => {
     switch (severity) {
-      case 'critical': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'low': return 'bg-blue-400';
-      case 'info': return 'bg-text-muted';
-      default: return 'bg-text-muted';
+      case 'critical':
+        return 'bg-red-500';
+      case 'high':
+        return 'bg-orange-500';
+      case 'medium':
+        return 'bg-yellow-500';
+      case 'low':
+        return 'bg-blue-400';
+      case 'info':
+        return 'bg-text-muted';
+      default:
+        return 'bg-text-muted';
     }
   };
 
-  const filteredFindings = report?.findings.filter(f =>
-    filter === 'all' || f.severity === filter
-  ) || [];
+  const filteredFindings =
+    report?.findings.filter((f) => filter === 'all' || f.severity === filter) || [];
 
   const toggleFinding = (id: string) => {
     const newExpanded = new Set(expandedFindings);
@@ -114,10 +125,7 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
   return (
     <div className="panel" style={{ padding: 0 }}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="panel-collapsible-header w-full"
-      >
+      <button onClick={() => setExpanded(!expanded)} className="panel-collapsible-header w-full">
         <div className="flex items-center gap-2">
           <span className="text-warning font-theme-data text-sm">[SECURITY]</span>
           <span className="text-text-muted text-xs">Vulnerability scanner</span>
@@ -172,12 +180,21 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
                         : 'border-text-muted/20 bg-surface hover:border-text-muted/40'
                     }`}
                   >
-                    <div className={`text-lg font-theme-data font-bold ${
-                      filter === sev ? '' : sev === 'critical' ? 'text-red-500' :
-                      sev === 'high' ? 'text-orange-500' :
-                      sev === 'medium' ? 'text-yellow-500' :
-                      sev === 'low' ? 'text-blue-400' : 'text-text-muted'
-                    }`}>
+                    <div
+                      className={`text-lg font-theme-data font-bold ${
+                        filter === sev
+                          ? ''
+                          : sev === 'critical'
+                            ? 'text-red-500'
+                            : sev === 'high'
+                              ? 'text-orange-500'
+                              : sev === 'medium'
+                                ? 'text-yellow-500'
+                                : sev === 'low'
+                                  ? 'text-blue-400'
+                                  : 'text-text-muted'
+                      }`}
+                    >
                       {report.summary[sev]}
                     </div>
                     <div className="text-[10px] text-text-muted uppercase">{sev}</div>
@@ -203,7 +220,9 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {filteredFindings.length === 0 ? (
                   <div className="text-[var(--accent)] text-xs text-center py-4">
-                    {filter === 'all' ? 'No security issues found!' : `No ${filter} severity issues`}
+                    {filter === 'all'
+                      ? 'No security issues found!'
+                      : `No ${filter} severity issues`}
                   </div>
                 ) : (
                   filteredFindings.map((finding) => (
@@ -216,7 +235,9 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
                         onClick={() => toggleFinding(finding.id)}
                         className="w-full p-2 text-left flex items-start gap-2"
                       >
-                        <span className={`${getSeverityBadgeColor(finding.severity)} text-white text-[10px] px-1 uppercase font-bold`}>
+                        <span
+                          className={`${getSeverityBadgeColor(finding.severity)} text-white text-[10px] px-1 uppercase font-bold`}
+                        >
                           {finding.severity}
                         </span>
                         <div className="flex-1 min-w-0">
@@ -226,7 +247,9 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
                             {finding.cwe_id && ` | CWE-${finding.cwe_id}`}
                           </div>
                         </div>
-                        <span className="text-text-muted">{expandedFindings.has(finding.id) ? '[-]' : '[+]'}</span>
+                        <span className="text-text-muted">
+                          {expandedFindings.has(finding.id) ? '[-]' : '[+]'}
+                        </span>
                       </button>
 
                       {/* Finding Details */}
@@ -242,7 +265,9 @@ export function SecurityFindingsPanel({ apiBase, repoPath }: SecurityFindingsPan
 
                           {finding.recommendation && (
                             <div className="border-l-2 border-[var(--accent)]/50 pl-2">
-                              <div className="text-[var(--accent)] text-[10px] font-bold">Recommendation</div>
+                              <div className="text-[var(--accent)] text-[10px] font-bold">
+                                Recommendation
+                              </div>
                               <div className="text-text-muted">{finding.recommendation}</div>
                             </div>
                           )}

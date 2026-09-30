@@ -56,9 +56,17 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
 
       const topicParam = topicFilter ? `&topic=${encodeURIComponent(topicFilter)}` : '';
       const [dissentsRes, contrarianRes, warningsRes, statsRes] = await Promise.allSettled([
-        fetchWithRetry(`${apiBase}/api/consensus/dissents?limit=20${topicParam}`, undefined, { maxRetries: 2 }),
-        fetchWithRetry(`${apiBase}/api/consensus/contrarian-views?limit=15${topicParam}`, undefined, { maxRetries: 2 }),
-        fetchWithRetry(`${apiBase}/api/consensus/risk-warnings?limit=10`, undefined, { maxRetries: 2 }),
+        fetchWithRetry(`${apiBase}/api/consensus/dissents?limit=20${topicParam}`, undefined, {
+          maxRetries: 2,
+        }),
+        fetchWithRetry(
+          `${apiBase}/api/consensus/contrarian-views?limit=15${topicParam}`,
+          undefined,
+          { maxRetries: 2 },
+        ),
+        fetchWithRetry(`${apiBase}/api/consensus/risk-warnings?limit=10`, undefined, {
+          maxRetries: 2,
+        }),
         fetchWithRetry(`${apiBase}/api/consensus/stats`, undefined, { maxRetries: 2 }),
       ]);
 
@@ -116,7 +124,7 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
       const response = await fetchWithRetry(
         `${apiBase}/api/debates/${searchDebateId}/evidence`,
         undefined,
-        { maxRetries: 2 }
+        { maxRetries: 2 },
       );
 
       if (response.ok) {
@@ -149,7 +157,7 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
       const response = await fetchWithRetry(
         `${apiBase}/api/debates/graph/${searchDebateId}/nodes`,
         undefined,
-        { maxRetries: 2 }
+        { maxRetries: 2 },
       );
 
       if (response.ok) {
@@ -202,7 +210,7 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
   if (error && dissents.length === 0) {
     return (
       <ErrorWithRetry
-        error={error || "Failed to load evidence and dissent data"}
+        error={error || 'Failed to load evidence and dissent data'}
         onRetry={fetchDissentData}
       />
     );
@@ -234,11 +242,15 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
           <h3 className="font-theme-data text-[var(--accent)] mb-4">Consensus Overview</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-3xl font-theme-data text-[var(--accent)]">{consensusStats.total_topics}</div>
+              <div className="text-3xl font-theme-data text-[var(--accent)]">
+                {consensusStats.total_topics}
+              </div>
               <div className="text-xs font-theme-data text-text-muted">Total Topics</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">{consensusStats.total_dissents}</div>
+              <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">
+                {consensusStats.total_dissents}
+              </div>
               <div className="text-xs font-theme-data text-text-muted">Total Dissents</div>
             </div>
             <div className="text-center">
@@ -267,7 +279,11 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
                 : 'text-text-muted hover:text-text'
             }`}
           >
-            {tab === 'dissent' ? 'DISSENT & CONTRARIAN' : tab === 'evidence' ? 'EVIDENCE TRAIL' : 'ARGUMENT GRAPH'}
+            {tab === 'dissent'
+              ? 'DISSENT & CONTRARIAN'
+              : tab === 'evidence'
+                ? 'EVIDENCE TRAIL'
+                : 'ARGUMENT GRAPH'}
           </button>
         ))}
       </div>
@@ -318,23 +334,25 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
             </h3>
             {dissents.length === 0 ? (
               <p className="text-text-muted font-theme-data text-sm">
-                No dissenting views recorded yet. Dissents are captured when agents disagree during debates.
+                No dissenting views recorded yet. Dissents are captured when agents disagree during
+                debates.
               </p>
             ) : (
               <div className="space-y-4">
                 {dissents.map((dissent, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 bg-surface rounded border border-acid-yellow/30"
-                  >
+                  <div key={idx} className="p-4 bg-surface rounded border border-acid-yellow/30">
                     <div className="mb-3">
-                      <div className="font-theme-data text-xs text-[var(--acid-cyan)] mb-1">Topic</div>
+                      <div className="font-theme-data text-xs text-[var(--acid-cyan)] mb-1">
+                        Topic
+                      </div>
                       <div className="font-theme-data text-sm text-text">{dissent.topic}</div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-3 bg-[var(--accent)]/10 rounded">
-                        <div className="font-theme-data text-xs text-[var(--accent)] mb-1">Majority View</div>
+                        <div className="font-theme-data text-xs text-[var(--accent)] mb-1">
+                          Majority View
+                        </div>
                         <p className="font-theme-data text-sm text-text line-clamp-3">
                           {dissent.majority_view}
                         </p>
@@ -342,7 +360,9 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
 
                       <div className="p-3 bg-acid-yellow/10 rounded">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-theme-data text-xs text-[var(--acid-yellow)]">Dissenting View</span>
+                          <span className="font-theme-data text-xs text-[var(--acid-yellow)]">
+                            Dissenting View
+                          </span>
                           <span className="font-theme-data text-xs text-text-muted">
                             by {dissent.dissenting_agent}
                           </span>
@@ -355,7 +375,9 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
 
                     {dissent.reasoning && (
                       <div className="mt-3 p-2 bg-surface/50 rounded">
-                        <div className="font-theme-data text-xs text-text-muted mb-1">Reasoning</div>
+                        <div className="font-theme-data text-xs text-text-muted mb-1">
+                          Reasoning
+                        </div>
                         <p className="font-theme-data text-xs text-text">{dissent.reasoning}</p>
                       </div>
                     )}
@@ -384,14 +406,18 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
                     className="p-3 bg-surface rounded border border-[var(--acid-cyan)]/30"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{view.agent}</span>
+                      <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                        {view.agent}
+                      </span>
                       <span className="font-theme-data text-xs text-text-muted">
                         {(view.confidence * 100).toFixed(0)}% confident
                       </span>
                     </div>
                     <p className="font-theme-data text-sm text-text">{view.position}</p>
                     {view.reasoning && (
-                      <p className="font-theme-data text-xs text-text-muted mt-2">{view.reasoning}</p>
+                      <p className="font-theme-data text-xs text-text-muted mt-2">
+                        {view.reasoning}
+                      </p>
                     )}
                   </div>
                 ))}
@@ -405,9 +431,7 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
       {activeTab === 'evidence' && (
         <div className="space-y-4">
           <div className="card p-4">
-            <label className="block font-theme-data text-xs text-text-muted mb-2">
-              Debate ID
-            </label>
+            <label className="block font-theme-data text-xs text-text-muted mb-2">Debate ID</label>
             <input
               type="text"
               value={searchDebateId}
@@ -436,11 +460,14 @@ export function EvidenceVisualizerPanel({ backendConfig }: EvidenceVisualizerPan
               <h3 className="font-theme-data text-[var(--acid-cyan)] mb-3">Evidence Sources</h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(
-                  evidence.reduce((acc, e) => {
-                    const type = e.source_type || 'unknown';
-                    acc[type] = (acc[type] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)
+                  evidence.reduce(
+                    (acc, e) => {
+                      const type = e.source_type || 'unknown';
+                      acc[type] = (acc[type] || 0) + 1;
+                      return acc;
+                    },
+                    {} as Record<string, number>,
+                  ),
                 ).map(([type, count]) => {
                   const config = SOURCE_TYPE_CONFIG[type] || SOURCE_TYPE_CONFIG.unknown;
                   return (

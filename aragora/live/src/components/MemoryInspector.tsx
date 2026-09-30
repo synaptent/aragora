@@ -112,7 +112,7 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
     try {
       const tiersParam = selectedTiers.join(',');
       const response = await fetch(
-        `${apiBase}/api/memory/continuum/retrieve?query=${encodeURIComponent(query)}&tiers=${tiersParam}&limit=10`
+        `${apiBase}/api/memory/continuum/retrieve?query=${encodeURIComponent(query)}&tiers=${tiersParam}&limit=10`,
       );
 
       if (!response.ok) {
@@ -163,7 +163,7 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
 
   const toggleTier = (tier: string) => {
     setSelectedTiers((prev) =>
-      prev.includes(tier) ? prev.filter((t) => t !== tier) : [...prev, tier]
+      prev.includes(tier) ? prev.filter((t) => t !== tier) : [...prev, tier],
     );
   };
 
@@ -175,10 +175,7 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
     <div className="panel">
       <div className="panel-header mb-4">
         <h3 className="panel-title font-theme-data">Continuum Memory</h3>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="panel-toggle hover:text-text"
-        >
+        <button onClick={() => setExpanded(!expanded)} className="panel-toggle hover:text-text">
           [{expanded ? '-' : '+'}]
         </button>
       </div>
@@ -201,9 +198,7 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
               }`}
             >
               <div className="font-bold">{config.label}</div>
-              <div className="text-[10px] opacity-70">
-                {stats?.count ?? 0} entries
-              </div>
+              <div className="text-[10px] opacity-70">{stats?.count ?? 0} entries</div>
             </button>
           );
         })}
@@ -212,8 +207,12 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
       {/* Summary Stats */}
       <div className="flex items-center justify-between text-xs font-theme-data text-text-muted mb-4 border-b border-border pb-3">
         <div className="flex items-center gap-4">
-          <span>Total: <span className="text-text">{getTotalMemories()}</span> memories</span>
-          <span>Selected: <span className="text-[var(--accent)]">{selectedTiers.length}</span> tiers</span>
+          <span>
+            Total: <span className="text-text">{getTotalMemories()}</span> memories
+          </span>
+          <span>
+            Selected: <span className="text-[var(--accent)]">{selectedTiers.length}</span> tiers
+          </span>
         </div>
         <button
           onClick={triggerConsolidation}
@@ -230,12 +229,24 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
         <div className="mb-4 p-2 bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded text-xs font-theme-data">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[var(--accent)] font-bold">✓ CONSOLIDATED</span>
-            <span className="text-text-muted">({consolidationResult.duration_seconds.toFixed(2)}s)</span>
+            <span className="text-text-muted">
+              ({consolidationResult.duration_seconds.toFixed(2)}s)
+            </span>
           </div>
           <div className="flex gap-4 text-text-muted">
-            <span>Processed: <span className="text-text">{consolidationResult.entries_processed}</span></span>
-            <span>Promoted: <span className="text-[var(--acid-cyan)]">{consolidationResult.entries_promoted}</span></span>
-            <span>Merged: <span className="text-purple-400">{consolidationResult.entries_consolidated}</span></span>
+            <span>
+              Processed: <span className="text-text">{consolidationResult.entries_processed}</span>
+            </span>
+            <span>
+              Promoted:{' '}
+              <span className="text-[var(--acid-cyan)]">
+                {consolidationResult.entries_promoted}
+              </span>
+            </span>
+            <span>
+              Merged:{' '}
+              <span className="text-purple-400">{consolidationResult.entries_consolidated}</span>
+            </span>
           </div>
         </div>
       )}
@@ -290,25 +301,19 @@ export function MemoryInspector({ apiBase = DEFAULT_API_BASE }: MemoryInspectorP
                       {tierConfig.label}
                     </span>
                     <div className="flex gap-2 text-xs font-theme-data text-text-muted">
-                      <span title="Importance">
-                        IMP: {(memory.importance * 100).toFixed(0)}%
-                      </span>
+                      <span title="Importance">IMP: {(memory.importance * 100).toFixed(0)}%</span>
                       <span title="Consolidation">
                         CON: {(memory.consolidation_score * 100).toFixed(0)}%
                       </span>
                     </div>
                   </div>
 
-                  <p className="text-sm text-text mb-2 line-clamp-3">
-                    {memory.content}
-                  </p>
+                  <p className="text-sm text-text mb-2 line-clamp-3">{memory.content}</p>
 
                   <div className="flex items-center justify-between text-xs font-theme-data text-text-muted">
                     <span>Updates: {memory.update_count}</span>
                     <span>
-                      {memory.updated_at
-                        ? new Date(memory.updated_at).toLocaleDateString()
-                        : 'N/A'}
+                      {memory.updated_at ? new Date(memory.updated_at).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
 

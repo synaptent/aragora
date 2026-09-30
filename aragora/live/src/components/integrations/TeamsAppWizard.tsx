@@ -23,11 +23,7 @@ interface TeamsAppWizardProps {
 
 type WizardStep = 'check' | 'consent' | 'channels' | 'test' | 'complete';
 
-export function TeamsAppWizard({
-  onClose,
-  onComplete,
-  apiBaseUrl = ''
-}: TeamsAppWizardProps) {
+export function TeamsAppWizard({ onClose, onComplete, apiBaseUrl = '' }: TeamsAppWizardProps) {
   const [step, setStep] = useState<WizardStep>('check');
   const [error, setError] = useState<string | null>(null);
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
@@ -124,7 +120,7 @@ export function TeamsAppWizard({
     const popup = window.open(
       consentUrl,
       'teams-oauth',
-      `width=${width},height=${height},left=${left},top=${top},popup=yes`
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
     );
 
     if (!popup) {
@@ -133,10 +129,8 @@ export function TeamsAppWizard({
   };
 
   const handleChannelToggle = (channelId: string) => {
-    setSelectedChannels(prev =>
-      prev.includes(channelId)
-        ? prev.filter(id => id !== channelId)
-        : [...prev, channelId]
+    setSelectedChannels((prev) =>
+      prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId],
     );
   };
 
@@ -167,9 +161,7 @@ export function TeamsAppWizard({
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/integrations/teams/test`, {
-        method: 'POST',
-      });
+      const response = await fetch(`${apiBaseUrl}/api/integrations/teams/test`, { method: 'POST' });
 
       if (!response.ok) {
         throw new Error('Test message failed');
@@ -222,7 +214,7 @@ export function TeamsAppWizard({
                     2. Add the following environment variables:
                   </p>
                   <pre className="font-theme-data text-xs text-[var(--accent)] bg-bg p-2 rounded overflow-x-auto">
-{`TEAMS_APP_ID=your_application_id
+                    {`TEAMS_APP_ID=your_application_id
 TEAMS_APP_PASSWORD=your_client_secret
 TEAMS_TENANT_ID=your_tenant_id`}
                   </pre>
@@ -243,9 +235,7 @@ TEAMS_TENANT_ID=your_tenant_id`}
         return (
           <div className="text-center py-8">
             <div className="font-theme-data text-[var(--acid-cyan)] text-4xl mb-4">T#</div>
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Admin Consent Required
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Admin Consent Required</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
               A Microsoft 365 admin must grant consent for Aragora to access your organization.
               Click the button below to start the consent flow.
@@ -272,9 +262,7 @@ TEAMS_TENANT_ID=your_tenant_id`}
                   <span className="font-theme-data text-text">{workspace.tenant_name}</span>
                 </div>
               )}
-              <h3 className="font-theme-data text-lg text-text mb-2">
-                Select Channels
-              </h3>
+              <h3 className="font-theme-data text-lg text-text mb-2">Select Channels</h3>
               <p className="font-theme-data text-sm text-text-muted">
                 Choose which Teams channels should receive debate notifications:
               </p>
@@ -298,7 +286,7 @@ TEAMS_TENANT_ID=your_tenant_id`}
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {channels.map(channel => (
+                {channels.map((channel) => (
                   <label
                     key={channel.id}
                     className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${
@@ -331,9 +319,7 @@ TEAMS_TENANT_ID=your_tenant_id`}
       case 'test':
         return (
           <div className="text-center py-8">
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Test Connection
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Test Connection</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
               Send a test Adaptive Card to verify the integration is working.
             </p>
@@ -345,8 +331,8 @@ TEAMS_TENANT_ID=your_tenant_id`}
                 testStatus === 'success'
                   ? 'bg-[var(--accent)]/20 border-[var(--accent)] text-[var(--accent)]'
                   : testStatus === 'failed'
-                  ? 'bg-warning/20 border-warning text-warning'
-                  : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/30'
+                    ? 'bg-warning/20 border-warning text-warning'
+                    : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/30'
               }`}
             >
               {testStatus === 'testing' && '[SENDING TEST CARD...]'}
@@ -367,12 +353,10 @@ TEAMS_TENANT_ID=your_tenant_id`}
         return (
           <div className="text-center py-8">
             <div className="font-theme-data text-[var(--accent)] text-4xl mb-4">✓</div>
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Teams Integration Complete!
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Teams Integration Complete!</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
-              Aragora is now connected to Microsoft Teams.
-              Debate results will be posted as Adaptive Cards to your selected channels.
+              Aragora is now connected to Microsoft Teams. Debate results will be posted as Adaptive
+              Cards to your selected channels.
             </p>
           </div>
         );
@@ -404,10 +388,7 @@ TEAMS_TENANT_ID=your_tenant_id`}
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-surface border border-[var(--accent)]/30 rounded-lg w-full max-w-xl max-h-[90vh] overflow-hidden">
         <div className="p-4 border-b border-[var(--accent)]/20 flex items-center justify-between">
@@ -422,10 +403,7 @@ TEAMS_TENANT_ID=your_tenant_id`}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-text font-theme-data"
-          >
+          <button onClick={onClose} className="text-text-muted hover:text-text font-theme-data">
             [X]
           </button>
         </div>

@@ -44,7 +44,9 @@ export function WorkflowTemplatesBrowser() {
 
     try {
       const [templatesRes, categoriesRes, patternsRes] = await Promise.all([
-        apiFetch<{ templates: Template[] }>(`/api/workflow/templates${selectedCategory ? `?category=${selectedCategory}` : ''}`),
+        apiFetch<{ templates: Template[] }>(
+          `/api/workflow/templates${selectedCategory ? `?category=${selectedCategory}` : ''}`,
+        ),
         apiFetch<{ categories: Category[] }>('/api/workflow/categories'),
         apiFetch<{ patterns: Pattern[] }>('/api/workflow/patterns'),
       ]);
@@ -75,10 +77,10 @@ export function WorkflowTemplatesBrowser() {
 
   const handleRunTemplate = async (templateId: string) => {
     try {
-      const response = await apiFetch<{ status: string }>(`/api/workflow/templates/${templateId}/run`, {
-        method: 'POST',
-        body: JSON.stringify({ inputs: {} }),
-      });
+      const response = await apiFetch<{ status: string }>(
+        `/api/workflow/templates/${templateId}/run`,
+        { method: 'POST', body: JSON.stringify({ inputs: {} }) },
+      );
       alert(`Template execution started: ${response.status}`);
     } catch (err) {
       alert(`Failed to run template: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -115,9 +117,7 @@ export function WorkflowTemplatesBrowser() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-theme-data text-[var(--accent)] text-xl">
-          {'>'} WORKFLOW TEMPLATES
-        </h2>
+        <h2 className="font-theme-data text-[var(--accent)] text-xl">{'>'} WORKFLOW TEMPLATES</h2>
         <div className="text-xs font-theme-data text-text-muted">
           {templates.length} templates available
         </div>
@@ -254,9 +254,7 @@ export function WorkflowTemplatesBrowser() {
             <div
               key={pattern.id}
               className={`card p-6 ${
-                pattern.available
-                  ? 'hover:border-[var(--accent)]/60'
-                  : 'opacity-50'
+                pattern.available ? 'hover:border-[var(--accent)]/60' : 'opacity-50'
               } transition-colors`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -318,7 +316,9 @@ export function WorkflowTemplatesBrowser() {
                 {selectedTemplate.estimated_duration && (
                   <div>
                     <span className="text-text-muted">Est. Duration:</span>{' '}
-                    <span className="text-[var(--acid-cyan)]">{selectedTemplate.estimated_duration}</span>
+                    <span className="text-[var(--acid-cyan)]">
+                      {selectedTemplate.estimated_duration}
+                    </span>
                   </div>
                 )}
               </div>

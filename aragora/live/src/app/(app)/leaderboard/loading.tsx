@@ -2,7 +2,11 @@
 
 export default function LeaderboardLoading() {
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-6" role="status" aria-label="Loading leaderboard">
+    <div
+      className="min-h-screen bg-background p-4 sm:p-6"
+      role="status"
+      aria-label="Loading leaderboard"
+    >
       {/* Header */}
       <div className="mb-6 text-center">
         <div className="h-10 w-64 bg-surface animate-pulse rounded mx-auto mb-2" />

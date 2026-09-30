@@ -154,84 +154,51 @@ export const useUIStore = create<UIStore>()(
         setIsMobile: (isMobile) => set({ isMobile }, false, 'setIsMobile'),
 
         // Panel visibility
-        togglePanel: (panel) => set(
-          (state) => ({
-            panels: { ...state.panels, [panel]: !state.panels[panel] },
-          }),
-          false,
-          'togglePanel'
-        ),
+        togglePanel: (panel) =>
+          set(
+            (state) => ({ panels: { ...state.panels, [panel]: !state.panels[panel] } }),
+            false,
+            'togglePanel',
+          ),
 
-        setPanel: (panel, visible) => set(
-          (state) => ({
-            panels: { ...state.panels, [panel]: visible },
-          }),
-          false,
-          'setPanel'
-        ),
+        setPanel: (panel, visible) =>
+          set((state) => ({ panels: { ...state.panels, [panel]: visible } }), false, 'setPanel'),
 
-        setPanels: (panels) => set(
-          (state) => ({
-            panels: { ...state.panels, ...panels },
-          }),
-          false,
-          'setPanels'
-        ),
+        setPanels: (panels) =>
+          set((state) => ({ panels: { ...state.panels, ...panels } }), false, 'setPanels'),
 
         resetPanels: () => set({ panels: { ...defaultPanels } }, false, 'resetPanels'),
 
         // Panel positions
-        setPanelPosition: (panel, position) => set(
-          (state) => ({
-            panelPositions: { ...state.panelPositions, [panel]: position },
-          }),
-          false,
-          'setPanelPosition'
-        ),
+        setPanelPosition: (panel, position) =>
+          set(
+            (state) => ({ panelPositions: { ...state.panelPositions, [panel]: position } }),
+            false,
+            'setPanelPosition',
+          ),
 
         resetPanelPositions: () => set({ panelPositions: {} }, false, 'resetPanelPositions'),
 
         // Modal
-        openModal: (modal, data) => set(
-          {
-            activeModal: modal,
-            modalData: data || {},
-            focusTrapActive: true,
-          },
-          false,
-          'openModal'
-        ),
+        openModal: (modal, data) =>
+          set(
+            { activeModal: modal, modalData: data || {}, focusTrapActive: true },
+            false,
+            'openModal',
+          ),
 
-        closeModal: () => set(
-          {
-            activeModal: null,
-            modalData: {},
-            focusTrapActive: false,
-          },
-          false,
-          'closeModal'
-        ),
+        closeModal: () =>
+          set({ activeModal: null, modalData: {}, focusTrapActive: false }, false, 'closeModal'),
 
-        setModalData: (data) => set(
-          (state) => ({ modalData: { ...state.modalData, ...data } }),
-          false,
-          'setModalData'
-        ),
+        setModalData: (data) =>
+          set((state) => ({ modalData: { ...state.modalData, ...data } }), false, 'setModalData'),
 
         // Toasts
         addToast: (toast) => {
           const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-          const newToast: ToastMessage = {
-            ...toast,
-            id,
-            timestamp: Date.now(),
-          };
+          const newToast: ToastMessage = { ...toast, id, timestamp: Date.now() };
 
-          set(
-            (state) => ({ toasts: [...state.toasts, newToast] }),
-            false,
-            'addToast'
-          );
+          set((state) => ({ toasts: [...state.toasts, newToast] }), false, 'addToast');
 
           // Auto-remove after duration
           const duration = toast.duration ?? 5000;
@@ -244,54 +211,47 @@ export const useUIStore = create<UIStore>()(
           return id;
         },
 
-        removeToast: (id) => set(
-          (state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }),
-          false,
-          'removeToast'
-        ),
+        removeToast: (id) =>
+          set(
+            (state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }),
+            false,
+            'removeToast',
+          ),
 
         clearToasts: () => set({ toasts: [] }, false, 'clearToasts'),
 
         // Loading
-        setGlobalLoading: (loading, message) => set(
-          { globalLoading: loading, loadingMessage: message || '' },
-          false,
-          'setGlobalLoading'
-        ),
+        setGlobalLoading: (loading, message) =>
+          set({ globalLoading: loading, loadingMessage: message || '' }, false, 'setGlobalLoading'),
 
         // Keyboard shortcuts
-        setKeyboardShortcutsEnabled: (enabled) => set(
-          { keyboardShortcutsEnabled: enabled },
-          false,
-          'setKeyboardShortcutsEnabled'
-        ),
+        setKeyboardShortcutsEnabled: (enabled) =>
+          set({ keyboardShortcutsEnabled: enabled }, false, 'setKeyboardShortcutsEnabled'),
 
         // Focus trap
-        setFocusTrapActive: (active) => set(
-          { focusTrapActive: active },
-          false,
-          'setFocusTrapActive'
-        ),
+        setFocusTrapActive: (active) =>
+          set({ focusTrapActive: active }, false, 'setFocusTrapActive'),
 
         // Reset
-        resetAll: () => set(
-          {
-            viewMode: 'default',
-            mobileViewMode: 'transcript',
-            isMobile: false,
-            panels: { ...defaultPanels },
-            panelPositions: {},
-            activeModal: null,
-            modalData: {},
-            toasts: [],
-            globalLoading: false,
-            loadingMessage: '',
-            keyboardShortcutsEnabled: true,
-            focusTrapActive: false,
-          },
-          false,
-          'resetAll'
-        ),
+        resetAll: () =>
+          set(
+            {
+              viewMode: 'default',
+              mobileViewMode: 'transcript',
+              isMobile: false,
+              panels: { ...defaultPanels },
+              panelPositions: {},
+              activeModal: null,
+              modalData: {},
+              toasts: [],
+              globalLoading: false,
+              loadingMessage: '',
+              keyboardShortcutsEnabled: true,
+              focusTrapActive: false,
+            },
+            false,
+            'resetAll',
+          ),
       })),
       {
         name: 'aragora-ui',
@@ -302,10 +262,10 @@ export const useUIStore = create<UIStore>()(
           panelPositions: state.panelPositions,
           keyboardShortcutsEnabled: state.keyboardShortcutsEnabled,
         }),
-      }
+      },
     ),
-    { name: 'ui-store' }
-  )
+    { name: 'ui-store' },
+  ),
 );
 
 // ============================================================================

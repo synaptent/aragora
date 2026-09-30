@@ -54,12 +54,10 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
   const isInProgress = debate.status === 'in_progress' || debate.status === 'running';
   const isFailed = debate.status === 'failed' || debate.status === 'error';
   const previewOnly =
-    debate.result_mode === 'preview'
-    || (
-      debate.verdict === 'needs_review'
-      && debate.critiques.length === 0
-      && debate.votes.length === 0
-    );
+    debate.result_mode === 'preview' ||
+    (debate.verdict === 'needs_review' &&
+      debate.critiques.length === 0 &&
+      debate.votes.length === 0);
 
   const shareUrl =
     typeof window !== 'undefined'
@@ -122,7 +120,8 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
             <div className="mb-6 p-4 border border-[var(--gold)]/40 bg-[var(--gold)]/5 font-theme-data text-sm text-[var(--gold)]">
               <div className="font-bold mb-1">{'>'} LANDING PREVIEW</div>
               <p className="text-xs leading-relaxed text-[var(--text-muted)]">
-                {debate.result_warning || 'This page shows a fast landing-page preview of parallel model outputs, not a full consensus proof.'}
+                {debate.result_warning ||
+                  'This page shows a fast landing-page preview of parallel model outputs, not a full consensus proof.'}
               </p>
             </div>
           )}
@@ -138,12 +137,8 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
             {typeof debate.rounds_used === 'number' && debate.rounds_used > 0 && (
               <span>{debate.rounds_used} ROUNDS</span>
             )}
-            {debate.duration_seconds > 0 && (
-              <span>{debate.duration_seconds.toFixed(1)}s</span>
-            )}
-            {previewOnly && (
-              <span className="text-[var(--gold)]">PREVIEW ONLY</span>
-            )}
+            {debate.duration_seconds > 0 && <span>{debate.duration_seconds.toFixed(1)}s</span>}
+            {previewOnly && <span className="text-[var(--gold)]">PREVIEW ONLY</span>}
             {!previewOnly && debate.consensus_reached && (
               <span className="text-[var(--acid-green)]">CONSENSUS</span>
             )}
@@ -161,9 +156,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
                     VERDICT
                   </span>
                   {previewOnly ? (
-                    <span className="text-xs font-theme-data text-[var(--gold)]">
-                      PREVIEW ONLY
-                    </span>
+                    <span className="text-xs font-theme-data text-[var(--gold)]">PREVIEW ONLY</span>
                   ) : (
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-theme-data text-[var(--text-muted)]">
@@ -214,10 +207,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
                     <div
                       key={agent}
                       className="p-4 bg-[var(--bg)]/50"
-                      style={{
-                        borderLeft: `3px solid ${color.border}`,
-                        backgroundColor: color.bg,
-                      }}
+                      style={{ borderLeft: `3px solid ${color.border}`, backgroundColor: color.bg }}
                     >
                       <span
                         className="text-xs font-theme-data font-bold uppercase tracking-wider"
@@ -299,9 +289,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
                             {voteConf}%
                           </span>
                         </div>
-                        <p className="text-xs font-theme-data text-[var(--text)]">
-                          {vote.choice}
-                        </p>
+                        <p className="text-xs font-theme-data text-[var(--text)]">{vote.choice}</p>
                       </div>
                     );
                   })}
@@ -345,9 +333,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
           {/* ---- Receipt Hash ---- */}
           {debate.receipt_hash && (
             <div className="mb-8 flex items-center gap-3 p-4 bg-[var(--surface)] border border-[var(--acid-green)]/20">
-              <span className="text-xs font-theme-data text-[var(--acid-green)]">
-                &#10003;
-              </span>
+              <span className="text-xs font-theme-data text-[var(--acid-green)]">&#10003;</span>
               <div className="min-w-0">
                 <span className="text-xs font-theme-data text-[var(--text-muted)]">
                   SHA-256 DECISION RECEIPT
@@ -407,11 +393,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
 // Main wrapper — shows saved debate view OR live/interactive debate view
 // ---------------------------------------------------------------------------
 
-export function DebateViewerWrapper({
-  savedDebate,
-}: {
-  savedDebate?: SavedDebate | null;
-}) {
+export function DebateViewerWrapper({ savedDebate }: { savedDebate?: SavedDebate | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -427,27 +409,30 @@ export function DebateViewerWrapper({
   const debateId = pathSegments[1] || null; // ['debate', 'abc123'] -> 'abc123'
 
   // Handle starting a debate from a trending topic
-  const handleStartDebateFromTrend = useCallback(async (topic: string, source: string) => {
-    try {
-      const response = await fetch(`${config.api}/api/debate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: topic,
-          agents: DEFAULT_AGENTS,
-          rounds: 3,
-          metadata: { source, from_trending: true },
-        }),
-      });
+  const handleStartDebateFromTrend = useCallback(
+    async (topic: string, source: string) => {
+      try {
+        const response = await fetch(`${config.api}/api/debate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: topic,
+            agents: DEFAULT_AGENTS,
+            rounds: 3,
+            metadata: { source, from_trending: true },
+          }),
+        });
 
-      const data = await response.json();
-      if (data.success && data.debate_id) {
-        router.push(`/debate/${data.debate_id}`);
+        const data = await response.json();
+        if (data.success && data.debate_id) {
+          router.push(`/debate/${data.debate_id}`);
+        }
+      } catch {
+        // Silently handle errors - could add toast notification
       }
-    } catch {
-      // Silently handle errors - could add toast notification
-    }
-  }, [config.api, router]);
+    },
+    [config.api, router],
+  );
 
   // Live debates start with 'adhoc_' - hide analysis during streaming for better UX
   const isLiveDebate = debateId?.startsWith('adhoc_') ?? false;
@@ -513,9 +498,12 @@ export function DebateViewerWrapper({
             </div>
           </header>
           <div className="container mx-auto px-4 py-20 text-center max-w-lg">
-            <div className="text-[var(--accent)] font-theme-data text-xl mb-4">{'>'} ARAGORA DEBATE VIEWER</div>
+            <div className="text-[var(--accent)] font-theme-data text-xl mb-4">
+              {'>'} ARAGORA DEBATE VIEWER
+            </div>
             <p className="text-text-muted font-theme-data text-sm mb-8">
-              Watch AI agents debate decisions with adversarial rigor and deliver audit-ready verdicts.
+              Watch AI agents debate decisions with adversarial rigor and deliver audit-ready
+              verdicts.
             </p>
             <div className="flex flex-col gap-3">
               <Link
@@ -661,7 +649,10 @@ export function DebateViewerWrapper({
                 <ConsensusKnowledgeBase apiBase={config.api} />
               </PanelErrorBoundary>
               <PanelErrorBoundary panelName="Trending Topics">
-                <TrendingTopicsPanel apiBase={config.api} onStartDebate={handleStartDebateFromTrend} />
+                <TrendingTopicsPanel
+                  apiBase={config.api}
+                  onStartDebate={handleStartDebateFromTrend}
+                />
               </PanelErrorBoundary>
               <PanelErrorBoundary panelName="Memory Inspector">
                 <MemoryInspector apiBase={config.api} />

@@ -20,12 +20,7 @@ jest.mock('@/hooks/useSWRFetch', () => ({
   invalidateCache: jest.fn(),
 }));
 
-jest.mock('@/hooks/useApi', () => ({
-  useApi: () => ({
-    post: mockPost,
-    get: jest.fn(),
-  }),
-}));
+jest.mock('@/hooks/useApi', () => ({ useApi: () => ({ post: mockPost, get: jest.fn() }) }));
 
 import { useSWRFetch } from '@/hooks/useSWRFetch';
 
@@ -48,10 +43,7 @@ describe('usePendingChanges', () => {
     const { result } = renderHook(() => usePendingChanges());
 
     expect(result.current.pending).toBeNull();
-    expect(result.current.pendingFallback).toEqual({
-      changes: [],
-      total_pending: 0,
-    });
+    expect(result.current.pendingFallback).toEqual({ changes: [], total_pending: 0 });
   });
 
   it('unwraps live pending data when the backend responds', () => {

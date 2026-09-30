@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  ReactNode,
+  useEffect,
+} from 'react';
 
 /**
  * Progressive disclosure modes for the UI
@@ -64,21 +72,22 @@ export function ProgressiveModeProvider({ children }: { children: ReactNode }) {
       const minIndex = MODE_ORDER.indexOf(minMode);
       return currentIndex >= minIndex;
     },
-    [mode]
+    [mode],
   );
 
-  const value = useMemo<ProgressiveModeContextType>(() => ({
-    mode,
-    setMode,
-    isFeatureVisible,
-    modeLabel: MODE_LABELS[mode],
-    modeDescription: MODE_DESCRIPTIONS[mode],
-  }), [mode, setMode, isFeatureVisible]);
+  const value = useMemo<ProgressiveModeContextType>(
+    () => ({
+      mode,
+      setMode,
+      isFeatureVisible,
+      modeLabel: MODE_LABELS[mode],
+      modeDescription: MODE_DESCRIPTIONS[mode],
+    }),
+    [mode, setMode, isFeatureVisible],
+  );
 
   return (
-    <ProgressiveModeContext.Provider value={value}>
-      {children}
-    </ProgressiveModeContext.Provider>
+    <ProgressiveModeContext.Provider value={value}>{children}</ProgressiveModeContext.Provider>
   );
 }
 
@@ -114,7 +123,7 @@ export function getModeInfo(): Array<{
   label: string;
   description: string;
 }> {
-  return MODE_ORDER.map(mode => ({
+  return MODE_ORDER.map((mode) => ({
     mode,
     label: MODE_LABELS[mode],
     description: MODE_DESCRIPTIONS[mode],

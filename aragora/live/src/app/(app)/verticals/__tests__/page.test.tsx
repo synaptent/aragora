@@ -35,7 +35,9 @@ jest.mock('@/components/ErrorWithRetry', () => ({
   ErrorWithRetry: ({ error, onRetry }: { error: string; onRetry: () => void }) => (
     <div data-testid="error-display">
       <span>{error}</span>
-      <button onClick={onRetry} data-testid="retry-button">Retry</button>
+      <button onClick={onRetry} data-testid="retry-button">
+        Retry
+      </button>
     </div>
   ),
 }));
@@ -55,10 +57,7 @@ describe('VerticalsPage', () => {
 
   describe('initial render', () => {
     it('renders visual effects', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       await act(async () => {
         render(<VerticalsPage />);
@@ -69,10 +68,7 @@ describe('VerticalsPage', () => {
     });
 
     it('renders header elements', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       await act(async () => {
         render(<VerticalsPage />);
@@ -84,10 +80,7 @@ describe('VerticalsPage', () => {
     });
 
     it('renders page title', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       await act(async () => {
         render(<VerticalsPage />);
@@ -105,10 +98,7 @@ describe('VerticalsPage', () => {
     });
 
     it('renders tab navigation', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -123,10 +113,7 @@ describe('VerticalsPage', () => {
 
   describe('data fetching', () => {
     it('fetches verticals on mount', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -138,32 +125,33 @@ describe('VerticalsPage', () => {
     it('displays verticals when fetched successfully', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'finance',
-              name: 'Finance',
-              description: 'Financial analysis and compliance',
-              icon: '\ud83d\udcb0',
-              category: 'finance',
-              agents: ['analyst', 'auditor'],
-              tools: ['calculator', 'spreadsheet'],
-              compliance_frameworks: ['SOX', 'GAAP'],
-              enabled: true,
-            },
-            {
-              id: 'legal',
-              name: 'Legal',
-              description: 'Legal document review',
-              icon: '\u2696\ufe0f',
-              category: 'legal',
-              agents: ['lawyer'],
-              tools: ['contract-analyzer'],
-              compliance_frameworks: ['GDPR'],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'finance',
+                name: 'Finance',
+                description: 'Financial analysis and compliance',
+                icon: '\ud83d\udcb0',
+                category: 'finance',
+                agents: ['analyst', 'auditor'],
+                tools: ['calculator', 'spreadsheet'],
+                compliance_frameworks: ['SOX', 'GAAP'],
+                enabled: true,
+              },
+              {
+                id: 'legal',
+                name: 'Legal',
+                description: 'Legal document review',
+                icon: '\u2696\ufe0f',
+                category: 'legal',
+                agents: ['lawyer'],
+                tools: ['contract-analyzer'],
+                compliance_frameworks: ['GDPR'],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -175,10 +163,7 @@ describe('VerticalsPage', () => {
     });
 
     it('shows empty state when no verticals', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -198,10 +183,7 @@ describe('VerticalsPage', () => {
     });
 
     it('displays error for non-ok response', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
       render(<VerticalsPage />);
 
@@ -215,21 +197,22 @@ describe('VerticalsPage', () => {
     it('displays vertical cards with icons', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'finance',
-              name: 'Finance',
-              description: 'Financial analysis',
-              icon: '\ud83d\udcb0',
-              category: 'finance',
-              agents: ['analyst', 'auditor'],
-              tools: ['calculator'],
-              compliance_frameworks: [],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'finance',
+                name: 'Finance',
+                description: 'Financial analysis',
+                icon: '\ud83d\udcb0',
+                category: 'finance',
+                agents: ['analyst', 'auditor'],
+                tools: ['calculator'],
+                compliance_frameworks: [],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -244,21 +227,22 @@ describe('VerticalsPage', () => {
     it('displays agent and tool counts', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'finance',
-              name: 'Finance',
-              description: 'Financial analysis',
-              icon: '\ud83d\udcb0',
-              category: 'finance',
-              agents: ['analyst', 'auditor', 'compliance'],
-              tools: ['calculator', 'spreadsheet'],
-              compliance_frameworks: [],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'finance',
+                name: 'Finance',
+                description: 'Financial analysis',
+                icon: '\ud83d\udcb0',
+                category: 'finance',
+                agents: ['analyst', 'auditor', 'compliance'],
+                tools: ['calculator', 'spreadsheet'],
+                compliance_frameworks: [],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -272,21 +256,22 @@ describe('VerticalsPage', () => {
     it('shows disabled indicator for disabled verticals', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'legacy',
-              name: 'Legacy System',
-              description: 'Old system support',
-              icon: '\ud83d\udce6',
-              category: 'technology',
-              agents: [],
-              tools: [],
-              compliance_frameworks: [],
-              enabled: false,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'legacy',
+                name: 'Legacy System',
+                description: 'Old system support',
+                icon: '\ud83d\udce6',
+                category: 'technology',
+                agents: [],
+                tools: [],
+                compliance_frameworks: [],
+                enabled: false,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -299,21 +284,22 @@ describe('VerticalsPage', () => {
     it('displays category badges with appropriate colors', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'finance',
-              name: 'Finance',
-              description: 'Test',
-              icon: '\ud83d\udcb0',
-              category: 'finance',
-              agents: [],
-              tools: [],
-              compliance_frameworks: [],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'finance',
+                name: 'Finance',
+                description: 'Test',
+                icon: '\ud83d\udcb0',
+                category: 'finance',
+                agents: [],
+                tools: [],
+                compliance_frameworks: [],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -328,34 +314,29 @@ describe('VerticalsPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/verticals/finance/tools')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ tools: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ tools: [] }) });
         }
         if (url.includes('/verticals/finance/compliance')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ frameworks: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ frameworks: [] }) });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: ['analyst'],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: ['analyst'],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -371,7 +352,9 @@ describe('VerticalsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/verticals/finance/tools');
-        expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/verticals/finance/compliance');
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:8080/api/verticals/finance/compliance',
+        );
       });
     });
   });
@@ -379,10 +362,7 @@ describe('VerticalsPage', () => {
   describe('suggest tab', () => {
     it('switches to suggest tab', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -399,10 +379,7 @@ describe('VerticalsPage', () => {
 
     it('displays task input field', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -419,10 +396,7 @@ describe('VerticalsPage', () => {
 
     it('disables suggest button when input is empty', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -440,10 +414,7 @@ describe('VerticalsPage', () => {
 
     it('enables suggest button when task is entered', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ verticals: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
 
       render(<VerticalsPage />);
 
@@ -470,30 +441,32 @@ describe('VerticalsPage', () => {
         if (url.includes('/suggest')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              suggestions: [
-                { vertical_id: 'finance', confidence: 0.92, reason: 'Financial analysis task' },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                suggestions: [
+                  { vertical_id: 'finance', confidence: 0.92, reason: 'Financial analysis task' },
+                ],
+              }),
           });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -518,7 +491,7 @@ describe('VerticalsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/verticals/suggest?task=')
+          expect.stringContaining('/api/verticals/suggest?task='),
         );
       });
     });
@@ -529,30 +502,32 @@ describe('VerticalsPage', () => {
         if (url.includes('/suggest')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              suggestions: [
-                { vertical_id: 'finance', confidence: 0.92, reason: 'Financial analysis task' },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                suggestions: [
+                  { vertical_id: 'finance', confidence: 0.92, reason: 'Financial analysis task' },
+                ],
+              }),
           });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -593,10 +568,7 @@ describe('VerticalsPage', () => {
         if (url.includes('/suggest')) {
           return suggestionPromise;
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ verticals: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
       });
 
       render(<VerticalsPage />);
@@ -622,10 +594,7 @@ describe('VerticalsPage', () => {
 
       // Cleanup
       await act(async () => {
-        resolvePromise!({
-          ok: true,
-          json: () => Promise.resolve({ suggestions: [] }),
-        });
+        resolvePromise!({ ok: true, json: () => Promise.resolve({ suggestions: [] }) });
       });
     });
 
@@ -633,15 +602,9 @@ describe('VerticalsPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/suggest')) {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ verticals: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
       });
 
       render(<VerticalsPage />);
@@ -676,40 +639,51 @@ describe('VerticalsPage', () => {
         if (url.includes('/tools')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              tools: [
-                { name: 'Financial Calculator', description: 'Calculate metrics', category: 'analysis' },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                tools: [
+                  {
+                    name: 'Financial Calculator',
+                    description: 'Calculate metrics',
+                    category: 'analysis',
+                  },
+                ],
+              }),
           });
         }
         if (url.includes('/compliance')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              frameworks: [
-                { name: 'SOX', description: 'Sarbanes-Oxley', requirements: ['Audit trail', 'Access control'] },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                frameworks: [
+                  {
+                    name: 'SOX',
+                    description: 'Sarbanes-Oxley',
+                    requirements: ['Audit trail', 'Access control'],
+                  },
+                ],
+              }),
           });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Financial analysis and compliance',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: ['analyst', 'auditor'],
-                tools: ['calculator'],
-                compliance_frameworks: ['SOX'],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Financial analysis and compliance',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: ['analyst', 'auditor'],
+                  tools: ['calculator'],
+                  compliance_frameworks: ['SOX'],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -739,21 +713,22 @@ describe('VerticalsPage', () => {
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: ['analyst', 'auditor'],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: ['analyst', 'auditor'],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -780,36 +755,39 @@ describe('VerticalsPage', () => {
         if (url.includes('/tools')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              tools: [
-                { name: 'Calculator', description: 'Financial calculations', category: 'analysis' },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                tools: [
+                  {
+                    name: 'Calculator',
+                    description: 'Financial calculations',
+                    category: 'analysis',
+                  },
+                ],
+              }),
           });
         }
         if (url.includes('/compliance')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ frameworks: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ frameworks: [] }) });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: ['calculator'],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: ['calculator'],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -834,38 +812,41 @@ describe('VerticalsPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/tools')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ tools: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ tools: [] }) });
         }
         if (url.includes('/compliance')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              frameworks: [
-                { name: 'SOX', description: 'Financial reporting', requirements: ['Audit trail'] },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                frameworks: [
+                  {
+                    name: 'SOX',
+                    description: 'Financial reporting',
+                    requirements: ['Audit trail'],
+                  },
+                ],
+              }),
           });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: [],
-                compliance_frameworks: ['SOX'],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: [],
+                  compliance_frameworks: ['SOX'],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -898,21 +879,22 @@ describe('VerticalsPage', () => {
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -944,21 +926,22 @@ describe('VerticalsPage', () => {
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -987,42 +970,41 @@ describe('VerticalsPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/tools')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ tools: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ tools: [] }) });
         }
         if (url.includes('/compliance')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              frameworks: [
-                {
-                  name: 'SOX',
-                  description: 'Test',
-                  requirements: ['Req1', 'Req2', 'Req3', 'Req4', 'Req5', 'Req6', 'Req7'],
-                },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                frameworks: [
+                  {
+                    name: 'SOX',
+                    description: 'Test',
+                    requirements: ['Req1', 'Req2', 'Req3', 'Req4', 'Req5', 'Req6', 'Req7'],
+                  },
+                ],
+              }),
           });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            verticals: [
-              {
-                id: 'finance',
-                name: 'Finance',
-                description: 'Test',
-                icon: '\ud83d\udcb0',
-                category: 'finance',
-                agents: [],
-                tools: [],
-                compliance_frameworks: [],
-                enabled: true,
-              },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              verticals: [
+                {
+                  id: 'finance',
+                  name: 'Finance',
+                  description: 'Test',
+                  icon: '\ud83d\udcb0',
+                  category: 'finance',
+                  agents: [],
+                  tools: [],
+                  compliance_frameworks: [],
+                  enabled: true,
+                },
+              ],
+            }),
         });
       });
 
@@ -1051,10 +1033,7 @@ describe('VerticalsPage', () => {
         if (callCount <= 1) {
           return Promise.reject(new Error('Network error'));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ verticals: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ verticals: [] }) });
       });
 
       render(<VerticalsPage />);
@@ -1077,21 +1056,22 @@ describe('VerticalsPage', () => {
     it('applies correct color for finance category', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'finance',
-              name: 'Finance',
-              description: 'Test',
-              icon: '\ud83d\udcb0',
-              category: 'finance',
-              agents: [],
-              tools: [],
-              compliance_frameworks: [],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'finance',
+                name: 'Finance',
+                description: 'Test',
+                icon: '\ud83d\udcb0',
+                category: 'finance',
+                agents: [],
+                tools: [],
+                compliance_frameworks: [],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -1105,21 +1085,22 @@ describe('VerticalsPage', () => {
     it('applies correct color for legal category', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'legal',
-              name: 'Legal',
-              description: 'Test',
-              icon: '\u2696\ufe0f',
-              category: 'legal',
-              agents: [],
-              tools: [],
-              compliance_frameworks: [],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'legal',
+                name: 'Legal',
+                description: 'Test',
+                icon: '\u2696\ufe0f',
+                category: 'legal',
+                agents: [],
+                tools: [],
+                compliance_frameworks: [],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);
@@ -1133,21 +1114,22 @@ describe('VerticalsPage', () => {
     it('applies correct color for healthcare category', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          verticals: [
-            {
-              id: 'healthcare',
-              name: 'Healthcare',
-              description: 'Test',
-              icon: '\ud83c\udfe5',
-              category: 'healthcare',
-              agents: [],
-              tools: [],
-              compliance_frameworks: [],
-              enabled: true,
-            },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            verticals: [
+              {
+                id: 'healthcare',
+                name: 'Healthcare',
+                description: 'Test',
+                icon: '\ud83c\udfe5',
+                category: 'healthcare',
+                agents: [],
+                tools: [],
+                compliance_frameworks: [],
+                enabled: true,
+              },
+            ],
+          }),
       });
 
       render(<VerticalsPage />);

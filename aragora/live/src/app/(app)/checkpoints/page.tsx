@@ -10,7 +10,7 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const CheckpointPanel = dynamic(
-  () => import('@/components/CheckpointPanel').then(m => ({ default: m.CheckpointPanel })),
+  () => import('@/components/CheckpointPanel').then((m) => ({ default: m.CheckpointPanel })),
   {
     ssr: false,
     loading: () => (
@@ -18,7 +18,7 @@ const CheckpointPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function CheckpointsPage() {
@@ -81,18 +81,32 @@ export default function CheckpointsPage() {
               {'>'} DEBATE CHECKPOINTS
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Browse saved debate states and resume from any checkpoint.
-              Automatic checkpoints are created at each round boundary.
+              Browse saved debate states and resume from any checkpoint. Automatic checkpoints are
+              created at each round boundary.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-acid-yellow/30 bg-acid-yellow/5 rounded">
-            <h3 className="text-sm font-theme-data text-[var(--acid-yellow)] mb-2">Checkpoint Features</h3>
+            <h3 className="text-sm font-theme-data text-[var(--acid-yellow)] mb-2">
+              Checkpoint Features
+            </h3>
             <ul className="text-xs font-theme-data text-text-muted space-y-1">
-              <li>• <span className="text-[var(--accent)]">Auto-save</span>: Checkpoints created after each round</li>
-              <li>• <span className="text-[var(--accent)]">State recovery</span>: Resume debates from any saved point</li>
-              <li>• <span className="text-[var(--accent)]">Branching</span>: Create alternate debate paths from checkpoints</li>
-              <li>• <span className="text-[var(--accent)]">Comparison</span>: Compare outcomes from different branches</li>
+              <li>
+                • <span className="text-[var(--accent)]">Auto-save</span>: Checkpoints created after
+                each round
+              </li>
+              <li>
+                • <span className="text-[var(--accent)]">State recovery</span>: Resume debates from
+                any saved point
+              </li>
+              <li>
+                • <span className="text-[var(--accent)]">Branching</span>: Create alternate debate
+                paths from checkpoints
+              </li>
+              <li>
+                • <span className="text-[var(--accent)]">Comparison</span>: Compare outcomes from
+                different branches
+              </li>
             </ul>
           </div>
 
@@ -106,12 +120,8 @@ export default function CheckpointsPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // DEBATE CHECKPOINTS
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // DEBATE CHECKPOINTS</p>
         </footer>
       </main>
     </>

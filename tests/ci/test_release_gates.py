@@ -804,8 +804,8 @@ class TestPipAuditGate:
     def test_allowlist_omits_resolved_pyjwt_debt(self):
         content = self.allowlist.read_text()
         assert "Format: VULN-ID YYYY-MM-DD" in content
-        assert "CVE-2025-14009" in content
-        assert "CVE-2026-3219" in content
+        assert "CVE-2026-64847" in content
+        assert "CVE-2026-63374" in content
         assert "PYSEC-2025-183" not in content
         lock_content = self.uv_lock.read_text()
         assert "pyjwt-2.12.1" not in lock_content

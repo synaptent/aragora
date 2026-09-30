@@ -16,11 +16,7 @@ interface TranscriptionResult {
   language?: string;
   backend?: string;
   processing_time?: number;
-  segments?: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
+  segments?: Array<{ start: number; end: number; text: string }>;
 }
 
 interface TranscriptionConfig {
@@ -44,9 +40,18 @@ interface YouTubeVideoInfo {
 }
 
 const ACCEPTED_FORMATS = [
-  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/webm', 'audio/ogg',
-  'audio/m4a', 'audio/flac', 'audio/aac',
-  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/webm',
+  'audio/ogg',
+  'audio/m4a',
+  'audio/flac',
+  'audio/aac',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-msvideo',
 ];
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -98,22 +103,25 @@ export default function TranscribePage() {
     fetchConfig();
   }, []);
 
-  const handleFileSelect = useCallback((file: File) => {
-    if (!ACCEPTED_FORMATS.includes(file.type)) {
-      setError(`Unsupported format. Accepted: MP3, WAV, M4A, FLAC, MP4, WebM, MOV`);
-      return;
-    }
+  const handleFileSelect = useCallback(
+    (file: File) => {
+      if (!ACCEPTED_FORMATS.includes(file.type)) {
+        setError(`Unsupported format. Accepted: MP3, WAV, M4A, FLAC, MP4, WebM, MOV`);
+        return;
+      }
 
-    const maxSize = config?.max_video_size_mb || 100;
-    if (file.size > maxSize * 1024 * 1024) {
-      setError(`File too large. Maximum size is ${maxSize}MB.`);
-      return;
-    }
+      const maxSize = config?.max_video_size_mb || 100;
+      if (file.size > maxSize * 1024 * 1024) {
+        setError(`File too large. Maximum size is ${maxSize}MB.`);
+        return;
+      }
 
-    setSelectedFile(file);
-    setError(null);
-    setResult(null);
-  }, [config]);
+      setSelectedFile(file);
+      setError(null);
+      setResult(null);
+    },
+    [config],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -125,22 +133,28 @@ export default function TranscribePage() {
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-  }, [handleFileSelect]);
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFileSelect(files[0]);
+      }
+    },
+    [handleFileSelect],
+  );
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-  }, [handleFileSelect]);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleFileSelect(files[0]);
+      }
+    },
+    [handleFileSelect],
+  );
 
   const transcribeFile = useCallback(async () => {
     if (!selectedFile) return;
@@ -212,51 +226,54 @@ export default function TranscribePage() {
     }
   }, [selectedFile, selectedBackend, selectedLanguage]);
 
-  const handleYouTubeSubmit = useCallback(async (url: string, _videoInfo: YouTubeVideoInfo) => {
-    setState('processing');
-    setProgress(0);
-    setError(null);
+  const handleYouTubeSubmit = useCallback(
+    async (url: string, _videoInfo: YouTubeVideoInfo) => {
+      setState('processing');
+      setProgress(0);
+      setError(null);
 
-    try {
-      // Start progress simulation
-      const interval = setInterval(() => {
-        setProgress((p) => Math.min(p + 2, 95));
-      }, 500);
+      try {
+        // Start progress simulation
+        const interval = setInterval(() => {
+          setProgress((p) => Math.min(p + 2, 95));
+        }, 500);
 
-      const res = await fetch(`${API_BASE_URL}/api/transcription/youtube`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          language: selectedLanguage || undefined,
-          backend: selectedBackend || undefined,
-          use_cache: true,
-        }),
-      });
+        const res = await fetch(`${API_BASE_URL}/api/transcription/youtube`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            language: selectedLanguage || undefined,
+            backend: selectedBackend || undefined,
+            use_cache: true,
+          }),
+        });
 
-      clearInterval(interval);
+        clearInterval(interval);
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'YouTube transcription failed');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'YouTube transcription failed');
+        }
+
+        const data = await res.json();
+        setProgress(100);
+        setResult({
+          text: data.text,
+          duration: data.duration,
+          language: data.language,
+          backend: data.backend,
+          processing_time: data.processing_time,
+          segments: data.segments,
+        });
+        setState('complete');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'YouTube transcription failed');
+        setState('error');
       }
-
-      const data = await res.json();
-      setProgress(100);
-      setResult({
-        text: data.text,
-        duration: data.duration,
-        language: data.language,
-        backend: data.backend,
-        processing_time: data.processing_time,
-        segments: data.segments,
-      });
-      setState('complete');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'YouTube transcription failed');
-      setState('error');
-    }
-  }, [selectedBackend, selectedLanguage]);
+    },
+    [selectedBackend, selectedLanguage],
+  );
 
   const copyToClipboard = useCallback(() => {
     if (result?.text) {
@@ -264,39 +281,48 @@ export default function TranscribePage() {
     }
   }, [result]);
 
-  const downloadTranscript = useCallback((format: 'txt' | 'srt' | 'vtt') => {
-    if (!result) return;
+  const downloadTranscript = useCallback(
+    (format: 'txt' | 'srt' | 'vtt') => {
+      if (!result) return;
 
-    let content = '';
-    const filename = `transcript.${format}`;
-    let mimeType = 'text/plain';
+      let content = '';
+      const filename = `transcript.${format}`;
+      let mimeType = 'text/plain';
 
-    if (format === 'txt') {
-      content = result.text;
-    } else if (format === 'srt' && result.segments) {
-      content = result.segments.map((seg, i) => {
-        const start = formatTimestamp(seg.start, true);
-        const end = formatTimestamp(seg.end, true);
-        return `${i + 1}\n${start} --> ${end}\n${seg.text}\n`;
-      }).join('\n');
-      mimeType = 'text/srt';
-    } else if (format === 'vtt' && result.segments) {
-      content = 'WEBVTT\n\n' + result.segments.map((seg) => {
-        const start = formatTimestamp(seg.start, false);
-        const end = formatTimestamp(seg.end, false);
-        return `${start} --> ${end}\n${seg.text}\n`;
-      }).join('\n');
-      mimeType = 'text/vtt';
-    }
+      if (format === 'txt') {
+        content = result.text;
+      } else if (format === 'srt' && result.segments) {
+        content = result.segments
+          .map((seg, i) => {
+            const start = formatTimestamp(seg.start, true);
+            const end = formatTimestamp(seg.end, true);
+            return `${i + 1}\n${start} --> ${end}\n${seg.text}\n`;
+          })
+          .join('\n');
+        mimeType = 'text/srt';
+      } else if (format === 'vtt' && result.segments) {
+        content =
+          'WEBVTT\n\n' +
+          result.segments
+            .map((seg) => {
+              const start = formatTimestamp(seg.start, false);
+              const end = formatTimestamp(seg.end, false);
+              return `${start} --> ${end}\n${seg.text}\n`;
+            })
+            .join('\n');
+        mimeType = 'text/vtt';
+      }
 
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [result]);
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [result],
+  );
 
   const formatTimestamp = (seconds: number, srtFormat: boolean): string => {
     const h = Math.floor(seconds / 3600);
@@ -342,10 +368,7 @@ export default function TranscribePage() {
             ARAGORA
           </Link>
           <div className="flex items-center gap-4">
-            <Link
-              href="/voice"
-              className="text-xs font-theme-data text-text-muted hover:text-text"
-            >
+            <Link href="/voice" className="text-xs font-theme-data text-text-muted hover:text-text">
               [VOICE INPUT]
             </Link>
             <Link
@@ -383,9 +406,7 @@ export default function TranscribePage() {
             <h1 className="text-2xl font-theme-data font-bold text-text mb-2">
               Transcribe Audio & Video
             </h1>
-            <p className="text-text-muted text-sm">
-              Upload a file or paste a YouTube URL
-            </p>
+            <p className="text-text-muted text-sm">Upload a file or paste a YouTube URL</p>
           </div>
 
           {/* Input Mode Selector */}
@@ -468,9 +489,10 @@ export default function TranscribePage() {
               className={`
                 p-8 border-2 border-dashed rounded-lg text-center cursor-pointer
                 transition-colors
-                ${isDragging
-                  ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                  : 'border-border hover:border-[var(--accent)]/50'
+                ${
+                  isDragging
+                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+                    : 'border-border hover:border-[var(--accent)]/50'
                 }
               `}
             >
@@ -487,12 +509,8 @@ export default function TranscribePage() {
                   <span className="text-3xl">📁</span>
                 </div>
                 <div>
-                  <p className="text-text font-medium">
-                    Drop your file here
-                  </p>
-                  <p className="text-text-muted text-sm mt-1">
-                    or tap to browse
-                  </p>
+                  <p className="text-text font-medium">Drop your file here</p>
+                  <p className="text-text-muted text-sm mt-1">or tap to browse</p>
                 </div>
                 <p className="text-xs text-text-muted">
                   MP3, WAV, M4A, FLAC, MP4, WebM, MOV (max {config?.max_video_size_mb || 100}MB)
@@ -520,17 +538,13 @@ export default function TranscribePage() {
                     {selectedFile.type.startsWith('video/') ? '🎬' : '🎵'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-text font-medium truncate">
-                      {selectedFile.name}
-                    </p>
+                    <p className="text-text font-medium truncate">{selectedFile.name}</p>
                     <p className="text-text-muted text-xs mt-1">
-                      {FORMAT_LABELS[selectedFile.type] || 'Unknown'} · {formatFileSize(selectedFile.size)}
+                      {FORMAT_LABELS[selectedFile.type] || 'Unknown'} ·{' '}
+                      {formatFileSize(selectedFile.size)}
                     </p>
                   </div>
-                  <button
-                    onClick={reset}
-                    className="text-text-muted hover:text-warning text-sm"
-                  >
+                  <button onClick={reset} className="text-text-muted hover:text-warning text-sm">
                     ✕
                   </button>
                 </div>
@@ -580,19 +594,17 @@ export default function TranscribePage() {
           {state === 'complete' && result && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-theme-data text-[var(--accent)]">Transcription Complete</h2>
+                <h2 className="text-lg font-theme-data text-[var(--accent)]">
+                  Transcription Complete
+                </h2>
                 <div className="flex items-center gap-3 text-xs text-text-muted">
-                  {result.duration && (
-                    <span>{formatDuration(result.duration)}</span>
-                  )}
+                  {result.duration && <span>{formatDuration(result.duration)}</span>}
                   {result.backend && (
                     <span className="px-2 py-0.5 bg-surface border border-border rounded">
                       {result.backend}
                     </span>
                   )}
-                  {result.language && (
-                    <span className="uppercase">{result.language}</span>
-                  )}
+                  {result.language && <span className="uppercase">{result.language}</span>}
                 </div>
               </div>
 

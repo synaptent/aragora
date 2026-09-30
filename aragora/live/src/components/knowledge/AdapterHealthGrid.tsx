@@ -22,20 +22,36 @@ export function AdapterHealthGrid() {
     return b.entry_count - a.entry_count;
   });
 
-  if (loading) return <div className="animate-pulse p-4 text-[var(--text-muted)] font-theme-data">Loading adapter health...</div>;
-  if (error) return <div className="p-4 text-red-400 font-theme-data">Failed to load adapter health</div>;
+  if (loading)
+    return (
+      <div className="animate-pulse p-4 text-[var(--text-muted)] font-theme-data">
+        Loading adapter health...
+      </div>
+    );
+  if (error)
+    return <div className="p-4 text-red-400 font-theme-data">Failed to load adapter health</div>;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex gap-4 font-theme-data text-xs text-[var(--text-muted)]">
-          <span>Total: <span className="text-[var(--acid-green)]">{total}</span></span>
-          <span>Active: <span className="text-emerald-400">{active}</span></span>
-          <span>Stale: <span className="text-amber-400">{stale}</span></span>
+          <span>
+            Total: <span className="text-[var(--acid-green)]">{total}</span>
+          </span>
+          <span>
+            Active: <span className="text-emerald-400">{active}</span>
+          </span>
+          <span>
+            Stale: <span className="text-amber-400">{stale}</span>
+          </span>
         </div>
         <div className="flex gap-2">
           {(['name', 'status', 'entry_count'] as SortKey[]).map((k) => (
-            <button key={k} onClick={() => setSortBy(k)} className={`text-[10px] font-theme-data px-2 py-0.5 border rounded ${sortBy === k ? 'border-[var(--acid-green)] text-[var(--acid-green)]' : 'border-[var(--text-muted)]/30 text-[var(--text-muted)]'}`}>
+            <button
+              key={k}
+              onClick={() => setSortBy(k)}
+              className={`text-[10px] font-theme-data px-2 py-0.5 border rounded ${sortBy === k ? 'border-[var(--acid-green)] text-[var(--acid-green)]' : 'border-[var(--text-muted)]/30 text-[var(--text-muted)]'}`}
+            >
               {k.replace('_', ' ')}
             </button>
           ))}
@@ -44,10 +60,15 @@ export function AdapterHealthGrid() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {sorted.map((a) => (
-          <div key={a.name} className={`card p-3 space-y-1 border-l-2 ${a.health === 'healthy' ? 'border-emerald-400' : a.health === 'degraded' ? 'border-amber-400' : a.health === 'unhealthy' ? 'border-red-400' : 'border-gray-400'}`}>
+          <div
+            key={a.name}
+            className={`card p-3 space-y-1 border-l-2 ${a.health === 'healthy' ? 'border-emerald-400' : a.health === 'degraded' ? 'border-amber-400' : a.health === 'unhealthy' ? 'border-red-400' : 'border-gray-400'}`}
+          >
             <div className="flex items-center justify-between">
               <span className="font-theme-data text-xs text-[var(--text)] truncate">{a.name}</span>
-              <span className={`text-[9px] font-theme-data px-1.5 py-0.5 border rounded ${STATUS_BADGE[a.health] || ''}`}>
+              <span
+                className={`text-[9px] font-theme-data px-1.5 py-0.5 border rounded ${STATUS_BADGE[a.health] || ''}`}
+              >
                 {a.status}
               </span>
             </div>

@@ -127,26 +127,19 @@ export const useShortcutsStore = create<ShortcutsStore>()(
         // Actions
         setEnabled: (enabled) => set({ enabled }, false, 'setEnabled'),
 
-        toggleEnabled: () =>
-          set((state) => ({ enabled: !state.enabled }), false, 'toggleEnabled'),
+        toggleEnabled: () => set((state) => ({ enabled: !state.enabled }), false, 'toggleEnabled'),
 
         openHelp: () => set({ isHelpOpen: true }, false, 'openHelp'),
 
         closeHelp: () => set({ isHelpOpen: false }, false, 'closeHelp'),
 
-        toggleHelp: () =>
-          set((state) => ({ isHelpOpen: !state.isHelpOpen }), false, 'toggleHelp'),
+        toggleHelp: () => set((state) => ({ isHelpOpen: !state.isHelpOpen }), false, 'toggleHelp'),
 
         setCustomBinding: (shortcutId, bindings) =>
           set(
-            (state) => ({
-              customBindings: {
-                ...state.customBindings,
-                [shortcutId]: bindings,
-              },
-            }),
+            (state) => ({ customBindings: { ...state.customBindings, [shortcutId]: bindings } }),
             false,
-            'setCustomBinding'
+            'setCustomBinding',
           ),
 
         clearCustomBinding: (shortcutId) =>
@@ -156,7 +149,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
               return { customBindings: rest };
             },
             false,
-            'clearCustomBinding'
+            'clearCustomBinding',
           ),
 
         disableShortcut: (shortcutId) =>
@@ -167,7 +160,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
                 : [...state.disabledShortcuts, shortcutId],
             }),
             false,
-            'disableShortcut'
+            'disableShortcut',
           ),
 
         enableShortcut: (shortcutId) =>
@@ -176,7 +169,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
               disabledShortcuts: state.disabledShortcuts.filter((id) => id !== shortcutId),
             }),
             false,
-            'enableShortcut'
+            'enableShortcut',
           ),
 
         addToSequence: (key) =>
@@ -186,27 +179,19 @@ export const useShortcutsStore = create<ShortcutsStore>()(
               sequenceStartTime: state.sequenceStartTime ?? Date.now(),
             }),
             false,
-            'addToSequence'
+            'addToSequence',
           ),
 
         clearSequence: () =>
-          set(
-            { pendingSequence: [], sequenceStartTime: null },
-            false,
-            'clearSequence'
-          ),
+          set({ pendingSequence: [], sequenceStartTime: null }, false, 'clearSequence'),
 
         setContext: (context) => set({ currentContext: context }, false, 'setContext'),
 
         resetToDefaults: () =>
           set(
-            {
-              enabled: true,
-              customBindings: {},
-              disabledShortcuts: [],
-            },
+            { enabled: true, customBindings: {}, disabledShortcuts: [] },
             false,
-            'resetToDefaults'
+            'resetToDefaults',
           ),
       }),
       {
@@ -217,10 +202,10 @@ export const useShortcutsStore = create<ShortcutsStore>()(
           customBindings: state.customBindings,
           disabledShortcuts: state.disabledShortcuts,
         }),
-      }
+      },
     ),
-    { name: 'shortcuts-store' }
-  )
+    { name: 'shortcuts-store' },
+  ),
 );
 
 // ============================================================================

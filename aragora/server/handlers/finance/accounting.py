@@ -34,6 +34,7 @@ from typing import Any
 from aiohttp import web
 
 from aragora.connectors.accounting.gusto import GustoConnector
+from aragora.server.handlers.base import BaseHandler, HandlerResult, error_response, json_response
 from aragora.server.handlers.utils import parse_json_body
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.params import get_pagination_params
@@ -1465,3 +1466,52 @@ def register_accounting_routes(app: web.Application) -> None:
         "/api/accounting/gusto/payrolls/{payroll_id}/journal-entry",
         handle_gusto_journal_entry,
     )
+
+
+class AccountingIntegrationHandler(BaseHandler):
+    """Fail closed for integrations unavailable on the modular HTTP server.
+
+    QBO/Gusto connectors are wired only by the aiohttp application above. Even
+    if a connector is supplied in this server's context, no modular adapter
+    exists yet; keep returning 503 rather than invoking aiohttp coroutines.
+    """
+
+    ROUTES = [
+        "/api/v1/accounting/status",
+        "/api/v1/accounting/connect",
+        "/api/v1/accounting/callback",
+        "/api/v1/accounting/customers",
+        "/api/v1/accounting/transactions",
+        "/api/v1/accounting/reports",
+        "/api/v1/accounting/disconnect",
+        "/api/v1/accounting/report",
+        "/api/v1/accounting/gusto/status",
+        "/api/v1/accounting/gusto/employees",
+        "/api/v1/accounting/gusto/payrolls",
+        "/api/v1/accounting/gusto/connect",
+        "/api/v1/accounting/gusto/callback",
+        "/api/v1/accounting/gusto/disconnect",
+        "/api/v1/gusto/connect",
+        "/api/v1/gusto/disconnect",
+        "/api/v1/gusto/employees",
+        "/api/v1/gusto/payrolls",
+        "/api/v1/gusto/status",
+        "/api/v1/ap/batch-payments",
+        "/api/v1/ap/cash-flow",
+        "/api/v1/ap/discount-opportunities",
+        "/api/v1/ap/invoices",
+        "/api/v1/ap/optimize",
+    ]
+
+    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        """Return an explicit unavailable result instead of the registry's 500."""
+        if not self.can_handle(path):
+            return error_response("Route not found", status=404)
+        return json_response(
+            {"error": "accounting integration not configured", "code": "not_configured"},
+            status=503,
+        )
+
+    def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        """Keep integration mutations unavailable on the modular server too."""
+        return self.handle(path, query_params, handler)

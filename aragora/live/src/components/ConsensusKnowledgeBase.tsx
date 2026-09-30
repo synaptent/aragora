@@ -85,7 +85,7 @@ export function ConsensusKnowledgeBase({ apiBase, events = [] }: ConsensusKnowle
     setError(null);
     try {
       const response = await fetch(
-        `${apiBase}/api/consensus/similar?topic=${encodeURIComponent(searchQuery)}&limit=5`
+        `${apiBase}/api/consensus/similar?topic=${encodeURIComponent(searchQuery)}&limit=5`,
       );
       if (!response.ok) throw new Error('Failed to search');
       const data = await response.json();
@@ -127,10 +127,8 @@ export function ConsensusKnowledgeBase({ apiBase, events = [] }: ConsensusKnowle
 
   // Refresh on consensus events
   const latestConsensusEvent = useMemo(() => {
-    const relevant = events.filter(e =>
-      e.type === 'consensus' ||
-      e.type === 'verdict' ||
-      e.type === 'grounded_verdict'
+    const relevant = events.filter(
+      (e) => e.type === 'consensus' || e.type === 'verdict' || e.type === 'grounded_verdict',
     );
     return relevant[relevant.length - 1];
   }, [events]);
@@ -202,15 +200,13 @@ export function ConsensusKnowledgeBase({ apiBase, events = [] }: ConsensusKnowle
 
           {/* Content */}
           {loading ? (
-            <div className="text-text-muted text-xs text-center py-4 animate-pulse">
-              Loading...
-            </div>
+            <div className="text-text-muted text-xs text-center py-4 animate-pulse">Loading...</div>
           ) : error ? (
             <div className="text-warning text-xs text-center py-4">{error}</div>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {activeTab === 'settled' && (
-                settledTopics.length === 0 ? (
+              {activeTab === 'settled' &&
+                (settledTopics.length === 0 ? (
                   <div className="text-text-muted text-xs text-center py-4">
                     No high-confidence topics yet
                   </div>
@@ -228,19 +224,16 @@ export function ConsensusKnowledgeBase({ apiBase, events = [] }: ConsensusKnowle
                           {(topic.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
-                      <div className="text-text-muted mt-1 line-clamp-2">
-                        {topic.conclusion}
-                      </div>
+                      <div className="text-text-muted mt-1 line-clamp-2">{topic.conclusion}</div>
                       <div className="text-text-muted/50 mt-1">
                         {formatTimestamp(topic.timestamp)}
                       </div>
                     </div>
                   ))
-                )
-              )}
+                ))}
 
-              {activeTab === 'dissents' && (
-                dissents.length === 0 ? (
+              {activeTab === 'dissents' &&
+                (dissents.length === 0 ? (
                   <div className="text-text-muted text-xs text-center py-4">
                     No dissenting views recorded yet
                   </div>
@@ -274,8 +267,7 @@ export function ConsensusKnowledgeBase({ apiBase, events = [] }: ConsensusKnowle
                       )}
                     </div>
                   ))
-                )
-              )}
+                ))}
 
               {activeTab === 'search' && (
                 <div className="space-y-2">

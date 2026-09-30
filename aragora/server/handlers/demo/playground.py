@@ -4149,7 +4149,7 @@ def start_playground_debate(
             except ImportError:
                 from contextlib import nullcontext as bind_spectate_context  # type: ignore[assignment]
 
-            async def _run_arena():
+            async def _run_arena() -> Any:
                 with bind_spectate_context(debate_id=debate_id):
                     return await asyncio.wait_for(arena.run(), timeout=timeout)
 

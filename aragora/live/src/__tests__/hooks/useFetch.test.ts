@@ -24,18 +24,14 @@ describe('useFetch', () => {
 
     it('should use initialData when provided', () => {
       const fetcher = jest.fn().mockResolvedValue('new data');
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { initialData: 'initial' })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { initialData: 'initial' }));
 
       expect(result.current.data).toBe('initial');
     });
 
     it('should start loading when immediate is true', async () => {
       const fetcher = jest.fn(() => new Promise(() => {}));
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { immediate: true })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { immediate: true }));
 
       await act(async () => {
         await Promise.resolve();
@@ -64,7 +60,7 @@ describe('useFetch', () => {
       const fetcher = jest.fn().mockReturnValue(
         new Promise<string>((resolve) => {
           resolvePromise = resolve;
-        })
+        }),
       );
 
       const { result } = renderHook(() => useFetch(fetcher));
@@ -113,9 +109,7 @@ describe('useFetch', () => {
       const data = { id: 1 };
       const fetcher = jest.fn().mockResolvedValue(data);
 
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { onSuccess })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { onSuccess }));
 
       await act(async () => {
         await result.current.fetch();
@@ -129,9 +123,7 @@ describe('useFetch', () => {
       const error = new Error('Failed');
       const fetcher = jest.fn().mockRejectedValue(error);
 
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { onError })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { onError }));
 
       await act(async () => {
         await result.current.fetch();
@@ -173,9 +165,7 @@ describe('useFetch', () => {
         .mockRejectedValueOnce(new Error('Fail 2'))
         .mockResolvedValueOnce('success');
 
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { retryDelay: 1000 })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { retryDelay: 1000 }));
 
       // First fetch fails
       await act(async () => {
@@ -220,9 +210,7 @@ describe('useFetch', () => {
 
     it('should respect retryCount limit', async () => {
       const fetcher = jest.fn().mockRejectedValue(new Error('Always fails'));
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { retryCount: 2, retryDelay: 100 })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { retryCount: 2, retryDelay: 100 }));
 
       await act(async () => {
         await result.current.fetch();
@@ -264,9 +252,7 @@ describe('useFetch', () => {
         .mockRejectedValueOnce(new Error('Fail'))
         .mockResolvedValueOnce('success');
 
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { retryDelay: 100 })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { retryDelay: 100 }));
 
       await act(async () => {
         await result.current.fetch();
@@ -291,9 +277,7 @@ describe('useFetch', () => {
   describe('reset', () => {
     it('should reset all state to initial values', async () => {
       const fetcher = jest.fn().mockResolvedValue('data');
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { initialData: 'initial' })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { initialData: 'initial' }));
 
       await act(async () => {
         await result.current.fetch();
@@ -317,9 +301,7 @@ describe('useFetch', () => {
     it('should fetch immediately when immediate is true', async () => {
       const fetcher = jest.fn().mockResolvedValue('immediate data');
 
-      const { result } = renderHook(() =>
-        useFetch(fetcher, { immediate: true })
-      );
+      const { result } = renderHook(() => useFetch(fetcher, { immediate: true }));
 
       // Wait for useEffect and fetch to complete
       await act(async () => {
@@ -337,7 +319,7 @@ describe('useFetch', () => {
       const fetcher = jest.fn().mockReturnValue(
         new Promise<string>((resolve) => {
           resolvePromise = resolve;
-        })
+        }),
       );
 
       const { result, unmount } = renderHook(() => useFetch(fetcher));
@@ -358,9 +340,7 @@ describe('useFetch', () => {
 
     it('should return null if unmounted during retry wait', async () => {
       const fetcher = jest.fn().mockRejectedValue(new Error('Fail'));
-      const { result, unmount } = renderHook(() =>
-        useFetch(fetcher, { retryDelay: 1000 })
-      );
+      const { result, unmount } = renderHook(() => useFetch(fetcher, { retryDelay: 1000 }));
 
       await act(async () => {
         await result.current.fetch();
@@ -386,7 +366,7 @@ describe('useAsyncState', () => {
     const asyncFn = jest.fn().mockReturnValue(
       new Promise<string>((resolve) => {
         resolvePromise = resolve;
-      })
+      }),
     );
 
     const { result } = renderHook(() => useAsyncState(asyncFn, []));
@@ -429,10 +409,7 @@ describe('useAsyncState', () => {
   });
 
   it('should refetch when calling refetch', async () => {
-    const asyncFn = jest
-      .fn()
-      .mockResolvedValueOnce('first')
-      .mockResolvedValueOnce('second');
+    const asyncFn = jest.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second');
 
     const { result } = renderHook(() => useAsyncState(asyncFn, []));
 

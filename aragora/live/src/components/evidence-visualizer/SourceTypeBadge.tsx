@@ -14,7 +14,9 @@ interface SourceTypeBadgeProps {
 export function SourceTypeBadge({ sourceType }: SourceTypeBadgeProps) {
   const config = SOURCE_TYPE_CONFIG[sourceType || 'unknown'] || SOURCE_TYPE_CONFIG.unknown;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 bg-surface rounded text-xs font-theme-data ${config.color}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 bg-surface rounded text-xs font-theme-data ${config.color}`}
+    >
       <span>{config.icon}</span>
       <span>{config.label}</span>
     </span>

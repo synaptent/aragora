@@ -66,12 +66,7 @@ export interface CostAnalysis {
 
 export interface ComplianceScore {
   overall_score: number;
-  categories: Array<{
-    category: string;
-    score: number;
-    max_score: number;
-    findings: number;
-  }>;
+  categories: Array<{ category: string; score: number; max_score: number; findings: number }>;
   last_audit: string;
 }
 

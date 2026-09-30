@@ -128,9 +128,7 @@ export function PricingSection() {
                 style={{
                   backgroundColor: 'var(--surface)',
                   borderRadius: 'var(--radius-card)',
-                  border: isHighlighted
-                    ? '2px solid var(--accent)'
-                    : '1px solid var(--border)',
+                  border: isHighlighted ? '2px solid var(--accent)' : '1px solid var(--border)',
                   boxShadow: isHighlighted ? 'var(--shadow-card-hover)' : 'var(--shadow-card)',
                   padding: '32px 28px',
                 }}
@@ -152,13 +150,21 @@ export function PricingSection() {
                   <div className="flex items-baseline gap-1">
                     <span
                       className="font-bold"
-                      style={{ fontSize: '36px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
+                      style={{
+                        fontSize: '36px',
+                        color: 'var(--text)',
+                        fontFamily: 'var(--font-landing)',
+                      }}
                     >
                       {tier.price}
                     </span>
                     {tier.period && (
                       <span
-                        style={{ fontSize: '14px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+                        style={{
+                          fontSize: '14px',
+                          color: 'var(--text-muted)',
+                          fontFamily: 'var(--font-landing)',
+                        }}
                       >
                         {tier.period}
                       </span>
@@ -182,7 +188,9 @@ export function PricingSection() {
                       <span style={{ color: 'var(--accent)', marginTop: '1px', flexShrink: 0 }}>
                         {isDark ? '+' : '\u2713'}
                       </span>
-                      <span style={{ color: 'var(--text-muted)', lineHeight: '1.5' }}>{feature}</span>
+                      <span style={{ color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                        {feature}
+                      </span>
                     </li>
                   ))}
                 </ul>

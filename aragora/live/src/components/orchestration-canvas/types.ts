@@ -4,7 +4,8 @@
  * Matches the Python OrchNodeType enum from aragora/canvas/stages.py.
  */
 
-export type OrchNodeType = 'agent_task' | 'debate' | 'human_gate' | 'parallel_fan' | 'merge' | 'verification';
+export type OrchNodeType =
+  'agent_task' | 'debate' | 'human_gate' | 'parallel_fan' | 'merge' | 'verification';
 export type OrchEdgeType = 'sequence' | 'parallel' | 'conditional' | 'fallback' | 'feedback';
 export type OrchStatus = 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_human';
 
@@ -37,12 +38,54 @@ export interface OrchTypeConfig {
 }
 
 export const ORCH_NODE_CONFIGS: Record<OrchNodeType, OrchTypeConfig> = {
-  agent_task: { icon: 'A', color: 'bg-pink-500/20', borderColor: 'border-pink-500', label: 'Agent Task', description: 'Task assigned to an agent', group: 'Agents' },
-  debate: { icon: 'D', color: 'bg-pink-600/20', borderColor: 'border-pink-600', label: 'Debate', description: 'Multi-agent debate', group: 'Agents' },
-  parallel_fan: { icon: '=', color: 'bg-pink-400/20', borderColor: 'border-pink-400', label: 'Parallel Fan', description: 'Parallel execution', group: 'Control Flow' },
-  merge: { icon: 'M', color: 'bg-pink-400/20', borderColor: 'border-pink-400', label: 'Merge', description: 'Merge parallel results', group: 'Control Flow' },
-  human_gate: { icon: 'H', color: 'bg-pink-500/20', borderColor: 'border-pink-500', label: 'Human Gate', description: 'Human approval required', group: 'Gates' },
-  verification: { icon: 'V', color: 'bg-pink-500/20', borderColor: 'border-pink-500', label: 'Verification', description: 'Verify results', group: 'Gates' },
+  agent_task: {
+    icon: 'A',
+    color: 'bg-pink-500/20',
+    borderColor: 'border-pink-500',
+    label: 'Agent Task',
+    description: 'Task assigned to an agent',
+    group: 'Agents',
+  },
+  debate: {
+    icon: 'D',
+    color: 'bg-pink-600/20',
+    borderColor: 'border-pink-600',
+    label: 'Debate',
+    description: 'Multi-agent debate',
+    group: 'Agents',
+  },
+  parallel_fan: {
+    icon: '=',
+    color: 'bg-pink-400/20',
+    borderColor: 'border-pink-400',
+    label: 'Parallel Fan',
+    description: 'Parallel execution',
+    group: 'Control Flow',
+  },
+  merge: {
+    icon: 'M',
+    color: 'bg-pink-400/20',
+    borderColor: 'border-pink-400',
+    label: 'Merge',
+    description: 'Merge parallel results',
+    group: 'Control Flow',
+  },
+  human_gate: {
+    icon: 'H',
+    color: 'bg-pink-500/20',
+    borderColor: 'border-pink-500',
+    label: 'Human Gate',
+    description: 'Human approval required',
+    group: 'Gates',
+  },
+  verification: {
+    icon: 'V',
+    color: 'bg-pink-500/20',
+    borderColor: 'border-pink-500',
+    label: 'Verification',
+    description: 'Verify results',
+    group: 'Gates',
+  },
 };
 
 export const ORCH_STATUS_COLORS: Record<OrchStatus, string> = {

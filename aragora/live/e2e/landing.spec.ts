@@ -14,9 +14,13 @@ test.describe('Landing Page', () => {
     // Check for ASCII art banner on desktop OR h1 on mobile OR compact banner
     const asciiBanner = page.locator('pre').filter({ hasText: /ARAGORA/i });
     const mobileTitle = page.locator('h1').filter({ hasText: /ARAGORA/i });
-    const compactBanner = page.locator('[class*="AsciiBanner"], header').filter({ hasText: /ARAGORA/i });
+    const compactBanner = page
+      .locator('[class*="AsciiBanner"], header')
+      .filter({ hasText: /ARAGORA/i });
 
-    await expect(asciiBanner.or(mobileTitle).or(compactBanner).first()).toBeVisible({ timeout: 10000 });
+    await expect(asciiBanner.or(mobileTitle).or(compactBanner).first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test('should have navigation links in header', async ({ page }) => {
@@ -35,11 +39,16 @@ test.describe('Landing Page', () => {
 
   test('should have theme toggle', async ({ page }) => {
     // Look for theme toggle button
-    const themeToggle = page.locator('button').filter({ hasText: /theme|dark|light/i }).or(
-      page.locator('[aria-label*="theme"]')
-    ).or(
-      page.locator('button').filter({ has: page.locator('svg') }).first()
-    );
+    const themeToggle = page
+      .locator('button')
+      .filter({ hasText: /theme|dark|light/i })
+      .or(page.locator('[aria-label*="theme"]'))
+      .or(
+        page
+          .locator('button')
+          .filter({ has: page.locator('svg') })
+          .first(),
+      );
 
     // Theme toggle should be present
     await expect(themeToggle.first()).toBeVisible();
@@ -89,11 +98,8 @@ test.describe('Landing Page', () => {
 
   test('should display error banner when error occurs', async ({ page }) => {
     // Trigger an error by mocking API failure
-    await page.route('**/api/**', route => {
-      route.fulfill({
-        status: 500,
-        body: JSON.stringify({ error: 'Test error' }),
-      });
+    await page.route('**/api/**', (route) => {
+      route.fulfill({ status: 500, body: JSON.stringify({ error: 'Test error' }) });
     });
 
     // Try to interact with the page in a way that triggers API call
@@ -101,14 +107,17 @@ test.describe('Landing Page', () => {
     if (await inputArea.isVisible()) {
       await inputArea.fill('Test topic');
       // Look for submit button and click
-      const submitButton = page.locator('button[type="submit"], button').filter({ hasText: /start|debate|submit/i }).first();
+      const submitButton = page
+        .locator('button[type="submit"], button')
+        .filter({ hasText: /start|debate|submit/i })
+        .first();
       if (await submitButton.isVisible()) {
         await submitButton.click();
         // Error should appear. The landing error state uses inline crimson
         // styles rather than a warning/error utility class.
-        await expect(page.getByText(/Test error|Something went wrong|Could not connect/i).first()).toBeVisible({
-          timeout: 10000,
-        });
+        await expect(
+          page.getByText(/Test error|Something went wrong|Could not connect/i).first(),
+        ).toBeVisible({ timeout: 10000 });
       }
     }
   });

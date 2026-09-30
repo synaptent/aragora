@@ -6,44 +6,45 @@ import type { Playbook } from '@/hooks/usePlaybooks';
 // Vertical / category color mapping
 // ---------------------------------------------------------------------------
 
-const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; badge: string }> = {
-  healthcare: {
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-400',
-    border: 'border-blue-500/30',
-    badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-  },
-  finance: {
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-400',
-    border: 'border-emerald-500/30',
-    badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-  },
-  legal: {
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-400',
-    border: 'border-purple-500/30',
-    badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-  },
-  compliance: {
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-400',
-    border: 'border-amber-500/30',
-    badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-  },
-  engineering: {
-    bg: 'bg-cyan-500/10',
-    text: 'text-cyan-400',
-    border: 'border-cyan-500/30',
-    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-  },
-  general: {
-    bg: 'bg-[var(--acid-green)]/10',
-    text: 'text-[var(--acid-green)]',
-    border: 'border-[var(--acid-green)]/30',
-    badge: 'bg-[var(--acid-green)]/20 text-[var(--acid-green)] border-[var(--acid-green)]/40',
-  },
-};
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; badge: string }> =
+  {
+    healthcare: {
+      bg: 'bg-blue-500/10',
+      text: 'text-blue-400',
+      border: 'border-blue-500/30',
+      badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+    },
+    finance: {
+      bg: 'bg-emerald-500/10',
+      text: 'text-emerald-400',
+      border: 'border-emerald-500/30',
+      badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    },
+    legal: {
+      bg: 'bg-purple-500/10',
+      text: 'text-purple-400',
+      border: 'border-purple-500/30',
+      badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    },
+    compliance: {
+      bg: 'bg-amber-500/10',
+      text: 'text-amber-400',
+      border: 'border-amber-500/30',
+      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    },
+    engineering: {
+      bg: 'bg-cyan-500/10',
+      text: 'text-cyan-400',
+      border: 'border-cyan-500/30',
+      badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+    },
+    general: {
+      bg: 'bg-[var(--acid-green)]/10',
+      text: 'text-[var(--acid-green)]',
+      border: 'border-[var(--acid-green)]/30',
+      badge: 'bg-[var(--acid-green)]/20 text-[var(--acid-green)] border-[var(--acid-green)]/40',
+    },
+  };
 
 function getCategoryColors(category: string) {
   return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.general;
@@ -86,7 +87,9 @@ export function PlaybookCard({ playbook, onLaunch }: PlaybookCardProps) {
     >
       {/* Header row: category badge + step count */}
       <div className="flex items-center justify-between mb-3">
-        <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase border ${colors.badge}`}>
+        <span
+          className={`px-2 py-0.5 text-[10px] font-theme-data uppercase border ${colors.badge}`}
+        >
           {icon} {playbook.category}
         </span>
         <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
@@ -95,7 +98,9 @@ export function PlaybookCard({ playbook, onLaunch }: PlaybookCardProps) {
       </div>
 
       {/* Name */}
-      <h3 className={`text-sm font-theme-data font-bold mb-2 ${colors.text} group-hover:brightness-125 transition-all`}>
+      <h3
+        className={`text-sm font-theme-data font-bold mb-2 ${colors.text} group-hover:brightness-125 transition-all`}
+      >
         {playbook.name}
       </h3>
 
@@ -124,7 +129,8 @@ export function PlaybookCard({ playbook, onLaunch }: PlaybookCardProps) {
         {/* Compliance artifacts count */}
         {playbook.compliance_artifacts.length > 0 && (
           <span className="text-[10px] font-theme-data text-amber-400 bg-amber-500/10 px-1.5 py-0.5 border border-amber-500/30">
-            {playbook.compliance_artifacts.length} artifact{playbook.compliance_artifacts.length !== 1 ? 's' : ''}
+            {playbook.compliance_artifacts.length} artifact
+            {playbook.compliance_artifacts.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
@@ -196,22 +202,19 @@ export function PlaybookDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[var(--bg)] border border-[var(--border)] mx-4">
         {/* Header */}
         <div className={`flex items-center justify-between p-4 border-b ${colors.border}`}>
           <div className="flex items-center gap-3">
-            <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase border ${colors.badge}`}>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-theme-data uppercase border ${colors.badge}`}
+            >
               {icon} {playbook.category}
             </span>
-            <h2 className={`text-lg font-theme-data font-bold ${colors.text}`}>
-              {playbook.name}
-            </h2>
+            <h2 className={`text-lg font-theme-data font-bold ${colors.text}`}>{playbook.name}</h2>
           </div>
           <button
             onClick={onClose}
@@ -232,23 +235,34 @@ export function PlaybookDetailModal({
           {/* Configuration summary */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[var(--surface)] border border-[var(--border)] p-3">
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">Agents</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">
+                Agents
+              </div>
               <div className="text-sm font-theme-data text-[var(--text)]">
                 {playbook.min_agents}-{playbook.max_agents} ({playbook.agent_selection_strategy})
               </div>
             </div>
             <div className="bg-[var(--surface)] border border-[var(--border)] p-3">
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">Rounds</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">
+                Rounds
+              </div>
               <div className="text-sm font-theme-data text-[var(--text)]">
-                {playbook.max_rounds} max, {Math.round(playbook.consensus_threshold * 100)}% threshold
+                {playbook.max_rounds} max, {Math.round(playbook.consensus_threshold * 100)}%
+                threshold
               </div>
             </div>
             <div className="bg-[var(--surface)] border border-[var(--border)] p-3">
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">Template</div>
-              <div className="text-sm font-theme-data text-[var(--text)]">{playbook.template_name}</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">
+                Template
+              </div>
+              <div className="text-sm font-theme-data text-[var(--text)]">
+                {playbook.template_name}
+              </div>
             </div>
             <div className="bg-[var(--surface)] border border-[var(--border)] p-3">
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">Output</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-1">
+                Output
+              </div>
               <div className="text-sm font-theme-data text-[var(--text)]">
                 {playbook.output_format} &rarr; {playbook.output_channels.join(', ') || 'none'}
               </div>
@@ -258,7 +272,9 @@ export function PlaybookDetailModal({
           {/* Required agent types */}
           {playbook.required_agent_types.length > 0 && (
             <div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">Required Agent Types</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">
+                Required Agent Types
+              </div>
               <div className="flex flex-wrap gap-1">
                 {playbook.required_agent_types.map((t) => (
                   <span
@@ -275,7 +291,9 @@ export function PlaybookDetailModal({
           {/* Compliance artifacts */}
           {playbook.compliance_artifacts.length > 0 && (
             <div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">Compliance Artifacts</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">
+                Compliance Artifacts
+              </div>
               <div className="flex flex-wrap gap-1">
                 {playbook.compliance_artifacts.map((a) => (
                   <span
@@ -300,7 +318,9 @@ export function PlaybookDetailModal({
                   key={step.name}
                   className="flex items-center gap-3 bg-[var(--surface)] border border-[var(--border)] px-3 py-2"
                 >
-                  <span className={`text-xs font-theme-data font-bold ${colors.text} w-5 text-right`}>
+                  <span
+                    className={`text-xs font-theme-data font-bold ${colors.text} w-5 text-right`}
+                  >
                     {i + 1}
                   </span>
                   <span className="text-xs font-theme-data text-[var(--text)]">{step.name}</span>
@@ -315,7 +335,9 @@ export function PlaybookDetailModal({
           {/* Approval gates */}
           {playbook.approval_gates.length > 0 && (
             <div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">Approval Gates</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase mb-2">
+                Approval Gates
+              </div>
               <div className="space-y-1">
                 {playbook.approval_gates.map((gate) => (
                   <div
@@ -324,7 +346,8 @@ export function PlaybookDetailModal({
                   >
                     <div className="text-xs font-theme-data text-amber-400">{gate.name}</div>
                     <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                      {gate.description} (role: {gate.required_role}, timeout: {gate.timeout_hours}h)
+                      {gate.description} (role: {gate.required_role}, timeout: {gate.timeout_hours}
+                      h)
                       {gate.auto_approve_if_consensus && (
                         <span className="text-emerald-400 ml-2">[auto-approve on consensus]</span>
                       )}

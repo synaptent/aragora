@@ -44,19 +44,13 @@ export const IdeaNode = memo(function IdeaNode({ data, selected }: IdeaNodeProps
         <span className="px-1.5 py-0.5 text-xs bg-indigo-500/30 text-indigo-200 rounded font-theme-data uppercase">
           {ideaTypeLabels[ideaType] || ideaType}
         </span>
-        {agent && (
-          <span className="text-xs text-text-muted font-theme-data">{agent}</span>
-        )}
+        {agent && <span className="text-xs text-text-muted font-theme-data">{agent}</span>}
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{label}</div>
 
       {fullContent && fullContent !== label && (
-        <div className="text-xs text-text-muted mb-1 line-clamp-2">
-          {fullContent}
-        </div>
+        <div className="text-xs text-text-muted mb-1 line-clamp-2">{fullContent}</div>
       )}
 
       {contentHash && (

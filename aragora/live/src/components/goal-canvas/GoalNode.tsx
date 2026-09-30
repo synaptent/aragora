@@ -55,22 +55,16 @@ export const GoalNode = memo(function GoalNode({ data, selected }: GoalNodeProps
       </div>
 
       {/* Label */}
-      <div className="text-sm font-medium text-text mb-1 line-clamp-2">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 line-clamp-2">{label}</div>
 
       {/* Description */}
       {description && (
-        <div className="text-xs text-text-muted mb-1 line-clamp-2">
-          {description}
-        </div>
+        <div className="text-xs text-text-muted mb-1 line-clamp-2">{description}</div>
       )}
 
       {/* Measurable criteria */}
       {measurable && (
-        <div className="text-xs text-emerald-300/80 mb-1 italic line-clamp-1">
-          {measurable}
-        </div>
+        <div className="text-xs text-emerald-300/80 mb-1 italic line-clamp-1">{measurable}</div>
       )}
 
       {/* Confidence bar */}
@@ -89,11 +83,7 @@ export const GoalNode = memo(function GoalNode({ data, selected }: GoalNodeProps
       )}
 
       {/* Lock indicator */}
-      {lockedBy && (
-        <div className="mt-1 text-xs text-amber-400">
-          Locked by {lockedBy}
-        </div>
-      )}
+      {lockedBy && <div className="mt-1 text-xs text-amber-400">Locked by {lockedBy}</div>}
 
       <Handle
         type="source"

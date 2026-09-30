@@ -93,15 +93,10 @@ function getAccessToken(): string | null {
 }
 
 export function useReviewQueue() {
-  const {
-    data,
-    error,
-    isLoading,
-    isValidating,
-    mutate,
-  } = useSWRFetch<ReviewQueueListResponse>('/api/v1/review-queue/prs', {
-    refreshInterval: 60000,
-  });
+  const { data, error, isLoading, isValidating, mutate } = useSWRFetch<ReviewQueueListResponse>(
+    '/api/v1/review-queue/prs',
+    { refreshInterval: 60000 },
+  );
 
   return {
     prs: data?.prs ?? [],
@@ -122,21 +117,14 @@ export function useReviewQueueStats() {
     '/api/v1/review-queue/stats',
     { refreshInterval: 30000 },
   );
-  return {
-    stats: data?.stats ?? null,
-    isLoading,
-    mutate,
-  };
+  return { stats: data?.stats ?? null, isLoading, mutate };
 }
 
 export async function fetchBrief(prNumber: number): Promise<ReviewQueueBrief | null> {
   const token = getAccessToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief`,
-    { headers },
-  );
+  const res = await fetch(`${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief`, { headers });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`brief request failed: ${res.status}`);
   const data = (await res.json()) as { brief: ReviewQueueBrief };
@@ -167,14 +155,11 @@ export async function settlePR(
   if (options.hours !== undefined) body.hours = options.hours;
   if (options.decisionSeconds !== undefined) body.decision_seconds = options.decisionSeconds;
 
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/${action}`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    },
-  );
+  const res = await fetch(`${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/${action}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     let detail: string;
     try {
@@ -195,11 +180,7 @@ export async function settlePR(
  */
 export function useSettlePR(onSettled?: () => void) {
   return useCallback(
-    async (
-      prNumber: number,
-      action: SettlementAction,
-      options: SettlementOptions = {},
-    ) => {
+    async (prNumber: number, action: SettlementAction, options: SettlementOptions = {}) => {
       const result = await settlePR(prNumber, action, options);
       onSettled?.();
       return result;
@@ -224,13 +205,7 @@ export function useSettlePR(onSettled?: () => void) {
 // ---------------------------------------------------------------------------
 
 /** Canonical lifecycle states from aragora/pdb/brief_state.py. */
-export type BriefLifecycleState =
-  | 'absent'
-  | 'queued'
-  | 'running'
-  | 'ready'
-  | 'failed'
-  | 'stale';
+export type BriefLifecycleState = 'absent' | 'queued' | 'running' | 'ready' | 'failed' | 'stale';
 
 export interface BriefStateSnapshot {
   state: BriefLifecycleState;
@@ -306,20 +281,15 @@ export async function generateBrief(
   if (options.force) body.force = true;
   if (options.repo !== undefined) body.repo = options.repo;
 
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief/generate`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    },
-  );
+  const res = await fetch(`${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief/generate`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
 
   if (res.status === 503) {
     rememberFlag(false);
-    const err = new Error('brief generation feature is disabled') as Error & {
-      status: number;
-    };
+    const err = new Error('brief generation feature is disabled') as Error & { status: number };
     err.status = 503;
     throw err;
   }
@@ -386,17 +356,14 @@ function snapshotFromRaw(raw: RawBriefStateResponse): BriefStateSnapshot {
  * check :func:`getBriefGenerationFlag` afterwards to decide which UX
  * to render.
  */
-export async function getBriefState(
-  prNumber: number,
-): Promise<BriefStateSnapshot> {
+export async function getBriefState(prNumber: number): Promise<BriefStateSnapshot> {
   const token = getAccessToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief/state`,
-    { headers },
-  );
+  const res = await fetch(`${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief/state`, {
+    headers,
+  });
 
   if (res.status === 503) {
     rememberFlag(false);
@@ -429,10 +396,10 @@ export async function cancelBriefGeneration(prNumber: number): Promise<void> {
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief/generate`,
-    { method: 'DELETE', headers },
-  );
+  const res = await fetch(`${API_BASE_URL}/api/v1/review-queue/prs/${prNumber}/brief/generate`, {
+    method: 'DELETE',
+    headers,
+  });
 
   if (res.status === 503) {
     rememberFlag(false);
@@ -545,8 +512,7 @@ export function useBriefState(
   // While state is queued or running, schedule a polling tick.
   useEffect(() => {
     if (!enabled || prNumber === null) return;
-    const active =
-      snapshot?.state === 'queued' || snapshot?.state === 'running';
+    const active = snapshot?.state === 'queued' || snapshot?.state === 'running';
     if (!active) {
       clearTimer();
       return;
@@ -558,12 +524,5 @@ export function useBriefState(
     return clearTimer;
   }, [snapshot, enabled, prNumber, pollIntervalMs, refresh, clearTimer]);
 
-  return {
-    snapshot,
-    isLoading,
-    error,
-    featureDisabled,
-    refresh,
-    setSnapshot,
-  };
+  return { snapshot, isLoading, error, featureDisabled, refresh, setSnapshot };
 }

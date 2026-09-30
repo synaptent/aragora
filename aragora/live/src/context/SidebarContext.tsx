@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  ReactNode,
+  useEffect,
+} from 'react';
 
 interface SidebarContextType {
   isOpen: boolean;
@@ -16,7 +24,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen(prev => !prev), []);
+  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
 
   // Close sidebar on escape key
   useEffect(() => {
@@ -42,15 +50,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     };
   }, [isOpen]);
 
-  const value = useMemo<SidebarContextType>(() => ({
-    isOpen, open, close, toggle,
-  }), [isOpen, open, close, toggle]);
-
-  return (
-    <SidebarContext.Provider value={value}>
-      {children}
-    </SidebarContext.Provider>
+  const value = useMemo<SidebarContextType>(
+    () => ({ isOpen, open, close, toggle }),
+    [isOpen, open, close, toggle],
   );
+
+  return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
 }
 
 export function useSidebar() {

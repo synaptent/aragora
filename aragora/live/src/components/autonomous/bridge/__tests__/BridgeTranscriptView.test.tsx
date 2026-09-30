@@ -31,14 +31,14 @@ describe('BridgeTranscriptView', () => {
           buildTurn({ turn_index: 2, author_role: 'reviewer', body_markdown: 'Second turn' }),
           buildTurn({ turn_index: 1, author_role: 'implementer', body_markdown: 'First turn' }),
         ]}
-      />
+      />,
     );
 
     const turnOne = screen.getByText('Turn 1');
     const turnTwo = screen.getByText('Turn 2');
 
     expect(
-      turnOne.compareDocumentPosition(turnTwo) & Node.DOCUMENT_POSITION_FOLLOWING
+      turnOne.compareDocumentPosition(turnTwo) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -52,7 +52,7 @@ describe('BridgeTranscriptView', () => {
 
   it('renders the parse_status badge', () => {
     render(
-      <BridgeTranscriptView turns={[buildTurn({ parse_status: 'malformed', footer: null })]} />
+      <BridgeTranscriptView turns={[buildTurn({ parse_status: 'malformed', footer: null })]} />,
     );
 
     expect(screen.getAllByText('malformed').length).toBeGreaterThan(0);

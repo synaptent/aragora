@@ -84,20 +84,14 @@ export function resolveBackendConfig(
       ...config,
       api: config.fallbackApi,
       ws: config.fallbackWs,
-      ...(config.fallbackControlPlaneWs
-        ? { controlPlaneWs: config.fallbackControlPlaneWs }
-        : {}),
+      ...(config.fallbackControlPlaneWs ? { controlPlaneWs: config.fallbackControlPlaneWs } : {}),
     };
   }
   return config;
 }
 
 export function getRuntimeBackendConfig(): { backend: BackendType; config: BackendConfig } {
-  const localHost =
-    typeof window !== 'undefined' && isLocalHost(window.location.hostname);
+  const localHost = typeof window !== 'undefined' && isLocalHost(window.location.hostname);
   const backend = getDefaultBackend();
-  return {
-    backend,
-    config: resolveBackendConfig(backend, localHost ? 'localhost' : null),
-  };
+  return { backend, config: resolveBackendConfig(backend, localHost ? 'localhost' : null) };
 }

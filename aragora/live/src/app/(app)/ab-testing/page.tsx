@@ -61,9 +61,7 @@ export default function ABTestingPage() {
       params.append('limit', '100');
 
       const response = await fetch(`${API_BASE}/api/evolution/ab-tests?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${tokens?.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${tokens?.access_token}` },
       });
 
       if (!response.ok) {
@@ -96,7 +94,7 @@ export default function ABTestingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokens?.access_token}`,
+          Authorization: `Bearer ${tokens?.access_token}`,
         },
         body: JSON.stringify({
           agent: createForm.agent,
@@ -128,7 +126,7 @@ export default function ABTestingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokens?.access_token}`,
+          Authorization: `Bearer ${tokens?.access_token}`,
         },
         body: JSON.stringify({ force: false }),
       });
@@ -140,7 +138,7 @@ export default function ABTestingPage() {
 
       await fetchTests();
       if (selectedTest?.id === testId) {
-        const refreshed = tests.find(t => t.id === testId);
+        const refreshed = tests.find((t) => t.id === testId);
         if (refreshed) setSelectedTest(refreshed);
       }
     } catch (err) {
@@ -152,9 +150,7 @@ export default function ABTestingPage() {
     try {
       const response = await fetch(`${API_BASE}/api/evolution/ab-tests/${testId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${tokens?.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${tokens?.access_token}` },
       });
 
       if (!response.ok) {
@@ -179,13 +175,25 @@ export default function ABTestingPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <span className="px-2 py-0.5 bg-[var(--accent)]/20 text-[var(--accent)] text-xs">ACTIVE</span>;
+        return (
+          <span className="px-2 py-0.5 bg-[var(--accent)]/20 text-[var(--accent)] text-xs">
+            ACTIVE
+          </span>
+        );
       case 'concluded':
-        return <span className="px-2 py-0.5 bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] text-xs">CONCLUDED</span>;
+        return (
+          <span className="px-2 py-0.5 bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] text-xs">
+            CONCLUDED
+          </span>
+        );
       case 'cancelled':
         return <span className="px-2 py-0.5 bg-warning/20 text-warning text-xs">CANCELLED</span>;
       default:
-        return <span className="px-2 py-0.5 bg-text-muted/20 text-text-muted text-xs">{status.toUpperCase()}</span>;
+        return (
+          <span className="px-2 py-0.5 bg-text-muted/20 text-text-muted text-xs">
+            {status.toUpperCase()}
+          </span>
+        );
     }
   };
 
@@ -227,7 +235,10 @@ export default function ABTestingPage() {
             <div className="flex gap-3">
               {viewMode !== 'list' && (
                 <button
-                  onClick={() => { setViewMode('list'); setSelectedTest(null); }}
+                  onClick={() => {
+                    setViewMode('list');
+                    setSelectedTest(null);
+                  }}
                   className="font-theme-data text-xs px-4 py-2 border border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/10 transition-colors"
                 >
                   [BACK TO LIST]
@@ -247,10 +258,7 @@ export default function ABTestingPage() {
           {error && (
             <div className="mb-6 p-4 border border-warning/50 bg-warning/10 text-warning text-sm font-theme-data">
               {error}
-              <button
-                onClick={() => setError(null)}
-                className="ml-4 text-xs underline"
-              >
+              <button onClick={() => setError(null)} className="ml-4 text-xs underline">
                 Dismiss
               </button>
             </div>
@@ -259,7 +267,9 @@ export default function ABTestingPage() {
           {/* Create View */}
           {viewMode === 'create' && (
             <div className="border border-[var(--accent)]/30 bg-surface/30 p-6 max-w-xl">
-              <h2 className="text-lg font-theme-data text-[var(--acid-cyan)] mb-6">CREATE NEW A/B TEST</h2>
+              <h2 className="text-lg font-theme-data text-[var(--acid-cyan)] mb-6">
+                CREATE NEW A/B TEST
+              </h2>
 
               {createError && (
                 <div className="mb-4 p-3 border border-warning/50 bg-warning/10 text-warning text-sm font-theme-data">
@@ -290,7 +300,9 @@ export default function ABTestingPage() {
                     <input
                       type="number"
                       value={createForm.baseline_version}
-                      onChange={(e) => setCreateForm({ ...createForm, baseline_version: e.target.value })}
+                      onChange={(e) =>
+                        setCreateForm({ ...createForm, baseline_version: e.target.value })
+                      }
                       required
                       min="1"
                       placeholder="e.g., 1"
@@ -304,7 +316,9 @@ export default function ABTestingPage() {
                     <input
                       type="number"
                       value={createForm.evolved_version}
-                      onChange={(e) => setCreateForm({ ...createForm, evolved_version: e.target.value })}
+                      onChange={(e) =>
+                        setCreateForm({ ...createForm, evolved_version: e.target.value })
+                      }
                       required
                       min="1"
                       placeholder="e.g., 2"
@@ -414,15 +428,25 @@ export default function ABTestingPage() {
                           <td className="px-4 py-3 text-right text-text">
                             {test.total_debates}
                             {test.is_significant && (
-                              <span className="ml-2 text-[var(--accent)]" title="Statistically significant">*</span>
+                              <span
+                                className="ml-2 text-[var(--accent)]"
+                                title="Statistically significant"
+                              >
+                                *
+                              </span>
                             )}
                           </td>
-                          <td className={`px-4 py-3 text-right ${getWinRateColor(test.evolved_win_rate)}`}>
+                          <td
+                            className={`px-4 py-3 text-right ${getWinRateColor(test.evolved_win_rate)}`}
+                          >
                             {(test.evolved_win_rate * 100).toFixed(1)}%
                           </td>
                           <td className="px-4 py-3 text-right">
                             <button
-                              onClick={(e) => { e.stopPropagation(); viewTestDetail(test); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewTestDetail(test);
+                              }}
                               className="text-[var(--acid-cyan)] hover:text-[var(--accent)] text-xs"
                             >
                               [VIEW]
@@ -448,7 +472,9 @@ export default function ABTestingPage() {
               <div className="border border-[var(--accent)]/30 bg-surface/30 p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-xl font-theme-data text-[var(--acid-cyan)] mb-2">{selectedTest.agent}</h2>
+                    <h2 className="text-xl font-theme-data text-[var(--acid-cyan)] mb-2">
+                      {selectedTest.agent}
+                    </h2>
                     <div className="text-sm font-theme-data text-text-muted">
                       Test ID: {selectedTest.id.slice(0, 8)}...
                     </div>
@@ -458,12 +484,20 @@ export default function ABTestingPage() {
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                   <div>
-                    <div className="text-xs font-theme-data text-text-muted mb-1">BASELINE VERSION</div>
-                    <div className="text-lg font-theme-data text-text">v{selectedTest.baseline_prompt_version}</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      BASELINE VERSION
+                    </div>
+                    <div className="text-lg font-theme-data text-text">
+                      v{selectedTest.baseline_prompt_version}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-xs font-theme-data text-text-muted mb-1">EVOLVED VERSION</div>
-                    <div className="text-lg font-theme-data text-[var(--accent)]">v{selectedTest.evolved_prompt_version}</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      EVOLVED VERSION
+                    </div>
+                    <div className="text-lg font-theme-data text-[var(--accent)]">
+                      v{selectedTest.evolved_prompt_version}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs font-theme-data text-text-muted mb-1">STARTED</div>
@@ -473,7 +507,9 @@ export default function ABTestingPage() {
                   </div>
                   <div>
                     <div className="text-xs font-theme-data text-text-muted mb-1">SIGNIFICANCE</div>
-                    <div className={`text-sm font-theme-data ${selectedTest.is_significant ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+                    <div
+                      className={`text-sm font-theme-data ${selectedTest.is_significant ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+                    >
                       {selectedTest.is_significant ? 'SIGNIFICANT' : 'NOT SIGNIFICANT'}
                     </div>
                   </div>
@@ -484,11 +520,15 @@ export default function ABTestingPage() {
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Baseline Stats */}
                 <div className="border border-[var(--acid-cyan)]/30 bg-surface/20 p-6">
-                  <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-4">BASELINE (v{selectedTest.baseline_prompt_version})</h3>
+                  <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-4">
+                    BASELINE (v{selectedTest.baseline_prompt_version})
+                  </h3>
                   <div className="space-y-4">
                     <div>
                       <div className="text-xs font-theme-data text-text-muted mb-1">WIN RATE</div>
-                      <div className={`text-3xl font-theme-data ${getWinRateColor(selectedTest.baseline_win_rate)}`}>
+                      <div
+                        className={`text-3xl font-theme-data ${getWinRateColor(selectedTest.baseline_win_rate)}`}
+                      >
                         {(selectedTest.baseline_win_rate * 100).toFixed(1)}%
                       </div>
                     </div>
@@ -505,11 +545,15 @@ export default function ABTestingPage() {
 
                 {/* Evolved Stats */}
                 <div className="border border-[var(--accent)]/30 bg-surface/20 p-6">
-                  <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">EVOLVED (v{selectedTest.evolved_prompt_version})</h3>
+                  <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                    EVOLVED (v{selectedTest.evolved_prompt_version})
+                  </h3>
                   <div className="space-y-4">
                     <div>
                       <div className="text-xs font-theme-data text-text-muted mb-1">WIN RATE</div>
-                      <div className={`text-3xl font-theme-data ${getWinRateColor(selectedTest.evolved_win_rate)}`}>
+                      <div
+                        className={`text-3xl font-theme-data ${getWinRateColor(selectedTest.evolved_win_rate)}`}
+                      >
                         {(selectedTest.evolved_win_rate * 100).toFixed(1)}%
                       </div>
                     </div>
@@ -527,7 +571,9 @@ export default function ABTestingPage() {
 
               {/* Win Rate Comparison Bar */}
               <div className="border border-[var(--accent)]/30 bg-surface/20 p-6">
-                <h3 className="text-sm font-theme-data text-text-muted mb-4">WIN RATE COMPARISON</h3>
+                <h3 className="text-sm font-theme-data text-text-muted mb-4">
+                  WIN RATE COMPARISON
+                </h3>
                 <div className="h-8 bg-surface border border-[var(--accent)]/20 flex overflow-hidden">
                   <div
                     className="bg-[var(--acid-cyan)]/50 flex items-center justify-center"

@@ -193,7 +193,7 @@ def create_agent(
             model=model or "claude-sonnet-4-5-20250929",
             api_key=api_key,
             system_prompt=system_prompt,
-            stance=stance,  # type: ignore[arg-type]
+            stance=stance,
             **kwargs,
         )
 
@@ -205,7 +205,7 @@ def create_agent(
             model=model or "gpt-4o",
             api_key=api_key,
             system_prompt=system_prompt,
-            stance=stance,  # type: ignore[arg-type]
+            stance=stance,
             **kwargs,
         )
 
@@ -217,7 +217,7 @@ def create_agent(
             model=model or "mistral-large-latest",
             api_key=api_key,
             system_prompt=system_prompt,
-            stance=stance,  # type: ignore[arg-type]
+            stance=stance,
             **kwargs,
         )
 
@@ -229,7 +229,7 @@ def create_agent(
             model=model or "gemini-3.1-pro-preview",
             api_key=api_key,
             system_prompt=system_prompt,
-            stance=stance,  # type: ignore[arg-type]
+            stance=stance,
             **kwargs,
         )
 
@@ -239,7 +239,7 @@ def create_agent(
         return MockAgent(
             name=agent_name,
             system_prompt=system_prompt,
-            stance=stance,  # type: ignore[arg-type]
+            stance=stance,
             **{k: v for k, v in kwargs.items() if k in ("proposal", "vote_for", "critique_issues")},
         )
 

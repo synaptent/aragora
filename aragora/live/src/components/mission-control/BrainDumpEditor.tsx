@@ -5,12 +5,7 @@ import { AutomationLevelSelector, type AutomationLevel } from './AutomationLevel
 
 export interface BrainDumpEditorProps {
   onLaunch: (text: string, automationLevel: AutomationLevel) => Promise<string | null>;
-  preview?: {
-    themes: string[];
-    ideaCount: number;
-    urgencySignals: string[];
-    isLoading: boolean;
-  };
+  preview?: { themes: string[]; ideaCount: number; urgencySignals: string[]; isLoading: boolean };
   onTextChange?: (text: string) => void;
   disabled?: boolean;
 }
@@ -109,7 +104,10 @@ export const BrainDumpEditor = memo(function BrainDumpEditor({
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className="text-xs text-amber-400">⚡ Urgency:</span>
               {preview.urgencySignals.map((signal, i) => (
-                <span key={i} className="px-1.5 py-0.5 text-xs font-theme-data bg-amber-500/20 text-amber-400 rounded">
+                <span
+                  key={i}
+                  className="px-1.5 py-0.5 text-xs font-theme-data bg-amber-500/20 text-amber-400 rounded"
+                >
                   {signal}
                 </span>
               ))}

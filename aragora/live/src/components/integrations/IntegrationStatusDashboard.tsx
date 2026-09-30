@@ -59,17 +59,13 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 
 function buildEditConfig(
   type: IntegrationType,
-  integration: Record<string, unknown>
+  integration: Record<string, unknown>,
 ): Record<string, unknown> {
   const settings = (
-    integration.settings && typeof integration.settings === 'object'
-      ? integration.settings
-      : {}
+    integration.settings && typeof integration.settings === 'object' ? integration.settings : {}
   ) as Record<string, unknown>;
   const config = INTEGRATION_CONFIGS[type];
-  const nextConfig: Record<string, unknown> = {
-    enabled: integration.enabled !== false,
-  };
+  const nextConfig: Record<string, unknown> = { enabled: integration.enabled !== false };
 
   for (const field of config.fields) {
     const rawValue = settings[field.key];
@@ -101,7 +97,11 @@ function StatusIndicator({ status }: { status: IntegrationStatus['status'] }) {
   const styles: Record<string, { bg: string; text: string; label: string }> = {
     connected: { bg: 'bg-[var(--accent)]/20', text: 'text-[var(--accent)]', label: 'CONNECTED' },
     degraded: { bg: 'bg-warning/20', text: 'text-warning', label: 'DEGRADED' },
-    disconnected: { bg: 'bg-[var(--crimson)]/20', text: 'text-[var(--crimson)]', label: 'DISCONNECTED' },
+    disconnected: {
+      bg: 'bg-[var(--crimson)]/20',
+      text: 'text-[var(--crimson)]',
+      label: 'DISCONNECTED',
+    },
     not_configured: { bg: 'bg-text-muted/20', text: 'text-text-muted', label: 'NOT CONFIGURED' },
   };
 
@@ -114,7 +114,10 @@ function StatusIndicator({ status }: { status: IntegrationStatus['status'] }) {
   );
 }
 
-export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationStatusDashboardProps) {
+export function IntegrationStatusDashboard({
+  onConfigure,
+  onEdit,
+}: IntegrationStatusDashboardProps) {
   const { config: backendConfig } = useBackend();
   const { tokens } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
@@ -142,7 +145,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
 
       return headers;
     },
-    [tokens?.access_token]
+    [tokens?.access_token],
   );
 
   const fetchStatus = useCallback(async () => {
@@ -165,7 +168,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
       } else {
         setIntegrations([]);
         setError(
-          await readErrorMessage(res, 'Live integration status is unavailable from this backend.')
+          await readErrorMessage(res, 'Live integration status is unavailable from this backend.'),
         );
       }
     } catch (err) {
@@ -188,10 +191,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
   const handleDisable = async (type: IntegrationType) => {
     if (!confirm(`Disable ${INTEGRATION_CONFIGS[type].title} integration?`)) return;
 
-    const headers = buildAuthHeaders({
-      contentType: 'application/json',
-      requireAuth: true,
-    });
+    const headers = buildAuthHeaders({ contentType: 'application/json', requireAuth: true });
     if (!headers) return;
 
     try {
@@ -205,7 +205,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
         void fetchStatus();
       } else {
         setError(
-          await readErrorMessage(res, `Failed to disable ${INTEGRATION_CONFIGS[type].title}.`)
+          await readErrorMessage(res, `Failed to disable ${INTEGRATION_CONFIGS[type].title}.`),
         );
       }
     } catch (err) {
@@ -214,7 +214,8 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
   };
 
   const handleDelete = async (type: IntegrationType) => {
-    if (!confirm(`Delete ${INTEGRATION_CONFIGS[type].title} configuration? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${INTEGRATION_CONFIGS[type].title} configuration? This cannot be undone.`))
+      return;
 
     const headers = buildAuthHeaders({ requireAuth: true });
     if (!headers) return;
@@ -229,7 +230,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
         void fetchStatus();
       } else {
         setError(
-          await readErrorMessage(res, `Failed to delete ${INTEGRATION_CONFIGS[type].title}.`)
+          await readErrorMessage(res, `Failed to delete ${INTEGRATION_CONFIGS[type].title}.`),
         );
       }
     } catch (err) {
@@ -251,9 +252,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
         const data = await res.json();
         alert(data.success ? 'Connection test successful!' : `Test failed: ${data.error}`);
       } else {
-        setError(
-          await readErrorMessage(res, `Failed to test ${INTEGRATION_CONFIGS[type].title}.`)
-        );
+        setError(await readErrorMessage(res, `Failed to test ${INTEGRATION_CONFIGS[type].title}.`));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection test failed');
@@ -274,8 +273,8 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
         setError(
           await readErrorMessage(
             res,
-            `${INTEGRATION_CONFIGS[type].title} configuration is unavailable from this backend.`
-          )
+            `${INTEGRATION_CONFIGS[type].title} configuration is unavailable from this backend.`,
+          ),
         );
         if (res.status === 404) {
           void fetchStatus();
@@ -293,7 +292,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
   };
 
   // Calculate stats
-  const connectedCount = integrations.filter(i => i.status === 'connected').length;
+  const connectedCount = integrations.filter((i) => i.status === 'connected').length;
   const totalMessages = integrations.reduce((sum, i) => sum + i.messagesSent, 0);
   const totalErrors = integrations.reduce((sum, i) => sum + i.errors, 0);
 
@@ -315,9 +314,12 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
         )}
 
         <div className="p-6 border border-warning/30 rounded bg-surface/30">
-          <p className="font-theme-data text-text text-center">No live integration status is available.</p>
+          <p className="font-theme-data text-text text-center">
+            No live integration status is available.
+          </p>
           <p className="mt-2 font-theme-data text-xs text-text-muted text-center">
-            Sign in and connect to a backend that exposes the integrations API to view real status data.
+            Sign in and connect to a backend that exposes the integrations API to view real status
+            data.
           </p>
         </div>
 
@@ -342,7 +344,9 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
             <div className="font-theme-data text-xs text-text-muted">Connected</div>
           </div>
           <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30 text-center">
-            <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">{totalMessages.toLocaleString()}</div>
+            <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">
+              {totalMessages.toLocaleString()}
+            </div>
             <div className="font-theme-data text-xs text-text-muted">Messages Sent</div>
           </div>
           <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30 text-center">
@@ -360,7 +364,7 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
 
       {/* Integration List */}
       <div className="space-y-3">
-        {integrations.map(integration => {
+        {integrations.map((integration) => {
           const config = INTEGRATION_CONFIGS[integration.type];
           const isConfigured = integration.status !== 'not_configured';
 
@@ -375,7 +379,9 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="font-theme-data text-lg text-[var(--acid-cyan)]">{config.icon}</span>
+                  <span className="font-theme-data text-lg text-[var(--acid-cyan)]">
+                    {config.icon}
+                  </span>
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="font-theme-data text-text">{config.title}</h4>
@@ -430,7 +436,8 @@ export function IntegrationStatusDashboard({ onConfigure, onEdit }: IntegrationS
               {isConfigured && (
                 <div className="mt-3 pt-3 border-t border-[var(--accent)]/10 flex gap-4 text-xs font-theme-data">
                   <span className="text-text-muted">
-                    Messages: <span className="text-[var(--acid-cyan)]">{integration.messagesSent}</span>
+                    Messages:{' '}
+                    <span className="text-[var(--acid-cyan)]">{integration.messagesSent}</span>
                   </span>
                   {integration.errors > 0 && (
                     <span className="text-text-muted">

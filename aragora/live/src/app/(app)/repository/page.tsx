@@ -74,7 +74,9 @@ export default function RepositoryPage() {
   const [repoPath, setRepoPath] = useState('');
   const [workspaceId, setWorkspaceId] = useState('default');
   const [includePatterns, setIncludePatterns] = useState('*,**/*');
-  const [excludePatterns, setExcludePatterns] = useState('node_modules/**,*.pyc,__pycache__/**,.git/**');
+  const [excludePatterns, setExcludePatterns] = useState(
+    'node_modules/**,*.pyc,__pycache__/**,.git/**',
+  );
   const [maxFileSize, setMaxFileSize] = useState(1000000);
   const [maxFiles, setMaxFiles] = useState(10000);
   const [extractSymbols, setExtractSymbols] = useState(true);
@@ -96,7 +98,9 @@ export default function RepositoryPage() {
   const [graphRepoId, setGraphRepoId] = useState('');
   const [entityId, setEntityId] = useState('');
   const [graphDepth, setGraphDepth] = useState(2);
-  const [graphDirection, setGraphDirection] = useState<'both' | 'dependencies' | 'dependents'>('both');
+  const [graphDirection, setGraphDirection] = useState<'both' | 'dependencies' | 'dependents'>(
+    'both',
+  );
   const [graphStats, setGraphStats] = useState<GraphStats | null>(null);
   const [graphEntities, setGraphEntities] = useState<Entity[]>([]);
   const [loadingGraph, setLoadingGraph] = useState(false);
@@ -111,7 +115,9 @@ export default function RepositoryPage() {
 
       for (const repoId of knownRepos) {
         try {
-          const res = await fetch(`${backendConfig.api}/api/repository/${encodeURIComponent(repoId)}`);
+          const res = await fetch(
+            `${backendConfig.api}/api/repository/${encodeURIComponent(repoId)}`,
+          );
           if (res.ok) {
             const data = await res.json();
             repos.push({
@@ -141,26 +147,31 @@ export default function RepositoryPage() {
   }, [fetchRepositories]);
 
   // Poll for indexing progress
-  const _pollProgress = useCallback(async (repoId: string) => {
-    try {
-      const res = await fetch(`${backendConfig.api}/api/repository/${encodeURIComponent(repoId)}/status`);
-      if (res.ok) {
-        const data = await res.json();
-        setProgress(data);
+  const _pollProgress = useCallback(
+    async (repoId: string) => {
+      try {
+        const res = await fetch(
+          `${backendConfig.api}/api/repository/${encodeURIComponent(repoId)}/status`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setProgress(data);
 
-        if (data.status === 'completed' || data.status === 'failed') {
-          if (pollingInterval) {
-            clearInterval(pollingInterval);
-            setPollingInterval(null);
+          if (data.status === 'completed' || data.status === 'failed') {
+            if (pollingInterval) {
+              clearInterval(pollingInterval);
+              setPollingInterval(null);
+            }
+            setIndexing(false);
+            fetchRepositories();
           }
-          setIndexing(false);
-          fetchRepositories();
         }
+      } catch (err) {
+        logger.error('Failed to poll progress:', err);
       }
-    } catch (err) {
-      logger.error('Failed to poll progress:', err);
-    }
-  }, [backendConfig.api, pollingInterval, fetchRepositories]);
+    },
+    [backendConfig.api, pollingInterval, fetchRepositories],
+  );
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -193,8 +204,14 @@ export default function RepositoryPage() {
           repo_path: repoPath,
           workspace_id: workspaceId,
           crawl_config: {
-            include_patterns: includePatterns.split(',').map(p => p.trim()).filter(Boolean),
-            exclude_patterns: excludePatterns.split(',').map(p => p.trim()).filter(Boolean),
+            include_patterns: includePatterns
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean),
+            exclude_patterns: excludePatterns
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean),
             max_file_size_bytes: maxFileSize,
             max_files: maxFiles,
             extract_symbols: extractSymbols,
@@ -219,18 +236,26 @@ export default function RepositoryPage() {
       } else {
         const errData = await res.json().catch(() => ({}));
         setError(errData.error || 'Indexing failed');
-        setProgress(prev => prev ? { ...prev, status: 'failed', error: errData.error } : null);
+        setProgress((prev) => (prev ? { ...prev, status: 'failed', error: errData.error } : null));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Indexing failed');
-      setProgress(prev => prev ? { ...prev, status: 'failed', error: err instanceof Error ? err.message : 'Failed' } : null);
+      setProgress((prev) =>
+        prev
+          ? { ...prev, status: 'failed', error: err instanceof Error ? err.message : 'Failed' }
+          : null,
+      );
     } finally {
       setIndexing(false);
     }
   };
 
   const handleDeleteRepository = async (repoId: string) => {
-    if (!confirm(`Are you sure you want to delete the indexed repository "${repoId}"? This cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete the indexed repository "${repoId}"? This cannot be undone.`,
+      )
+    ) {
       return;
     }
 
@@ -265,7 +290,7 @@ export default function RepositoryPage() {
       params.set('limit', '50');
 
       const res = await fetch(
-        `${backendConfig.api}/api/repository/${encodeURIComponent(browseRepoId)}/entities?${params}`
+        `${backendConfig.api}/api/repository/${encodeURIComponent(browseRepoId)}/entities?${params}`,
       );
 
       if (res.ok) {
@@ -297,7 +322,7 @@ export default function RepositoryPage() {
       params.set('direction', graphDirection);
 
       const res = await fetch(
-        `${backendConfig.api}/api/repository/${encodeURIComponent(graphRepoId)}/graph?${params}`
+        `${backendConfig.api}/api/repository/${encodeURIComponent(graphRepoId)}/graph?${params}`,
       );
 
       if (res.ok) {
@@ -342,7 +367,7 @@ export default function RepositoryPage() {
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6 border-b border-border pb-2">
-            {(['repos', 'index', 'browse', 'graph'] as const).map(tab => (
+            {(['repos', 'index', 'browse', 'graph'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -361,7 +386,9 @@ export default function RepositoryPage() {
           {activeTab === 'repos' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-theme-data text-[var(--accent)]">[INDEXED REPOSITORIES]</h3>
+                <h3 className="text-lg font-theme-data text-[var(--accent)]">
+                  [INDEXED REPOSITORIES]
+                </h3>
                 <button
                   onClick={() => setActiveTab('index')}
                   className="px-4 py-2 font-theme-data text-sm bg-[var(--accent)]/20 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)]/30 transition-colors"
@@ -372,7 +399,9 @@ export default function RepositoryPage() {
 
               {loadingRepos ? (
                 <div className="text-center py-12">
-                  <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading repositories...</div>
+                  <div className="text-[var(--accent)] font-theme-data animate-pulse">
+                    Loading repositories...
+                  </div>
                 </div>
               ) : repositories.length === 0 ? (
                 <div className="card p-8 text-center">
@@ -388,12 +417,19 @@ export default function RepositoryPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {repositories.map(repo => (
-                    <div key={repo.repository_name} className="card p-4 hover:border-[var(--accent)]/50 transition-colors">
+                  {repositories.map((repo) => (
+                    <div
+                      key={repo.repository_name}
+                      className="card p-4 hover:border-[var(--accent)]/50 transition-colors"
+                    >
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h4 className="font-theme-data font-bold text-[var(--accent)]">{repo.repository_name}</h4>
-                          <span className="text-xs font-theme-data text-text-muted">Workspace: {repo.workspace_id}</span>
+                          <h4 className="font-theme-data font-bold text-[var(--accent)]">
+                            {repo.repository_name}
+                          </h4>
+                          <span className="text-xs font-theme-data text-text-muted">
+                            Workspace: {repo.workspace_id}
+                          </span>
                         </div>
                         <span className="px-2 py-0.5 text-xs font-theme-data text-[var(--accent)] bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded">
                           INDEXED
@@ -403,23 +439,34 @@ export default function RepositoryPage() {
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="p-2 bg-bg rounded border border-border">
                           <div className="text-xs font-theme-data text-text-muted">Nodes</div>
-                          <div className="font-theme-data text-lg text-[var(--acid-cyan)]">{repo.total_nodes.toLocaleString()}</div>
+                          <div className="font-theme-data text-lg text-[var(--acid-cyan)]">
+                            {repo.total_nodes.toLocaleString()}
+                          </div>
                         </div>
                         <div className="p-2 bg-bg rounded border border-border">
                           <div className="text-xs font-theme-data text-text-muted">Files</div>
-                          <div className="font-theme-data text-lg text-accent">{repo.total_files.toLocaleString()}</div>
+                          <div className="font-theme-data text-lg text-accent">
+                            {repo.total_files.toLocaleString()}
+                          </div>
                         </div>
                       </div>
 
                       {repo.node_types && Object.keys(repo.node_types).length > 0 && (
                         <div className="mb-3">
-                          <div className="text-xs font-theme-data text-text-muted mb-1">Node Types</div>
+                          <div className="text-xs font-theme-data text-text-muted mb-1">
+                            Node Types
+                          </div>
                           <div className="flex flex-wrap gap-1">
-                            {Object.entries(repo.node_types).slice(0, 4).map(([type, count]) => (
-                              <span key={type} className="px-2 py-0.5 text-xs font-theme-data bg-surface text-text-muted rounded">
-                                {type}: {count}
-                              </span>
-                            ))}
+                            {Object.entries(repo.node_types)
+                              .slice(0, 4)
+                              .map(([type, count]) => (
+                                <span
+                                  key={type}
+                                  className="px-2 py-0.5 text-xs font-theme-data bg-surface text-text-muted rounded"
+                                >
+                                  {type}: {count}
+                                </span>
+                              ))}
                           </div>
                         </div>
                       )}
@@ -461,26 +508,32 @@ export default function RepositoryPage() {
           {activeTab === 'index' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="card p-4">
-                <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">[INDEX REPOSITORY]</h3>
+                <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                  [INDEX REPOSITORY]
+                </h3>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Repository Path *</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Repository Path *
+                    </label>
                     <input
                       type="text"
                       value={repoPath}
-                      onChange={e => setRepoPath(e.target.value)}
+                      onChange={(e) => setRepoPath(e.target.value)}
                       placeholder="/path/to/repository"
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Workspace ID</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Workspace ID
+                    </label>
                     <input
                       type="text"
                       value={workspaceId}
-                      onChange={e => setWorkspaceId(e.target.value)}
+                      onChange={(e) => setWorkspaceId(e.target.value)}
                       placeholder="default"
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
@@ -488,21 +541,25 @@ export default function RepositoryPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-theme-data text-text-muted mb-1">Include Patterns</label>
+                      <label className="block text-xs font-theme-data text-text-muted mb-1">
+                        Include Patterns
+                      </label>
                       <input
                         type="text"
                         value={includePatterns}
-                        onChange={e => setIncludePatterns(e.target.value)}
+                        onChange={(e) => setIncludePatterns(e.target.value)}
                         placeholder="*,**/*"
                         className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-theme-data text-text-muted mb-1">Exclude Patterns</label>
+                      <label className="block text-xs font-theme-data text-text-muted mb-1">
+                        Exclude Patterns
+                      </label>
                       <input
                         type="text"
                         value={excludePatterns}
-                        onChange={e => setExcludePatterns(e.target.value)}
+                        onChange={(e) => setExcludePatterns(e.target.value)}
                         placeholder="node_modules/**,.git/**"
                         className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                       />
@@ -511,20 +568,24 @@ export default function RepositoryPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-theme-data text-text-muted mb-1">Max File Size (bytes)</label>
+                      <label className="block text-xs font-theme-data text-text-muted mb-1">
+                        Max File Size (bytes)
+                      </label>
                       <input
                         type="number"
                         value={maxFileSize}
-                        onChange={e => setMaxFileSize(parseInt(e.target.value) || 1000000)}
+                        onChange={(e) => setMaxFileSize(parseInt(e.target.value) || 1000000)}
                         className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-theme-data text-text-muted mb-1">Max Files</label>
+                      <label className="block text-xs font-theme-data text-text-muted mb-1">
+                        Max Files
+                      </label>
                       <input
                         type="number"
                         value={maxFiles}
-                        onChange={e => setMaxFiles(parseInt(e.target.value) || 10000)}
+                        onChange={(e) => setMaxFiles(parseInt(e.target.value) || 10000)}
                         className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
@@ -535,7 +596,7 @@ export default function RepositoryPage() {
                       <input
                         type="checkbox"
                         checked={extractSymbols}
-                        onChange={e => setExtractSymbols(e.target.checked)}
+                        onChange={(e) => setExtractSymbols(e.target.checked)}
                         className="rounded border-border"
                       />
                       <span className="text-text-muted">Extract Symbols</span>
@@ -544,7 +605,7 @@ export default function RepositoryPage() {
                       <input
                         type="checkbox"
                         checked={extractDeps}
-                        onChange={e => setExtractDeps(e.target.checked)}
+                        onChange={(e) => setExtractDeps(e.target.checked)}
                         className="rounded border-border"
                       />
                       <span className="text-text-muted">Extract Dependencies</span>
@@ -553,7 +614,7 @@ export default function RepositoryPage() {
                       <input
                         type="checkbox"
                         checked={incrementalUpdate}
-                        onChange={e => setIncrementalUpdate(e.target.checked)}
+                        onChange={(e) => setIncrementalUpdate(e.target.checked)}
                         className="rounded border-border"
                       />
                       <span className="text-[var(--acid-cyan)]">Incremental Update</span>
@@ -565,7 +626,11 @@ export default function RepositoryPage() {
                     disabled={indexing || !repoPath.trim()}
                     className="w-full py-3 font-theme-data text-sm bg-[var(--accent)]/20 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)]/30 transition-colors disabled:opacity-50"
                   >
-                    {indexing ? '[INDEXING...]' : incrementalUpdate ? '[RUN INCREMENTAL UPDATE]' : '[START FULL INDEX]'}
+                    {indexing
+                      ? '[INDEXING...]'
+                      : incrementalUpdate
+                        ? '[RUN INCREMENTAL UPDATE]'
+                        : '[START FULL INDEX]'}
                   </button>
                 </div>
               </div>
@@ -584,29 +649,47 @@ export default function RepositoryPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="p-3 bg-bg rounded border border-border">
-                        <div className="text-xs font-theme-data text-text-muted mb-1">Files Discovered</div>
-                        <div className="text-xl font-theme-data text-[var(--accent)]">{progress.files_discovered}</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          Files Discovered
+                        </div>
+                        <div className="text-xl font-theme-data text-[var(--accent)]">
+                          {progress.files_discovered}
+                        </div>
                       </div>
                       <div className="p-3 bg-bg rounded border border-border">
-                        <div className="text-xs font-theme-data text-text-muted mb-1">Files Processed</div>
-                        <div className="text-xl font-theme-data text-[var(--acid-cyan)]">{progress.files_processed}</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          Files Processed
+                        </div>
+                        <div className="text-xl font-theme-data text-[var(--acid-cyan)]">
+                          {progress.files_processed}
+                        </div>
                       </div>
                       <div className="p-3 bg-bg rounded border border-border">
-                        <div className="text-xs font-theme-data text-text-muted mb-1">Nodes Created</div>
-                        <div className="text-xl font-theme-data text-accent">{progress.nodes_created}</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          Nodes Created
+                        </div>
+                        <div className="text-xl font-theme-data text-accent">
+                          {progress.nodes_created}
+                        </div>
                       </div>
                     </div>
 
                     {progress.current_file && (
                       <div>
-                        <div className="text-xs font-theme-data text-text-muted mb-1">Current File</div>
-                        <div className="text-sm font-theme-data text-text truncate">{progress.current_file}</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          Current File
+                        </div>
+                        <div className="text-sm font-theme-data text-text truncate">
+                          {progress.current_file}
+                        </div>
                       </div>
                     )}
 
                     {progress.error && (
                       <div className="p-3 bg-[var(--crimson)]/10 border border-[var(--crimson)]/30 rounded">
-                        <div className="text-xs font-theme-data text-[var(--crimson)]">{progress.error}</div>
+                        <div className="text-xs font-theme-data text-[var(--crimson)]">
+                          {progress.error}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -623,24 +706,30 @@ export default function RepositoryPage() {
           {activeTab === 'browse' && (
             <div className="space-y-6">
               <div className="card p-4">
-                <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">[BROWSE ENTITIES]</h3>
+                <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                  [BROWSE ENTITIES]
+                </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Repository ID *</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Repository ID *
+                    </label>
                     <input
                       type="text"
                       value={browseRepoId}
-                      onChange={e => setBrowseRepoId(e.target.value)}
+                      onChange={(e) => setBrowseRepoId(e.target.value)}
                       placeholder="repository-name"
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Kind (optional)</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Kind (optional)
+                    </label>
                     <select
                       value={entityKind}
-                      onChange={e => setEntityKind(e.target.value)}
+                      onChange={(e) => setEntityKind(e.target.value)}
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     >
                       <option value="">All</option>
@@ -652,11 +741,13 @@ export default function RepositoryPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">File Path (optional)</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      File Path (optional)
+                    </label>
                     <input
                       type="text"
                       value={filePath}
-                      onChange={e => setFilePath(e.target.value)}
+                      onChange={(e) => setFilePath(e.target.value)}
                       placeholder="src/..."
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
@@ -694,9 +785,15 @@ export default function RepositoryPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {entities.map(entity => (
-                          <tr key={entity.id} className="border-b border-border/50 hover:bg-surface/50">
-                            <td className="py-2 px-2 text-[var(--acid-cyan)] truncate max-w-[120px]" title={entity.id}>
+                        {entities.map((entity) => (
+                          <tr
+                            key={entity.id}
+                            className="border-b border-border/50 hover:bg-surface/50"
+                          >
+                            <td
+                              className="py-2 px-2 text-[var(--acid-cyan)] truncate max-w-[120px]"
+                              title={entity.id}
+                            >
                               {entity.id.slice(0, 12)}...
                             </td>
                             <td className="py-2 px-2 text-[var(--accent)]">
@@ -731,45 +828,55 @@ export default function RepositoryPage() {
           {activeTab === 'graph' && (
             <div className="space-y-6">
               <div className="card p-4">
-                <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">[RELATIONSHIP GRAPH]</h3>
+                <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                  [RELATIONSHIP GRAPH]
+                </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Repository ID *</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Repository ID *
+                    </label>
                     <input
                       type="text"
                       value={graphRepoId}
-                      onChange={e => setGraphRepoId(e.target.value)}
+                      onChange={(e) => setGraphRepoId(e.target.value)}
                       placeholder="repository-name"
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Entity ID (optional)</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Entity ID (optional)
+                    </label>
                     <input
                       type="text"
                       value={entityId}
-                      onChange={e => setEntityId(e.target.value)}
+                      onChange={(e) => setEntityId(e.target.value)}
                       placeholder="For specific entity"
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Depth</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Depth
+                    </label>
                     <input
                       type="number"
                       value={graphDepth}
-                      onChange={e => setGraphDepth(parseInt(e.target.value) || 2)}
+                      onChange={(e) => setGraphDepth(parseInt(e.target.value) || 2)}
                       min={1}
                       max={5}
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-theme-data text-text-muted mb-1">Direction</label>
+                    <label className="block text-xs font-theme-data text-text-muted mb-1">
+                      Direction
+                    </label>
                     <select
                       value={graphDirection}
-                      onChange={e => setGraphDirection(e.target.value as typeof graphDirection)}
+                      onChange={(e) => setGraphDirection(e.target.value as typeof graphDirection)}
                       className="w-full p-2 bg-bg border border-border rounded font-theme-data text-sm focus:border-[var(--accent)] focus:outline-none"
                     >
                       <option value="both">Both</option>
@@ -791,16 +898,26 @@ export default function RepositoryPage() {
 
               {graphStats && (
                 <div className="card p-4">
-                  <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">[GRAPH STATISTICS]</h3>
+                  <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                    [GRAPH STATISTICS]
+                  </h3>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="p-3 bg-bg rounded border border-border">
-                      <div className="text-xs font-theme-data text-text-muted mb-1">Total Nodes</div>
-                      <div className="text-xl font-theme-data text-[var(--accent)]">{graphStats.total_nodes}</div>
+                      <div className="text-xs font-theme-data text-text-muted mb-1">
+                        Total Nodes
+                      </div>
+                      <div className="text-xl font-theme-data text-[var(--accent)]">
+                        {graphStats.total_nodes}
+                      </div>
                     </div>
                     <div className="p-3 bg-bg rounded border border-border">
-                      <div className="text-xs font-theme-data text-text-muted mb-1">Total Edges</div>
-                      <div className="text-xl font-theme-data text-[var(--acid-cyan)]">{graphStats.total_edges}</div>
+                      <div className="text-xs font-theme-data text-text-muted mb-1">
+                        Total Edges
+                      </div>
+                      <div className="text-xl font-theme-data text-[var(--acid-cyan)]">
+                        {graphStats.total_edges}
+                      </div>
                     </div>
                   </div>
 
@@ -809,7 +926,10 @@ export default function RepositoryPage() {
                       <div className="text-xs font-theme-data text-text-muted mb-2">Node Types</div>
                       <div className="space-y-1">
                         {Object.entries(graphStats.node_types || {}).map(([type, count]) => (
-                          <div key={type} className="flex items-center justify-between text-sm font-theme-data">
+                          <div
+                            key={type}
+                            className="flex items-center justify-between text-sm font-theme-data"
+                          >
                             <span className="text-text-muted">{type}</span>
                             <span className="text-[var(--accent)]">{count}</span>
                           </div>
@@ -820,7 +940,10 @@ export default function RepositoryPage() {
                       <div className="text-xs font-theme-data text-text-muted mb-2">Edge Types</div>
                       <div className="space-y-1">
                         {Object.entries(graphStats.edge_types || {}).map(([type, count]) => (
-                          <div key={type} className="flex items-center justify-between text-sm font-theme-data">
+                          <div
+                            key={type}
+                            className="flex items-center justify-between text-sm font-theme-data"
+                          >
                             <span className="text-text-muted">{type}</span>
                             <span className="text-[var(--acid-cyan)]">{count}</span>
                           </div>
@@ -833,13 +956,17 @@ export default function RepositoryPage() {
 
               {graphEntities.length > 0 && (
                 <div className="card p-4">
-                  <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">[RELATED ENTITIES]</h3>
+                  <h3 className="text-lg font-theme-data text-[var(--accent)] mb-4">
+                    [RELATED ENTITIES]
+                  </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {graphEntities.map((entity) => (
                       <div key={entity.id} className="p-3 bg-bg rounded border border-border">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-theme-data text-sm text-[var(--accent)]">{entity.metadata?.name}</span>
+                          <span className="font-theme-data text-sm text-[var(--accent)]">
+                            {entity.metadata?.name}
+                          </span>
                           <span className="text-xs font-theme-data text-text-muted px-2 py-0.5 bg-surface rounded">
                             {entity.metadata?.kind}
                           </span>

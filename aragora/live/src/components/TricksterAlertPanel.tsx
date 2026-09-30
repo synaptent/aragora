@@ -1,11 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type {
-  StreamEvent,
-  HollowConsensusData,
-  TricksterInterventionData,
-} from '@/types/events';
+import type { StreamEvent, HollowConsensusData, TricksterInterventionData } from '@/types/events';
 
 interface TricksterAlertPanelProps {
   events: StreamEvent[];
@@ -78,10 +74,7 @@ export function TricksterAlertPanel({ events }: TricksterAlertPanelProps) {
             const data = alert.data as HollowConsensusData;
             const severity = data.metric || 0.5;
             return (
-              <div
-                key={`hollow-${idx}`}
-                className={`p-3 border ${getSeverityBg(severity)}`}
-              >
+              <div key={`hollow-${idx}`} className={`p-3 border ${getSeverityBg(severity)}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className={`text-xs font-theme-data ${getSeverityColor(severity)}`}>
                     HOLLOW CONSENSUS
@@ -90,9 +83,7 @@ export function TricksterAlertPanel({ events }: TricksterAlertPanelProps) {
                     Round {alert.round}
                   </span>
                 </div>
-                <div className="text-xs font-theme-data text-text-primary">
-                  {data.details}
-                </div>
+                <div className="text-xs font-theme-data text-text-primary">{data.details}</div>
                 <div className="text-xs font-theme-data text-text-muted mt-1">
                   Evidence gap: {(severity * 100).toFixed(0)}%
                 </div>
@@ -102,10 +93,7 @@ export function TricksterAlertPanel({ events }: TricksterAlertPanelProps) {
             const data = alert.data as TricksterInterventionData;
             const priority = data.priority || 0.5;
             return (
-              <div
-                key={`intervention-${idx}`}
-                className={`p-3 border ${getSeverityBg(priority)}`}
-              >
+              <div key={`intervention-${idx}`} className={`p-3 border ${getSeverityBg(priority)}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className={`text-xs font-theme-data ${getSeverityColor(priority)}`}>
                     CHALLENGE INJECTED

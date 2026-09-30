@@ -63,7 +63,9 @@ const getTrendColor = (trend: string): string => {
   return 'text-text-muted';
 };
 
-export function ConsensusQualityDashboard({ apiBase = DEFAULT_API_BASE }: ConsensusQualityDashboardProps) {
+export function ConsensusQualityDashboard({
+  apiBase = DEFAULT_API_BASE,
+}: ConsensusQualityDashboardProps) {
   const [data, setData] = useState<ConsensusQuality | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +104,9 @@ export function ConsensusQualityDashboard({ apiBase = DEFAULT_API_BASE }: Consen
         {alert && (
           <div className={`mb-4 p-3 rounded border ${ALERT_COLORS[alert.level]}`}>
             <div className="flex items-center gap-2 text-sm">
-              <span>{alert.level === 'critical' ? '🚨' : alert.level === 'warning' ? '⚠️' : 'ℹ️'}</span>
+              <span>
+                {alert.level === 'critical' ? '🚨' : alert.level === 'warning' ? '⚠️' : 'ℹ️'}
+              </span>
               <span>{alert.message}</span>
             </div>
           </div>
@@ -132,7 +136,8 @@ export function ConsensusQualityDashboard({ apiBase = DEFAULT_API_BASE }: Consen
           </div>
           <div className="bg-surface rounded p-3 text-center">
             <div className={`text-lg ${getTrendColor(stats.trend)}`}>
-              {TREND_ICONS[stats.trend]} {stats.trend.charAt(0).toUpperCase() + stats.trend.slice(1).replace(/_/g, ' ')}
+              {TREND_ICONS[stats.trend]}{' '}
+              {stats.trend.charAt(0).toUpperCase() + stats.trend.slice(1).replace(/_/g, ' ')}
             </div>
             <div className="text-xs text-text-muted">Trend</div>
           </div>

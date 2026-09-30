@@ -56,7 +56,13 @@ dependencies = [
 
 [project.optional-dependencies]
 schema = ["jsonschema>=4.0"]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=7.0.0,<8.0",
+    "pytest-randomly>=4.0.1,<6.0",
+    "pytest-xdist>=3.8.0,<4.0",
+    "pytest-timeout>=2.4.0,<3.0",
+]
 
 [project.scripts]
 aragora-verify = "aragora_verify.cli:main"
@@ -99,19 +105,35 @@ packages = ["src/aragora_verify"]
 "src/aragora_verify/odr_schema.json" = "aragora_verify/odr_schema.json"
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
 
-# Previously this package had no [tool.ruff] table at all. Without one, Ruff
-# discovery falls back to the root pyproject.toml, whose "tests/*" per-file
-# ignore is relative to the repo root and never matches "aragora-verify/tests/*".
-# This package-local config keeps direct verifier checks equivalent to the root
-# policy while adding package-relative test exemptions.
+[tool.coverage.run]
+source = ["aragora_verify"]
+
+[tool.coverage.report]
+# Full package suite: 90.26% lines (2026-09-06), minus one point.
+fail_under = 89.26
+precision = 2
+
+[tool.deptry]
+known_first_party = ["aragora_verify"]
+optional_dependencies_dev_groups = ["dev"]
+
+# Inherit the root policy, with stricter naming/complexity and package-relative
+# test exemptions.
 [tool.ruff]
-line-length = 100
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "T201", "BLE001", "UP006", "UP007", "G004", "C4", "SIM910", "S101"]
+select = ["E", "F", "W", "T201", "BLE001", "UP006", "UP007", "G004", "C4", "SIM910", "S101", "N", "C901"]
+# Ruff's local select resets inherited ignores; retain the root policy.
 ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 # Matches the root repo's own tests/* exemptions (see
 # ../pyproject.toml [tool.ruff.lint.per-file-ignores]) with paths relative to
@@ -119,3 +141,12 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 [tool.ruff.lint.per-file-ignores]
 "src/aragora_verify/cli.py" = ["T201"]
 "tests/*" = ["T201", "F401", "F821", "F841", "BLE001", "G004", "S101"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[[tool.mypy.overrides]]
+# Optional schema validation is usable without installing third-party stubs.
+module = ["jsonschema", "jsonschema.*"]
+ignore_missing_imports = true

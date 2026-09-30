@@ -26,17 +26,13 @@ const createVoteEvent = (
   agent: string,
   choice: string,
   confidence = 0.8,
-  timestamp = Date.now() / 1000
-): StreamEvent => ({
-  type: 'vote',
-  data: { agent, choice, confidence },
-  timestamp,
-});
+  timestamp = Date.now() / 1000,
+): StreamEvent => ({ type: 'vote', data: { agent, choice, confidence }, timestamp });
 
 const createConsensusEvent = (
   reached: boolean,
   answer?: string,
-  confidence?: number
+  confidence?: number,
 ): StreamEvent => ({
   type: 'consensus',
   data: { reached, answer, confidence },
@@ -135,10 +131,7 @@ describe('ConsensusMeter', () => {
 
   describe('consensus states', () => {
     it('shows DIVERGING when votes are split', () => {
-      const events = [
-        createVoteEvent('claude', 'Option A'),
-        createVoteEvent('gpt-4', 'Option B'),
-      ];
+      const events = [createVoteEvent('claude', 'Option A'), createVoteEvent('gpt-4', 'Option B')];
 
       render(<ConsensusMeter events={events} agents={defaultAgents} />);
 
@@ -181,10 +174,7 @@ describe('ConsensusMeter', () => {
       ];
 
       render(
-        <ConsensusMeter
-          events={events}
-          agents={['agent-1', 'agent-2', 'agent-3', 'agent-4']}
-        />
+        <ConsensusMeter events={events} agents={['agent-1', 'agent-2', 'agent-3', 'agent-4']} />,
       );
 
       expect(screen.getByText('DEADLOCK')).toBeInTheDocument();
@@ -201,10 +191,7 @@ describe('ConsensusMeter', () => {
     });
 
     it('calculates 67% when 2 of 3 agree', () => {
-      const events = [
-        createVoteEvent('claude', 'Option A'),
-        createVoteEvent('gpt-4', 'Option A'),
-      ];
+      const events = [createVoteEvent('claude', 'Option A'), createVoteEvent('gpt-4', 'Option A')];
 
       render(<ConsensusMeter events={events} agents={defaultAgents} />);
 

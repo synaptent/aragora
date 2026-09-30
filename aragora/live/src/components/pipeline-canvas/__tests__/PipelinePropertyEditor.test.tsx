@@ -7,10 +7,7 @@ import { PipelinePropertyEditor } from '../editors/PipelinePropertyEditor';
 import type { PipelineStageType, ProvenanceLink, StageTransition } from '../types';
 
 describe('PipelinePropertyEditor', () => {
-  const baseProps = {
-    onUpdate: jest.fn(),
-    onDelete: jest.fn(),
-  };
+  const baseProps = { onUpdate: jest.fn(), onDelete: jest.fn() };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -22,15 +19,9 @@ describe('PipelinePropertyEditor', () => {
 
   it('renders empty state when node is null', () => {
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={null}
-        stage={'ideas' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={null} stage={'ideas' as PipelineStageType} />,
     );
-    expect(
-      screen.getByText('Select a node to edit its properties.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Select a node to edit its properties.')).toBeInTheDocument();
   });
 
   /* ---------------------------------------------------------------------- */
@@ -46,11 +37,7 @@ describe('PipelinePropertyEditor', () => {
     };
 
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={node}
-        stage={'ideas' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={node} stage={'ideas' as PipelineStageType} />,
     );
 
     // Header
@@ -87,11 +74,7 @@ describe('PipelinePropertyEditor', () => {
     };
 
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={node}
-        stage={'goals' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={node} stage={'goals' as PipelineStageType} />,
     );
 
     // Header
@@ -134,11 +117,7 @@ describe('PipelinePropertyEditor', () => {
     };
 
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={node}
-        stage={'actions' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={node} stage={'actions' as PipelineStageType} />,
     );
 
     // Header
@@ -243,10 +222,7 @@ describe('PipelinePropertyEditor', () => {
 
   it('calls onDelete when delete button is clicked', () => {
     const onDelete = jest.fn();
-    const node: Record<string, unknown> = {
-      label: 'Deletable',
-      ideaType: 'concept',
-    };
+    const node: Record<string, unknown> = { label: 'Deletable', ideaType: 'concept' };
 
     render(
       <PipelinePropertyEditor
@@ -302,17 +278,10 @@ describe('PipelinePropertyEditor', () => {
   /* ---------------------------------------------------------------------- */
 
   it('shows Properties and Provenance tabs when node is present', () => {
-    const node: Record<string, unknown> = {
-      label: 'Test Node',
-      ideaType: 'concept',
-    };
+    const node: Record<string, unknown> = { label: 'Test Node', ideaType: 'concept' };
 
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={node}
-        stage={'ideas' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={node} stage={'ideas' as PipelineStageType} />,
     );
 
     expect(screen.getByTestId('tab-properties')).toBeInTheDocument();
@@ -320,17 +289,10 @@ describe('PipelinePropertyEditor', () => {
   });
 
   it('defaults to Properties tab', () => {
-    const node: Record<string, unknown> = {
-      label: 'Test Node',
-      ideaType: 'concept',
-    };
+    const node: Record<string, unknown> = { label: 'Test Node', ideaType: 'concept' };
 
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={node}
-        stage={'ideas' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={node} stage={'ideas' as PipelineStageType} />,
     );
 
     // Properties tab should be active (has border class)
@@ -342,17 +304,10 @@ describe('PipelinePropertyEditor', () => {
   });
 
   it('switches to Provenance tab on click', () => {
-    const node: Record<string, unknown> = {
-      label: 'Test Node',
-      ideaType: 'concept',
-    };
+    const node: Record<string, unknown> = { label: 'Test Node', ideaType: 'concept' };
 
     render(
-      <PipelinePropertyEditor
-        {...baseProps}
-        node={node}
-        stage={'ideas' as PipelineStageType}
-      />,
+      <PipelinePropertyEditor {...baseProps} node={node} stage={'ideas' as PipelineStageType} />,
     );
 
     const provTab = screen.getByTestId('tab-provenance');
@@ -367,10 +322,7 @@ describe('PipelinePropertyEditor', () => {
   /* ---------------------------------------------------------------------- */
 
   it('shows provenance links in the Provenance tab', () => {
-    const node: Record<string, unknown> = {
-      label: 'Goal Node',
-      goalType: 'goal',
-    };
+    const node: Record<string, unknown> = { label: 'Goal Node', goalType: 'goal' };
 
     const links: ProvenanceLink[] = [
       {
@@ -404,10 +356,7 @@ describe('PipelinePropertyEditor', () => {
   });
 
   it('shows green dot on provenance tab when links exist', () => {
-    const node: Record<string, unknown> = {
-      label: 'Goal Node',
-      goalType: 'goal',
-    };
+    const node: Record<string, unknown> = { label: 'Goal Node', goalType: 'goal' };
 
     const links: ProvenanceLink[] = [
       {
@@ -437,10 +386,7 @@ describe('PipelinePropertyEditor', () => {
   });
 
   it('shows transition details in the Provenance tab', () => {
-    const node: Record<string, unknown> = {
-      label: 'Goal Node',
-      goalType: 'goal',
-    };
+    const node: Record<string, unknown> = { label: 'Goal Node', goalType: 'goal' };
 
     const transitions: StageTransition[] = [
       {

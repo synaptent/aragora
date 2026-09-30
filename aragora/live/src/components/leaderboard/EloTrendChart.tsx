@@ -75,11 +75,7 @@ function EloTrendChartComponent({ maxPoints = 30, height = 240 }: EloTrendChartP
       }
 
       if (points.length >= 2) {
-        series.push({
-          agent: agentName,
-          color: AGENT_COLORS[i % AGENT_COLORS.length],
-          points,
-        });
+        series.push({ agent: agentName, color: AGENT_COLORS[i % AGENT_COLORS.length], points });
       }
     }
 

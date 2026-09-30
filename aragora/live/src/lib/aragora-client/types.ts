@@ -227,11 +227,7 @@ export interface BillingSubscription {
   current_period_start: string;
   current_period_end: string;
   cancel_at_period_end: boolean;
-  payment_method?: {
-    type: string;
-    last4?: string;
-    brand?: string;
-  };
+  payment_method?: { type: string; last4?: string; brand?: string };
 }
 
 export interface BillingInvoice {
@@ -280,14 +276,8 @@ export interface ConsensusPatternAnalytics {
   consensus_reached: number;
   consensus_rate: number;
   avg_rounds_to_consensus: number;
-  common_agreement_patterns: Array<{
-    pattern: string;
-    frequency: number;
-  }>;
-  dissent_reasons: Array<{
-    reason: string;
-    count: number;
-  }>;
+  common_agreement_patterns: Array<{ pattern: string; frequency: number }>;
+  dissent_reasons: Array<{ reason: string; count: number }>;
 }
 
 export interface RealTimeMetrics {
@@ -350,20 +340,10 @@ export interface SystemHealthResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   services: Record<
     string,
-    {
-      status: 'up' | 'down' | 'degraded';
-      latency_ms?: number;
-      last_check: string;
-    }
+    { status: 'up' | 'down' | 'degraded'; latency_ms?: number; last_check: string }
   >;
-  database: {
-    connected: boolean;
-    latency_ms: number;
-  };
-  cache: {
-    connected: boolean;
-    hit_rate: number;
-  };
+  database: { connected: boolean; latency_ms: number };
+  cache: { connected: boolean; hit_rate: number };
 }
 
 // =============================================================================
@@ -388,10 +368,7 @@ export interface EvidenceSearchResult {
   total: number;
   page: number;
   limit: number;
-  facets?: {
-    sources: Record<string, number>;
-    agents: Record<string, number>;
-  };
+  facets?: { sources: Record<string, number>; agents: Record<string, number> };
 }
 
 export interface EvidenceCreateRequest {
@@ -488,11 +465,7 @@ export interface TrendingTopic {
   debate_count: number;
   growth_rate: number;
   top_agents: string[];
-  sentiment: {
-    positive: number;
-    negative: number;
-    neutral: number;
-  };
+  sentiment: { positive: number; negative: number; neutral: number };
   related_topics: string[];
 }
 
@@ -570,12 +543,7 @@ export interface AgentDetail extends AgentProfile {
     consensus_initiation_rate: number;
     critique_effectiveness: number;
   };
-  badges: Array<{
-    id: string;
-    name: string;
-    description: string;
-    earned_at: string;
-  }>;
+  badges: Array<{ id: string; name: string; description: string; earned_at: string }>;
 }
 
 // =============================================================================
@@ -608,11 +576,7 @@ export interface GenesisAgent {
   parent_ids: string[];
   traits: Record<string, number>;
   fitness_score: number;
-  debate_performance: {
-    wins: number;
-    losses: number;
-    avg_elo: number;
-  };
+  debate_performance: { wins: number; losses: number; avg_elo: number };
   created_at: string;
 }
 
@@ -641,11 +605,7 @@ export interface GauntletRun {
   name: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
   config: GauntletConfig;
-  progress: {
-    completed_challenges: number;
-    total_challenges: number;
-    current_challenge?: string;
-  };
+  progress: { completed_challenges: number; total_challenges: number; current_challenge?: string };
   results?: GauntletResults;
   started_at?: string;
   completed_at?: string;
@@ -661,16 +621,8 @@ export interface GauntletConfig {
 export interface GauntletResults {
   overall_score: number;
   challenge_scores: Record<string, number>;
-  agent_rankings: Array<{
-    agent_id: string;
-    score: number;
-    challenges_passed: number;
-  }>;
-  failure_analysis: Array<{
-    challenge: string;
-    failure_rate: number;
-    common_issues: string[];
-  }>;
+  agent_rankings: Array<{ agent_id: string; score: number; challenges_passed: number }>;
+  failure_analysis: Array<{ challenge: string; failure_rate: number; common_issues: string[] }>;
 }
 
 // =============================================================================
@@ -737,14 +689,8 @@ export interface ControlPlaneAgent {
   provider: string;
   status: 'active' | 'inactive' | 'suspended';
   config: Record<string, unknown>;
-  rate_limits: {
-    requests_per_minute: number;
-    tokens_per_minute: number;
-  };
-  usage: {
-    requests_today: number;
-    tokens_today: number;
-  };
+  rate_limits: { requests_per_minute: number; tokens_per_minute: number };
+  usage: { requests_today: number; tokens_today: number };
   created_at: string;
   updated_at: string;
 }
@@ -994,11 +940,7 @@ export interface TrainingMetrics {
   eval_loss?: number;
   eval_accuracy?: number;
   training_time_seconds: number;
-  history: Array<{
-    epoch: number;
-    loss: number;
-    accuracy?: number;
-  }>;
+  history: Array<{ epoch: number; loss: number; accuracy?: number }>;
 }
 
 export interface TrainedModel {
@@ -1008,10 +950,6 @@ export interface TrainedModel {
   version: string;
   status: 'ready' | 'deploying' | 'deployed' | 'archived';
   metrics: TrainingMetrics;
-  deployment?: {
-    endpoint: string;
-    replicas: number;
-    last_request?: string;
-  };
+  deployment?: { endpoint: string; replicas: number; last_request?: string };
   created_at: string;
 }

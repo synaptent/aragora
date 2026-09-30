@@ -9,11 +9,11 @@
  * - ResponsiveDrawer: Bottom sheet on mobile, side panel on desktop
  */
 
-"use client";
+'use client';
 
-import React, { ReactNode, useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
-import { useIsMobile, useIsDesktop } from "@/hooks/useMediaQuery";
+import React, { ReactNode, useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import { useIsMobile, useIsDesktop } from '@/hooks/useMediaQuery';
 
 // =============================================================================
 // ResponsiveContainer
@@ -23,45 +23,45 @@ interface ResponsiveContainerProps {
   children: ReactNode;
   className?: string;
   /** Maximum width on desktop */
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full" | "none";
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'none';
   /** Padding style */
-  padding?: "none" | "sm" | "md" | "lg";
+  padding?: 'none' | 'sm' | 'md' | 'lg';
   /** Center content horizontally */
   center?: boolean;
 }
 
 const maxWidthClasses = {
-  sm: "max-w-sm",
-  md: "max-w-md",
-  lg: "max-w-lg",
-  xl: "max-w-xl",
-  "2xl": "max-w-2xl",
-  full: "max-w-full",
-  none: "",
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  full: 'max-w-full',
+  none: '',
 };
 
 const paddingClasses = {
-  none: "",
-  sm: "px-3 py-2 md:px-4 md:py-3",
-  md: "px-4 py-3 md:px-6 md:py-4",
-  lg: "px-4 py-4 md:px-8 md:py-6",
+  none: '',
+  sm: 'px-3 py-2 md:px-4 md:py-3',
+  md: 'px-4 py-3 md:px-6 md:py-4',
+  lg: 'px-4 py-4 md:px-8 md:py-6',
 };
 
 export function ResponsiveContainer({
   children,
   className,
-  maxWidth = "full",
-  padding = "md",
+  maxWidth = 'full',
+  padding = 'md',
   center = true,
 }: ResponsiveContainerProps) {
   return (
     <div
       className={cn(
-        "w-full",
+        'w-full',
         maxWidthClasses[maxWidth],
         paddingClasses[padding],
-        center && "mx-auto",
-        className
+        center && 'mx-auto',
+        className,
       )}
     >
       {children}
@@ -77,39 +77,31 @@ interface ResponsiveGridProps {
   children: ReactNode;
   className?: string;
   /** Columns on different breakpoints */
-  cols?: {
-    mobile?: number;
-    tablet?: number;
-    desktop?: number;
-  };
+  cols?: { mobile?: number; tablet?: number; desktop?: number };
   /** Gap between items */
-  gap?: "sm" | "md" | "lg";
+  gap?: 'sm' | 'md' | 'lg';
 }
 
-const gapClasses = {
-  sm: "gap-2 md:gap-3",
-  md: "gap-3 md:gap-4",
-  lg: "gap-4 md:gap-6",
-};
+const gapClasses = { sm: 'gap-2 md:gap-3', md: 'gap-3 md:gap-4', lg: 'gap-4 md:gap-6' };
 
 export function ResponsiveGrid({
   children,
   className,
   cols = { mobile: 1, tablet: 2, desktop: 3 },
-  gap = "md",
+  gap = 'md',
 }: ResponsiveGridProps) {
   return (
     <div
       className={cn(
-        "grid",
+        'grid',
         gapClasses[gap],
         // Using inline style for dynamic cols since Tailwind doesn't support dynamic classes
-        className
+        className,
       )}
       style={{
         gridTemplateColumns: `repeat(var(--cols), minmax(0, 1fr))`,
         // @ts-expect-error - CSS custom properties are valid
-        "--cols": cols.mobile || 1,
+        '--cols': cols.mobile || 1,
       }}
     >
       <style jsx>{`
@@ -139,33 +131,33 @@ interface ResponsiveStackProps {
   /** Reverse order on mobile */
   reverseOnMobile?: boolean;
   /** Gap between items */
-  gap?: "sm" | "md" | "lg";
+  gap?: 'sm' | 'md' | 'lg';
   /** Alignment */
-  align?: "start" | "center" | "end" | "stretch";
+  align?: 'start' | 'center' | 'end' | 'stretch';
 }
 
 export function ResponsiveStack({
   children,
   className,
   reverseOnMobile = false,
-  gap = "md",
-  align = "stretch",
+  gap = 'md',
+  align = 'stretch',
 }: ResponsiveStackProps) {
   const alignClasses = {
-    start: "items-start",
-    center: "items-center",
-    end: "items-end",
-    stretch: "items-stretch",
+    start: 'items-start',
+    center: 'items-center',
+    end: 'items-end',
+    stretch: 'items-stretch',
   };
 
   return (
     <div
       className={cn(
-        "flex flex-col md:flex-row",
+        'flex flex-col md:flex-row',
         gapClasses[gap],
         alignClasses[align],
-        reverseOnMobile && "flex-col-reverse md:flex-row",
-        className
+        reverseOnMobile && 'flex-col-reverse md:flex-row',
+        className,
       )}
     >
       {children}
@@ -221,16 +213,12 @@ interface ResponsiveDrawerProps {
   title?: string;
   className?: string;
   /** Position on desktop */
-  desktopPosition?: "left" | "right";
+  desktopPosition?: 'left' | 'right';
   /** Width on desktop */
-  desktopWidth?: "sm" | "md" | "lg";
+  desktopWidth?: 'sm' | 'md' | 'lg';
 }
 
-const desktopWidthClasses = {
-  sm: "md:w-80",
-  md: "md:w-96",
-  lg: "md:w-[480px]",
-};
+const desktopWidthClasses = { sm: 'md:w-80', md: 'md:w-96', lg: 'md:w-[480px]' };
 
 export function ResponsiveDrawer({
   children,
@@ -238,8 +226,8 @@ export function ResponsiveDrawer({
   onClose,
   title,
   className,
-  desktopPosition = "right",
-  desktopWidth = "md",
+  desktopPosition = 'right',
+  desktopWidth = 'md',
 }: ResponsiveDrawerProps) {
   const isMobile = useIsMobile();
   const [mounted, setMounted] = useState(false);
@@ -255,17 +243,14 @@ export function ResponsiveDrawer({
     return (
       <>
         {/* Backdrop */}
-        <div
-          className="fixed inset-0 bg-black/50 z-40 animate-in fade-in"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/50 z-40 animate-in fade-in" onClick={onClose} />
         {/* Bottom Sheet */}
         <div
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-xl shadow-xl",
-            "max-h-[85vh] overflow-y-auto",
-            "animate-in slide-in-from-bottom duration-300",
-            className
+            'fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-xl shadow-xl',
+            'max-h-[85vh] overflow-y-auto',
+            'animate-in slide-in-from-bottom duration-300',
+            className,
           )}
         >
           {/* Handle */}
@@ -276,16 +261,8 @@ export function ResponsiveDrawer({
           {title && (
             <div className="px-4 py-2 border-b flex items-center justify-between">
               <h3 className="font-semibold">{title}</h3>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-muted rounded-lg"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+              <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -307,36 +284,25 @@ export function ResponsiveDrawer({
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 z-40 animate-in fade-in"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/30 z-40 animate-in fade-in" onClick={onClose} />
       {/* Side Panel */}
       <div
         className={cn(
-          "fixed top-0 bottom-0 z-50 bg-background shadow-xl",
+          'fixed top-0 bottom-0 z-50 bg-background shadow-xl',
           desktopWidthClasses[desktopWidth],
-          desktopPosition === "right"
-            ? "right-0 animate-in slide-in-from-right"
-            : "left-0 animate-in slide-in-from-left",
-          "duration-300",
-          className
+          desktopPosition === 'right'
+            ? 'right-0 animate-in slide-in-from-right'
+            : 'left-0 animate-in slide-in-from-left',
+          'duration-300',
+          className,
         )}
       >
         {/* Header */}
         {title && (
           <div className="px-6 py-4 border-b flex items-center justify-between">
             <h3 className="font-semibold text-lg">{title}</h3>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-muted rounded-lg"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+            <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -361,33 +327,25 @@ export function ResponsiveDrawer({
 interface ResponsiveTextProps {
   children: ReactNode;
   className?: string;
-  as?: "h1" | "h2" | "h3" | "h4" | "p" | "span";
+  as?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'span';
 }
 
 const textSizeClasses = {
-  h1: "text-2xl md:text-3xl lg:text-4xl font-bold",
-  h2: "text-xl md:text-2xl lg:text-3xl font-semibold",
-  h3: "text-lg md:text-xl lg:text-2xl font-semibold",
-  h4: "text-base md:text-lg lg:text-xl font-medium",
-  p: "text-sm md:text-base",
-  span: "text-sm md:text-base",
+  h1: 'text-2xl md:text-3xl lg:text-4xl font-bold',
+  h2: 'text-xl md:text-2xl lg:text-3xl font-semibold',
+  h3: 'text-lg md:text-xl lg:text-2xl font-semibold',
+  h4: 'text-base md:text-lg lg:text-xl font-medium',
+  p: 'text-sm md:text-base',
+  span: 'text-sm md:text-base',
 };
 
-export function ResponsiveText({
-  children,
-  className,
-  as = "p",
-}: ResponsiveTextProps) {
+export function ResponsiveText({ children, className, as = 'p' }: ResponsiveTextProps) {
   const Component = as;
-  return (
-    <Component className={cn(textSizeClasses[as], className)}>
-      {children}
-    </Component>
-  );
+  return <Component className={cn(textSizeClasses[as], className)}>{children}</Component>;
 }
 
 // =============================================================================
 // Export utilities
 // =============================================================================
 
-export { useIsMobile, useIsDesktop } from "@/hooks/useMediaQuery";
+export { useIsMobile, useIsDesktop } from '@/hooks/useMediaQuery';

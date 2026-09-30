@@ -60,7 +60,7 @@ interface SourcesResponse {
 
 // --- Hooks ---
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function useUnifiedMemoryQuery() {
   const [results, setResults] = useState<MemoryResult[]>([]);
@@ -75,7 +75,11 @@ export function useUnifiedMemoryQuery() {
       const res = await fetch(`${API_BASE_URL}/api/memory/unified/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, systems: systems ?? ['continuum', 'km', 'supermemory', 'claude_mem'], limit: 20 }),
+        body: JSON.stringify({
+          query,
+          systems: systems ?? ['continuum', 'km', 'supermemory', 'claude_mem'],
+          limit: 20,
+        }),
       });
       const data: QueryResponse = await res.json();
       setResults(data.data?.results ?? []);
@@ -94,25 +98,35 @@ export function useRetentionDecisions() {
   const { data, error, isLoading } = useSWR<RetentionResponse>(
     `${API_BASE_URL}/api/memory/unified/retention`,
     fetcher,
-    { refreshInterval: 15000 }
+    { refreshInterval: 15000 },
   );
-  return { decisions: data?.data?.decisions ?? [], stats: data?.data?.stats ?? { retained: 0, demoted: 0, forgotten: 0, consolidated: 0 }, loading: isLoading, error };
+  return {
+    decisions: data?.data?.decisions ?? [],
+    stats: data?.data?.stats ?? { retained: 0, demoted: 0, forgotten: 0, consolidated: 0 },
+    loading: isLoading,
+    error,
+  };
 }
 
 export function useDedupClusters() {
   const { data, error, isLoading } = useSWR<DedupResponse>(
     `${API_BASE_URL}/api/memory/unified/dedup`,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 30000 },
   );
-  return { clusters: data?.data?.clusters ?? [], totalDuplicates: data?.data?.total_duplicates ?? 0, loading: isLoading, error };
+  return {
+    clusters: data?.data?.clusters ?? [],
+    totalDuplicates: data?.data?.total_duplicates ?? 0,
+    loading: isLoading,
+    error,
+  };
 }
 
 export function useMemorySources() {
   const { data, error, isLoading } = useSWR<SourcesResponse>(
     `${API_BASE_URL}/api/memory/unified/sources`,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 30000 },
   );
   return { sources: data?.data?.sources ?? [], loading: isLoading, error };
 }

@@ -21,9 +21,4 @@ export type {
   AgentIntrospection,
 } from './types';
 
-export {
-  getEloColor,
-  getConsistencyColor,
-  getRankBadge,
-  formatEloChange,
-} from './types';
+export { getEloColor, getConsistencyColor, getRankBadge, formatEloChange } from './types';

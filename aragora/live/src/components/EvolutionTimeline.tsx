@@ -113,7 +113,9 @@ function TimelineEvent({
       case 'crossover':
         return `Crossover: ${data.parent_ids?.length || 2} parents`;
       case 'fitness_update':
-        const change = data.fitness_change || (data.new_fitness && data.old_fitness ? data.new_fitness - data.old_fitness : 0);
+        const change =
+          data.fitness_change ||
+          (data.new_fitness && data.old_fitness ? data.new_fitness - data.old_fitness : 0);
         return `Fitness ${change >= 0 ? '+' : ''}${(change * 100).toFixed(1)}%`;
       case 'selection':
         return `Selection: ${data.strategy || 'tournament'}`;
@@ -167,9 +169,7 @@ function TimelineEvent({
               {timestamp.toLocaleTimeString()}
             </span>
           </div>
-          <div className="font-theme-data text-sm text-text">
-            {getEventSummary()}
-          </div>
+          <div className="font-theme-data text-sm text-text">{getEventSummary()}</div>
           <div className="text-xs font-theme-data text-text-muted mt-1">
             {timestamp.toLocaleDateString()}
           </div>
@@ -301,23 +301,30 @@ export function EvolutionTimeline({
         </div>
         <div>
           <span className="text-xs font-theme-data text-text-muted">Avg Fitness Change</span>
-          <div className={`text-lg font-theme-data ${stats.avgFitnessChange >= 0 ? 'text-[var(--accent)]' : 'text-acid-red'}`}>
-            {stats.avgFitnessChange >= 0 ? '+' : ''}{(stats.avgFitnessChange * 100).toFixed(2)}%
+          <div
+            className={`text-lg font-theme-data ${stats.avgFitnessChange >= 0 ? 'text-[var(--accent)]' : 'text-acid-red'}`}
+          >
+            {stats.avgFitnessChange >= 0 ? '+' : ''}
+            {(stats.avgFitnessChange * 100).toFixed(2)}%
           </div>
         </div>
-        {Object.entries(stats.typeCounts).slice(0, 4).map(([type, count]) => (
-          <div key={type}>
-            <span className="text-xs font-theme-data text-text-muted capitalize">
-              {type.replace(/_/g, ' ')}
-            </span>
-            <div className="text-lg font-theme-data text-text">{count}</div>
-          </div>
-        ))}
+        {Object.entries(stats.typeCounts)
+          .slice(0, 4)
+          .map(([type, count]) => (
+            <div key={type}>
+              <span className="text-xs font-theme-data text-text-muted capitalize">
+                {type.replace(/_/g, ' ')}
+              </span>
+              <div className="text-lg font-theme-data text-text">{count}</div>
+            </div>
+          ))}
       </div>
 
       {/* Filter */}
       <div className="flex gap-2">
-        <label htmlFor="event-type-filter" className="sr-only">Filter by event type</label>
+        <label htmlFor="event-type-filter" className="sr-only">
+          Filter by event type
+        </label>
         <select
           id="event-type-filter"
           value={filter}
@@ -380,9 +387,7 @@ export function EvolutionTimeline({
 
         {/* Selected event details */}
         <div className="bg-surface border border-[var(--acid-cyan)]/30 rounded-lg p-4 h-fit sticky top-4">
-          <h5 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-4">
-            EVENT DETAILS
-          </h5>
+          <h5 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-4">EVENT DETAILS</h5>
           {selectedEvent ? (
             <div className="space-y-4">
               <div>
@@ -394,7 +399,9 @@ export function EvolutionTimeline({
 
               <div>
                 <div className="text-xs text-text-muted mb-1">TYPE</div>
-                <div className={`font-theme-data text-sm uppercase ${EVENT_COLORS[selectedEvent.event_type]?.text || 'text-text'}`}>
+                <div
+                  className={`font-theme-data text-sm uppercase ${EVENT_COLORS[selectedEvent.event_type]?.text || 'text-text'}`}
+                >
                   {selectedEvent.event_type.replace(/_/g, ' ')}
                 </div>
               </div>
@@ -443,7 +450,9 @@ export function EvolutionTimeline({
       <div className="flex flex-wrap gap-4 text-xs font-theme-data pt-4 border-t border-border">
         {Object.entries(EVENT_COLORS).map(([type, colors]) => (
           <div key={type} className="flex items-center gap-2">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm ${colors.bg} ${colors.border} border`}>
+            <div
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-sm ${colors.bg} ${colors.border} border`}
+            >
               {colors.icon}
             </div>
             <span className="text-text-muted capitalize">{type.replace(/_/g, ' ')}</span>

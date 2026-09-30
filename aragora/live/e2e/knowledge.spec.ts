@@ -86,8 +86,13 @@ test.describe('Knowledge Mound Page', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for search input
-    const searchInput = page.locator('input[type="text"], input[placeholder*="search" i], input[placeholder*="Search" i]');
-    const hasSearch = await searchInput.first().isVisible().catch(() => false);
+    const searchInput = page.locator(
+      'input[type="text"], input[placeholder*="search" i], input[placeholder*="Search" i]',
+    );
+    const hasSearch = await searchInput
+      .first()
+      .isVisible()
+      .catch(() => false);
     expect(hasSearch).toBeDefined();
   });
 
@@ -99,14 +104,25 @@ test.describe('Knowledge Mound Page', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for filter buttons or selects
-    const filters = page.locator('select, [role="combobox"], button:has-text("Filter"), button:has-text("All")');
-    const hasFilters = await filters.first().isVisible().catch(() => false);
+    const filters = page.locator(
+      'select, [role="combobox"], button:has-text("Filter"), button:has-text("All")',
+    );
+    const hasFilters = await filters
+      .first()
+      .isVisible()
+      .catch(() => false);
     expect(hasFilters).toBeDefined();
   });
 
   test('should handle empty state gracefully', async ({ page, aragoraPage }) => {
     await mockApiResponse(page, '**/api/knowledge/nodes**', { nodes: [] });
-    await mockApiResponse(page, '**/api/knowledge/stats', { totalNodes: 0, nodesByType: {}, nodesByTier: {}, nodesBySource: {}, totalRelationships: 0 });
+    await mockApiResponse(page, '**/api/knowledge/stats', {
+      totalNodes: 0,
+      nodesByType: {},
+      nodesByTier: {},
+      nodesBySource: {},
+      totalRelationships: 0,
+    });
 
     await page.goto('/knowledge');
     await aragoraPage.dismissAllOverlays();
@@ -255,11 +271,7 @@ test.describe('Knowledge Mound Visibility', () => {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            visibility: 'workspace',
-            isDiscoverable: true,
-            setBy: 'user-1',
-          }),
+          body: JSON.stringify({ visibility: 'workspace', isDiscoverable: true, setBy: 'user-1' }),
         });
       } else if (route.request().method() === 'PUT') {
         route.fulfill({
@@ -273,7 +285,9 @@ test.describe('Knowledge Mound Visibility', () => {
     });
 
     // Test GET visibility
-    const getResponse = await page.request.get('/api/knowledge/mound/nodes/test-node/visibility').catch(() => null);
+    const getResponse = await page.request
+      .get('/api/knowledge/mound/nodes/test-node/visibility')
+      .catch(() => null);
     if (getResponse) {
       expect([200, 401, 404]).toContain(getResponse.status());
     }
@@ -286,18 +300,15 @@ test.describe('Knowledge Mound Visibility', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           grants: [
-            {
-              id: 'grant-1',
-              granteeType: 'user',
-              granteeId: 'user-2',
-              permissions: ['read'],
-            },
+            { id: 'grant-1', granteeType: 'user', granteeId: 'user-2', permissions: ['read'] },
           ],
         }),
       });
     });
 
-    const response = await page.request.get('/api/knowledge/mound/nodes/test-node/access').catch(() => null);
+    const response = await page.request
+      .get('/api/knowledge/mound/nodes/test-node/access')
+      .catch(() => null);
     if (response) {
       expect([200, 401, 404]).toContain(response.status());
     }
@@ -306,7 +317,10 @@ test.describe('Knowledge Mound Visibility', () => {
 
 test.describe('Knowledge Mound Sharing', () => {
   test('should display shared items tab', async ({ page, aragoraPage }) => {
-    await mockApiResponse(page, '**/api/knowledge/mound/shared-with-me**', { items: mockSharedItems, count: 1 });
+    await mockApiResponse(page, '**/api/knowledge/mound/shared-with-me**', {
+      items: mockSharedItems,
+      count: 1,
+    });
 
     await page.goto('/admin/knowledge');
     await aragoraPage.dismissAllOverlays();
@@ -314,7 +328,10 @@ test.describe('Knowledge Mound Sharing', () => {
 
     // Look for shared tab
     const sharedTab = page.locator('button:has-text("Shared"), [role="tab"]:has-text("Shared")');
-    const hasSharedTab = await sharedTab.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const hasSharedTab = await sharedTab
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
 
     if (hasSharedTab) {
       await sharedTab.first().click();
@@ -346,13 +363,11 @@ test.describe('Knowledge Mound Sharing', () => {
       }
     });
 
-    const response = await page.request.post('/api/knowledge/mound/share', {
-      data: {
-        item_id: 'node-1',
-        target_type: 'workspace',
-        target_id: 'ws-2',
-      },
-    }).catch(() => null);
+    const response = await page.request
+      .post('/api/knowledge/mound/share', {
+        data: { item_id: 'node-1', target_type: 'workspace', target_id: 'ws-2' },
+      })
+      .catch(() => null);
 
     if (response) {
       expect([201, 400, 401, 404]).toContain(response.status());
@@ -360,9 +375,14 @@ test.describe('Knowledge Mound Sharing', () => {
   });
 
   test('should handle shared-with-me endpoint', async ({ page }) => {
-    await mockApiResponse(page, '**/api/knowledge/mound/shared-with-me**', { items: mockSharedItems, count: 1 });
+    await mockApiResponse(page, '**/api/knowledge/mound/shared-with-me**', {
+      items: mockSharedItems,
+      count: 1,
+    });
 
-    const response = await page.request.get('/api/knowledge/mound/shared-with-me').catch(() => null);
+    const response = await page.request
+      .get('/api/knowledge/mound/shared-with-me')
+      .catch(() => null);
     if (response) {
       expect([200, 401, 404]).toContain(response.status());
     }
@@ -371,7 +391,10 @@ test.describe('Knowledge Mound Sharing', () => {
 
 test.describe('Knowledge Mound Federation', () => {
   test('should display federation tab for admins', async ({ page, aragoraPage }) => {
-    await mockApiResponse(page, '**/api/knowledge/mound/federation/regions', { regions: mockFederatedRegions, count: 2 });
+    await mockApiResponse(page, '**/api/knowledge/mound/federation/regions', {
+      regions: mockFederatedRegions,
+      count: 2,
+    });
     await mockApiResponse(page, '**/api/knowledge/mound/federation/status', {
       regions: mockFederatedRegions.reduce((acc, r) => ({ ...acc, [r.id]: r }), {}),
       totalRegions: 2,
@@ -383,8 +406,13 @@ test.describe('Knowledge Mound Federation', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for federation tab
-    const federationTab = page.locator('button:has-text("Federation"), [role="tab"]:has-text("Federation")');
-    const hasFederationTab = await federationTab.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const federationTab = page.locator(
+      'button:has-text("Federation"), [role="tab"]:has-text("Federation")',
+    );
+    const hasFederationTab = await federationTab
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
 
     if (hasFederationTab) {
       await federationTab.first().click();
@@ -395,9 +423,14 @@ test.describe('Knowledge Mound Federation', () => {
   });
 
   test('should handle federation regions endpoint', async ({ page }) => {
-    await mockApiResponse(page, '**/api/knowledge/mound/federation/regions', { regions: mockFederatedRegions, count: 2 });
+    await mockApiResponse(page, '**/api/knowledge/mound/federation/regions', {
+      regions: mockFederatedRegions,
+      count: 2,
+    });
 
-    const response = await page.request.get('/api/knowledge/mound/federation/regions').catch(() => null);
+    const response = await page.request
+      .get('/api/knowledge/mound/federation/regions')
+      .catch(() => null);
     if (response) {
       expect([200, 401, 404]).toContain(response.status());
     }
@@ -416,7 +449,9 @@ test.describe('Knowledge Mound Federation', () => {
       });
     });
 
-    const response = await page.request.get('/api/knowledge/mound/federation/status').catch(() => null);
+    const response = await page.request
+      .get('/api/knowledge/mound/federation/status')
+      .catch(() => null);
     if (response) {
       expect([200, 401, 404]).toContain(response.status());
     }
@@ -438,9 +473,9 @@ test.describe('Knowledge Mound Federation', () => {
       });
     });
 
-    const response = await page.request.post('/api/knowledge/mound/federation/sync/push', {
-      data: { region_id: 'us-west-2' },
-    }).catch(() => null);
+    const response = await page.request
+      .post('/api/knowledge/mound/federation/sync/push', { data: { region_id: 'us-west-2' } })
+      .catch(() => null);
 
     if (response) {
       expect([200, 400, 401, 404]).toContain(response.status());
@@ -463,9 +498,9 @@ test.describe('Knowledge Mound Federation', () => {
       });
     });
 
-    const response = await page.request.post('/api/knowledge/mound/federation/sync/pull', {
-      data: { region_id: 'us-west-2' },
-    }).catch(() => null);
+    const response = await page.request
+      .post('/api/knowledge/mound/federation/sync/pull', { data: { region_id: 'us-west-2' } })
+      .catch(() => null);
 
     if (response) {
       expect([200, 400, 401, 404]).toContain(response.status());
@@ -497,7 +532,9 @@ test.describe('Knowledge Mound Global Knowledge', () => {
       }
     });
 
-    const response = await page.request.get('/api/knowledge/mound/global?query=test').catch(() => null);
+    const response = await page.request
+      .get('/api/knowledge/mound/global?query=test')
+      .catch(() => null);
     if (response) {
       expect([200, 401, 404]).toContain(response.status());
     }
@@ -509,9 +546,7 @@ test.describe('Knowledge Mound Global Knowledge', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          facts: [
-            { id: 'fact-1', content: 'System verified fact', confidence: 0.99 },
-          ],
+          facts: [{ id: 'fact-1', content: 'System verified fact', confidence: 0.99 }],
           count: 1,
           total: 1,
         }),
@@ -529,21 +564,15 @@ test.describe('Knowledge Mound Global Knowledge', () => {
       route.fulfill({
         status: 201,
         contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          globalId: 'promoted-1',
-          originalId: 'node-1',
-        }),
+        body: JSON.stringify({ success: true, globalId: 'promoted-1', originalId: 'node-1' }),
       });
     });
 
-    const response = await page.request.post('/api/knowledge/mound/global/promote', {
-      data: {
-        item_id: 'node-1',
-        workspace_id: 'ws-1',
-        reason: 'high_consensus',
-      },
-    }).catch(() => null);
+    const response = await page.request
+      .post('/api/knowledge/mound/global/promote', {
+        data: { item_id: 'node-1', workspace_id: 'ws-1', reason: 'high_consensus' },
+      })
+      .catch(() => null);
 
     if (response) {
       expect([201, 400, 401, 403, 404]).toContain(response.status());

@@ -50,7 +50,10 @@ const STEPS: { key: DemoStep; label: string; number: number }[] = [
   { key: 'orchestrate', label: 'ORCHESTRATE', number: 4 },
 ];
 
-const STAGE_COLORS: Record<string, { border: string; bg: string; text: string; glow: string; badge: string }> = {
+const STAGE_COLORS: Record<
+  string,
+  { border: string; bg: string; text: string; glow: string; badge: string }
+> = {
   idea: {
     border: 'border-blue-500/60',
     bg: 'bg-blue-500/10',
@@ -108,33 +111,213 @@ const PRESET_IDEAS = [
 
 function buildFallbackData(): StageData {
   const ideas: PipelineNode[] = [
-    { id: 'idea-f1a2b3c4', stage: 'idea', label: 'Build a customer feedback dashboard', metadata: {}, derived_from: [], hash: 'a1b2c3d4e5f6g7h8' },
-    { id: 'idea-d5e6f7g8', stage: 'idea', label: 'Automate weekly reports', metadata: {}, derived_from: [], hash: 'b2c3d4e5f6g7h8i9' },
-    { id: 'idea-h9i0j1k2', stage: 'idea', label: 'Improve onboarding flow', metadata: {}, derived_from: [], hash: 'c3d4e5f6g7h8i9j0' },
-    { id: 'idea-l3m4n5o6', stage: 'idea', label: 'Add real-time notifications', metadata: {}, derived_from: [], hash: 'd4e5f6g7h8i9j0k1' },
-    { id: 'idea-p7q8r9s0', stage: 'idea', label: 'Create API documentation', metadata: {}, derived_from: [], hash: 'e5f6g7h8i9j0k1l2' },
+    {
+      id: 'idea-f1a2b3c4',
+      stage: 'idea',
+      label: 'Build a customer feedback dashboard',
+      metadata: {},
+      derived_from: [],
+      hash: 'a1b2c3d4e5f6g7h8',
+    },
+    {
+      id: 'idea-d5e6f7g8',
+      stage: 'idea',
+      label: 'Automate weekly reports',
+      metadata: {},
+      derived_from: [],
+      hash: 'b2c3d4e5f6g7h8i9',
+    },
+    {
+      id: 'idea-h9i0j1k2',
+      stage: 'idea',
+      label: 'Improve onboarding flow',
+      metadata: {},
+      derived_from: [],
+      hash: 'c3d4e5f6g7h8i9j0',
+    },
+    {
+      id: 'idea-l3m4n5o6',
+      stage: 'idea',
+      label: 'Add real-time notifications',
+      metadata: {},
+      derived_from: [],
+      hash: 'd4e5f6g7h8i9j0k1',
+    },
+    {
+      id: 'idea-p7q8r9s0',
+      stage: 'idea',
+      label: 'Create API documentation',
+      metadata: {},
+      derived_from: [],
+      hash: 'e5f6g7h8i9j0k1l2',
+    },
   ];
 
   const goals: PipelineNode[] = [
-    { id: 'goal-a1b2c3d4', stage: 'goal', label: 'Achieve: Build a customer feedback dashboard', metadata: { objective: 'Build a customer feedback dashboard', key_results: ['Build a customer feedback dashboard', 'Automate weekly reports'] }, derived_from: ['idea-f1a2b3c4', 'idea-d5e6f7g8'], hash: 'f6g7h8i9j0k1l2m3' },
-    { id: 'goal-e5f6g7h8', stage: 'goal', label: 'Achieve: Improve onboarding flow', metadata: { objective: 'Improve onboarding flow', key_results: ['Improve onboarding flow', 'Add real-time notifications'] }, derived_from: ['idea-h9i0j1k2', 'idea-l3m4n5o6'], hash: 'g7h8i9j0k1l2m3n4' },
-    { id: 'goal-i9j0k1l2', stage: 'goal', label: 'Achieve: Create API documentation', metadata: { objective: 'Create API documentation', key_results: ['Create API documentation'] }, derived_from: ['idea-p7q8r9s0'], hash: 'h8i9j0k1l2m3n4o5' },
+    {
+      id: 'goal-a1b2c3d4',
+      stage: 'goal',
+      label: 'Achieve: Build a customer feedback dashboard',
+      metadata: {
+        objective: 'Build a customer feedback dashboard',
+        key_results: ['Build a customer feedback dashboard', 'Automate weekly reports'],
+      },
+      derived_from: ['idea-f1a2b3c4', 'idea-d5e6f7g8'],
+      hash: 'f6g7h8i9j0k1l2m3',
+    },
+    {
+      id: 'goal-e5f6g7h8',
+      stage: 'goal',
+      label: 'Achieve: Improve onboarding flow',
+      metadata: {
+        objective: 'Improve onboarding flow',
+        key_results: ['Improve onboarding flow', 'Add real-time notifications'],
+      },
+      derived_from: ['idea-h9i0j1k2', 'idea-l3m4n5o6'],
+      hash: 'g7h8i9j0k1l2m3n4',
+    },
+    {
+      id: 'goal-i9j0k1l2',
+      stage: 'goal',
+      label: 'Achieve: Create API documentation',
+      metadata: {
+        objective: 'Create API documentation',
+        key_results: ['Create API documentation'],
+      },
+      derived_from: ['idea-p7q8r9s0'],
+      hash: 'h8i9j0k1l2m3n4o5',
+    },
   ];
 
   const tasks: PipelineNode[] = [
-    { id: 'task-m3n4o5p6', stage: 'action', label: 'Build a customer feedback dashboard', metadata: { assignee_type: 'researcher', priority: 'high', estimated_effort: 'medium', source_goal_id: 'goal-a1b2c3d4' }, derived_from: ['goal-a1b2c3d4'], hash: 'i9j0k1l2m3n4o5p6' },
-    { id: 'task-q7r8s9t0', stage: 'action', label: 'Automate weekly reports', metadata: { assignee_type: 'implementer', priority: 'medium', estimated_effort: 'medium', source_goal_id: 'goal-a1b2c3d4' }, derived_from: ['goal-a1b2c3d4'], hash: 'j0k1l2m3n4o5p6q7' },
-    { id: 'task-u1v2w3x4', stage: 'action', label: 'Improve onboarding flow', metadata: { assignee_type: 'researcher', priority: 'high', estimated_effort: 'medium', source_goal_id: 'goal-e5f6g7h8' }, derived_from: ['goal-e5f6g7h8'], hash: 'k1l2m3n4o5p6q7r8' },
-    { id: 'task-y5z6a7b8', stage: 'action', label: 'Add real-time notifications', metadata: { assignee_type: 'implementer', priority: 'medium', estimated_effort: 'medium', source_goal_id: 'goal-e5f6g7h8' }, derived_from: ['goal-e5f6g7h8'], hash: 'l2m3n4o5p6q7r8s9' },
-    { id: 'task-c9d0e1f2', stage: 'action', label: 'Create API documentation', metadata: { assignee_type: 'reviewer', priority: 'high', estimated_effort: 'medium', source_goal_id: 'goal-i9j0k1l2' }, derived_from: ['goal-i9j0k1l2'], hash: 'm3n4o5p6q7r8s9t0' },
+    {
+      id: 'task-m3n4o5p6',
+      stage: 'action',
+      label: 'Build a customer feedback dashboard',
+      metadata: {
+        assignee_type: 'researcher',
+        priority: 'high',
+        estimated_effort: 'medium',
+        source_goal_id: 'goal-a1b2c3d4',
+      },
+      derived_from: ['goal-a1b2c3d4'],
+      hash: 'i9j0k1l2m3n4o5p6',
+    },
+    {
+      id: 'task-q7r8s9t0',
+      stage: 'action',
+      label: 'Automate weekly reports',
+      metadata: {
+        assignee_type: 'implementer',
+        priority: 'medium',
+        estimated_effort: 'medium',
+        source_goal_id: 'goal-a1b2c3d4',
+      },
+      derived_from: ['goal-a1b2c3d4'],
+      hash: 'j0k1l2m3n4o5p6q7',
+    },
+    {
+      id: 'task-u1v2w3x4',
+      stage: 'action',
+      label: 'Improve onboarding flow',
+      metadata: {
+        assignee_type: 'researcher',
+        priority: 'high',
+        estimated_effort: 'medium',
+        source_goal_id: 'goal-e5f6g7h8',
+      },
+      derived_from: ['goal-e5f6g7h8'],
+      hash: 'k1l2m3n4o5p6q7r8',
+    },
+    {
+      id: 'task-y5z6a7b8',
+      stage: 'action',
+      label: 'Add real-time notifications',
+      metadata: {
+        assignee_type: 'implementer',
+        priority: 'medium',
+        estimated_effort: 'medium',
+        source_goal_id: 'goal-e5f6g7h8',
+      },
+      derived_from: ['goal-e5f6g7h8'],
+      hash: 'l2m3n4o5p6q7r8s9',
+    },
+    {
+      id: 'task-c9d0e1f2',
+      stage: 'action',
+      label: 'Create API documentation',
+      metadata: {
+        assignee_type: 'reviewer',
+        priority: 'high',
+        estimated_effort: 'medium',
+        source_goal_id: 'goal-i9j0k1l2',
+      },
+      derived_from: ['goal-i9j0k1l2'],
+      hash: 'm3n4o5p6q7r8s9t0',
+    },
   ];
 
   const agents: PipelineNode[] = [
-    { id: 'orch-g3h4i5j6', stage: 'orchestration', label: 'Build a customer feedback dashboard', metadata: { agent_type: 'research_agent', execution_mode: 'parallel', source_task_id: 'task-m3n4o5p6' }, derived_from: ['task-m3n4o5p6'], hash: 'n4o5p6q7r8s9t0u1' },
-    { id: 'orch-k7l8m9n0', stage: 'orchestration', label: 'Automate weekly reports', metadata: { agent_type: 'code_agent', execution_mode: 'parallel', source_task_id: 'task-q7r8s9t0' }, derived_from: ['task-q7r8s9t0'], hash: 'o5p6q7r8s9t0u1v2' },
-    { id: 'orch-o1p2q3r4', stage: 'orchestration', label: 'Improve onboarding flow', metadata: { agent_type: 'research_agent', execution_mode: 'parallel', source_task_id: 'task-u1v2w3x4' }, derived_from: ['task-u1v2w3x4'], hash: 'p6q7r8s9t0u1v2w3' },
-    { id: 'orch-s5t6u7v8', stage: 'orchestration', label: 'Add real-time notifications', metadata: { agent_type: 'code_agent', execution_mode: 'parallel', source_task_id: 'task-y5z6a7b8' }, derived_from: ['task-y5z6a7b8'], hash: 'q7r8s9t0u1v2w3x4' },
-    { id: 'orch-w9x0y1z2', stage: 'orchestration', label: 'Create API documentation', metadata: { agent_type: 'review_agent', execution_mode: 'parallel', source_task_id: 'task-c9d0e1f2' }, derived_from: ['task-c9d0e1f2'], hash: 'r8s9t0u1v2w3x4y5' },
+    {
+      id: 'orch-g3h4i5j6',
+      stage: 'orchestration',
+      label: 'Build a customer feedback dashboard',
+      metadata: {
+        agent_type: 'research_agent',
+        execution_mode: 'parallel',
+        source_task_id: 'task-m3n4o5p6',
+      },
+      derived_from: ['task-m3n4o5p6'],
+      hash: 'n4o5p6q7r8s9t0u1',
+    },
+    {
+      id: 'orch-k7l8m9n0',
+      stage: 'orchestration',
+      label: 'Automate weekly reports',
+      metadata: {
+        agent_type: 'code_agent',
+        execution_mode: 'parallel',
+        source_task_id: 'task-q7r8s9t0',
+      },
+      derived_from: ['task-q7r8s9t0'],
+      hash: 'o5p6q7r8s9t0u1v2',
+    },
+    {
+      id: 'orch-o1p2q3r4',
+      stage: 'orchestration',
+      label: 'Improve onboarding flow',
+      metadata: {
+        agent_type: 'research_agent',
+        execution_mode: 'parallel',
+        source_task_id: 'task-u1v2w3x4',
+      },
+      derived_from: ['task-u1v2w3x4'],
+      hash: 'p6q7r8s9t0u1v2w3',
+    },
+    {
+      id: 'orch-s5t6u7v8',
+      stage: 'orchestration',
+      label: 'Add real-time notifications',
+      metadata: {
+        agent_type: 'code_agent',
+        execution_mode: 'parallel',
+        source_task_id: 'task-y5z6a7b8',
+      },
+      derived_from: ['task-y5z6a7b8'],
+      hash: 'q7r8s9t0u1v2w3x4',
+    },
+    {
+      id: 'orch-w9x0y1z2',
+      stage: 'orchestration',
+      label: 'Create API documentation',
+      metadata: {
+        agent_type: 'review_agent',
+        execution_mode: 'parallel',
+        source_task_id: 'task-c9d0e1f2',
+      },
+      derived_from: ['task-c9d0e1f2'],
+      hash: 'r8s9t0u1v2w3x4y5',
+    },
   ];
 
   const edges: PipelineEdge[] = [
@@ -215,11 +398,12 @@ function StepIndicator({ currentStep }: { currentStep: DemoStep }) {
             <div
               className={`
                 flex items-center gap-1.5 px-2 sm:px-3 py-1 text-xs font-theme-data border transition-all duration-500 whitespace-nowrap
-                ${isActive
-                  ? 'border-[var(--acid-green)] bg-[var(--acid-green)]/20 text-[var(--acid-green)] shadow-[0_0_10px_var(--acid-green)/30]'
-                  : isDone
-                    ? 'border-[var(--acid-green)]/50 bg-[var(--acid-green)]/10 text-[var(--acid-green)]/80'
-                    : 'border-[var(--border)] text-[var(--text-muted)]'
+                ${
+                  isActive
+                    ? 'border-[var(--acid-green)] bg-[var(--acid-green)]/20 text-[var(--acid-green)] shadow-[0_0_10px_var(--acid-green)/30]'
+                    : isDone
+                      ? 'border-[var(--acid-green)]/50 bg-[var(--acid-green)]/10 text-[var(--acid-green)]/80'
+                      : 'border-[var(--border)] text-[var(--text-muted)]'
                 }
               `}
             >
@@ -233,13 +417,7 @@ function StepIndicator({ currentStep }: { currentStep: DemoStep }) {
   );
 }
 
-function PipelineNodeCard({
-  node,
-  animDelay,
-}: {
-  node: PipelineNode;
-  animDelay: number;
-}) {
+function PipelineNodeCard({ node, animDelay }: { node: PipelineNode; animDelay: number }) {
   const colors = STAGE_COLORS[node.stage] || STAGE_COLORS.idea;
   const stageLabel = STAGE_LABELS[node.stage] || node.stage.toUpperCase();
   const agentType = node.metadata?.agent_type as string | undefined;
@@ -252,7 +430,12 @@ function PipelineNodeCard({
         p-3 border ${colors.border} ${colors.bg} ${colors.glow}
         transition-all duration-500 animate-fade-in
       `}
-      style={{ animationDelay: `${animDelay}ms`, animationFillMode: 'backwards', opacity: 0, animation: `fade-in 0.4s ease-out ${animDelay}ms forwards` }}
+      style={{
+        animationDelay: `${animDelay}ms`,
+        animationFillMode: 'backwards',
+        opacity: 0,
+        animation: `fade-in 0.4s ease-out ${animDelay}ms forwards`,
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -441,10 +624,7 @@ export default function PipelineDemoPage() {
     setStep('goals');
     scrollToResults();
 
-    const apiIdeas = ideas.map((idea) => ({
-      id: idea.id,
-      label: idea.label,
-    }));
+    const apiIdeas = ideas.map((idea) => ({ id: idea.id, label: idea.label }));
 
     const result = await callTransition('ideas-to-goals', { ideas: apiIdeas });
 
@@ -474,7 +654,13 @@ export default function PipelineDemoPage() {
         goals: fallback.goals,
         edges: fallback.edges.filter((e) => e.edge_type === 'derives'),
       }));
-      setProvenances([{ method: 'demo_fallback', source_count: fallback.ideas.length, output_count: fallback.goals.length }]);
+      setProvenances([
+        {
+          method: 'demo_fallback',
+          source_count: fallback.ideas.length,
+          output_count: fallback.goals.length,
+        },
+      ]);
     }
 
     setLoading(false);
@@ -492,9 +678,21 @@ export default function PipelineDemoPage() {
       setStageData((prev) => ({
         ...prev,
         tasks: fallback.tasks,
-        edges: [...prev.edges, ...fallback.edges.filter((e) => e.edge_type === 'decomposes' || e.edge_type === 'depends_on')],
+        edges: [
+          ...prev.edges,
+          ...fallback.edges.filter(
+            (e) => e.edge_type === 'decomposes' || e.edge_type === 'depends_on',
+          ),
+        ],
       }));
-      setProvenances((prev) => [...prev, { method: 'demo_fallback', source_count: stageData.goals.length, output_count: fallback.tasks.length }]);
+      setProvenances((prev) => [
+        ...prev,
+        {
+          method: 'demo_fallback',
+          source_count: stageData.goals.length,
+          output_count: fallback.tasks.length,
+        },
+      ]);
       setLoading(false);
       return;
     }
@@ -522,9 +720,21 @@ export default function PipelineDemoPage() {
       setStageData((prev) => ({
         ...prev,
         tasks: fallback.tasks,
-        edges: [...prev.edges, ...fallback.edges.filter((e) => e.edge_type === 'decomposes' || e.edge_type === 'depends_on')],
+        edges: [
+          ...prev.edges,
+          ...fallback.edges.filter(
+            (e) => e.edge_type === 'decomposes' || e.edge_type === 'depends_on',
+          ),
+        ],
       }));
-      setProvenances((prev) => [...prev, { method: 'demo_fallback', source_count: stageData.goals.length, output_count: fallback.tasks.length }]);
+      setProvenances((prev) => [
+        ...prev,
+        {
+          method: 'demo_fallback',
+          source_count: stageData.goals.length,
+          output_count: fallback.tasks.length,
+        },
+      ]);
     }
 
     setLoading(false);
@@ -544,7 +754,14 @@ export default function PipelineDemoPage() {
         agents: fallback.agents,
         edges: [...prev.edges, ...fallback.edges.filter((e) => e.edge_type === 'triggers')],
       }));
-      setProvenances((prev) => [...prev, { method: 'demo_fallback', source_count: stageData.tasks.length, output_count: fallback.agents.length }]);
+      setProvenances((prev) => [
+        ...prev,
+        {
+          method: 'demo_fallback',
+          source_count: stageData.tasks.length,
+          output_count: fallback.agents.length,
+        },
+      ]);
       setLoading(false);
       stopTimer();
       setTimeout(() => setStep('complete'), 500);
@@ -576,7 +793,14 @@ export default function PipelineDemoPage() {
         agents: fallback.agents,
         edges: [...prev.edges, ...fallback.edges.filter((e) => e.edge_type === 'triggers')],
       }));
-      setProvenances((prev) => [...prev, { method: 'demo_fallback', source_count: stageData.tasks.length, output_count: fallback.agents.length }]);
+      setProvenances((prev) => [
+        ...prev,
+        {
+          method: 'demo_fallback',
+          source_count: stageData.tasks.length,
+          output_count: fallback.agents.length,
+        },
+      ]);
     }
 
     setLoading(false);
@@ -604,7 +828,10 @@ export default function PipelineDemoPage() {
 
   // Count totals
   const totalNodes =
-    stageData.ideas.length + stageData.goals.length + stageData.tasks.length + stageData.agents.length;
+    stageData.ideas.length +
+    stageData.goals.length +
+    stageData.tasks.length +
+    stageData.agents.length;
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)] relative z-10">
@@ -655,14 +882,10 @@ export default function PipelineDemoPage() {
               </span>
             )}
             {step === 'complete' && (
-              <span className="text-xs font-theme-data text-[var(--acid-green)]">
-                COMPLETE
-              </span>
+              <span className="text-xs font-theme-data text-[var(--acid-green)]">COMPLETE</span>
             )}
             {usedFallback && (
-              <span className="text-xs font-theme-data text-[var(--acid-yellow)]">
-                DEMO MODE
-              </span>
+              <span className="text-xs font-theme-data text-[var(--acid-yellow)]">DEMO MODE</span>
             )}
           </div>
           <StepIndicator currentStep={step} />
@@ -852,31 +1075,47 @@ export default function PipelineDemoPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="p-3 bg-blue-500/10 border border-blue-500/30">
-                    <div className="text-2xl font-theme-data font-bold text-blue-400">{stageData.ideas.length}</div>
+                    <div className="text-2xl font-theme-data font-bold text-blue-400">
+                      {stageData.ideas.length}
+                    </div>
                     <div className="text-xs font-theme-data text-[var(--text-muted)]">Ideas</div>
                   </div>
                   <div className="p-3 bg-emerald-500/10 border border-emerald-500/30">
-                    <div className="text-2xl font-theme-data font-bold text-emerald-400">{stageData.goals.length}</div>
+                    <div className="text-2xl font-theme-data font-bold text-emerald-400">
+                      {stageData.goals.length}
+                    </div>
                     <div className="text-xs font-theme-data text-[var(--text-muted)]">Goals</div>
                   </div>
                   <div className="p-3 bg-amber-500/10 border border-amber-500/30">
-                    <div className="text-2xl font-theme-data font-bold text-amber-400">{stageData.tasks.length}</div>
+                    <div className="text-2xl font-theme-data font-bold text-amber-400">
+                      {stageData.tasks.length}
+                    </div>
                     <div className="text-xs font-theme-data text-[var(--text-muted)]">Tasks</div>
                   </div>
                   <div className="p-3 bg-purple-500/10 border border-purple-500/30">
-                    <div className="text-2xl font-theme-data font-bold text-purple-400">{stageData.agents.length}</div>
+                    <div className="text-2xl font-theme-data font-bold text-purple-400">
+                      {stageData.agents.length}
+                    </div>
                     <div className="text-xs font-theme-data text-[var(--text-muted)]">Agents</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <span className="text-xs font-theme-data text-[var(--text-muted)] block mb-1">Total Nodes</span>
-                    <span className="font-theme-data text-sm text-[var(--acid-green)]">{totalNodes}</span>
+                    <span className="text-xs font-theme-data text-[var(--text-muted)] block mb-1">
+                      Total Nodes
+                    </span>
+                    <span className="font-theme-data text-sm text-[var(--acid-green)]">
+                      {totalNodes}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-xs font-theme-data text-[var(--text-muted)] block mb-1">Total Edges</span>
-                    <span className="font-theme-data text-sm text-[var(--acid-green)]">{stageData.edges.length}</span>
+                    <span className="text-xs font-theme-data text-[var(--text-muted)] block mb-1">
+                      Total Edges
+                    </span>
+                    <span className="font-theme-data text-sm text-[var(--acid-green)]">
+                      {stageData.edges.length}
+                    </span>
                   </div>
                 </div>
 
@@ -941,25 +1180,29 @@ export default function PipelineDemoPage() {
               <div className="flex gap-3">
                 <span className="text-blue-400 shrink-0">1.</span>
                 <span>
-                  <strong className="text-blue-400">PASTE IDEAS</strong> -- Type or paste raw ideas, one per line. They become the root nodes of your pipeline.
+                  <strong className="text-blue-400">PASTE IDEAS</strong> -- Type or paste raw ideas,
+                  one per line. They become the root nodes of your pipeline.
                 </span>
               </div>
               <div className="flex gap-3">
                 <span className="text-emerald-400 shrink-0">2.</span>
                 <span>
-                  <strong className="text-emerald-400">GENERATE GOALS</strong> -- AI clusters your ideas and derives actionable goals with key results.
+                  <strong className="text-emerald-400">GENERATE GOALS</strong> -- AI clusters your
+                  ideas and derives actionable goals with key results.
                 </span>
               </div>
               <div className="flex gap-3">
                 <span className="text-amber-400 shrink-0">3.</span>
                 <span>
-                  <strong className="text-amber-400">PLAN ACTIONS</strong> -- Each goal is decomposed into concrete tasks with priorities and effort estimates.
+                  <strong className="text-amber-400">PLAN ACTIONS</strong> -- Each goal is
+                  decomposed into concrete tasks with priorities and effort estimates.
                 </span>
               </div>
               <div className="flex gap-3">
                 <span className="text-purple-400 shrink-0">4.</span>
                 <span>
-                  <strong className="text-purple-400">ORCHESTRATE</strong> -- Tasks are assigned to specialized agents (Researcher, Implementer, Reviewer) for execution.
+                  <strong className="text-purple-400">ORCHESTRATE</strong> -- Tasks are assigned to
+                  specialized agents (Researcher, Implementer, Reviewer) for execution.
                 </span>
               </div>
             </div>
@@ -973,7 +1216,7 @@ export default function PipelineDemoPage() {
         <div className="text-center text-xs font-theme-data text-[var(--text-muted)]/60 pt-4 border-t border-[var(--border)]">
           {usedFallback
             ? 'Running in demo mode with sample data. Start the Aragora server to see live AI-powered pipeline transitions.'
-            : 'Powered by Aragora\'s idea-to-execution pipeline. Each transition uses AI to cluster, decompose, and orchestrate.'}
+            : "Powered by Aragora's idea-to-execution pipeline. Each transition uses AI to cluster, decompose, and orchestrate."}
         </div>
       </div>
     </main>

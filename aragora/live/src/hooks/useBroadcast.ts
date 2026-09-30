@@ -69,15 +69,9 @@ export function useBroadcast(debateId: string) {
 
   const checkAudioExists = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/audio/${debateId}.mp3`, {
-        method: 'HEAD',
-      });
+      const response = await fetch(`${API_BASE}/audio/${debateId}.mp3`, { method: 'HEAD' });
       if (response.ok) {
-        setStatus((s) => ({
-          ...s,
-          hasAudio: true,
-          audioUrl: `${API_BASE}/audio/${debateId}.mp3`,
-        }));
+        setStatus((s) => ({ ...s, hasAudio: true, audioUrl: `${API_BASE}/audio/${debateId}.mp3` }));
         return true;
       }
       return false;
@@ -112,11 +106,7 @@ export function useBroadcast(debateId: string) {
       return result;
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Failed to generate broadcast';
-      setStatus((s) => ({
-        ...s,
-        isGenerating: false,
-        error: errorMessage,
-      }));
+      setStatus((s) => ({ ...s, isGenerating: false, error: errorMessage }));
       throw e;
     }
   }, [debateId]);
@@ -136,7 +126,7 @@ export function useBroadcast(debateId: string) {
 
       return response.json();
     },
-    [debateId]
+    [debateId],
   );
 
   const publishToYouTube = useCallback(
@@ -154,7 +144,7 @@ export function useBroadcast(debateId: string) {
 
       return response.json();
     },
-    [debateId]
+    [debateId],
   );
 
   const runFullPipeline = useCallback(
@@ -195,15 +185,11 @@ export function useBroadcast(debateId: string) {
         return result;
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : 'Pipeline failed';
-        setStatus((s) => ({
-          ...s,
-          isGenerating: false,
-          error: errorMessage,
-        }));
+        setStatus((s) => ({ ...s, isGenerating: false, error: errorMessage }));
         throw e;
       }
     },
-    [debateId]
+    [debateId],
   );
 
   return {

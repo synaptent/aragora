@@ -5,6 +5,7 @@ End-to-end tests for the Aragora Live Dashboard.
 ## Setup
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -57,6 +58,7 @@ npx playwright test -g "should load"
 ## Configuration
 
 Edit `playwright.config.ts` to:
+
 - Change the base URL
 - Add/remove browsers
 - Adjust timeouts
@@ -76,6 +78,7 @@ test('example test', async ({ page }) => {
 ## CI Integration
 
 Tests run automatically on CI with:
+
 - Retries enabled (2 retries on failure)
 - Single worker for stability
 - HTML report generation

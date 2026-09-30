@@ -44,9 +44,7 @@ export function CommandPaletteResults({
   useEffect(() => {
     if (totalItems === 0) return;
 
-    const selectedElement = document.getElementById(
-      `command-palette-item-${selectedIndex}`
-    );
+    const selectedElement = document.getElementById(`command-palette-item-${selectedIndex}`);
     if (selectedElement && resultsRef.current) {
       const container = resultsRef.current;
       const elementTop = selectedElement.offsetTop;
@@ -98,20 +96,13 @@ export function CommandPaletteResults({
   let globalIndex = 0;
 
   return (
-    <div
-      ref={resultsRef}
-      className="max-h-96 overflow-y-auto"
-    >
+    <div ref={resultsRef} className="max-h-96 overflow-y-auto">
       {/* Live region for accessibility */}
       <div role="status" aria-live="polite" className="sr-only">
         {isSearching ? 'Searching...' : `${totalItems} results found`}
       </div>
 
-      <ul
-        id="command-palette-results"
-        role="listbox"
-        aria-label="Search results"
-      >
+      <ul id="command-palette-results" role="listbox" aria-label="Search results">
         {sections.map((section) => {
           if (section.items.length === 0) return null;
 

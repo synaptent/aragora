@@ -67,16 +67,19 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
     }
   }, [apiBase, statusFilter]);
 
-  const fetchResults = useCallback(async (jobId: string) => {
-    try {
-      const response = await fetch(`${apiBase}/explainability/batch/${jobId}/results`);
-      if (!response.ok) throw new Error('Failed to fetch job results');
-      const data = await response.json();
-      setResults(data.results || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    }
-  }, [apiBase]);
+  const fetchResults = useCallback(
+    async (jobId: string) => {
+      try {
+        const response = await fetch(`${apiBase}/explainability/batch/${jobId}/results`);
+        if (!response.ok) throw new Error('Failed to fetch job results');
+        const data = await response.json();
+        setResults(data.results || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      }
+    },
+    [apiBase],
+  );
 
   const cancelJob = async (jobId: string) => {
     try {
@@ -116,9 +119,7 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
   const getElapsedTime = (job: BatchJob): string => {
     if (!job.started_at) return '-';
     const start = new Date(job.started_at).getTime();
-    const end = job.completed_at
-      ? new Date(job.completed_at).getTime()
-      : Date.now();
+    const end = job.completed_at ? new Date(job.completed_at).getTime() : Date.now();
     const seconds = Math.round((end - start) / 1000);
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
@@ -142,7 +143,7 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
     );
   }
 
-  const activeJobs = jobs.filter(j => j.status === 'processing').length;
+  const activeJobs = jobs.filter((j) => j.status === 'processing').length;
 
   return (
     <div className="space-y-6">
@@ -192,13 +193,13 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
         <div className="bg-black/50 border border-[var(--accent)]/30 rounded-lg p-4">
           <div className="text-sm text-gray-400">Completed</div>
           <div className="text-2xl font-semibold text-[var(--accent)]">
-            {jobs.filter(j => j.status === 'completed').length}
+            {jobs.filter((j) => j.status === 'completed').length}
           </div>
         </div>
         <div className="bg-black/50 border border-[var(--crimson)]/30 rounded-lg p-4">
           <div className="text-sm text-gray-400">Failed</div>
           <div className="text-2xl font-semibold text-[var(--crimson)]">
-            {jobs.filter(j => j.status === 'failed').length}
+            {jobs.filter((j) => j.status === 'failed').length}
           </div>
         </div>
       </div>
@@ -256,9 +257,7 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
                   <span className="text-gray-500 mx-1">/</span>
                   <span className="text-[var(--crimson)] text-sm">{job.failure_count}</span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-400">
-                  {getElapsedTime(job)}
-                </td>
+                <td className="px-4 py-3 text-sm text-gray-400">{getElapsedTime(job)}</td>
                 <td className="px-4 py-3 text-sm text-gray-400">
                   {new Date(job.created_at).toLocaleString()}
                 </td>
@@ -292,10 +291,7 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
             <h3 className="text-lg font-medium text-white">
               Job Results: {selectedJob.id.substring(0, 12)}...
             </h3>
-            <button
-              onClick={() => setSelectedJob(null)}
-              className="text-gray-400 hover:text-white"
-            >
+            <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-white">
               Close
             </button>
           </div>
@@ -319,9 +315,7 @@ export function BatchJobsMonitor({ apiBase = '/api' }: BatchJobsMonitorProps) {
                     <span className={`text-sm ${RESULT_STATUS_COLORS[result.status]}`}>
                       {result.status === 'success' ? '✓' : result.status === 'error' ? '✗' : '○'}
                     </span>
-                    <span className="font-theme-data text-sm text-white">
-                      {result.debate_id}
-                    </span>
+                    <span className="font-theme-data text-sm text-white">{result.debate_id}</span>
                     {result.processing_time_ms && (
                       <span className="text-xs text-gray-400">
                         {result.processing_time_ms.toFixed(0)}ms

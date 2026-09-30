@@ -58,7 +58,6 @@ const quickActions: NavItem[] = [
 // =============================================================================
 
 const navSections: NavSection[] = [
-
   /* === CORE SECTION === Progressive disclosure group
    * Always-visible top-level pages. Not collapsible so users always see
    * the primary entry points (Dashboard, Debates, Pipeline, etc.).
@@ -77,7 +76,7 @@ const navSections: NavSection[] = [
       { label: 'Ideas', href: '/ideas', icon: '\u2726', minMode: 'standard' },
       { label: 'Goals', href: '/goals', icon: '\u25CE', minMode: 'standard' },
       { label: 'Actions', href: '/actions', icon: '\u25B6', minMode: 'standard' },
-      { label: 'Knowledge', href: '/knowledge', icon: '?' , minMode: 'standard' },
+      { label: 'Knowledge', href: '/knowledge', icon: '?', minMode: 'standard' },
       { label: 'Agents', href: '/agents', icon: '&', minMode: 'standard' },
       { label: 'Analytics', href: '/analytics', icon: '~', minMode: 'standard' },
     ],
@@ -147,10 +146,20 @@ const navSections: NavSection[] = [
       { label: 'Intelligence', href: '/intelligence', icon: '\u269B' },
       { label: 'System Intelligence', href: '/system-intelligence', icon: '\u2328' },
       { label: 'Outcome Dashboard', href: '/outcome-dashboard', icon: '\u2611' },
-      { label: 'Analytics Outcomes', href: '/analytics/outcomes', icon: '\u2714', minMode: 'standard' },
+      {
+        label: 'Analytics Outcomes',
+        href: '/analytics/outcomes',
+        icon: '\u2714',
+        minMode: 'standard',
+      },
       { label: 'Leaderboard', href: '/leaderboard', icon: '^' },
       { label: 'Performance', href: '/agent-performance', icon: '\u2261' },
-      { label: 'Performance Detail', href: '/agents/performance', icon: '\u2197', minMode: 'advanced' },
+      {
+        label: 'Performance Detail',
+        href: '/agents/performance',
+        icon: '\u2197',
+        minMode: 'advanced',
+      },
       { label: 'ELO Analytics', href: '/elo-analytics', icon: '\u2295', minMode: 'standard' },
       { label: 'Agent Evolution', href: '/agent-evolution', icon: '\u267E', minMode: 'advanced' },
       { label: 'Tournaments', href: '/tournaments', icon: '\u2295' },
@@ -165,7 +174,12 @@ const navSections: NavSection[] = [
       { label: 'Spend', href: '/spend', icon: '$', minMode: 'standard' },
       { label: 'Decisions', href: '/analytics/decisions', icon: '\u2713', minMode: 'standard' },
       { label: 'Usage', href: '/usage', icon: '%', minMode: 'standard' },
-      { label: 'Argument Analysis', href: '/argument-analysis', icon: '\u2726', minMode: 'standard' },
+      {
+        label: 'Argument Analysis',
+        href: '/argument-analysis',
+        icon: '\u2726',
+        minMode: 'standard',
+      },
     ],
   },
 
@@ -182,7 +196,12 @@ const navSections: NavSection[] = [
       { label: 'Connectors', href: '/connectors', icon: '<' },
       { label: 'Templates', href: '/templates', icon: '[' },
       { label: 'Integrations', href: '/integrations', icon: '\u222B' },
-      { label: 'Chat Integrations', href: '/integrations/chat', icon: '\u2709', minMode: 'advanced' },
+      {
+        label: 'Chat Integrations',
+        href: '/integrations/chat',
+        icon: '\u2709',
+        minMode: 'advanced',
+      },
       { label: 'Webhooks', href: '/webhooks', icon: '\u21C4', minMode: 'advanced' },
       { label: 'Marketplace', href: '/marketplace', icon: '\u229A' },
       { label: 'Plugins', href: '/plugins', icon: '\u2699', minMode: 'advanced' },
@@ -205,7 +224,13 @@ const navSections: NavSection[] = [
       { label: 'Hub', href: '/hub', icon: '\u2302' },
       { label: 'Portal', href: '/portal', icon: '\u2302', minMode: 'standard' },
       { label: 'Social', href: '/social', icon: '\u263A', minMode: 'standard' },
-      { label: 'Shared Inbox', href: '/shared-inbox', icon: '\u2709', minMode: 'standard', requiresAuth: true },
+      {
+        label: 'Shared Inbox',
+        href: '/shared-inbox',
+        icon: '\u2709',
+        minMode: 'standard',
+        requiresAuth: true,
+      },
       { label: 'Broadcast', href: '/broadcast', icon: '\u25CE', minMode: 'advanced' },
       { label: 'Moments', href: '/moments', icon: '\u25C6', minMode: 'standard' },
     ],
@@ -223,7 +248,12 @@ const navSections: NavSection[] = [
       { label: 'Memory Gateway', href: '/memory-gateway', icon: '\u2194' },
       { label: 'Supermemory', href: '/supermemory', icon: '\u221E', minMode: 'standard' },
       { label: 'Knowledge Flow', href: '/knowledge-flow', icon: '\u21C4' },
-      { label: 'Knowledge Learning', href: '/knowledge/learning', icon: '\u2042', minMode: 'advanced' },
+      {
+        label: 'Knowledge Learning',
+        href: '/knowledge/learning',
+        icon: '\u2042',
+        minMode: 'advanced',
+      },
       { label: 'Cross-Debate', href: '/cross-debate', icon: '\u2728', minMode: 'standard' },
       { label: 'Pulse', href: '/pulse', icon: '\u2665', minMode: 'standard' },
       { label: 'Memory Analytics', href: '/memory-analytics', icon: '\u2261', minMode: 'advanced' },
@@ -290,7 +320,12 @@ const navSections: NavSection[] = [
       { label: 'Security', href: '/security', icon: '\u26BF' },
       { label: 'Verification', href: '/verification', icon: '\u2713' },
       { label: 'Quick Verify', href: '/verify', icon: '\u2714' },
-      { label: 'Data Classification', href: '/data-classification', icon: '\u2263', minMode: 'advanced' },
+      {
+        label: 'Data Classification',
+        href: '/data-classification',
+        icon: '\u2263',
+        minMode: 'advanced',
+      },
     ],
   },
 
@@ -485,7 +520,7 @@ export function LeftSidebar() {
   }, []);
 
   const toggleSection = useCallback((key: string) => {
-    setCollapsedSections(prev => {
+    setCollapsedSections((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
@@ -503,7 +538,7 @@ export function LeftSidebar() {
   }
 
   const filterItems = (items: NavItem[]) =>
-    items.filter(item => {
+    items.filter((item) => {
       if (item.requiresAuth && !isAuthenticated) return false;
       if (item.adminOnly && !isAdmin) return false;
       if (item.minMode && !isFeatureVisible(item.minMode)) return false;
@@ -525,9 +560,10 @@ export function LeftSidebar() {
         onClick={() => isMobile && closeLeftSidebar()}
         className={`
           flex items-center gap-3 px-3 py-2 sm:py-1.5 rounded-md transition-colors text-xs
-          ${isActive
-            ? 'bg-[var(--acid-green)]/10 text-[var(--acid-green)]'
-            : 'text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text)]'
+          ${
+            isActive
+              ? 'bg-[var(--acid-green)]/10 text-[var(--acid-green)]'
+              : 'text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text)]'
           }
         `}
         title={leftSidebarCollapsed ? item.label : undefined}
@@ -552,7 +588,7 @@ export function LeftSidebar() {
     const canCollapse = section.collapsible !== false;
 
     // Check if any child is active (show section even if collapsed)
-    const hasActiveChild = filtered.some(item => isItemActive(item.href));
+    const hasActiveChild = filtered.some((item) => isItemActive(item.href));
 
     return (
       <div key={section.key} className="mb-2">
@@ -562,10 +598,7 @@ export function LeftSidebar() {
             className={`
               w-full px-3 mb-1 flex items-center justify-between
               text-xs font-medium uppercase tracking-wider
-              ${section.highlight
-                ? 'text-[var(--acid-green)]'
-                : 'text-[var(--text-muted)]'
-              }
+              ${section.highlight ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}
               ${canCollapse ? 'cursor-pointer hover:text-[var(--text)] transition-colors' : 'cursor-default'}
             `}
           >
@@ -612,7 +645,7 @@ export function LeftSidebar() {
     <div className="flex flex-col h-full">
       {/* Quick Actions */}
       <div className="p-3 border-b border-[var(--border)]">
-        {filterItems(quickActions).map(item => (
+        {filterItems(quickActions).map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -620,17 +653,13 @@ export function LeftSidebar() {
             className="flex items-center gap-2 px-3 py-2 mb-1 rounded-md bg-[var(--acid-green)]/10 text-[var(--acid-green)] hover:bg-[var(--acid-green)]/20 transition-colors"
           >
             <span className="font-theme-data text-lg">{item.icon}</span>
-            {!leftSidebarCollapsed && (
-              <span className="text-sm font-medium">{item.label}</span>
-            )}
+            {!leftSidebarCollapsed && <span className="text-sm font-medium">{item.label}</span>}
           </Link>
         ))}
       </div>
 
       {/* Scrollable Navigation */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {navSections.map(renderSection)}
-      </div>
+      <div className="flex-1 overflow-y-auto p-3">{navSections.map(renderSection)}</div>
 
       {/* Bottom: Login/User + Mode Selector + Collapse Toggle */}
       <div className="border-t border-[var(--border)] p-3">
@@ -643,16 +672,15 @@ export function LeftSidebar() {
             title={leftSidebarCollapsed ? 'Login' : undefined}
           >
             <span className="font-theme-data text-lg">{'\u2192'}</span>
-            {!leftSidebarCollapsed && (
-              <span className="text-sm font-medium">Login</span>
-            )}
+            {!leftSidebarCollapsed && <span className="text-sm font-medium">Login</span>}
           </Link>
         )}
 
         {/* Show user info when authenticated */}
         {isAuthenticated && user && !leftSidebarCollapsed && (
           <div className="px-3 py-2 mb-3 text-xs text-[var(--text-muted)]">
-            <span className="text-[var(--acid-green)]">{'\u25CF'}</span> {user.email || user.name || 'Logged in'}
+            <span className="text-[var(--acid-green)]">{'\u25CF'}</span>{' '}
+            {user.email || user.name || 'Logged in'}
           </div>
         )}
 
@@ -673,9 +701,7 @@ export function LeftSidebar() {
             <span className="font-theme-data" aria-hidden="true">
               {leftSidebarCollapsed ? '\u00BB' : '\u00AB'}
             </span>
-            {!leftSidebarCollapsed && (
-              <span className="text-sm">Collapse</span>
-            )}
+            {!leftSidebarCollapsed && <span className="text-sm">Collapse</span>}
           </button>
         )}
       </div>
@@ -688,10 +714,7 @@ export function LeftSidebar() {
       <>
         {/* Backdrop */}
         {leftSidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={closeLeftSidebar}
-          />
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={closeLeftSidebar} />
         )}
 
         {/* Drawer */}

@@ -20,7 +20,12 @@ interface VelocityData {
   timestamp: string;
 }
 
-function MetricCard({ label, value, sub, color = 'acid-green' }: {
+function MetricCard({
+  label,
+  value,
+  sub,
+  color = 'acid-green',
+}: {
   label: string;
   value: string | number;
   sub?: string;
@@ -37,7 +42,12 @@ function MetricCard({ label, value, sub, color = 'acid-green' }: {
   );
 }
 
-function HorizontalBar({ label, value, max, color }: {
+function HorizontalBar({
+  label,
+  value,
+  max,
+  color,
+}: {
   label: string;
   value: number;
   max: number;
@@ -64,7 +74,7 @@ function HorizontalBar({ label, value, max, color }: {
 
 function AccumulationChart({ data }: { data: { date: string; count: number }[] }) {
   if (!data.length) return null;
-  const max = Math.max(...data.map(d => d.count), 1);
+  const max = Math.max(...data.map((d) => d.count), 1);
   const chartHeight = 120;
 
   return (
@@ -121,9 +131,7 @@ function ConfidenceHistogram({ distribution }: { distribution: Record<string, nu
                   backgroundColor: `var(--${colors[i] || 'acid-green'})`,
                 }}
               />
-              <div className="font-theme-data text-[10px] text-[var(--text-muted)]">
-                {label}
-              </div>
+              <div className="font-theme-data text-[10px] text-[var(--text-muted)]">{label}</div>
             </div>
           );
         })}

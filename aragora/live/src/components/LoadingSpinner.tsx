@@ -41,26 +41,19 @@ export function LoadingSpinner({
     >
       <div className="text-accent font-theme-data text-center">
         <div className="text-lg mb-2 flex items-center justify-center gap-2">
-          <span className="animate-pulse" aria-hidden="true">{'>'}</span>
+          <span className="animate-pulse" aria-hidden="true">
+            {'>'}
+          </span>
           <span>{message}</span>
         </div>
         <div className="flex gap-1 justify-center" aria-hidden="true">
-          <span
-            className="animate-pulse"
-            style={{ animationDelay: '0ms' }}
-          >
+          <span className="animate-pulse" style={{ animationDelay: '0ms' }}>
             █
           </span>
-          <span
-            className="animate-pulse"
-            style={{ animationDelay: '150ms' }}
-          >
+          <span className="animate-pulse" style={{ animationDelay: '150ms' }}>
             █
           </span>
-          <span
-            className="animate-pulse"
-            style={{ animationDelay: '300ms' }}
-          >
+          <span className="animate-pulse" style={{ animationDelay: '300ms' }}>
             █
           </span>
         </div>

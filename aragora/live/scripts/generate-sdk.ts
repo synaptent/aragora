@@ -42,11 +42,7 @@ interface OpenAPIParameter {
 
 interface OpenAPIRequestBody {
   required?: boolean;
-  content: {
-    'application/json'?: {
-      schema: OpenAPISchema;
-    };
-  };
+  content: { 'application/json'?: { schema: OpenAPISchema } };
 }
 
 interface OpenAPIOperation {
@@ -57,14 +53,10 @@ interface OpenAPIOperation {
   security?: Array<Record<string, string[]>>;
   parameters?: OpenAPIParameter[];
   requestBody?: OpenAPIRequestBody;
-  responses: Record<string, {
-    description: string;
-    content?: {
-      'application/json'?: {
-        schema: OpenAPISchema;
-      };
-    };
-  }>;
+  responses: Record<
+    string,
+    { description: string; content?: { 'application/json'?: { schema: OpenAPISchema } } }
+  >;
 }
 
 interface OpenAPIPath {
@@ -77,25 +69,24 @@ interface OpenAPIPath {
 
 interface OpenAPISpec {
   openapi: string;
-  info: {
-    title: string;
-    version: string;
-  };
+  info: { title: string; version: string };
   paths: Record<string, OpenAPIPath>;
-  components?: {
-    schemas?: Record<string, OpenAPISchema>;
-  };
+  components?: { schemas?: Record<string, OpenAPISchema> };
 }
 
 // Convert OpenAPI type to TypeScript type
-function schemaToType(schema: OpenAPISchema, schemas: Record<string, OpenAPISchema>, indent = ''): string {
+function schemaToType(
+  schema: OpenAPISchema,
+  schemas: Record<string, OpenAPISchema>,
+  indent = '',
+): string {
   if (schema.$ref) {
     const refName = schema.$ref.replace('#/components/schemas/', '');
     return refName;
   }
 
   if (schema.enum) {
-    return schema.enum.map(e => `'${e}'`).join(' | ');
+    return schema.enum.map((e) => `'${e}'`).join(' | ');
   }
 
   switch (schema.type) {
@@ -139,7 +130,11 @@ function schemaToType(schema: OpenAPISchema, schemas: Record<string, OpenAPISche
 }
 
 // Generate TypeScript interface from schema
-function generateInterface(name: string, schema: OpenAPISchema, schemas: Record<string, OpenAPISchema>): string {
+function generateInterface(
+  name: string,
+  schema: OpenAPISchema,
+  schemas: Record<string, OpenAPISchema>,
+): string {
   const typeBody = schemaToType(schema, schemas, '');
   if (typeBody.startsWith('{')) {
     return `export interface ${name} ${typeBody}`;
@@ -282,8 +277,8 @@ export class AragoraApiClient {
       const methodUpper = method.toUpperCase();
 
       // Extract path params
-      const pathParams = (op.parameters || []).filter(p => p.in === 'path');
-      const queryParams = (op.parameters || []).filter(p => p.in === 'query');
+      const pathParams = (op.parameters || []).filter((p) => p.in === 'path');
+      const queryParams = (op.parameters || []).filter((p) => p.in === 'query');
       const hasBody = !!op.requestBody;
       const requiresAuth = op.security && op.security.length > 0;
 
@@ -299,7 +294,7 @@ export class AragoraApiClient {
       // Query params as object
       if (queryParams.length > 0) {
         const queryType = queryParams
-          .map(p => {
+          .map((p) => {
             const optional = !p.required ? '?' : '';
             const type = schemaToType(p.schema, schemas);
             return `${p.name}${optional}: ${type}`;
@@ -341,7 +336,9 @@ export class AragoraApiClient {
         op.description ? `   * ${op.description}` : '',
         requiresAuth ? '   * @requires Authentication' : '',
         '   */',
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       const queryArg = queryParams.length > 0 ? ', query' : '';
       const bodyArg = hasBody ? ', body' : '';

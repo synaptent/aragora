@@ -17,17 +17,13 @@ describe('ToastContainer', () => {
   });
 
   it('returns null when no toasts', () => {
-    const { container } = render(
-      <ToastContainer toasts={[]} onRemove={mockOnRemove} />
-    );
+    const { container } = render(<ToastContainer toasts={[]} onRemove={mockOnRemove} />);
 
     expect(container.firstChild).toBeNull();
   });
 
   it('renders a single toast', () => {
-    const toasts: Toast[] = [
-      { id: '1', type: 'info', message: 'Test message' },
-    ];
+    const toasts: Toast[] = [{ id: '1', type: 'info', message: 'Test message' }];
 
     render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -50,9 +46,7 @@ describe('ToastContainer', () => {
 
   describe('Toast types', () => {
     it('renders error toast with correct icon', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'error', message: 'Error message' },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'error', message: 'Error message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -60,9 +54,7 @@ describe('ToastContainer', () => {
     });
 
     it('renders success toast with correct icon', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'success', message: 'Success message' },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'success', message: 'Success message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -70,9 +62,7 @@ describe('ToastContainer', () => {
     });
 
     it('renders warning toast with correct icon', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'warning', message: 'Warning message' },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'warning', message: 'Warning message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -80,9 +70,7 @@ describe('ToastContainer', () => {
     });
 
     it('renders info toast with correct icon', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'info', message: 'Info message' },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'info', message: 'Info message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -92,9 +80,7 @@ describe('ToastContainer', () => {
 
   describe('Toast interactions', () => {
     it('calls onRemove when close button clicked', async () => {
-      const toasts: Toast[] = [
-        { id: 'toast-1', type: 'info', message: 'Test message' },
-      ];
+      const toasts: Toast[] = [{ id: 'toast-1', type: 'info', message: 'Test message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -110,9 +96,7 @@ describe('ToastContainer', () => {
     });
 
     it('has accessible close button', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'info', message: 'Test message' },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'info', message: 'Test message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -122,9 +106,7 @@ describe('ToastContainer', () => {
 
   describe('Toast positioning', () => {
     it('has fixed positioning', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'info', message: 'Test message' },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'info', message: 'Test message' }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -135,9 +117,7 @@ describe('ToastContainer', () => {
 
   describe('Toast auto-dismiss', () => {
     it('applies exit animation before duration expires', () => {
-      const toasts: Toast[] = [
-        { id: '1', type: 'info', message: 'Test message', duration: 3000 },
-      ];
+      const toasts: Toast[] = [{ id: '1', type: 'info', message: 'Test message', duration: 3000 }];
 
       render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -162,9 +142,7 @@ describe('ToastContainer edge cases', () => {
 
   it('handles long messages', () => {
     const longMessage = 'A'.repeat(500);
-    const toasts: Toast[] = [
-      { id: '1', type: 'info', message: longMessage },
-    ];
+    const toasts: Toast[] = [{ id: '1', type: 'info', message: longMessage }];
 
     render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -173,9 +151,7 @@ describe('ToastContainer edge cases', () => {
 
   it('handles messages with special characters', () => {
     const specialMessage = '<script>alert("xss")</script>';
-    const toasts: Toast[] = [
-      { id: '1', type: 'info', message: specialMessage },
-    ];
+    const toasts: Toast[] = [{ id: '1', type: 'info', message: specialMessage }];
 
     render(<ToastContainer toasts={toasts} onRemove={mockOnRemove} />);
 
@@ -184,16 +160,14 @@ describe('ToastContainer edge cases', () => {
   });
 
   it('handles rapid additions and removals', () => {
-    const { rerender } = render(
-      <ToastContainer toasts={[]} onRemove={mockOnRemove} />
-    );
+    const { rerender } = render(<ToastContainer toasts={[]} onRemove={mockOnRemove} />);
 
     // Add toasts
     rerender(
       <ToastContainer
         toasts={[{ id: '1', type: 'info', message: 'Message 1' }]}
         onRemove={mockOnRemove}
-      />
+      />,
     );
 
     expect(screen.getByText('Message 1')).toBeInTheDocument();
@@ -203,7 +177,7 @@ describe('ToastContainer edge cases', () => {
       <ToastContainer
         toasts={[{ id: '2', type: 'success', message: 'Message 2' }]}
         onRemove={mockOnRemove}
-      />
+      />,
     );
 
     expect(screen.queryByText('Message 1')).not.toBeInTheDocument();

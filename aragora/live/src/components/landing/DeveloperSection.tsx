@@ -104,11 +104,7 @@ export function DeveloperSection() {
         </h2>
         <p
           className="text-center max-w-xl mx-auto"
-          style={{
-            fontSize: '14px',
-            color: 'var(--text-muted)',
-            marginBottom: '48px',
-          }}
+          style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '48px' }}
         >
           No API keys needed for mock agents. Add real LLMs with one line.
         </p>
@@ -138,7 +134,8 @@ export function DeveloperSection() {
                   className="px-4 py-3 text-xs font-bold transition-colors cursor-pointer"
                   style={{
                     color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-muted)',
-                    borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
+                    borderBottom:
+                      activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
                     backgroundColor: 'transparent',
                     fontFamily: "'JetBrains Mono', monospace",
                   }}

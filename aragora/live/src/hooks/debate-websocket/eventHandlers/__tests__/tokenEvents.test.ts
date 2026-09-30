@@ -63,11 +63,7 @@ describe('tokenEvents handlers', () => {
   describe('handleTokenStartEvent', () => {
     it('initializes streaming message with reasoning fields', () => {
       const ctx = createMockContext();
-      const data: ParsedEventData = {
-        type: 'token_start',
-        agent: 'claude',
-        task_id: '',
-      };
+      const data: ParsedEventData = { type: 'token_start', agent: 'claude', task_id: '' };
 
       handleTokenStartEvent(data, ctx);
 
@@ -87,11 +83,7 @@ describe('tokenEvents handlers', () => {
 
     it('uses composite key with taskId', () => {
       const ctx = createMockContext();
-      const data: ParsedEventData = {
-        type: 'token_start',
-        agent: 'claude',
-        task_id: 'task-42',
-      };
+      const data: ParsedEventData = { type: 'token_start', agent: 'claude', task_id: 'task-42' };
 
       handleTokenStartEvent(data, ctx);
 
@@ -201,19 +193,13 @@ describe('tokenEvents handlers', () => {
       handleAgentThinkingEvent(data, ctx);
 
       expect(ctx.addStreamEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'agent_thinking',
-          agent: 'claude',
-        })
+        expect.objectContaining({ type: 'agent_thinking', agent: 'claude' }),
       );
     });
 
     it('ignores events without agent', () => {
       const ctx = createMockContext();
-      const data: ParsedEventData = {
-        type: 'agent_thinking',
-        data: { thinking: 'No agent' },
-      };
+      const data: ParsedEventData = { type: 'agent_thinking', data: { thinking: 'No agent' } };
 
       handleAgentThinkingEvent(data, ctx);
 
@@ -329,11 +315,7 @@ describe('tokenEvents handlers', () => {
 
     it('ignores events with null confidence', () => {
       const ctx = createMockContext();
-      const data: ParsedEventData = {
-        type: 'agent_confidence',
-        agent: 'claude',
-        data: {},
-      };
+      const data: ParsedEventData = { type: 'agent_confidence', agent: 'claude', data: {} };
 
       handleAgentConfidenceEvent(data, ctx);
 
@@ -443,19 +425,13 @@ describe('tokenEvents handlers', () => {
       handleAgentReasoningEvent(data, ctx);
 
       expect(ctx.addStreamEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'agent_reasoning',
-          agent: 'claude',
-        })
+        expect.objectContaining({ type: 'agent_reasoning', agent: 'claude' }),
       );
     });
 
     it('ignores events without agent', () => {
       const ctx = createMockContext();
-      const data: ParsedEventData = {
-        type: 'agent_reasoning',
-        data: { phase: 'ANALYZING' },
-      };
+      const data: ParsedEventData = { type: 'agent_reasoning', data: { phase: 'ANALYZING' } };
 
       handleAgentReasoningEvent(data, ctx);
 
@@ -484,11 +460,7 @@ describe('tokenEvents handlers', () => {
         if (typeof updater === 'function') updater(existingMap);
       });
 
-      const data: ParsedEventData = {
-        type: 'token_end',
-        agent: 'claude',
-        task_id: '',
-      };
+      const data: ParsedEventData = { type: 'token_end', agent: 'claude', task_id: '' };
 
       handleTokenEndEvent(data, ctx);
 
@@ -499,7 +471,7 @@ describe('tokenEvents handlers', () => {
           confidence_score: 0.92,
           reasoning_phase: 'FORMING ARGUMENT',
           thinking: 'Step 1 analysis',
-        })
+        }),
       );
     });
   });

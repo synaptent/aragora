@@ -45,12 +45,40 @@ interface EmailDetailModalProps {
   onFeedback?: (emailId: string, isCorrect: boolean) => void;
 }
 
-const PRIORITY_CONFIG: Record<EmailPriority, { color: string; bgColor: string; icon: string; label: string }> = {
-  critical: { color: 'text-red-400', bgColor: 'bg-red-500/10 border-red-500/40', icon: '!', label: 'CRITICAL' },
-  high: { color: 'text-orange-400', bgColor: 'bg-orange-500/10 border-orange-500/40', icon: '^', label: 'HIGH' },
-  medium: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/10 border-yellow-500/40', icon: '-', label: 'MEDIUM' },
-  low: { color: 'text-blue-400', bgColor: 'bg-blue-500/10 border-blue-500/40', icon: '_', label: 'LOW' },
-  defer: { color: 'text-gray-400', bgColor: 'bg-gray-500/10 border-gray-500/40', icon: '.', label: 'DEFER' },
+const PRIORITY_CONFIG: Record<
+  EmailPriority,
+  { color: string; bgColor: string; icon: string; label: string }
+> = {
+  critical: {
+    color: 'text-red-400',
+    bgColor: 'bg-red-500/10 border-red-500/40',
+    icon: '!',
+    label: 'CRITICAL',
+  },
+  high: {
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-500/10 border-orange-500/40',
+    icon: '^',
+    label: 'HIGH',
+  },
+  medium: {
+    color: 'text-yellow-400',
+    bgColor: 'bg-yellow-500/10 border-yellow-500/40',
+    icon: '-',
+    label: 'MEDIUM',
+  },
+  low: {
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-500/10 border-blue-500/40',
+    icon: '_',
+    label: 'LOW',
+  },
+  defer: {
+    color: 'text-gray-400',
+    bgColor: 'bg-gray-500/10 border-gray-500/40',
+    icon: '.',
+    label: 'DEFER',
+  },
 };
 
 const TIER_DESCRIPTIONS: Record<number, string> = {
@@ -94,20 +122,15 @@ export function EmailDetailModal({
     setError(null);
 
     try {
-      const response = await fetch(
-        `${apiBase}/api/email/message/${emailId}?user_id=${userId}`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
-      );
+      const response = await fetch(`${apiBase}/api/email/message/${emailId}?user_id=${userId}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
 
       if (!response.ok) {
         // Fallback to Gmail API
         const legacyResponse = await fetch(
           `${apiBase}/api/gmail/message/${emailId}?user_id=${userId}`,
-          {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          }
+          { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
         );
         if (!legacyResponse.ok) throw new Error('Failed to fetch email');
         const data = await legacyResponse.json();
@@ -192,11 +215,17 @@ export function EmailDetailModal({
           </button>
         </div>
         <div className="mt-2 text-sm font-theme-data text-text-muted">
-          <div>From: <span className="text-text">{email.from_address}</span></div>
+          <div>
+            From: <span className="text-text">{email.from_address}</span>
+          </div>
           {email.to_addresses && email.to_addresses.length > 0 && (
-            <div>To: <span className="text-text">{email.to_addresses.join(', ')}</span></div>
+            <div>
+              To: <span className="text-text">{email.to_addresses.join(', ')}</span>
+            </div>
           )}
-          <div>Date: <span className="text-text">{email.date}</span></div>
+          <div>
+            Date: <span className="text-text">{email.date}</span>
+          </div>
         </div>
       </div>
 
@@ -217,12 +246,8 @@ export function EmailDetailModal({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-text-muted font-theme-data">
-              Tier {email.tier_used}
-            </div>
-            <div className="text-xs text-text-muted">
-              {TIER_DESCRIPTIONS[email.tier_used]}
-            </div>
+            <div className="text-xs text-text-muted font-theme-data">Tier {email.tier_used}</div>
+            <div className="text-xs text-text-muted">{TIER_DESCRIPTIONS[email.tier_used]}</div>
           </div>
         </div>
 
@@ -386,13 +411,7 @@ export function EmailDetailModal({
   );
 }
 
-function ModalWrapper({
-  children,
-  onClose,
-}: {
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
+function ModalWrapper({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -408,7 +427,9 @@ function ModalWrapper({
         aria-labelledby="email-modal-title"
         className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-bg border border-[var(--accent)]/30 rounded-lg p-6 shadow-2xl"
       >
-        <h2 id="email-modal-title" className="sr-only">Email Details</h2>
+        <h2 id="email-modal-title" className="sr-only">
+          Email Details
+        </h2>
         {children}
       </div>
     </div>

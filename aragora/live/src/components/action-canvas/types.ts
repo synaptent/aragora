@@ -4,19 +4,9 @@
  * Matches the Python ActionNodeType enum from aragora/canvas/stages.py.
  */
 
-export type ActionNodeType =
-  | 'task'
-  | 'epic'
-  | 'checkpoint'
-  | 'deliverable'
-  | 'dependency';
+export type ActionNodeType = 'task' | 'epic' | 'checkpoint' | 'deliverable' | 'dependency';
 
-export type ActionEdgeType =
-  | 'requires'
-  | 'blocks'
-  | 'follows'
-  | 'derived_from'
-  | 'depends_on';
+export type ActionEdgeType = 'requires' | 'blocks' | 'follows' | 'derived_from' | 'depends_on';
 
 export type ActionStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
 

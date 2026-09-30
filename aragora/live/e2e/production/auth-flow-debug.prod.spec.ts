@@ -77,7 +77,7 @@ test.describe('Auth Flow Debug', () => {
     }
 
     // Count console errors
-    const errors = logs.filter(l => l.startsWith('[error]'));
+    const errors = logs.filter((l) => l.startsWith('[error]'));
     console.log(`\nConsole errors: ${errors.length}`);
     for (const err of errors.slice(0, 10)) {
       console.log(`  ${err.slice(0, 200)}`);
@@ -105,10 +105,11 @@ test.describe('Auth Flow Debug', () => {
 
     // Go directly to callback with fake tokens (will fail but shows the flow)
     // SECURITY: Tokens should be in URL fragment (#) not query params (?)
-    const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItaWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ.fake';
+    const fakeToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItaWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ.fake';
     await page.goto(
       `https://aragora.ai/auth/callback/#access_token=${fakeToken}&refresh_token=refresh-token&token_type=Bearer&expires_in=86400`,
-      { waitUntil: 'networkidle' }
+      { waitUntil: 'networkidle' },
     );
 
     await page.waitForTimeout(5000);
@@ -122,17 +123,18 @@ test.describe('Auth Flow Debug', () => {
     }
 
     // Check for /me endpoint calls
-    const meCalls = apiCalls.filter(c => c.url.includes('/me'));
+    const meCalls = apiCalls.filter((c) => c.url.includes('/me'));
     console.log(`\n/me endpoint calls: ${meCalls.length}`);
     for (const call of meCalls) {
       console.log(`  [${call.status}] ${call.method} ${call.url}`);
     }
 
     // Log auth-related console messages
-    const authLogs = logs.filter(l =>
-      l.toLowerCase().includes('auth') ||
-      l.toLowerCase().includes('token') ||
-      l.toLowerCase().includes('/me')
+    const authLogs = logs.filter(
+      (l) =>
+        l.toLowerCase().includes('auth') ||
+        l.toLowerCase().includes('token') ||
+        l.toLowerCase().includes('/me'),
     );
     console.log('\nAuth-related console messages:');
     for (const log of authLogs.slice(0, 20)) {
@@ -140,7 +142,7 @@ test.describe('Auth Flow Debug', () => {
     }
 
     // Count errors
-    const errors = logs.filter(l => l.startsWith('[error]'));
+    const errors = logs.filter((l) => l.startsWith('[error]'));
     console.log(`\nTotal console errors: ${errors.length}`);
   });
 
@@ -157,16 +159,18 @@ test.describe('Auth Flow Debug', () => {
     // Set up localStorage as if logged in with expired token
     await page.goto('https://aragora.ai');
     await page.evaluate(() => {
-      localStorage.setItem('aragora_tokens', JSON.stringify({
-        access_token: 'expired-token',
-        refresh_token: 'expired-refresh',
-        expires_at: new Date(Date.now() - 1000).toISOString(), // Expired
-      }));
-      localStorage.setItem('aragora_user', JSON.stringify({
-        id: 'test-user',
-        email: 'test@example.com',
-        name: 'Test User',
-      }));
+      localStorage.setItem(
+        'aragora_tokens',
+        JSON.stringify({
+          access_token: 'expired-token',
+          refresh_token: 'expired-refresh',
+          expires_at: new Date(Date.now() - 1000).toISOString(), // Expired
+        }),
+      );
+      localStorage.setItem(
+        'aragora_user',
+        JSON.stringify({ id: 'test-user', email: 'test@example.com', name: 'Test User' }),
+      );
     });
 
     // Reload and wait - should trigger token refresh attempts
@@ -206,10 +210,7 @@ test.describe('Auth Flow Debug', () => {
 
     const result = await page.evaluate(async () => {
       const response = await fetch('https://api.aragora.ai/api/v1/auth/me', {
-        headers: {
-          'Authorization': 'Bearer test-token',
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
       });
       return {
         status: response.status,

@@ -52,7 +52,7 @@ interface UseGraphDebateWebSocketReturn {
   status: GraphConnectionStatus;
   error: string | null;
   isConnected: boolean;
-  reconnectAttempt: number;  // Expose for UI feedback
+  reconnectAttempt: number; // Expose for UI feedback
   events: GraphDebateEvent[];
   lastEvent: GraphDebateEvent | null;
   reconnect: () => void;
@@ -96,40 +96,45 @@ export function useGraphDebateWebSocket({
 
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 30s)
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), MAX_RECONNECT_DELAY_MS);
-    logger.debug(`[Graph WebSocket] Scheduling reconnect attempt ${reconnectAttempt + 1} in ${delay}ms`);
+    logger.debug(
+      `[Graph WebSocket] Scheduling reconnect attempt ${reconnectAttempt + 1} in ${delay}ms`,
+    );
 
     clearReconnectTimeout();
     reconnectTimeoutRef.current = setTimeout(() => {
       if (!isUnmountedRef.current) {
-        setReconnectAttempt(prev => prev + 1);
+        setReconnectAttempt((prev) => prev + 1);
       }
     }, delay);
   }, [reconnectAttempt, autoReconnect, clearReconnectTimeout]);
 
-  const handleEvent = useCallback((event: GraphDebateEvent) => {
-    // Filter by debate ID if provided
-    if (debateId && event.data.debate_id && event.data.debate_id !== debateId) {
-      return;
-    }
+  const handleEvent = useCallback(
+    (event: GraphDebateEvent) => {
+      // Filter by debate ID if provided
+      if (debateId && event.data.debate_id && event.data.debate_id !== debateId) {
+        return;
+      }
 
-    // Only handle graph-related events
-    const graphEventTypes: GraphEventType[] = [
-      'graph_node_added',
-      'graph_branch_created',
-      'graph_branch_merged',
-      'graph_debate_complete',
-      'debate_branch',
-      'debate_merge',
-    ];
+      // Only handle graph-related events
+      const graphEventTypes: GraphEventType[] = [
+        'graph_node_added',
+        'graph_branch_created',
+        'graph_branch_merged',
+        'graph_debate_complete',
+        'debate_branch',
+        'debate_merge',
+      ];
 
-    if (!graphEventTypes.includes(event.type)) {
-      return;
-    }
+      if (!graphEventTypes.includes(event.type)) {
+        return;
+      }
 
-    logger.debug(`Graph WebSocket event: ${event.type}`, event.data);
-    setLastEvent(event);
-    setEvents((prev) => [...prev.slice(-99), event]); // Keep last 100 events
-  }, [debateId]);
+      logger.debug(`Graph WebSocket event: ${event.type}`, event.data);
+      setLastEvent(event);
+      setEvents((prev) => [...prev.slice(-99), event]); // Keep last 100 events
+    },
+    [debateId],
+  );
 
   const connect = useCallback(() => {
     if (!enabled) return;
@@ -152,17 +157,15 @@ export function useGraphDebateWebSocket({
       ws.onopen = () => {
         logger.debug(`Graph WebSocket connected (attempt ${reconnectAttempt + 1})`);
         setStatus('connected');
-        setReconnectAttempt(0);  // Reset on successful connection
+        setReconnectAttempt(0); // Reset on successful connection
         hasEverConnectedRef.current = true;
         handshakeFailuresRef.current = 0;
 
         // Subscribe to graph events if debate ID is provided
         if (debateId) {
-          ws.send(JSON.stringify({
-            type: 'subscribe',
-            channel: 'graph_debate',
-            debate_id: debateId,
-          }));
+          ws.send(
+            JSON.stringify({ type: 'subscribe', channel: 'graph_debate', debate_id: debateId }),
+          );
         }
       };
 

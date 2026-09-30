@@ -3,11 +3,7 @@ import { useGraphDebateWebSocket } from '@/hooks/useGraphDebateWebSocket';
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-  },
+  logger: { debug: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
 // Mock WebSocket
@@ -85,9 +81,7 @@ describe('useGraphDebateWebSocket', () => {
 
   describe('initial state', () => {
     it('starts with disconnected status when no debate ID', () => {
-      const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useGraphDebateWebSocket({ wsUrl: 'wss://test.com/ws' }));
 
       // Effect runs and tries to connect, changing status to connecting
       expect(['connecting', 'disconnected']).toContain(result.current.status);
@@ -98,16 +92,14 @@ describe('useGraphDebateWebSocket', () => {
 
     it('does not connect when disabled', () => {
       renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws', enabled: false })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws', enabled: false }),
       );
 
       expect(MockWebSocket.instances).toHaveLength(0);
     });
 
     it('creates WebSocket connection when enabled', async () => {
-      renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       await act(async () => {});
 
@@ -117,9 +109,7 @@ describe('useGraphDebateWebSocket', () => {
 
   describe('connection lifecycle', () => {
     it('sends subscribe message on open with debate ID', async () => {
-      renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       await act(async () => {});
       const ws = getLatestWs();
@@ -137,9 +127,7 @@ describe('useGraphDebateWebSocket', () => {
     });
 
     it('does not send subscribe without debate ID', async () => {
-      renderHook(() =>
-        useGraphDebateWebSocket({ wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useGraphDebateWebSocket({ wsUrl: 'wss://test.com/ws' }));
 
       await act(async () => {});
       const ws = getLatestWs();
@@ -152,9 +140,7 @@ describe('useGraphDebateWebSocket', () => {
     });
 
     it('sets connected status on successful connection', async () => {
-      renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       await act(async () => {});
       const ws = getLatestWs();
@@ -171,7 +157,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('sets disconnected status on normal close', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -191,7 +177,7 @@ describe('useGraphDebateWebSocket', () => {
   describe('graph events', () => {
     it('handles graph_node_added event', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -220,7 +206,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('handles graph_branch_created event', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -248,7 +234,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('handles graph_branch_merged event', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -276,7 +262,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('handles graph_debate_complete event', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -286,10 +272,7 @@ describe('useGraphDebateWebSocket', () => {
         ws.simulateOpen();
         ws.simulateMessage({
           type: 'graph_debate_complete',
-          data: {
-            debate_id: debateId,
-            synthesis: 'Final conclusion',
-          },
+          data: { debate_id: debateId, synthesis: 'Final conclusion' },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -301,7 +284,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('handles debate_branch event', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -311,10 +294,7 @@ describe('useGraphDebateWebSocket', () => {
         ws.simulateOpen();
         ws.simulateMessage({
           type: 'debate_branch',
-          data: {
-            debate_id: debateId,
-            branch_id: 'branch-3',
-          },
+          data: { debate_id: debateId, branch_id: 'branch-3' },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -326,7 +306,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('handles debate_merge event', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -336,10 +316,7 @@ describe('useGraphDebateWebSocket', () => {
         ws.simulateOpen();
         ws.simulateMessage({
           type: 'debate_merge',
-          data: {
-            debate_id: debateId,
-            merged_branch_ids: ['branch-1', 'branch-2'],
-          },
+          data: { debate_id: debateId, merged_branch_ids: ['branch-1', 'branch-2'] },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -351,7 +328,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('ignores non-graph events', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -361,11 +338,7 @@ describe('useGraphDebateWebSocket', () => {
         ws.simulateOpen();
         ws.simulateMessage({
           type: 'agent_message',
-          data: {
-            debate_id: debateId,
-            agent: 'claude',
-            content: 'Regular message',
-          },
+          data: { debate_id: debateId, agent: 'claude', content: 'Regular message' },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -377,7 +350,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('filters events by debate ID', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -388,10 +361,7 @@ describe('useGraphDebateWebSocket', () => {
         // Event for different debate
         ws.simulateMessage({
           type: 'graph_node_added',
-          data: {
-            debate_id: 'different-debate',
-            node_id: 'node-other',
-          },
+          data: { debate_id: 'different-debate', node_id: 'node-other' },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -401,9 +371,7 @@ describe('useGraphDebateWebSocket', () => {
     });
 
     it('accepts events without debate_id when no filter', async () => {
-      const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useGraphDebateWebSocket({ wsUrl: 'wss://test.com/ws' }));
 
       await act(async () => {});
       const ws = getLatestWs();
@@ -412,10 +380,7 @@ describe('useGraphDebateWebSocket', () => {
         ws.simulateOpen();
         ws.simulateMessage({
           type: 'graph_node_added',
-          data: {
-            node_id: 'node-1',
-            content: 'Test',
-          },
+          data: { node_id: 'node-1', content: 'Test' },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -426,7 +391,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('keeps only last 100 events', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -438,10 +403,7 @@ describe('useGraphDebateWebSocket', () => {
         for (let i = 0; i < 105; i++) {
           ws.simulateMessage({
             type: 'graph_node_added',
-            data: {
-              debate_id: debateId,
-              node_id: `node-${i}`,
-            },
+            data: { debate_id: debateId, node_id: `node-${i}` },
             timestamp: Date.now() / 1000,
             seq: i,
           });
@@ -458,7 +420,7 @@ describe('useGraphDebateWebSocket', () => {
   describe('reconnection', () => {
     it('attempts reconnection on abnormal close', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws', autoReconnect: true })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws', autoReconnect: true }),
       );
 
       await act(async () => {});
@@ -487,7 +449,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('does not schedule reconnect when autoReconnect is false', async () => {
       renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws', autoReconnect: false })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws', autoReconnect: false }),
       );
 
       await act(async () => {});
@@ -514,7 +476,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('exposes reconnectAttempt count', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -526,7 +488,7 @@ describe('useGraphDebateWebSocket', () => {
   describe('reconnect function', () => {
     it('manually triggers reconnection', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -559,7 +521,7 @@ describe('useGraphDebateWebSocket', () => {
   describe('clearEvents function', () => {
     it('clears events and lastEvent', async () => {
       const { result } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -590,7 +552,7 @@ describe('useGraphDebateWebSocket', () => {
   describe('cleanup', () => {
     it('closes WebSocket on unmount', async () => {
       const { unmount } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -620,7 +582,7 @@ describe('useGraphDebateWebSocket', () => {
 
     it('clears reconnect timeout on unmount', async () => {
       const { unmount } = renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' })
+        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -647,9 +609,7 @@ describe('useGraphDebateWebSocket', () => {
 
   describe('URL handling', () => {
     it('strips trailing slash from URL', async () => {
-      renderHook(() =>
-        useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws/' })
-      );
+      renderHook(() => useGraphDebateWebSocket({ debateId, wsUrl: 'wss://test.com/ws/' }));
 
       await act(async () => {});
       const ws = getLatestWs();

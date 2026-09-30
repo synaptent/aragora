@@ -117,9 +117,7 @@ describe('PacketDecisionCard', () => {
     );
 
     PACKET_DECISION_OPTIONS.forEach((opt) => {
-      expect(
-        screen.getByTestId(`packet-decision-option-7240-${opt.id}`),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId(`packet-decision-option-7240-${opt.id}`)).toBeInTheDocument();
     });
     expect(PACKET_DECISION_OPTIONS).toHaveLength(5);
   });

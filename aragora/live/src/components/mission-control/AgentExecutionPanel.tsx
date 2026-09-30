@@ -39,7 +39,10 @@ export const AgentExecutionPanel = memo(function AgentExecutionPanel({
         </div>
         <div className="flex items-center gap-2">
           {active.length > 0 && (
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" title={`${active.length} active`} />
+            <span
+              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+              title={`${active.length} active`}
+            />
           )}
           {failed.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-red-400" title={`${failed.length} failed`} />

@@ -85,7 +85,11 @@ const RISK_COLORS: Record<string, { bg: string; text: string; border: string }> 
   unacceptable: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/40' },
   high: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/40' },
   limited: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/40' },
-  minimal: { bg: 'bg-[var(--acid-green)]/10', text: 'text-[var(--acid-green)]', border: 'border-[var(--acid-green)]/40' },
+  minimal: {
+    bg: 'bg-[var(--acid-green)]/10',
+    text: 'text-[var(--acid-green)]',
+    border: 'border-[var(--acid-green)]/40',
+  },
 };
 
 const STATUS_ICONS: Record<string, string> = {
@@ -239,23 +243,42 @@ function getDemoBundle(): ComplianceBundle {
   return {
     bundle_id: `CAB-${Date.now().toString(36).toUpperCase()}`,
     generated_at: now,
-    integrity_hash: 'sha256:' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
+    integrity_hash:
+      'sha256:' +
+      Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
     article_12: {
       event_log: {
         total_events: 47,
-        event_types: ['debate_start', 'proposal', 'critique', 'vote', 'consensus', 'receipt_generated'],
+        event_types: [
+          'debate_start',
+          'proposal',
+          'critique',
+          'vote',
+          'consensus',
+          'receipt_generated',
+        ],
         retention_days: 365,
       },
       technical_documentation: {
-        annex_iv_sections: ['System description', 'Design specifications', 'Risk management', 'Testing procedures'],
+        annex_iv_sections: [
+          'System description',
+          'Design specifications',
+          'Risk management',
+          'Testing procedures',
+        ],
         completeness: 0.85,
       },
     },
     article_13: {
       provider_identity: { name: 'Aragora Platform', contact: 'compliance@aragora.ai' },
       intended_purpose: 'Multi-agent adversarial debate for decision integrity',
-      known_risks: ['Model provider outages', 'Training data biases in individual models', 'Prompt injection attacks'],
-      output_interpretation: 'Decision receipts with confidence scores, dissent trails, and consensus proofs',
+      known_risks: [
+        'Model provider outages',
+        'Training data biases in individual models',
+        'Prompt injection attacks',
+      ],
+      output_interpretation:
+        'Decision receipts with confidence scores, dissent trails, and consensus proofs',
     },
     article_14: {
       oversight_model: 'Human-on-the-loop with override capability',
@@ -264,7 +287,12 @@ function getDemoBundle(): ComplianceBundle {
         'Contrarian agent prevents groupthink',
         'Dissent tracking surfaces disagreements',
       ],
-      override_mechanisms: ['Debate pause/resume', 'Agent removal', 'Manual verdict override', 'Kill switch'],
+      override_mechanisms: [
+        'Debate pause/resume',
+        'Agent removal',
+        'Manual verdict override',
+        'Kill switch',
+      ],
     },
   };
 }
@@ -303,13 +331,17 @@ function RBACCoveragePanel({ data, loading }: { data: RBACCoverage; loading: boo
       </div>
       <div className="p-4">
         {loading ? (
-          <div className="text-xs font-theme-data text-[var(--text-muted)] animate-pulse">Loading...</div>
+          <div className="text-xs font-theme-data text-[var(--text-muted)] animate-pulse">
+            Loading...
+          </div>
         ) : (
           <div className="space-y-4">
             {/* Coverage bar */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-theme-data text-[var(--text-muted)]">Endpoint Coverage</span>
+                <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                  Endpoint Coverage
+                </span>
                 <span className={`text-sm font-theme-data font-bold ${coverageColor}`}>
                   {data.coverage_percent}%
                 </span>
@@ -325,22 +357,38 @@ function RBACCoveragePanel({ data, loading }: { data: RBACCoverage; loading: boo
             {/* Stats grid */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className="text-xl font-theme-data text-[var(--acid-green)]">{data.roles_defined}</div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Roles Defined</div>
+                <div className="text-xl font-theme-data text-[var(--acid-green)]">
+                  {data.roles_defined}
+                </div>
+                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Roles Defined
+                </div>
               </div>
               <div>
-                <div className="text-xl font-theme-data text-[var(--acid-green)]">{data.permissions_defined}</div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Permissions</div>
+                <div className="text-xl font-theme-data text-[var(--acid-green)]">
+                  {data.permissions_defined}
+                </div>
+                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Permissions
+                </div>
               </div>
               <div>
-                <div className="text-xl font-theme-data text-purple-400">{data.assignments_active}</div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Active Assignments</div>
+                <div className="text-xl font-theme-data text-purple-400">
+                  {data.assignments_active}
+                </div>
+                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Active Assignments
+                </div>
               </div>
               <div>
-                <div className={`text-xl font-theme-data ${data.unprotected_endpoints > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+                <div
+                  className={`text-xl font-theme-data ${data.unprotected_endpoints > 0 ? 'text-yellow-400' : 'text-green-400'}`}
+                >
                   {data.unprotected_endpoints}
                 </div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Unprotected Endpoints</div>
+                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Unprotected Endpoints
+                </div>
               </div>
             </div>
 
@@ -413,26 +461,46 @@ function EncryptionStatusPanel({ data, loading }: { data: EncryptionStatus; load
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)]">
       <div className="p-4 border-b border-[var(--border)]">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} ENCRYPTION STATUS</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
+          {'>'} ENCRYPTION STATUS
+        </h3>
       </div>
       <div className="p-4">
         {loading ? (
-          <div className="text-xs font-theme-data text-[var(--text-muted)] animate-pulse">Loading...</div>
+          <div className="text-xs font-theme-data text-[var(--text-muted)] animate-pulse">
+            Loading...
+          </div>
         ) : (
           <div className="space-y-4">
             {/* At-Rest */}
             <div className="p-3 bg-[var(--bg)] border border-[var(--border)] rounded">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-theme-data text-[var(--text)]">At-Rest Encryption</span>
-                <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded ${statusBg(data.at_rest.status)} ${statusColor(data.at_rest.status)}`}>
+                <span className="text-xs font-theme-data text-[var(--text)]">
+                  At-Rest Encryption
+                </span>
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded ${statusBg(data.at_rest.status)} ${statusColor(data.at_rest.status)}`}
+                >
                   {data.at_rest.status}
                 </span>
               </div>
               <div className="space-y-1 text-[10px] font-theme-data text-[var(--text-muted)]">
-                <div>Algorithm: <span className="text-[var(--text)]">{data.at_rest.algorithm}</span></div>
-                <div>Key Rotation: <span className="text-[var(--text)]">every {data.at_rest.key_rotation_days} days</span></div>
+                <div>
+                  Algorithm: <span className="text-[var(--text)]">{data.at_rest.algorithm}</span>
+                </div>
+                <div>
+                  Key Rotation:{' '}
+                  <span className="text-[var(--text)]">
+                    every {data.at_rest.key_rotation_days} days
+                  </span>
+                </div>
                 {data.at_rest.last_rotation && (
-                  <div>Last Rotation: <span className="text-[var(--text)]">{formatRelativeTime(data.at_rest.last_rotation)}</span></div>
+                  <div>
+                    Last Rotation:{' '}
+                    <span className="text-[var(--text)]">
+                      {formatRelativeTime(data.at_rest.last_rotation)}
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -440,14 +508,23 @@ function EncryptionStatusPanel({ data, loading }: { data: EncryptionStatus; load
             {/* In-Transit */}
             <div className="p-3 bg-[var(--bg)] border border-[var(--border)] rounded">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-theme-data text-[var(--text)]">In-Transit Encryption</span>
-                <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded ${statusBg(data.in_transit.status)} ${statusColor(data.in_transit.status)}`}>
+                <span className="text-xs font-theme-data text-[var(--text)]">
+                  In-Transit Encryption
+                </span>
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-theme-data uppercase rounded ${statusBg(data.in_transit.status)} ${statusColor(data.in_transit.status)}`}
+                >
                   {data.in_transit.status}
                 </span>
               </div>
               <div className="space-y-1 text-[10px] font-theme-data text-[var(--text-muted)]">
-                <div>Protocol: <span className="text-[var(--text)]">{data.in_transit.protocol}</span></div>
-                <div>Min Version: <span className="text-[var(--text)]">TLS {data.in_transit.min_version}</span></div>
+                <div>
+                  Protocol: <span className="text-[var(--text)]">{data.in_transit.protocol}</span>
+                </div>
+                <div>
+                  Min Version:{' '}
+                  <span className="text-[var(--text)]">TLS {data.in_transit.min_version}</span>
+                </div>
                 {data.in_transit.certificate_expiry && (
                   <div>
                     Certificate Expiry:{' '}
@@ -488,22 +565,28 @@ function ComplianceFrameworksPanel({
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)]">
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} COMPLIANCE FRAMEWORKS</h3>
-        <span className={`text-lg font-theme-data font-bold ${loading ? 'text-[var(--text-muted)]' : scoreColor}`}>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
+          {'>'} COMPLIANCE FRAMEWORKS
+        </h3>
+        <span
+          className={`text-lg font-theme-data font-bold ${loading ? 'text-[var(--text-muted)]' : scoreColor}`}
+        >
           {loading ? '--' : `${overallScore}%`}
         </span>
       </div>
 
       {loading ? (
-        <div className="p-4 text-xs font-theme-data text-[var(--text-muted)] animate-pulse">Loading...</div>
+        <div className="p-4 text-xs font-theme-data text-[var(--text-muted)] animate-pulse">
+          Loading...
+        </div>
       ) : (
         <>
           <div className="divide-y divide-[var(--border)]">
             {frameworks.map((fw) => {
-              const style = FRAMEWORK_STATUS_STYLES[fw.status] || FRAMEWORK_STATUS_STYLES.not_assessed;
-              const pct = fw.controls_total > 0
-                ? Math.round((fw.controls_met / fw.controls_total) * 100)
-                : 0;
+              const style =
+                FRAMEWORK_STATUS_STYLES[fw.status] || FRAMEWORK_STATUS_STYLES.not_assessed;
+              const pct =
+                fw.controls_total > 0 ? Math.round((fw.controls_met / fw.controls_total) * 100) : 0;
 
               return (
                 <div key={fw.name} className="p-4">
@@ -511,10 +594,14 @@ function ComplianceFrameworksPanel({
                     <div>
                       <div className="text-sm font-theme-data text-[var(--text)]">{fw.name}</div>
                       {fw.notes && (
-                        <div className="text-[10px] font-theme-data text-[var(--text-muted)] mt-0.5">{fw.notes}</div>
+                        <div className="text-[10px] font-theme-data text-[var(--text-muted)] mt-0.5">
+                          {fw.notes}
+                        </div>
                       )}
                     </div>
-                    <span className={`px-2 py-0.5 text-[10px] font-theme-data uppercase ${style.bg} ${style.text} border border-current/30`}>
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-theme-data uppercase ${style.bg} ${style.text} border border-current/30`}
+                    >
                       {style.label}
                     </span>
                   </div>
@@ -560,7 +647,9 @@ function AuditTrailPanel({ entries, loading }: { entries: AuditEntry[]; loading:
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)]">
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} RECENT AUDIT TRAIL</h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
+          {'>'} RECENT AUDIT TRAIL
+        </h3>
         <Link
           href="/audit"
           className="text-[10px] font-theme-data text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors"
@@ -570,7 +659,9 @@ function AuditTrailPanel({ entries, loading }: { entries: AuditEntry[]; loading:
       </div>
 
       {loading ? (
-        <div className="p-4 text-xs font-theme-data text-[var(--text-muted)] animate-pulse">Loading...</div>
+        <div className="p-4 text-xs font-theme-data text-[var(--text-muted)] animate-pulse">
+          Loading...
+        </div>
       ) : entries.length === 0 ? (
         <div className="p-6 text-center text-xs font-theme-data text-[var(--text-muted)]">
           No audit entries recorded
@@ -586,8 +677,12 @@ function AuditTrailPanel({ entries, loading }: { entries: AuditEntry[]; loading:
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-theme-data text-[var(--text)]">{entry.event_type}</span>
-                    <span className={`px-1.5 py-0 text-[10px] font-theme-data rounded ${outcomeStyle.bg} ${outcomeStyle.text}`}>
+                    <span className="text-xs font-theme-data text-[var(--text)]">
+                      {entry.event_type}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0 text-[10px] font-theme-data rounded ${outcomeStyle.bg} ${outcomeStyle.text}`}
+                    >
                       {entry.outcome}
                     </span>
                   </div>
@@ -623,7 +718,10 @@ export default function CompliancePage() {
   const { rbac, rbacFallback, isLoading: rbacLoading } = useRBACCoverage();
   const { encryption, encryptionFallback, isLoading: encryptionLoading } = useEncryptionStatus();
   const { entries: auditEntries, auditFallback, isLoading: auditLoading } = useAuditTrail(8);
-  const { data: healthData, isLoading: healthLoading } = useSWRFetch<HealthResponse>('/api/health', { refreshInterval: 60000 });
+  const { data: healthData, isLoading: healthLoading } = useSWRFetch<HealthResponse>(
+    '/api/health',
+    { refreshInterval: 60000 },
+  );
 
   // New RBAC coverage endpoint (v1) — used to populate the RBAC coverage card
   const { data: v1RbacData, isLoading: v1RbacLoading } = useSWRFetch<{
@@ -646,9 +744,10 @@ export default function CompliancePage() {
     : baseRBAC;
   const effectiveEncryption = encryption ?? encryptionFallback;
   const effectiveAudit = auditEntries ?? auditFallback;
-  const dbMode: string = (healthData as HealthResponse | null)?.db_mode
-    ?? (healthData as HealthResponse | null)?.database_mode
-    ?? 'unknown';
+  const dbMode: string =
+    (healthData as HealthResponse | null)?.db_mode ??
+    (healthData as HealthResponse | null)?.database_mode ??
+    'unknown';
 
   // EU AI Act interactive state
   const [euAiActExpanded, setEuAiActExpanded] = useState(false);
@@ -731,26 +830,29 @@ export default function CompliancePage() {
     setGeneratingBundle(true);
 
     try {
-      const response = await fetch(`${backendConfig.api}/api/v2/compliance/eu-ai-act/generate-bundle`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          receipt: {
-            question: useCase,
-            verdict: 'approved_with_conditions',
-            confidence: 0.78,
-            consensus: { reached: true, method: 'majority' },
-            agents: ['anthropic', 'openai', 'mistral'],
-            rounds_used: 2,
+      const response = await fetch(
+        `${backendConfig.api}/api/v2/compliance/eu-ai-act/generate-bundle`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.access_token || ''}`,
           },
-          provider_name: 'Aragora Platform',
-          system_name: 'Decision Integrity Engine',
-          system_version: '1.0',
-        }),
-      });
+          body: JSON.stringify({
+            receipt: {
+              question: useCase,
+              verdict: 'approved_with_conditions',
+              confidence: 0.78,
+              consensus: { reached: true, method: 'majority' },
+              agents: ['anthropic', 'openai', 'mistral'],
+              rounds_used: 2,
+            },
+            provider_name: 'Aragora Platform',
+            system_name: 'Decision Integrity Engine',
+            system_version: '1.0',
+          }),
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -765,7 +867,9 @@ export default function CompliancePage() {
     }
   }, [useCase, backendConfig.api, tokens?.access_token]);
 
-  const riskStyle = classification ? RISK_COLORS[classification.risk_level] || RISK_COLORS.minimal : null;
+  const riskStyle = classification
+    ? RISK_COLORS[classification.risk_level] || RISK_COLORS.minimal
+    : null;
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -778,7 +882,9 @@ export default function CompliancePage() {
             <Link href="/" className="hover:text-[var(--acid-green)]">
               <AsciiBannerCompact />
             </Link>
-            <span className="text-[var(--text-muted)] font-theme-data text-sm">{'//'} COMPLIANCE DASHBOARD</span>
+            <span className="text-[var(--text-muted)] font-theme-data text-sm">
+              {'//'} COMPLIANCE DASHBOARD
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <BackendSelector />
@@ -813,11 +919,17 @@ export default function CompliancePage() {
         {/* ============================================================= */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <PanelErrorBoundary panelName="RBAC Coverage">
-            <RBACCoveragePanel data={effectiveRBAC} loading={(rbacLoading && !rbac) || (v1RbacLoading && !v1RbacData)} />
+            <RBACCoveragePanel
+              data={effectiveRBAC}
+              loading={(rbacLoading && !rbac) || (v1RbacLoading && !v1RbacData)}
+            />
           </PanelErrorBoundary>
 
           <PanelErrorBoundary panelName="Encryption Status">
-            <EncryptionStatusPanel data={effectiveEncryption} loading={encryptionLoading && !encryption} />
+            <EncryptionStatusPanel
+              data={effectiveEncryption}
+              loading={encryptionLoading && !encryption}
+            />
           </PanelErrorBoundary>
         </div>
 
@@ -840,14 +952,17 @@ export default function CompliancePage() {
                 <h3 className="text-xs font-theme-data font-bold text-[var(--text-primary)] uppercase tracking-wider">
                   Receipt Anchor Verification
                 </h3>
-                <span className="text-[10px] font-theme-data text-[var(--text-muted)]">Coming soon</span>
+                <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Coming soon
+                </span>
               </div>
               <div className="text-xs font-theme-data text-[var(--text-muted)] space-y-2">
                 <p>Verify decision receipt integrity against on-chain anchors.</p>
                 <p>SHA-256 hashes are anchored after each debate settlement.</p>
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded bg-[var(--bg)] border border-dashed border-[var(--border)]">
                   <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
-                    Anchor verification will be available once the settlement hook infrastructure is production-ready.
+                    Anchor verification will be available once the settlement hook infrastructure is
+                    production-ready.
                   </span>
                 </div>
               </div>
@@ -887,29 +1002,41 @@ export default function CompliancePage() {
             href="/policy"
             className="p-3 bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--acid-green)]/50 transition-colors text-center"
           >
-            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">Policies</div>
+            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">
+              Policies
+            </div>
             <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Manage rules</div>
           </Link>
           <Link
             href="/audit"
             className="p-3 bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--acid-green)]/50 transition-colors text-center"
           >
-            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">Audit</div>
+            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">
+              Audit
+            </div>
             <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Audit trails</div>
           </Link>
           <Link
             href="/receipts"
             className="p-3 bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--acid-green)]/50 transition-colors text-center"
           >
-            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">Receipts</div>
-            <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Decision records</div>
+            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">
+              Receipts
+            </div>
+            <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+              Decision records
+            </div>
           </Link>
           <Link
             href="/privacy"
             className="p-3 bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--acid-green)]/50 transition-colors text-center"
           >
-            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">Privacy</div>
-            <div className="text-[10px] font-theme-data text-[var(--text-muted)]">GDPR controls</div>
+            <div className="text-xs font-theme-data text-[var(--text)] hover:text-[var(--acid-green)]">
+              Privacy
+            </div>
+            <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+              GDPR controls
+            </div>
           </Link>
         </div>
 
@@ -922,7 +1049,9 @@ export default function CompliancePage() {
             className="w-full p-4 flex items-center justify-between hover:bg-[var(--bg)]/30 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} EU AI ACT TOOLKIT</h3>
+              <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
+                {'>'} EU AI ACT TOOLKIT
+              </h3>
               <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
                 Risk classification, conformity assessment, artifact bundles
               </span>
@@ -937,7 +1066,9 @@ export default function CompliancePage() {
               {/* Step 1: Risk Classification */}
               <PanelErrorBoundary panelName="Risk Classification">
                 <section>
-                  <h2 className="text-base font-theme-data mb-1 text-[var(--text)]">1. CLASSIFY AI USE CASE</h2>
+                  <h2 className="text-base font-theme-data mb-1 text-[var(--text)]">
+                    1. CLASSIFY AI USE CASE
+                  </h2>
                   <p className="text-xs text-[var(--text-muted)] font-theme-data mb-4">
                     Describe your AI system to determine its risk category under the EU AI Act
                   </p>
@@ -983,10 +1114,15 @@ export default function CompliancePage() {
 
                       {classification.annex_iii_categories.length > 0 && (
                         <div className="mb-2">
-                          <span className="text-xs font-theme-data text-[var(--text-muted)]">Annex III Categories:</span>
+                          <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                            Annex III Categories:
+                          </span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {classification.annex_iii_categories.map((cat, i) => (
-                              <span key={i} className="px-2 py-0.5 text-xs font-theme-data bg-[var(--bg)]/50 rounded">
+                              <span
+                                key={i}
+                                className="px-2 py-0.5 text-xs font-theme-data bg-[var(--bg)]/50 rounded"
+                              >
                                 {cat}
                               </span>
                             ))}
@@ -995,10 +1131,15 @@ export default function CompliancePage() {
                       )}
 
                       <div className="mb-2">
-                        <span className="text-xs font-theme-data text-[var(--text-muted)]">Applicable Articles:</span>
+                        <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                          Applicable Articles:
+                        </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {classification.applicable_articles.map((art, i) => (
-                            <span key={i} className="px-2 py-0.5 text-xs font-theme-data bg-[var(--bg)]/50 rounded">
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 text-xs font-theme-data bg-[var(--bg)]/50 rounded"
+                            >
                               {art}
                             </span>
                           ))}
@@ -1007,7 +1148,9 @@ export default function CompliancePage() {
 
                       {classification.matched_keywords.length > 0 && (
                         <div>
-                          <span className="text-xs font-theme-data text-[var(--text-muted)]">Matched Keywords:</span>
+                          <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                            Matched Keywords:
+                          </span>
                           <span className="text-xs font-theme-data ml-2">
                             {classification.matched_keywords.join(', ')}
                           </span>
@@ -1033,29 +1176,41 @@ export default function CompliancePage() {
               {showAssessments && (
                 <PanelErrorBoundary panelName="Conformity Assessment">
                   <section>
-                    <h2 className="text-base font-theme-data mb-1 text-[var(--text)]">2. CONFORMITY ASSESSMENT</h2>
+                    <h2 className="text-base font-theme-data mb-1 text-[var(--text)]">
+                      2. CONFORMITY ASSESSMENT
+                    </h2>
                     <p className="text-xs text-[var(--text-muted)] font-theme-data mb-4">
                       Article-by-article compliance status based on your decision receipt
                     </p>
 
                     <div className="space-y-3">
                       {assessments.map((assessment) => (
-                        <details key={assessment.article} className="border border-[var(--border)] rounded overflow-hidden">
+                        <details
+                          key={assessment.article}
+                          className="border border-[var(--border)] rounded overflow-hidden"
+                        >
                           <summary className="p-3 bg-[var(--surface)]/50 cursor-pointer hover:bg-[var(--surface)] transition-colors flex items-center justify-between">
                             <span className="font-theme-data text-sm text-[var(--text)]">
                               {assessment.article}: {assessment.title}
                             </span>
-                            <span className={`font-theme-data text-xs ${STATUS_COLORS[assessment.status]}`}>
+                            <span
+                              className={`font-theme-data text-xs ${STATUS_COLORS[assessment.status]}`}
+                            >
                               {STATUS_ICONS[assessment.status]}
                             </span>
                           </summary>
                           <div className="p-3 border-t border-[var(--border)] text-sm">
                             {assessment.findings.length > 0 && (
                               <div className="mb-2">
-                                <span className="text-xs font-theme-data text-[var(--text-muted)]">Findings:</span>
+                                <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                                  Findings:
+                                </span>
                                 <ul className="mt-1 space-y-1">
                                   {assessment.findings.map((f, i) => (
-                                    <li key={i} className="text-xs font-theme-data pl-3 border-l-2 border-[var(--acid-green)]/40">
+                                    <li
+                                      key={i}
+                                      className="text-xs font-theme-data pl-3 border-l-2 border-[var(--acid-green)]/40"
+                                    >
                                       {f}
                                     </li>
                                   ))}
@@ -1064,10 +1219,15 @@ export default function CompliancePage() {
                             )}
                             {assessment.recommendations.length > 0 && (
                               <div>
-                                <span className="text-xs font-theme-data text-[var(--text-muted)]">Recommendations:</span>
+                                <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                                  Recommendations:
+                                </span>
                                 <ul className="mt-1 space-y-1">
                                   {assessment.recommendations.map((r, i) => (
-                                    <li key={i} className="text-xs font-theme-data pl-3 border-l-2 border-yellow-400/40">
+                                    <li
+                                      key={i}
+                                      className="text-xs font-theme-data pl-3 border-l-2 border-yellow-400/40"
+                                    >
                                       {r}
                                     </li>
                                   ))}
@@ -1094,7 +1254,9 @@ export default function CompliancePage() {
               {bundle && (
                 <PanelErrorBoundary panelName="Compliance Bundle">
                   <section>
-                    <h2 className="text-base font-theme-data mb-1 text-[var(--text)]">3. COMPLIANCE ARTIFACT BUNDLE</h2>
+                    <h2 className="text-base font-theme-data mb-1 text-[var(--text)]">
+                      3. COMPLIANCE ARTIFACT BUNDLE
+                    </h2>
                     <div className="flex items-center gap-4 mb-4">
                       <span className="text-xs font-theme-data text-[var(--text-muted)]">
                         Bundle: {bundle.bundle_id}
@@ -1132,7 +1294,7 @@ export default function CompliancePage() {
                               ? bundle.article_13
                               : bundle.article_14,
                           null,
-                          2
+                          2,
                         )}
                       </pre>
                     </div>
@@ -1140,7 +1302,9 @@ export default function CompliancePage() {
                     <div className="mt-4 flex gap-2">
                       <button
                         onClick={() => {
-                          const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+                          const blob = new Blob([JSON.stringify(bundle, null, 2)], {
+                            type: 'application/json',
+                          });
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
                           a.href = url;

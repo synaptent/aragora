@@ -99,6 +99,7 @@ from aragora.server.oauth_state_store import (  # noqa: F401
 
 import logging as _logging
 import sys as _sys
+from typing import Any
 from urllib.parse import urlparse as _urlparse
 
 _logger = _logging.getLogger(__name__)
@@ -182,7 +183,7 @@ if "_validate_redirect_url" not in globals():
         return _validate_redirect_url_impl(redirect_url)
 
 
-def _validate_state(state: str):
+def _validate_state(state: str) -> dict[str, Any] | None:
     """Validate an OAuth state token.
 
     Wraps ``_validate_state_internal`` so that tests can patch
