@@ -2252,7 +2252,9 @@ class ConsensusPhase:
     ) -> None:
         """Publish exact per-slot majority outcomes as additive result metadata."""
         result = require_phase_result(ctx)
-        metadata = result.metadata if isinstance(result.metadata, dict) else {}
+        metadata = getattr(result, "metadata", None)
+        if not isinstance(metadata, dict):
+            metadata = {}
         metadata["vote_participation"] = {
             "eligible": snapshot.eligible_count,
             "received": len(collection.ballots),

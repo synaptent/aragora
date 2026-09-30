@@ -691,17 +691,21 @@ class VoteCollector:
         failed_ids: set[int] = set()
         early_leader: str | None = None
 
-        async def cast_vote(slot: VoterSlot, agent: Agent) -> Any:
+        async def cast_vote(slot: VoterSlot, agent: Agent) -> tuple[VoterSlot, Any]:
+            # A 2-tuple result is what _VoteTaskOwner inspects on detached tasks,
+            # so a returned control-flow value still reaches the loop handler.
             logger.debug("agent_voting agent=%s slot=%s", slot.name, slot.index)
             try:
                 proposal_view = dict(proposals)
                 if with_timeout:
-                    return await with_timeout(
+                    vote_result = await with_timeout(
                         vote_with_agent(agent, proposal_view, task_text),
                         slot.name,
                         timeout_seconds=effective_agent_timeout,
                     )
-                return await vote_with_agent(agent, proposal_view, task_text)
+                else:
+                    vote_result = await vote_with_agent(agent, proposal_view, task_text)
+                return (slot, vote_result)
             except (ValueError, KeyError, TypeError) as error:  # noqa: BLE001
                 logger.warning(
                     "vote_exception agent=%s slot=%s error=%s: %s",
@@ -710,7 +714,7 @@ class VoteCollector:
                     type(error).__name__,
                     error,
                 )
-                return error
+                return (slot, error)
 
         tasks = [asyncio.create_task(cast_vote(slot, agent)) for slot, agent in roster]
         binding_by_task = {task: roster[index] for index, task in enumerate(tasks)}
@@ -719,7 +723,7 @@ class VoteCollector:
         def consume_vote(completed_task: asyncio.Task[Any]) -> None:
             slot, agent = binding_by_task[completed_task]
             try:
-                vote_result = completed_task.result()
+                _slot, vote_result = completed_task.result()
             except asyncio.CancelledError:
                 raise
             except BaseException as error:  # noqa: BLE001 - preserve control flow
