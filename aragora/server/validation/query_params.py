@@ -281,6 +281,16 @@ def safe_query_float(
         return default
 
 
+def parse_iso_datetime(raw: Any) -> datetime:
+    """Parse an ISO 8601 value; an offset-bearing value becomes naive local time.
+
+    The accounting services store naive local ``datetime.now()`` timestamps, and
+    comparing naive with aware datetimes raises ``TypeError``.
+    """
+    value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    return value.astimezone().replace(tzinfo=None) if value.tzinfo else value
+
+
 def parse_date_range_params(
     query: Any,
 ) -> tuple[datetime | None, datetime | None, str | None]:
@@ -300,7 +310,7 @@ def parse_date_range_params(
         parsed[key] = None
         if raw:
             try:
-                parsed[key] = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                parsed[key] = parse_iso_datetime(raw)
             except ValueError:
                 return None, None, f"{key} must be an ISO format date"
     return parsed["start_date"], parsed["end_date"], None

@@ -36,7 +36,6 @@ import base64
 import binascii
 import logging
 import threading
-from datetime import datetime
 from typing import Any
 
 from aragora.server.handlers.base import (
@@ -48,7 +47,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
-from aragora.server.validation.query_params import parse_date_range_params
+from aragora.server.validation.query_params import parse_date_range_params, parse_iso_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -242,14 +241,14 @@ async def handle_create_invoice(
         invoice_date = None
         if data.get("invoice_date"):
             try:
-                invoice_date = datetime.fromisoformat(data["invoice_date"].replace("Z", "+00:00"))
+                invoice_date = parse_iso_datetime(data["invoice_date"])
             except ValueError:
                 return error_response("Invalid invoice_date format", status=400)
 
         due_date = None
         if data.get("due_date"):
             try:
-                due_date = datetime.fromisoformat(data["due_date"].replace("Z", "+00:00"))
+                due_date = parse_iso_datetime(data["due_date"])
             except ValueError:
                 return error_response("Invalid due_date format", status=400)
 
@@ -715,7 +714,7 @@ async def handle_schedule_payment(
         pay_date = None
         if data.get("pay_date"):
             try:
-                pay_date = datetime.fromisoformat(data["pay_date"].replace("Z", "+00:00"))
+                pay_date = parse_iso_datetime(data["pay_date"])
             except ValueError:
                 return error_response("Invalid pay_date format", status=400)
 
@@ -852,16 +851,14 @@ async def handle_create_purchase_order(
         order_date = None
         if data.get("order_date"):
             try:
-                order_date = datetime.fromisoformat(data["order_date"].replace("Z", "+00:00"))
+                order_date = parse_iso_datetime(data["order_date"])
             except ValueError:
                 logger.debug("Invalid order_date format: %s", data.get("order_date"))
 
         expected_delivery = None
         if data.get("expected_delivery"):
             try:
-                expected_delivery = datetime.fromisoformat(
-                    data["expected_delivery"].replace("Z", "+00:00")
-                )
+                expected_delivery = parse_iso_datetime(data["expected_delivery"])
             except ValueError:
                 logger.debug("Invalid expected_delivery format: %s", data.get("expected_delivery"))
 
@@ -1135,8 +1132,11 @@ class InvoiceHandler(BaseHandler):
         query_params: dict[str, Any] | None = None,
         handler: Any = None,
     ) -> HandlerResult:
-        """Handle POST requests."""
-        data: dict[str, Any] = query_params or {}
+        """Handle POST requests; direct calls without a request handler pass the body dict."""
+        body = self.read_json_body(handler) if handler is not None else query_params
+        if body is None:
+            return error_response("Invalid JSON body", status=400)
+        data: dict[str, Any] = body or {}
 
         if path == "/api/v1/accounting/invoices/upload":
             return await handle_upload_invoice(data, handler=handler)

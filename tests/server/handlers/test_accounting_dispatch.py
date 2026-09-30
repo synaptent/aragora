@@ -8,6 +8,7 @@ by the production token code and are checked by the unpatched
 
 from __future__ import annotations
 
+import base64
 import functools
 import io
 import json
@@ -17,14 +18,14 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 
 import pytest
 
 from aragora.server.handler_registry import HANDLER_REGISTRY, HandlerRegistryMixin
 from aragora.server.handler_registry.admin import ADMIN_HANDLER_REGISTRY
 from aragora.server.handler_registry.core import RouteIndex, _DeferredImport
-from aragora.server.handlers.base import HandlerResult, json_response
+from aragora.server.handlers.base import json_response
 from aragora.server.handlers.finance import (
     ap_automation,
     ar_automation,
@@ -66,7 +67,7 @@ INTEGRATION_GATED = [
 ]
 CALLBACKS = [f"{A}/callback", f"{A}/gusto/callback"]
 
-# (method, path, owner, permission). Dynamic ids are unknown on purpose.
+# (method, path, owner, permission). The fresh_services fixture seeds the ids.
 MATRIX: list[tuple[str, str, str, str]] = [
     *[("GET", f"{A}/ap/{p}", AP, "ap:read") for p in ("invoices", "forecast", "discounts")],
     ("GET", f"{A}/ap/invoices/inv-x", AP, "ap:read"),
@@ -112,6 +113,38 @@ MATRIX: list[tuple[str, str, str, str]] = [
     ],
 ]
 CALLBACK_ROUTES = [(method, path) for path in CALLBACKS for method in ("GET", "POST")]
+PDF = base64.b64encode(b"%PDF-1.4 test").decode()
+BODIES: dict[str, dict[str, Any]] = {
+    "POST ap/invoices": {
+        "vendor_id": "v",
+        "vendor_name": "Vendor",
+        "total_amount": 10,
+        "priority": "high",
+        "early_pay_discount": 0.02,
+        "discount_deadline": "2026-06-11",
+    },
+    "POST ap/invoices/inv-x/payment": {"amount": 5, "payment_date": "2026-06-05"},
+    "POST ap/optimize": {"available_cash": 50},
+    "POST ap/batch": {"invoice_ids": ["inv-x"], "payment_method": "wire"},
+    "POST ar/invoices": {
+        "customer_id": "cust-x",
+        "customer_name": "Customer",
+        "line_items": [{"description": "Work", "amount": 10}],
+    },
+    "POST ar/customers": {"customer_id": "cust-2", "name": "Customer 2"},
+    "POST ar/invoices/inv-x/payment": {"amount": 5},
+    "POST invoices/upload": {"document_data": PDF},
+    "POST invoices": {"vendor_name": "Vendor", "total_amount": 10, "invoice_date": "2026-06-02"},
+    "POST purchase-orders": {"po_number": "PO-1", "vendor_name": "Vendor", "total_amount": 10},
+    "POST invoices/inv-x/reject": {"reason": "duplicate"},
+    "POST invoices/inv-x/schedule": {"pay_date": "2026-08-01", "payment_method": "wire"},
+    "POST expenses/upload": {"receipt_data": PDF},
+    "POST expenses": {"vendor_name": "Vendor", "amount": 10, "date": "2026-06-02"},
+    "POST expenses/categorize": {"expense_ids": ["exp-x"]},
+    "POST expenses/sync": {"expense_ids": ["exp-x"]},
+    "POST expenses/exp-x/reject": {"reason": "duplicate"},
+    "PUT expenses/exp-x": {"amount": 42},
+}
 
 
 def route_id(value: Any) -> str:
@@ -145,16 +178,33 @@ def real_auth(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def fresh_services(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real in-memory services, each holding one record dated 2026-06-01 under the MATRIX ids."""
     from aragora.resilience import CircuitBreaker
-    from aragora.services.ap_automation import APAutomation
-    from aragora.services.ar_automation import ARAutomation
+    from aragora.services.ap_automation import APAutomation, PayableInvoice
+    from aragora.services.ar_automation import ARAutomation, ARInvoice
+    from aragora.services.expense_tracker import ExpenseRecord, ExpenseTracker
+    from aragora.services.invoice_processor import InvoiceData, InvoiceProcessor, PaymentSchedule
+    from aragora.services.invoice_processor import InvoiceStatus
 
-    monkeypatch.setattr(ap_automation, "_ap_automation", APAutomation())
-    monkeypatch.setattr(ar_automation, "_ar_automation", ARAutomation())
+    ap, ar = APAutomation(), ARAutomation()
+    processor = InvoiceProcessor(enable_ocr=False, enable_llm_extraction=False)
+    tracker = ExpenseTracker(enable_ocr=False, enable_llm_categorization=False)
+    day, amount = datetime(2026, 6, 1), Decimal("100")
+    money = {"total_amount": amount, "balance": amount}
+    ap._store_invoice(PayableInvoice("inv-x", "v", "Vendor", invoice_date=day, **money))
+    ar._customers["cust-x"] = {"id": "cust-x", "name": "Customer", "email": "c@example.com"}
+    ar._store_invoice(ARInvoice("inv-x", "cust-x", "Customer", "c@example.com", **money))
+    processor._store_invoice(
+        InvoiceData("inv-x", "Vendor", invoice_date=day, status=InvoiceStatus.APPROVED)
+    )
+    processor._payment_schedule["inv-x"] = PaymentSchedule("inv-x", day, amount, "v", "Vendor")
+    tracker._store_expense(ExpenseRecord("exp-x", "Vendor", amount, date=day))
+    monkeypatch.setattr(ap_automation, "_ap_automation", ap)
+    monkeypatch.setattr(ar_automation, "_ar_automation", ar)
     monkeypatch.setattr(ap_automation, "_ap_circuit_breaker", CircuitBreaker())
     monkeypatch.setattr(ar_automation, "_ar_circuit_breaker", CircuitBreaker())
-    monkeypatch.setattr(invoices, "_invoice_processor", None)
-    monkeypatch.setattr(expenses, "_expense_tracker", None)
+    monkeypatch.setattr(invoices, "_invoice_processor", processor)
+    monkeypatch.setattr(expenses, "_expense_tracker", tracker)
     invoices.reset_invoice_circuit_breaker()
     expenses.reset_expense_circuit_breaker()
 
@@ -170,10 +220,9 @@ def token(role: str) -> str:
 
 
 def dispatch(
-    method: str, path: str, role: str | None = None, query: str = ""
+    method: str, path: str, role: str | None = None, query: str = "", body: bytes = b"{}"
 ) -> tuple[int, dict[str, Any]]:
     """Serve one request through the registry; return (status, JSON body)."""
-    body = b"{}"
     inst: Any = _Registry()
     inst.command = method
     inst.headers = {"Content-Length": str(len(body))}
@@ -212,15 +261,11 @@ def dispatch(
     return status, payload
 
 
-def assert_authorized(method: str, path: str, owner: str, status: int, body: dict) -> None:
+def assert_authorized(owner: str, status: int, body: dict) -> None:
     if owner == INT:
         assert (status, body) == (503, NOT_CONFIGURED)
-    elif method == "GET" and not re.search(r"-x(/|$)", path):
-        assert status == 200 and "error" not in body, (status, body)
     else:
-        assert status in (200, 201, 400, 404), (status, body)
-        if status >= 400:
-            assert isinstance(body.get("error"), str) and body["error"]
+        assert 200 <= status < 300 and "error" not in body, (status, body)
 
 
 @pytest.mark.parametrize(("method", "path", "owner", "perm"), MATRIX, ids=matrix_ids(MATRIX))
@@ -228,9 +273,10 @@ def test_authorized_caller(
     method: str, path: str, owner: str, perm: str, record_property: Any
 ) -> None:
     role = "owner" if perm == SYSTEM else "admin"
-    status, body = dispatch(method, path, role)
+    data = BODIES.get(f"{method} {path.removeprefix(A + '/')}", {})
+    status, body = dispatch(method, path, role, body=json.dumps(data).encode())
     record_property("caller", f"{role}:{status}:{body.get('error') or body.get('code') or ''}")
-    assert_authorized(method, path, owner, status, body)
+    assert_authorized(owner, status, body)
 
 
 @pytest.mark.parametrize(("method", "path", "owner", "perm"), MATRIX, ids=matrix_ids(MATRIX))
@@ -258,7 +304,7 @@ def test_member_caller(method: str, path: str, owner: str, perm: str, record_pro
     status, body = dispatch(method, path, "member")
     record_property("caller", f"member:{status}:{body.get('error') or body.get('code') or ''}")
     if perm == READ:
-        assert_authorized(method, path, owner, status, body)
+        assert_authorized(owner, status, body)
     else:
         assert (status, body) == (403, {"error": "Permission denied"})
 
@@ -269,6 +315,39 @@ def test_oauth_callback_not_configured_for_every_caller(
     method: str, path: str, role: str | None
 ) -> None:
     assert dispatch(method, path, role) == (503, NOT_CONFIGURED)
+
+
+BODY_ROUTES = [(m, p) for m, p, owner, _ in MATRIX if owner != INT and m in ("POST", "PUT")]
+
+
+@pytest.mark.parametrize("raw", [b"{", b"[]"], ids=["truncated", "array"])
+@pytest.mark.parametrize(("role", "expected"), [(None, 401), ("viewer", 403), ("admin", 400)])
+@pytest.mark.parametrize(("method", "path"), BODY_ROUTES, ids=matrix_ids(BODY_ROUTES))
+def test_malformed_body_after_permission_check(
+    method: str, path: str, role: str | None, expected: int, raw: bytes
+) -> None:
+    status, body = dispatch(method, path, role, body=raw)
+    assert status == expected and isinstance(body.get("error"), str) and body["error"], body
+
+
+@pytest.mark.parametrize(
+    ("path", "data"),
+    [
+        ("ap/invoices", {**BODIES["POST ap/invoices"], "priority": "urgent"}),
+        ("ap/batch", {"invoice_ids": ["inv-x"], "payment_method": "cash"}),
+    ],
+    ids=["priority", "payment_method"],
+)
+def test_invalid_ap_enum_400(path: str, data: dict[str, Any]) -> None:
+    status, body = dispatch("POST", f"{A}/{path}", "admin", body=json.dumps(data).encode())
+    assert status == 400 and body["error"]
+
+
+def test_expense_put_is_stored() -> None:
+    update = json.dumps({"amount": 42, "vendor_name": "Renamed"}).encode()
+    assert dispatch("PUT", f"{A}/expenses/exp-x", "admin", body=update)[0] == 200
+    status, body = dispatch("GET", f"{A}/expenses/exp-x", "admin")
+    assert (body["expense"]["amount"], body["expense"]["vendorName"]) == (42, "Renamed")
 
 
 def declared_routes(cls: Any) -> set[tuple[str, str]]:
@@ -386,6 +465,48 @@ def test_malformed_date_filter_400(path: str, param: str, query: str) -> None:
 def test_well_formed_date_filters_200(path: str) -> None:
     status, body = dispatch("GET", path, "admin", "start_date=2026-01-01&end_date=2026-12-31")
     assert status == 200 and "error" not in body, body
+
+
+TZ_SITES = {
+    "invoices": lambda body: body["data"]["total"],
+    "payments/scheduled": lambda body: body["data"]["count"],
+    "expenses": lambda body: body["total"],
+    "expenses/stats": lambda body: body["stats"]["totalExpenses"],
+    "expenses/export": lambda body: body["data"].count("Vendor"),
+}
+
+
+@pytest.mark.parametrize(
+    ("query", "count"),
+    [
+        ({"start_date": "2026-05-01T00:00:00Z"}, 1),
+        ({"start_date": "2026-07-01T00:00:00+02:00"}, 0),
+        ({"end_date": "2026-07-01T00:00:00Z"}, 1),
+        ({"end_date": "2026-05-01T00:00:00+02:00"}, 0),
+    ],
+    ids=["start_z", "start_offset", "end_z", "end_offset"],
+)
+@pytest.mark.parametrize("site", TZ_SITES)
+def test_timezone_date_filters(site: str, query: dict[str, str], count: int) -> None:
+    """The seeded records are dated 2026-06-01, a month from each bound."""
+    status, body = dispatch("GET", f"{A}/{site}", "admin", urlencode(query))
+    assert status == 200 and TZ_SITES[site](body) == count, body
+
+
+def test_offset_dated_bodies_keep_lists_working() -> None:
+    dated = {"invoice_date": "2026-06-02T00:00:00Z", "due_date": "2026-07-02T00:00:00+02:00"}
+    for path, data in [
+        ("ap/invoices", {**BODIES["POST ap/invoices"], **dated}),
+        ("invoices", {**BODIES["POST invoices"], **dated}),
+        ("invoices/inv-x/schedule", {"pay_date": "2026-06-03T00:00:00+02:00"}),
+        ("expenses", {**BODIES["POST expenses"], "date": "2026-06-02T00:00:00+02:00"}),
+    ]:
+        status, body = dispatch("POST", f"{A}/{path}", "admin", body=json.dumps(data).encode())
+        assert status == 200, (path, body)
+    for path in ["ap/invoices", *TZ_SITES]:
+        for query in ("", "start_date=2026-05-01&end_date=2026-07-01"):
+            status, body = dispatch("GET", f"{A}/{path}", "admin", query)
+            assert status == 200 and "error" not in body, (path, query, body)
 
 
 @pytest.mark.parametrize(
@@ -512,16 +633,6 @@ async def test_invoices_handle_forwards_request_handler() -> None:
         result = await invoice.handle(f"{A}/invoices", query, http)
     assert result is expected
     get.assert_awaited_once_with(f"{A}/invoices", query, handler=http)
-
-
-@pytest.mark.parametrize("module", [ap_automation, ar_automation])
-@pytest.mark.parametrize("body", [b"{", b"[]", b"null"])
-async def test_post_rejects_invalid_json(module: Any, body: bytes) -> None:
-    cls = module.APAutomationHandler if module is ap_automation else module.ARAutomationHandler
-    area = "ap" if module is ap_automation else "ar"
-    result = await cls({}).handle_post(f"{A}/{area}/invoices", {}, request(body))
-    assert isinstance(result, HandlerResult)
-    assert result.status_code == 400
 
 
 @pytest.mark.parametrize("module", [ap_automation, ar_automation])

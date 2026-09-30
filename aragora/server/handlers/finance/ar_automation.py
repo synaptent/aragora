@@ -114,8 +114,7 @@ async def handle_create_invoice(
         customer_email: str (optional),
         line_items: list[{description, quantity, unit_price, amount}] (required),
         payment_terms: str (optional, default "Net 30"),
-        memo: str (optional),
-        tax_rate: float (optional, default 0)
+        memo: str (optional)
     }
     """
     # Check circuit breaker before processing
@@ -153,7 +152,6 @@ async def handle_create_invoice(
                 line_items=line_items,
                 payment_terms=data.get("payment_terms", "Net 30"),
                 memo=data.get("memo", ""),
-                tax_rate=data.get("tax_rate", 0),
             )
 
         return success_response(
@@ -614,10 +612,7 @@ async def handle_add_customer(
     Body: {
         customer_id: str (required),
         name: str (required),
-        email: str (optional),
-        phone: str (optional),
-        address: str (optional),
-        payment_terms: str (optional, default "Net 30")
+        email: str (optional)
     }
     """
     # Validate required fields before service call
@@ -650,7 +645,6 @@ async def handle_add_customer(
                 customer_id=customer_id.strip(),
                 name=name.strip(),
                 email=data.get("email"),
-                payment_terms=data.get("payment_terms", "Net 30"),
             )
 
         return success_response(
@@ -712,6 +706,15 @@ async def handle_get_customer_balance(
     except (TypeError, ValueError, AttributeError, OSError):
         logger.exception("Error getting balance for customer %s", customer_id)
         return error_response("Failed to retrieve balance", status=500)
+
+
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
 
 
 # =============================================================================
@@ -780,7 +783,8 @@ class ARAutomationHandler(BaseHandler):
         """Read the HTTP body and dispatch AR mutations."""
         data = self.read_json_body(handler)
         if data is None:
-            return error_response("Invalid JSON body", status=400)
+            permission = "ar:read" if path.endswith("/reminder") else "finance:write"
+            return await _reject_invalid_body(permission, handler)
         if path == "/api/v1/accounting/ar/invoices":
             return await handle_create_invoice(data, handler=handler)
         if path == "/api/v1/accounting/ar/customers":

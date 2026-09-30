@@ -44,6 +44,7 @@ from aragora.server.handlers.ap_automation import (
     handle_record_payment,
 )
 from aragora.server.handlers.base import HandlerResult
+from aragora.services.ap_automation import PaymentMethod
 
 
 # ---------------------------------------------------------------------------
@@ -911,19 +912,11 @@ class TestOptimizePayments:
         assert "No invoices" in body["data"]["message"]
 
     @pytest.mark.asyncio
-    async def test_optimize_prioritize_discounts_default(self, mock_ap):
-        data = {}
-        await handle_optimize_payments(data)
-        # prioritize_discounts defaults to True
+    async def test_optimize_passes_only_service_arguments(self, mock_ap):
+        # APAutomation.optimize_payment_timing takes no prioritize_discounts argument.
+        await handle_optimize_payments({"prioritize_discounts": False})
         call_kwargs = mock_ap.optimize_payment_timing.call_args.kwargs
-        assert call_kwargs["prioritize_discounts"] is True
-
-    @pytest.mark.asyncio
-    async def test_optimize_prioritize_discounts_false(self, mock_ap):
-        data = {"prioritize_discounts": False}
-        await handle_optimize_payments(data)
-        call_kwargs = mock_ap.optimize_payment_timing.call_args.kwargs
-        assert call_kwargs["prioritize_discounts"] is False
+        assert set(call_kwargs) == {"invoices", "available_cash"}
 
     @pytest.mark.asyncio
     async def test_optimize_circuit_breaker_open(self, mock_ap):
@@ -1411,7 +1404,7 @@ class TestParameterPassThrough:
         assert kw["payment_terms"] == "Net 60"
         assert kw["early_pay_discount"] == 0.05
         assert kw["priority"] == "critical"
-        assert kw["preferred_payment_method"] == "wire"
+        assert "preferred_payment_method" not in kw  # APAutomation.add_invoice has no such argument
 
     @pytest.mark.asyncio
     async def test_add_invoice_default_early_discount(self, mock_ap):
@@ -1428,7 +1421,8 @@ class TestParameterPassThrough:
         assert kw["invoice_number"] == ""
 
     @pytest.mark.asyncio
-    async def test_record_payment_passes_method_and_ref(self, mock_ap):
+    async def test_record_payment_passes_only_service_arguments(self, mock_ap):
+        # APAutomation.record_payment takes no payment_method or reference argument.
         data = {
             "amount": 100,
             "payment_method": "check",
@@ -1436,16 +1430,13 @@ class TestParameterPassThrough:
         }
         await handle_record_payment(data, invoice_id="inv-001")
         kw = mock_ap.record_payment.call_args.kwargs
-        assert kw["payment_method"] == "check"
-        assert kw["reference"] == "REF-123"
+        assert set(kw) == {"invoice_id", "amount", "payment_date"}
 
     @pytest.mark.asyncio
     async def test_record_payment_none_optional_fields(self, mock_ap):
         data = {"amount": 100}
         await handle_record_payment(data, invoice_id="inv-001")
         kw = mock_ap.record_payment.call_args.kwargs
-        assert kw["payment_method"] is None
-        assert kw["reference"] is None
         assert kw["payment_date"] is None
 
     @pytest.mark.asyncio
@@ -1486,11 +1477,11 @@ class TestParameterPassThrough:
         assert kw["payment_method"] == "credit_card"
 
     @pytest.mark.asyncio
-    async def test_batch_no_payment_method_passes_none(self, mock_ap):
+    async def test_batch_no_payment_method_defaults_to_ach(self, mock_ap):
         data = {"invoice_ids": ["inv-1"]}
         await handle_batch_payments(data)
         kw = mock_ap.batch_payments.call_args.kwargs
-        assert kw["payment_method"] is None
+        assert kw["payment_method"] is PaymentMethod.ACH
 
     @pytest.mark.asyncio
     async def test_forecast_passes_days_ahead(self, mock_ap):

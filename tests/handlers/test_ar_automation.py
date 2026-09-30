@@ -311,6 +311,7 @@ class TestCreateInvoice:
         }
         result = await handle_create_invoice(data)
         assert _status(result) == 200
+        # ARAutomation.generate_invoice has no tax_rate argument.
         mock_ar.generate_invoice.assert_awaited_once_with(
             customer_id="CUST-001",
             customer_name="Test Corp",
@@ -318,7 +319,6 @@ class TestCreateInvoice:
             line_items=[{"description": "Widget", "amount": 100}],
             payment_terms="Net 60",
             memo="Test memo",
-            tax_rate=0.1,
         )
 
     @pytest.mark.asyncio
@@ -333,7 +333,7 @@ class TestCreateInvoice:
         call_kwargs = mock_ar.generate_invoice.call_args.kwargs
         assert call_kwargs["payment_terms"] == "Net 30"
         assert call_kwargs["memo"] == ""
-        assert call_kwargs["tax_rate"] == 0
+        assert "tax_rate" not in call_kwargs
 
     @pytest.mark.asyncio
     async def test_create_invoice_service_type_error(self, mock_ar):
@@ -1013,15 +1013,15 @@ class TestAddCustomer:
         assert _status(result) == 200
         call_kwargs = mock_ar.add_customer.call_args.kwargs
         assert call_kwargs["email"] == "test@corp.com"
-        assert call_kwargs["payment_terms"] == "Net 60"
+        assert "payment_terms" not in call_kwargs  # ARAutomation.add_customer has no such argument
 
     @pytest.mark.asyncio
-    async def test_add_customer_default_payment_terms(self, mock_ar):
+    async def test_add_customer_passes_only_service_arguments(self, mock_ar):
         data = {"customer_id": "CUST-001", "name": "Test Corp"}
         result = await handle_add_customer(data)
         assert _status(result) == 200
         call_kwargs = mock_ar.add_customer.call_args.kwargs
-        assert call_kwargs["payment_terms"] == "Net 30"
+        assert call_kwargs == {"customer_id": "CUST-001", "name": "Test Corp", "email": None}
 
     @pytest.mark.asyncio
     async def test_add_customer_missing_customer_id(self):

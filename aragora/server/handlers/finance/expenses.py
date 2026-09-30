@@ -34,7 +34,6 @@ import binascii
 import inspect
 import logging
 import threading
-from datetime import datetime
 from typing import Any, TypeAlias
 from collections.abc import Awaitable
 
@@ -48,7 +47,11 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
-from aragora.server.validation.query_params import parse_date_range_params, safe_query_int
+from aragora.server.validation.query_params import (
+    parse_date_range_params,
+    parse_iso_datetime,
+    safe_query_int,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +277,7 @@ async def handle_create_expense(
             if not isinstance(date_str, str):
                 return error_response("date must be a string", status=400)
             try:
-                date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                date = parse_iso_datetime(date_str)
             except ValueError:
                 return error_response("Invalid date format", status=400)
 
@@ -1043,6 +1046,15 @@ async def handle_export_expenses(
         return error_response("Expense export failed", status=500)
 
 
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
+
+
 # =============================================================================
 # Handler Class for Router Registration
 # =============================================================================
@@ -1060,10 +1072,11 @@ class ExpenseHandler(BaseHandler):
     - RBAC permission checks
     """
 
-    @staticmethod
-    def _extract_request_body(query_params: Any) -> dict[str, Any]:
-        """Extract request body from query_params for backwards compatibility."""
-        return query_params if isinstance(query_params, dict) else {}
+    def _extract_request_body(self, query_params: Any, handler: Any) -> dict[str, Any] | None:
+        """Read the HTTP JSON body; direct calls without a handler pass the body dict."""
+        if handler is None:
+            return query_params if isinstance(query_params, dict) else {}
+        return self.read_json_body(handler)
 
     def __init__(self, ctx: dict | None = None):
         """Initialize handler with optional context."""
@@ -1170,8 +1183,9 @@ class ExpenseHandler(BaseHandler):
         handler: Any = None,
     ) -> MaybeAsyncHandlerResult:
         """Handle POST requests."""
-        # Extract data from query_params for backwards compatibility
-        data = self._extract_request_body(query_params)
+        data = self._extract_request_body(query_params, handler)
+        if data is None:
+            return await _reject_invalid_body("finance:write", handler)
 
         if path == "/api/v1/accounting/expenses/upload":
             return await handle_upload_receipt(data, handler=handler)
@@ -1203,8 +1217,9 @@ class ExpenseHandler(BaseHandler):
         handler: Any = None,
     ) -> MaybeAsyncHandlerResult:
         """Handle PUT requests."""
-        # Extract data from query_params for backwards compatibility
-        data = self._extract_request_body(query_params)
+        data = self._extract_request_body(query_params, handler)
+        if data is None:
+            return await _reject_invalid_body("finance:write", handler)
 
         expense_id = self._extract_expense_id(path)
         if expense_id:
