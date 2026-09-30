@@ -742,7 +742,12 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             return []
 
     async def fetch(self, evidence_id: str) -> Any | None:
-        """Fetch a specific Teams message."""
+        """Fetch a specific Teams message.
+
+        Not implemented: the evidence ID does not carry the team and channel
+        IDs the Graph API needs, so this always returns None. None here does
+        not mean the message does not exist.
+        """
 
         # Parse evidence ID: teams-msg-{message_id}
         if not evidence_id.startswith("teams-msg-"):
