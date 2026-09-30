@@ -99,7 +99,7 @@ class SpendAnalyticsHandler(SecureHandler):
     # Helper to resolve workspace_id from query or context
     # ------------------------------------------------------------------
 
-    def _resolve_workspace_id(self, handler: Any) -> str:
+    def _resolve_workspace_id(self, handler: Any) -> str | None:
         """Get workspace_id from query parameter or default."""
         return get_string_param(handler, "workspace_id", "default")
 
@@ -218,6 +218,11 @@ class SpendAnalyticsHandler(SecureHandler):
         workspace_id = self._resolve_workspace_id(handler)
         days_str = get_string_param(handler, "days", "30")
         try:
+            if days_str is None:
+                raise TypeError(
+                    "int() argument must be a string, a bytes-like object or a real number, "
+                    "not 'NoneType'"
+                )
             days = int(days_str)
         except ValueError:
             days = 30

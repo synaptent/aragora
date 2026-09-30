@@ -47,7 +47,7 @@ class ModerationHandler(SecureHandler):
     def can_handle(self, path: str) -> bool:
         return strip_version_prefix(path).startswith("/api/moderation/")
 
-    def _get_moderation(self):
+    def _get_moderation(self) -> Any:
         moderation = get_spam_moderation()
         if not moderation._initialized:
             try:

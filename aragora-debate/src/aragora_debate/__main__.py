@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from importlib import metadata
 import sys
 
 from aragora_debate.styled_mock import StyledMockAgent
 from aragora_debate.arena import Arena
-from aragora_debate.types import DebateConfig
+from aragora_debate.types import Agent, DebateConfig
 
 # ---------------------------------------------------------------------------
 # ANSI helpers (no external deps)
@@ -53,13 +54,13 @@ def _header(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _run_demo(
+async def _run_demo(  # noqa: C901 - Keep the demo's ordered presentation in one place.
     topic: str,
     rounds: int,
     enable_trickster: bool = False,
     enable_convergence: bool = False,
 ) -> None:
-    agents = [
+    agents: list[Agent] = [
         StyledMockAgent("analyst", style="supportive"),
         StyledMockAgent("critic", style="critical"),
         StyledMockAgent("moderator", style="balanced"),
@@ -182,9 +183,18 @@ async def _run_demo(
 
 
 def main() -> None:
+    try:
+        package_version = metadata.version("aragora-debate")
+    except metadata.PackageNotFoundError:
+        package_version = "0.0.0+source"
     parser = argparse.ArgumentParser(
         prog="python -m aragora_debate",
         description="Run an adversarial multi-agent debate (no API keys needed)",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"aragora-debate {package_version}",
     )
     parser.add_argument(
         "--topic",
