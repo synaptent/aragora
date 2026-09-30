@@ -807,10 +807,7 @@ registry:
     superseded_by: null
   - id: CHR-E-004
     state: EXCLUSION
-    paths:
-      - aragora/server/metrics.py
-      - aragora/server/middleware/tracing.py
-      - aragora/server/http_client_pool.py
+    paths: [aragora/server/]
     symbols: []
     deadline: null
     owner: null
