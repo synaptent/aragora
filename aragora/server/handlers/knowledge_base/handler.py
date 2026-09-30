@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+from functools import wraps
 
 from aragora.knowledge import (
     DatasetQueryEngine,
@@ -30,6 +31,7 @@ from aragora.knowledge import (
     InMemoryFactStore,
     SimpleQueryEngine,
 )
+from aragora.rbac import AuthorizationContext, PermissionDeniedError, get_permission_checker
 from aragora.rbac.decorators import require_permission
 
 from ..base import (
@@ -45,9 +47,30 @@ from .query import QueryOperationsMixin
 from .search import SearchOperationsMixin
 
 if TYPE_CHECKING:
-    pass
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
+
+
+def _permission_denied_as_403(
+    func: Callable[..., HandlerResult | None],
+) -> Callable[..., HandlerResult | None]:
+    """Answer 403 when an RBAC decorator underneath denies the request.
+
+    The handler registry does not recognize PermissionDeniedError and would
+    answer it with a 500 ``unexpected_exception``.
+    """
+
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> HandlerResult | None:
+        try:
+            return func(*args, **kwargs)
+        except PermissionDeniedError as exc:
+            logger.info("Knowledge request denied: %s", exc)
+            return error_response("Permission denied", 403)
+
+    return wrapper
+
 
 # Rate limiter for knowledge endpoints (60 requests per minute)
 _knowledge_limiter = RateLimiter(requests_per_minute=60)
@@ -169,18 +192,30 @@ class KnowledgeHandler(
         return path
 
     def _check_permission(self, handler: Any, permission: str) -> HandlerResult | None:
-        """Check RBAC permission and return error response if denied."""
+        """Check an RBAC v2 permission for the caller's role; return an error response if denied.
+
+        Uses the same checker and role -> permission mapping as the
+        ``@require_permission`` decorator on ``handle()``. The authenticated
+        user carries a single ``role`` (JWT claim or API-key user record); a
+        missing role grants nothing.
+        """
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
 
-        # Check permission
-        permissions = getattr(user, "permissions", []) or []
-        roles = getattr(user, "roles", []) or []
-        if permission not in permissions and "admin" not in roles and "admin" not in permissions:
+        role = getattr(user, "role", None)
+        context = AuthorizationContext(
+            user_id=getattr(user, "user_id", None) or "",
+            user_email=getattr(user, "email", None),
+            org_id=getattr(user, "org_id", None),
+            roles={role} if isinstance(role, str) and role else set(),
+        )
+        decision = get_permission_checker().check_permission(context, permission)
+        if not decision.allowed:
             return error_response("Permission denied", 403)
         return None
 
+    @_permission_denied_as_403
     @require_permission("knowledge:read")
     def handle(self, path: str, query_params: dict, handler: Any) -> HandlerResult | None:
         """Route knowledge requests to appropriate methods."""
