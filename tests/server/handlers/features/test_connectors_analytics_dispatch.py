@@ -15,6 +15,7 @@ import io
 import itertools
 import json
 import threading
+from collections.abc import Callable, Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -28,7 +29,7 @@ from aragora.server.handlers.connectors.management import ConnectorManagementHan
 from aragora.server.handlers.features import analytics_platforms as analytics_module
 from aragora.server.handlers.features import connectors as connectors_module
 from aragora.server.handlers.features.connectors import ConnectorsHandler
-from aragora.storage.sync_store import ConnectorConfig
+from aragora.storage.sync_store import ConnectorConfig, SyncStore
 
 CALLERS = ("owner", "admin", "member", "analyst", "viewer", "anon")
 
@@ -466,6 +467,70 @@ def test_stored_connector_can_be_updated_and_deleted_after_a_restart(
 
     status, missing = _dispatch(registry_cls, "DELETE", "/api/v1/connectors/stored-1")
     assert status == 404, missing
+
+
+@pytest.fixture
+def open_sqlite_store(monkeypatch, tmp_path) -> Iterator[Callable[[], SyncStore]]:
+    """Open a real SQLite SyncStore; each call reopens the same file, as after a restart."""
+    url = f"sqlite:///{tmp_path / 'connectors.db'}"
+    stores: list[SyncStore] = []
+
+    def _open() -> SyncStore:
+        store = SyncStore(database_url=url, use_encryption=False)
+        asyncio.run(store.initialize())
+        stores.append(store)
+        return store
+
+    async def _latest() -> SyncStore:
+        return stores[-1]
+
+    monkeypatch.setattr(connectors_module, "_get_store", _latest)
+    yield _open
+    for store in stores:
+        asyncio.run(store.close())
+
+
+# Real JWTs get 403 on PATCH and PUT (connectors:configure is not a registered
+# permission), so these run under the handler suite's default admin context.
+@pytest.mark.parametrize("method", ["PATCH", "PUT"])
+def test_config_update_status_survives_get_and_restart(
+    registry_cls, open_sqlite_store, method: str
+) -> None:
+    store = open_sqlite_store()
+    asyncio.run(store.save_connector("stored-1", "github", "Stored", {"org": "a"}))
+    asyncio.run(store.update_connector_status("stored-1", "connected"))
+
+    status, updated = _dispatch(
+        registry_cls, method, "/api/v1/connectors/stored-1", {"config": {"repo": "b"}}
+    )
+    assert (status, updated["status"]) == (200, "configuring"), updated
+
+    status, fetched = _dispatch(registry_cls, "GET", "/api/v1/connectors/stored-1")
+    assert (status, fetched["status"]) == (200, "configuring"), fetched
+
+    open_sqlite_store()
+    status, fetched = _dispatch(registry_cls, "GET", "/api/v1/connectors/stored-1")
+    assert status == 200, fetched
+    assert (fetched["status"], fetched["config"]) == ("configuring", {"org": "a", "repo": "b"})
+
+
+def test_config_update_does_not_share_the_handler_dict_with_the_store(
+    registry_cls, open_sqlite_store
+) -> None:
+    store = open_sqlite_store()
+    asyncio.run(store.save_connector("stored-1", "github", "Stored", {"org": {"name": "a"}}))
+
+    status, updated = _dispatch(
+        registry_cls, "PATCH", "/api/v1/connectors/stored-1", {"config": {"repo": "b"}}
+    )
+    assert status == 200, updated
+
+    in_memory = connectors_module._connectors["stored-1"]["config"]
+    in_memory["repo"] = "changed in memory"
+    in_memory["org"]["name"] = "changed in memory"
+    cached = asyncio.run(store.get_connector("stored-1"))
+    assert cached is not None
+    assert cached.config == {"org": {"name": "a"}, "repo": "b"}
 
 
 def test_cancel_sync_accepts_the_sdk_path_and_checks_the_connector(registry_cls) -> None:

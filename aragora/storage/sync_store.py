@@ -825,6 +825,18 @@ class SyncStore:
                     (status, error_message, connector.updated_at.isoformat(), connector_id),
                 )
                 await self._connection.commit()
+            else:
+                await self._connection.execute(
+                    """
+                    UPDATE connectors
+                    SET status = $1, error_message = $2, updated_at = $3
+                    WHERE id = $4
+                """,
+                    status,
+                    error_message,
+                    connector.updated_at,
+                    connector_id,
+                )
 
     # ==================== Sync Job Operations ====================
 

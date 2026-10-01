@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 from datetime import datetime, timezone
 from typing import Any, TypedDict
@@ -557,7 +558,8 @@ class ConnectorsHandler(SecureHandler):
         connector["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         # If config is updated and was previously connected, mark as needing reconnection
-        if "config" in body and connector["status"] == "connected":
+        needs_reconnect = "config" in body and connector["status"] == "connected"
+        if needs_reconnect:
             connector["status"] = "configuring"
 
         _connectors[connector_id] = connector
@@ -566,8 +568,11 @@ class ConnectorsHandler(SecureHandler):
                 connector_id=connector_id,
                 connector_type=connector["type"],
                 name=connector["name"],
-                config=connector["config"],
+                config=copy.deepcopy(connector["config"]),
             )
+            # save_connector keeps the stored status, which GET reads.
+            if needs_reconnect:
+                await store.update_connector_status(connector_id, connector["status"])
 
         logger.info("Updated connector %s", connector_id)
 
