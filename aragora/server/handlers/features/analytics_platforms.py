@@ -200,6 +200,8 @@ class AnalyticsPlatformsHandler(SecureHandler):
 
         # Route to handlers
         if path.endswith("/platforms") and method == "GET":
+            if err := await self._check_permission(request, "analytics:read"):
+                return err
             return await self._list_platforms(request)
 
         elif path.endswith("/connect") and method == "POST":

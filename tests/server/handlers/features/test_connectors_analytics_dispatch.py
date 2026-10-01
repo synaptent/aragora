@@ -25,6 +25,8 @@ import pytest
 
 from aragora.billing.jwt_auth import create_access_token
 from aragora.connectors.runtime_registry import ConnectorStatus
+from aragora.server.auth import auth_config
+from aragora.server.auth_checks import AuthChecksMixin
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.connectors.management import ConnectorManagementHandler
 from aragora.server.handlers.features import analytics_platforms as analytics_module
@@ -54,6 +56,10 @@ class _RegistryMixin(HandlerRegistryMixin):
     continuum_memory = None
     cross_debate_memory = None
     knowledge_mound = None
+
+
+class _ServerChecks(AuthChecksMixin, _RegistryMixin):
+    """The registry behind the server's pre-dispatch RBAC and auth checks."""
 
 
 class _FakeConnectorRegistry:
@@ -120,6 +126,7 @@ def _dispatch(
     raw = json.dumps(body).encode("utf-8") if body is not None else b""
     if raw_body is not None:
         raw = raw_body
+    instance.path = path
     instance.command = method
     instance.headers = {"Content-Length": str(len(raw)), "Content-Type": "application/json"}
     if caller and caller != "anon":
@@ -135,6 +142,7 @@ def _dispatch(
     instance._add_cors_headers = MagicMock()
     instance._add_security_headers = MagicMock()
     instance._add_trace_headers = MagicMock()
+    send_json = instance._send_json = MagicMock()
     instance._auth_context = None
     n = next(_client_ips)
     # A distinct client per request keeps the handlers' per-IP limiters out of the way.
@@ -148,6 +156,11 @@ def _dispatch(
         # Keep token validation off whatever revocation database the host points at.
         patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False),
     ):
+        if isinstance(instance, AuthChecksMixin):
+            # UnifiedHandler runs both checks before modular dispatch and stops on False.
+            if not (instance._check_rbac(path, method) and instance._check_rate_limit()):
+                sent = send_json.call_args
+                return sent.kwargs["status"], sent.args[0]
         handled = instance._try_modular_handler(path, {})
     assert handled is True, f"{method} {path} was not handled"
     status = instance.send_response.call_args[0][0]
@@ -687,6 +700,43 @@ def test_analytics_platform_routes_run_their_logic(registry_cls) -> None:
     assert status == 200, body
     status, body = _dispatch(registry_cls, "DELETE", "/api/v1/analytics/metabase")
     assert status == 404, body
+
+
+@pytest.fixture
+def auth_on(monkeypatch) -> None:
+    monkeypatch.setattr(auth_config, "enabled", True)
+    monkeypatch.setattr(auth_config, "api_token", "dispatch-test-api-token")
+
+
+_PLATFORM_LIST = "/api/v1/analytics/platforms"
+# RBAC v2 grants analytics.read to owner, admin, member and analyst, not to viewer.
+_PLATFORM_LIST_CELLS = {
+    "owner": 200,
+    "admin": 200,
+    "member": 200,
+    "analyst": 200,
+    "viewer": 403,
+    "anon": 401,
+}
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize("server_checks", [False, True], ids=["handler", "server"])
+def test_platform_list_requires_analytics_read(
+    registry_cls, auth_on, server_checks: bool, caller: str
+) -> None:
+    analytics_module._platform_credentials["metabase"] = {"connected_at": "2026-10-01T00:00:00Z"}
+    # The server skips its own RBAC and auth checks for this GET, so the handler's
+    # check is the only one that can refuse the caller.
+    assert _ServerChecks()._is_path_exempt_for_get(_PLATFORM_LIST)
+    dispatcher = _ServerChecks if server_checks else registry_cls
+    status, body = _dispatch(dispatcher, "GET", _PLATFORM_LIST, caller=caller)
+    assert status == _PLATFORM_LIST_CELLS[caller], (caller, body)
+    if status == 200:
+        assert body["connected_count"] == 1, body
+    else:
+        assert "platforms" not in body, body
 
 
 def test_workspace_usage_answers_501_not_implemented(registry_cls) -> None:
