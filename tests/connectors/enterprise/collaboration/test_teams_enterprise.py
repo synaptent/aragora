@@ -105,6 +105,67 @@ class TestTeamsAuthentication:
             await connector._get_access_token()
 
 
+class TestTeamsTenantSeparation:
+    """The Azure AD tenant authenticates; the base tenant keys sync state."""
+
+    @staticmethod
+    def _credentials(teams_tenant_id: str | None) -> MagicMock:
+        credentials = MagicMock()
+        credentials.get_credential = AsyncMock(
+            side_effect=lambda key: {
+                "TEAMS_TENANT_ID": teams_tenant_id,
+                "TEAMS_CLIENT_ID": "test-client-id",
+                "TEAMS_CLIENT_SECRET": "test-secret",
+            }.get(key)
+        )
+        return credentials
+
+    @staticmethod
+    async def _token_url(connector: TeamsEnterpriseConnector) -> str:
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"access_token": "token", "expires_in": 3600}
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await connector._get_access_token()
+
+        return mock_client_instance.post.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_azure_tenant_keeps_base_tenant_and_authenticates_against_it(self, tmp_path):
+        connector = TeamsEnterpriseConnector(tenant_id="azure-tenant-guid", state_dir=tmp_path)
+        connector.credentials = self._credentials("credential-tenant")
+
+        assert connector.tenant_id == "default"
+        assert connector.azure_tenant_id == "azure-tenant-guid"
+        assert await self._token_url(connector) == (
+            "https://login.microsoftonline.com/azure-tenant-guid/oauth2/v2.0/token"
+        )
+
+    @pytest.mark.asyncio
+    async def test_without_azure_tenant_falls_back_to_teams_tenant_id_credential(self, tmp_path):
+        connector = TeamsEnterpriseConnector(state_dir=tmp_path)
+        connector.credentials = self._credentials("credential-tenant")
+
+        assert connector.tenant_id == "default"
+        assert connector.azure_tenant_id is None
+        assert await self._token_url(connector) == (
+            "https://login.microsoftonline.com/credential-tenant/oauth2/v2.0/token"
+        )
+
+    @pytest.mark.parametrize("kwargs", [{}, {"tenant_id": "azure-tenant-guid"}])
+    def test_state_is_keyed_by_base_tenant(self, tmp_path, kwargs):
+        connector = TeamsEnterpriseConnector(state_dir=tmp_path, **kwargs)
+
+        assert connector.state_path == tmp_path / "teams-enterprise_default.json"
+        assert connector.load_state().tenant_id == "default"
+
+
 class TestTeamAndChannelEnumeration:
     """Test team and channel listing."""
 
