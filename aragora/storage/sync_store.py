@@ -750,7 +750,7 @@ class SyncStore:
                     connector.id,
                     connector.connector_type,
                     connector.name,
-                    encrypted_config,
+                    config_json,
                     connector.status,
                     connector.created_at,
                     connector.updated_at,

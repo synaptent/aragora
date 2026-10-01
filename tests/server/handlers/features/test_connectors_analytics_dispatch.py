@@ -11,6 +11,7 @@ permission checks are all exercised.
 from __future__ import annotations
 
 import asyncio
+import copy
 import io
 import itertools
 import json
@@ -498,7 +499,7 @@ def test_config_update_status_survives_get_and_restart(
 ) -> None:
     store = open_sqlite_store()
     asyncio.run(store.save_connector("stored-1", "github", "Stored", {"org": "a"}))
-    asyncio.run(store.update_connector_status("stored-1", "connected"))
+    asyncio.run(store.update_connector_status("stored-1", "connected", "last sync failed"))
 
     status, updated = _dispatch(
         registry_cls, method, "/api/v1/connectors/stored-1", {"config": {"repo": "b"}}
@@ -512,6 +513,7 @@ def test_config_update_status_survives_get_and_restart(
     status, fetched = _dispatch(registry_cls, "GET", "/api/v1/connectors/stored-1")
     assert status == 200, fetched
     assert (fetched["status"], fetched["config"]) == ("configuring", {"org": "a", "repo": "b"})
+    assert fetched["error_message"] == "last sync failed"
 
 
 def test_config_update_does_not_share_the_handler_dict_with_the_store(
@@ -531,6 +533,88 @@ def test_config_update_does_not_share_the_handler_dict_with_the_store(
     cached = asyncio.run(store.get_connector("stored-1"))
     assert cached is not None
     assert cached.config == {"org": {"name": "a"}, "repo": "b"}
+
+
+_MASK = "********"
+_SECRET_CONFIG: dict[str, Any] = {
+    "org": "a",
+    "api_key": "sk-live-1",
+    "auth": {"user": "u", "client_secret": "cs-1"},
+    "credentials": {"password": "pw-1"},
+    "accounts": [{"name": "n", "token": "t-1"}],
+}
+_MASKED_CONFIG: dict[str, Any] = {
+    "org": "a",
+    "api_key": _MASK,
+    "auth": {"user": "u", "client_secret": _MASK},
+    "credentials": _MASK,
+    "accounts": [{"name": "n", "token": _MASK}],
+}
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", ["owner", "admin"])
+@pytest.mark.parametrize("backend", ["sqlite", "memory"])
+def test_list_and_detail_mask_secret_config_values(
+    registry_cls, request, backend: str, caller: str
+) -> None:
+    if backend == "sqlite":
+        store = request.getfixturevalue("open_sqlite_store")()
+        asyncio.run(store.save_connector("c1", "github", "C1", copy.deepcopy(_SECRET_CONFIG)))
+    else:
+        connectors_module._connectors["c1"] = {
+            "id": "c1",
+            "type": "github",
+            "name": "C1",
+            "status": "configured",
+            "config": copy.deepcopy(_SECRET_CONFIG),
+        }
+
+    status, listed = _dispatch(registry_cls, "GET", "/api/v1/connectors", caller=caller)
+    assert status == 200, listed
+    assert [c["config"] for c in listed["connectors"]] == [_MASKED_CONFIG]
+
+    status, detail = _dispatch(registry_cls, "GET", "/api/v1/connectors/c1", caller=caller)
+    assert (status, detail["config"]) == (200, _MASKED_CONFIG), detail
+
+    if backend == "sqlite":
+        stored = asyncio.run(store.get_connector("c1"))
+        assert stored is not None
+        assert stored.config == _SECRET_CONFIG
+    else:
+        assert connectors_module._connectors["c1"]["config"] == _SECRET_CONFIG
+
+
+# Real JWTs get 403 on PATCH and PUT (see above), so this uses the default admin context.
+@pytest.mark.parametrize("method", ["PATCH", "PUT"])
+def test_create_and_update_mask_secrets_and_never_store_the_mask(
+    registry_cls, open_sqlite_store, method: str
+) -> None:
+    open_sqlite_store()
+    status, created = _dispatch(
+        registry_cls,
+        "POST",
+        "/api/v1/connectors",
+        {"type": "github", "name": "Repo", "config": copy.deepcopy(_SECRET_CONFIG)},
+    )
+    assert (status, created["config"]) == (201, _MASKED_CONFIG), created
+    path = f"/api/v1/connectors/{created['id']}"
+
+    # The masked config sent straight back with one real edit keeps every secret.
+    status, updated = _dispatch(
+        registry_cls, method, path, {"config": {**created["config"], "org": "b"}}
+    )
+    assert (status, updated["config"]) == (200, {**_MASKED_CONFIG, "org": "b"}), updated
+    stored = asyncio.run(open_sqlite_store().get_connector(created["id"]))
+    assert stored is not None
+    assert stored.config == {**_SECRET_CONFIG, "org": "b"}
+
+    new_values = {"api_key": "sk-live-2", "auth": {"user": "u", "client_secret": "cs-2"}}
+    status, updated = _dispatch(registry_cls, method, path, {"config": new_values})
+    assert (status, updated["config"]["api_key"]) == (200, _MASK), updated
+    stored = asyncio.run(open_sqlite_store().get_connector(created["id"]))
+    assert stored is not None
+    assert stored.config == {**_SECRET_CONFIG, "org": "b", **new_values}
 
 
 def test_cancel_sync_accepts_the_sdk_path_and_checks_the_connector(registry_cls) -> None:

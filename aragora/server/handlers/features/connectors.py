@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 try:
     from aragora.storage.sync_store import (
         SyncStore,
+        _is_sensitive_key,
         get_sync_store,
     )
 
@@ -64,6 +65,11 @@ except ImportError:
         "CONNECTOR CONFIGURATIONS WILL BE LOST ON RESTART! "
         "To fix: ensure aragora.storage.sync_store is importable."
     )
+
+    def _is_sensitive_key(key: str) -> bool:
+        # Without the store's classifier, mask every config value rather than none.
+        return True
+
 
 # In-memory fallback storage (used when sync_store not available)
 _connectors: dict[str, dict[str, Any]] = {}
@@ -87,6 +93,47 @@ async def _get_store() -> SyncStore | None:
                 e,
             )
     return _store
+
+
+CONFIG_SECRET_MASK = "********"
+
+
+def _mask_secrets(value: Any) -> Any:
+    """Copy ``value`` with every sensitive config value replaced by the mask."""
+    if isinstance(value, dict):
+        return {
+            k: CONFIG_SECRET_MASK if _is_sensitive_key(str(k)) else _mask_secrets(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_mask_secrets(v) for v in value]
+    return value
+
+
+def _restore_masked(incoming: Any, stored: Any) -> Any:
+    """Copy ``incoming`` with each mask a client sent back replaced by the stored value."""
+    if isinstance(incoming, dict):
+        prior = stored if isinstance(stored, dict) else {}
+        return {
+            k: prior[k]
+            if v == CONFIG_SECRET_MASK and k in prior and _is_sensitive_key(str(k))
+            else _restore_masked(v, prior.get(k))
+            for k, v in incoming.items()
+        }
+    if isinstance(incoming, list):
+        prior_items = stored if isinstance(stored, list) else []
+        return [
+            _restore_masked(v, prior_items[i] if i < len(prior_items) else None)
+            for i, v in enumerate(incoming)
+        ]
+    return incoming
+
+
+def _public_connector(connector: dict[str, Any]) -> dict[str, Any]:
+    """Shallow copy of a connector for a response, with secret config values masked."""
+    if "config" not in connector:
+        return dict(connector)
+    return {**connector, "config": _mask_secrets(connector["config"])}
 
 
 # Connector type metadata
@@ -395,7 +442,7 @@ class ConnectorsHandler(SecureHandler):
         return self._json_response(
             200,
             {
-                "connectors": connectors,
+                "connectors": [_public_connector(c) for c in connectors],
                 "total": len(connectors),
                 "connected": sum(
                     1 for c in connectors if c["status"] in ("connected", "syncing", "configured")
@@ -458,7 +505,7 @@ class ConnectorsHandler(SecureHandler):
         connector["type_name"] = type_meta.get("name", connector["type"])
         connector["category"] = type_meta.get("category", "unknown")
 
-        return self._json_response(200, connector)
+        return self._json_response(200, _public_connector(connector))
 
     async def _create_connector(self, request: Any) -> dict[str, Any]:
         """Configure a new connector."""
@@ -512,7 +559,7 @@ class ConnectorsHandler(SecureHandler):
 
         logger.info("Created connector %s of type %s", connector_id, connector_type)
 
-        return self._json_response(201, connector)
+        return self._json_response(201, _public_connector(connector))
 
     async def _load_connector(
         self, connector_id: str
@@ -553,7 +600,7 @@ class ConnectorsHandler(SecureHandler):
         if "name" in body:
             connector["name"] = body["name"]
         if "config" in body:
-            connector["config"].update(body["config"])
+            connector["config"].update(_restore_masked(body["config"], connector["config"]))
 
         connector["updated_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -564,7 +611,7 @@ class ConnectorsHandler(SecureHandler):
 
         _connectors[connector_id] = connector
         if store:
-            await store.save_connector(
+            saved = await store.save_connector(
                 connector_id=connector_id,
                 connector_type=connector["type"],
                 name=connector["name"],
@@ -572,11 +619,13 @@ class ConnectorsHandler(SecureHandler):
             )
             # save_connector keeps the stored status, which GET reads.
             if needs_reconnect:
-                await store.update_connector_status(connector_id, connector["status"])
+                await store.update_connector_status(
+                    connector_id, connector["status"], saved.error_message
+                )
 
         logger.info("Updated connector %s", connector_id)
 
-        return self._json_response(200, connector)
+        return self._json_response(200, _public_connector(connector))
 
     @require_permission("connectors:delete")
     async def _delete_connector(self, request: Any, connector_id: str) -> dict[str, Any]:

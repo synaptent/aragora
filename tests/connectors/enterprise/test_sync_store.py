@@ -607,3 +607,22 @@ async def test_update_connector_status_persists_on_every_backend(status_store_ur
         assert [c.id for c in await reopened.list_connectors()] == ["c1"]
     finally:
         await reopened.close()
+
+
+async def test_save_connector_creates_and_edits_on_every_backend(status_store_url):
+    store = SyncStore(database_url=status_store_url, use_encryption=True)
+    await store.initialize()
+    try:
+        await store.save_connector("c1", "github", "Repo", {"org": "a", "api_key": "sk-1"})
+        await store.save_connector("c1", "github", "Renamed", {"org": "b", "api_key": "sk-2"})
+    finally:
+        await store.close()
+
+    reopened = SyncStore(database_url=status_store_url, use_encryption=True)
+    await reopened.initialize()
+    try:
+        row = await reopened.get_connector("c1")
+        assert row is not None
+        assert (row.name, row.config) == ("Renamed", {"org": "b", "api_key": "sk-2"})
+    finally:
+        await reopened.close()
