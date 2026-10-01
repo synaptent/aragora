@@ -55,10 +55,11 @@ def _write(root: Path, files: dict[str, str]) -> None:
         path.write_text(body, encoding="utf-8")
 
 
-def _git(root: Path, tmp_path: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", *args], cwd=root, env=_env(tmp_path), check=True, capture_output=True, timeout=60
-    )
+def _git(root: Path, tmp_path: Path, *args: str, stdin: bytes | None = None) -> bytes:
+    cmd = ["git", *args]
+    return subprocess.run(
+        cmd, cwd=root, env=_env(tmp_path), input=stdin, check=True, capture_output=True, timeout=60
+    ).stdout
 
 
 def _repo(tmp_path: Path, files: dict[str, str], untracked: dict[str, str] | None = None) -> Path:
@@ -120,6 +121,34 @@ def test_non_git_root_is_tool_error(tmp_path: Path) -> None:
     assert proc.stdout == ""
 
 
+def test_root_below_worktree_top_level_is_tool_error(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {**_index("# Docs\n\n[g](guides/g.md)\n"), "docs/guides/g.md": "# G\n"})
+    rc, report = _report(tmp_path, root)
+    assert (rc, report["reachable"]) == (0, ["docs/README.md", "docs/guides/g.md"])
+    proc = _run(tmp_path, "--root", str(root / "docs"), "--scope", "curated", "--json")
+    assert proc.returncode == 2, proc.stdout
+    assert "is not the git worktree top-level" in proc.stderr
+    assert f"use --root {root.resolve()}" in proc.stderr
+    assert proc.stdout == ""
+
+
+def test_empty_repository_is_not_a_tool_error(tmp_path: Path) -> None:
+    rc, report = _report(tmp_path, _repo(tmp_path, {}))
+    assert (rc, report["candidate_count"], report["orphans"]) == (0, 0, [])
+
+
+def test_non_utf8_index_path_is_tool_error(tmp_path: Path) -> None:
+    root = _repo(tmp_path, _index("# Docs\n"))
+    # Indexed without a working-tree file: some filesystems reject non-UTF-8 names.
+    blob = _git(root, tmp_path, "hash-object", "-w", "--stdin", stdin=b"# Bad\n").strip()
+    entry = b"100644 " + blob + b"\tdocs/guides/bad-\xff.md\0"
+    _git(root, tmp_path, "update-index", "-z", "--index-info", stdin=entry)
+    proc = _run(tmp_path, "--root", str(root), "--scope", "curated", "--json")
+    assert proc.returncode == 2, proc.stderr
+    assert "tracked path is not valid UTF-8: docs/guides/bad-\\xff.md" in proc.stderr
+    assert proc.stdout == ""
+
+
 def test_fenced_and_inline_code_links_are_ignored(tmp_path: Path) -> None:
     body = (
         "# Docs\n\n"
@@ -135,6 +164,20 @@ def test_fenced_and_inline_code_links_are_ignored(tmp_path: Path) -> None:
     assert rc == 1
     assert report["reachable"] == ["docs/README.md", "docs/guides/after.md"]
     assert report["orphans"] == sorted(pages)
+
+
+def test_list_item_fence_hides_pseudo_link_and_keeps_later_prose(tmp_path: Path) -> None:
+    probe = (
+        "# Root\n\n- ```\n  [pseudo](docs/guides/codeonly.md)\n  ```\n\n"
+        "[real prose](docs/guides/after.md)\n"
+    )
+    pages = {"docs/guides/codeonly.md": "# Code only\n", "docs/guides/after.md": "# After\n"}
+    rc, report = _report(tmp_path, _repo(tmp_path, {"README.md": probe, **pages}))
+    assert rc == 1
+    assert report["orphans"] == ["docs/guides/codeonly.md"]
+    assert report["reachable"] == ["docs/guides/after.md"]
+    counts = (report["candidate_count"], report["reachable_count"], report["orphan_count"])
+    assert counts == (2, 1, 1)
 
 
 def test_reference_links_fragments_and_external_targets(tmp_path: Path) -> None:

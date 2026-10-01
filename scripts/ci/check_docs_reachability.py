@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -51,6 +52,8 @@ CURATED_DIRS = frozenset(
 ARCHIVE_PREFIX = "docs/archive/"
 
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+# An opening fence may follow a list marker ("- ```"); inside a fence such a line is content.
+FENCE_OPEN_RE = re.compile(r"^\s*(?:(?:[-+*]|\d{1,9}[.)])\s+)?(`{3,}|~{3,})(.*)$")
 INLINE_CODE_RE = re.compile(r"(`+).*?\1")
 INLINE_LINK_RE = re.compile(
     r"(?<!!)\[(?:[^\[\]]|\[[^\[\]]*\])*\]"
@@ -88,21 +91,43 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def tracked_markdown(root: Path) -> set[str]:
-    """Repo-relative paths of Markdown files in the git index."""
+def git(root: Path, *args: str) -> bytes:
     try:
         proc = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "-z"],
+            ["git", "-C", str(root), *args],
             capture_output=True,
-            text=True,
             check=False,
             timeout=120,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise ToolError(f"git ls-files failed in {root}: {exc}") from exc
+        raise ToolError(f"git {args[0]} failed in {root}: {exc}") from exc
     if proc.returncode != 0:
-        raise ToolError(f"git ls-files failed in {root}: {proc.stderr.strip()}")
-    return {path for path in proc.stdout.split("\0") if path.endswith(".md")}
+        stderr = proc.stderr.decode(errors="replace").strip()
+        raise ToolError(f"git {args[0]} failed in {root}: {stderr}")
+    return proc.stdout
+
+
+def tracked_markdown(root: Path) -> set[str]:
+    """Repo-relative paths of Markdown files in the git index."""
+    paths: set[str] = set()
+    for raw in git(root, "ls-files", "-z").split(b"\0"):
+        try:
+            path = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            shown = raw.decode("utf-8", errors="backslashreplace")
+            raise ToolError(
+                f"tracked path is not valid UTF-8: {shown} (rename it or remove it from the index)"
+            ) from None
+        if path.endswith(".md"):
+            paths.add(path)
+    return paths
+
+
+def require_toplevel(root: Path) -> None:
+    """A root below the worktree top-level would silently report no candidates."""
+    toplevel = Path(os.fsdecode(git(root, "rev-parse", "--show-toplevel").rstrip(b"\n")))
+    if not toplevel.samefile(root):
+        raise ToolError(f"--root {root} is not the git worktree top-level; use --root {toplevel}")
 
 
 def prose_lines(text: str) -> list[str]:
@@ -110,7 +135,7 @@ def prose_lines(text: str) -> list[str]:
     lines: list[str] = []
     fence: str | None = None
     for line in text.splitlines():
-        match = FENCE_RE.match(line)
+        match = (FENCE_OPEN_RE if fence is None else FENCE_RE).match(line)
         if fence is None:
             # A backtick fence's info string cannot contain backticks (CommonMark).
             if match and not (match.group(1)[0] == "`" and "`" in match.group(2)):
@@ -178,6 +203,7 @@ def read_text(path: Path) -> str:
 
 def analyze(root: Path) -> Report:
     pages = {p for p in tracked_markdown(root) if not p.startswith(ARCHIVE_PREFIX)}
+    require_toplevel(root)
     for seed in SEEDS:
         if seed not in pages:
             print(f"check_docs_reachability: warning: seed {seed} is not tracked", file=sys.stderr)
@@ -218,7 +244,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--root",
         type=Path,
         default=repo_root(),
-        help="repository root to inspect (default: the checkout containing this script)",
+        help="git worktree top-level to inspect; anything else is a tool error (exit 2) "
+        "(default: the checkout containing this script)",
     )
     return parser
 

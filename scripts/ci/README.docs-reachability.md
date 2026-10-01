@@ -27,7 +27,7 @@ python3 scripts/ci/check_docs_reachability.py --help
 |---|---|
 | `--scope curated` | Candidate set to report. `curated` is the only scope and the default. Any other value is a usage error (exit 2). |
 | `--json` | Print the JSON report described below instead of the text summary. |
-| `--root PATH` | Repository to inspect. Defaults to the checkout that contains the script. |
+| `--root PATH` | Repository to inspect. Must be the git worktree top-level (`git rev-parse --show-toplevel`); a subdirectory is a tool error (exit 2), not an empty report. Defaults to the checkout that contains the script. |
 
 ## Seeds and traversal
 
@@ -43,8 +43,9 @@ are ignored). From each page it follows:
   are decoded;
 - directory links: `reference/` or `reference` resolves to `reference/README.md`.
 
-It ignores links inside fenced code blocks (backtick and tilde fences) and inline code
-spans, images, external URLs (`https:`, `mailto:` and other schemes, `//host`), pure
+It ignores links inside fenced code blocks (backtick and tilde fences, including a fence
+opened on a list-item line such as `` - ``` ``) and inline code spans, images, external
+URLs (`https:`, `mailto:` and other schemes, `//host`), pure
 in-page anchors (`#section`), footnote definitions, links that leave the repository and
 targets that are not tracked Markdown files. Cycles are handled.
 
@@ -88,7 +89,7 @@ does not affect the exit code.
 |---|---|
 | `0` | No curated orphans. |
 | `1` | At least one curated orphan (listed in the output). |
-| `2` | Usage error (for example an unknown `--scope`) or tool error (for example the root is not a git repository). |
+| `2` | Usage error (for example an unknown `--scope`) or tool error (for example the root is not a git repository or not its top-level, or a tracked path is not valid UTF-8). |
 
 ## Current repository state
 
