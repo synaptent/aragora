@@ -52,7 +52,7 @@ CURATED_DIRS = frozenset(
 ARCHIVE_PREFIX = "docs/archive/"
 
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
-# An opening fence may follow a list marker ("- ```"); inside a fence such a line is content.
+# A fence may open after a list marker ("- ```"); it then also ends where that list item ends.
 FENCE_OPEN_RE = re.compile(r"^\s*(?:(?:[-+*]|\d{1,9}[.)])\s+)?(`{3,}|~{3,})(.*)$")
 INLINE_CODE_RE = re.compile(r"(`+).*?\1")
 INLINE_LINK_RE = re.compile(
@@ -134,12 +134,16 @@ def prose_lines(text: str) -> list[str]:
     """Lines outside fenced code blocks, with inline code spans removed."""
     lines: list[str] = []
     fence: str | None = None
+    item_indent = 0
     for line in text.splitlines():
+        if fence and item_indent and line.strip() and len(line) - len(line.lstrip()) < item_indent:
+            fence = None
         match = (FENCE_OPEN_RE if fence is None else FENCE_RE).match(line)
         if fence is None:
             # A backtick fence's info string cannot contain backticks (CommonMark).
             if match and not (match.group(1)[0] == "`" and "`" in match.group(2)):
                 fence = match.group(1)
+                item_indent = match.start(1) if line[: match.start(1)].strip() else 0
                 continue
             lines.append(INLINE_CODE_RE.sub("", line))
         elif (

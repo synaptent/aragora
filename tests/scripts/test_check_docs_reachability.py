@@ -180,6 +180,17 @@ def test_list_item_fence_hides_pseudo_link_and_keeps_later_prose(tmp_path: Path)
     assert counts == (2, 1, 1)
 
 
+def test_list_item_fence_ends_with_its_list_item(tmp_path: Path) -> None:
+    readme = (
+        "- ```\n  x\n```\n[in a new fence](docs/guides/hidden.md)\n```\n\n"
+        "- ```\n  y\n\n[after the item](docs/guides/shown.md)\n"
+    )
+    pages = {f"docs/guides/{n}.md": "# Page\n" for n in ("hidden", "shown")}
+    rc, report = _report(tmp_path, _repo(tmp_path, {"README.md": readme, **pages}))
+    assert (rc, report["orphans"]) == (1, ["docs/guides/hidden.md"])
+    assert report["reachable"] == ["docs/guides/shown.md"]
+
+
 def test_reference_links_fragments_and_external_targets(tmp_path: Path) -> None:
     body = (
         "# Docs\n\n"

@@ -44,8 +44,8 @@ are ignored). From each page it follows:
 - directory links: `reference/` or `reference` resolves to `reference/README.md`.
 
 It ignores links inside fenced code blocks (backtick and tilde fences, including a fence
-opened on a list-item line such as `` - ``` ``) and inline code spans, images, external
-URLs (`https:`, `mailto:` and other schemes, `//host`), pure
+opened on a list-item line such as `` - ``` ``, ending with that item) and inline code
+spans, images, external URLs (`https:`, `mailto:` and other schemes, `//host`), pure
 in-page anchors (`#section`), footnote definitions, links that leave the repository and
 targets that are not tracked Markdown files. Cycles are handled.
 
