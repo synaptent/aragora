@@ -157,7 +157,10 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             exclude_system_messages: Skip system/event messages
             messages_per_channel: Maximum messages to sync per channel
             use_delta_sync: Use delta queries for incremental sync
-            tenant_id: Azure AD tenant ID
+            tenant_id: Azure AD tenant ID used to request tokens (falls back to the
+                TEAMS_TENANT_ID credential). Stored as ``azure_tenant_id``; it does not
+                set the Aragora tenant (``self.tenant_id``), which keys sync state and
+                the Knowledge Mound workspace.
         """
         super().__init__(connector_id="teams-enterprise", **kwargs)
 
@@ -170,7 +173,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         self.exclude_system_messages = exclude_system_messages
         self.messages_per_channel = messages_per_channel
         self.use_delta_sync = use_delta_sync
-        self.tenant_id = tenant_id
+        self.azure_tenant_id = tenant_id
 
         self._access_token: str | None = None
         self._token_expiry: datetime | None = None
@@ -194,7 +197,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             return self._access_token
 
         # Get credentials
-        tenant_id = self.tenant_id or await self.credentials.get_credential("TEAMS_TENANT_ID")
+        tenant_id = self.azure_tenant_id or await self.credentials.get_credential("TEAMS_TENANT_ID")
         client_id = await self.credentials.get_credential("TEAMS_CLIENT_ID")
         client_secret = await self.credentials.get_credential("TEAMS_CLIENT_SECRET")
 
