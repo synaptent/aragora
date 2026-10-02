@@ -33,7 +33,8 @@ from aragora.debate.arena_phases import create_phase_executor, init_phases
 from aragora.debate.batch_loaders import debate_loader_context
 from aragora.debate.context import DebateContext
 from aragora.debate.hierarchy import HierarchyConfig
-from aragora.debate.protocol import CircuitBreaker, DebateProtocol
+from aragora.protocols.debate import DebateProtocol
+from aragora.resilience import CircuitBreaker
 from aragora.logging_config import get_logger as get_structured_logger
 from aragora.observability.n1_detector import n1_detection_scope
 from aragora.observability.tracing import add_span_attributes, get_tracer
