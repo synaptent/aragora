@@ -158,11 +158,14 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             messages_per_channel: Maximum messages to sync per channel
             use_delta_sync: Use delta queries for incremental sync
             tenant_id: Azure AD tenant ID used to request tokens (falls back to the
-                TEAMS_TENANT_ID credential). Stored as ``azure_tenant_id``; it does not
-                set the Aragora tenant (``self.tenant_id``), which keys sync state and
-                the Knowledge Mound workspace.
+                TEAMS_TENANT_ID credential). Stored as ``azure_tenant_id`` and
+                appended to ``connector_id`` (``teams-enterprise-<tenant_id>``), so
+                each Azure tenant gets its own sync state file and circuit breaker.
+                It does not set the Aragora tenant (``self.tenant_id``), which still
+                suffixes the state file name and keys the Knowledge Mound workspace.
         """
-        super().__init__(connector_id="teams-enterprise", **kwargs)
+        connector_id = f"teams-enterprise-{tenant_id}" if tenant_id else "teams-enterprise"
+        super().__init__(connector_id=connector_id, **kwargs)
 
         self.team_ids = team_ids or []
         self.channel_ids = channel_ids or []
