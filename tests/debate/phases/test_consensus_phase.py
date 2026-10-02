@@ -1813,7 +1813,7 @@ class TestImmutableMajoritySnapshot:
         }
 
     @pytest.mark.asyncio
-    async def test_duplicate_names_remain_distinct_missing_weight_slots(self):
+    async def test_duplicate_names_remain_distinct_received_weight_slots(self):
         first_duplicate = MockAgent(name="duplicate")
         second_duplicate = MockAgent(name="duplicate")
         agents = [first_duplicate, second_duplicate, MockAgent(name="b"), MockAgent(name="c")]
@@ -1844,13 +1844,104 @@ class TestImmutableMajoritySnapshot:
         await phase._handle_majority_consensus(ctx)
 
         assert ctx.result.winner == "proposal-a"
-        assert ctx.result.consensus_reached is False
-        assert ctx.result.confidence == pytest.approx(0.5)
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(0.75)
         assert ctx.result.metadata["vote_participation"] == {
             "eligible": 4,
             "received": 3,
             "failed": 1,
             "skipped": 0,
+        }
+
+    @staticmethod
+    async def _run_three_voters_with_unreceived_third(third_vote):
+        agents = [MockAgent(name=name) for name in ("voter-a", "voter-b", "voter-c")]
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"alpha": "Alpha", "beta": "Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.7
+        protocol.enable_rlm_early_termination = False
+
+        async def vote_with_agent(agent, proposals, task):
+            if agent.name == "voter-c":
+                return third_vote()
+            return make_vote(agent=agent.name, choice="alpha")
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(protocol=protocol),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+
+        await phase._handle_majority_consensus(ctx)
+        return ctx
+
+    @pytest.mark.asyncio
+    async def test_failed_slot_leaves_received_weight_denominator(self):
+        def fail():
+            raise RuntimeError("voter-c failed")
+
+        ctx = await self._run_three_voters_with_unreceived_third(fail)
+
+        assert ctx.result.winner == "alpha"
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(1.0)
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 3,
+            "received": 2,
+            "failed": 1,
+            "skipped": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_missing_slot_leaves_received_weight_denominator(self):
+        ctx = await self._run_three_voters_with_unreceived_third(lambda: None)
+
+        assert ctx.result.winner == "alpha"
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(1.0)
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 3,
+            "received": 2,
+            "failed": 1,
+            "skipped": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_early_stopped_slot_leaves_received_weight_denominator(self):
+        agents = [MockAgent(name=f"voter-{index}") for index in range(4)]
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"alpha": "Alpha", "beta": "Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.7
+        hook = MagicMock()
+
+        async def vote_with_agent(agent, proposals, task):
+            if agent.name == "voter-3":
+                await asyncio.sleep(10)
+            return make_vote(agent=agent.name, choice="alpha")
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(protocol=protocol, hooks={"on_rlm_early_termination": hook}),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+        phase._vote_collector.config.rlm_early_termination_threshold = 0.5
+        phase._vote_collector.config.rlm_majority_lead_threshold = 0.1
+
+        await phase._handle_majority_consensus(ctx)
+
+        hook.assert_called_once_with(leader="alpha", votes_collected=3, total_agents=4)
+        assert ctx.result.winner == "alpha"
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(1.0)
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 4,
+            "received": 3,
+            "failed": 0,
+            "skipped": 1,
         }
 
     @pytest.mark.asyncio
@@ -1878,7 +1969,7 @@ class TestImmutableMajoritySnapshot:
         await phase._handle_majority_consensus(ctx)
 
         assert ctx.result.consensus_reached is True
-        assert ctx.result.confidence == pytest.approx(0.8)
+        assert ctx.result.confidence == pytest.approx(1.0)
         assert ctx.result.metadata["vote_participation"] == {
             "eligible": 10,
             "received": 8,

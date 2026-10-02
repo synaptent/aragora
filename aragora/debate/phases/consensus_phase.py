@@ -1116,7 +1116,8 @@ class ConsensusPhase:
         # weights, policy scalars, exact slots, and frozen proposals only.
         slot_weights = majority_snapshot.resolve_slot_weights(ballots)
 
-        # Missing, failed, and early-stopped slots remain in the denominator.
+        # Failed, missing, and early-stopped slots leave the denominator, as in
+        # the legacy tally; vote_participation and the quorum check account for them.
         vote_counts, total_weighted = self._count_snapshot_votes(
             ballots,
             choice_mapping,
@@ -2368,13 +2369,15 @@ class ConsensusPhase:
         choice_mapping: dict[str, str],
         slot_weights: tuple[float, ...],
     ) -> tuple[dict[str, float], float]:
-        """Count received ballots while retaining every eligible slot in the denominator."""
+        """Count received ballots; only their slot weights form the denominator."""
         vote_counts: dict[str, float] = {}
+        total_weighted = 0.0
         for ballot in ballots:
             canonical = choice_mapping.get(ballot.vote.choice, ballot.vote.choice)
             weight = slot_weights[ballot.slot.index]
             vote_counts[canonical] = vote_counts.get(canonical, 0.0) + weight
-        return vote_counts, sum(slot_weights)
+            total_weighted += weight
+        return vote_counts, total_weighted
 
     def _add_user_votes(
         self,
