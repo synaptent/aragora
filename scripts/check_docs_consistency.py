@@ -45,6 +45,9 @@ LINK_RE = re.compile(r"(?<!!)\[[^\]\n]+\]\(([^)\n]+)\)")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 HTML_ID_RE = re.compile(r"""<a\s+[^>]*id=["']([^"']+)["']""", re.IGNORECASE)
+# Adjacency limit: the kind word must directly follow the number, so qualified claims such as
+# "226,025 automated tests" or "47 registered adapters" are never checked. Allowing a qualifier
+# word also brings existing drifted claims into scope, so widen it only together with refreshing them.
 METRIC_RE = re.compile(r"\b(\d+(?:,\d+)*)(\+)?\s+(tests|adapters|agent types|API operations|modules)\b", re.IGNORECASE)
 CODE_RE = re.compile(r"\b([A-Z]{2,4})-(\d{2})(?:\.\.(\d{2}))?\b")
 TRACKED_ISSUE_CODE_PREFIXES = ("DIC-", "TW-")
