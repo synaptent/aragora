@@ -12,7 +12,8 @@ viewer have none), and ``knowledge.write`` / ``knowledge.delete`` to owner only.
 Until facts are scoped to an organization, every route that returns data derived
 from stored facts or touches an existing fact is closed: anonymous callers get
 401 and every authenticated caller, owner included, gets the closure 403.
-Creating a fact and the routes that never touch stored facts follow RBAC v2.
+Creating a fact and the routes that never touch stored facts follow RBAC v2,
+and creating a fact never hands back a fact another organization stored.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aragora.billing.jwt_auth import create_access_token
-from aragora.knowledge import InMemoryFactStore
+from aragora.knowledge import FactStore, InMemoryFactStore
 from aragora.rbac.checker import get_permission_checker
 from aragora.server.handler_registry import HandlerRegistryMixin
 from aragora.server.handlers.knowledge_base.handler import _knowledge_limiter
@@ -217,6 +218,71 @@ def test_roles_without_knowledge_write_cannot_create_facts(
     status, payload = _dispatch(registry_cls, method, path, body, role)
     assert status == 403, payload
     assert payload == {"error": "Permission denied"}
+
+
+def _org_owner_token(org_id: str) -> str:
+    return create_access_token(
+        user_id=f"owner-{org_id}", email=f"owner@{org_id}.example.com", org_id=org_id, role="owner"
+    )
+
+
+@pytest.fixture(params=["in-memory-store", "sqlite-store"])
+def fact_store(request, registry_cls, monkeypatch, tmp_path):
+    if request.param == "in-memory-store":
+        store: Any = InMemoryFactStore()
+    else:
+        store = FactStore(db_path=tmp_path / "knowledge.db")
+    monkeypatch.setattr(registry_cls._knowledge_handler, "_fact_store", store)
+    return store
+
+
+# The org B statement normalizes to org A's (case and whitespace), so a store
+# that deduplicates by statement and workspace would hand back org A's row.
+@pytest.mark.parametrize(
+    ("org_a_workspace", "org_b_workspace"),
+    [("ws-org-a", "ws-org-a"), ("ws-org-a", "ws-org-b"), (None, None)],
+    ids=["org-b-names-org-a-workspace", "org-b-own-workspace", "both-default-workspace"],
+)
+def test_create_never_returns_another_orgs_existing_fact(
+    registry_cls, fact_store, org_a_workspace, org_b_workspace
+) -> None:
+    org_a_body: dict[str, Any] = {
+        "statement": "Org A Pricing Floor Is 40 Dollars",
+        "confidence": 0.91,
+        "evidence_ids": ["ev-org-a"],
+        "source_documents": ["doc-org-a"],
+        "topics": ["org-a-pricing"],
+        "metadata": {"owner": "org-a", "secret": "org-a-only"},
+    }
+    org_b_body: dict[str, Any] = {
+        "statement": "  org a pricing floor   is 40 dollars ",
+        "confidence": 0.3,
+    }
+    if org_a_workspace is not None:
+        org_a_body["workspace_id"] = org_a_workspace
+    if org_b_workspace is not None:
+        org_b_body["workspace_id"] = org_b_workspace
+
+    path = "/api/v1/knowledge/facts"
+    status, org_a_fact = _dispatch(
+        registry_cls, "POST", path, org_a_body, None, bearer=_org_owner_token("org-a")
+    )
+    assert status == 201, org_a_fact
+    status, created = _dispatch(
+        registry_cls, "POST", path, org_b_body, None, bearer=_org_owner_token("org-b")
+    )
+    assert status == 201, created
+
+    assert created["id"] != org_a_fact["id"]
+    assert created["statement"] == org_b_body["statement"]
+    assert created["confidence"] == 0.3
+    assert created["evidence_ids"] == []
+    assert created["source_documents"] == []
+    assert created["topics"] == []
+    assert created["metadata"] == {}
+    assert created["created_at"] != org_a_fact["created_at"]
+    assert created["updated_at"] != org_a_fact["updated_at"]
+    assert "org-a-only" not in json.dumps(created)
 
 
 def test_owner_created_fact_stays_unreadable_to_owner_and_member(registry_cls) -> None:
