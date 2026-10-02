@@ -61,7 +61,7 @@ async def debate(
     """
     from aragora.core_types import Environment
     from aragora.debate.orchestrator import Arena
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
     if isinstance(agents, int):
         from aragora.agents.demo_agent import DemoAgent
