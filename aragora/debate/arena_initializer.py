@@ -276,7 +276,7 @@ class ArenaInitializer:
         # Prompt evolver for self-improvement via pattern extraction
         if prompt_evolver:
             evolver = prompt_evolver
-        elif enable_prompt_evolution and PROMPT_EVOLVER_AVAILABLE:
+        elif enable_prompt_evolution and PROMPT_EVOLVER_AVAILABLE and PromptEvolver is not None:
             evolver = PromptEvolver()
             logger.debug("[evolution] Auto-created PromptEvolver for pattern extraction")
         else:

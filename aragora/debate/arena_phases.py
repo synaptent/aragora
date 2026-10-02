@@ -276,7 +276,12 @@ def init_phases(arena: Arena) -> None:
     )
 
     # Auto-initialize PopulationManager for genome evolution when auto_evolve is enabled
-    if arena.auto_evolve and arena.population_manager is None and GENESIS_AVAILABLE:
+    if (
+        arena.auto_evolve
+        and arena.population_manager is None
+        and GENESIS_AVAILABLE
+        and _PopulationManager is not None
+    ):
         try:
             arena.population_manager = _PopulationManager()
             logger.info("population_manager auto-initialized for genome evolution")

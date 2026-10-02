@@ -439,7 +439,7 @@ class VotingEngine:
     def count_votes(
         self,
         votes: list[Vote],
-        user_votes: list[dict[str, Any] | None] = None,
+        user_votes: list[dict[str, Any]] | None = None,
         require_majority: bool = False,
         min_margin: float = 0.0,
     ) -> VoteResult:

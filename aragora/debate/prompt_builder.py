@@ -42,8 +42,12 @@ AbstractionLevel: Any
 RLMContextAdapter: Any
 
 try:
-    from aragora.rlm import AbstractionLevel, RLMContextAdapter, HAS_OFFICIAL_RLM
+    from aragora.rlm import AbstractionLevel as _AbstractionLevel
+    from aragora.rlm import RLMContextAdapter as _RLMContextAdapter
+    from aragora.rlm import HAS_OFFICIAL_RLM
 
+    AbstractionLevel = _AbstractionLevel
+    RLMContextAdapter = _RLMContextAdapter
     HAS_RLM = True
 except ImportError:
     HAS_RLM = False
