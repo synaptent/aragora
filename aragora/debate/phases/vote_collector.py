@@ -785,10 +785,15 @@ class VoteCollector:
         timed_out = False
         early_terminated = False
         try:
-            async with asyncio.timeout(effective_collection_timeout):
-                early_terminated = await owner.run(consume_vote, stop_at_decision_boundary)
-        except TimeoutError:
+            early_terminated = await asyncio.wait_for(
+                owner.run(consume_vote, stop_at_decision_boundary),
+                timeout=effective_collection_timeout,
+            )
+        except asyncio.TimeoutError:
             timed_out = True
+            # wait_for may run owner.run in its own task, and a non-positive timeout
+            # cancels that task before it starts, so its own settle never runs.
+            owner.settle(consume_vote, propagate=False)
             logger.warning(
                 "vote_collection_timeout collected=%s expected=%s timeout=%ss",
                 len(ballots),
