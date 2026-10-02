@@ -17,7 +17,8 @@ from aragora.debate.chaos_theater import DramaLevel, get_chaos_director
 from aragora.debate.extensions import ArenaExtensions
 from aragora.debate.immune_system import get_immune_system
 from aragora.debate.optional_imports import OptionalImports
-from aragora.debate.protocol import CircuitBreaker, DebateProtocol
+from aragora.protocols.debate import DebateProtocol
+from aragora.resilience import CircuitBreaker
 from aragora.debate.safety import resolve_auto_evolve, resolve_prompt_evolution
 from aragora.debate.subsystem_coordinator import SubsystemCoordinator
 from aragora.spectate.stream import SpectatorStream
@@ -223,7 +224,7 @@ class ArenaInitializer:
         auto_evolve = resolve_auto_evolve(auto_evolve)
         enable_prompt_evolution = resolve_prompt_evolution(enable_prompt_evolution)
 
-        from aragora.debate.protocol import resolve_default_protocol
+        from aragora.debate.protocol_resolver import resolve_default_protocol
 
         protocol = resolve_default_protocol(protocol)
 

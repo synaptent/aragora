@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from aragora.agents.calibration import CalibrationTracker
     from aragora.agents.personas import PersonaManager
     from aragora.core import Agent, Environment
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.debate.roles import RoleAssignment, RoleRotator
     from aragora.evidence.collector import EvidencePack
     from aragora.insights.flip_detector import FlipDetector

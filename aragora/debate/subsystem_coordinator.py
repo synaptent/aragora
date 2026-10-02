@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from aragora.core import DebateResult
     from aragora.insights.flip_detector import FlipDetector
     from aragora.debate.context import DebateContext
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.memory.consensus import ConsensusMemory, DissentRetriever
     from aragora.memory.continuum import ContinuumMemory
     from aragora.memory.tier_analytics import TierAnalyticsTracker
