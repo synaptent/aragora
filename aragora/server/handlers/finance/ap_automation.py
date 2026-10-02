@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -161,6 +161,9 @@ async def handle_add_invoice(
             discount["discount_days"] = (deadline - (invoice_date or datetime.now())).days
     except ValueError:
         return error_response("Dates must be in ISO format", status=400)
+    # The AP service adds up to 60 days of payment terms to invoice_date.
+    if invoice_date and invoice_date > datetime.max - timedelta(days=60):
+        return error_response("invoice_date is out of range", status=400)
 
     from aragora.services.ap_automation import PaymentPriority
 

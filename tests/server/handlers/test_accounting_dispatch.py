@@ -32,6 +32,7 @@ from aragora.server.handlers.finance import (
     expenses,
     invoices,
 )
+from aragora.server.validation.query_params import parse_date_range_params, parse_iso_datetime
 
 pytestmark = pytest.mark.no_auto_auth
 
@@ -256,7 +257,7 @@ def dispatch(
         assert inst._try_modular_handler(path, parse_qs(query)) is True
     status = inst.send_response.call_args[0][0]
     payload = json.loads(inst.wfile.getvalue())
-    assert "handler_no_result" not in json.dumps(payload)
+    assert not re.search("handler_no_result|unexpected_exception", json.dumps(payload)), payload
     assert status != 500, payload
     return status, payload
 
@@ -507,6 +508,77 @@ def test_offset_dated_bodies_keep_lists_working() -> None:
         for query in ("", "start_date=2026-05-01&end_date=2026-07-01"):
             status, body = dispatch("GET", f"{A}/{path}", "admin", query)
             assert status == 200 and "error" not in body, (path, query, body)
+
+
+# UTC instants outside the datetime range, whatever the local zone.
+OUT_OF_RANGE = ["0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"]
+
+
+@pytest.mark.parametrize("value", OUT_OF_RANGE)
+def test_parse_out_of_range_iso_raises_value_error(value: str) -> None:
+    with pytest.raises(ValueError):
+        parse_iso_datetime(value)
+    for key in ("start_date", "end_date"):
+        expected = (None, None, f"{key} must be an ISO format date")
+        assert parse_date_range_params({key: [value]}) == expected
+
+
+@pytest.mark.parametrize("value", ["0001-01-01T00:00:00Z", "9999-12-31T23:59:59Z"])
+def test_parse_utc_range_edge_is_naive_or_value_error(value: str) -> None:
+    try:
+        assert parse_iso_datetime(value).tzinfo is None
+    except ValueError:
+        pass
+
+
+RANGE_FILTERS = [(path, value) for path in DATE_SITES for value in OUT_OF_RANGE] + [
+    (f"{A}/{area}/invoices", "0001-01-01") for area in ("ap", "ar")
+]
+
+
+@pytest.mark.parametrize("param", ["start_date", "end_date"])
+@pytest.mark.parametrize(("path", "value"), RANGE_FILTERS, ids=route_id)
+def test_out_of_range_date_filter_400(path: str, value: str, param: str) -> None:
+    status, body = dispatch("GET", path, "admin", urlencode({param: value}))
+    assert status == 400 and param in body["error"], body
+
+
+RANGE_BODY_FIELDS = [
+    *[("ap/invoices", f, "Dates must be in ISO format") for f in ("invoice_date", "due_date")],
+    ("ap/invoices", "discount_deadline", "Dates must be in ISO format"),
+    *[("invoices", f, f"Invalid {f} format") for f in ("invoice_date", "due_date")],
+    ("invoices/inv-x/schedule", "pay_date", "Invalid pay_date format"),
+    ("expenses", "date", "Invalid date format"),
+]
+
+
+@pytest.mark.parametrize("value", OUT_OF_RANGE)
+@pytest.mark.parametrize(("path", "field", "error"), RANGE_BODY_FIELDS)
+def test_out_of_range_body_date_400(path: str, field: str, error: str, value: str) -> None:
+    data = {**BODIES.get(f"POST {path}", {}), field: value}
+    status, body = dispatch("POST", f"{A}/{path}", "admin", body=json.dumps(data).encode())
+    assert (status, body.get("error")) == (400, error), body
+
+
+@pytest.mark.parametrize("due_date", [None, "9999-12-31"], ids=["net_terms", "discount_window"])
+def test_far_future_ap_invoice_400(due_date: str | None) -> None:
+    """The AP service adds payment terms or a discount window to invoice_date."""
+    data = {**BODIES["POST ap/invoices"], "invoice_date": "9999-12-31"}
+    if due_date:
+        data["due_date"] = due_date
+        del data["discount_deadline"]
+    status, body = dispatch("POST", f"{A}/ap/invoices", "admin", body=json.dumps(data).encode())
+    assert status == 400 and isinstance(body["error"], str) and body["error"], body
+
+
+@pytest.mark.parametrize("field", ["order_date", "expected_delivery"])
+def test_purchase_order_out_of_range_date_matches_unparsable(field: str) -> None:
+    def post(value: str) -> int:
+        data = {**BODIES["POST purchase-orders"], field: value}
+        return dispatch("POST", f"{A}/purchase-orders", "admin", body=json.dumps(data).encode())[0]
+
+    assert post("2026-06-02T00:00:00+02:00") == 200
+    assert post(OUT_OF_RANGE[0]) == post(OUT_OF_RANGE[1]) == post("not-a-date")
 
 
 @pytest.mark.parametrize(

@@ -285,10 +285,17 @@ def parse_iso_datetime(raw: Any) -> datetime:
     """Parse an ISO 8601 value; an offset-bearing value becomes naive local time.
 
     The accounting services store naive local ``datetime.now()`` timestamps, and
-    comparing naive with aware datetimes raises ``TypeError``.
+    comparing naive with aware datetimes raises ``TypeError``. A value outside the
+    range of local time, or without a POSIX timestamp there (the AP and AR lists
+    compare timestamps), raises ``ValueError``.
     """
     value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-    return value.astimezone().replace(tzinfo=None) if value.tzinfo else value
+    try:
+        local = value.astimezone().replace(tzinfo=None) if value.tzinfo else value
+        local.timestamp()
+    except (OverflowError, OSError) as exc:
+        raise ValueError(f"{raw!r} is outside the supported date range") from exc
+    return local
 
 
 def parse_date_range_params(
