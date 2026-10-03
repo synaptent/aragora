@@ -164,7 +164,7 @@ def _schedule_sync(job: Coroutine[Any, Any, None], sync_id: str) -> None:
     def _run_in_thread() -> None:
         try:
             asyncio.run(job)
-        except Exception:  # noqa: BLE001 - a background job has no caller to raise to
+        except (RuntimeError, OSError, ValueError, TypeError, KeyError, AttributeError):
             logger.exception("Connector sync %s failed", sync_id)
 
     threading.Thread(target=_run_in_thread, name=f"connector-sync-{sync_id}", daemon=True).start()
