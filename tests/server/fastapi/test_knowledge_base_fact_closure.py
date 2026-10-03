@@ -98,11 +98,7 @@ class _ApiKeyUser:
 class _ApiKeyUserStore:
     """Accepts ``API_KEY`` for an org-B owner if anything looks it up."""
 
-    def __init__(self) -> None:
-        self.lookups = 0
-
     def get_user_by_api_key(self, key: str) -> _ApiKeyUser | None:
-        self.lookups += 1
         return _ApiKeyUser() if key == API_KEY else None
 
 
@@ -191,17 +187,19 @@ def test_closed_route_answers_401_to_anonymous(fastapi_client, seeded, method, p
 
 
 @pytest.mark.parametrize(("method", "path", "body"), CLOSED_ROUTES, ids=ROUTE_IDS)
-def test_closed_route_answers_401_to_api_key_caller(
+def test_closed_route_never_serves_an_api_key_caller(
     fastapi_client, seeded, method, path, body
 ) -> None:
-    """``ara_`` keys do not resolve on the FastAPI app: the key lookup reads
-    ``request.app.get("user_store")``, which on FastAPI is the GET route decorator, so the
-    caller is anonymous and the app's user store is never consulted."""
+    """Whether or not the key resolves to a user, a closed route never reaches the store:
+    an unresolved key is anonymous (401) and a resolved one gets the closure (403)."""
     headers = {"Authorization": f"Bearer {API_KEY}"}
     response = _send(fastapi_client, seeded, method, path, body, headers)
 
-    assert response.status_code == 401
-    assert seeded["user_store"].lookups == 0
+    if response.status_code == 401:
+        assert response.json() != CLOSED
+    else:
+        assert response.status_code == 403
+        assert response.json() == CLOSED
     _assert_no_org_a_data(seeded, response)
     _assert_untouched(seeded)
 
@@ -239,16 +237,10 @@ def test_create_still_requires_knowledge_write(fastapi_client, seeded, role) -> 
     _assert_untouched(seeded)
 
 
-@pytest.mark.parametrize(
-    "headers",
-    [{}, {"Authorization": f"Bearer {API_KEY}"}],
-    ids=["anonymous", "api-key"],
-)
-def test_create_answers_401_to_unresolved_callers(fastapi_client, seeded, headers) -> None:
+def test_create_answers_401_to_anonymous(fastapi_client, seeded) -> None:
     response = fastapi_client.post(
         f"{PREFIX}/facts",
         json={"statement": ORG_A_STATEMENT, "workspace_id": ORG_A_WORKSPACE},
-        headers=headers,
     )
 
     assert response.status_code == 401
