@@ -48,7 +48,7 @@ from aragora.fabric.models import (
 if TYPE_CHECKING:
     from aragora.core import Agent
     from aragora.core_types import DebateResult, Environment
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.fabric import AgentFabric
 
 logger = logging.getLogger(__name__)
@@ -313,7 +313,7 @@ class FabricDebateRunner:
             TimeoutError: If debate exceeds timeout
         """
         from aragora.debate.orchestrator import Arena
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         config = config or FabricDebateConfig(pool_id=pool_id)
         debate_id = f"debate-{uuid4().hex[:8]}"

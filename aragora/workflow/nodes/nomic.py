@@ -101,7 +101,7 @@ class NomicLoopStep(BaseStep):
             from aragora.agents import create_agent
             from aragora.core_types import Environment
             from aragora.debate.orchestrator import Arena
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
             from aragora.nomic import NomicState, create_nomic_state_machine
             from aragora.nomic.handlers import (
                 create_commit_handler,
@@ -181,8 +181,8 @@ class NomicLoopStep(BaseStep):
                 logger.debug("Failed to load debate profile, using defaults: %s", exc)
                 debate_config = DebateConfig(rounds=DebateSettings().default_rounds)
 
-            if config.get("debate_rounds"):
-                debate_config.rounds = int(config.get("debate_rounds"))
+            if debate_rounds := config.get("debate_rounds"):
+                debate_config.rounds = int(debate_rounds)
             if config.get("consensus_mechanism"):
                 debate_config.consensus_mode = str(config.get("consensus_mechanism"))
 

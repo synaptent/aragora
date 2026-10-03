@@ -21,13 +21,14 @@ from aragora.server.handlers.tasks.execution import (
     MAX_CONTEXT_SIZE,
     MAX_GOAL_LENGTH,
     MAX_LIST_LIMIT,
+    VALID_TASK_TYPES,
     VALID_STATUSES,
     TaskExecutionHandler,
+    TaskRouter,
     TaskRecord,
     _clear_tasks,
     _tasks,
 )
-from aragora.tasks.router import VALID_TASK_TYPES
 
 
 # ============================================================================
@@ -935,8 +936,6 @@ class TestStartExecution:
     """Tests for the _start_execution internal method."""
 
     def test_pending_task_transitions_to_running(self, handler):
-        from aragora.tasks.router import TaskRouter
-
         router = TaskRouter()
         route = router.route("debate", "test", {})
         task = TaskRecord(goal="test", type="debate", status="pending")
@@ -946,8 +945,6 @@ class TestStartExecution:
         assert task.result is not None
 
     def test_approved_task_transitions_to_running(self, handler):
-        from aragora.tasks.router import TaskRouter
-
         router = TaskRouter()
         route = router.route("debate", "test", {})
         task = TaskRecord(goal="test", type="debate", status="approved")
@@ -955,8 +952,6 @@ class TestStartExecution:
         assert task.status == "completed"
 
     def test_execution_result_contains_summary(self, handler):
-        from aragora.tasks.router import TaskRouter
-
         router = TaskRouter()
         route = router.route("debate", "my goal", {})
         task = TaskRecord(goal="my goal", type="debate", status="pending")
@@ -965,8 +960,6 @@ class TestStartExecution:
         assert task.result["steps_completed"] == len(route.workflow_steps)
 
     def test_workflow_engine_integration(self, handler):
-        from aragora.tasks.router import TaskRouter
-
         router = TaskRouter()
         route = router.route("debate", "test", {})
         task = TaskRecord(goal="test", type="debate", status="pending")
@@ -982,8 +975,6 @@ class TestStartExecution:
         assert task.workflow_id.startswith("wf-")
 
     def test_workflow_engine_failure_does_not_block(self, handler):
-        from aragora.tasks.router import TaskRouter
-
         router = TaskRouter()
         route = router.route("debate", "test", {})
         task = TaskRecord(goal="test", type="debate", status="pending")
@@ -1008,8 +999,6 @@ class TestScheduleTask:
     """Tests for _schedule_task."""
 
     def test_schedule_noop_when_no_scheduler(self, handler):
-        from aragora.tasks.router import TaskRouter
-
         router = TaskRouter()
         route = router.route("debate", "test", {})
         task = TaskRecord(goal="test", type="debate")
