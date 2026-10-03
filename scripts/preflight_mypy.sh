@@ -17,7 +17,8 @@
 #   0    both passes clean (the repo-config pass is skipped when no *.py changed)
 #   N    the repo-config pass's mypy exit code if it reported issues, otherwise
 #        the hook's exit code if the hook reported issues
-#   2    usage error, or mypy / pre-commit not installed
+#   2    usage error, pre-commit not installed, or mypy not installed when
+#        *.py files changed
 #
 # Notes:
 #   - macOS bash 3.2 compatible (no GNU-only flags).

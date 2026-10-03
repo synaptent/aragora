@@ -217,8 +217,10 @@ def test_hook_failure_fails_preflight_when_repo_config_pass_is_clean(tmp_path: P
 
 
 def test_hook_runs_and_can_fail_without_python_changes(tmp_path: Path) -> None:
-    # pyproject.toml forces the hook's full typecheck tier, so a branch with
-    # no python changes can still be blocked at push.
+    # With the real hook a pyproject.toml change forces the full typecheck
+    # tier, so a branch with no python changes can still be blocked at push.
+    # The shimmed hook here only proves the preflight still runs it and
+    # propagates its exit code.
     repo = _init_repo(tmp_path)
     (repo / "pyproject.toml").write_text("[tool.mypy]\n", encoding="utf-8")
     _run(["git", "add", "pyproject.toml"], cwd=repo)
@@ -353,9 +355,10 @@ def test_committed_diff_with_dirty_tree_keeps_committed_behavior_identical(
 
 # --- Opt-in integration: the real typecheck-changed hook and real mypy ---------
 #
-# These run the repo's actual hook definition through pre-commit (which may
-# need network access the first time it builds the hook's pinned mypy
-# environment), so they only run when PREFLIGHT_MYPY_HOOK_INTEGRATION=1.
+# These run the repo's actual hook definition through pre-commit (whose first
+# run may need network access to fetch hook repositories and build the hook's
+# pinned mypy environment), so they only run when
+# PREFLIGHT_MYPY_HOOK_INTEGRATION=1.
 
 _FIXTURE_PYPROJECT = """\
 [tool.mypy]

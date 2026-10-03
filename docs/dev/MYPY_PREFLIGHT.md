@@ -34,7 +34,8 @@ The script:
    `scripts/test_tiers.sh typecheck` when config files force a full run. It
    uses the mypy version and stub packages pinned in `.pre-commit-config.yaml`.
 4. Exits with the repo-config pass's mypy exit code if it failed, otherwise
-   with the hook's exit code. It exits 2 if `mypy` or `pre-commit` is missing.
+   with the hook's exit code. It exits 2 if `pre-commit` is missing, or if
+   `mypy` is missing when Python files changed.
 
 Neither pass subsumes the other, so the preflight requires both. With
 `--follow-imports=skip` the hook cannot see attributes that only an unchanged
@@ -65,5 +66,6 @@ scripts/preflight_mypy.sh || {
 
 `tests/scripts/test_preflight_mypy.py` covers the script with PATH shims. Its
 real-hook fixtures run the actual hook and mypy only when
-`PREFLIGHT_MYPY_HOOK_INTEGRATION=1` is set, because pre-commit may need
-network access to build the hook environment the first time.
+`PREFLIGHT_MYPY_HOOK_INTEGRATION=1` is set, because the first pre-commit run
+may need network access to fetch every hook repository in
+`.pre-commit-config.yaml` and to build the hook's environment.
