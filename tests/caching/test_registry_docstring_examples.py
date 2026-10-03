@@ -18,14 +18,13 @@ def _usage_tree() -> ast.Module:
     return ast.parse(textwrap.dedent(block))
 
 
-def _example_calls(tree: ast.Module) -> list[ast.Call]:
-    return [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in caching.__all__
-    ]
+def _example_calls(tree: ast.Module) -> list[tuple[str, ast.Call]]:
+    calls: list[tuple[str, ast.Call]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in caching.__all__:
+                calls.append((node.func.id, node))
+    return calls
 
 
 def test_usage_imports_are_exported() -> None:
@@ -42,11 +41,11 @@ def test_usage_imports_are_exported() -> None:
 
 def test_usage_calls_bind_to_real_signatures() -> None:
     calls = _example_calls(_usage_tree())
-    assert {"cached", "TTLCache", "register_cache"} <= {call.func.id for call in calls}
+    assert {"cached", "TTLCache", "register_cache"} <= {name for name, _ in calls}
 
     failures = []
-    for call in calls:
-        signature = inspect.signature(getattr(caching, call.func.id))
+    for name, call in calls:
+        signature = inspect.signature(getattr(caching, name))
         args = [object()] * len(call.args)
         kwargs = {kw.arg: object() for kw in call.keywords if kw.arg is not None}
         try:
