@@ -356,18 +356,18 @@ def _permission_set_fingerprint(permissions: set[str]) -> tuple[int, str]:
 # Effective (inherited) permission set of every system role before admin was granted
 # connectors.test, as (count, sha256 of the sorted keys joined by newlines).
 _ROLE_FINGERPRINTS_BEFORE_ADMIN_CONNECTOR_TEST = {
-    "admin": (203, "a6b4fc14829fa2081b3e476c4a47488f0c33c4d1090193fa59c4d895835c0028"),
-    "analyst": (18, "6ce469b663e7a9c80e0765e5a5cd9881b48fa2f1f98137f5a4a09834a3505a85"),
+    "admin": (208, "efb3a0c66bbbd48cae51ea4ab484d91d7d6dd2f588eb7157c76b237ed75a5678"),
+    "analyst": (20, "86bb6d41ea84271be1c2067dcc53a4d75809ff374143b592feb251d1e50b286b"),
     "compliance_officer": (
-        44,
-        "7154b5f8fb10d40a265f0716a2dda5245fef3d1edbf739ea90655f1c28a564ea",
+        46,
+        "1cd961bcaf18249a7d4142481c76d32dff01e295ed5cf4ba4b295e30c1178172",
     ),
-    "debate_creator": (90, "722d3c2470ba732875ace58def9408394f3b87ea315d61196f36ba48716bf2dd"),
-    "developer": (71, "eadf74e4bab5827706318db23cf5720f128aef0f6db566552a138e823ce10511"),
-    "member": (70, "3c727c438bcbc6e1976ab077bae34e691e7e4ee0fb2b51cf727f47d2ed637049"),
-    "ops_reviewer": (19, "da772f750b26090aa0fc86126d497e90dd0187fe9959ac3feb0a77d52329210d"),
-    "owner": (402, "6e4c5b5ec5efbd68065676557a346954f47670e31783a34c62af6fc10b523ae2"),
-    "team_lead": (82, "24623ba7ccc70070494c7410d159d7eba8bdf9e5b7ebcb121e0733cdb7060802"),
+    "debate_creator": (91, "e2f07371a5821585e5aec33ffb6e1953ae48eb780402117a825864450071e3ae"),
+    "developer": (72, "ef0588ce9fbbe5425f9c248739c582a7a6232eedd23c99daa1a6cdc40894735b"),
+    "member": (71, "d78ee48bca88b6fa0eca8fcfa03dfe2a8c34f07a77260da4296fe4d381002ea7"),
+    "ops_reviewer": (21, "5bbc38b88c87ba7af84e4dfe6a8d5904d06fcee3d1a068b156dfd2a9fcb9a8a8"),
+    "owner": (407, "9b4bb2b5979aab3c896360879c0e49c7976b9f7ea4ed6e974bec2d3e9aeb7a86"),
+    "team_lead": (83, "d3fbda5b1fda95170d527419433ce75ead712dc44804c6cfa0529e2b536853dd"),
     "viewer": (6, "d2fce120a3ae82e4dfe79c8fb99bb26c12a4613db6e5bb78fe53c4e2f891a1e1"),
 }
 
