@@ -1,4 +1,4 @@
-"""Live-dispatch tests for the email snooze, Teams list and conflict-resolve routes.
+"""Live-dispatch tests for the email services, Teams list and conflict-resolve routes.
 
 The requests go through the real ``_try_modular_handler`` over the route index built
 from the full HANDLER_REGISTRY by ``_init_handlers``. Every authenticated caller
@@ -20,6 +20,7 @@ import pytest
 from aragora.billing.jwt_auth import create_access_token
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.bots.teams.handler import TeamsHandler
+from aragora.server.handlers.email import email_services as email_module
 from aragora.server.handlers.email.email_services import EmailServicesHandler
 from aragora.server.handlers.evolution.cross_pollination import CrossPollinationStatsHandler
 
@@ -106,7 +107,6 @@ def _dispatch(
 SNOOZE_SUGGESTIONS = "/api/v1/email/probe-email/snooze-suggestions"
 
 ROUTES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
-    "emailServices.getSnoozeSuggestions": ("GET", SNOOZE_SUGGESTIONS, None),
     "teams.listTeams": ("GET", "/api/v1/teams", None),
     "crossPollination.resolveConflict": (
         "POST",
@@ -115,18 +115,7 @@ ROUTES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
     ),
 }
 
-# Email: the handler's own check denies every role but owner (403), and the email
-# module functions answer 401 because the handler never passes them an auth context,
-# so nobody gets suggestions yet. The handler's other routes answer the same way.
 EXPECTED: dict[str, dict[str, int]] = {
-    "emailServices.getSnoozeSuggestions": {
-        "owner": 401,
-        "admin": 403,
-        "member": 403,
-        "analyst": 403,
-        "viewer": 403,
-        "anon": 401,
-    },
     "teams.listTeams": {
         "owner": 501,
         "admin": 501,
@@ -184,21 +173,58 @@ def test_real_jwt_callers_get_the_route_permission_answer(
         assert payload["error"]["code"] == "not_implemented"
 
 
+# Only owner holds email.*, so the handler's own check answers 403 to every other role.
+# Owner's request reaches the module, which repeats the check on the forwarded context;
+# the status after that is the module's own answer, so only "not 401/403" is pinned.
+EMAIL_ROUTES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
+    "getCategories": ("GET", "/api/v1/email/categories", None),
+    "getPendingFollowups": ("GET", "/api/v1/email/followups/pending", None),
+    "getSnoozedEmails": ("GET", "/api/v1/email/snoozed", None),
+    "getSnoozeSuggestions": ("GET", SNOOZE_SUGGESTIONS, None),
+    "markFollowup": ("POST", "/api/v1/email/followups/mark", {"email_id": "e1", "thread_id": "t1"}),
+    "checkReplies": ("POST", "/api/v1/email/followups/check-replies", {}),
+    "autoDetectFollowups": ("POST", "/api/v1/email/followups/auto-detect", {}),
+    "resolveFollowup": ("POST", "/api/v1/email/followups/probe-fu/resolve", {}),
+    "applySnooze": (
+        "POST",
+        "/api/v1/email/probe-email/snooze",
+        {"snooze_until": "2030-01-01T09:00:00"},
+    ),
+    "processDueSnoozes": ("POST", "/api/v1/email/snooze/process-due", {}),
+    "categoryFeedback": (
+        "POST",
+        "/api/v1/email/categories/learn",
+        {"email_id": "e1", "predicted_category": "a", "correct_category": "b"},
+    ),
+    "cancelSnooze": ("DELETE", "/api/v1/email/probe-email/snooze", None),
+}
+
+
 @pytest.mark.parametrize("caller", CALLERS)
-@pytest.mark.parametrize(
-    ("method", "path", "body"),
-    [
-        ("GET", "/api/v1/email/followups/pending", None),
-        ("GET", "/api/v1/email/snoozed", None),
-        ("POST", "/api/v1/email/followups/mark", {"email_id": "e1", "thread_id": "t1"}),
-    ],
-)
-def test_snooze_suggestions_answer_like_the_other_email_routes(
-    registry_cls, method: str, path: str, body: dict[str, Any] | None, caller: str
+@pytest.mark.parametrize("route_id", sorted(EMAIL_ROUTES))
+def test_email_module_check_sees_the_callers_auth_context(
+    registry_cls, route_id: str, caller: str
 ) -> None:
-    snooze_status, _ = _dispatch(registry_cls, "GET", SNOOZE_SUGGESTIONS, caller=caller)
-    status, payload = _dispatch(registry_cls, method, path, body, caller=caller)
-    assert status == snooze_status, (path, caller, payload)
+    method, path, body = EMAIL_ROUTES[route_id]
+    real_check = email_module._check_email_permission
+    seen: list[tuple[str | None, Any]] = []
+
+    def recording_check(auth_context: Any, permission_key: str) -> Any:
+        result = real_check(auth_context, permission_key)
+        seen.append((getattr(auth_context, "user_id", None), result))
+        return result
+
+    with (
+        patch.object(email_module, "_check_email_permission", recording_check),
+        patch.dict(email_module._snoozed_emails, clear=True),
+    ):
+        status, payload = _dispatch(registry_cls, method, path, body, caller=caller)
+    if caller == "owner":
+        assert seen == [("jwt-owner", None)], (route_id, payload)
+        assert status not in (401, 403), (route_id, payload)
+    else:
+        assert status == (401 if caller == "anon" else 403), (route_id, payload)
+        assert seen == [], (route_id, payload)
 
 
 @pytest.mark.parametrize("caller", ("owner", "member", "anon"))

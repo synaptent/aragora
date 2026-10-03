@@ -1006,24 +1006,26 @@ class EmailServicesHandler(SecureHandler):
         user_id = auth_context.user_id
 
         if path == "/api/v1/email/followups/mark":
-            return await handle_mark_followup(data, user_id=user_id)
+            return await handle_mark_followup(data, user_id=user_id, auth_context=auth_context)
         elif path == "/api/v1/email/followups/check-replies":
-            return await handle_check_replies()
+            return await handle_check_replies(auth_context=auth_context)
         elif path == "/api/v1/email/followups/auto-detect":
             days_back = data.get("days_back", 7)
-            return await handle_auto_detect_followups(days_back=days_back)
+            return await handle_auto_detect_followups(
+                days_back=days_back, auth_context=auth_context
+            )
         elif path.endswith("/resolve"):
             parts = path.split("/")
             if len(parts) >= 5:
-                return await handle_resolve_followup(parts[-2], data)
+                return await handle_resolve_followup(parts[-2], data, auth_context=auth_context)
         elif path.endswith("/snooze") and "process-due" not in path:
             parts = path.split("/")
             if len(parts) >= 5:
-                return await handle_apply_snooze(parts[-2], data)
+                return await handle_apply_snooze(parts[-2], data, auth_context=auth_context)
         elif path == "/api/v1/email/snooze/process-due":
-            return await handle_process_due_snoozes()
+            return await handle_process_due_snoozes(auth_context=auth_context)
         elif path == "/api/v1/email/categories/learn":
-            return await handle_category_feedback(data)
+            return await handle_category_feedback(data, auth_context=auth_context)
         return error_response("Not found", status=404)
 
     async def handle_get(
@@ -1033,12 +1035,6 @@ class EmailServicesHandler(SecureHandler):
         handler: Any,
     ) -> HandlerResult | None:
         """Handle GET requests with RBAC protection."""
-        # Categories endpoint is public (static reference data)
-        if path == "/api/v1/email/categories":
-            user_id = query_params.get("user_id", "default")
-            return await handle_get_categories(user_id=user_id)
-
-        # All other read operations require authentication
         try:
             auth_context = await self.get_auth_context(handler, require_auth=True)
         except UnauthorizedError:
@@ -1055,18 +1051,21 @@ class EmailServicesHandler(SecureHandler):
 
         user_id = auth_context.user_id
 
-        if path == "/api/v1/email/followups/pending":
+        if path == "/api/v1/email/categories":
+            return await handle_get_categories(user_id=user_id, auth_context=auth_context)
+        elif path == "/api/v1/email/followups/pending":
             return await handle_get_pending_followups(
                 user_id=user_id,
                 include_resolved=query_params.get("include_resolved", "false").lower() == "true",
+                auth_context=auth_context,
             )
         elif path == "/api/v1/email/snoozed":
-            return await handle_get_snoozed_emails(user_id=user_id)
+            return await handle_get_snoozed_emails(user_id=user_id, auth_context=auth_context)
         elif "snooze-suggestions" in path:
             parts = path.split("/")
             if len(parts) >= 5:
                 return await handle_get_snooze_suggestions(
-                    parts[-2], data=query_params, user_id=user_id
+                    parts[-2], data=query_params, user_id=user_id, auth_context=auth_context
                 )
         return error_response("Not found", status=404)
 
@@ -1098,5 +1097,7 @@ class EmailServicesHandler(SecureHandler):
         if "/snooze" in path:
             parts = path.split("/")
             if len(parts) >= 5:
-                return await handle_cancel_snooze(parts[-2], user_id=user_id)
+                return await handle_cancel_snooze(
+                    parts[-2], user_id=user_id, auth_context=auth_context
+                )
         return error_response("Not found", status=404)

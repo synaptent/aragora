@@ -1300,11 +1300,9 @@ class TestEmailServicesHandlerCanHandle:
 class TestEmailServicesHandlerPost:
     """Tests for EmailServicesHandler.handle_post.
 
-    Note: handle_post dispatches to standalone handler functions which do their
-    own _check_email_permission check. Since the handler class already verifies
-    auth via get_auth_context + check_permission, the standalone functions
-    receive no auth_context and would return 401. We patch _check_email_permission
-    to return None (allowed) for these routing tests.
+    Note: handle_post dispatches to standalone handler functions which repeat
+    the permission check on the auth context the handler passes them. We patch
+    _check_email_permission to return None (allowed) for these routing tests.
     """
 
     @pytest.fixture(autouse=True)
@@ -1397,7 +1395,6 @@ class TestEmailServicesHandlerGet:
 
     Note: handle_get calls standalone functions which do their own
     _check_email_permission. We patch it to return None (allowed).
-    The categories endpoint is handled separately in the handler (public).
     """
 
     @pytest.fixture(autouse=True)
@@ -1406,9 +1403,7 @@ class TestEmailServicesHandlerGet:
             yield
 
     @pytest.mark.asyncio
-    async def test_get_categories_public(self, handler, mock_http_handler):
-        """Categories endpoint is public (no auth needed via handler)."""
-
+    async def test_get_categories(self, handler, mock_http_handler):
         class MockEmailCategory(Enum):
             INVOICES = "invoices"
 
