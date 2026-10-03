@@ -23,6 +23,7 @@ All endpoints require authentication.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from aiohttp import web
 
@@ -56,6 +57,19 @@ def get_threat_service() -> ThreatIntelligenceService:
     return _threat_service
 
 
+def _require_body(body: dict[str, Any] | None) -> dict[str, Any]:
+    """Narrow the parsed body once the parser's error branch has been handled.
+
+    ``parse_json_body`` returns ``(dict, None)`` or ``(None, response)``, so the
+    body is always a dict after the error response has been consumed; the
+    ``None`` branch keeps the native first-use failure rather than adding a
+    new response.
+    """
+    if body is None:
+        raise AttributeError("'NoneType' object has no attribute 'get'")
+    return body
+
+
 class ThreatIntelHandler(BaseHandler):
     """Handler for threat intelligence endpoints."""
 
@@ -68,17 +82,17 @@ class ThreatIntelHandler(BaseHandler):
         "/api/v1/threat/urls",
     ]
 
-    def __init__(self, server_context=None):
+    def __init__(self, server_context: dict[str, Any] | None = None) -> None:
         """Initialize handler."""
         super().__init__(server_context or {})
         self.service = get_threat_service()
 
     @require_permission("threat_intel:read")
-    def handle(self, path: str, query_params: dict, handler) -> HandlerResult:
+    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> None:
         """Route threat intel requests to appropriate methods."""
         # This handler uses @api_endpoint decorators, this is a placeholder
         # for RBAC enforcement at the handler routing level
-        pass
+        return None
 
     # =========================================================================
     # URL Scanning
@@ -121,6 +135,7 @@ class ThreatIntelHandler(BaseHandler):
             body, err = await parse_json_body(request, context="check_url")
             if err:
                 return err
+            body = _require_body(body)
             url = body.get("url", "").strip()
 
             if not url:
@@ -178,6 +193,7 @@ class ThreatIntelHandler(BaseHandler):
             body, err = await parse_json_body(request, context="check_urls_batch")
             if err:
                 return err
+            body = _require_body(body)
             urls = body.get("urls", [])
 
             if not urls:
@@ -284,6 +300,7 @@ class ThreatIntelHandler(BaseHandler):
             body, err = await parse_json_body(request, context="check_ips_batch")
             if err:
                 return err
+            body = _require_body(body)
             ips = body.get("ips", [])
 
             if not ips:
@@ -381,6 +398,7 @@ class ThreatIntelHandler(BaseHandler):
             body, err = await parse_json_body(request, context="check_hashes_batch")
             if err:
                 return err
+            body = _require_body(body)
             hashes = body.get("hashes", [])
 
             if not hashes:
@@ -452,6 +470,7 @@ class ThreatIntelHandler(BaseHandler):
             body, err = await parse_json_body(request, context="scan_email_content")
             if err:
                 return err
+            body = _require_body(body)
             email_body = body.get("body", "")
             headers = body.get("headers", {})
 
