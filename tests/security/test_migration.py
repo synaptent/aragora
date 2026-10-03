@@ -4,13 +4,17 @@ Tests for encryption migration utilities.
 Tests automatic detection, migration, and startup migration functionality.
 """
 
+import ast
+import logging
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import aragora.security.migration as migration_module
 from aragora.security.migration import (
     MigrationResult,
     EncryptionMigrator,
@@ -509,6 +513,73 @@ class TestMigrationAuditProvider:
         assert result.new_key_version == 2
         assert result.errors == []
 
+    def test_live_audit_import_failure_is_logged(self, encryption_service, caplog):
+        encryption_service._keys = {"default": MagicMock(version=1)}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = MagicMock(key_id="default", version=2)
+        register_migration_audit_provider(
+            MagicMock(side_effect=ImportError("audit backend unavailable"))
+        )
+
+        with caplog.at_level(logging.WARNING, logger="aragora.security.migration"):
+            with patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ):
+                result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+
+        assert result.success is True
+        assert result.new_key_version == 2
+        assert "key rotation event was not emitted" in caplog.text
+        assert "audit backend unavailable" in caplog.text
+
+    def test_live_missing_audit_provider_warns(self, encryption_service, caplog):
+        encryption_service._keys = {"default": MagicMock(version=1)}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = MagicMock(key_id="default", version=2)
+
+        with caplog.at_level(logging.WARNING, logger="aragora.security.migration"):
+            with patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ):
+                result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+
+        assert result.success is True
+        assert result.new_key_version == 2
+        assert "Migration audit provider not registered" in caplog.text
+
+    def test_missing_provider_warning_names_event_and_registration_path(
+        self, encryption_service, caplog
+    ):
+        with caplog.at_level(logging.WARNING, logger="aragora.security.migration"):
+            with patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ):
+                rotate_encryption_key(dry_run=True, stores=[])
+
+        warnings = [
+            record
+            for record in caplog.records
+            if record.name == "aragora.security.migration" and record.levelno == logging.WARNING
+        ]
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert "'key_rotation'" in message
+        assert "register_security_migration_adapters()" in message
+        assert "register_migration_audit_provider()" in message
+
+    def test_registered_provider_is_readable(self):
+        provider = MagicMock()
+        assert migration_module.get_migration_audit_provider() is None
+
+        register_migration_audit_provider(provider)
+        assert migration_module.get_migration_audit_provider() is provider
+
+        register_migration_audit_provider(None)
+        assert migration_module.get_migration_audit_provider() is None
+
     def test_live_sync_rotation_resolves_unregistered_storage_store(
         self, encryption_service, monkeypatch
     ):
@@ -667,6 +738,76 @@ class TestMigrationAuditProvider:
         assert result.failed_records == 1
         assert result.errors == ["Error re-encrypting record: connector-1"]
         store.save_connector.assert_awaited_once()
+
+
+class TestMigrationAuditComposition:
+    """The ops adapter routes key-rotation events to the unified audit log."""
+
+    @pytest.fixture
+    def encryption_service(self):
+        service = MagicMock()
+        service._keys = {}
+        service._active_key_id = None
+        return service
+
+    def test_adapter_emits_unified_dry_run_event(self, encryption_service):
+        from aragora.ops.security_edge_adapters import register_security_migration_adapters
+
+        register_security_migration_adapters()
+
+        with (
+            patch("aragora.audit.unified.audit_security") as audit_security,
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+        ):
+            result = rotate_encryption_key(dry_run=True, stores=[])
+
+        assert result.success is True
+        audit_security.assert_called_once_with(
+            event_type="key_rotation",
+            actor_id="system",
+            reason="dry_run_key_rotation",
+        )
+
+    def test_adapter_emits_unified_live_event(self, encryption_service):
+        from aragora.ops.security_edge_adapters import register_security_migration_adapters
+
+        encryption_service._keys = {"default": MagicMock(version=1)}
+        encryption_service._active_key_id = "default"
+        encryption_service.rotate_key.return_value = MagicMock(key_id="default", version=2)
+        register_security_migration_adapters()
+
+        with (
+            patch("aragora.audit.unified.audit_security") as audit_security,
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+
+        assert result.success is True
+        audit_security.assert_called_once_with(
+            event_type="key_rotation",
+            actor_id="system",
+            old_version=1,
+            new_version=2,
+        )
+
+    def test_migration_module_does_not_import_audit_or_ops(self):
+        source = Path(migration_module.__file__).read_text(encoding="utf-8")
+        imported: set[str] = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+
+        assert {
+            name for name in imported if name.startswith(("aragora.audit", "aragora.ops"))
+        } == set()
 
 
 class TestDirectSyncMigration:
