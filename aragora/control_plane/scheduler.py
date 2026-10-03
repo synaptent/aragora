@@ -51,21 +51,24 @@ CostLimitExceededError: Any = None
 
 # Policy imports (optional - graceful fallback if not available)
 try:
-    from aragora.control_plane.policy import (  # type: ignore[no-redef]
-        PolicyViolationError,
-        EnforcementLevel,
+    from aragora.control_plane.policy import (
+        PolicyViolationError as _PolicyViolationError,
+        EnforcementLevel as _EnforcementLevel,
     )
 
+    PolicyViolationError = _PolicyViolationError
+    EnforcementLevel = _EnforcementLevel
     HAS_POLICY = True
 except ImportError:
     HAS_POLICY = False
 
 # Cost enforcement imports (optional - graceful fallback if not available)
 try:
-    from aragora.control_plane.cost_enforcement import (  # type: ignore[no-redef]
-        CostLimitExceededError,
+    from aragora.control_plane.cost_enforcement import (
+        CostLimitExceededError as _CostLimitExceededError,
     )
 
+    CostLimitExceededError = _CostLimitExceededError
     HAS_COST_ENFORCEMENT = True
 except ImportError:
     HAS_COST_ENFORCEMENT = False
@@ -329,7 +332,7 @@ class TaskScheduler:
         self._claim_timeout_ms = claim_timeout_ms
         self._policy_manager = policy_manager
         self._cost_enforcer = cost_enforcer
-        self._redis: Any | None = None
+        self._redis: Any = None
         self._local_tasks: dict[str, Task] = {}
         self._local_queue: list[Task] = []
         # Local indexes for in-memory fallback
@@ -1138,7 +1141,7 @@ class TaskScheduler:
 
             try:
                 # Read from consumer group
-                messages = await self._redis.xreadgroup(  # type: ignore[union-attr]
+                messages = await self._redis.xreadgroup(
                     groupname=self._consumer_group,
                     consumername=worker_id,
                     streams={stream_key: ">"},
@@ -1158,8 +1161,8 @@ class TaskScheduler:
                         task = await self.get(task_id)
                         if not task:
                             # Task deleted, ack and skip
-                            await self._redis.xack(stream_key, self._consumer_group, msg_id)  # type: ignore[union-attr]
-                            await self._redis.xdel(stream_key, msg_id)  # type: ignore[union-attr]
+                            await self._redis.xack(stream_key, self._consumer_group, msg_id)
+                            await self._redis.xdel(stream_key, msg_id)
                             continue
 
                         # Check capabilities
@@ -1168,7 +1171,7 @@ class TaskScheduler:
                         ):
                             # Worker doesn't have required capabilities
                             # XACK to remove from this worker's pending list
-                            await self._redis.xack(stream_key, self._consumer_group, msg_id)  # type: ignore[union-attr]
+                            await self._redis.xack(stream_key, self._consumer_group, msg_id)
 
                             # Track rejection in metadata for debugging
                             if "rejection_count" not in task.metadata:
@@ -1207,7 +1210,7 @@ class TaskScheduler:
 
                             if not result.allowed:
                                 # Policy violation - requeue task for another worker
-                                await self._redis.xack(stream_key, self._consumer_group, msg_id)  # type: ignore[union-attr]
+                                await self._redis.xack(stream_key, self._consumer_group, msg_id)
 
                                 # Track policy rejection
                                 if "policy_rejection_count" not in task.metadata:
