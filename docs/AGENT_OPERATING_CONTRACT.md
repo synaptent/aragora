@@ -129,10 +129,13 @@ reviewed; (3) every branch-protection required check **other than** the exact qu
 human-settlement context being satisfied by this evidence/settlement step is green, with no
 non-quorum required check pending, failing, or cancelled; AND (4) the PR is mergeable — not
 behind base and free of conflicts — with the PR non-draft and GitHub reporting `mergeable` as
-`MERGEABLE` and `mergeStateStatus` as `CLEAN` or `BLOCKED`. Required-check gating comes from
-`gh pr checks --required` / merge-packet's required-check surface, not the raw
-`statusCheckRollup`: non-required rollup failures remain advisory, but any failing non-quorum
-required check makes the head not settlement-stable. Do not add a "base unchanged" condition
+`MERGEABLE` and `mergeStateStatus` as `CLEAN` or `BLOCKED`; `UNSTABLE` is also permitted only
+when merge-packet has an available, selected required-check surface with at least one effective
+required check, every required check green, and complete rollup diagnostics proving every
+non-green context is non-required. Required-check gating comes from `gh pr checks --required` /
+merge-packet's required-check surface, not the raw `statusCheckRollup`: non-required rollup
+failures remain advisory, but any failing non-quorum required check makes the head not
+settlement-stable. Do not add a "base unchanged" condition
 that depends on a `baseRefOid` / base-OID freeze the helper does not record (the `BEHIND` /
 `DIRTY` exclusion below already rejects a head that drifted behind or conflicts with its base).
 "Clean" is a
@@ -141,8 +144,8 @@ semantic/body-marker requirement, not only the helper's `verdict`, `would_count`
 `[P0]`, `[P1]`, or `[P2]` finding is not clean and must become a repair packet, not countable
 support. `BLOCKED` is allowed only when the blocker is the quorum / exact-head human-settlement
 context this step is designed to satisfy; `BLOCKED` from any other required check failure is
-not settlement-stable. `DIRTY`, `BEHIND`, `DRAFT`, `UNKNOWN`, `UNSTABLE`, and missing/unknown
-mergeability or `mergeStateStatus` are not settlement-stable. The
+not settlement-stable. `DIRTY`, `BEHIND`, `DRAFT`, `UNKNOWN`, unproven `UNSTABLE`, and
+missing/unknown mergeability or `mergeStateStatus` are not settlement-stable. The
 counted-family set comes from
 [`docs/REVIEW_AUTHORITY_PRINCIPLES.md`](REVIEW_AUTHORITY_PRINCIPLES.md), especially the
 Tier-eligibility table; do not invent a smaller family set inside a recursive prompt.
