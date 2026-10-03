@@ -56,6 +56,9 @@ DECISIVE_REPLY_MARKERS = (
     "keep this pr parked",
     "close this pr",
 )
+_FENCE_OPEN_RE = re.compile(r"(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
+_FENCE_CLOSE_RE = re.compile(r"(?P<marker>`{3,}|~{3,})[ \t]*$")
+_CITED_HEAD_RE = re.compile(r"\b[0-9a-f]{7,40}\b", flags=re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
@@ -315,35 +318,75 @@ def _comment_time(comment: Mapping[str, Any]) -> datetime | None:
     return _parse_datetime(raw) if isinstance(raw, str) else None
 
 
-def _unquoted_markdown_prose(body: str) -> str:
-    """Return prose that can carry an operator decision, excluding quoted/code text."""
-    prose: list[str] = []
+def _fence_opener(line: str) -> tuple[str, int] | None:
+    match = _FENCE_OPEN_RE.match(line.lstrip())
+    if match is None:
+        return None
+    marker = match.group("marker")
+    # A backtick run whose info string holds another backtick is an inline code
+    # span (CommonMark), not a fence opener.
+    if marker[0] == "`" and "`" in match.group("info"):
+        return None
+    return marker[0], len(marker)
+
+
+def _closes_fence(line: str, fence: tuple[str, int]) -> bool:
+    match = _FENCE_CLOSE_RE.match(line.lstrip())
+    if match is None:
+        return False
+    marker = match.group("marker")
+    return marker[0] == fence[0] and len(marker) >= fence[1]
+
+
+def _unquoted_markdown_lines(body: str) -> list[str]:
+    """Return lines outside fenced code, block quotes and indented code."""
+    lines: list[str] = []
     fence: tuple[str, int] | None = None
     for line in body.splitlines():
-        stripped = line.lstrip()
-        fence_match = re.match(r"(`{3,}|~{3,})(?:\s|$)", stripped)
         if fence is not None:
-            if (
-                fence_match
-                and fence_match.group(1)[0] == fence[0]
-                and len(fence_match.group(1)) >= fence[1]
-            ):
+            if _closes_fence(line, fence):
                 fence = None
             continue
-        if fence_match:
-            marker = fence_match.group(1)
-            fence = (marker[0], len(marker))
+        opener = _fence_opener(line)
+        if opener is not None:
+            fence = opener
             continue
         if re.match(r"^\s*>", line) or line.startswith(("    ", "\t")):
             continue
-        prose.append(re.sub(r"`+[^`]*`+", "", line))
-    return "\n".join(prose)
+        lines.append(line)
+    return lines
+
+
+def _strip_inline_code(lines: Iterable[str]) -> str:
+    return "\n".join(re.sub(r"`+[^`]*`+", "", line) for line in lines)
+
+
+def _unquoted_markdown_prose(body: str) -> str:
+    """Return prose that can carry an operator decision, excluding quoted/code text."""
+    return _strip_inline_code(_unquoted_markdown_lines(body))
+
+
+def _cited_heads(text: str) -> set[str]:
+    heads: set[str] = set()
+    for token in _CITED_HEAD_RE.findall(text):
+        lowered = token.lower()
+        # Short hex runs count only when they mix digits and letters, so ordinary
+        # words, issue numbers and dates are not read as commit SHAs.
+        if len(lowered) == 40 or (re.search(r"[0-9]", lowered) and re.search(r"[a-f]", lowered)):
+            heads.add(lowered)
+    return heads
 
 
 def _decisive_operator_reply(body: str, *, pr: int, head: str) -> bool:
-    prose = _unquoted_markdown_prose(body)
+    lines = _unquoted_markdown_lines(body)
+    prose = _strip_inline_code(lines)
     lowered = prose.lower()
-    references_target = bool(re.search(rf"#{pr}(?!\d)", prose)) or head in lowered
+    ask_head = head.lower()
+    # SHAs are usually written as inline code, so read them before it is stripped.
+    cited = _cited_heads("\n".join(lines))
+    if any(not ask_head.startswith(cited_head) for cited_head in cited):
+        return False
+    references_target = bool(re.search(rf"#{pr}(?!\d)", prose)) or bool(cited)
     return references_target and any(marker in lowered for marker in DECISIVE_REPLY_MARKERS)
 
 

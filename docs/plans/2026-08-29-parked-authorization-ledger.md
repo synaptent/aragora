@@ -4,7 +4,10 @@ The parked-authorization ledger is a read-only transport helper for exact-head
 human decisions already requested on open pull requests. It scans open
 non-Dependabot PR comments, identifies the latest terminal authorization or
 preapproval request, and omits an ask only when a later decisive operator reply
-addresses the same PR or exact head.
+addresses the same PR or exact head. A reply that cites any commit SHA other
+than the ask head never resolves the ask, and text inside block quotes, indented
+code, inline code or fenced code blocks (with or without an info string such as
+` ```text `) is never read as a decision.
 
 Rows rank current-head asks first when all five non-quorum protected checks are
 green and GitHub reports `MERGEABLE` with `CLEAN` or `BLOCKED`. Lower tiers rank
