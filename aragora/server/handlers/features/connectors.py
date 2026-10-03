@@ -25,6 +25,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
+import threading
+from collections.abc import Coroutine
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 from uuid import uuid4
@@ -110,8 +112,22 @@ def _mask_secrets(value: Any) -> Any:
     return value
 
 
+def _mask_inside_list(value: Any, in_list: bool = False) -> bool:
+    """Whether the mask appears anywhere inside a list element of ``value``."""
+    if isinstance(value, dict):
+        return any(_mask_inside_list(v, in_list) for v in value.values())
+    if isinstance(value, list):
+        return any(_mask_inside_list(v, True) for v in value)
+    return in_list and value == CONFIG_SECRET_MASK
+
+
 def _restore_masked(incoming: Any, stored: Any) -> Any:
-    """Copy ``incoming`` with each mask a client sent back replaced by the stored value."""
+    """Copy ``incoming`` with each mask sent back under a dict key replaced by the stored value.
+
+    List entries carry no identity to match a mask to its stored entry by, so
+    callers must refuse a config with a mask inside a list (``_mask_inside_list``);
+    lists are taken as sent.
+    """
     if isinstance(incoming, dict):
         prior = stored if isinstance(stored, dict) else {}
         return {
@@ -120,13 +136,38 @@ def _restore_masked(incoming: Any, stored: Any) -> Any:
             else _restore_masked(v, prior.get(k))
             for k, v in incoming.items()
         }
-    if isinstance(incoming, list):
-        prior_items = stored if isinstance(stored, list) else []
-        return [
-            _restore_masked(v, prior_items[i] if i < len(prior_items) else None)
-            for i, v in enumerate(incoming)
-        ]
     return incoming
+
+
+def _schedule_sync(job: Coroutine[Any, Any, None], sync_id: str) -> None:
+    """Run a sync job on an event loop that outlives the request that started it.
+
+    Without a PostgreSQL pool each request runs on its own event loop, which
+    stops once the response is ready, so a task created there never finishes.
+    """
+    main_loop = None
+    try:
+        from aragora.server.unified_server import get_main_event_loop
+
+        main_loop = get_main_event_loop()
+    except ImportError:
+        pass
+    if main_loop is not None and main_loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(job, main_loop)
+        future.add_done_callback(
+            lambda f: logger.error("Connector sync %s failed: %s", sync_id, f.exception())
+            if not f.cancelled() and f.exception()
+            else None
+        )
+        return
+
+    def _run_in_thread() -> None:
+        try:
+            asyncio.run(job)
+        except Exception:  # noqa: BLE001 - a background job has no caller to raise to
+            logger.exception("Connector sync %s failed", sync_id)
+
+    threading.Thread(target=_run_in_thread, name=f"connector-sync-{sync_id}", daemon=True).start()
 
 
 def _public_connector(connector: dict[str, Any]) -> dict[str, Any]:
@@ -596,6 +637,13 @@ class ConnectorsHandler(SecureHandler):
             logger.warning("Handler error: %s", e)
             return self._error_response(400, "Invalid request body")
 
+        if "config" in body and _mask_inside_list(body["config"]):
+            return self._error_response(
+                400,
+                f"config contains the secret mask {CONFIG_SECRET_MASK} inside a list; "
+                "send the real values or leave the key out",
+            )
+
         # Update allowed fields
         if "name" in body:
             connector["name"] = body["name"]
@@ -650,7 +698,7 @@ class ConnectorsHandler(SecureHandler):
 
     async def _start_sync(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Start a sync operation for a connector."""
-        connector = _connectors.get(connector_id)
+        _, connector = await self._load_connector(connector_id)
         if not connector:
             return self._error_response(404, f"Connector {connector_id} not found")
 
@@ -684,13 +732,7 @@ class ConnectorsHandler(SecureHandler):
         _sync_jobs[sync_id] = sync_job
         connector["status"] = "syncing"
 
-        # Start background sync task
-        task = asyncio.create_task(self._run_sync(sync_id, connector_id))
-        task.add_done_callback(
-            lambda t: logger.error("Connector sync %s failed: %s", sync_id, t.exception())
-            if not t.cancelled() and t.exception()
-            else None
-        )
+        _schedule_sync(self._run_sync(sync_id, connector_id), sync_id)
 
         logger.info("Started sync %s for connector %s", sync_id, connector_id)
 

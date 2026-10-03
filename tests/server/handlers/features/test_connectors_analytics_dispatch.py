@@ -16,7 +16,9 @@ import io
 import itertools
 import json
 import threading
+import time
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -25,6 +27,7 @@ import pytest
 
 from aragora.billing.jwt_auth import create_access_token
 from aragora.connectors.runtime_registry import ConnectorStatus
+from aragora.server import unified_server
 from aragora.server.auth import auth_config
 from aragora.server.auth_checks import AuthChecksMixin
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
@@ -33,6 +36,7 @@ from aragora.server.handlers.features import analytics_platforms as analytics_mo
 from aragora.server.handlers.features import connectors as connectors_module
 from aragora.server.handlers.features.connectors import ConnectorsHandler
 from aragora.storage.sync_store import ConnectorConfig, SyncStore
+from aragora.utils.async_utils import get_pool_event_loop
 
 CALLERS = ("owner", "admin", "member", "analyst", "viewer", "anon")
 
@@ -614,10 +618,15 @@ def test_create_and_update_mask_secrets_and_never_store_the_mask(
     assert (status, created["config"]) == (201, _MASKED_CONFIG), created
     path = f"/api/v1/connectors/{created['id']}"
 
-    # The masked config sent straight back with one real edit keeps every secret.
-    status, updated = _dispatch(
+    # The masked "accounts" list cannot say which stored entry each mask stands for.
+    status, rejected = _dispatch(
         registry_cls, method, path, {"config": {**created["config"], "org": "b"}}
     )
+    assert status == 400, rejected
+
+    # The rest of the masked config sent straight back with one real edit keeps every secret.
+    resent = {k: v for k, v in created["config"].items() if k != "accounts"}
+    status, updated = _dispatch(registry_cls, method, path, {"config": {**resent, "org": "b"}})
     assert (status, updated["config"]) == (200, {**_MASKED_CONFIG, "org": "b"}), updated
     stored = asyncio.run(open_sqlite_store().get_connector(created["id"]))
     assert stored is not None
@@ -629,6 +638,158 @@ def test_create_and_update_mask_secrets_and_never_store_the_mask(
     stored = asyncio.run(open_sqlite_store().get_connector(created["id"]))
     assert stored is not None
     assert stored.config == {**_SECRET_CONFIG, "org": "b", **new_values}
+
+
+_LIST_CONFIG: dict[str, Any] = {
+    "org": "a",
+    "api_key": "sk-1",
+    "accounts": [{"name": "A", "token": "t-A"}, {"name": "B", "token": "t-B"}],
+}
+
+
+@pytest.mark.parametrize("method", ["PATCH", "PUT"])
+@pytest.mark.parametrize(
+    "accounts",
+    [
+        pytest.param([{"name": "B", "token": _MASK}], id="delete"),
+        pytest.param([{"name": "B", "token": _MASK}, {"name": "A", "token": _MASK}], id="reorder"),
+        pytest.param(
+            [{"name": "A", "token": _MASK}, {"name": "A", "token": _MASK}], id="duplicate"
+        ),
+        pytest.param([{"name": "A", "token": _MASK}, {"name": "B", "token": _MASK}], id="same"),
+        pytest.param([{"name": "C", "token": "t-C"}, _MASK], id="bare-mask"),
+        pytest.param([[{"token": _MASK}]], id="nested-list"),
+    ],
+)
+def test_mask_inside_a_list_is_refused_and_nothing_is_stored(
+    registry_cls, open_sqlite_store, method: str, accounts: list[Any]
+) -> None:
+    store = open_sqlite_store()
+    asyncio.run(store.save_connector("stored-1", "github", "Stored", copy.deepcopy(_LIST_CONFIG)))
+
+    status, body = _dispatch(
+        registry_cls,
+        method,
+        "/api/v1/connectors/stored-1",
+        {"name": "Renamed", "config": {"org": "b", "api_key": _MASK, "accounts": accounts}},
+    )
+    assert status == 400, body
+    assert "inside a list" in json.dumps(body)
+
+    assert connectors_module._connectors["stored-1"]["config"] == _LIST_CONFIG
+    for reader in (store, open_sqlite_store()):
+        stored = asyncio.run(reader.get_connector("stored-1"))
+        assert stored is not None
+        assert (stored.name, stored.config) == ("Stored", _LIST_CONFIG)
+
+
+def test_list_without_the_mask_replaces_and_dict_masks_still_restore(
+    registry_cls, open_sqlite_store
+) -> None:
+    store = open_sqlite_store()
+    asyncio.run(store.save_connector("stored-1", "github", "Stored", copy.deepcopy(_SECRET_CONFIG)))
+    accounts = [{"name": "m", "token": "t-2"}]
+
+    status, updated = _dispatch(
+        registry_cls,
+        "PATCH",
+        "/api/v1/connectors/stored-1",
+        {"config": {**_MASKED_CONFIG, "org": "b", "accounts": accounts}},
+    )
+    assert status == 200, updated
+    masked_accounts = [{"name": "m", "token": _MASK}]
+    assert updated["config"] == {**_MASKED_CONFIG, "org": "b", "accounts": masked_accounts}
+
+    stored = asyncio.run(open_sqlite_store().get_connector("stored-1"))
+    assert stored is not None
+    assert stored.config == {**_SECRET_CONFIG, "org": "b", "accounts": accounts}
+
+
+def _wait_until(predicate: Callable[[], bool], timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.01)
+    return True
+
+
+def _sync_awaits_io(monkeypatch) -> list[asyncio.AbstractEventLoop]:
+    """Make the sync job await once before finishing, as a real connector's I/O would."""
+    loops: list[asyncio.AbstractEventLoop] = []
+    stub = ConnectorsHandler._run_sync
+
+    async def _run_sync_after_io(self, sync_id: str, connector_id: str) -> None:
+        loops.append(asyncio.get_running_loop())
+        await asyncio.sleep(0.05)
+        await stub(self, sync_id, connector_id)
+
+    monkeypatch.setattr(ConnectorsHandler, "_run_sync", _run_sync_after_io)
+    return loops
+
+
+@contextmanager
+def _server_main_loop(monkeypatch, running: bool) -> Iterator[asyncio.AbstractEventLoop | None]:
+    if not running:
+        yield None
+        return
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+    monkeypatch.setattr(unified_server, "_main_event_loop", loop)
+    try:
+        yield loop
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(5)
+        loop.close()
+
+
+def _assert_two_syncs_finish(registry_cls, connector_id: str) -> None:
+    """Each 202 job must reach its terminal state after its request's event loop is gone."""
+    for _ in range(2):
+        status, started = _dispatch(registry_cls, "POST", f"/api/v1/connectors/{connector_id}/sync")
+        assert status == 202, started
+        job = connectors_module._sync_jobs[started["sync_id"]]
+        assert _wait_until(lambda: job["status"] != "running"), job
+        assert job["status"] == "failed", job
+        assert job["error_message"].startswith("Real connector sync required"), job
+        assert connectors_module._connectors[connector_id]["status"] == "error"
+
+
+@pytest.mark.parametrize("job", ["stub", "awaits-io"])
+@pytest.mark.parametrize("server_loop", [False, True], ids=["no-server-loop", "server-loop"])
+def test_sync_job_finishes_after_the_request_loop_is_gone(
+    registry_cls, open_sqlite_store, monkeypatch, job: str, server_loop: bool
+) -> None:
+    # SQLite only: with no PostgreSQL pool each request runs on its own short-lived loop.
+    assert get_pool_event_loop() is None
+    open_sqlite_store()
+    loops = _sync_awaits_io(monkeypatch) if job == "awaits-io" else []
+    status, created = _dispatch(
+        registry_cls, "POST", "/api/v1/connectors", {"type": "github", "name": "Repo"}
+    )
+    assert status == 201, created
+
+    with _server_main_loop(monkeypatch, server_loop) as main_loop:
+        _assert_two_syncs_finish(registry_cls, created["id"])
+    if main_loop is not None and job == "awaits-io":
+        assert loops == [main_loop, main_loop]
+
+
+@pytest.mark.parametrize("job", ["stub", "awaits-io"])
+def test_stored_connector_syncs_after_a_restart(
+    registry_cls, open_sqlite_store, monkeypatch, job: str
+) -> None:
+    store = open_sqlite_store()
+    asyncio.run(store.save_connector("stored-1", "github", "Stored", {"org": "a"}))
+    open_sqlite_store()
+    assert connectors_module._connectors == {}
+    assert (connectors_module._sync_jobs, connectors_module._sync_history) == ({}, [])
+    if job == "awaits-io":
+        _sync_awaits_io(monkeypatch)
+
+    _assert_two_syncs_finish(registry_cls, "stored-1")
 
 
 def test_cancel_sync_accepts_the_sdk_path_and_checks_the_connector(registry_cls) -> None:
