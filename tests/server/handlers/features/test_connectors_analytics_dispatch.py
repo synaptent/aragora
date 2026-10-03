@@ -200,8 +200,9 @@ ROUTES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
 _ALL_403 = {"owner": 403, "admin": 403, "member": 403, "analyst": 403, "viewer": 403, "anon": 401}
 
 # Status per caller with a real JWT (role only, as production tokens carry).
-# connectors:configure, analytics:configure and analytics:query are not registered
-# RBAC permissions, so every authenticated caller gets 403 on the routes they guard.
+# connectors:configure, analytics:configure and analytics:query are registered RBAC
+# permissions held by owner and admin; analyst holds analytics:query only. A caller
+# holding the guarding key reaches the handler and gets its answer to the probe request.
 # Per-connector health and test follow the RBAC v2 role grants: connectors.read
 # and connectors.test are both held by owner and admin.
 EXPECTED: dict[str, dict[str, int]] = {
@@ -221,9 +222,9 @@ EXPECTED: dict[str, dict[str, int]] = {
         "viewer": 403,
         "anon": 401,
     },
-    "connectors.update": _ALL_403,
-    "connectors.triggerSync": _ALL_403,
-    "connectors.cancelSync": _ALL_403,
+    "connectors.update": {**_ALL_403, "owner": 404, "admin": 404},
+    "connectors.triggerSync": {**_ALL_403, "owner": 404, "admin": 404},
+    "connectors.cancelSync": {**_ALL_403, "owner": 404, "admin": 404},
     "connectors.listSyncs": {
         "owner": 501,
         "admin": 501,
@@ -256,10 +257,10 @@ EXPECTED: dict[str, dict[str, int]] = {
         "viewer": 403,
         "anon": 401,
     },
-    "analytics.connectPlatform": _ALL_403,
-    "analytics.disconnectPlatform": _ALL_403,
-    "analytics.executeQuery": _ALL_403,
-    "analytics.generateReport": _ALL_403,
+    "analytics.connectPlatform": {**_ALL_403, "owner": 400, "admin": 400},
+    "analytics.disconnectPlatform": {**_ALL_403, "owner": 404, "admin": 404},
+    "analytics.executeQuery": {**_ALL_403, "owner": 400, "admin": 400, "analyst": 400},
+    "analytics.generateReport": {**_ALL_403, "owner": 200, "admin": 200, "analyst": 200},
     "analytics.getWorkspaceUsage": {
         "owner": 501,
         "admin": 501,
