@@ -1258,8 +1258,7 @@ class TestARAutomationHandlerClass:
         )
 
     def test_total_route_count(self):
-        total = len(ARAutomationHandler._ROUTE_MAP) + len(ARAutomationHandler.DYNAMIC_ROUTES)
-        assert total == 10  # 5 static + 5 dynamic
+        assert len(ARAutomationHandler._ROUTE_MAP) == 10  # 5 static + 5 dynamic
 
 
 # ============================================================================

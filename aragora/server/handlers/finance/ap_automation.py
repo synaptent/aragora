@@ -751,6 +751,8 @@ class APAutomationHandler(BaseHandler):
         "GET /api/v1/accounting/ap/invoices/{invoice_id}": handle_get_invoice,
         "POST /api/v1/accounting/ap/invoices/{invoice_id}/payment": handle_record_payment,
     }
+    # The OpenAPI generator reads per-route verbs from _ROUTE_MAP, not DYNAMIC_ROUTES.
+    _ROUTE_MAP = {**_ROUTE_MAP, **DYNAMIC_ROUTES}
 
     def can_handle(self, path: str) -> bool:
         """Claim only AP routes, including single-segment dynamic IDs."""
