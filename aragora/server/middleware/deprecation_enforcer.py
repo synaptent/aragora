@@ -520,9 +520,17 @@ def register_default_deprecations() -> None:
         ("/api/v1/flips/**", "/api/v2/analytics/flips/", ["GET"]),
         ("/api/v1/moments/**", "/api/v2/analytics/moments/", ["GET"]),
         # --- Knowledge & memory ---
+        # Fact-store routes moved to the knowledge-base router; /api/v2/knowledge is the
+        # Knowledge Mound. They must stay above /api/v1/knowledge/** (first match wins).
+        ("/api/v1/knowledge/facts", "/api/v2/knowledge-base/facts", all_methods),
+        ("/api/v1/knowledge/facts/**", "/api/v2/knowledge-base/facts/", all_methods),
+        ("/api/v1/knowledge/query", "/api/v2/knowledge-base/query", all_methods),
+        ("/api/v1/knowledge/search", "/api/v2/knowledge-base/search", all_methods),
+        ("/api/v1/knowledge/stats", "/api/v2/knowledge-base/stats", all_methods),
         ("/api/v1/knowledge/**", "/api/v2/knowledge/", all_methods),
         ("/api/v1/memory/**", "/api/v2/memory/", ["GET"]),
-        ("/api/v1/facts/**", "/api/v2/knowledge/facts/", all_methods),
+        ("/api/v1/facts", "/api/v2/knowledge-base/facts", all_methods),
+        ("/api/v1/facts/**", "/api/v2/knowledge-base/facts/", all_methods),
         ("/api/v1/evidence/**", "/api/v2/knowledge/evidence/", all_methods),
         # --- Gauntlet & verification ---
         ("/api/v1/gauntlet/**", "/api/v2/gauntlet/", ["GET", "POST"]),
