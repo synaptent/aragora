@@ -527,6 +527,7 @@ def register_default_deprecations() -> None:
         ("/api/v1/knowledge/query", "/api/v2/knowledge-base/query", all_methods),
         ("/api/v1/knowledge/search", "/api/v2/knowledge-base/search", all_methods),
         ("/api/v1/knowledge/stats", "/api/v2/knowledge-base/stats", all_methods),
+        ("/api/v1/knowledge/export", "/api/v2/knowledge-base/export", all_methods),
         ("/api/v1/knowledge/**", "/api/v2/knowledge/", all_methods),
         ("/api/v1/memory/**", "/api/v2/memory/", ["GET"]),
         ("/api/v1/facts", "/api/v2/knowledge-base/facts", all_methods),

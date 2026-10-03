@@ -638,6 +638,7 @@ class TestDefaultKnowledgeFactReplacements:
             ("POST", "/api/v1/knowledge/query", "/api/v2/knowledge-base/query"),
             ("GET", "/api/v1/knowledge/search", "/api/v2/knowledge-base/search"),
             ("GET", "/api/v1/knowledge/stats", "/api/v2/knowledge-base/stats"),
+            ("GET", "/api/v1/knowledge/export", "/api/v2/knowledge-base/export"),
         ],
     )
     def test_fact_routes_map_to_served_knowledge_base_paths(
