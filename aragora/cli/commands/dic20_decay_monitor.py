@@ -117,6 +117,7 @@ def cmd_decay_monitor(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    units = []
     signals = []
     if manifests:
         from aragora.epistemic.proof_unit_model import load_proof_unit
@@ -124,24 +125,40 @@ def cmd_decay_monitor(args: argparse.Namespace) -> int:
 
         for data in manifests:
             try:
-                signals.append(
-                    evaluate_unit(load_proof_unit(data), claim_results=claim_results or None)
-                )
+                unit = load_proof_unit(data)
+                units.append(unit)
+                signals.append(evaluate_unit(unit, claim_results=claim_results or None))
             except Exception as exc:  # noqa: BLE001
                 logger.warning("unit %s skipped: %s", data.get("code_unit_id", "?"), exc)
 
+    # Transitive impact set — exposes compute_decay_impact_set via the CLI.
+    # Active only when the caller passes --transitive-impact.
+    # No dependency edges are wired from manifests (single-hop impact only in
+    # this slice); multi-hop edge loading is DIC-20 follow-up scope.
+    transitive_impact_set: set[str] = set()
+    if getattr(args, "transitive_impact", False) and units:
+        from aragora.epistemic.constraint_graph import ProofUnitConstraintGraph
+        from aragora.epistemic.decay_monitor import compute_decay_impact_set
+
+        failing_claim_ids: set[str] = {
+            r.claim_id
+            for s in signals
+            for r in s.reasons
+            if r.claim_id and r.kind in {"failed_claim", "stale_evidence", "verifier_error"}
+        }
+        graph = ProofUnitConstraintGraph(units)
+        transitive_impact_set = compute_decay_impact_set(graph, failing_claim_ids, transitive=True)
+
     ts = datetime.now(timezone.utc).isoformat()
     if getattr(args, "json", False):
-        print(
-            json.dumps(
-                {
-                    "generated_at": ts,
-                    "total": len(signals),
-                    "signals": [s.to_dict() for s in signals],
-                },
-                indent=2,
-            )
-        )
+        out: dict = {
+            "generated_at": ts,
+            "total": len(signals),
+            "signals": [s.to_dict() for s in signals],
+        }
+        if transitive_impact_set:
+            out["transitive_impact_set"] = sorted(transitive_impact_set)
+        print(json.dumps(out, indent=2))
     else:
         print(f"Decay monitor — {ts}\n{len(signals)} unit(s) evaluated\n")
         for s in signals:
@@ -152,4 +169,8 @@ def cmd_decay_monitor(args: argparse.Namespace) -> int:
                 print(f"    [{r.kind}] {r.detail}")
         if not signals:
             print("  (no proof-unit manifests found)")
+        if transitive_impact_set:
+            print(f"\nTransitive impact ({len(transitive_impact_set)} unit(s)):")
+            for uid in sorted(transitive_impact_set):
+                print(f"  {uid}")
     return 0
