@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from aragora.routing.pricing import with_effective_costs
+
 if TYPE_CHECKING:
     from aragora.routing.provider_metrics import ProviderMetrics, ProviderMetricsStore
 
@@ -136,6 +138,29 @@ def pareto_frontier(providers: list[ProviderMetrics]) -> list[ProviderMetrics]:
     return frontier
 
 
+def filter_candidates(
+    providers: list[ProviderMetrics],
+    *,
+    min_quality: float = 0.0,
+    budget_remaining: float | None = None,
+    exclude_providers: set[str] | None = None,
+) -> list[ProviderMetrics]:
+    """Apply selection constraints, returning the actual candidate set.
+
+    This is the exact filter :meth:`CostQualityOptimizer.select_provider`
+    chooses among: the quality floor, the total-failure exclusion
+    (``failure_rate < 1.0``), caller exclusions, and the budget ceiling.
+    """
+    candidates = [
+        m for m in providers if m.avg_quality_score >= min_quality and m.failure_rate < 1.0
+    ]
+    if exclude_providers:
+        candidates = [m for m in candidates if m.provider_name not in exclude_providers]
+    if budget_remaining is not None:
+        candidates = [m for m in candidates if m.avg_cost_per_debate <= budget_remaining]
+    return candidates
+
+
 class CostQualityOptimizer:
     """Selects providers using Pareto-optimal cost/quality analysis.
 
@@ -151,10 +176,41 @@ class CostQualityOptimizer:
         self._store = metrics_store
         self._cache = RoutingCache(ttl=cache_ttl)
 
+    def _all_metrics_with_real_costs(self) -> list[ProviderMetrics]:
+        """Read the store, pricing zero-cost entries via the model catalog.
+
+        Providers whose outcomes were recorded without cost (the default
+        ``cost=0.0`` path) previously entered every cost comparison as FREE,
+        which let unpriced frontier pins dominate the Pareto frontier. The
+        pricing ladder (catalog -> legacy table -> conservative default)
+        substitutes a real, nonzero expectation; substituted entries carry
+        ``cost_estimated=True`` for downstream audit records.
+        """
+        return with_effective_costs(list(self._store.get_all_metrics().values()))
+
     def get_pareto_frontier(self) -> list[ProviderMetrics]:
         """Return the current Pareto frontier across all providers."""
-        all_metrics = list(self._store.get_all_metrics().values())
-        return pareto_frontier(all_metrics)
+        return pareto_frontier(self._all_metrics_with_real_costs())
+
+    def get_candidates(
+        self,
+        min_quality: float = 0.0,
+        budget_remaining: float | None = None,
+        exclude_providers: set[str] | None = None,
+    ) -> list[ProviderMetrics]:
+        """Return the providers :meth:`select_provider` would choose among.
+
+        Applies the same constraint filter as :meth:`select_provider`
+        (via :func:`filter_candidates`) so callers can audit the actual
+        post-constraint choice set.
+        """
+        all_metrics = self._all_metrics_with_real_costs()
+        return filter_candidates(
+            all_metrics,
+            min_quality=min_quality,
+            budget_remaining=budget_remaining,
+            exclude_providers=exclude_providers,
+        )
 
     def select_provider(
         self,
@@ -186,22 +242,38 @@ class CostQualityOptimizer:
             logger.debug("Routing cache hit for strategy=%s", strategy.value)
             return cached
 
-        all_metrics = list(self._store.get_all_metrics().values())
+        all_metrics = self._all_metrics_with_real_costs()
         if not all_metrics:
             self._cache.put(strategy.value, budget_remaining, min_quality, frozen_exclude, None)
             return None
 
         # Filter by constraints
-        candidates = [
-            m for m in all_metrics if m.avg_quality_score >= min_quality and m.failure_rate < 1.0
-        ]
+        candidates = filter_candidates(
+            all_metrics,
+            min_quality=min_quality,
+            budget_remaining=budget_remaining,
+            exclude_providers=exclude_providers,
+        )
 
-        if exclude_providers:
-            candidates = [m for m in candidates if m.provider_name not in exclude_providers]
+        result = self.select_from_candidates(candidates, strategy)
+        if result is None:
+            return None
 
-        if budget_remaining is not None:
-            candidates = [m for m in candidates if m.avg_cost_per_debate <= budget_remaining]
+        self._cache.put(strategy.value, budget_remaining, min_quality, frozen_exclude, result)
+        return result
 
+    def select_from_candidates(
+        self,
+        candidates: list[ProviderMetrics],
+        strategy: SelectionStrategy = SelectionStrategy.BALANCED,
+    ) -> str | None:
+        """Apply ``strategy`` to an already-filtered candidate list.
+
+        Pure selection: no store read, no cache. Callers that must keep the
+        selection consistent with an audited candidate set (e.g. the
+        decision-stakes router's rationale) pass the exact list they
+        recorded, guaranteeing both come from the same metrics snapshot.
+        """
         if not candidates:
             return None
 
@@ -227,9 +299,7 @@ class CostQualityOptimizer:
                 key=lambda m: m.avg_quality_score / (m.avg_cost_per_debate + epsilon),
             )
 
-        result = best.provider_name
-        self._cache.put(strategy.value, budget_remaining, min_quality, frozen_exclude, result)
-        return result
+        return best.provider_name
 
     def invalidate_cache(self) -> None:
         """Clear the routing decision cache."""
@@ -241,5 +311,6 @@ __all__ = [
     "DEFAULT_CACHE_TTL",
     "RoutingCache",
     "SelectionStrategy",
+    "filter_candidates",
     "pareto_frontier",
 ]

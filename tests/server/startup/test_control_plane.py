@@ -8,9 +8,48 @@ mayor coordinator, and persistent task queue initialization.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# =============================================================================
+# Event Registry Composition Tests
+# =============================================================================
+
+
+class TestControlPlaneEventRegistryComposition:
+    """Tests for explicit control-plane event contributor composition."""
+
+    def test_registers_notification_event_contributor(self) -> None:
+        from aragora.control_plane.channels import NotificationEventType
+        from aragora.events import registry as registry_module
+        from aragora.server.startup.control_plane import register_control_plane_event_contributors
+
+        registry_module.register_notification_event_contributor(None)
+        registry_module.reset_event_registry()
+        try:
+            assert register_control_plane_event_contributors() is True
+
+            registry = registry_module.get_event_registry()
+            registered = {
+                event.name
+                for event in registry.list_events(source=registry_module.EventSource.CONTROL_PLANE)
+            }
+            assert registered == {event_type.value for event_type in NotificationEventType}
+        finally:
+            registry_module.register_notification_event_contributor(None)
+            registry_module.reset_event_registry()
+
+    def test_composes_events_before_control_plane_startup(self) -> None:
+        from aragora.server.startup import _init_all_components
+
+        source = inspect.getsource(_init_all_components)
+
+        assert source.index("register_control_plane_event_contributors()") < source.index(
+            "init_control_plane_coordinator()"
+        )
 
 
 # =============================================================================

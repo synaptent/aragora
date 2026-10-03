@@ -138,14 +138,14 @@ class SynthesisGenerator:
 
             return True
 
-        # Try 1: Claude Opus 4.5
+        # Try 1: Claude Opus 5
         try:
             from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
 
-            # Create dedicated synthesizer (always Opus 4.5)
+            # Create dedicated synthesizer (always Opus 5)
             synthesizer = AnthropicAPIAgent(
                 name="synthesis-agent",
-                model="claude-opus-4-8",
+                model="claude-opus-5",
             )
 
             # Build synthesis prompt — split into system (format) and user (content)
@@ -186,7 +186,7 @@ class SynthesisGenerator:
 
                 synthesizer = AnthropicAPIAgent(
                     name="synthesis-agent-fallback",
-                    model="claude-opus-4-8",
+                    model="claude-opus-5",
                 )
                 system_prompt, user_prompt = self._build_synthesis_prompt_parts(ctx)
                 synthesizer.system_prompt = system_prompt

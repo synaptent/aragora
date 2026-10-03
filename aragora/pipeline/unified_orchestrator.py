@@ -24,7 +24,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from aragora.pipeline.backbone_contracts import (
     BackboneStage,
@@ -996,7 +996,7 @@ class UnifiedOrchestrator:
                 contract_data = json.loads(Path(cfg.quality_contract_path).read_text())
                 contract = OutputContract(**contract_data)
 
-            report = validate_output_against_contract(answer, contract)
+            report = validate_output_against_contract(answer, cast(OutputContract, contract))
 
             # Enrich with repo grounding
             grounding = assess_repo_grounding(answer)

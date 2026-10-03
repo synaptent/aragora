@@ -14,11 +14,27 @@ import logging
 import threading
 from pathlib import Path
 from typing import Any, TypeVar
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+PoolEventLoopProvider = Callable[[], asyncio.AbstractEventLoop | None]
+
+_pool_event_loop_provider: PoolEventLoopProvider | None = None
+
+
+def register_pool_event_loop_provider(provider: PoolEventLoopProvider | None) -> None:
+    """Register the infrastructure callback that resolves the shared pool loop."""
+    global _pool_event_loop_provider
+    _pool_event_loop_provider = provider
+
+
+def get_pool_event_loop() -> asyncio.AbstractEventLoop | None:
+    """Return the shared pool event loop without importing storage infrastructure."""
+    if _pool_event_loop_provider is None:
+        return None
+    return _pool_event_loop_provider()
 
 
 def _run_async_in_worker_thread(coro: Coroutine[Any, Any, T], timeout: float) -> T:
@@ -82,13 +98,7 @@ def run_async(coro: Coroutine[Any, Any, T], timeout: float = 30.0) -> T:
         # (sync handler called from async handle() on the main loop).
         # nest_asyncio is applied to the main loop in pool_manager, so
         # loop.run_until_complete() works for nested calls.
-        main_loop: asyncio.AbstractEventLoop | None = None
-        try:
-            from aragora.storage.pool_manager import get_pool_event_loop
-
-            main_loop = get_pool_event_loop()
-        except ImportError:
-            pass
+        main_loop = get_pool_event_loop()
 
         if main_loop is not None and main_loop.is_running():
             if running_loop is main_loop:
@@ -130,18 +140,13 @@ def run_async(coro: Coroutine[Any, Any, T], timeout: float = 30.0) -> T:
 
     # No running loop in this thread - we're in a sync context.
     # Try to dispatch to the main event loop where the asyncpg pool lives.
-    try:
-        from aragora.storage.pool_manager import get_pool_event_loop
-
-        main_loop = get_pool_event_loop()
-        if main_loop is not None and main_loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(
-                asyncio.wait_for(coro, timeout=timeout),
-                main_loop,
-            )
-            return future.result(timeout=timeout)
-    except ImportError:
-        pass
+    main_loop = get_pool_event_loop()
+    if main_loop is not None and main_loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(
+            asyncio.wait_for(coro, timeout=timeout),
+            main_loop,
+        )
+        return future.result(timeout=timeout)
 
     # Fallback: no shared pool / CLI mode - create temporary event loop
     return asyncio.run(asyncio.wait_for(coro, timeout=timeout))

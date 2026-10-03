@@ -12,7 +12,6 @@
 # Core package exports and types
 /aragora/__init__.py @an0mium
 /aragora/core.py @an0mium
-/aragora/types.py @an0mium
 /aragora/typing.py @an0mium
 
 # Nomic loop (self-improvement safety-critical)

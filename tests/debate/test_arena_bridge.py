@@ -1,8 +1,13 @@
 """Tests for ArenaEventBridge integration."""
 
-import pytest
 from datetime import datetime, timezone
+from pathlib import Path
+import subprocess
+import sys
+import textwrap
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from aragora.debate.arena_bridge import (
     ArenaEventBridge,
@@ -191,6 +196,100 @@ class TestArenaEventBridge:
         bridge = create_arena_bridge(event_bus)
 
         assert bridge.is_connected
+
+    def test_create_arena_bridge_cold_bootstraps_domain_subscribers(self):
+        """Cold factory construction wires the debate-domain subscriber manager."""
+        script = textwrap.dedent(
+            """\
+            import sys
+
+            from aragora.debate.arena_bridge import create_arena_bridge
+            from aragora.debate.event_bus import EventBus
+            from aragora.debate import event_subscribers
+            from aragora.events.cross_subscribers import (
+                reset_cross_subscriber_manager,
+                reset_registry,
+            )
+
+            reset_registry()
+            reset_cross_subscriber_manager()
+            bootstrapped_managers = []
+            bootstrap = event_subscribers.bootstrap_debate_event_subscribers
+
+            def track_bootstrap():
+                manager = bootstrap()
+                bootstrapped_managers.append(manager)
+                return manager
+
+            event_subscribers.bootstrap_debate_event_subscribers = track_bootstrap
+            event_bus = EventBus()
+            bridge = create_arena_bridge(event_bus)
+
+            assert len(bootstrapped_managers) == 1
+            manager = bootstrapped_managers[0]
+            assert bridge._cross_manager is manager
+            expected = event_subscribers.DEBATE_EVENT_SUBSCRIBER_HANDLER_NAMES
+            assert expected <= set(manager.get_stats())
+            assert manager._applied_subscribers == set(
+                event_subscribers.DOMAIN_EVENT_SUBSCRIBER_HOME_NAMES
+            )
+
+            event_bus.emit_sync(
+                "agent_elo_updated",
+                debate_id="cold-debate",
+                agent="claude",
+                elo=1600,
+                delta=0,
+            )
+            assert manager.get_stats()["elo_to_debate"]["events_processed"] == 1
+
+            composition_homes = {
+                "aragora.workflow.event_subscribers",
+                "aragora.server.event_subscribers",
+                "aragora.server.startup.event_subscribers",
+            }
+            assert composition_homes.isdisjoint(sys.modules)
+
+            print("PASS cold domain bootstrap")
+            """
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "PASS cold domain bootstrap" in result.stdout
+
+    def test_create_arena_bridge_preserves_explicit_manager(self):
+        """Explicit manager injection preserves identity and registration scope."""
+
+        class FalsyCrossSubscriberManager(CrossSubscriberManager):
+            def __bool__(self):
+                return False
+
+        event_bus = EventBus()
+        cross_manager = FalsyCrossSubscriberManager()
+        received_events = []
+        cross_manager.register(
+            "explicit_capture",
+            StreamEventType.DEBATE_START,
+            received_events.append,
+        )
+        initial_handlers = set(cross_manager.get_stats())
+
+        bridge = ArenaEventBridge(event_bus, cross_manager)
+        bridge.connect_to_cross_subscribers()
+
+        assert bridge._cross_manager is cross_manager
+        assert set(cross_manager.get_stats()) == initial_handlers
+
+        event_bus.emit_sync("debate_start", debate_id="explicit-debate")
+
+        assert len(received_events) == 1
+        assert received_events[0].data["debate_id"] == "explicit-debate"
 
     def test_disconnect(self):
         """Test bridge can be disconnected."""

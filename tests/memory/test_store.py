@@ -394,3 +394,98 @@ class TestCritiqueStoreArchive:
 
         assert "total_archived" in stats
         assert "archived_by_type" in stats
+
+
+class TestTimestampUTCConsistency:
+    """Python-side timestamps must be UTC to match SQLite's julianday('now').
+
+    Pattern and reputation rows are aged/pruned/ranked with UTC
+    julianday('now') comparisons, so local-time stamps skew staleness math
+    by the machine's UTC offset (see PR #9311's CI flake).
+    """
+
+    @pytest.fixture
+    def temp_db(self):
+        """Create a temporary database."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir) / "test_tz.db"
+
+    @pytest.fixture
+    def non_utc_timezone(self):
+        """Force a far-from-UTC, DST-free local timezone for the process."""
+        import os
+        import time
+
+        if not hasattr(time, "tzset"):
+            pytest.skip("requires time.tzset (POSIX)")
+        old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "Pacific/Kiritimati"  # UTC+14, no DST
+        time.tzset()
+        try:
+            yield
+        finally:
+            if old_tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old_tz
+            time.tzset()
+
+    @staticmethod
+    def _age_seconds(store, table: str, column: str = "updated_at") -> float:
+        """Age of the single row's timestamp as SQLite's UTC clock sees it."""
+        assert table in {"patterns", "agent_reputation"}
+        with store.connection() as conn:
+            row = conn.execute(
+                f"SELECT (julianday('now') - julianday({column})) * 86400.0 FROM {table}"  # noqa: S608 -- table from whitelist above
+            ).fetchone()
+        assert row is not None and row[0] is not None
+        return row[0]
+
+    def _make_critique(self) -> Critique:
+        return Critique(
+            agent="claude",
+            target_agent="gpt",
+            target_content="Some code",
+            issues=["Timestamp skew issue"],
+            suggestions=["Stamp in UTC"],
+            severity=0.5,
+            reasoning="Local-time stamps skew julianday comparisons",
+        )
+
+    def test_store_pattern_stamps_utc(self, temp_db, non_utc_timezone):
+        """A freshly stored pattern must not appear hours old/new to julianday."""
+        store = CritiqueStore(str(temp_db))
+        store.store_pattern(self._make_critique(), successful_fix="fix")
+
+        age = self._age_seconds(store, "patterns")
+        assert abs(age) < 300, f"pattern updated_at skewed by {age:.0f}s vs UTC"
+
+        created_age = self._age_seconds(store, "patterns", column="created_at")
+        assert abs(created_age) < 300, f"pattern created_at skewed by {created_age:.0f}s vs UTC"
+
+    def test_fail_pattern_stamps_utc(self, temp_db, non_utc_timezone):
+        """fail_pattern's updated_at stamp must be UTC as well."""
+        store = CritiqueStore(str(temp_db))
+        store.store_pattern(self._make_critique(), successful_fix="fix")
+        store.fail_pattern("Timestamp skew issue")
+
+        age = self._age_seconds(store, "patterns")
+        assert abs(age) < 300, f"pattern updated_at skewed by {age:.0f}s vs UTC"
+
+    def test_reputation_update_stamps_utc(self, temp_db, non_utc_timezone):
+        """Reputation updates must stamp updated_at in UTC."""
+        store = CritiqueStore(str(temp_db))
+        store.update_reputation(agent_name="claude", proposal_made=True)
+
+        age = self._age_seconds(store, "agent_reputation")
+        assert abs(age) < 300, f"reputation updated_at skewed by {age:.0f}s vs UTC"
+
+    def test_fresh_pattern_not_pruned_under_utc_clock(self, temp_db, non_utc_timezone):
+        """A just-written, low-success pattern is fresh, so age gating keeps it."""
+        store = CritiqueStore(str(temp_db))
+        store.store_pattern(self._make_critique(), successful_fix="fix")
+        store.fail_pattern("Timestamp skew issue")
+        store.fail_pattern("Timestamp skew issue")
+
+        pruned = store.prune_stale_patterns(max_age_days=1, min_success_rate=0.5)
+        assert pruned == 0

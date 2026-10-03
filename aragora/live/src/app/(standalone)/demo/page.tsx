@@ -176,7 +176,7 @@ function accentForAgent(agent: string): string {
 function formatAgentName(agent: string): string {
   const replacements: Record<string, string> = {
     claude: "Claude",
-    "claude-opus": "Claude Opus 4.8",
+    "claude-opus": "Claude Opus 5",
     "claude-sonnet": "Claude Sonnet 4.6",
     gpt: "GPT",
     "gpt-5": "GPT-5.4",

@@ -390,6 +390,38 @@ class TestClaudeAgent:
 
         assert agent.name == "claude-test"
 
+    @pytest.mark.asyncio
+    async def test_claude_agent_pins_model_on_cli_command(self):
+        """The CLI call must carry --model so receipts match the model that ran.
+
+        Without the flag the CLI answers with the active profile's default
+        while self.model is recorded — a silent misattribution (#9075 review).
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from aragora.agents.cli_agents import ClaudeAgent
+
+        agent = ClaudeAgent(name="claude-test", model="claude-fable-5")
+        captured: dict = {}
+
+        async def fake_generate(command, *args, **kwargs):
+            captured["command"] = command
+            return "ok"
+
+        with (
+            patch.object(agent, "_generate_with_fallback", AsyncMock(side_effect=fake_generate)),
+            patch(
+                "aragora.agents.cli_agents.build_claude_command",
+                side_effect=lambda cmd: (cmd, None),
+            ),
+        ):
+            result = await agent.generate("hello")
+
+        assert result == "ok"
+        command = captured["command"]
+        assert "--model" in command
+        assert command[command.index("--model") + 1] == "claude-fable-5"
+
 
 class TestGeminiCLIAgent:
     """Test GeminiCLIAgent implementation."""

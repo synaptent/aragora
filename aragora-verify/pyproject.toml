@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aragora-verify"
-version = "0.1.1"
+version = "0.2.0"
 description = "Standalone offline verifier for Open Decision Receipts (ODR) -- check schema, JCS canonical digest, Ed25519 signature, and hash-chain linkage with no Aragora install or account."
 readme = "README.md"
 license = "MIT"
@@ -41,7 +41,17 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "cryptography>=41.0",
+    # Floor matches the root project's [tool.uv] constraint-dependencies floor
+    # (../pyproject.toml): fixes GHSA-537c-gmf6-5ccf. This package only touches
+    # the stable Ed25519 verify + PEM-load surface (hazmat.primitives.
+    # asymmetric.ed25519, serialization, exceptions.InvalidSignature), which is
+    # unaffected by the 41->48 range.
+    # pip-audit risk: a standalone `pip install aragora-verify` resolves this
+    # dependency on its own -- it does not inherit the root project's uv-locked
+    # constraint-dependencies floor. Before this bump, a solo install could
+    # still land on a cryptography release vulnerable to GHSA-537c-gmf6-5ccf;
+    # this direct floor is what keeps a standalone install off it.
+    "cryptography>=48.0.1",
 ]
 
 [project.optional-dependencies]
@@ -90,3 +100,22 @@ packages = ["src/aragora_verify"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Previously this package had no [tool.ruff] table at all. Without one, Ruff
+# discovery falls back to the root pyproject.toml, whose "tests/*" per-file
+# ignore is relative to the repo root and never matches "aragora-verify/tests/*".
+# This package-local config keeps direct verifier checks equivalent to the root
+# policy while adding package-relative test exemptions.
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "T201", "BLE001", "UP006", "UP007", "G004", "C4", "SIM910", "S101"]
+ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"]
+
+# Matches the root repo's own tests/* exemptions (see
+# ../pyproject.toml [tool.ruff.lint.per-file-ignores]) with paths relative to
+# this package config root.
+[tool.ruff.lint.per-file-ignores]
+"src/aragora_verify/cli.py" = ["T201"]
+"tests/*" = ["T201", "F401", "F821", "F841", "BLE001", "G004", "S101"]

@@ -519,6 +519,7 @@ class GoogleChatHandler(BotHandlerMixin, SecureHandler):
             event, err = self._parse_json_body(body, "Google Chat event")
             if err:
                 return err
+            event = cast(dict[str, Any], event)
 
             event_type = event.get("type", "")
             logger.debug("Google Chat event: %s", event_type)
@@ -1223,7 +1224,7 @@ class GoogleChatHandler(BotHandlerMixin, SecureHandler):
         self,
         title: str | None = None,
         body: str | None = None,
-        fields: list[tuple[str, str] | None] = None,
+        fields: list[tuple[str, str]] | None = None,
         context: str | None = None,
         actions: list[dict] | None = None,
     ) -> HandlerResult:

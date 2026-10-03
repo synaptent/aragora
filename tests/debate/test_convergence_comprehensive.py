@@ -1911,7 +1911,22 @@ class TestSentenceTransformerBackend:
         assert sim > 0.99
 
     def test_sentence_transformer_batch_similarity(self, sentence_backend):
-        """Test batch similarity with SentenceTransformer."""
+        """The optimized batch path must agree with the naive pairwise average.
+
+        Do not assert `avg_sim >= 0.0` here. Cosine similarity is [-1, 1], and this
+        backend clamps at neither end (`compute_similarity` returns the raw cosine;
+        `compute_batch_similarity_fast` returns their raw mean). The value is also
+        network-dependent: sentence-transformers downloads weights from the HF Hub,
+        and when that is rate-limited or offline it falls back to a randomly
+        initialised model. With real weights these three texts average ~0.43; with
+        random weights the average sits at ~0 and goes negative roughly half the
+        time. That made this test flake in CI (`assert 0.0 <= -0.01772175170481205`)
+        and locally about 1 run in 5.
+
+        The invariant that actually matters — and that holds under either set of
+        weights, because both paths consume the same embeddings — is that the
+        vectorised batch implementation equals the naive loop it replaces.
+        """
         texts = [
             "machine learning is powerful",
             "deep learning achieves great results",
@@ -1920,7 +1935,15 @@ class TestSentenceTransformerBackend:
 
         avg_sim = sentence_backend.compute_batch_similarity(texts)
 
-        assert 0.0 <= avg_sim <= 1.0
+        naive_pairs = [
+            sentence_backend.compute_similarity(texts[i], texts[j])
+            for i in range(len(texts))
+            for j in range(i + 1, len(texts))
+        ]
+        naive_avg = sum(naive_pairs) / len(naive_pairs)
+
+        assert avg_sim == pytest.approx(naive_avg, abs=1e-5)
+        assert -1.0 <= avg_sim <= 1.0
 
     def test_sentence_transformer_pairwise_similarities(self, sentence_backend):
         """Test pairwise similarities computation."""

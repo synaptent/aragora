@@ -43,7 +43,7 @@ and what the buyer still owns.
 | **Adversarial stress tests** (Gauntlet) | `aragora/gauntlet/` | Art. 9 (foreseeable misuse), Art. 15 (robustness) |
 | **Risk classifier** for Annex III use cases | `aragora/compliance/risk_classifier.py` | Art. 6 (classification), Art. 5 (prohibited-practice detection) |
 | **Human-in-the-loop / human-on-the-loop** oversight model | `aragora/debate/protocol.py`, approval flows | Art. 14 (oversight capability, override, stop) |
-| **Multi-model consensus** across heterogeneous agents | `aragora/agents/` (43 agent types) | Art. 10 bias mitigation (supplementary) |
+| **Multi-model consensus** across heterogeneous agents | `aragora/agents/` (46 agent types) | Art. 10 bias mitigation (supplementary) |
 
 ### One-sentence pitch
 

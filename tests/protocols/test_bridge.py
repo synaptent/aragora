@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from aragora.protocols.bridge import (
+from aragora.server.protocol_bridge import (
     BridgeConfig,
     ExternalResource,
     Protocol,
@@ -428,7 +428,7 @@ class TestGlobalBridge:
 
     def test_get_protocol_bridge_returns_instance(self):
         """get_protocol_bridge returns a bridge."""
-        import aragora.protocols.bridge as br
+        import aragora.server.protocol_bridge as br
 
         br._bridge = None
 
@@ -437,7 +437,7 @@ class TestGlobalBridge:
 
     def test_get_protocol_bridge_returns_singleton(self):
         """get_protocol_bridge returns same instance."""
-        import aragora.protocols.bridge as br
+        import aragora.server.protocol_bridge as br
 
         br._bridge = None
 
@@ -447,7 +447,7 @@ class TestGlobalBridge:
 
     def test_get_protocol_bridge_with_config(self):
         """Config is used for initial creation."""
-        import aragora.protocols.bridge as br
+        import aragora.server.protocol_bridge as br
 
         br._bridge = None
 

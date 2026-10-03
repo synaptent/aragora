@@ -85,20 +85,14 @@ def test_rewrite_metric_blocks_rewrites_only_delimited_blocks(tmp_path, monkeypa
     mod = _load_module()
     root = _make_root(tmp_path)
 
-    prose_outside_blocks = (
-        "Aragora orchestrates 46 agent types. The old count 3,386 stays untouched."
+    claude_static = "\n".join(
+        [
+            "Aragora orchestrates 46 agent types.",
+            "**Codebase metrics:** See `docs/METRICS.md` for canonical generated counts.",
+            "**Test suite metrics:** See `docs/METRICS.md` for canonical generated counts.",
+        ]
     )
-    (root / "CLAUDE.md").write_text(
-        "\n".join(
-            [
-                prose_outside_blocks,
-                _block("claude-codebase-scale", "stale scale line"),
-                "middle prose with 9,999 tests that must not change",
-                _block("claude-test-suite", "stale test suite line"),
-            ]
-        ),
-        encoding="utf-8",
-    )
+    (root / "CLAUDE.md").write_text(claude_static, encoding="utf-8")
     (root / "docs" / "EXTENDED_README.md").write_text(
         _block("extended-readme-scale", "stale"),
         encoding="utf-8",
@@ -114,21 +108,10 @@ def test_rewrite_metric_blocks_rewrites_only_delimited_blocks(tmp_path, monkeypa
 
     monkeypatch.setattr(mod, "ROOT", root)
     updated = mod.rewrite_metric_blocks(write=True)
-    assert updated == 4
+    assert updated == 3
 
     claude = (root / "CLAUDE.md").read_text(encoding="utf-8")
-    assert prose_outside_blocks in claude
-    assert "middle prose with 9,999 tests that must not change" in claude
-    assert (
-        "**Codebase Scale:** 4,219 tracked Python files | 144 top-level modules | "
-        "222,659 test functions | 5,402 test files | 3,297 API operations across "
-        "2,870 paths | canonical counts in `docs/METRICS.md`"
-    ) in claude
-    assert (
-        "**Test Suite:** 222,659 test functions across 5,402 test files "
-        "(canonical counts in `docs/METRICS.md`)"
-    ) in claude
-    assert "stale" not in claude
+    assert claude == claude_static
 
     extended = (root / "docs" / "EXTENDED_README.md").read_text(encoding="utf-8")
     assert (
@@ -159,27 +142,28 @@ def test_rewrite_metric_blocks_rewrites_only_delimited_blocks(tmp_path, monkeypa
 def test_rewrite_metric_blocks_is_idempotent(tmp_path, monkeypatch):
     mod = _load_module()
     root = _make_root(tmp_path)
-    (root / "CLAUDE.md").write_text(
-        _block("claude-codebase-scale", "stale"),
+    (root / "docs" / "EXTENDED_README.md").write_text(
+        _block("extended-readme-scale", "stale"),
         encoding="utf-8",
     )
 
     monkeypatch.setattr(mod, "ROOT", root)
     assert mod.rewrite_metric_blocks(write=True) == 1
-    first = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    first = (root / "docs" / "EXTENDED_README.md").read_text(encoding="utf-8")
     assert mod.rewrite_metric_blocks(write=True) == 0
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == first
+    assert (root / "docs" / "EXTENDED_README.md").read_text(encoding="utf-8") == first
 
 
 def test_rewrite_metric_blocks_reports_without_writing_when_write_is_false(tmp_path, monkeypatch):
     mod = _load_module()
     root = _make_root(tmp_path)
-    original = _block("claude-test-suite", "stale")
-    (root / "CLAUDE.md").write_text(original, encoding="utf-8")
+    original = _block("extended-readme-scale", "stale")
+    target = root / "docs" / "EXTENDED_README.md"
+    target.write_text(original, encoding="utf-8")
 
     monkeypatch.setattr(mod, "ROOT", root)
     assert mod.rewrite_metric_blocks(write=False) == 1
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == original
+    assert target.read_text(encoding="utf-8") == original
 
 
 def test_rewrite_metric_blocks_fails_closed_when_metrics_doc_is_partial(tmp_path, monkeypatch):
@@ -193,33 +177,36 @@ def test_rewrite_metric_blocks_fails_closed_when_metrics_doc_is_partial(tmp_path
         ]
     )
     root = _make_root(tmp_path, metrics_table=partial)
-    original = _block("claude-codebase-scale", "stale but preserved")
-    (root / "CLAUDE.md").write_text(original, encoding="utf-8")
+    original = _block("extended-readme-scale", "stale but preserved")
+    target = root / "docs" / "EXTENDED_README.md"
+    target.write_text(original, encoding="utf-8")
 
     monkeypatch.setattr(mod, "ROOT", root)
     with pytest.raises(RuntimeError, match="docs/METRICS.md is missing rows"):
         mod.rewrite_metric_blocks(write=True)
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == original
+    assert target.read_text(encoding="utf-8") == original
 
 
 def test_rewrite_metric_blocks_fails_closed_on_missing_version(tmp_path, monkeypatch):
     mod = _load_module()
     root = _make_root(tmp_path)
     (root / "pyproject.toml").unlink()
-    original = _block("claude-codebase-scale", "stale but preserved")
-    (root / "CLAUDE.md").write_text(original, encoding="utf-8")
+    original = _block("extended-readme-scale", "stale but preserved")
+    target = root / "docs" / "EXTENDED_README.md"
+    target.write_text(original, encoding="utf-8")
 
     monkeypatch.setattr(mod, "ROOT", root)
     with pytest.raises(RuntimeError, match="version"):
         mod.rewrite_metric_blocks(write=True)
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == original
+    assert target.read_text(encoding="utf-8") == original
 
 
 def test_rewrite_metric_blocks_fails_closed_on_unknown_key(tmp_path, monkeypatch):
     mod = _load_module()
     root = _make_root(tmp_path)
-    known = _block("claude-test-suite", "stale but preserved")
-    (root / "CLAUDE.md").write_text(known, encoding="utf-8")
+    known = _block("extended-readme-scale", "stale but preserved")
+    target = root / "docs" / "EXTENDED_README.md"
+    target.write_text(known, encoding="utf-8")
     unknown = _block("no-such-renderer", "body")
     (root / "docs" / "OTHER.md").write_text(unknown, encoding="utf-8")
 
@@ -227,15 +214,15 @@ def test_rewrite_metric_blocks_fails_closed_on_unknown_key(tmp_path, monkeypatch
     with pytest.raises(RuntimeError, match="unknown metrics block key"):
         mod.rewrite_metric_blocks(write=True)
     # Fail-closed: nothing is written, not even valid blocks in other files.
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == known
+    assert target.read_text(encoding="utf-8") == known
     assert (root / "docs" / "OTHER.md").read_text(encoding="utf-8") == unknown
 
 
 def test_rewrite_metric_blocks_fails_closed_on_unterminated_block(tmp_path, monkeypatch):
     mod = _load_module()
     root = _make_root(tmp_path)
-    (root / "CLAUDE.md").write_text(
-        "<!-- metrics:begin claude-test-suite -->\nno end marker\n",
+    (root / "docs" / "EXTENDED_README.md").write_text(
+        "<!-- metrics:begin extended-readme-scale -->\nno end marker\n",
         encoding="utf-8",
     )
 
@@ -249,12 +236,25 @@ def test_rewrite_metric_blocks_excludes_docs_site_mirrors(tmp_path, monkeypatch)
     root = _make_root(tmp_path)
     mirror_dir = root / "docs-site" / "docs" / "contributing"
     mirror_dir.mkdir(parents=True)
-    mirror = _block("claude-test-suite", "mirror body owned by sync-docs.js")
+    mirror = _block("extended-readme-scale", "mirror body owned by sync-docs.js")
     (mirror_dir / "claude.md").write_text(mirror, encoding="utf-8")
 
     monkeypatch.setattr(mod, "ROOT", root)
     assert mod.rewrite_metric_blocks(write=True) == 0
     assert (mirror_dir / "claude.md").read_text(encoding="utf-8") == mirror
+
+
+@pytest.mark.parametrize("removed_key", ["claude-codebase-scale", "claude-test-suite"])
+def test_rewrite_metric_blocks_rejects_removed_claude_keys(tmp_path, monkeypatch, removed_key):
+    mod = _load_module()
+    root = _make_root(tmp_path)
+    original = _block(removed_key, "stale generated content")
+    (root / "CLAUDE.md").write_text(original, encoding="utf-8")
+
+    monkeypatch.setattr(mod, "ROOT", root)
+    with pytest.raises(RuntimeError, match="unknown metrics block key"):
+        mod.rewrite_metric_blocks(write=True)
+    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == original
 
 
 def test_every_renderer_is_covered_by_required_metric_keys(tmp_path, monkeypatch):

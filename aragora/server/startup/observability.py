@@ -11,6 +11,78 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def register_observability_sinks() -> bool:
+    """Register higher-layer adapters with observability contracts."""
+    results: list[bool] = []
+
+    try:
+        from aragora.connectors.devops.slo_alert_sink import (
+            register_slo_alert_sink as register_pagerduty_sink,
+        )
+
+        results.append(register_pagerduty_sink())
+    except ImportError as e:
+        logger.debug("PagerDuty observability adapter not available: %s", e)
+        results.append(False)
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Failed to register PagerDuty observability adapter: %s", e)
+        results.append(False)
+
+    try:
+        from aragora.control_plane.slo_alert_sink import (
+            register_slo_alert_sink as register_channel_sink,
+        )
+
+        results.append(register_channel_sink())
+    except ImportError as e:
+        logger.debug("Channel observability adapter not available: %s", e)
+        results.append(False)
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Failed to register Channel observability adapter: %s", e)
+        results.append(False)
+
+    try:
+        from aragora.integrations.webhooks import (
+            register_slo_event_sink as register_webhook_sink,
+        )
+
+        results.append(register_webhook_sink())
+    except ImportError as e:
+        logger.debug("Webhook observability adapter not available: %s", e)
+        results.append(False)
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Failed to register Webhook observability adapter: %s", e)
+        results.append(False)
+
+    try:
+        from aragora.knowledge.mound.metrics import (
+            register_prometheus_health_provider as register_km_health_provider,
+        )
+
+        results.append(register_km_health_provider())
+    except ImportError as e:
+        logger.debug("Knowledge Mound observability adapter not available: %s", e)
+        results.append(False)
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Failed to register Knowledge Mound observability adapter: %s", e)
+        results.append(False)
+
+    try:
+        from aragora.nomic.metrics import (
+            register_prometheus_metrics_provider as register_nomic_metrics_provider,
+        )
+
+        results.append(register_nomic_metrics_provider())
+    except ImportError as e:
+        logger.debug("Nomic observability adapter not available: %s", e)
+        results.append(False)
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Failed to register Nomic observability adapter: %s", e)
+        results.append(False)
+
+    return all(results)
+
+
 def init_structured_logging() -> bool:
     """Initialize structured JSON logging.
 
@@ -245,6 +317,8 @@ async def init_prometheus_metrics() -> bool:
     Returns:
         True if metrics were enabled, False otherwise
     """
+    register_observability_sinks()
+
     try:
         from aragora.observability.config import is_metrics_enabled
         from aragora.observability.metrics import start_metrics_server

@@ -41,7 +41,7 @@ AUDIT_READ_PERMISSION = "audit:read"
 AUDIT_EXPORT_PERMISSION = "audit:export"
 
 # Re-export from audit_export.py
-from aragora.server.handlers.audit_export import (
+from aragora.server.handlers.compliance.audit_export import (
     handle_audit_events,
     handle_audit_export,
     handle_audit_stats,
@@ -51,12 +51,12 @@ from aragora.server.handlers.audit_export import (
 )
 
 # Re-export from audit_trail.py
-from aragora.server.handlers.audit_trail import (
+from aragora.server.handlers.compliance.audit_trail import (
     AuditTrailHandler,
 )
 
 # Re-export from auditing.py
-from aragora.server.handlers.auditing import (
+from aragora.server.handlers.debates.auditing import (
     AuditRequestParser,
     AuditAgentFactory,
     AuditResultRecorder,

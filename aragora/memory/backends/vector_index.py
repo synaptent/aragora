@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -317,7 +317,7 @@ class VectorIndex:
 
         # FAISS search returns (distances, indices)
         # For IndexFlatIP, distances are inner products (cosine sim for normalized)
-        distances, indices = self._faiss_index.search(query, k)
+        distances, indices = cast(Any, self._faiss_index).search(query, k)
 
         results = []
         for i, (sim, idx) in enumerate(zip(distances[0], indices[0])):

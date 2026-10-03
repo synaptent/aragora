@@ -83,6 +83,7 @@ then wire it into CI.
 ## Reference
 
 - [Environment Variables](reference/ENVIRONMENT.md)
+- [Install Matrix](reference/INSTALL_MATRIX.md)
 - [Library Usage](reference/LIBRARY_USAGE.md)
 
 ## Contributing
@@ -98,3 +99,6 @@ then wire it into CI.
 - `docs/specs/` is mirrored into `docs-site/` (as the `specs/` category) by
   `docs-site/scripts/sync-docs.js`; relative links into it from mirrored docs
   are safe to use.
+- `docs/reference/` is mirrored into `docs-site/` (as the `reference/`
+  category) the same way; relative links into it from mirrored docs are
+  safe to use.

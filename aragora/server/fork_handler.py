@@ -8,16 +8,17 @@ import json
 import logging
 import threading
 from typing import Any
+from collections.abc import Callable
 
 from aragora.config import DEFAULT_CONSENSUS, DEFAULT_ROUNDS
 
 logger = logging.getLogger(__name__)
 
 # Lazy imports to avoid circular dependencies
-Arena = None
-DebateProtocol = None
-Environment = None
-create_agent = None
+Arena: Callable[..., Any] | None = None
+DebateProtocol: Callable[..., Any] | None = None
+Environment: Callable[..., Any] | None = None
+create_agent: Callable[..., Any] | None = None
 
 
 def _ensure_imports():
@@ -116,6 +117,17 @@ class ForkBridgeHandler:
 
         try:
             _ensure_imports()
+            arena_cls = Arena
+            protocol_cls = DebateProtocol
+            environment_cls = Environment
+            create_agent_fn = create_agent
+            if (
+                arena_cls is None
+                or protocol_cls is None
+                or environment_cls is None
+                or create_agent_fn is None
+            ):
+                raise RuntimeError("Debate components were not initialized")
 
             # Extract fork configuration
             hypothesis = fork_data.get("hypothesis", "Forked debate")
@@ -143,7 +155,7 @@ class ForkBridgeHandler:
             # Create agents
             agents = []
             for agent_type in agents_config[:5]:  # Max 5 agents
-                agent = create_agent(
+                agent = create_agent_fn(
                     model_type=agent_type,
                     name=f"{agent_type}_fork",
                     role="proposer",
@@ -156,8 +168,8 @@ class ForkBridgeHandler:
 
             # Create environment with fork context
             task = f"[Branch: {hypothesis}]\n[Lead: {lead_agent}]\n\n{original_task}"
-            env = Environment(task=task, max_rounds=DEFAULT_ROUNDS)
-            protocol = DebateProtocol(
+            env = environment_cls(task=task, max_rounds=DEFAULT_ROUNDS)
+            protocol = protocol_cls(
                 rounds=DEFAULT_ROUNDS,
                 consensus=DEFAULT_CONSENSUS,
                 convergence_detection=False,
@@ -165,7 +177,7 @@ class ForkBridgeHandler:
             )
 
             # Create arena with initial message context
-            arena = Arena(
+            arena = arena_cls(
                 env,
                 agents,
                 protocol,

@@ -387,23 +387,59 @@ export class EmailServicesAPI {
 
   // --- Email Triage ---
 
-  /** Create an email triage rule. */
+  /**
+   * Update the triage rules document.
+   *
+   * @deprecated The server exposes triage rules as a single GET/PUT
+   * document; POST /api/v1/email/triage/rules was never served. Use
+   * {@link updateTriageRule} with the full rules document instead.
+   *
+   * @throws Error if the payload is not a full rules document — a
+   * single-rule payload sent to the full-document PUT would silently
+   * reset the server's triage rules to defaults, so this shim fails
+   * closed instead of delegating blindly.
+   */
   async createTriageRule(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.client.request('POST', '/api/v1/email/triage/rules', { json: data });
+    if (!('rules' in data)) {
+      throw new Error(
+        'createTriageRule cannot translate a single-rule payload: ' +
+          'PUT /api/v1/email/triage/rules replaces the whole document, and a ' +
+          "payload without 'rules' would reset the server config to defaults. " +
+          'Call updateTriageRule with the full document ' +
+          "({ rules: [...], escalation_keywords: [...], ... })."
+      );
+    }
+    return this.updateTriageRule(data);
   }
 
-  /** Update an email triage rule. */
+  /**
+   * Update the email triage rules.
+   *
+   * The server exposes triage rules as a single document: GET/PUT
+   * /api/v1/email/triage/rules (there is no POST-create operation).
+   */
   async updateTriageRule(data: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.client.request('PUT', '/api/v1/email/triage/rules', { json: data });
   }
 
-  /** Create an email triage test. */
+  /**
+   * Test a message against the triage rules.
+   *
+   * The server serves POST /api/v1/email/triage/test only (tests are
+   * stateless; there is no PUT-update operation).
+   */
   async createTriageTest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.client.request('POST', '/api/v1/email/triage/test', { json: data });
   }
 
-  /** Update an email triage test. */
+  /**
+   * Test a message against the triage rules.
+   *
+   * @deprecated Triage tests are stateless; PUT /api/v1/email/triage/test
+   * was never served. Use {@link createTriageTest} instead — this shim
+   * delegates to it.
+   */
   async updateTriageTest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.client.request('PUT', '/api/v1/email/triage/test', { json: data });
+    return this.createTriageTest(data);
   }
 }

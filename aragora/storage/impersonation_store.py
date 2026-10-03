@@ -30,7 +30,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aragora.config import resolve_db_path
 from aragora.storage.backends import (
@@ -444,8 +444,8 @@ class ImpersonationStore:
             target_user_id=row[3],
             target_email=row[4],
             reason=row[5],
-            started_at=parse_timestamp(row[6], default=utc_now()),
-            expires_at=parse_timestamp(row[7], default=utc_now()),
+            started_at=cast(datetime, parse_timestamp(row[6], default=utc_now())),
+            expires_at=cast(datetime, parse_timestamp(row[7], default=utc_now())),
             ip_address=row[8] or "",
             user_agent=row[9] or "",
             actions_performed=row[10] or 0,
@@ -595,7 +595,7 @@ class ImpersonationStore:
         """Convert database row to AuditRecord."""
         return AuditRecord(
             audit_id=row[0],
-            timestamp=parse_timestamp(row[1], default=utc_now()),
+            timestamp=cast(datetime, parse_timestamp(row[1], default=utc_now())),
             event_type=row[2],
             session_id=row[3],
             admin_user_id=row[4],

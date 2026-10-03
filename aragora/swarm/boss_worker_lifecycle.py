@@ -386,12 +386,18 @@ def finalize_worker_result(
                 )
 
         if loop.config.auto_continue_on_needs_human:
-            loop._consecutive_failures += 1
+            # Only deliverable-less rescue outcomes count toward the failure
+            # streak; a skip over a produced-but-untyped deliverable is clean.
+            if not raw_deliverable:
+                loop._consecutive_failures += 1
             threshold_reason = (
                 "Repeated rescue outcomes without a typed deliverable reached "
                 f"threshold ({loop.config.max_consecutive_failures})."
             )
-            if loop._consecutive_failures >= loop.config.max_consecutive_failures:
+            if (
+                not raw_deliverable
+                and loop._consecutive_failures >= loop.config.max_consecutive_failures
+            ):
                 logger.warning(
                     "boss_loop_stop issue=#%s "
                     "(needs_human, no typed deliverable, consecutive failure threshold reached)",

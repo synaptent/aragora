@@ -1,0 +1,24 @@
+{
+  "below_threshold_classes": [],
+  "generated_at": "2026-07-16T14:01:52Z",
+  "initial_issue_drafts": [],
+  "issue_drafts": [],
+  "issue_linkage_results": [],
+  "ledger_path": "~/.aragora/rescue_events.jsonl",
+  "one_off_classes": [],
+  "productization_map_path": "docs/benchmarks/rescue_productization.json",
+  "repeated_classes": [],
+  "repo": "synaptent/aragora",
+  "summary": {
+    "below_threshold_class_count": 0,
+    "linked_fixture_count": 0,
+    "linked_issue_count": 0,
+    "linked_other_count": 0,
+    "one_off_class_count": 0,
+    "recent_limit": 500,
+    "repeated_class_count": 0,
+    "threshold": 2,
+    "total_unique_classes": 0,
+    "unlinked_repeated_class_count": 0
+  }
+}

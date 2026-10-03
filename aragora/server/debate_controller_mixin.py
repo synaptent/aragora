@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from aragora.ranking.elo import EloSystem
     from aragora.server.debate_controller import DebateController
     from aragora.server.debate_factory import DebateFactory
-    from aragora.server.storage import DebateStorage
+    from aragora.storage.debate_storage import DebateStorage
     from aragora.server.stream import SyncEventEmitter
 
 

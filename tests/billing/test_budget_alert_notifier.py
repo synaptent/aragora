@@ -12,7 +12,9 @@ from aragora.billing.budget_alert_notifier import (
     BudgetAlertNotifier,
     DeliveryResult,
     NotificationStatus,
+    clear_budget_alert_sinks,
     get_budget_alert_notifier,
+    register_budget_alert_sink,
     setup_budget_notifications,
 )
 
@@ -79,6 +81,14 @@ def notifier(mock_subscription_store):
 def sample_alert():
     """Create a sample alert for testing."""
     return MockBudgetAlert()
+
+
+@pytest.fixture(autouse=True)
+def reset_budget_alert_sinks():
+    """Keep process-wide sink registration isolated between tests."""
+    clear_budget_alert_sinks()
+    yield
+    clear_budget_alert_sinks()
 
 
 class TestDeliveryResult:
@@ -230,6 +240,38 @@ class TestBudgetAlertNotifier:
         assert results[0].status == NotificationStatus.SUCCESS
         assert results[0].channel_type == "teams"
         mock_teams.post_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_deliver_alert_uses_registered_sink(self, sample_alert, mock_subscription_store):
+        """Fallback delivery resolves a connector-owned registered sink."""
+        subscription = MockChannelSubscription(channel_type="slack")
+        mock_subscription_store.get_for_event.return_value = [subscription]
+        sink = AsyncMock()
+        register_budget_alert_sink("slack", sink)
+
+        notifier = BudgetAlertNotifier(subscription_store=mock_subscription_store)
+        results = await notifier.deliver_alert(sample_alert)
+
+        assert results[0].status == NotificationStatus.SUCCESS
+        sink.deliver.assert_awaited_once_with(
+            workspace_id=subscription.workspace_id,
+            channel_id=subscription.channel_id,
+            message=notifier._format_alert_message(sample_alert),
+            config=subscription.config,
+        )
+
+    @pytest.mark.asyncio
+    async def test_deliver_alert_fails_when_sink_unregistered(
+        self, sample_alert, mock_subscription_store
+    ):
+        """Missing external capability is reported as a failed delivery."""
+        subscription = MockChannelSubscription(channel_type="slack")
+        mock_subscription_store.get_for_event.return_value = [subscription]
+
+        notifier = BudgetAlertNotifier(subscription_store=mock_subscription_store)
+        results = await notifier.deliver_alert(sample_alert)
+
+        assert results[0].status == NotificationStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_deliver_alert_handles_failure(self, sample_alert, mock_subscription_store):

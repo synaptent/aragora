@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aragora.swarm.campaign import CampaignPlanner
 from aragora.swarm.spec import SwarmSpec
@@ -170,7 +170,10 @@ def submit_intake_bundle(
     )
     inspector = TrancheInspector(
         repo_root=repo_path,
-        reference_client=_StaticOpenReferenceClient() if skip_github_resolution else client,
+        reference_client=cast(
+            Any,
+            _StaticOpenReferenceClient() if skip_github_resolution else client,
+        ),
     )
     inspection = inspector.inspect(manifest)
     _write_yaml_like(inspection_path, dict(inspection))

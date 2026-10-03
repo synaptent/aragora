@@ -19,11 +19,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 from collections.abc import Callable
 from uuid import uuid4
 
 from aragora.billing.budget_manager import get_budget_manager
+from aragora.billing.notification_sink import notify_cost_anomaly
 from aragora.billing.usage import (
     UsageEvent,
     UsageEventType,
@@ -43,10 +44,33 @@ except ImportError:
         pass  # No-op if Prometheus not available
 
 
-if TYPE_CHECKING:
-    from aragora.knowledge.mound.adapters.cost_adapter import CostAdapter
-
 logger = logging.getLogger(__name__)
+
+
+class CostKnowledgeSink(Protocol):
+    """Knowledge-side capability used for cost history and anomaly persistence."""
+
+    def store_alert(self, alert: Any) -> Any: ...
+
+    def get_cost_patterns(self, workspace_id: str, agent_id: str | None = None) -> dict: ...
+
+    def get_workspace_alerts(
+        self,
+        workspace_id: str,
+        min_level: str = "warning",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]: ...
+
+    def detect_anomalies(
+        self,
+        *,
+        workspace_id: str,
+        current_cost: float,
+        current_tokens: int,
+        current_calls: int,
+    ) -> list[Any]: ...
+
+    def store_anomaly(self, anomaly: Any) -> str | None: ...
 
 
 class BudgetAlertLevel(str, Enum):
@@ -385,14 +409,14 @@ class CostTracker:
     Provides comprehensive cost monitoring with budget management,
     alerting, and detailed reporting.
 
-    Supports optional Knowledge Mound integration via CostAdapter for
+    Supports optional Knowledge Mound integration via a registered sink for
     persisting budget alerts and cost anomalies to organizational memory.
     """
 
     def __init__(
         self,
         usage_tracker: UsageTracker | None = None,
-        km_adapter: CostAdapter | None = None,
+        km_adapter: CostKnowledgeSink | None = None,
         event_emitter: Any | None = None,
     ):
         """
@@ -400,7 +424,7 @@ class CostTracker:
 
         Args:
             usage_tracker: Optional UsageTracker for persistence
-            km_adapter: Optional CostAdapter for Knowledge Mound integration
+            km_adapter: Optional knowledge sink for cost history integration
             event_emitter: Optional event emitter for streaming budget events
         """
         self._usage_tracker = usage_tracker
@@ -652,12 +676,12 @@ class CostTracker:
             return self._budgets.get(self._org_budgets[org_id])
         return None
 
-    def set_km_adapter(self, adapter: CostAdapter) -> None:
+    def set_km_adapter(self, adapter: CostKnowledgeSink) -> None:
         """
         Set Knowledge Mound adapter for alert/anomaly persistence.
 
         Args:
-            adapter: CostAdapter instance for KM integration
+            adapter: Knowledge-side cost sink
         """
         self._km_adapter = adapter
 
@@ -1136,8 +1160,6 @@ class CostTracker:
 
                     # Send cost anomaly notification
                     try:
-                        from aragora.notifications.service import notify_cost_anomaly
-
                         await notify_cost_anomaly(
                             anomaly_type=anomaly_dict.get("type", "unknown"),
                             severity=anomaly_dict.get("severity", "warning"),
@@ -1248,10 +1270,7 @@ _cost_tracker: CostTracker | None = None
 
 
 def get_cost_tracker() -> CostTracker:
-    """Get or create the global cost tracker.
-
-    Includes KM adapter wiring for alert/anomaly persistence when available.
-    """
+    """Get or create the global cost tracker."""
     global _cost_tracker
     if _cost_tracker is None:
         try:
@@ -1266,18 +1285,6 @@ def get_cost_tracker() -> CostTracker:
             logger.exception("Unexpected error creating UsageTracker: %s", e)
             usage_tracker = None
         _cost_tracker = CostTracker(usage_tracker=usage_tracker)
-
-        # Wire KM adapter for bidirectional sync
-        try:
-            from aragora.knowledge.mound.adapters.cost_adapter import CostAdapter
-
-            adapter = CostAdapter(enable_dual_write=True)
-            _cost_tracker.set_km_adapter(adapter)
-            logger.info("CostTracker KM adapter wired for bidirectional sync")
-        except ImportError:
-            logger.debug("KM CostAdapter not available, cost tracking will run without KM sync")
-        except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as km_e:
-            logger.warning("Failed to wire KM CostAdapter: %s", km_e)
 
     return _cost_tracker
 
@@ -1333,6 +1340,7 @@ async def record_usage(
 
 __all__ = [
     "CostAdvisory",
+    "CostKnowledgeSink",
     "CostTracker",
     "TokenUsage",
     "Budget",

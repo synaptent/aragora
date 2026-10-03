@@ -93,7 +93,7 @@ class ModelConfig:
     """Configuration for specialist models."""
 
     # Primary model (API-based)
-    primary_model: str = "claude-opus-4-8"
+    primary_model: str = "claude-opus-5"
     primary_provider: str = "anthropic"
 
     # Specialist model (optional, HuggingFace)
@@ -125,7 +125,7 @@ class ModelConfig:
     def from_dict(cls, data: dict[str, Any]) -> ModelConfig:
         """Create from dictionary."""
         return cls(
-            primary_model=data.get("primary_model", "claude-opus-4-8"),
+            primary_model=data.get("primary_model", "claude-opus-5"),
             primary_provider=data.get("primary_provider", "anthropic"),
             specialist_model=data.get("specialist_model"),
             specialist_quantization=data.get("specialist_quantization"),

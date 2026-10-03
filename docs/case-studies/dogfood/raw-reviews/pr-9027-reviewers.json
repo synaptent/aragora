@@ -1,0 +1,22 @@
+[
+  {
+    "family": "grok",
+    "agent_type": "grok",
+    "ok": true,
+    "text": "Verdict: PASS\nNo findings.",
+    "error": "",
+    "elapsed_s": 6.2,
+    "verdict": "PASS",
+    "model": "grok-4-latest"
+  },
+  {
+    "family": "mistral",
+    "agent_type": "mistral-api",
+    "ok": true,
+    "text": "Verdict: PASS\n\n- [P2] `scripts/fable_goal_cycle.py`: The new `operator-context` path is added to `SAFE_CONTEXT_SUBDIRS` without validation of path traversal risks (e.g., symlinks, relative paths). While the existing tests check symlink refusal, the lack of explicit path normalization or canonicalization in the code could lead to edge cases. Location: Line 54.",
+    "error": "",
+    "elapsed_s": 2.0,
+    "verdict": "PASS",
+    "model": "mistral-large-2512"
+  }
+]

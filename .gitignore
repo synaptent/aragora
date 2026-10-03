@@ -13,6 +13,7 @@ __pycache__/
 .aragora_sessions.yaml
 .aragora_sessions.json
 .aragora_events/
+.aragora_ideas/
 .aragora_coordination/
 
 # Worktree session lock files (created by SessionStart hook, removed on Stop)
@@ -120,6 +121,7 @@ artifacts/
 docs/artifacts/*
 !docs/artifacts/2026-07-decision-integrity-dogfooding.md
 !docs/artifacts/2026-07-reviewer-failure-taxonomy.md
+!docs/artifacts/2026-07-10-stranger-sim-run-1.md
 smoke_output/
 replays/*.mp3
 

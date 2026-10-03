@@ -54,7 +54,7 @@ class AcquisitionRecord:
 
     @property
     def held_seconds(self) -> float:
-        end = self.released_at if self.released else time.time()
+        end = self.released_at if self.released_at is not None else time.time()
         return end - self.acquired_at
 
     def to_dict(self) -> dict[str, Any]:

@@ -142,6 +142,17 @@ def _render_human(summary: dict[str, Any], plan: Any) -> None:
             f"  - {str(it['family']):8} verdict={str(it['verdict']):18} "
             f"would_count={it['would_count']} problems={it['problems']}"
         )
+        # ``problems`` are countability codes and never say WHY a reviewer
+        # dissented. Print the reviewer's own findings so a dissent is
+        # diagnosable here, instead of costing a second full reviewer run.
+        for finding in it.get("findings") or []:
+            print(f"      {finding}")
+        if not it.get("findings") and not it.get("would_count"):
+            print("      (no [Pn] finding lines parsed — see --show-review-bodies)")
+        if it.get("body"):
+            print("      --- full review body ---")
+            for line in str(it["body"]).splitlines():
+                print(f"      {line}")
     print(f"  ready_to_mutate:       {plan.ready_to_mutate}")
     for b in plan.blockers:
         print(f"    blocker: {b}")
@@ -171,6 +182,13 @@ def main(argv: list[str] | None = None) -> int:
         "(branch-protection preflight workaround)",
     )
     ap.add_argument("--json", action="store_true", help="emit a JSON summary instead of text")
+    ap.add_argument(
+        "--show-review-bodies",
+        action="store_true",
+        help="include each reviewer's full review text (parsed [Pn] findings are "
+        "always shown; this adds the complete body for the rare case the findings "
+        "do not explain the verdict)",
+    )
     args = ap.parse_args(argv)
 
     repo = _resolve_repo(args.repo)
@@ -243,6 +261,13 @@ def main(argv: list[str] | None = None) -> int:
                 "Tier 3-4: evidence prepared (collect refuses to auto-post it); "
                 "run the surfaced commands to settle -- never automated here."
             )
+
+    if not args.show_review_bodies:
+        # Findings stay (they are the diagnostic payload); the verbatim bodies are
+        # several KB per reviewer, so they are opt-in to keep the default JSON and
+        # any log that captures it readable.
+        for item in summary.get("items") or []:
+            item.pop("body", None)
 
     if args.json:
         print(

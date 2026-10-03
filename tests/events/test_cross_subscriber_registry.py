@@ -110,8 +110,9 @@ GOLDEN_SUBSCRIBER_NAMES = frozenset(
 # contributed by E7a security_dispatcher and E7b arena_bridge); only the last of
 # the three batches to land hand-shrinks the frozen baseline string.
 # E5: the workflow-coupled alert-escalation reaction embedded in the strategic
-# mixin -> aragora/workflow/event_subscribers.py (application-tier home, see
-# APPLICATION_TIER_SUBSCRIBER_NAMES below - it is wired only via the
+# mixin and the post-debate workflow subscriber ->
+# aragora/workflow/event_subscribers.py (application-tier home, see
+# APPLICATION_TIER_SUBSCRIBER_NAMES below - both are wired only via the
 # interface-superset bootstrap, unlike E2-E4's domain-tier relocations).
 # E6: the server-coupled webhook-delivery reaction embedded in the basic mixin
 # and the staleness-to-debate reaction embedded in the culture mixin ->
@@ -122,8 +123,13 @@ GOLDEN_SUBSCRIBER_NAMES = frozenset(
 # "aragora.events -> aragora.server" is NOT hand-shrunk by E6 (core-side
 # events/dispatcher.py + events/async_dispatcher.py contributors remain,
 # owned by later batches).
+# Corrective boundary: the gauntlet-complete notification reaction also lives
+# in aragora/server/event_subscribers.py because notification delivery is an
+# interface concern. It remains part of the golden superset but must not appear
+# in a bare or domain-only manager.
 RELOCATED_SUBSCRIBER_NAMES = frozenset(
     {
+        "gauntlet_to_notification",
         "memory_to_mound",
         "mound_to_memory_retrieval",
         "belief_to_mound",
@@ -157,6 +163,7 @@ RELOCATED_SUBSCRIBER_NAMES = frozenset(
         "budget_alert_to_team_selection",
         "meta_learning_to_team_selection",
         "alert_escalated_to_workflow_brake",
+        "debate_end_to_workflow",
         "staleness_to_debate",
         "webhook_agent_elo_updated",
         "webhook_calibration_update",
@@ -179,6 +186,7 @@ RELOCATED_SUBSCRIBER_NAMES = frozenset(
 APPLICATION_TIER_SUBSCRIBER_NAMES = frozenset(
     {
         "alert_escalated_to_workflow_brake",
+        "debate_end_to_workflow",
     }
 )
 
@@ -191,6 +199,7 @@ APPLICATION_TIER_SUBSCRIBER_NAMES = frozenset(
 # docs/architecture/P4A_EVENTS_QUEUE_INVERSION.md §4.4 (P4a Batch E6).
 INTERFACE_TIER_SUBSCRIBER_NAMES = frozenset(
     {
+        "gauntlet_to_notification",
         "staleness_to_debate",
         "webhook_agent_elo_updated",
         "webhook_calibration_update",
@@ -468,10 +477,11 @@ def test_relocated_reactions_registered_via_home_bootstrap():
     slice, so a silently dropped home import is caught here and not only in the
     superset test). APPLICATION_TIER_SUBSCRIBER_NAMES and
     INTERFACE_TIER_SUBSCRIBER_NAMES are excluded: those reactions (e.g.
-    alert_escalated_to_workflow_brake, P4a Batch E5; staleness_to_debate /
-    webhook_*, P4a Batch E6) wire only via the interface-superset bootstrap -
-    see ``test_application_tier_reactions_registered_via_superset_bootstrap``
-    and ``test_interface_tier_reactions_registered_via_superset_bootstrap``.
+    alert_escalated_to_workflow_brake / debate_end_to_workflow, P4a Batch E5;
+    staleness_to_debate / webhook_*, P4a Batch E6) wire only via the
+    interface-superset bootstrap - see
+    ``test_application_tier_reactions_registered_via_superset_bootstrap`` and
+    ``test_interface_tier_reactions_registered_via_superset_bootstrap``.
     """
     from aragora.debate.event_subscribers import bootstrap_debate_event_subscribers
 
@@ -615,6 +625,23 @@ def test_superset_bootstrap_fails_closed_when_server_home_registration_is_missin
 
     with pytest.raises(RuntimeError, match="Application event subscriber bootstrap incomplete"):
         bootstrap_event_subscribers()
+
+
+def test_events_package_owns_no_notification_delivery_reaction():
+    """Notification delivery reactions belong above infrastructure ``events``."""
+    import aragora.events as events_package
+    import aragora.events.subscribers as subscribers_package
+
+    events_root = Path(events_package.__file__).parent
+    offenders = sorted(
+        path.relative_to(events_root).as_posix()
+        for path in events_root.rglob("*.py")
+        if "aragora.notifications.service" in path.read_text(encoding="utf-8")
+    )
+
+    assert offenders == []
+    assert not (events_root / "subscribers" / "notification_handlers.py").exists()
+    assert not hasattr(subscribers_package, "NotificationHandlersMixin")
 
 
 def test_registry_module_has_zero_domain_imports():

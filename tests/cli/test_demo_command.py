@@ -301,9 +301,11 @@ class TestDemoIntegration:
 
         captured = capsys.readouterr()
         assert "ARAGORA DEMO" in captured.out
+        assert "Mode:   Offline (mock agents, no API keys needed)" in captured.out
         assert "DECISION SUMMARY" in captured.out
         assert "WINNING POSITION" in captured.out
         assert "DECISION RECEIPT" in captured.out
+        assert "package unavailable" not in captured.out
 
     def test_demo_has_proposals_and_votes(self):
         """The demo produces proposals, critiques, and votes."""
@@ -506,6 +508,94 @@ class TestOfflineMockFallback:
         assert "DECISION SUMMARY" in captured.out
         assert "WINNING POSITION" in captured.out
         assert "DECISION RECEIPT" in captured.out
+
+
+class TestReceiptSingleWrite:
+    """A --receipt run writes exactly one receipt file and the banner names it.
+
+    Regression for the dual-write bug: ``_run_demo_debate`` always wrote
+    ``aragora-demo-receipt.json`` (and the banner pointed at it) while the
+    user's ``--receipt`` path was written silently as a second file.
+    """
+
+    def test_builtin_fallback_receipt_flag_writes_only_requested_file(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.chdir(tmp_path)
+        args = argparse.Namespace(name="microservices", topic=None, receipt="r.json")
+
+        with patch("aragora.cli.demo.HAS_ARAGORA_DEBATE", False):
+            _run_mock_demo(args)
+
+        assert (tmp_path / "r.json").exists()
+        assert not (tmp_path / "aragora-demo-receipt.json").exists()
+        captured = capsys.readouterr()
+        assert "Full receipt saved to: ./r.json" in captured.out
+
+    def test_custom_topic_receipt_flag_writes_only_requested_file(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.chdir(tmp_path)
+        args = argparse.Namespace(name=None, topic="Should we use Kubernetes?", receipt="r.json")
+
+        _run_mock_demo(args)
+
+        assert (tmp_path / "r.json").exists()
+        assert not (tmp_path / "aragora-demo-receipt.json").exists()
+        captured = capsys.readouterr()
+        assert "Full receipt saved to: ./r.json" in captured.out
+
+    def test_named_demo_receipt_flag_writes_only_requested_file(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.chdir(tmp_path)
+        args = argparse.Namespace(name="microservices", topic=None, receipt="r.json")
+
+        _run_mock_demo(args)
+
+        assert (tmp_path / "r.json").exists()
+        assert not (tmp_path / "aragora-demo-receipt.json").exists()
+        captured = capsys.readouterr()
+        assert "Full receipt saved to: ./r.json" in captured.out
+
+    def test_absolute_receipt_path_named_without_dot_slash_prefix(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.chdir(tmp_path)
+        receipt_path = tmp_path / "sub" / "r.json"
+        receipt_path.parent.mkdir()
+        args = argparse.Namespace(name="microservices", topic=None, receipt=str(receipt_path))
+
+        _run_mock_demo(args)
+
+        assert receipt_path.exists()
+        assert not (tmp_path / "aragora-demo-receipt.json").exists()
+        captured = capsys.readouterr()
+        assert f"Full receipt saved to: {receipt_path}" in captured.out
+        assert f"./{receipt_path}" not in captured.out
+
+    def test_no_receipt_flag_keeps_default_file(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        args = argparse.Namespace(name="microservices", topic=None, receipt=None)
+
+        _run_mock_demo(args)
+
+        assert (tmp_path / "aragora-demo-receipt.json").exists()
+        captured = capsys.readouterr()
+        assert "Full receipt saved to: ./aragora-demo-receipt.json" in captured.out
+
+    def test_requested_receipt_verifies(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        args = argparse.Namespace(name="microservices", topic=None, receipt="r.json")
+
+        _run_mock_demo(args)
+        capsys.readouterr()  # drain demo output
+
+        saved = json.loads((tmp_path / "r.json").read_text())
+        assert saved.get("artifact_hash")
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_receipt_verify(argparse.Namespace(receipt="r.json", verbose=False))
+        assert exc_info.value.code == 0
 
 
 class TestServerDemoHelper:

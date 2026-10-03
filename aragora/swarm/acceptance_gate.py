@@ -59,6 +59,33 @@ _TEST_CRITERION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Phrases that guard ALREADY-EXISTING tests rather than ask for new ones.
+# These are subtracted from a criterion before the test-mention check above is
+# applied to what remains, so a criterion carrying both ("add tests, and keep
+# existing tests passing") still demands tests on the strength of its residue.
+#
+# Every alternative must assert something about tests *continuing to hold* —
+# a qualifier alone is not enough. "existing tests" is only subtracted when it
+# comes with a pass-clause, so "extend existing tests" (a request to edit test
+# files) still demands tests, while "existing tests still pass" does not.
+# A bare "tests pass" is likewise not matched: "the new tests pass"
+# presupposes tests that must be written. Both choices fail closed.
+#
+# Motivation: the auto-generated narrowing and silent-exception issues all end
+# with "Existing tests still pass", which made that whole class of refactor
+# work structurally ungateable (#9638).
+_TEST_REGRESSION_ONLY_RE = re.compile(
+    r"\b(?:"
+    r"(?:existing|all|current)\s+(?:unit\s+|integration\s+)?tests?"
+    r"\s+(?:still\s+|continue\s+to\s+|should\s+still\s+)?pass(?:es|ing)?|"
+    r"tests?\s+(?:still|continue\s+to|should\s+still)\s+pass(?:es|ing)?|"
+    r"no\s+(?:new\s+)?test\s+(?:failures|regressions)|"
+    r"(?:do(?:es)?\s+not|don't|doesn't)\s+break\s+(?:existing\s+)?tests?|"
+    r"without\s+breaking\s+(?:existing\s+)?tests?"
+    r")\b",
+    re.IGNORECASE,
+)
+
 # Pull explicit pytest target file paths out of a criterion.
 _PYTEST_TARGET_RE = re.compile(
     r"(?:pytest|python\s+-m\s+pytest)\s+([^\s'\"`]+\.py)",
@@ -159,11 +186,21 @@ def _is_test_path(path: str) -> bool:
 
 
 def _criterion_requires_tests(criteria: Sequence[str]) -> bool:
+    """True when the criteria ask for test files, not merely mention tests.
+
+    Regression-guard phrases are subtracted from each criterion and the
+    module's original conservative rule is applied to the residue. Deleting
+    only the guard phrase — rather than discarding the whole criterion —
+    keeps the fallback alive for the rest of the sentence, so a criterion
+    that both asks for tests and guards existing ones still demands tests,
+    and any phrasing this module does not anticipate still requires them.
+    """
     for item in criteria or []:
         text = str(item or "").strip()
         if not text:
             continue
-        if _TEST_CRITERION_RE.search(text):
+        residual = _TEST_REGRESSION_ONLY_RE.sub(" ", text)
+        if _TEST_CRITERION_RE.search(residual):
             return True
     return False
 

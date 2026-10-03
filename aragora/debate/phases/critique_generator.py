@@ -156,7 +156,8 @@ class CritiqueGenerator:
         new_messages: list[Message] = []
         new_critiques: list[Critique] = []
 
-        if not self._critique_with_agent:
+        critique_with_agent = self._critique_with_agent
+        if critique_with_agent is None:
             logger.warning("No critique_with_agent callback, skipping critiques")
             return (new_messages, new_critiques)
 
@@ -172,9 +173,10 @@ class CritiqueGenerator:
 
             try:
                 with streaming_task_context(task_id):
-                    if self._with_timeout:
-                        crit_result = await self._with_timeout(
-                            self._critique_with_agent(
+                    with_timeout = self._with_timeout
+                    if with_timeout is not None:
+                        crit_result = await with_timeout(
+                            critique_with_agent(
                                 critic,
                                 proposal,
                                 ctx.env.task if ctx.env else "",
@@ -185,7 +187,7 @@ class CritiqueGenerator:
                             timeout_seconds=timeout,
                         )
                     else:
-                        crit_result = await self._critique_with_agent(
+                        crit_result = await critique_with_agent(
                             critic,
                             proposal,
                             ctx.env.task if ctx.env else "",
@@ -201,9 +203,10 @@ class CritiqueGenerator:
                     )
                     retry_task_id = f"{critic.name}:critique:{proposal_agent}:retry"
                     with streaming_task_context(retry_task_id):
-                        if self._with_timeout:
-                            crit_result = await self._with_timeout(
-                                self._critique_with_agent(
+                        retry_with_timeout = self._with_timeout
+                        if retry_with_timeout is not None:
+                            crit_result = await retry_with_timeout(
+                                critique_with_agent(
                                     critic,
                                     proposal,
                                     ctx.env.task if ctx.env else "",
@@ -214,7 +217,7 @@ class CritiqueGenerator:
                                 timeout_seconds=timeout,
                             )
                         else:
-                            crit_result = await self._critique_with_agent(
+                            crit_result = await critique_with_agent(
                                 critic,
                                 proposal,
                                 ctx.env.task if ctx.env else "",
@@ -558,8 +561,7 @@ class CritiqueGenerator:
             content=critique_content,
             round=round_num,
         )
-        ctx.add_message(msg)
-        result.messages.append(msg)
+        ctx.add_message(msg)  # also appends to result.messages (#9661)
         partial_messages.append(msg)
         new_messages.append(msg)
 

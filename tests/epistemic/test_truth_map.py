@@ -129,8 +129,7 @@ class TestBuildTruthMap:
 class TestBuildTruthMapFromManifests:
     def test_real_manifest_dry_run(self) -> None:
         manifest = Path("docs/status/claims/proof_first_claims.yaml")
-        if not manifest.exists():
-            pytest.skip("DIC-13 manifest fixture not present")
+        assert manifest.exists(), "required DIC-13 manifest fixture is missing"
         r = build_truth_map_from_manifests(manifest_paths=[manifest])
         assert r.total_claims > 0
         assert all(row.statement for row in r.claims)

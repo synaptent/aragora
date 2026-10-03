@@ -58,7 +58,7 @@ For full runtime configuration, see [ENVIRONMENT](../getting-started/environment
 | `codebase-audit` | - | Run a staged repo audit with triage, threat-surface ranking, and deep audit | - |
 | `codex` | - | Read-only inspector for Codex Desktop local state | `insights`, `sessions` |
 | `coherence-scan` | - | DIC-26: scan a belief ledger for contradictions, evidence conflicts, and confidence rot | - |
-| `compliance` | - | Compliance framework and EU AI Act tools | `audit`, `check`, `classify`, `eu-ai-act`, `evidence`, `export`, `report`, `status` |
+| `compliance` | - | Compliance framework and EU AI Act tools | `audit`, `check`, `classify`, `eu-ai-act`, `evidence`, `export`, `oversight-pack`, `report`, `status` |
 | `computer-use` | - | Computer use task management | `list`, `run`, `status` |
 | `config` | - | Manage configuration | - |
 | `connectors` | - | Connector management commands | `list`, `status`, `test` |

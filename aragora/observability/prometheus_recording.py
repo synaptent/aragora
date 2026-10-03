@@ -7,6 +7,7 @@ database, memory, cost, and V1 API deprecation metrics.
 """
 
 import logging
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,14 @@ if PROMETHEUS_AVAILABLE:
         WEBSOCKET_MESSAGES,
         ARAGORA_INFO,
     )
+
+_v1_sunset_days_provider: Callable[[], int] | None = None
+
+
+def register_v1_sunset_days_provider(provider: Callable[[], int] | None) -> None:
+    """Register the server-owned provider for the V1 sunset gauge value."""
+    global _v1_sunset_days_provider
+    _v1_sunset_days_provider = provider
 
 
 # ============================================================================
@@ -503,20 +512,19 @@ def record_v1_api_request(endpoint: str, method: str) -> None:
 
 def update_v1_days_until_sunset() -> None:
     """Update the gauge showing days until V1 API sunset."""
-    try:
-        # Resolved dynamically so this observability module does not statically
-        # import the interface-layer aragora.server.versioning package, which
-        # would invert the foundation/infra layer contract. Optional at runtime.
-        import importlib
+    if _v1_sunset_days_provider is None:
+        return
 
-        _versioning = importlib.import_module("aragora.server.versioning.constants")
-        days = _versioning.days_until_v1_sunset()
-        if PROMETHEUS_AVAILABLE:
-            V1_API_DAYS_UNTIL_SUNSET.set(days)
-        else:
-            _simple_metrics.set_gauge("aragora_v1_api_days_until_sunset", days)
-    except (ImportError, AttributeError):
-        pass
+    try:
+        days = _v1_sunset_days_provider()
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        logger.warning("Failed to collect registered V1 sunset days: %s", exc)
+        return
+
+    if PROMETHEUS_AVAILABLE:
+        V1_API_DAYS_UNTIL_SUNSET.set(days)
+    else:
+        _simple_metrics.set_gauge("aragora_v1_api_days_until_sunset", days)
 
 
 def record_v1_api_sunset_blocked(endpoint: str, method: str) -> None:

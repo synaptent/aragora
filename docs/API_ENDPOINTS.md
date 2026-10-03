@@ -1877,10 +1877,6 @@ Handle vote pivot analysis request
 
 Handle counterfactual analysis request
 
-### `GET` `/api/v1/debates/*/summary`
-
-Handle human-readable summary request
-
 ### `GET` `/api/v1/explain`
 
 GET /api/v1/explain
@@ -3626,6 +3622,14 @@ Create shareable link
 ### `GET` `/api/v2/receipts/share/:token`
 
 Access receipt via share token
+
+### `GET` `/api/v2/receipts/signing-key`
+
+ODR signing public key (JSON envelope)
+
+### `GET` `/.well-known/aragora-odr-signing-key`
+
+ODR signing public key (raw PEM)
 
 ### `GET` `/api/v1/receipts/deliveries`
 

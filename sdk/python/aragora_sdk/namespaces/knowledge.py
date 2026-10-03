@@ -8,19 +8,30 @@ Provides methods for interacting with the Knowledge Base:
 - Governance, analytics, extraction, confidence, curation
 - Dashboard and export operations
 
-Note: Fact-specific CRUD (get/update/delete by ID, verify, relations),
-federation, sync, sharing, visibility/access, global knowledge, and
-culture document operations were removed as their handler routes
-no longer exist.
+Note: Several methods below target routes the server declares (handler
+ROUTES membership) but never dispatches. Because the knowledge handlers'
+``can_handle`` claims the whole path family, those calls do not 404
+cleanly: undispatched paths return HTTP 500 with code ``handler_no_result``,
+and unrecognized ``/facts/...`` sub-paths fall into the get-fact-by-ID
+branch (404 "fact not found") or the facts sub-route 404. They are kept
+for backward compatibility, emit :class:`DeprecationWarning` at runtime,
+and are marked DEPRECATED in their docstrings; prefer the documented
+working methods named in each docstring (see #9396).
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
     from ..pagination import AsyncPaginator, SyncPaginator
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class KnowledgeAPI:
@@ -173,11 +184,32 @@ class KnowledgeAPI:
         return self._client.request("POST", "/api/v1/knowledge/facts/relations", json=payload)
 
     def batch_create_facts(self, facts: list[dict[str, Any]]) -> dict[str, Any]:
-        """Create multiple facts in batch."""
+        """Create multiple facts in batch.
+
+        DEPRECATED: The server has no facts batch endpoint. POST
+        /api/v1/knowledge/facts/batch falls into the facts sub-route
+        dispatcher and always fails with HTTP 404 ("Unknown endpoint").
+        Use create_fact() per fact instead.
+        """
+        _warn_deprecated(
+            "knowledge.batch_create_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); use create_fact() per fact."
+        )
         return self._client.request("POST", "/api/v1/knowledge/facts/batch", json={"facts": facts})
 
     def batch_delete_facts(self, fact_ids: list[str]) -> dict[str, Any]:
-        """Delete multiple facts in batch."""
+        """Delete multiple facts in batch.
+
+        DEPRECATED: The server has no facts batch-delete endpoint. POST
+        /api/v1/knowledge/facts/batch/delete always fails with HTTP 404
+        ("Unknown endpoint"). Delete facts one at a time via the documented
+        DELETE /api/v1/knowledge/facts/{fact_id} route.
+        """
+        _warn_deprecated(
+            "knowledge.batch_delete_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); delete facts individually via "
+            "DELETE /api/v1/knowledge/facts/{fact_id}."
+        )
         return self._client.request(
             "POST", "/api/v1/knowledge/facts/batch/delete", json={"fact_ids": fact_ids}
         )
@@ -187,23 +219,64 @@ class KnowledgeAPI:
         source_ids: list[str],
         target_id: str | None = None,
     ) -> dict[str, Any]:
-        """Merge multiple facts."""
+        """Merge multiple facts.
+
+        DEPRECATED: The server has no facts merge endpoint. POST
+        /api/v1/knowledge/facts/merge always fails with HTTP 404
+        ("Unknown endpoint"). For Knowledge Mound duplicate handling use
+        the mound dedup endpoints (POST /api/v1/knowledge/mound/dedup/merge).
+        """
+        _warn_deprecated(
+            "knowledge.merge_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); use the mound dedup merge endpoint."
+        )
         data: dict[str, Any] = {"source_ids": source_ids}
         if target_id:
             data["target_id"] = target_id
         return self._client.request("POST", "/api/v1/knowledge/facts/merge", json=data)
 
     def list_fact_relationships(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
-        """List fact relationships."""
+        """List fact relationships.
+
+        DEPRECATED: The server has no relationships listing endpoint. GET
+        /api/v1/knowledge/facts/relationships falls into the get-fact-by-ID
+        branch with the literal ID "relationships" and always fails with
+        HTTP 404 ("Fact not found"). Use get_fact_relations(fact_id) for a
+        specific fact's relations.
+        """
+        _warn_deprecated(
+            "knowledge.list_fact_relationships() targets a nonexistent "
+            "endpoint (HTTP 404 Fact not found); use get_fact_relations(fact_id)."
+        )
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         return self._client.request("GET", "/api/v1/knowledge/facts/relationships", params=params)
 
     def get_fact_stats(self) -> dict[str, Any]:
-        """Get fact statistics."""
+        """Get fact statistics.
+
+        DEPRECATED: The server has no facts stats endpoint. GET
+        /api/v1/knowledge/facts/stats falls into the get-fact-by-ID branch
+        with the literal ID "stats" and always fails with HTTP 404
+        ("Fact not found"). Use get_stats() for knowledge base statistics.
+        """
+        _warn_deprecated(
+            "knowledge.get_fact_stats() targets a nonexistent endpoint "
+            "(HTTP 404 Fact not found); use get_stats()."
+        )
         return self._client.request("GET", "/api/v1/knowledge/facts/stats")
 
     def validate_facts(self, fact_ids: list[str] | None = None) -> dict[str, Any]:
-        """Validate facts."""
+        """Validate facts.
+
+        DEPRECATED: The server has no facts validate endpoint. POST
+        /api/v1/knowledge/facts/validate always fails with HTTP 404
+        ("Unknown endpoint"). Use verify_fact(fact_id) for agent-backed
+        verification of a specific fact.
+        """
+        _warn_deprecated(
+            "knowledge.validate_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); use verify_fact(fact_id)."
+        )
         data: dict[str, Any] = {}
         if fact_ids:
             data["fact_ids"] = fact_ids
@@ -219,7 +292,18 @@ class KnowledgeAPI:
         return self._client.request("POST", "/api/v1/knowledge/mound/index/repository", json=data)
 
     def embed_batch(self, texts: list[str]) -> dict[str, Any]:
-        """Create embeddings for a batch of texts."""
+        """Create embeddings for a batch of texts.
+
+        DEPRECATED: POST /api/v1/knowledge/embeddings is declared in the
+        knowledge handler's ROUTES list but never dispatched, so this method
+        always fails with HTTP 500 (``handler_no_result``). The server has
+        no client-facing embeddings endpoint; use search() for embedding-
+        backed retrieval.
+        """
+        _warn_deprecated(
+            "knowledge.embed_batch() targets an undispatched route (HTTP 500 "
+            "handler_no_result); the server has no embeddings endpoint."
+        )
         return self._client.request("POST", "/api/v1/knowledge/embeddings", json={"texts": texts})
 
     def search_index(self, query: str, limit: int = 10) -> dict[str, Any]:
@@ -228,7 +312,18 @@ class KnowledgeAPI:
         return self._client.request("GET", "/api/v1/knowledge/search", params=params)
 
     def create_embeddings(self, text: str, **kwargs: Any) -> dict[str, Any]:
-        """Create embeddings for text."""
+        """Create embeddings for text.
+
+        DEPRECATED: POST /api/v1/knowledge/embeddings is declared in the
+        knowledge handler's ROUTES list but never dispatched, so this method
+        always fails with HTTP 500 (``handler_no_result``). The server has
+        no client-facing embeddings endpoint; use search() for embedding-
+        backed retrieval.
+        """
+        _warn_deprecated(
+            "knowledge.create_embeddings() targets an undispatched route "
+            "(HTTP 500 handler_no_result); the server has no embeddings endpoint."
+        )
         payload: dict[str, Any] = {"text": text, **kwargs}
         return self._client.request("POST", "/api/v1/knowledge/embeddings", json=payload)
 
@@ -250,14 +345,35 @@ class KnowledgeAPI:
         return self._client.request("GET", "/api/v1/knowledge/export", params=params)
 
     def refresh(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Refresh knowledge base."""
+        """Refresh knowledge base.
+
+        DEPRECATED: POST /api/v1/knowledge/refresh is declared in the
+        knowledge handler's ROUTES list but never dispatched, so this method
+        always fails with HTTP 500 (``handler_no_result``). The server has
+        no refresh endpoint; mound revalidation is available via
+        revalidate_entry(entry_id).
+        """
+        _warn_deprecated(
+            "knowledge.refresh() targets an undispatched route (HTTP 500 "
+            "handler_no_result); the server has no refresh endpoint."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
         return self._client.request("POST", "/api/v1/knowledge/refresh", json=payload)
 
     def validate(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Validate knowledge base integrity."""
+        """Validate knowledge base integrity.
+
+        DEPRECATED: POST /api/v1/knowledge/validate is declared in the
+        knowledge handler's ROUTES list but never dispatched, so this method
+        always fails with HTTP 500 (``handler_no_result``). Use
+        verify_fact(fact_id) for per-fact verification.
+        """
+        _warn_deprecated(
+            "knowledge.validate() targets an undispatched route (HTTP 500 "
+            "handler_no_result); use verify_fact(fact_id)."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
@@ -473,14 +589,37 @@ class KnowledgeAPI:
     # ========== Bulk Revalidation & Sync ==========
 
     def revalidate(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Trigger bulk revalidation of stale knowledge."""
+        """Trigger bulk revalidation of stale knowledge.
+
+        DEPRECATED: POST /api/v1/knowledge/mound/revalidate (no entry ID) is
+        declared in the mound handler's ROUTES list but never dispatched, so
+        this method always fails with HTTP 500 (``handler_no_result``). Use
+        revalidate_entry(entry_id) (POST /api/v1/knowledge/mound/revalidate/{id})
+        per entry, or schedule batch revalidation via
+        POST /api/v1/knowledge/mound/schedule-revalidation.
+        """
+        _warn_deprecated(
+            "knowledge.revalidate() targets an undispatched route (HTTP 500 "
+            "handler_no_result); use revalidate_entry(entry_id)."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
         return self._client.request("POST", "/api/v1/knowledge/mound/revalidate", json=payload)
 
     def sync(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Trigger bulk sync of knowledge mound."""
+        """Trigger bulk sync of knowledge mound.
+
+        DEPRECATED: POST /api/v1/knowledge/mound/sync (no adapter) is
+        declared in the mound handler's ROUTES list but never dispatched, so
+        this method always fails with HTTP 500 (``handler_no_result``). Use
+        sync_entry(target) with "continuum", "consensus", or "facts"
+        (POST /api/v1/knowledge/mound/sync/{adapter}).
+        """
+        _warn_deprecated(
+            "knowledge.sync() targets an undispatched route (HTTP 500 "
+            "handler_no_result); use sync_entry('continuum'|'consensus'|'facts')."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
@@ -803,13 +942,31 @@ class AsyncKnowledgeAPI:
         return await self._client.request("POST", "/api/v1/knowledge/facts/relations", json=payload)
 
     async def batch_create_facts(self, facts: list[dict[str, Any]]) -> dict[str, Any]:
-        """Create multiple facts in batch."""
+        """Create multiple facts in batch.
+
+        DEPRECATED: The server has no facts batch endpoint (HTTP 404
+        "Unknown endpoint"). Use create_fact() per fact instead.
+        """
+        _warn_deprecated(
+            "knowledge.batch_create_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); use create_fact() per fact."
+        )
         return await self._client.request(
             "POST", "/api/v1/knowledge/facts/batch", json={"facts": facts}
         )
 
     async def batch_delete_facts(self, fact_ids: list[str]) -> dict[str, Any]:
-        """Delete multiple facts in batch."""
+        """Delete multiple facts in batch.
+
+        DEPRECATED: The server has no facts batch-delete endpoint (HTTP 404
+        "Unknown endpoint"). Delete facts one at a time via the documented
+        DELETE /api/v1/knowledge/facts/{fact_id} route.
+        """
+        _warn_deprecated(
+            "knowledge.batch_delete_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); delete facts individually via "
+            "DELETE /api/v1/knowledge/facts/{fact_id}."
+        )
         return await self._client.request(
             "POST", "/api/v1/knowledge/facts/batch/delete", json={"fact_ids": fact_ids}
         )
@@ -817,25 +974,61 @@ class AsyncKnowledgeAPI:
     async def merge_facts(
         self, source_ids: list[str], target_id: str | None = None
     ) -> dict[str, Any]:
-        """Merge multiple facts."""
+        """Merge multiple facts.
+
+        DEPRECATED: The server has no facts merge endpoint (HTTP 404
+        "Unknown endpoint"). For Knowledge Mound duplicate handling use the
+        mound dedup endpoints (POST /api/v1/knowledge/mound/dedup/merge).
+        """
+        _warn_deprecated(
+            "knowledge.merge_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); use the mound dedup merge endpoint."
+        )
         data: dict[str, Any] = {"source_ids": source_ids}
         if target_id:
             data["target_id"] = target_id
         return await self._client.request("POST", "/api/v1/knowledge/facts/merge", json=data)
 
     async def list_fact_relationships(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
-        """List fact relationships."""
+        """List fact relationships.
+
+        DEPRECATED: The server has no relationships listing endpoint; the
+        path falls into the get-fact-by-ID branch (HTTP 404 "Fact not
+        found"). Use get_fact_relations(fact_id) for a specific fact.
+        """
+        _warn_deprecated(
+            "knowledge.list_fact_relationships() targets a nonexistent "
+            "endpoint (HTTP 404 Fact not found); use get_fact_relations(fact_id)."
+        )
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         return await self._client.request(
             "GET", "/api/v1/knowledge/facts/relationships", params=params
         )
 
     async def get_fact_stats(self) -> dict[str, Any]:
-        """Get fact statistics."""
+        """Get fact statistics.
+
+        DEPRECATED: The server has no facts stats endpoint; the path falls
+        into the get-fact-by-ID branch (HTTP 404 "Fact not found"). Use
+        get_stats() for knowledge base statistics.
+        """
+        _warn_deprecated(
+            "knowledge.get_fact_stats() targets a nonexistent endpoint "
+            "(HTTP 404 Fact not found); use get_stats()."
+        )
         return await self._client.request("GET", "/api/v1/knowledge/facts/stats")
 
     async def validate_facts(self, fact_ids: list[str] | None = None) -> dict[str, Any]:
-        """Validate facts."""
+        """Validate facts.
+
+        DEPRECATED: The server has no facts validate endpoint (HTTP 404
+        "Unknown endpoint"). Use verify_fact(fact_id) for agent-backed
+        verification of a specific fact.
+        """
+        _warn_deprecated(
+            "knowledge.validate_facts() targets a nonexistent endpoint "
+            "(HTTP 404 Unknown endpoint); use verify_fact(fact_id)."
+        )
         data: dict[str, Any] = {}
         if fact_ids:
             data["fact_ids"] = fact_ids
@@ -851,7 +1044,16 @@ class AsyncKnowledgeAPI:
         )
 
     async def embed_batch(self, texts: list[str]) -> dict[str, Any]:
-        """Create embeddings for a batch of texts."""
+        """Create embeddings for a batch of texts.
+
+        DEPRECATED: POST /api/v1/knowledge/embeddings is declared in ROUTES
+        but never dispatched (HTTP 500 ``handler_no_result``). The server has
+        no client-facing embeddings endpoint; use search() instead.
+        """
+        _warn_deprecated(
+            "knowledge.embed_batch() targets an undispatched route (HTTP 500 "
+            "handler_no_result); the server has no embeddings endpoint."
+        )
         return await self._client.request(
             "POST", "/api/v1/knowledge/embeddings", json={"texts": texts}
         )
@@ -884,7 +1086,16 @@ class AsyncKnowledgeAPI:
         )
 
     async def create_embeddings(self, text: str, **kwargs: Any) -> dict[str, Any]:
-        """Create embeddings for text."""
+        """Create embeddings for text.
+
+        DEPRECATED: POST /api/v1/knowledge/embeddings is declared in ROUTES
+        but never dispatched (HTTP 500 ``handler_no_result``). The server has
+        no client-facing embeddings endpoint; use search() instead.
+        """
+        _warn_deprecated(
+            "knowledge.create_embeddings() targets an undispatched route "
+            "(HTTP 500 handler_no_result); the server has no embeddings endpoint."
+        )
         payload: dict[str, Any] = {"text": text, **kwargs}
         return await self._client.request("POST", "/api/v1/knowledge/embeddings", json=payload)
 
@@ -906,14 +1117,33 @@ class AsyncKnowledgeAPI:
         return await self._client.request("GET", "/api/v1/knowledge/export", params=params)
 
     async def refresh(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Refresh knowledge base."""
+        """Refresh knowledge base.
+
+        DEPRECATED: POST /api/v1/knowledge/refresh is declared in ROUTES but
+        never dispatched (HTTP 500 ``handler_no_result``). The server has no
+        refresh endpoint; mound revalidation is available via
+        revalidate_entry(entry_id).
+        """
+        _warn_deprecated(
+            "knowledge.refresh() targets an undispatched route (HTTP 500 "
+            "handler_no_result); the server has no refresh endpoint."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
         return await self._client.request("POST", "/api/v1/knowledge/refresh", json=payload)
 
     async def validate(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Validate knowledge base integrity."""
+        """Validate knowledge base integrity.
+
+        DEPRECATED: POST /api/v1/knowledge/validate is declared in ROUTES but
+        never dispatched (HTTP 500 ``handler_no_result``). Use
+        verify_fact(fact_id) for per-fact verification.
+        """
+        _warn_deprecated(
+            "knowledge.validate() targets an undispatched route (HTTP 500 "
+            "handler_no_result); use verify_fact(fact_id)."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
@@ -1207,7 +1437,17 @@ class AsyncKnowledgeAPI:
     # ========== Bulk Revalidation & Sync ==========
 
     async def revalidate(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Trigger bulk revalidation of stale knowledge."""
+        """Trigger bulk revalidation of stale knowledge.
+
+        DEPRECATED: POST /api/v1/knowledge/mound/revalidate (no entry ID) is
+        declared in ROUTES but never dispatched (HTTP 500
+        ``handler_no_result``). Use revalidate_entry(entry_id) per entry, or
+        POST /api/v1/knowledge/mound/schedule-revalidation for batches.
+        """
+        _warn_deprecated(
+            "knowledge.revalidate() targets an undispatched route (HTTP 500 "
+            "handler_no_result); use revalidate_entry(entry_id)."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id
@@ -1216,7 +1456,17 @@ class AsyncKnowledgeAPI:
         )
 
     async def sync(self, workspace_id: str | None = None) -> dict[str, Any]:
-        """Trigger bulk sync of knowledge mound."""
+        """Trigger bulk sync of knowledge mound.
+
+        DEPRECATED: POST /api/v1/knowledge/mound/sync (no adapter) is
+        declared in ROUTES but never dispatched (HTTP 500
+        ``handler_no_result``). Use sync_entry(target) with "continuum",
+        "consensus", or "facts" (POST /api/v1/knowledge/mound/sync/{adapter}).
+        """
+        _warn_deprecated(
+            "knowledge.sync() targets an undispatched route (HTTP 500 "
+            "handler_no_result); use sync_entry('continuum'|'consensus'|'facts')."
+        )
         payload: dict[str, Any] = {}
         if workspace_id:
             payload["workspace_id"] = workspace_id

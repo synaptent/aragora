@@ -47,7 +47,7 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ class TokenManager:
                 decode_responses=True,
             )
             # Test connection
-            await self._redis.ping()
+            await cast(Any, self._redis.ping())
             self._redis_available = True
             logger.debug("Token manager connected to Redis")
             return self._redis
@@ -293,6 +293,7 @@ class TokenManager:
             TokenData if valid, None otherwise
         """
         redis_client = await self._get_redis()
+        token_data: TokenData | None
 
         if redis_client:
             key = f"{self.config.key_prefix}{token}"
@@ -310,7 +311,7 @@ class TokenManager:
         else:
             async with self._lock:
                 token_data = self._local_store.get(token)
-                if not token_data:
+                if token_data is None:
                     return None
 
         # Check expiration

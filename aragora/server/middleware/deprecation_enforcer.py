@@ -267,7 +267,7 @@ class DeprecationEnforcer:
             self._stats.record_blocked()
             # Record Prometheus metric for blocked requests
             try:
-                from aragora.server.prometheus import record_v1_api_sunset_blocked
+                from aragora.observability.prometheus import record_v1_api_sunset_blocked
 
                 record_v1_api_sunset_blocked(path, method)
             except ImportError:
@@ -480,6 +480,7 @@ def register_default_deprecations() -> None:
     from aragora.server.versioning.constants import (
         MIGRATION_DOCS_URL,
         V1_SUNSET_DATE,
+        days_until_v1_sunset,
     )
 
     all_methods = ["GET", "POST", "PUT", "DELETE", "PATCH"]
@@ -624,8 +625,12 @@ def register_default_deprecations() -> None:
 
     # Update Prometheus gauge for days until sunset
     try:
-        from aragora.server.prometheus import update_v1_days_until_sunset
+        from aragora.observability.prometheus_recording import (
+            register_v1_sunset_days_provider,
+            update_v1_days_until_sunset,
+        )
 
+        register_v1_sunset_days_provider(days_until_v1_sunset)
         update_v1_days_until_sunset()
     except ImportError:
         pass

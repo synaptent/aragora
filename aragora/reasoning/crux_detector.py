@@ -196,66 +196,81 @@ class CruxDetector:
         """
         Compute disagreement scores for all claims.
 
-        Disagreement = variance in how different agents' claims affect this belief.
-        Also returns list of contesting agents.
+        Attribution is read from the **direction and polarity of the edges**, not
+        from variance across belief values (#9644). A ``CONTRADICTS`` factor from
+        S to A is already the recorded fact "S's author contests A" — exact,
+        directional, and impossible to invert. Deriving it from prior or
+        posterior spread instead was wrong three separate ways:
+
+        * posteriors are measured after ``propagate()`` has reconciled the very
+          disagreement being measured, so a contested claim trended to zero;
+        * a mean-and-threshold test over priors degenerates as contesters are
+          added — with a uniform prior each contester sits ``0.6/(k+1)`` from the
+          mean, which a strict ``> 0.2`` cut excludes for every ``k >= 2``, i.e.
+          exactly the 3+ agent debates that are the normal configuration;
+        * symmetric traversal ignored direction, so a critiqued proposer was
+          reported as contesting the critiques of them.
+
+        ``SUPPORTS`` edges never produce dissent, and an author never contests
+        their own claim: this list becomes ``DecisionReceipt`` dissent
+        attribution, where either would be a false statement about a person.
+
+        Magnitude is the summed contest strength (``factor.strength``, carrying
+        critique severity), capped at 1.0 and scaled by the contested share of
+        the authors who took a *stance* on the claim. So a severity-9 objection
+        outweighs a nitpick, two objections outweigh one, and a claim with three
+        supporters and one contester scores below one contested by three.
+
+        Only ``SUPPORTS``/``CONTRADICTS`` authors count toward that share.
+        Non-stance relations (``REFINES``, ``QUALIFIES``, ``DEPENDS_ON``) are not
+        treated as either agreement or dissent — silence about a claim is not
+        support for it. Whether a qualification is *partial* dissent is a
+        modelling question worth its own change.
         """
         from aragora.reasoning.claims import RelationType
 
         disagreement_scores: dict[str, tuple[float, list[str]]] = {}
 
         for node_id, node in self.network.nodes.items():
-            # Group incoming evidence by author
-            author_beliefs: dict[str, list[float]] = {}
+            contesters: dict[str, float] = {}
+            supporters: set[str] = set()
 
-            # Look at claims from different authors that relate to this claim
             for factor_id in self.network.node_factors.get(node_id, []):
                 factor = self.network.factors.get(factor_id)
-                if not factor:
+                if not factor or factor.target_node_id != node_id:
+                    # Only incoming edges say something about THIS claim; an
+                    # outgoing one says something about the other claim.
+                    continue
+                source = self.network.nodes.get(factor.source_node_id)
+                if not source or not source.author or source.author == node.author:
                     continue
 
-                # Get the other node in this factor
-                other_id = (
-                    factor.source_node_id
-                    if factor.target_node_id == node_id
-                    else factor.target_node_id
-                )
-                other_node = self.network.nodes.get(other_id)
-                if not other_node:
-                    continue
+                if factor.relation_type == RelationType.CONTRADICTS:
+                    strength = float(getattr(factor, "strength", 1.0) or 0.0)
+                    if strength <= 0:
+                        # A zero-weight contradiction would name a contester on a
+                        # claim scoring 0.0 — listed as contested by someone while
+                        # the same result excludes it from `total_disagreements`.
+                        # Keep the list and the count telling one story.
+                        continue
+                    contesters[source.author] = max(contesters.get(source.author, 0.0), strength)
+                elif factor.relation_type == RelationType.SUPPORTS:
+                    supporters.add(source.author)
 
-                author = other_node.author
-                if author not in author_beliefs:
-                    author_beliefs[author] = []
-
-                # Record what this author's claim implies about the current claim
-                if factor.relation_type == RelationType.SUPPORTS:
-                    author_beliefs[author].append(other_node.posterior.p_true)
-                elif factor.relation_type == RelationType.CONTRADICTS:
-                    author_beliefs[author].append(1 - other_node.posterior.p_true)
-                else:
-                    author_beliefs[author].append(0.5)
-
-            # Compute disagreement as variance across authors
-            if len(author_beliefs) >= 2:
-                author_means = [
-                    sum(beliefs) / len(beliefs) for beliefs in author_beliefs.values() if beliefs
-                ]
-                if len(author_means) >= 2:
-                    mean = sum(author_means) / len(author_means)
-                    variance = sum((x - mean) ** 2 for x in author_means) / len(author_means)
-                    disagreement = math.sqrt(variance) * 2  # Scale to 0-1 range
-
-                    # Find contesting agents (those far from mean)
-                    contesting = [
-                        author
-                        for author, beliefs in author_beliefs.items()
-                        if beliefs and abs(sum(beliefs) / len(beliefs) - mean) > 0.2
-                    ]
-                    disagreement_scores[node_id] = (min(1.0, disagreement), contesting)
-                else:
-                    disagreement_scores[node_id] = (0.0, [])
-            else:
+            if not contesters:
                 disagreement_scores[node_id] = (0.0, [])
+                continue
+
+            # Capped sum, not mean: averaging made a second, weaker contester
+            # LOWER the score (0.7 alone -> 0.7; 0.7 plus a 0.1 nitpick -> 0.4),
+            # so a more widely contested claim could rank as less contested.
+            # This is monotonic in both the strength of objections and the
+            # number of distinct agents raising them.
+            contest_weight = min(1.0, sum(contesters.values()))
+            stance_authors = len(contesters) + len(supporters - set(contesters))
+            contested_share = len(contesters) / stance_authors if stance_authors else 1.0
+            disagreement = min(1.0, max(0.0, contest_weight * contested_share))
+            disagreement_scores[node_id] = (disagreement, sorted(contesters))
 
         return disagreement_scores
 

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier, TierConfig
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 
 from .types import TIER_CONFIGS
 
@@ -187,7 +188,7 @@ class OutcomeMixin:
                             updated_at = ?
                         WHERE id = ?
                         """,
-                        (updated_surprise, consolidation, datetime.now().isoformat(), id),
+                        (updated_surprise, consolidation, utc_now_iso_naive(), id),
                     )
                 else:
                     cursor.execute(
@@ -200,7 +201,7 @@ class OutcomeMixin:
                             updated_at = ?
                         WHERE id = ?
                         """,
-                        (updated_surprise, consolidation, datetime.now().isoformat(), id),
+                        (updated_surprise, consolidation, utc_now_iso_naive(), id),
                     )
 
                 cursor.execute("COMMIT")

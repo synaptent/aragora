@@ -168,8 +168,23 @@ class TestEstimateCostUsd:
 
     def test_known_openai_model(self) -> None:
         cost = estimate_cost_usd(model="gpt-5.5", tokens_in=1_000_000, tokens_out=1_000_000)
-        # (2.50, 10.00) → 12.50
-        assert cost == pytest.approx(12.5)
+        # (5.00, 30.00) → 35.00 (live catalog 2026-07-16; provider repriced)
+        assert cost == pytest.approx(35.0)
+
+    def test_qwen37_max_priced_not_free(self) -> None:
+        # (1.475, 4.425) → 5.90 (live catalog 2026-07-16; provider raised the
+        # rate from 1.25/3.75); the quorum-reviewer default must never hit the
+        # $0.00 unknown-model path (#9073 P2).
+        cost = estimate_cost_usd(
+            model="qwen/qwen3.7-max", tokens_in=1_000_000, tokens_out=1_000_000
+        )
+        assert cost == pytest.approx(5.9)
+
+    def test_qwen38_max_priced_not_free(self) -> None:
+        cost = estimate_cost_usd(
+            model="qwen/qwen3.8-max", tokens_in=1_000_000, tokens_out=1_000_000
+        )
+        assert cost == pytest.approx(8.0)
 
     def test_unknown_model_returns_zero(self) -> None:
         cost = estimate_cost_usd(model="unknown-model", tokens_in=1000, tokens_out=500)
@@ -357,7 +372,7 @@ class TestFindings:
 
     def test_kimi_findings_dispatch(self) -> None:
         agent = _make_mock_agent(
-            model="moonshotai/kimi-k2.6",
+            model="moonshotai/kimi-k3",
             response_text=_findings_payload_json("approve", slot_id="kimi_heterodox"),
             tokens_in=1500,
             tokens_out=700,
@@ -374,7 +389,7 @@ class TestFindings:
             lens="heterodox",
         )
         result = invoker.findings(slot=slot, provider="kimi", prompt="p", binding=_binding())
-        assert result.model == "moonshotai/kimi-k2.6"
+        assert result.model == "moonshotai/kimi-k3"
         assert result.cost_usd > 0
 
     def test_qwen_findings_dispatch(self) -> None:
@@ -524,7 +539,7 @@ class TestCritique:
             (FAMILY_GEMINI, "gemini-3.1-pro-preview", "gemini"),
             (FAMILY_GROK, "grok-4.2", "grok"),
             (FAMILY_DEEPSEEK, "deepseek/deepseek-v4-pro", "deepseek"),
-            (FAMILY_KIMI, "moonshotai/kimi-k2.6", "kimi"),
+            (FAMILY_KIMI, "moonshotai/kimi-k3", "kimi"),
             (FAMILY_QWEN, "qwen/qwen3-235b-a22b", "qwen"),
             (FAMILY_MISTRAL, "mistral-large-2512", "mistral"),
         ]
@@ -757,7 +772,7 @@ class TestNewFamilyCostTracking:
         ) == pytest.approx(expected)
 
     def test_gpt_5_5_pdb_price_entry_is_explicit(self) -> None:
-        assert _PRICE_PER_MTOK["gpt-5.5"] == (2.50, 10.00)
+        assert _PRICE_PER_MTOK["gpt-5.5"] == (5.00, 30.00)
 
     @pytest.mark.parametrize(
         ("provider", "model"),
@@ -812,12 +827,19 @@ class TestNewFamilyCostTracking:
     def test_kimi_k2_cost(self) -> None:
         assert (
             estimate_cost_usd(
-                model="moonshotai/kimi-k2.6",
+                model="moonshotai/kimi-k2.7-code",
                 tokens_in=1_000_000,
                 tokens_out=1_000_000,
             )
-            == pytest.approx(5.3998)  # 0.7448 + 4.655
+            == pytest.approx(4.21)  # 0.71 + 3.50 (k2.7-code, live catalog 2026-08-16)
         )
+
+    def test_kimi_k3_cost(self) -> None:
+        assert estimate_cost_usd(
+            model="moonshotai/kimi-k3",
+            tokens_in=1_000_000,
+            tokens_out=1_000_000,
+        ) == pytest.approx(18.0)
 
     def test_qwen3_235b_cost(self) -> None:
         assert (

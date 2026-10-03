@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "Versioned manifest of PROTECTED workflows: required checks plus the",
+    "keep-list that .github/workflows/required-check-priority.yml must never",
+    "cancel. Consumers: scripts/retrigger_cancelled_pr_runs.py (a cancelled",
+    "run is rerun-eligible ONLY if its workflow is listed here — advisory",
+    "cancellations by the priority system are intentional and must stay",
+    "cancelled). Follow-up (Tier 4): migrate required-check-priority.yml's",
+    "inline keep-list to read this manifest so the two can never drift."
+  ],
+  "version": 1,
+  "workflow_paths": [
+    ".github/workflows/aragora-merge-quorum.yml",
+    ".github/workflows/aragora-review-gate.yml",
+    ".github/workflows/autopilot-worktree-e2e.yml",
+    ".github/workflows/core-suites.yml",
+    ".github/workflows/lint.yml",
+    ".github/workflows/sdk-parity.yml",
+    ".github/workflows/sdk-generate.yml",
+    ".github/workflows/sdk-test.yml",
+    ".github/workflows/test.yml",
+    ".github/workflows/openapi.yml",
+    ".github/workflows/pr-admission-controller.yml",
+    ".github/workflows/quality-smoke.yml",
+    ".github/workflows/release-readiness.yml",
+    ".github/workflows/security-gate.yml",
+    ".github/workflows/self-hosted-shadow.yml",
+    ".github/workflows/smoke.yml",
+    ".github/workflows/smoke-offline.yml",
+    ".github/workflows/required-check-priority.yml"
+  ],
+  "workflow_names": [
+    "Aragora Merge Quorum",
+    "Aragora Code Review",
+    "Autopilot Worktree E2E",
+    "Core Suites (Decision Integrity)",
+    "Generate SDK Types",
+    "Offline Golden Path",
+    "Required Check Priority",
+    "Lint",
+    "PR Admission Controller",
+    "Quality Pipeline Smoke",
+    "Release Readiness Gate",
+    "Security Gate",
+    "Self-Hosted Shadow CI",
+    "SDK Parity Check",
+    "SDK Tests",
+    "Smoke Tests",
+    "Tests",
+    "OpenAPI Spec"
+  ]
+}

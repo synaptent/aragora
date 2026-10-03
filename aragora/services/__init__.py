@@ -23,6 +23,10 @@ Usage:
     ServiceRegistry.reset()
 """
 
+from typing import Any
+
+from aragora.utils.cache import register_cache_registration_hook
+
 from .registry import (
     RegistryStats,
     ServiceDescriptor,
@@ -69,6 +73,18 @@ class EmbeddingProviderService:
     """Marker type for the embedding provider reference (memory/streams.py)."""
 
     pass
+
+
+def _register_foundation_caches(method_cache: Any, query_cache: Any) -> None:
+    """Register foundation cache instances without making utils import services."""
+    registry = ServiceRegistry.get()
+    if not registry.has(MethodCacheService):
+        registry.register(MethodCacheService, method_cache)
+    if not registry.has(QueryCacheService):
+        registry.register(QueryCacheService, query_cache)
+
+
+register_cache_registration_hook(_register_foundation_caches)
 
 
 __all__ = [

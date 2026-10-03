@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -72,6 +72,7 @@ class ReceiptExplorerHandler(BaseHandler):
 
     def __init__(self, server_context: dict[str, Any] | None = None) -> None:
         super().__init__(server_context or {})
+        self._limiter: RateLimiter | None
         try:
             self._limiter = RateLimiter(requests_per_minute=60)
         except (TypeError, RuntimeError):
@@ -107,7 +108,7 @@ class ReceiptExplorerHandler(BaseHandler):
             receipt_id = parts[3]
             ok, err = validate_path_segment(receipt_id, "receipt_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
             return self._get_receipt(receipt_id)
 
         # GET /api/receipts/:id/verify
@@ -115,7 +116,7 @@ class ReceiptExplorerHandler(BaseHandler):
             receipt_id = parts[3]
             ok, err = validate_path_segment(receipt_id, "receipt_id", SAFE_ID_PATTERN)
             if not ok:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
             return self._verify_receipt(receipt_id)
 
         return None
@@ -127,7 +128,7 @@ class ReceiptExplorerHandler(BaseHandler):
         limit = get_int_param(params, "limit", 50)
 
         receipts_by_id: dict[str, dict[str, Any]] = {
-            receipt.get("receipt_id"): receipt
+            cast(str, receipt.get("receipt_id")): receipt
             for receipt in _receipt_store.values()
             if receipt.get("receipt_id")
         }

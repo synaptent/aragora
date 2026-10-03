@@ -101,8 +101,24 @@ def test_server_handlers_partition_is_complete_and_disjoint() -> None:
 def test_debate_partition_is_complete_and_disjoint() -> None:
     _assert_partition(
         "tests/debate",
-        ["debate-am", "debate-nz", "debate-phases"],
+        ["debate-phases", "debate-1", "debate-2", "debate-3"],
     )
+
+
+def test_debate_boundaries_are_sorted_and_each_range_nonempty() -> None:
+    """Boundary tuple stays sorted, and no debate shard silently degenerates."""
+    bounds = shard_mod._DEBATE_FILE_BOUNDARIES
+    assert list(bounds) == sorted(bounds)
+    for name in ["debate-phases", "debate-1", "debate-2", "debate-3"]:
+        assert shard_mod.SHARDS[name](), f"shard {name} resolved to no paths"
+
+
+def test_debate_subdirs_run_only_in_phases_shard() -> None:
+    """Subdirectory tests belong to debate-phases; ranges cover only top-level files."""
+    subdir_tests = {f for f in _all_tests_under("tests/debate") if len(Path(f).parts) > 3}
+    assert subdir_tests <= _expand_to_files(shard_mod.shard_debate_phases())
+    for fn in (shard_mod.shard_debate_1, shard_mod.shard_debate_2, shard_mod.shard_debate_3):
+        assert subdir_tests.isdisjoint(_expand_to_files(fn()))
 
 
 def test_resolver_emits_relative_paths() -> None:

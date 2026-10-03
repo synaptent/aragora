@@ -3,10 +3,31 @@ from __future__ import annotations
 import logging
 import os
 
+import pytest
+
 from aragora.server.__main__ import (
     LOCAL_DEMO_HANDLER_TIERS,
     _configure_runtime_environment,
 )
+
+
+_RUNTIME_ENV_KEYS = (
+    "ARAGORA_OFFLINE",
+    "ARAGORA_DEMO_MODE",
+    "ARAGORA_DB_BACKEND",
+    "ARAGORA_ENV",
+    "ARAGORA_HANDLER_TIERS",
+)
+
+
+@pytest.fixture(autouse=True)
+def restore_runtime_environment():
+    """Keep runtime defaults set by one entrypoint test out of later tests."""
+    original = {key: os.environ[key] for key in _RUNTIME_ENV_KEYS if key in os.environ}
+    yield
+    for key in _RUNTIME_ENV_KEYS:
+        os.environ.pop(key, None)
+    os.environ.update(original)
 
 
 def test_offline_mode_keeps_optional_handlers(monkeypatch):

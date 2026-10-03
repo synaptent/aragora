@@ -64,13 +64,15 @@ GITHUB_WEBHOOK_SECRET=your-webhook-secret-here
 
 # Optional (for API access)
 GITHUB_APP_ID=12345
-GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----"
+GITHUB_APP_PRIVATE_KEY="paste-complete-PEM-contents-here"
 
 # Optional (use personal token instead of App)
 GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 ```
+
+Set `GITHUB_APP_PRIVATE_KEY` to the complete contents of the private key downloaded
+from GitHub. Keep the value quoted when storing it in a dotenv file, and never
+commit the real key.
 
 ## Webhook Flow
 

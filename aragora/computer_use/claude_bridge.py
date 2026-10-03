@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.config import get_api_key
 from aragora.computer_use.actions import Action
+from aragora.models.compat import strip_sampling_params
 
 if TYPE_CHECKING:
     from aragora.computer_use.orchestrator import StepResult
@@ -42,7 +43,7 @@ class BridgeConfig:
     """Configuration for the Claude Computer Use bridge."""
 
     # Model settings
-    model: str = "claude-opus-4-8"
+    model: str = "claude-opus-5"
     max_tokens: int = 4096
     temperature: float = 0.0
 
@@ -307,14 +308,17 @@ class ClaudeComputerUseBridge:
 
         # Make API call
         try:
-            response = client.messages.create(
-                model=self._config.model,
-                max_tokens=self._config.max_tokens,
-                temperature=self._config.temperature,
-                system=system,
-                tools=tools,
-                messages=messages,
-            )
+            create_kwargs: dict[str, Any] = {
+                "model": self._config.model,
+                "max_tokens": self._config.max_tokens,
+                "temperature": self._config.temperature,
+                "system": system,
+                "tools": tools,
+                "messages": messages,
+            }
+            # Opus 4.7+ (incl. the Opus 5 default) reject temperature with a 400.
+            strip_sampling_params(create_kwargs, self._config.model)
+            response = client.messages.create(**create_kwargs)
         except Exception as e:  # noqa: BLE001 - must catch all API errors before re-raising
             logger.error("Claude API call failed: %s", e)
             raise

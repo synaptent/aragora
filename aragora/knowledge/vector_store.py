@@ -23,11 +23,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 from collections.abc import Callable
 
-from aragora.server.metrics import (
+from aragora.observability.server_metrics import (
     track_vector_index_batch,
     track_vector_operation,
     track_vector_search_results,
@@ -40,10 +41,14 @@ logger = logging.getLogger(__name__)
 
 # Check for weaviate library
 try:
-    import weaviate  # noqa: F401
-    from weaviate.classes.config import Configure, DataType, Property  # noqa: F401
-    from weaviate.classes.data import DataObject  # noqa: F401
-    from weaviate.classes.query import Filter, MetadataQuery  # noqa: F401
+    # weaviate's package __init__ calls a bare warnings.simplefilter("default")
+    # (and its transitive imports register more filters), globally rewriting the
+    # ambient warning policy; the scoped guard confines that to this import.
+    with warnings.catch_warnings():
+        import weaviate  # noqa: F401
+        from weaviate.classes.config import Configure, DataType, Property  # noqa: F401
+        from weaviate.classes.data import DataObject  # noqa: F401
+        from weaviate.classes.query import Filter, MetadataQuery  # noqa: F401
 
     WEAVIATE_AVAILABLE = True
 except ImportError:
@@ -115,7 +120,9 @@ class KnowledgeVectorConfig:
             api_key=os.getenv("WEAVIATE_API_KEY"),
             collection_name=os.getenv("WEAVIATE_KNOWLEDGE_COLLECTION", "KnowledgeNodes"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-            default_workspace=workspace_id or os.getenv("ARAGORA_WORKSPACE", "default"),
+            default_workspace=(
+                workspace_id if workspace_id else os.getenv("ARAGORA_WORKSPACE", "default")
+            ),
         )
 
 
@@ -145,7 +152,9 @@ class KnowledgeVectorStore:
         self.config = config or KnowledgeVectorConfig.from_env(workspace_id)
         self.workspace_id = workspace_id or self.config.default_workspace
         self._client: Any | None = None
-        self._collection: Any | None = None
+        # Typed Any (not Any | None): connect() must run before use, and the
+        # unconnected AttributeError is part of the existing error contract.
+        self._collection: Any = None
         self._connected = False
 
     @property

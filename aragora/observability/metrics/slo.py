@@ -32,7 +32,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 from collections.abc import Callable, Generator
 
 from aragora.observability.config import get_metrics_config
@@ -62,6 +62,8 @@ __all__ = [
     "get_violation_state",
     "SLOWebhookConfig",
     "SEVERITY_ORDER",
+    "SLOEventSink",
+    "register_slo_event_sink_provider",
     # Callback registration for external alert bridges
     "register_violation_callback",
     "register_recovery_callback",
@@ -72,6 +74,80 @@ __all__ = [
 
 # Webhook notification callback (set by init_slo_webhooks)
 _webhook_callback: Callable[[dict[str, Any]], bool] | None = None
+_webhook_sink: SLOEventSink | None = None
+_webhook_config: SLOWebhookConfig | None = None
+_webhook_init_requested = False
+
+
+class SLOEventSink(Protocol):
+    """Higher-layer webhook delivery contract."""
+
+    def enqueue(self, event: dict[str, Any]) -> bool:
+        """Queue an SLO event for delivery."""
+
+
+SLOEventSinkProvider = Callable[[], SLOEventSink | None]
+_slo_event_sink_provider: SLOEventSinkProvider | None = None
+
+
+def register_slo_event_sink_provider(provider: SLOEventSinkProvider | None) -> None:
+    """Register the integrations-side provider for SLO event delivery.
+
+    An initialized integration switches only after the replacement provider
+    resolves successfully, so concurrent delivery never observes an empty
+    callback and a transient replacement failure cannot disable the old sink.
+    """
+    global _slo_event_sink_provider, _webhook_callback, _webhook_sink
+    global _webhook_init_requested
+
+    if provider is None:
+        _slo_event_sink_provider = None
+        _webhook_callback = None
+        _webhook_sink = None
+        _webhook_init_requested = False
+        return
+
+    if _webhook_init_requested:
+        try:
+            replacement = provider()
+        except (ImportError, OSError, ConnectionError, RuntimeError, TypeError, ValueError) as e:
+            logger.warning("Failed to replace SLO webhook provider: %s", e)
+            return
+        if replacement is None:
+            logger.warning("SLO webhook provider replacement returned no sink")
+            return
+
+        config = _webhook_config or SLOWebhookConfig()
+        replacement_callback = _build_slo_violation_callback(config)
+        _slo_event_sink_provider = provider
+        _webhook_sink = replacement
+        _webhook_callback = replacement_callback
+        return
+
+    _slo_event_sink_provider = provider
+    _webhook_callback = None
+    _webhook_sink = None
+
+
+def _resolve_slo_event_sink(*, refresh: bool = False) -> SLOEventSink | None:
+    """Resolve the current integrations-side sink without importing upward."""
+    global _webhook_sink
+
+    if _webhook_sink is not None and not refresh:
+        return _webhook_sink
+    if _slo_event_sink_provider is None:
+        return None
+    try:
+        resolved = _slo_event_sink_provider()
+    except (ImportError, OSError, ConnectionError, RuntimeError, TypeError, ValueError) as e:
+        logger.debug("Webhook dispatcher not available: %s", e)
+        return _webhook_sink
+    if resolved is not None:
+        _webhook_sink = resolved
+    elif refresh:
+        _webhook_sink = None
+    return _webhook_sink
+
 
 # Violation buffer for batching webhook notifications
 _violation_buffer: list[dict[str, Any]] = []
@@ -91,6 +167,41 @@ class SLOWebhookConfig:
 
 # Severity ordering for filtering
 SEVERITY_ORDER = {"minor": 0, "moderate": 1, "major": 2, "critical": 3}
+
+
+def _build_slo_violation_callback(
+    config: SLOWebhookConfig,
+) -> Callable[[dict[str, Any]], bool]:
+    """Create a violation callback that follows the provider's current sink."""
+
+    def send_violation_webhook(violation_data: dict[str, Any]) -> bool:
+        severity = violation_data.get("severity", "minor")
+        if SEVERITY_ORDER.get(severity, 0) < SEVERITY_ORDER.get(config.min_severity, 0):
+            return False
+
+        operation = violation_data.get("operation", "unknown")
+        percentile = violation_data.get("percentile", "p99")
+        timestamp_ms = int(time.time() * 1000)
+        event = {
+            "type": "slo_violation",
+            "idempotency_key": f"{operation}:{percentile}:{timestamp_ms}",
+            "timestamp": datetime.now().isoformat(),
+            "operation": operation,
+            "percentile": percentile,
+            "severity": severity,
+            "latency_ms": violation_data.get("latency_ms", 0),
+            "threshold_ms": violation_data.get("threshold_ms", 0),
+            "margin_ms": violation_data.get("margin_ms", 0),
+            "margin_percent": violation_data.get("margin_percent", 0),
+            "context": violation_data.get("context", {}),
+        }
+        sink = _resolve_slo_event_sink(refresh=True)
+        if sink is None:
+            return False
+        return sink.enqueue(event)
+
+    return send_violation_webhook
+
 
 # Cooldown tracking
 _last_notification: dict[str, float] = {}
@@ -113,6 +224,32 @@ SLO_LATENCY_HISTOGRAM: Any = None
 SLO_VIOLATION_MARGIN: Any = None  # How much over the threshold
 
 
+def _slo_metrics_ready() -> bool:
+    """Return whether the lazy-init flag and metric objects are coherent."""
+    return _initialized and all(
+        metric is not None
+        for metric in (
+            SLO_CHECKS_TOTAL,
+            SLO_VIOLATIONS_TOTAL,
+            SLO_LATENCY_HISTOGRAM,
+            SLO_VIOLATION_MARGIN,
+        )
+    )
+
+
+def _init_noop_metrics() -> None:
+    """Initialize the complete SLO metric set with no-op collectors."""
+    global _initialized
+    global SLO_CHECKS_TOTAL, SLO_VIOLATIONS_TOTAL
+    global SLO_LATENCY_HISTOGRAM, SLO_VIOLATION_MARGIN
+
+    SLO_CHECKS_TOTAL = NoOpMetric()
+    SLO_VIOLATIONS_TOTAL = NoOpMetric()
+    SLO_LATENCY_HISTOGRAM = NoOpMetric()
+    SLO_VIOLATION_MARGIN = NoOpMetric()
+    _initialized = True
+
+
 def init_slo_metrics() -> bool:
     """Initialize SLO Prometheus metrics lazily.
 
@@ -123,17 +260,15 @@ def init_slo_metrics() -> bool:
     global SLO_CHECKS_TOTAL, SLO_VIOLATIONS_TOTAL
     global SLO_LATENCY_HISTOGRAM, SLO_VIOLATION_MARGIN
 
-    if _initialized:
+    if _slo_metrics_ready():
         return True
+    if _initialized:
+        logger.warning("SLO metric state was incomplete; reinitializing all metric objects")
+        _initialized = False
 
     config = get_metrics_config()
     if not config.enabled:
-        # Use NoOp metrics
-        SLO_CHECKS_TOTAL = NoOpMetric()
-        SLO_VIOLATIONS_TOTAL = NoOpMetric()
-        SLO_LATENCY_HISTOGRAM = NoOpMetric()
-        SLO_VIOLATION_MARGIN = NoOpMetric()
-        _initialized = True
+        _init_noop_metrics()
         return False
 
     try:
@@ -171,11 +306,7 @@ def init_slo_metrics() -> bool:
 
     except (ImportError, ValueError):
         logger.warning("prometheus-client not installed, SLO metrics disabled")
-        SLO_CHECKS_TOTAL = NoOpMetric()
-        SLO_VIOLATIONS_TOTAL = NoOpMetric()
-        SLO_LATENCY_HISTOGRAM = NoOpMetric()
-        SLO_VIOLATION_MARGIN = NoOpMetric()
-        _initialized = True
+        _init_noop_metrics()
         return False
 
 
@@ -191,8 +322,7 @@ def record_slo_check(
         passed: Whether the check passed
         percentile: SLO percentile checked (p50, p90, p99)
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     result = "pass" if passed else "fail"
     SLO_CHECKS_TOTAL.labels(
@@ -225,8 +355,7 @@ def record_slo_violation(
     Returns:
         The calculated severity level
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # Auto-calculate severity based on how much threshold was exceeded
     if severity is None:
@@ -274,8 +403,7 @@ def record_operation_latency(operation: str, latency_ms: float) -> None:
         operation: Operation name
         latency_ms: Latency in milliseconds
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     SLO_LATENCY_HISTOGRAM.labels(operation=operation).observe(latency_ms)
 
@@ -299,8 +427,7 @@ def check_and_record_slo(
     """
     from aragora.config.performance_slos import check_latency_slo, get_slo_config
 
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # Record latency in histogram
     record_operation_latency(operation, latency_ms)
@@ -346,8 +473,7 @@ def track_operation_slo(
             result = await mound.query(...)
             ctx["result_count"] = len(result.items)
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     ctx: dict = {}
     start_time = time.perf_counter()
@@ -372,8 +498,7 @@ def get_slo_metrics_summary() -> dict:
     Returns:
         Dict with metric summaries
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # This would need prometheus_client inspection which varies
     # Return basic status for now
@@ -406,7 +531,9 @@ def init_slo_webhooks(
 ) -> bool:
     """Initialize SLO webhook notifications.
 
-    Connects SLO violations to the webhook dispatcher for external alerting.
+    Connects SLO violations to the registered higher-layer event sink. The
+    application composition root must register a provider before calling this
+    function; server startup does so via ``register_observability_sinks``.
 
     Args:
         webhook_config: Optional configuration for webhook behavior
@@ -414,51 +541,29 @@ def init_slo_webhooks(
     Returns:
         True if webhooks were successfully initialized
     """
-    global _webhook_callback, _buffer_lock
+    global _webhook_callback, _webhook_sink, _buffer_lock
+    global _webhook_config, _webhook_init_requested
 
     try:
         import threading
-        from aragora.integrations.webhooks import get_dispatcher
 
         _buffer_lock = threading.Lock()
+        _webhook_config = webhook_config or SLOWebhookConfig()
+        _webhook_init_requested = True
 
-        dispatcher = get_dispatcher()
+        dispatcher = _resolve_slo_event_sink(refresh=True)
         if dispatcher is None:
-            logger.debug("Webhook dispatcher not available, SLO webhooks disabled")
+            _webhook_callback = None
+            _webhook_sink = None
+            logger.warning(
+                "SLO event sink provider not registered or unavailable; webhooks disabled"
+            )
             return False
+        _webhook_sink = dispatcher
 
         # Create callback that sends to webhook dispatcher
-        config = webhook_config or SLOWebhookConfig()
-
-        def send_violation_webhook(violation_data: dict[str, Any]) -> bool:
-            """Send violation to webhook dispatcher."""
-            severity = violation_data.get("severity", "minor")
-
-            # Check severity threshold
-            if SEVERITY_ORDER.get(severity, 0) < SEVERITY_ORDER.get(config.min_severity, 0):
-                return False
-
-            # Build webhook event
-            operation = violation_data.get("operation", "unknown")
-            percentile = violation_data.get("percentile", "p99")
-            timestamp_ms = int(time.time() * 1000)
-            event = {
-                "type": "slo_violation",
-                "idempotency_key": f"{operation}:{percentile}:{timestamp_ms}",
-                "timestamp": datetime.now().isoformat(),
-                "operation": operation,
-                "percentile": percentile,
-                "severity": severity,
-                "latency_ms": violation_data.get("latency_ms", 0),
-                "threshold_ms": violation_data.get("threshold_ms", 0),
-                "margin_ms": violation_data.get("margin_ms", 0),
-                "margin_percent": violation_data.get("margin_percent", 0),
-                "context": violation_data.get("context", {}),
-            }
-
-            return dispatcher.enqueue(event)
-
-        _webhook_callback = send_violation_webhook
+        config = _webhook_config or SLOWebhookConfig()
+        _webhook_callback = _build_slo_violation_callback(config)
         logger.info("SLO webhook notifications initialized")
         return True
 
@@ -587,19 +692,19 @@ def notify_slo_recovery(
 
     result = False
 
-    # Send to webhook dispatcher
+    # Send to webhook dispatcher. Recovery delivery historically worked
+    # without explicit webhook initialization, so resolve the registered sink
+    # directly while keeping the dependency direction inverted.
     try:
-        from aragora.integrations.webhooks import get_dispatcher
-
-        dispatcher = get_dispatcher()
-        if dispatcher:
+        sink = _resolve_slo_event_sink(refresh=True)
+        if sink is not None:
             event = {
                 "type": "slo_recovery",
                 **recovery_data,
             }
-            result = dispatcher.enqueue(event)
+            result = sink.enqueue(event)
 
-    except (ImportError, OSError, ConnectionError, RuntimeError) as e:
+    except (OSError, ConnectionError, RuntimeError, TypeError, ValueError) as e:
         logger.debug("Failed to send SLO recovery webhook: %s", e)
 
     # Invoke registered external callbacks (e.g., SLO Alert Bridge)
@@ -633,8 +738,7 @@ def check_and_record_slo_with_recovery(
     """
     from aragora.config.performance_slos import check_latency_slo, get_slo_config
 
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # Record latency in histogram
     record_operation_latency(operation, latency_ms)

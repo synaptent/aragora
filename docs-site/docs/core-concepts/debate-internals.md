@@ -186,7 +186,7 @@ is protected by an execution safety gate that evaluates:
 - context taint signals from untrusted prompt context
 - high-severity dissent and correlated-failure risk
 
-See [Execution Safety Gate](./EXECUTION_SAFETY_GATE.md) for policy knobs, defaults,
+See [Execution Safety Gate](https://github.com/synaptent/aragora/blob/main/docs/debate/EXECUTION_SAFETY_GATE.md) for policy knobs, defaults,
 reason codes, and telemetry/dashboard queries.
 
 ## Agent Channel Integration

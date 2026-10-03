@@ -24,6 +24,7 @@ import httpx
 from aragora.agents.errors.classifier import ErrorClassifier
 from aragora.agents.fallback import get_default_fallback_enabled
 from aragora.config.secrets import get_secret_presence
+from aragora.models.compat import first_text_block
 
 if TYPE_CHECKING:
     import anthropic
@@ -39,12 +40,12 @@ DEFAULT_TIMEOUT = float(os.getenv("ARAGORA_RESEARCH_HTTP_TIMEOUT", "45.0"))
 CLAUDE_SEARCH_TIMEOUT = float(os.getenv("ARAGORA_CLAUDE_SEARCH_TIMEOUT", "240.0"))
 SUMMARIZATION_TIMEOUT = float(os.getenv("ARAGORA_RESEARCH_SUMMARIZATION_TIMEOUT", "120.0"))
 
-# Frontier pins (Opus 4.8). OpenRouter alias is used by default so research
+# Frontier pins (Opus 5). OpenRouter alias is used by default so research
 # still runs when no direct Anthropic key is configured.
-RESEARCH_MODEL = "claude-opus-4-8"
+RESEARCH_MODEL = "claude-opus-5"
 OPENROUTER_RESEARCH_MODEL = os.getenv(
     "ARAGORA_RESEARCH_OPENROUTER_MODEL",
-    "anthropic/claude-opus-4.8",
+    "anthropic/claude-opus-5",
 )
 
 
@@ -190,8 +191,31 @@ class PreDebateResearcher:
                 )
 
             response = await asyncio.wait_for(asyncio.to_thread(_call_anthropic), timeout_seconds)
-            content_block = response.content[0]
-            return str(getattr(content_block, "text", "")).strip()
+            # Opus 5 thinks by default: content[0] is a thinking block.
+            text = first_text_block(response.content).strip()
+            if text:
+                return text
+
+            # Empty text is a FAILURE, not a success. On a thinking-by-default
+            # model an exhausted max_tokens yields thinking blocks and no text
+            # block; returning "" here would look like a successful summary and
+            # silently skip the OpenRouter fallback below.
+            logger.warning(
+                "[research] Anthropic returned no text block (thinking may have "
+                "consumed max_tokens=%s); falling back to OpenRouter",
+                max_tokens,
+                extra={
+                    "triage_diag_code": "provider_fallback",
+                    "triage_diag_severity": "degraded",
+                },
+            )
+            empty_fallback = self._get_openrouter_agent()
+            if empty_fallback is None:
+                return ""
+            return await asyncio.wait_for(
+                empty_fallback.generate(prompt),
+                timeout_seconds,
+            )
         except Exception as e:  # noqa: BLE001 - provider SDK raises many exception types
             if not self._should_try_openrouter_fallback(e):
                 raise
@@ -241,7 +265,9 @@ class PreDebateResearcher:
             def _call_classify() -> Any:
                 return self.anthropic_client.messages.create(
                     model=RESEARCH_MODEL,
-                    max_tokens=100,
+                    # Opus 5 thinks by default and max_tokens covers thinking +
+                    # response; 100 could be consumed entirely by thinking.
+                    max_tokens=2048,
                     messages=[
                         {
                             "role": "user",
@@ -255,8 +281,8 @@ Respond with just "yes" or "no".""",
                 )
 
             response = await asyncio.to_thread(_call_classify)
-            content_block = response.content[0]
-            content = str(getattr(content_block, "text", "")).strip().lower()
+            # Opus 5 thinks by default: content[0] is a thinking block.
+            content = first_text_block(response.content).strip().lower()
             return content.startswith("yes")
         except (OSError, ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
             logger.warning("LLM classification failed: %s", e)
@@ -352,7 +378,7 @@ Respond with just "yes" or "no".""",
                 tools: list[Any] = [{"type": "web_search_20250305", "name": "web_search"}]
                 return self.anthropic_client.messages.create(
                     model=RESEARCH_MODEL,
-                    max_tokens=2000,
+                    max_tokens=4096,
                     tools=cast(Any, tools),
                     messages=[
                         {
@@ -568,7 +594,7 @@ Provide a brief, factual summary (2-3 paragraphs) of the current situation.
 Focus on facts, not opinions. Include relevant dates and specifics."""
             result.summary = await self._generate_text_with_fallback(
                 prompt,
-                max_tokens=500,
+                max_tokens=4096,
                 timeout_seconds=SUMMARIZATION_TIMEOUT,
             )
 
@@ -594,7 +620,7 @@ Please share what you know about this topic, including:
 Note: Clearly indicate if certain information may be outdated or requires verification."""
             summary = await self._generate_text_with_fallback(
                 prompt,
-                max_tokens=800,
+                max_tokens=4096,
                 timeout_seconds=SUMMARIZATION_TIMEOUT,
             )
             return ResearchResult(

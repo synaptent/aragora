@@ -60,7 +60,7 @@ from aragora.pulse.ingestor import (
     RedditIngestor,
     TwitterIngestor,
 )
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 from aragora.server.stream.state_manager import (
     get_active_debates,
     get_active_debates_lock,
@@ -74,7 +74,7 @@ _active_debates_lock = get_active_debates_lock()
 
 _ENV_VAR_RE = re.compile(r"[A-Z][A-Z0-9_]+")
 _OPENROUTER_FALLBACK_MODELS = {
-    "anthropic-api": "anthropic/claude-opus-4.8",
+    "anthropic-api": "anthropic/claude-opus-5",
     "openai-api": "openai/gpt-5.3",
     "gemini": "google/gemini-3-flash-preview",
     "grok": "x-ai/grok-4.1-fast",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from aragora.rlm.debate_integration import (
+    DebateOutcome,
     DebateTrajectoryCollector,
     reset_debate_trajectory_collector,
 )
@@ -16,6 +17,17 @@ def collector():
 
 
 class TestRecordRound:
+    def test_outcome_normalizes_explicit_none_agents(self):
+        outcome = DebateOutcome(
+            debate_id="d1",
+            task="Test task",
+            consensus_reached=True,
+            confidence=0.9,
+            agents=None,  # type: ignore[arg-type]
+        )
+
+        assert outcome.agents == []
+
     def test_record_round_creates_steps(self, collector):
         """Per-round data should create proposal and critique steps."""
         collector.record_round(

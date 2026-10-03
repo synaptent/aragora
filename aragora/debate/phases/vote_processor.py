@@ -18,6 +18,7 @@ from collections.abc import Callable
 
 from aragora.config import AGENT_TIMEOUT_SECONDS
 from aragora.debate.complexity_governor import get_complexity_governor
+from aragora.debate.phases._phase_invariant import require_phase_result
 from aragora.debate.phases.weight_calculator import WeightCalculator
 
 if TYPE_CHECKING:
@@ -47,8 +48,8 @@ class VoteProcessor:
         calibration_tracker: Any = None,
         recorder: Any = None,
         agent_weights: dict[str, float] | None = None,
-        hooks: dict[str, Callable[..., Any] | None] = None,
-        user_votes: list[dict[str, Any] | None] = None,
+        hooks: dict[str, Callable[..., Any] | None] | None = None,
+        user_votes: list[dict[str, Any] | None] | None = None,
         protocol: Any = None,
         # Callbacks
         vote_with_agent: Callable[..., Any] | None = None,
@@ -123,6 +124,10 @@ class VoteProcessor:
 
         votes: list[Vote] = []
         task = ctx.env.task if ctx.env else ""
+        vote_with_agent = self._vote_with_agent
+        if vote_with_agent is None:
+            return votes
+        with_timeout = self._with_timeout
 
         async def cast_vote(agent: Agent) -> tuple[Agent, Any]:
             """Cast a vote for a single agent with timeout protection."""
@@ -130,14 +135,14 @@ class VoteProcessor:
             try:
                 base_timeout = getattr(agent, "timeout", AGENT_TIMEOUT_SECONDS)
                 timeout = get_complexity_governor().get_scaled_timeout(float(base_timeout))
-                if self._with_timeout:
-                    vote_result = await self._with_timeout(
-                        self._vote_with_agent(agent, ctx.proposals, task),
+                if with_timeout:
+                    vote_result = await with_timeout(
+                        vote_with_agent(agent, ctx.proposals, task),
                         agent.name,
                         timeout_seconds=timeout,
                     )
                 else:
-                    vote_result = await self._vote_with_agent(agent, ctx.proposals, task)
+                    vote_result = await vote_with_agent(agent, ctx.proposals, task)
                 return (agent, vote_result)
             except (ValueError, KeyError, TypeError) as e:  # noqa: BLE001
                 logger.warning(
@@ -196,6 +201,10 @@ class VoteProcessor:
         votes: list[Vote] = []
         voting_errors = 0
         task = ctx.env.task if ctx.env else ""
+        vote_with_agent = self._vote_with_agent
+        if vote_with_agent is None:
+            return votes, voting_errors
+        with_timeout = self._with_timeout
 
         async def cast_vote(agent: Agent) -> tuple[Agent, Any]:
             """Cast a vote for unanimous consensus with timeout protection."""
@@ -203,14 +212,14 @@ class VoteProcessor:
             try:
                 base_timeout = getattr(agent, "timeout", AGENT_TIMEOUT_SECONDS)
                 timeout = get_complexity_governor().get_scaled_timeout(float(base_timeout))
-                if self._with_timeout:
-                    vote_result = await self._with_timeout(
-                        self._vote_with_agent(agent, ctx.proposals, task),
+                if with_timeout:
+                    vote_result = await with_timeout(
+                        vote_with_agent(agent, ctx.proposals, task),
                         agent.name,
                         timeout_seconds=timeout,
                     )
                 else:
-                    vote_result = await self._vote_with_agent(agent, ctx.proposals, task)
+                    vote_result = await vote_with_agent(agent, ctx.proposals, task)
                 return (agent, vote_result)
             except (ValueError, KeyError, TypeError) as e:  # noqa: BLE001
                 logger.warning(
@@ -273,7 +282,7 @@ class VoteProcessor:
         unanimous: bool = False,
     ) -> None:
         """Handle successful vote: notifications, hooks, recording."""
-        result = ctx.result
+        result = require_phase_result(ctx)
 
         logger.debug(
             f"vote_cast{'_unanimous' if unanimous else ''} agent={agent.name} "
@@ -288,8 +297,9 @@ class VoteProcessor:
                 metric=vote.confidence,
             )
 
-        if "on_vote" in self.hooks:
-            self.hooks["on_vote"](agent.name, vote.choice, vote.confidence)
+        on_vote = self.hooks.get("on_vote")
+        if on_vote:
+            on_vote(agent.name, vote.choice, vote.confidence)
 
         if self.recorder:
             try:
@@ -471,6 +481,8 @@ class VoteProcessor:
         base_user_weight = getattr(self.protocol, "user_vote_weight", 0.5)
 
         for user_vote in self.user_votes:
+            if user_vote is None:
+                continue
             choice = user_vote.get("choice", "")
             if choice:
                 canonical = choice_mapping.get(choice, choice)

@@ -1,6 +1,6 @@
 {
   "python_endpoint_count": 2150,
-  "typescript_endpoint_count": 2275,
+  "typescript_endpoint_count": 2276,
   "common_count": 2150,
   "python_only": [],
   "typescript_only": [
@@ -31,6 +31,7 @@
     "/api/debates/statistics/agents",
     "/api/debates/{param}/export/{param}",
     "/api/debates/{param}/graph/stats",
+    "/api/debates/{param}/inject-evidence",
     "/api/debates/{param}/meta-critique",
     "/api/debates/{param}/permanent",
     "/api/devices/user/{param}",

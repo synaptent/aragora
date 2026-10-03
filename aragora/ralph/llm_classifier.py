@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from aragora.agents.base import AgentType
 from aragora.ralph.classifier import BlockerKind
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ class LLMBlockerClassifier:
     failure, callers fall back to existing keyword-based logic.
     """
 
-    def __init__(self, *, model: str = "anthropic", timeout: float = 30.0) -> None:
+    def __init__(self, *, model: AgentType = "anthropic-api", timeout: float = 30.0) -> None:
         self.model = model
         self.timeout = timeout
 

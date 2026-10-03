@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 from collections.abc import Callable
 from uuid import uuid4
 
@@ -274,11 +274,14 @@ class FindingWorkflowData:
             due_date=parse_timestamp(data.get("due_date")),
             linked_findings=data.get("linked_findings", []),
             parent_finding_id=data.get("parent_finding_id"),
-            created_at=parse_timestamp(data.get("created_at"), default=utc_now()),
-            updated_at=parse_timestamp(data.get("updated_at"), default=utc_now()),
+            created_at=cast(datetime, parse_timestamp(data.get("created_at"), default=utc_now())),
+            updated_at=cast(datetime, parse_timestamp(data.get("updated_at"), default=utc_now())),
             resolved_at=parse_timestamp(data.get("resolved_at")),
             time_in_states=data.get("time_in_states", {}),
-            state_entered_at=parse_timestamp(data.get("state_entered_at"), default=utc_now()),
+            state_entered_at=cast(
+                datetime,
+                parse_timestamp(data.get("state_entered_at"), default=utc_now()),
+            ),
         )
 
 

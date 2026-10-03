@@ -173,7 +173,7 @@ class TestDebatesExport:
     """Tests for debate export."""
 
     def test_export_debate_json(self) -> None:
-        """Export debate as JSON."""
+        """Export debate as JSON (format is a path segment)."""
         with patch.object(AragoraClient, "request") as mock_request:
             mock_request.return_value = {"data": "exported_content"}
 
@@ -181,20 +181,21 @@ class TestDebatesExport:
             client.debates.get_export("deb_123", format="json")
 
             mock_request.assert_called_once_with(
-                "GET", "/api/v1/debates/deb_123/export", params={"format": "json"}
+                "GET", "/api/v1/debates/deb_123/export/json", params=None
             )
             client.close()
 
-    def test_export_debate_pdf(self) -> None:
-        """Export debate as PDF."""
+    def test_export_debate_csv_with_table(self) -> None:
+        """Export debate as CSV with a table selector."""
         with patch.object(AragoraClient, "request") as mock_request:
-            mock_request.return_value = {"url": "https://cdn.aragora.ai/exports/..."}
+            mock_request.return_value = {"data": "exported_content"}
 
             client = AragoraClient(base_url="https://api.aragora.ai")
-            client.debates.get_export("deb_123", format="pdf")
+            client.debates.get_export("deb_123", format="csv", table="messages")
 
-            call_args = mock_request.call_args
-            assert call_args[1]["params"]["format"] == "pdf"
+            mock_request.assert_called_once_with(
+                "GET", "/api/v1/debates/deb_123/export/csv", params={"table": "messages"}
+            )
             client.close()
 
 

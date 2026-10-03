@@ -17,6 +17,7 @@ import asyncio
 import math
 import os
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -24,6 +25,9 @@ from collections.abc import Callable
 
 # Observability
 from aragora.observability import get_logger
+from aragora.config.distributed import (
+    is_distributed_state_required as _is_distributed_state_required,
+)
 
 logger = get_logger(__name__)
 
@@ -38,30 +42,14 @@ def _redis_ttl_seconds(ttl_seconds: float) -> int:
 
 
 def is_distributed_state_required() -> bool:
-    """Check if distributed state backend (Redis) is required.
-
-    Returns True if:
-    - ARAGORA_REQUIRE_DISTRIBUTED=true (canonical var, also used by production_guards)
-    - ARAGORA_REQUIRE_DISTRIBUTED_STATE=true (legacy alias, deprecated)
-    - ARAGORA_MULTI_INSTANCE=true
-    - ARAGORA_ENV=production (unless ARAGORA_SINGLE_INSTANCE=true)
-    """
-    # Check canonical var first (shared with production_guards.py)
-    if os.environ.get("ARAGORA_REQUIRE_DISTRIBUTED", "").lower() in ("true", "1", "yes"):
-        return True
-    # Legacy alias for backwards compatibility
-    if os.environ.get("ARAGORA_REQUIRE_DISTRIBUTED_STATE", "").lower() in ("true", "1", "yes"):
-        logger.warning(
-            "ARAGORA_REQUIRE_DISTRIBUTED_STATE is deprecated, use ARAGORA_REQUIRE_DISTRIBUTED instead"
-        )
-        return True
-    if os.environ.get("ARAGORA_MULTI_INSTANCE", "").lower() in ("true", "1", "yes"):
-        return True
-    if os.environ.get("ARAGORA_ENV") == "production":
-        if os.environ.get("ARAGORA_SINGLE_INSTANCE", "").lower() in ("true", "1", "yes"):
-            return False
-        return True
-    return False
+    """Compatibility shim for the foundation-owned deployment policy."""
+    warnings.warn(
+        "aragora.control_plane.leader.is_distributed_state_required is deprecated; "
+        "import aragora.config.distributed.is_distributed_state_required instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _is_distributed_state_required()
 
 
 class DistributedStateError(Exception):

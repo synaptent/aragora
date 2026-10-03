@@ -162,7 +162,7 @@ def check_runner_freshness(
         allowed_profiles=allowed_profile_set or None,
         rotation_interval_seconds=rotation_interval_seconds,
     )
-    probe_summary = {
+    probe_summary: dict[str, Any] = {
         "auto_probe_triggered": False,
         "attempted": 0,
         "passed": 0,

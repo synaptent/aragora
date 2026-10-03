@@ -29,6 +29,7 @@ from aragora.cli.review import (
     get_shareable_url,
     save_review_for_sharing,
 )
+from aragora.cli.parser import build_parser
 
 
 # ===========================================================================
@@ -730,6 +731,8 @@ class TestCreateReviewParser:
                 "json",
                 "--output-dir",
                 "./output",
+                "--emit-odr",
+                "./output/custom-review.odr.json",
                 "--demo",
                 "--share",
             ]
@@ -741,8 +744,26 @@ class TestCreateReviewParser:
         assert args.focus == "security"
         assert args.output_format == "json"
         assert args.output_dir == "./output"
+        assert args.emit_odr == "./output/custom-review.odr.json"
         assert args.demo is True
         assert args.share is True
+
+    def test_parser_emit_odr_uses_default_path(self):
+        """--emit-odr accepts an omitted path for the ergonomic default."""
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers()
+        create_review_parser(subparsers)
+
+        args = parser.parse_args(["review", "--emit-odr", "--demo"])
+
+        assert args.emit_odr == ""
+
+    def test_top_level_parser_registers_emit_odr(self):
+        """The installed aragora entrypoint exposes the same ODR option."""
+        args = build_parser().parse_args(["review", "--emit-odr", "/tmp/review.odr.json", "--demo"])
+
+        assert args.emit_odr == "/tmp/review.odr.json"
+        assert args.func.__name__ == "cmd_review"
 
 
 # ===========================================================================
@@ -766,6 +787,7 @@ class TestCmdReview:
         args.output_dir = None
         args.demo = False
         args.share = False
+        args.emit_odr = None
         return args
 
     def test_demo_mode_github_output(self, review_args, capsys, monkeypatch):
@@ -805,6 +827,247 @@ class TestCmdReview:
 
         assert result == 0
         assert (tmp_path / "comment.md").exists()
+
+    def test_demo_mode_emits_odr_to_output_dir(self, review_args, tmp_path, monkeypatch):
+        """The default ODR path follows --output-dir in demo mode."""
+        review_args.demo = True
+        review_args.output_dir = str(tmp_path)
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        result = cmd_review(review_args)
+
+        assert result == 0
+        odr_text = (tmp_path / "review.odr.json").read_text()
+        odr = json.loads(odr_text)
+        assert odr["claim"]["verdict"] == "FAIL"
+        assert odr["quorum"]["method"] == "multi_agent_review"
+        # Demo receipts must never pass for a real review's receipt.
+        assert "[DEMO MODE]" in odr_text
+
+    @pytest.mark.parametrize("env,expected", [(None, "0.2"), ("", "0.2"), ("0.1", "0.1")])
+    def test_emit_odr_profile_follows_env(self, review_args, tmp_path, monkeypatch, env, expected):
+        """The review receipt uses the library default unless the env var asks for 0.1."""
+        from aragora.gauntlet.odr_verify import verify_odr_document
+
+        monkeypatch.delenv("ARAGORA_ODR_PROFILE_VERSION", raising=False)
+        if env is not None:
+            monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", env)
+        review_args.demo = True
+        review_args.output_dir = str(tmp_path)
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        assert cmd_review(review_args) == 0
+        odr = json.loads((tmp_path / "review.odr.json").read_text())
+        assert odr["odr_version"] == expected
+        assert verify_odr_document(odr).ok
+
+    def test_emit_odr_invalid_profile_env_writes_nothing(self, review_args, tmp_path, monkeypatch):
+        """An invalid ARAGORA_ODR_PROFILE_VERSION fails the ODR step (exit 3), no file."""
+        monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", "banana")
+        review_args.demo = True
+        review_args.output_dir = str(tmp_path)
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        assert cmd_review(review_args) == 3
+        assert not (tmp_path / "review.odr.json").exists()
+
+    def test_real_review_emits_odr_to_explicit_path(self, review_args, tmp_path, monkeypatch):
+        """A standard review can produce its portable receipt in one invocation."""
+        diff_file = tmp_path / "test.diff"
+        diff_file.write_text("diff --git a/test.py b/test.py\n+new line")
+        odr_path = tmp_path / "artifacts" / "result.odr.json"
+        review_args.diff_file = str(diff_file)
+        review_args.agents = "anthropic-api,openai-api"
+        review_args.emit_odr = str(odr_path)
+
+        findings = get_demo_findings()
+        with (
+            patch(
+                "aragora.cli.review.run_review_debate",
+                new=AsyncMock(return_value=MockDebateResult()),
+            ),
+            patch("aragora.cli.review.extract_review_findings", return_value=findings),
+            patch("aragora.cli.review._persist_review_to_km", return_value=True),
+        ):
+            result = cmd_review(review_args)
+
+        assert result == 0
+        odr = json.loads(odr_path.read_text())
+        assert odr["claim"]["verdict"] == "FAIL"
+        assert odr["quorum"]["participants"]
+
+    def test_emit_odr_pipes_receipt_through_signer(self, review_args, tmp_path, monkeypatch):
+        """A real review's receipt is signed whenever a signing key is configured."""
+        diff_file = tmp_path / "test.diff"
+        diff_file.write_text("diff --git a/test.py b/test.py\n+new line")
+        odr_path = tmp_path / "review.odr.json"
+        review_args.diff_file = str(diff_file)
+        review_args.agents = "anthropic-api,openai-api"
+        review_args.emit_odr = str(odr_path)
+
+        def fake_signer(odr, **kwargs):
+            return {**odr, "signatures": [{"alg": "test", "sig": "stub"}]}
+
+        monkeypatch.setattr("aragora.gauntlet.odr_export.sign_odr_if_configured", fake_signer)
+
+        findings = get_demo_findings()
+        with (
+            patch(
+                "aragora.cli.review.run_review_debate",
+                new=AsyncMock(return_value=MockDebateResult()),
+            ),
+            patch("aragora.cli.review.extract_review_findings", return_value=findings),
+            patch("aragora.cli.review._persist_review_to_km", return_value=True),
+        ):
+            result = cmd_review(review_args)
+
+        assert result == 0
+        odr = json.loads(odr_path.read_text())
+        assert odr["signatures"] == [{"alg": "test", "sig": "stub"}]
+
+    def test_demo_odr_is_never_signed(self, review_args, tmp_path, monkeypatch):
+        """Fabricated demo findings must not be signed even with a key configured."""
+        review_args.demo = True
+        review_args.output_dir = str(tmp_path)
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        def fake_signer(odr, **kwargs):
+            return {**odr, "signatures": [{"alg": "test", "sig": "stub"}]}
+
+        monkeypatch.setattr("aragora.gauntlet.odr_export.sign_odr_if_configured", fake_signer)
+
+        result = cmd_review(review_args)
+
+        assert result == 0
+        odr = json.loads((tmp_path / "review.odr.json").read_text())
+        assert odr["signatures"] == []
+
+    def test_emit_odr_signing_error_contained(self, review_args, tmp_path, monkeypatch):
+        """A configured-but-broken signing key exits 3 cleanly, not a traceback."""
+        from aragora.gauntlet.odr_signing import OdrSigningError
+
+        diff_file = tmp_path / "test.diff"
+        diff_file.write_text("diff --git a/test.py b/test.py\n+new line")
+        review_args.diff_file = str(diff_file)
+        review_args.agents = "anthropic-api,openai-api"
+        review_args.emit_odr = str(tmp_path / "review.odr.json")
+
+        def broken_signer(odr, **kwargs):
+            raise OdrSigningError("configured key is unreadable")
+
+        monkeypatch.setattr("aragora.gauntlet.odr_export.sign_odr_if_configured", broken_signer)
+
+        findings = get_demo_findings()
+        with (
+            patch(
+                "aragora.cli.review.run_review_debate",
+                new=AsyncMock(return_value=MockDebateResult()),
+            ),
+            patch("aragora.cli.review.extract_review_findings", return_value=findings),
+            patch("aragora.cli.review._persist_review_to_km", return_value=True),
+        ):
+            result = cmd_review(review_args)
+
+        assert result == 3
+
+    def test_emit_odr_url_misbinding_fails_fast(self, review_args, tmp_path, capsys, monkeypatch):
+        """--emit-odr followed by the PR URL errors out before any review runs."""
+        review_args.demo = True
+        review_args.emit_odr = "https://github.com/owner/repo/pull/123"
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        monkeypatch.chdir(tmp_path)
+
+        result = cmd_review(review_args)
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--emit-odr received a URL" in captured.err
+        assert not (tmp_path / "https:").exists()
+
+    def test_emit_odr_schemeless_url_misbinding_fails_fast(
+        self, review_args, tmp_path, capsys, monkeypatch
+    ):
+        """A scheme-less PR URL is caught by the guard too."""
+        review_args.demo = True
+        review_args.emit_odr = "github.com/owner/repo/pull/123"
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        monkeypatch.chdir(tmp_path)
+
+        result = cmd_review(review_args)
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--emit-odr received a URL" in captured.err
+        assert not (tmp_path / "github.com").exists()
+
+    def test_demo_emit_odr_failure_returns_distinct_exit_code(
+        self, review_args, tmp_path, monkeypatch
+    ):
+        """An unwritable receipt path exits 3, not a findings-verdict code."""
+        blocker = tmp_path / "blocker"
+        blocker.write_text("not a directory")
+        review_args.demo = True
+        review_args.emit_odr = str(blocker / "review.odr.json")
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        result = cmd_review(review_args)
+
+        assert result == 3
+
+    def test_real_review_emit_odr_failure_preserves_sarif(self, review_args, tmp_path, monkeypatch):
+        """ODR emission runs after the other artifact steps, so SARIF still lands."""
+        diff_file = tmp_path / "test.diff"
+        diff_file.write_text("diff --git a/test.py b/test.py\n+new line")
+        blocker = tmp_path / "blocker"
+        blocker.write_text("not a directory")
+        sarif_path = tmp_path / "review.sarif"
+        review_args.diff_file = str(diff_file)
+        review_args.agents = "anthropic-api,openai-api"
+        review_args.emit_odr = str(blocker / "review.odr.json")
+        review_args.sarif = str(sarif_path)
+
+        findings = get_demo_findings()
+        with (
+            patch(
+                "aragora.cli.review.run_review_debate",
+                new=AsyncMock(return_value=MockDebateResult()),
+            ),
+            patch("aragora.cli.review.extract_review_findings", return_value=findings),
+            patch("aragora.cli.review._persist_review_to_km", return_value=True),
+        ):
+            result = cmd_review(review_args)
+
+        assert result == 3
+        assert sarif_path.exists()
+
+    def test_ci_findings_verdict_beats_emit_odr_failure(self, review_args, tmp_path):
+        """--ci exit codes take priority over an ODR emit failure."""
+        diff_file = tmp_path / "test.diff"
+        diff_file.write_text("diff --git a/test.py b/test.py\n+new line")
+        blocker = tmp_path / "blocker"
+        blocker.write_text("not a directory")
+        review_args.diff_file = str(diff_file)
+        review_args.agents = "anthropic-api,openai-api"
+        review_args.emit_odr = str(blocker / "review.odr.json")
+        review_args.ci = True
+
+        findings = get_demo_findings()
+        assert findings["critical_issues"]
+        with (
+            patch(
+                "aragora.cli.review.run_review_debate",
+                new=AsyncMock(return_value=MockDebateResult()),
+            ),
+            patch("aragora.cli.review.extract_review_findings", return_value=findings),
+            patch("aragora.cli.review._persist_review_to_km", return_value=True),
+        ):
+            result = cmd_review(review_args)
+
+        assert result == 1
 
     def test_error_no_diff_provided(self, review_args, capsys, monkeypatch):
         """Test error when no diff provided."""

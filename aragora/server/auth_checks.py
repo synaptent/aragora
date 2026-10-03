@@ -13,6 +13,7 @@ and allow easier testing of authentication logic.
 """
 
 import logging
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -231,6 +232,21 @@ class AuthChecksMixin:
             "/api/v1/health/detailed",
             "/api/v1/health/deep",
             "/api/v1/health/stores",
+            # Build identity (sha, version, build time): public by the handler's
+            # own contract (handlers/admin/health/build.py PUBLIC_ROUTES) so an
+            # operator can confirm what is deployed from outside.
+            "/health/build",
+            "/api/health/build",
+            "/api/v1/health/build",
+            # ODR signing-key trust anchor (issue #8804): serves only the
+            # PUBLIC Ed25519 key so external auditors can verify receipts.
+            # Unauthenticated by design, like any /.well-known resource.
+            "/.well-known/aragora-odr-signing-key",
+            "/api/v2/receipts/signing-key",
+            # Stateless ODR verification: the document comes from the request
+            # body, no stored receipt is read and nothing is persisted, so an
+            # auditor holding a document but no account can check it.
+            "/api/v2/receipts/verify",
             # OAuth
             "/api/auth/oauth/providers",  # Login page needs to show available providers
             "/api/v1/auth/oauth/providers",  # v1 route
@@ -402,6 +418,17 @@ class AuthChecksMixin:
         # "/api/v1/nomic/",
     )
 
+    # GET routes exempt from authentication, matched by pattern rather than a
+    # prefix: a prefix like "/api/v2/receipts/" would expose every stored
+    # receipt. Each pattern admits one route template, so its parameter segment
+    # excludes the sibling route segments the handler dispatches first -- "dsar"
+    # reaches the GDPR subject-access branch, which stays authenticated.
+    AUTH_EXEMPT_GET_PATTERNS: tuple[re.Pattern[str], ...] = (
+        # ODR export document: public trust surface (architecture §2.10). The
+        # handler itself still requires receipts:read for non-ODR formats.
+        re.compile(r"^/api/v2/receipts/(?!(?:dsar|share|search|stats|verify)/)[^/]+/export$"),
+    )
+
     # Type stubs for attributes expected from parent class
     headers: Any
     command: str
@@ -441,7 +468,9 @@ class AuthChecksMixin:
         Returns:
             True if the path is exempt for GET, False otherwise
         """
-        return any(path.startswith(prefix) for prefix in self.AUTH_EXEMPT_GET_PREFIXES)
+        if any(path.startswith(prefix) for prefix in self.AUTH_EXEMPT_GET_PREFIXES):
+            return True
+        return any(pattern.match(path) for pattern in self.AUTH_EXEMPT_GET_PATTERNS)
 
     def _check_rate_limit(self) -> bool:
         """Check auth and rate limit. Returns True if allowed, False if blocked.

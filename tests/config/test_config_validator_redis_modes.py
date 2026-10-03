@@ -18,7 +18,7 @@ def test_distributed_state_accepts_sentinel_configuration() -> None:
             },
             clear=True,
         ),
-        patch("aragora.control_plane.leader.is_distributed_state_required", return_value=True),
+        patch("aragora.config.validator.is_distributed_state_required", return_value=True),
     ):
         result = validate_all(strict=False)
 
@@ -29,7 +29,7 @@ def test_distributed_state_accepts_sentinel_configuration() -> None:
 def test_distributed_state_without_url_or_sentinel_fails() -> None:
     with (
         patch.dict(os.environ, {"ARAGORA_ENV": "development"}, clear=True),
-        patch("aragora.control_plane.leader.is_distributed_state_required", return_value=True),
+        patch("aragora.config.validator.is_distributed_state_required", return_value=True),
     ):
         result = validate_all(strict=False)
 

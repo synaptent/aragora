@@ -228,7 +228,7 @@ HAS_GMAIL_TOKEN_STORE = _check_aragora_module("aragora.storage.gmail_token_store
 REQUIRES_GMAIL_TOKEN_STORE = "GmailTokenStore not available"
 requires_gmail_token_store = not HAS_GMAIL_TOKEN_STORE
 
-HAS_SYNC_STORE = _check_aragora_module("aragora.connectors.enterprise.sync_store")
+HAS_SYNC_STORE = _check_aragora_module("aragora.storage.sync_store")
 REQUIRES_SYNC_STORE = "SyncStore not available"
 requires_sync_store = not HAS_SYNC_STORE
 

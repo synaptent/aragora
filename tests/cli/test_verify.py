@@ -239,6 +239,165 @@ class TestVerifyReceipt:
         assert "recomputed=" in checksum_check["detail"]
 
 
+def _sample_cruxes() -> dict[str, Any]:
+    return {
+        "items": [
+            {
+                "claim_id": "c1",
+                "statement": "The latency budget holds under burst load",
+                "author": "agent-alpha",
+                "crux_score": 0.82,
+                "contesting_agents": ["agent-beta"],
+            }
+        ],
+        "total_claims": 5,
+        "total_disagreements": 1,
+        "convergence_barrier": 0.41,
+        "detector": "belief_network",
+    }
+
+
+class TestCruxReceiptIntegrity:
+    """Crux receipts (schema >= 1.2) through the flagship `aragora verify`.
+
+    Regression for #9506 round 5: an earlier inline hash copy omitted the
+    cruxes branch, so every untampered --crux-cards receipt was reported
+    tampered by this command (while `aragora receipt verify` passed).
+    """
+
+    def _crux_receipt_data(self) -> dict[str, Any]:
+        data = _make_receipt_data(schema_version="1.2", include_checksum=False)
+        data["input_hash"] = "deadbeef"
+        data["risk_summary"] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}
+        data["cruxes"] = _sample_cruxes()
+        return data
+
+    def test_untampered_crux_receipt_from_canonical_producer_verifies(self):
+        """Round-trip: canonical producer hash -> _verify_receipt passes."""
+        from aragora.gauntlet.receipt_models import DecisionReceipt
+
+        data = self._crux_receipt_data()
+        receipt_dict = DecisionReceipt.from_dict(data).to_dict()
+        assert receipt_dict["cruxes"] == data["cruxes"]
+
+        result = _verify_receipt(receipt_dict)
+
+        assert result["valid"] is True
+        integrity = next(c for c in result["checks"] if c["name"] == "integrity")
+        assert integrity["passed"] is True
+        # Honest coverage: crux receipts report cruxes + schema_version too.
+        assert "cruxes" in integrity["covers"]
+        assert "schema_version" in integrity["covers"]
+
+    def test_tampered_cruxes_detected(self):
+        data = self._crux_receipt_data()
+        data["artifact_hash"] = _recompute_artifact_hash(data)
+        data["cruxes"]["items"][0]["statement"] = "tampered"
+
+        result = _verify_receipt(data)
+
+        assert result["valid"] is False
+
+    def test_schema_downgrade_detected(self):
+        """1.2 -> 1.1 downgrade must fail: schema_version is bound into the
+        hash for crux receipts, so the version signal cannot be stripped."""
+        data = self._crux_receipt_data()
+        data["artifact_hash"] = _recompute_artifact_hash(data)
+        data["schema_version"] = "1.1"
+
+        result = _verify_receipt(data)
+
+        assert result["valid"] is False
+
+    def test_pre_stamp_crux_receipt_with_11_schema_still_verifies(self):
+        """#9414 shipped crux binding on main BEFORE the 1.2 stamp existed:
+        persisted receipts carry cruxes + schema_version 1.1 with a hash
+        computed WITHOUT schema_version. The version binding is gated on the
+        1.2 stamp, so those audit receipts must keep verifying."""
+        data = self._crux_receipt_data()
+        data["schema_version"] = "1.1"
+        pre_pr_material = json.dumps(
+            {
+                "receipt_id": data["receipt_id"],
+                "gauntlet_id": data["gauntlet_id"],
+                "input_hash": data["input_hash"],
+                "risk_summary": data["risk_summary"],
+                "verdict": data["verdict"],
+                "confidence": data["confidence"],
+                "cruxes": data["cruxes"],
+            },
+            sort_keys=True,
+        )
+        data["artifact_hash"] = hashlib.sha256(pre_pr_material.encode()).hexdigest()
+
+        result = _verify_receipt(data)
+
+        assert result["valid"] is True
+        integrity = next(c for c in result["checks"] if c["name"] == "integrity")
+        assert "cruxes" in integrity["covers"]
+        assert "schema_version" not in integrity["covers"]
+
+    def test_stripped_artifact_hash_crux_receipt_rejected(self):
+        """Stripping artifact_hash from a crux receipt must not downgrade
+        verification to the legacy 16-char checksum, which covers neither
+        cruxes nor schema_version."""
+        data = self._crux_receipt_data()
+        data.pop("artifact_hash", None)
+        data["checksum"] = _recompute_checksum(data)
+
+        result = _verify_receipt(data)
+
+        assert result["valid"] is False
+        integrity = next(c for c in result["checks"] if c["name"] == "integrity")
+        assert "requires the full" in integrity["detail"]
+
+    def test_legacy_pre_crux_receipt_via_checksum_still_valid(self):
+        """Pre-crux receipts keep the legacy checksum fallback."""
+        data = _make_receipt_data(include_checksum=True)
+
+        result = _verify_receipt(data)
+
+        assert result["valid"] is True
+
+    def test_legacy_receipt_hash_recipe_unchanged(self):
+        """Pre-crux (1.1) receipts keep the original recipe: schema_version
+        and cruxes are NOT bound, so existing stored hashes keep verifying."""
+        data = _make_receipt_data(schema_version="1.1", include_checksum=False)
+        legacy_material = json.dumps(
+            {
+                "receipt_id": data["receipt_id"],
+                "gauntlet_id": data["gauntlet_id"],
+                "input_hash": data.get("input_hash", ""),
+                "risk_summary": data.get("risk_summary", {}),
+                "verdict": data["verdict"],
+                "confidence": data["confidence"],
+            },
+            sort_keys=True,
+        )
+        data["artifact_hash"] = hashlib.sha256(legacy_material.encode()).hexdigest()
+
+        result = _verify_receipt(data)
+
+        assert result["valid"] is True
+        integrity = next(c for c in result["checks"] if c["name"] == "integrity")
+        assert "schema_version" not in integrity["covers"]
+
+    def test_inline_fallback_matches_canonical_recipe(self):
+        """The no-gauntlet fallback must stay byte-equivalent to the shared
+        canonical recipe for pre-crux, 1.2-stamped crux, and pre-stamp
+        (#9414-era, schema 1.1) crux receipts."""
+        from aragora.cli.commands.verify import _inline_artifact_hash
+        from aragora.gauntlet.receipt_models import compute_receipt_artifact_hash
+
+        plain = _make_receipt_data(include_checksum=False)
+        crux = self._crux_receipt_data()
+        pre_stamp_crux = self._crux_receipt_data()
+        pre_stamp_crux["schema_version"] = "1.1"
+        for data in (plain, crux, pre_stamp_crux):
+            assert _inline_artifact_hash(data) == compute_receipt_artifact_hash(data)
+            assert _recompute_artifact_hash(data) == _inline_artifact_hash(data)
+
+
 # ---------------------------------------------------------------------------
 # CLI cmd_verify tests
 # ---------------------------------------------------------------------------

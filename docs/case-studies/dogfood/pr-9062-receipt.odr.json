@@ -1,0 +1,90 @@
+{
+  "odr_version": "0.1",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "receipt_id": "pr-9062-0a37ec64bde1",
+  "issued_at": null,
+  "subject": {
+    "identifier": "merge-quorum/synaptent/aragora#9062",
+    "digest": {
+      "status": "present",
+      "alg": "sha-256",
+      "value": "f45dad4ab19d28911485c523b02e97565bb13f4ded8604eb0a2b289281b49e7e"
+    },
+    "summary": "Merge synaptent/aragora#9062 @ 0a37ec64bde1"
+  },
+  "claim": {
+    "verdict": "CHANGES_REQUESTED",
+    "statement": "Merge synaptent/aragora#9062 @ 0a37ec64bde1"
+  },
+  "reasoning": {
+    "status": "present",
+    "summary": "1 reviewer(s) requested changes, 1 passed"
+  },
+  "quorum": {
+    "status": "present",
+    "method": "merge-quorum",
+    "reached": false,
+    "supporting_agents": [
+      "mistral"
+    ],
+    "participants": [
+      {
+        "agent": "grok",
+        "model_family": "xai",
+        "model_id": "undisclosed"
+      },
+      {
+        "agent": "mistral",
+        "model_family": "mistral",
+        "model_id": "undisclosed"
+      }
+    ],
+    "independence": {
+      "disclosed": true,
+      "distinct_model_families": 2,
+      "model_families": [
+        "mistral",
+        "xai"
+      ]
+    },
+    "dissent": {
+      "present": true,
+      "dissenting_agents": [
+        "grok"
+      ],
+      "views": [
+        "grok: Verdict: CHANGES-REQUESTED\n\n- [P2] scripts/fable_goal_cycle.py:538: run_consult computes overall_timeout as `timeout * (2 + int(openrouter_fallback))`, ignoring api_fallback, fallback_model, or _planned_attempt_count, causing under/over-budgeting and potential hangs/timeouts.\n- [P2] scripts/consult_claude.py:545: cli_prompt = _compose_prompt(...) is now used only for CLI paths while raw prompt+system is passed to _run_api/_run_openrouter_api; this alters prior uniform composition and risks prompt duplication or system-instruction loss on CLI.\n- [P3] scripts/consult_claude.py:366: _run_openrouter_api performs no request-size or token validation before sending (unlike response checks), allowing oversized payloads to OPENROUTER_API_URL."
+      ]
+    }
+  },
+  "confidence": {
+    "status": "present",
+    "value": 0.5,
+    "scale": "unit_interval",
+    "calibration": {
+      "status": "present",
+      "provenance_ref": {
+        "type": "aragora.settlement_metadata",
+        "receipt_id": "pr-9062-0a37ec64bde1"
+      }
+    }
+  },
+  "cruxes": {
+    "status": "absent",
+    "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+  },
+  "attestation": {
+    "disposition": "autonomous"
+  },
+  "routing": {
+    "status": "reserved"
+  },
+  "signatures": [],
+  "source": {
+    "system": "aragora",
+    "schema": "aragora.gauntlet.DecisionReceipt",
+    "schema_version": "1.1",
+    "receipt_id": "pr-9062-0a37ec64bde1",
+    "artifact_hash": "68bd90d6a4a12aeb43cb090ba82613732e12354e4c3a89cffc582b052957fba1"
+  }
+}

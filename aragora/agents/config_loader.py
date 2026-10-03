@@ -376,12 +376,12 @@ class AgentConfigLoader:
         # Store config reference for later access. Some registry-created agents do
         # not predefine ``_config``, but they still need access to YAML fallback
         # metadata at runtime.
-        agent._config = config
+        setattr(agent, "_config", config)
 
         logger.debug("Created agent from config: %s", config.name)
         return agent
 
-    def create_agents(self, configs: list[str | AgentConfig | None] = None) -> list[Agent]:
+    def create_agents(self, configs: list[str | AgentConfig] | None = None) -> list[Agent]:
         """
         Create multiple agents from configurations.
 

@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from aragora.agents import claude_profile_pool
 
 
@@ -18,6 +20,11 @@ SPEC = importlib.util.spec_from_file_location("consult_claude_under_test", SCRIP
 assert SPEC and SPEC.loader
 consult_claude = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(consult_claude)
+
+
+@pytest.fixture(autouse=True)
+def _default_direct_transport(monkeypatch):
+    monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "direct")
 
 
 def test_build_cli_command_disables_mcp() -> None:
@@ -125,8 +132,46 @@ def test_run_cli_does_not_treat_nonzero_stdout_as_success(monkeypatch) -> None:
     assert "secret" not in json.dumps(result)
 
 
+def test_run_cli_classifies_rate_limit_without_exposing_raw_output(monkeypatch) -> None:
+    class FakePopen:
+        returncode = 1
+        pid = 54321
+
+        def __init__(self, *args, **kwargs):
+            assert kwargs["stderr"] == subprocess.DEVNULL
+
+        def communicate(self, input, timeout):
+            assert input == "live prompt"
+            assert timeout == 12.5
+            return "You've hit your session limit - resets 3am (America/Chicago)\n", ""
+
+    monkeypatch.setattr(consult_claude.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(consult_claude.subprocess, "Popen", FakePopen)
+
+    result = consult_claude._run_cli("live prompt", "claude-fable-5", 12.5)
+
+    assert result == {
+        "ok": False,
+        "backend": "cli",
+        "elapsed_s": result["elapsed_s"],
+        "rate_limited": True,
+        "failure_kind": "rate_limited",
+        "error": "claude CLI rate limited, rc=1",
+    }
+    serialized = json.dumps(result)
+    assert "3am" not in serialized
+    assert "America/Chicago" not in serialized
+
+
+def test_classify_cli_failure_does_not_treat_generic_limit_as_rate_limit() -> None:
+    result = consult_claude._classify_cli_failure("recursion limit reached")
+
+    assert result == {"failure_kind": "cli_error"}
+
+
 def test_consult_default_is_cli_only(monkeypatch) -> None:
     cli_models: list[str] = []
+    monkeypatch.delenv("ARAGORA_MODEL_TRANSPORT", raising=False)
 
     def fake_cli(_prompt: str, model: str, _timeout: float) -> dict:
         cli_models.append(model)
@@ -147,6 +192,260 @@ def test_consult_default_is_cli_only(monkeypatch) -> None:
     assert result["ok"] is False
     assert cli_models == [consult_claude.DEFAULT_MODEL, consult_claude.FALLBACK_MODEL]
     assert [attempt["backend"] for attempt in result["attempts"]] == ["cli", "cli"]
+
+
+def test_consult_uses_vibeproxy_before_cli(monkeypatch) -> None:
+    policy = SimpleNamespace(mode=consult_claude.TransportMode.PREFER)
+    monkeypatch.setattr(consult_claude.ModelTransportPolicy, "from_env", lambda **_kwargs: policy)
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_vibeproxy",
+        lambda *_args, **_kwargs: {
+            "ok": True,
+            "backend": "vibeproxy",
+            "text": "fable answer",
+            "elapsed_s": 0.1,
+        },
+    )
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CLI should not run")),
+    )
+
+    result = consult_claude.consult("question")
+
+    assert result["ok"] is True
+    assert result["backend"] == "vibeproxy"
+    assert result["model"] == consult_claude.DEFAULT_MODEL
+
+
+def test_run_vibeproxy_preserves_catalog_timeout_classification() -> None:
+    class TimeoutPolicy:
+        client = object()
+
+        def resolve(self, *_args, **_kwargs):
+            raise consult_claude.VibeProxyTimeoutError("catalog timed out")
+
+    result = consult_claude._run_vibeproxy(
+        "question",
+        consult_claude.DEFAULT_MODEL,
+        10,
+        None,
+        TimeoutPolicy(),  # type: ignore[arg-type]
+    )
+
+    assert result == {
+        "ok": False,
+        "backend": "vibeproxy",
+        "timed_out": True,
+        "error": "catalog timed out",
+    }
+
+
+def test_run_vibeproxy_marks_executed_failure_as_backend_failed() -> None:
+    class FailedPolicy:
+        client = object()
+
+        def resolve(self, *_args, **_kwargs):
+            raise consult_claude.VibeProxyUnavailableError("invalid response")
+
+    result = consult_claude._run_vibeproxy(
+        "question",
+        consult_claude.DEFAULT_MODEL,
+        10,
+        None,
+        FailedPolicy(),  # type: ignore[arg-type]
+    )
+
+    assert result["timed_out"] is False
+    assert result["failure_kind"] == "backend_failed"
+
+
+def test_run_vibeproxy_sanitizes_unexpected_client_failure() -> None:
+    class BrokenClient:
+        def anthropic_message(self, **_kwargs):
+            raise RuntimeError("sensitive proxy detail")
+
+    class BrokenPolicy:
+        client = BrokenClient()
+
+        def resolve(self, *_args, **_kwargs):
+            return SimpleNamespace(transport="vibeproxy", resolved_model="claude-fable-5")
+
+    result = consult_claude._run_vibeproxy(
+        "question",
+        consult_claude.DEFAULT_MODEL,
+        10,
+        None,
+        BrokenPolicy(),  # type: ignore[arg-type]
+    )
+
+    assert result == {
+        "ok": False,
+        "backend": "vibeproxy",
+        "timed_out": False,
+        "failure_kind": "backend_failed",
+        "error": "VibeProxy attempt failed: RuntimeError",
+    }
+
+
+def test_consult_prefer_falls_back_to_cli(monkeypatch) -> None:
+    policy = SimpleNamespace(mode=consult_claude.TransportMode.PREFER)
+    monkeypatch.setattr(consult_claude.ModelTransportPolicy, "from_env", lambda **_kwargs: policy)
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_vibeproxy",
+        lambda *_args, **_kwargs: {
+            "ok": False,
+            "backend": "vibeproxy",
+            "error": "proxy unavailable",
+        },
+    )
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: {
+            "ok": True,
+            "backend": "cli",
+            "text": "cli answer",
+            "elapsed_s": 0.1,
+        },
+    )
+
+    result = consult_claude.consult("question")
+
+    assert result["ok"] is True
+    assert [attempt["backend"] for attempt in result["attempts"]] == [
+        "vibeproxy",
+        "vibeproxy",
+        "cli",
+    ]
+
+
+def test_consult_prefer_fails_closed_after_proxy_configuration_error(monkeypatch) -> None:
+    monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-prefer")
+    monkeypatch.setattr(
+        consult_claude.ModelTransportPolicy,
+        "from_env",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            consult_claude.VibeProxyConfigurationError("invalid proxy configuration")
+        ),
+    )
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CLI should not run")),
+    )
+
+    result = consult_claude.consult("question")
+
+    assert result["ok"] is False
+    assert result["usage_error"] is True
+    assert [attempt["backend"] for attempt in result["attempts"]] == ["vibeproxy"]
+    assert result["attempts"][0]["error"] == "invalid proxy configuration"
+
+
+def test_consult_required_fails_closed_on_proxy_configuration_error(monkeypatch) -> None:
+    monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-required")
+    monkeypatch.setattr(
+        consult_claude.ModelTransportPolicy,
+        "from_env",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            consult_claude.VibeProxyConfigurationError("invalid proxy configuration")
+        ),
+    )
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CLI should not run")),
+    )
+
+    result = consult_claude.consult("question")
+
+    assert result["ok"] is False
+    assert result["usage_error"] is True
+    assert [attempt["backend"] for attempt in result["attempts"]] == ["vibeproxy"]
+    assert result["error"] == "invalid proxy configuration"
+
+
+def test_consult_rejects_empty_model_with_clean_failure_envelope(monkeypatch) -> None:
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CLI should not run")),
+    )
+
+    result = consult_claude.consult("question", model="", fallback_model="")
+
+    assert result == {
+        "ok": False,
+        "model": "",
+        "timed_out": False,
+        "budget_exhausted": False,
+        "rate_limited": False,
+        "usage_error": True,
+        "attempts": [],
+        "error": "model must be a non-empty string",
+    }
+
+
+def test_consult_required_does_not_fall_back_to_cli(monkeypatch) -> None:
+    policy = SimpleNamespace(mode=consult_claude.TransportMode.REQUIRED)
+    monkeypatch.setattr(consult_claude.ModelTransportPolicy, "from_env", lambda **_kwargs: policy)
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_vibeproxy",
+        lambda *_args, **_kwargs: {
+            "ok": False,
+            "backend": "vibeproxy",
+            "error": "proxy unavailable",
+        },
+    )
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CLI should not run")),
+    )
+
+    result = consult_claude.consult("question")
+
+    assert result["ok"] is False
+    assert [attempt["backend"] for attempt in result["attempts"]] == ["vibeproxy", "vibeproxy"]
+
+
+def test_consult_required_budget_excludes_unreachable_fallbacks(monkeypatch) -> None:
+    policy = SimpleNamespace(mode=consult_claude.TransportMode.REQUIRED)
+    timeouts: list[float] = []
+    monotonic_values = iter([0.0, 0.0, 10.0])
+    monkeypatch.setattr(consult_claude.ModelTransportPolicy, "from_env", lambda **_kwargs: policy)
+    monkeypatch.setattr(consult_claude.time, "monotonic", lambda: next(monotonic_values))
+
+    def fail_proxy(_prompt, _model, timeout, _system, _policy):
+        timeouts.append(timeout)
+        return {
+            "ok": False,
+            "backend": "vibeproxy",
+            "timed_out": True,
+            "error": "timeout",
+        }
+
+    monkeypatch.setattr(consult_claude, "_run_vibeproxy", fail_proxy)
+
+    result = consult_claude.consult(
+        "question",
+        timeout=10,
+        api_fallback=True,
+        openrouter_fallback=True,
+    )
+
+    assert result["ok"] is False
+    assert result["timed_out"] is True
+    assert timeouts == [10, 10]
+    assert [attempt["backend"] for attempt in result["attempts"]] == [
+        "vibeproxy",
+        "vibeproxy",
+    ]
 
 
 def test_consult_api_fallback_skips_cli_only_model(monkeypatch) -> None:
@@ -562,6 +861,43 @@ def test_consult_reports_timeout_only_when_all_attempts_timeout(monkeypatch) -> 
     assert attempt_timeouts == [600, 600]
 
 
+def test_unavailable_proxy_does_not_mask_cli_timeouts(monkeypatch) -> None:
+    policy = SimpleNamespace(mode=consult_claude.TransportMode.PREFER)
+    monkeypatch.setattr(consult_claude.ModelTransportPolicy, "from_env", lambda **_kwargs: policy)
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_vibeproxy",
+        lambda *_args, **_kwargs: {
+            "ok": False,
+            "backend": "vibeproxy",
+            "timed_out": False,
+            "failure_kind": "transport_unavailable",
+            "error": "proxy unavailable",
+        },
+    )
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda _prompt, model, _timeout: {
+            "ok": False,
+            "backend": "cli",
+            "timed_out": True,
+            "error": f"{model} timed out",
+        },
+    )
+
+    result = consult_claude.consult("question")
+
+    assert result["ok"] is False
+    assert result["timed_out"] is True
+    assert [attempt["backend"] for attempt in result["attempts"]] == [
+        "vibeproxy",
+        "vibeproxy",
+        "cli",
+        "cli",
+    ]
+
+
 def test_consult_explicit_api_fallback_has_budget_for_supported_models(monkeypatch) -> None:
     attempt_timeouts: list[float] = []
     monotonic_values = iter([0.0, 0.0, 10.0, 20.0])
@@ -727,6 +1063,100 @@ def test_consult_tries_fallback_cli_after_primary_timeout(monkeypatch) -> None:
     assert cli_models == [consult_claude.DEFAULT_MODEL, consult_claude.FALLBACK_MODEL]
 
 
+def test_consult_skips_redundant_cli_fallback_after_subscription_rate_limit(
+    monkeypatch,
+) -> None:
+    cli_models: list[str] = []
+
+    def fake_cli(_prompt: str, model: str, _timeout: float) -> dict:
+        cli_models.append(model)
+        return {
+            "ok": False,
+            "backend": "cli",
+            "rate_limited": True,
+            "failure_kind": "rate_limited",
+            "error": "claude CLI rate limited, rc=1",
+        }
+
+    monkeypatch.setattr(consult_claude, "_run_cli", fake_cli)
+
+    result = consult_claude.consult("question", api_fallback=False)
+
+    assert result["ok"] is False
+    assert result["rate_limited"] is True
+    assert result["model"] == consult_claude.DEFAULT_MODEL
+    assert cli_models == [consult_claude.DEFAULT_MODEL]
+
+
+def test_consult_rate_limit_still_allows_explicit_openrouter_fallback(monkeypatch) -> None:
+    cli_models: list[str] = []
+
+    def fake_cli(_prompt: str, model: str, _timeout: float) -> dict:
+        cli_models.append(model)
+        return {
+            "ok": False,
+            "backend": "cli",
+            "rate_limited": True,
+            "failure_kind": "rate_limited",
+            "error": "claude CLI rate limited, rc=1",
+        }
+
+    def fake_openrouter(
+        _prompt: str,
+        model: str,
+        _timeout: float,
+        *,
+        system: str | None = None,
+    ) -> dict:
+        assert model == "anthropic/claude-test"
+        assert system is None
+        return {"ok": True, "backend": "openrouter", "text": "fallback answer"}
+
+    monkeypatch.setattr(consult_claude, "_run_cli", fake_cli)
+    monkeypatch.setattr(consult_claude, "_run_openrouter_api", fake_openrouter)
+
+    result = consult_claude.consult(
+        "question",
+        openrouter_fallback=True,
+        openrouter_model="anthropic/claude-test",
+    )
+
+    assert result["ok"] is True
+    assert result["backend"] == "openrouter"
+    assert cli_models == [consult_claude.DEFAULT_MODEL]
+
+
+def test_main_json_surfaces_safe_rate_limit_classification(monkeypatch, capsys) -> None:
+    def fake_consult(*_args, **_kwargs) -> dict:
+        return {
+            "ok": False,
+            "model": consult_claude.DEFAULT_MODEL,
+            "timed_out": False,
+            "budget_exhausted": False,
+            "rate_limited": True,
+            "attempts": [
+                {
+                    "model": consult_claude.DEFAULT_MODEL,
+                    "ok": False,
+                    "backend": "cli",
+                    "rate_limited": True,
+                    "failure_kind": "rate_limited",
+                    "error": "claude CLI rate limited, rc=1",
+                }
+            ],
+            "error": "claude CLI rate limited, rc=1",
+        }
+
+    monkeypatch.setattr(consult_claude, "consult", fake_consult)
+
+    rc = consult_claude.main(["--json", "question"])
+
+    assert rc == consult_claude.EXIT_ALL_FAILED
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["rate_limited"] is True
+    assert payload["attempts"][0]["failure_kind"] == "rate_limited"
+
+
 def test_consult_failure_reports_last_attempted_model(monkeypatch) -> None:
     cli_models: list[str] = []
 
@@ -767,6 +1197,22 @@ def test_main_rejects_non_positive_overall_timeout(capsys) -> None:
 
     assert rc == consult_claude.EXIT_USAGE
     assert "positive finite" in capsys.readouterr().err
+
+
+def test_main_rejects_invalid_transport_as_usage_error(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "required")
+    monkeypatch.setattr(
+        consult_claude,
+        "_run_cli",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CLI should not run")),
+    )
+
+    rc = consult_claude.main(["--json", "question"])
+
+    assert rc == consult_claude.EXIT_USAGE
+    result = json.loads(capsys.readouterr().out)
+    assert result["usage_error"] is True
+    assert result["error"] == "invalid ARAGORA_MODEL_TRANSPORT: required"
 
 
 def test_consult_rejects_non_positive_timeout_for_programmatic_callers() -> None:

@@ -13,11 +13,53 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from aragora.exceptions import ConfigurationError
 from aragora.serialization import SerializableMixin
+
+
+class MFABypassAuditSink(Protocol):
+    """Required audit capability for privileged MFA bypass changes."""
+
+    def __call__(self, admin_id: str, action: str, **kwargs: Any) -> None: ...
+
+
+_mfa_bypass_audit_sink: MFABypassAuditSink | None = None
+
+
+def register_mfa_bypass_audit_sink(sink: MFABypassAuditSink) -> None:
+    """Register the required MFA bypass audit capability."""
+    global _mfa_bypass_audit_sink
+    _mfa_bypass_audit_sink = sink
+
+
+def clear_mfa_bypass_audit_sink() -> None:
+    """Clear the audit capability, primarily for isolated tests."""
+    global _mfa_bypass_audit_sink
+    _mfa_bypass_audit_sink = None
+
+
+def _audit_mfa_bypass(
+    *,
+    component: str,
+    missing_reason: str,
+    admin_id: str,
+    action: str,
+    target_id: str,
+    details: dict[str, Any],
+) -> None:
+    if _mfa_bypass_audit_sink is None:
+        raise ConfigurationError(component=component, reason=missing_reason)
+    _mfa_bypass_audit_sink(
+        admin_id=admin_id,
+        action=action,
+        target_type="service_account",
+        target_id=target_id,
+        details=details,
+    )
+
 
 # Try to import bcrypt for secure password hashing
 try:
@@ -532,10 +574,23 @@ class User:
         if not self.is_service_account:
             raise ValueError("MFA bypass can only be approved for service accounts")
 
+        approved_at = datetime.now(timezone.utc)
+        expires_at = approved_at + timedelta(days=expires_days)
+        _audit_mfa_bypass(
+            component="MFA Bypass Approval Audit",
+            missing_reason=(
+                "aragora.audit.unified.audit_admin is required to approve MFA bypasses"
+            ),
+            admin_id=approved_by,
+            action="mfa_bypass_approved",
+            target_id=str(self.id),
+            details={"reason": reason, "expires_days": expires_days},
+        )
+
         self.mfa_bypass_reason = reason
         self.mfa_bypass_approved_by = approved_by
-        self.mfa_bypass_approved_at = datetime.now(timezone.utc)
-        self.mfa_bypass_expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+        self.mfa_bypass_approved_at = approved_at
+        self.mfa_bypass_expires_at = expires_at
         self.updated_at = datetime.now(timezone.utc)
 
         logger.info(
@@ -544,27 +599,21 @@ class User:
             approved_by,
             self.mfa_bypass_expires_at,
         )
-        try:
-            from aragora.audit.unified import audit_admin
-
-            audit_admin(
-                admin_id=approved_by,
-                action="mfa_bypass_approved",
-                target_type="service_account",
-                target_id=str(self.id),
-                details={"reason": reason, "expires_days": expires_days},
-            )
-        except ImportError as exc:
-            raise ConfigurationError(
-                component="MFA Bypass Approval Audit",
-                reason="aragora.audit.unified.audit_admin is required to approve MFA bypasses",
-            ) from exc
 
     def revoke_mfa_bypass(self, revoked_by: str, reason: str = "manual_revocation") -> None:
         """Revoke MFA bypass for this service account."""
         if not self.is_service_account:
             raise ValueError("MFA bypass can only be revoked for service accounts")
         previous_approved_by = self.mfa_bypass_approved_by
+        _audit_mfa_bypass(
+            component="MFA Bypass Revocation Audit",
+            missing_reason=("aragora.audit.unified.audit_admin is required to revoke MFA bypasses"),
+            admin_id=revoked_by,
+            action="mfa_bypass_revoked",
+            target_id=str(self.id),
+            details={"reason": reason, "previous_approved_by": previous_approved_by},
+        )
+
         self.mfa_bypass_approved_at = None
         self.mfa_bypass_approved_by = None
         self.mfa_bypass_expires_at = None
@@ -577,21 +626,6 @@ class User:
             reason,
             previous_approved_by,
         )
-        try:
-            from aragora.audit.unified import audit_admin
-
-            audit_admin(
-                admin_id=revoked_by,
-                action="mfa_bypass_revoked",
-                target_type="service_account",
-                target_id=str(self.id),
-                details={"reason": reason, "previous_approved_by": previous_approved_by},
-            )
-        except ImportError as exc:
-            raise ConfigurationError(
-                component="MFA Bypass Revocation Audit",
-                reason="aragora.audit.unified.audit_admin is required to revoke MFA bypasses",
-            ) from exc
 
     def to_dict(self, include_sensitive: bool = False) -> dict[str, Any]:
         """Convert to dictionary."""

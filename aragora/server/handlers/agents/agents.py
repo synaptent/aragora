@@ -83,10 +83,10 @@ _agent_limiter = RateLimiter(requests_per_minute=60)
 
 _ENV_VAR_RE = re.compile(r"[A-Z][A-Z0-9_]+")
 _OPENROUTER_FALLBACK_MODELS = {
-    "anthropic-api": "anthropic/claude-opus-4.8",
+    "anthropic-api": "anthropic/claude-opus-5",
     "openai-api": "openai/gpt-4.1-mini",
     "gemini": "google/gemini-3-flash-preview",
-    "grok": "x-ai/grok-4",
+    "grok": "x-ai/grok-4.5",
     "mistral-api": "mistralai/mistral-large-2512",
 }
 

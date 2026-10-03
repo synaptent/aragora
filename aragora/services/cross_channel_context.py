@@ -381,7 +381,11 @@ class CrossChannelContextService:
                         )
                     )
                     if urgent_count > 0:
-                        signal.urgent_threads = [m.get("ts") for m in messages[:urgent_count]]
+                        signal.urgent_threads = [
+                            timestamp
+                            for message in messages[:urgent_count]
+                            if isinstance((timestamp := message.get("ts")), str)
+                        ]
                         signal.activity_score += min(0.2, urgent_count * 0.05)
 
             except (ValueError, OSError, ConnectionError, RuntimeError) as e:

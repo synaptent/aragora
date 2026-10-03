@@ -195,6 +195,25 @@ class TestExtractClientIP:
         ip = extract_client_ip(handler)
         assert ip == "::1"
 
+    def test_auth_legacy_path_warns(self, mock_handler):
+        """The old auth symbol remains a warning compatibility shim."""
+        from aragora.server.middleware.auth import extract_client_ip
+
+        with pytest.warns(
+            DeprecationWarning, match="aragora.server.middleware.auth.extract_client_ip"
+        ):
+            assert extract_client_ip(mock_handler) == "127.0.0.1"
+
+    def test_user_auth_legacy_path_warns(self, mock_handler):
+        """The old user_auth symbol remains a warning compatibility shim."""
+        from aragora.server.middleware.user_auth import extract_client_ip
+
+        with pytest.warns(
+            DeprecationWarning,
+            match="aragora.server.middleware.user_auth.extract_client_ip",
+        ):
+            assert extract_client_ip(mock_handler) == "127.0.0.1"
+
 
 # ===========================================================================
 # Test Token Validation

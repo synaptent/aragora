@@ -579,15 +579,27 @@ class ArenaDelegatesMixin:
         self, proposal_agent: str, all_critics: list[Agent]
     ) -> list[Agent]:
         """Select critics for proposal. Delegates to AgentPool."""
-        # Find the proposer agent object
-        proposer = None
-        for agent in all_critics:
-            if getattr(agent, "name", str(agent)) == proposal_agent:
-                proposer = agent
-                break
-
+        # Dedicated critic lists normally exclude the proposer. Resolve against
+        # the full arena roster and preserve the name when only the identity is
+        # available; treating the first critic as the proposer filters out the
+        # sole critic in a two-agent debate.
+        proposer = next(
+            (
+                agent
+                for agent in self.agents
+                if getattr(agent, "name", str(agent)) == proposal_agent
+            ),
+            None,
+        )
         if proposer is None:
-            proposer = all_critics[0] if all_critics else None
+            proposer = next(
+                (
+                    agent
+                    for agent in all_critics
+                    if getattr(agent, "name", str(agent)) == proposal_agent
+                ),
+                proposal_agent,
+            )
 
         return self.agent_pool.select_critics(
             proposer=proposer,

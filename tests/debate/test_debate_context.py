@@ -219,14 +219,16 @@ class TestMessageTracking:
         assert ctx.partial_messages[0] == msg
 
     def test_add_message_to_result(self):
-        """Should add message to result when result exists."""
+        """One call should record exactly once in every production destination."""
         ctx = DebateContext(env=MockEnvironment())
         ctx.result = MockDebateResult()
         msg = MockMessage(content="Test message")
 
         ctx.add_message(msg)
 
-        assert len(ctx.result.messages) == 1
+        assert ctx.context_messages == [msg]
+        assert ctx.partial_messages == [msg]
+        assert ctx.result.messages == [msg]
 
     def test_add_message_no_result(self):
         """Should not crash when result is None."""

@@ -432,7 +432,7 @@ autonomy.
 These are supporting facts. They should appear after the proof point, not as the
 opening line:
 
-- 43 agent types
+- 46 agent types
 - 42 adapter counts
 - SDK namespace counts
 - broad connector breadth

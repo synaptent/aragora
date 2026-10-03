@@ -12,6 +12,13 @@ import pytest
 
 from aragora.cli.commands import crux as crux_cmd
 from aragora.cli.parser import build_parser
+from aragora.debate.crux_mode import CRUX_FINDER_ENV_VAR
+
+
+@pytest.fixture(autouse=True)
+def _enable_crux_finder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep existing live-path tests on the explicitly enabled path."""
+    monkeypatch.setenv(CRUX_FINDER_ENV_VAR, "1")
 
 
 def _fake_proof(*, debate_id: str = "debate-xyz") -> SimpleNamespace:
@@ -136,6 +143,32 @@ def test_cmd_crux_empty_question_exits() -> None:
     with pytest.raises(SystemExit) as exc_info:
         crux_cmd.cmd_crux(args)
     assert exc_info.value.code == 1
+
+
+def test_cmd_crux_disabled_fails_before_debate(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(CRUX_FINDER_ENV_VAR, "0")
+    args = argparse.Namespace(
+        question="Should we ship?",
+        agents=None,
+        rounds=3,
+        top_k=5,
+        min_score=0.3,
+        no_counterfactuals=False,
+        format="markdown",
+        receipt=None,
+        output=None,
+        dry_run=False,
+    )
+
+    with patch.object(crux_cmd, "_run_crux_debate") as mock_run:
+        with pytest.raises(SystemExit) as exc_info:
+            crux_cmd.cmd_crux(args)
+
+    assert exc_info.value.code == 1
+    mock_run.assert_not_called()
+    assert CRUX_FINDER_ENV_VAR in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

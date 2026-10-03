@@ -324,6 +324,46 @@ jobs:
             --report-root docs/status/generated/rescue_productization \
             --output docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md
 
+      - name: Sync docs-site mirrors
+        shell: bash
+        # Scope: repair the mirror drift this workflow itself creates, nothing
+        # more. The status pages it renders are mirrored into docs-site, and
+        # docs-build.yml fails closed when a docs/** change lands without its
+        # mirror — so without this every daily PR is red on `build` and, once
+        # merged, hands that red to the next unrelated docs PR.
+        #
+        # This deliberately does NOT re-implement docs-build's full closure
+        # (doc_stats, capability-matrix, legacy-entrypoint and CLI-reference
+        # checks). Chasing parity means re-deriving another job's gate inside a
+        # publisher that cannot see it change. docs-build stays the authority;
+        # this only stops the publisher from being a drift source. Note that
+        # staging the sync's whole output does absorb unrelated mirror drift
+        # that reached main (`build` is not a required check) into the bot
+        # commit — unavoidable if the PR is to be green, and worth naming.
+        #
+        # Separate from the publish step so repository JavaScript does not run
+        # in the step holding BENCHMARK_TRUTH_PR_TOKEN, and so a sync failure
+        # is attributable in the run log. (The checkout token still persists in
+        # .git/config for the whole job; this narrows the PAT's exposure, not
+        # all credentials.)
+        #
+        # Uses the runner's ambient node (v23.5.0 on mac-studio, already probed
+        # by "Ensure local toolchain on PATH"); sync-docs.js needs only fs/path.
+        # Do NOT add actions/setup-node here: dispatching this workflow with it
+        # killed the runner mid-step (run 30134420462 — the job ended with
+        # Setup Node still in_progress and every later step pending, which
+        # continue-on-error cannot rescue because the failure is the runner,
+        # not the step).
+        #
+        # Non-fatal by design: the neighbouring publish step's contract is to
+        # degrade and warn rather than leave the daily cron red. Aborting here
+        # would discard the day's rendered surfaces after --ensure-issues has
+        # already mutated GitHub issues, and the worst case of continuing is
+        # today's status quo — a red `build` on the PR.
+        run: |
+          cd docs-site && node scripts/sync-docs.js \
+            || echo "::warning::docs-site mirror sync failed; PR will red the build check"
+
       - name: Publish workflow summary
         run: |
           cat docs/status/B0_BENCHMARK_TRUTH_STATUS.md >> "$GITHUB_STEP_SUMMARY"
@@ -332,11 +372,23 @@ jobs:
 
       - name: Commit, publish, and verify draft PR for refreshed trust-loop surfaces
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          # BENCHMARK_TRUTH_PR_TOKEN: fine-grained PAT scoped to this repo only
+          # (pull_requests: read/write + contents: read, plus the mandatory
+          # metadata: read every fine-grained PAT carries — gh pr list needs it) so
+          # draft PR creation works despite the org policy that blocks the Actions
+          # token from creating PRs (#9519, option B). Falls back to the Actions
+          # token, which keeps the branch-backed handoff path as the fallback.
+          # Persistent degradation (stale status surfaces, accumulating PR-less
+          # branches) is detected externally by the Stage-Gate Conductor, which
+          # files stage-gate-drift issues — see #9519 itself. Escalation is
+          # deliberately NOT done in-workflow: a broken credential cannot be
+          # trusted to report its own breakage without false reds.
+          GH_TOKEN: ${{ secrets.BENCHMARK_TRUTH_PR_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.BENCHMARK_TRUTH_PR_TOKEN || github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add \
             docs/benchmarks/benchmark_corpus_freshness.json \
             docs/benchmarks/rescue_productization.json \
@@ -345,6 +397,14 @@ jobs:
             docs/status/generated/benchmark_scorecards \
             docs/status/generated/benchmark_truth_artifacts \
             docs/status/generated/rescue_productization
+
+          # Stage every mirror the sync rewrote, not a hand-listed subset —
+          # sync-docs also regenerates category index pages, and naming only
+          # the two status mirrors would leave the rest dirty. `-u` restricts
+          # this to tracked files: the checkout runs with `clean: false`, so
+          # `-A` here could sweep untracked leftovers from earlier runs into
+          # the publication commit.
+          git add -u docs-site/docs
 
           if git diff --cached --quiet; then
             echo "No recurring trust-loop surface changes to commit."
@@ -356,6 +416,8 @@ jobs:
           body_file="$RUNNER_TEMP/benchmark-truth-publication-pr.md"
           compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1"
           permission_blocked=0
+          auth_failed=0
+          create_failed=0
 
           find_draft_pr() {
             gh pr list \
@@ -384,7 +446,7 @@ jobs:
 
           pr_url=""
           for _ in 1 2 3; do
-            pr_url="$(find_draft_pr)"
+            pr_url="$(find_draft_pr || true)"
             if [[ -n "$pr_url" ]]; then
               break
             fi
@@ -406,15 +468,29 @@ jobs:
             set -e
             if [[ $create_status -ne 0 ]]; then
               echo "$create_output"
+              create_failed=1
               if grep -Fq "GitHub Actions is not permitted to create or approve pull requests" <<<"$create_output"; then
                 permission_blocked=1
-                echo "::notice::GitHub Actions token cannot create draft PRs in this repository; leaving a branch-backed handoff instead."
+                echo "::notice::GitHub Actions token cannot create draft PRs in this repository; leaving a branch-backed handoff instead. Configure the BENCHMARK_TRUTH_PR_TOKEN repo secret (fine-scoped PAT, pull_requests: write) to restore auto-PR creation (#9519)."
+              elif grep -qiE "HTTP 401|Bad credentials|HTTP 403|Resource not accessible|HTTP 404" <<<"$create_output"; then
+                # Known credential failure modes for a fine-grained PAT that
+                # expired, was revoked, or is mis-scoped. These are expected
+                # eventually (PATs expire <=1y) and must not leave the daily
+                # cron permanently red: degrade to the handoff, warn loudly.
+                auth_failed=1
+                echo "::warning::Draft PR creation failed with an auth/permission error — BENCHMARK_TRUTH_PR_TOKEN is likely expired, revoked, or mis-scoped (#9519). Leaving a branch-backed handoff instead."
+              else
+                # Unrecognized failure (transient API error, regression in this
+                # script): keep the handoff for continuity but fail the run so
+                # real breakage is not hidden behind green. A transient cause
+                # self-heals on tomorrow's run.
+                echo "::error::Draft PR creation failed unexpectedly (exit ${create_status}) — not the Actions PR policy and not a recognizable token/auth failure. See output above; branch-backed handoff left (#9519)."
               fi
             fi
           fi
 
           for _ in 1 2 3 4 5; do
-            pr_url="$(find_draft_pr)"
+            pr_url="$(find_draft_pr || true)"
             if [[ -n "$pr_url" ]]; then
               break
             fi
@@ -422,14 +498,30 @@ jobs:
           done
 
           if [[ -z "$pr_url" ]]; then
-            if [[ $permission_blocked -eq 1 ]]; then
+            if [[ $create_failed -eq 1 ]]; then
+              # The branch push already succeeded (checkout persists the Actions
+              # token), so every PR-creation failure leaves the branch-backed
+              # handoff in the step summary. Whether the run stays green depends
+              # on the failure class: the Actions policy block and PAT death are
+              # expected, documented modes that must not leave the daily cron
+              # permanently red; anything unrecognized fails the run so real
+              # breakage is not hidden behind green.
               {
                 echo "Published automation branch: \`$branch\`"
                 echo ""
-                echo "Draft PR auto-creation is blocked for GitHub Actions in this repository."
+                if [[ $permission_blocked -eq 1 ]]; then
+                  echo "Draft PR auto-creation is blocked for GitHub Actions in this repository."
+                elif [[ $auth_failed -eq 1 ]]; then
+                  echo "Draft PR auto-creation failed on auth — check BENCHMARK_TRUTH_PR_TOKEN expiry/scopes (#9519)."
+                else
+                  echo "Draft PR auto-creation failed unexpectedly (see the ::error above)."
+                fi
                 echo "Open draft PR manually: $compare_url"
               } >> "$GITHUB_STEP_SUMMARY"
-              exit 0
+              if [[ $permission_blocked -eq 1 || $auth_failed -eq 1 ]]; then
+                exit 0
+              fi
+              exit 1
             fi
 
             echo "::error::Benchmark publication branch was pushed but no draft PR exists for $branch"

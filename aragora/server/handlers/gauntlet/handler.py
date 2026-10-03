@@ -11,7 +11,7 @@ This module contains the main GauntletHandler class that combines:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, unquote
 
 from aragora.observability.metrics import track_handler
@@ -118,7 +118,7 @@ class GauntletHandler(
 
         is_valid, err = validate_gauntlet_id(gauntlet_id)
         if not is_valid:
-            return None, error_response(err, 400)
+            return None, error_response(cast(str, err), 400)
 
         return gauntlet_id, None
 
@@ -146,28 +146,28 @@ class GauntletHandler(
             gauntlet_id, err = self._extract_and_validate_id(path, -3)
             if err:
                 return err
-            return await self._verify_receipt(gauntlet_id, handler)
+            return await self._verify_receipt(cast(str, gauntlet_id), handler)
 
         # GET /api/gauntlet/{id}/receipt
         if path.endswith("/receipt") and method == "GET":
             gauntlet_id, err = self._extract_and_validate_id(path, -2)
             if err:
                 return err
-            return await self._get_receipt(gauntlet_id, query_params)
+            return await self._get_receipt(cast(str, gauntlet_id), query_params)
 
         # GET /api/gauntlet/{id}/heatmap
         if path.endswith("/heatmap") and method == "GET":
             gauntlet_id, err = self._extract_and_validate_id(path, -2)
             if err:
                 return err
-            return await self._get_heatmap(gauntlet_id, query_params)
+            return await self._get_heatmap(cast(str, gauntlet_id), query_params)
 
         # GET /api/gauntlet/{id}/export
         if path.endswith("/export") and method == "GET":
             gauntlet_id, err = self._extract_and_validate_id(path, -2)
             if err:
                 return err
-            return await self._export_report(gauntlet_id, query_params, handler)
+            return await self._export_report(cast(str, gauntlet_id), query_params, handler)
 
         # GET /api/gauntlet/{id}/compare/{id2}
         if "/compare/" in path and method == "GET":
@@ -180,21 +180,21 @@ class GauntletHandler(
                 is_valid, err_msg = validate_gauntlet_id(compare_id)
                 if not is_valid:
                     return error_response(f"Invalid compare ID: {err_msg}", 400)
-                return self._compare_results(gauntlet_id, compare_id, query_params)
+                return self._compare_results(cast(str, gauntlet_id), compare_id, query_params)
 
         # DELETE /api/gauntlet/{id}
         if method == "DELETE" and path.startswith("/api/gauntlet/"):
             gauntlet_id, err = self._extract_and_validate_id(path)
             if err:
                 return err
-            return self._delete_result(gauntlet_id, query_params)
+            return self._delete_result(cast(str, gauntlet_id), query_params)
 
         # GET /api/gauntlet/{id} - catch-all for status
         if method == "GET" and path.startswith("/api/gauntlet/"):
             gauntlet_id, err = self._extract_and_validate_id(path)
             if err:
                 return err
-            return await self._get_status(gauntlet_id)
+            return await self._get_status(cast(str, gauntlet_id))
 
         return None
 

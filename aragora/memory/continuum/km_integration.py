@@ -12,10 +12,10 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.utils.cache import TTLCache
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 from aragora.utils.json_helpers import safe_json_loads
 
 from .entry import ContinuumMemoryEntry
@@ -32,6 +32,8 @@ _km_similarity_cache: TTLCache[list] = TTLCache(maxsize=1000, ttl_seconds=300)
 
 class KMIntegrationMixin:
     """Mixin providing Knowledge Mound integration for ContinuumMemory."""
+
+    _km_adapter: ContinuumAdapter | None
 
     def set_km_adapter(self: ContinuumMemory, adapter: ContinuumAdapter) -> None:
         """Set the Knowledge Mound adapter for bidirectional sync.
@@ -127,8 +129,8 @@ class KMIntegrationMixin:
                 return 0
 
             # Batch update all entries in a single transaction using executemany
-            prewarm_time: str = datetime.now().isoformat()
-            current_time: str = datetime.now().isoformat()
+            prewarm_time: str = utc_now_iso_naive()
+            current_time: str = utc_now_iso_naive()
 
             # Prepare batch update data
             update_data: list[tuple[str, str, str]] = []

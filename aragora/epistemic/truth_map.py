@@ -1,7 +1,8 @@
 """Organizational Truth Map report (DIC-18 / #6028).
 
 Read-only operator report aggregating ExecutableClaim verification results
-(DIC-14) and optional CruxFinderResult summaries (DIC-15).
+(DIC-14), optional CruxFinderResult summaries (DIC-15), and optional
+DIC-27 operator arbitration records with age display.
 Default OFF — callers must explicitly invoke ``build_truth_map`` or
 ``build_truth_map_from_manifests``.  No queue mutation, no side effects.
 """
@@ -18,12 +19,41 @@ from aragora.epistemic.claim_verifier import ClaimResult, ClaimStatus
 
 if TYPE_CHECKING:
     from aragora.debate.crux_mode import CruxFinderResult
+    from aragora.epistemic.arbitration import CruxArbitration
     from aragora.epistemic.genealogy import GenealogyStore
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
 def _genealogy_enabled() -> bool:
     raw = str(os.environ.get("ARAGORA_GENEALOGY_ENABLED") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    return raw in _TRUTHY
+
+
+def _arbitration_enabled() -> bool:
+    """Return True when ARAGORA_CRUX_ARBITRATION_ENABLED is set.
+
+    Same flag as :func:`aragora.epistemic.arbitration.crux_arbitration_enabled`.
+    Inlined here to avoid a module-level import of arbitration.py.
+    """
+    raw = str(os.environ.get("ARAGORA_CRUX_ARBITRATION_ENABLED") or "").strip().lower()
+    return raw in _TRUTHY
+
+
+def _age_days(iso_timestamp: str) -> float:
+    """Return the age in fractional days from *iso_timestamp* to now (UTC).
+
+    Fails open: an unparseable timestamp returns 0.0 rather than raising,
+    so a bad created_at does not abort truth-map generation.
+    """
+    try:
+        dt = datetime.datetime.fromisoformat(iso_timestamp)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        delta = datetime.datetime.now(datetime.timezone.utc) - dt
+        return max(0.0, delta.total_seconds() / 86400)
+    except (ValueError, OverflowError):
+        return 0.0
 
 
 @dataclass
@@ -75,6 +105,36 @@ class GenealogyRow:
 
 
 @dataclass
+class ArbitrationRow:
+    """DIC-27 operator arbitration record for the truth map (age display).
+
+    Populated in ``build_truth_map`` when ``ARAGORA_CRUX_ARBITRATION_ENABLED``
+    is set and the caller supplies ``arbitration_inputs``.  Provides at-a-glance
+    age and status so operators can see stale or reversed arbitrations without
+    opening individual receipt files.
+
+    Only included in the truth map when the DIC-27 flag is active; the field
+    is always present on :class:`OrgTruthMapReport` but defaults to an empty
+    list, so existing callers are unaffected.
+    """
+
+    arbitration_id: str
+    crux_id: str
+    question_family_id: str
+    statement: str
+    operator: str
+    side: str
+    created_at: str
+    expires_at: str
+    age_days: float
+    is_expired: bool
+    is_reversed: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class OrgTruthMapReport:
     """Read-only aggregated truth map for an Aragora deployment."""
 
@@ -82,6 +142,8 @@ class OrgTruthMapReport:
     claims: list[ClaimRow] = field(default_factory=list)
     crux_summaries: list[CruxSummaryRow] = field(default_factory=list)
     genealogies: list[GenealogyRow] = field(default_factory=list)
+    arbitrations: list[ArbitrationRow] = field(default_factory=list)
+    arbitration_enabled: bool = False
     total_claims: int = 0
     passing_claims: int = 0
     failing_claims: int = 0
@@ -89,23 +151,31 @@ class OrgTruthMapReport:
     unsupported_claims: int = 0
     error_claims: int = 0
     open_crux_count: int = 0
+    active_arbitration_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        summary = {
+            "total_claims": self.total_claims,
+            "passing": self.passing_claims,
+            "failing": self.failing_claims,
+            "stale": self.stale_claims,
+            "unsupported": self.unsupported_claims,
+            "error": self.error_claims,
+            "open_crux_count": self.open_crux_count,
+        }
+        if self.arbitration_enabled:
+            summary["active_arbitrations"] = self.active_arbitration_count
+
+        d: dict[str, Any] = {
             "generated_at": self.generated_at,
             "claims": [c.to_dict() for c in self.claims],
             "crux_summaries": [cs.to_dict() for cs in self.crux_summaries],
             "genealogies": [g.to_dict() for g in self.genealogies],
-            "summary": {
-                "total_claims": self.total_claims,
-                "passing": self.passing_claims,
-                "failing": self.failing_claims,
-                "stale": self.stale_claims,
-                "unsupported": self.unsupported_claims,
-                "error": self.error_claims,
-                "open_crux_count": self.open_crux_count,
-            },
+            "summary": summary,
         }
+        if self.arbitrations:
+            d["arbitrations"] = [a.to_dict() for a in self.arbitrations]
+        return d
 
 
 def build_truth_map(
@@ -116,6 +186,7 @@ def build_truth_map(
     top_k_cruxes: int = 3,
     open_crux_score_threshold: float = 0.3,
     genealogy_inputs: "list[tuple[str, GenealogyStore]] | None" = None,
+    arbitration_inputs: "list[CruxArbitration] | None" = None,
 ) -> OrgTruthMapReport:
     """Build an OrgTruthMapReport from pre-computed claim and crux inputs.
 
@@ -124,6 +195,12 @@ def build_truth_map(
     via :func:`aragora.epistemic.genealogy.get_genealogy` and added as a
     :class:`GenealogyRow` drill-down.  When the flag is off the parameter
     is silently ignored so callers can wire it unconditionally.
+
+    ``arbitration_inputs`` is an optional list of :class:`CruxArbitration`
+    objects (DIC-27).  When ``ARAGORA_CRUX_ARBITRATION_ENABLED`` is set, each
+    arbitration is converted to an :class:`ArbitrationRow` with age computed
+    from ``created_at``.  When the flag is off the parameter is silently
+    ignored so callers can wire it unconditionally.
     """
     meta = claim_metadata or {}
     rows: list[ClaimRow] = []
@@ -184,11 +261,35 @@ def build_truth_map(
                 )
             )
 
+    arbitration_enabled = _arbitration_enabled()
+    arbitration_rows: list[ArbitrationRow] = []
+    if arbitration_inputs and arbitration_enabled:
+        for arb in arbitration_inputs:
+            arbitration_rows.append(
+                ArbitrationRow(
+                    arbitration_id=arb.arbitration_id,
+                    crux_id=arb.crux.crux_id,
+                    question_family_id=arb.crux.question_family_id,
+                    statement=arb.crux.statement,
+                    operator=arb.operator,
+                    side=arb.side,
+                    created_at=arb.created_at,
+                    expires_at=arb.expires_at,
+                    age_days=round(_age_days(arb.created_at), 2),
+                    is_expired=arb.is_expired,
+                    is_reversed=arb.is_reversed,
+                )
+            )
+
+    active_arb_count = sum(1 for a in arbitration_rows if not a.is_expired and not a.is_reversed)
+
     return OrgTruthMapReport(
         generated_at=datetime.datetime.utcnow().isoformat() + "Z",
         claims=rows,
         crux_summaries=crux_rows,
         genealogies=genealogy_rows,
+        arbitrations=arbitration_rows,
+        arbitration_enabled=arbitration_enabled,
         total_claims=len(rows),
         passing_claims=counts[ClaimStatus.PASS],
         failing_claims=counts[ClaimStatus.FAIL],
@@ -196,6 +297,7 @@ def build_truth_map(
         unsupported_claims=counts[ClaimStatus.UNSUPPORTED],
         error_claims=counts[ClaimStatus.ERROR],
         open_crux_count=open_crux_total,
+        active_arbitration_count=active_arb_count,
     )
 
 

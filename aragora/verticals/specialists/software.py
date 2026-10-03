@@ -122,7 +122,7 @@ Provide clear, actionable feedback that helps developers improve their code.""",
         ),
     ],
     model_config=ModelConfig(
-        primary_model="claude-opus-4-8",
+        primary_model="claude-opus-5",
         primary_provider="anthropic",
         specialist_model="codellama/CodeLlama-34b-Instruct-hf",
         temperature=0.3,  # Lower for more precise code analysis

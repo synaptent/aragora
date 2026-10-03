@@ -20,20 +20,21 @@ Covers:
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aragora.server.handlers.social.sharing import (
-    DebateVisibility,
-    ShareSettings,
     ShareStore,
     SharingHandler,
     SocialShare,
     SocialShareStore,
     MAX_SHARE_SETTINGS,
 )
+from aragora.storage.share_models import DebateVisibility, ShareSettings
 
 
 # ============================================================================
@@ -106,6 +107,92 @@ def handler(share_store, social_share_store):
 # ============================================================================
 # DebateVisibility Enum Tests
 # ============================================================================
+
+
+def test_debate_visibility_legacy_symbol_warns_and_preserves_identity():
+    import aragora.server.handlers.social.sharing as sharing
+    from aragora.storage.share_models import DebateVisibility as CanonicalDebateVisibility
+
+    script = """
+import warnings
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    from aragora.server.handlers.social.sharing import SharingHandler
+legacy = [
+    item for item in caught
+    if "aragora.server.handlers.social.sharing.DebateVisibility" in str(item.message)
+    or "aragora.server.handlers.social.sharing.ShareSettings" in str(item.message)
+]
+assert not legacy, legacy
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    with pytest.warns(
+        DeprecationWarning,
+        match=r"aragora\.server\.handlers\.social\.sharing\.DebateVisibility",
+    ):
+        legacy_symbol = sharing.DebateVisibility
+
+    assert legacy_symbol is CanonicalDebateVisibility
+
+
+def test_share_settings_legacy_symbol_warns_and_preserves_identity():
+    from aragora.storage.share_models import ShareSettings as CanonicalShareSettings
+
+    with pytest.warns(
+        DeprecationWarning,
+        match=r"aragora\.server\.handlers\.social\.sharing\.ShareSettings",
+    ):
+        from aragora.server.handlers.social.sharing import ShareSettings as LegacyShareSettings
+
+    assert LegacyShareSettings is CanonicalShareSettings
+
+
+def test_legacy_share_symbol_monkeypatch_reaches_handler(handler, mock_http_handler, share_store):
+    settings_factory = MagicMock(
+        return_value=ShareSettings(
+            debate_id="patched-settings",
+            owner_id="test-user-001",
+            org_id="test-org-001",
+        )
+    )
+    with patch(
+        "aragora.server.handlers.social.sharing.ShareSettings",
+        settings_factory,
+    ):
+        result = handler._get_share_settings("patched-settings", mock_http_handler)
+
+    assert _status(result) == 200
+    settings_factory.assert_called_once_with(
+        debate_id="patched-settings",
+        owner_id="test-user-001",
+        org_id="test-org-001",
+    )
+
+    class PatchedVisibility:
+        PRIVATE = DebateVisibility.PRIVATE
+        TEAM = DebateVisibility.TEAM
+        PUBLIC = DebateVisibility.PUBLIC
+
+        def __new__(cls, value):
+            return DebateVisibility(value)
+
+    mock_http_handler.command = "POST"
+    _set_body(mock_http_handler, {"visibility": "public"})
+    with patch(
+        "aragora.server.handlers.social.sharing.DebateVisibility",
+        PatchedVisibility,
+    ):
+        result = handler._update_share_settings("patched-visibility", mock_http_handler)
+
+    assert _status(result) == 200
+    assert share_store.get("patched-visibility").visibility is DebateVisibility.PUBLIC
 
 
 class TestDebateVisibility:

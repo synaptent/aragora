@@ -123,6 +123,20 @@ class TestCrossSubscriberManager:
 
         handler.assert_not_called()
 
+    def test_required_dispatch_attempts_handler_with_open_circuit(self):
+        """Safety-critical dispatch must not suppress an attempt after prior failures."""
+        manager = CrossSubscriberManager(failure_threshold=1)
+        handler = MagicMock(return_value=True)
+        manager.register("required", StreamEventType.ALERT_ESCALATED, handler)
+        manager._circuit_breaker.record_failure("required")
+        assert manager._circuit_breaker.is_available("required") is False
+
+        event = make_stream_event(StreamEventType.ALERT_ESCALATED)
+        manager.dispatch_required(event, "required")
+
+        handler.assert_called_once_with(event)
+        assert manager._stats["required"].events_processed == 1
+
 
 class TestBuiltinHandlers:
     """Test built-in cross-subsystem handlers.

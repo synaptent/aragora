@@ -962,6 +962,28 @@ class TestEdgeCases:
 class TestServiceRegistryIntegration:
     """Tests for ServiceRegistry integration (if available)."""
 
+    def test_cache_registration_recovers_after_service_registry_reset(self):
+        """Cache access re-registers instances after the service registry resets."""
+        from aragora.services import (
+            MethodCacheService,
+            QueryCacheService,
+            ServiceRegistry,
+        )
+
+        ServiceRegistry.reset()
+        method_cache = get_method_cache()
+        query_cache = get_query_cache()
+        registry = ServiceRegistry.get()
+        assert registry.resolve(MethodCacheService) is method_cache
+        assert registry.resolve(QueryCacheService) is query_cache
+
+        ServiceRegistry.reset()
+        method_cache = get_method_cache()
+        query_cache = get_query_cache()
+        registry = ServiceRegistry.get()
+        assert registry.resolve(MethodCacheService) is method_cache
+        assert registry.resolve(QueryCacheService) is query_cache
+
     def test_register_caches_with_service_registry_no_error(self):
         """_register_caches_with_service_registry should not raise errors."""
         # This function is called internally - we test it indirectly

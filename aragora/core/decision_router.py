@@ -604,7 +604,7 @@ class DecisionRouter:
             # Convert to debate format
             from aragora.agents import get_agents_by_names
             from aragora.core_types import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             # Gather knowledge context if enabled
             knowledge_context = ""

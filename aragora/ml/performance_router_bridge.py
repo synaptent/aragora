@@ -159,6 +159,10 @@ class PerformanceRouterBridge:
         if stats.total_calls < self.config.min_calls_for_sync:
             return 0
 
+        router = self.agent_router
+        if router is None:
+            return 0
+
         # Determine task type from agent's typical usage
         # For now, use GENERAL as default - could be enhanced with task tracking
 
@@ -180,12 +184,12 @@ class PerformanceRouterBridge:
 
             # Record successes
             for _ in range(successes):
-                self.agent_router.record_performance(agent_name, task_type.value, success=True)
+                router.record_performance(agent_name, task_type.value, success=True)
                 records_added += 1
 
             # Record failures
             for _ in range(failures):
-                self.agent_router.record_performance(agent_name, task_type.value, success=False)
+                router.record_performance(agent_name, task_type.value, success=False)
                 records_added += 1
 
         # Also update agent capabilities based on telemetry
@@ -230,10 +234,11 @@ class PerformanceRouterBridge:
             agent_name: Name of the agent
             stats: Current performance statistics
         """
-        if agent_name not in self.agent_router._capabilities:
+        router = self.agent_router
+        if router is None or agent_name not in router._capabilities:
             return
 
-        caps = self.agent_router._capabilities[agent_name]
+        caps = router._capabilities[agent_name]
 
         # Update speed tier based on latency
         if stats.avg_duration_ms > 0:

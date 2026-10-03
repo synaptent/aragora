@@ -86,6 +86,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+CrossSubscriberHandler = Callable[[StreamEvent], object]
+
 
 def _default_async_event_types() -> set:
     """Default event types for async dispatch."""
@@ -112,7 +114,7 @@ class DispatchMixin:
     """
 
     # Mixin attribute declarations (provided by the composed class)
-    _subscribers: dict[StreamEventType, list[tuple[str, Callable[[StreamEvent], None]]]]
+    _subscribers: dict[StreamEventType, list[tuple[str, CrossSubscriberHandler]]]
     _stats: dict[str, SubscriberStats]
     _filters: dict[str, Callable[[StreamEvent], bool]]
     _circuit_breaker: CircuitBreaker
@@ -159,11 +161,8 @@ class DispatchMixin:
                 continue
 
             # Get retry config
-            retry_config = (
-                self._stats[name].retry_config
-                if name in self._stats and self._stats[name].retry_config
-                else self._default_retry_config
-            )
+            configured_retry = self._stats[name].retry_config if name in self._stats else None
+            retry_config = configured_retry or self._default_retry_config
 
             # Execute handler with timing, retry, and metrics
             start_time = time.time()
@@ -261,6 +260,109 @@ class DispatchMixin:
             event: The event to dispatch
         """
         self._dispatch_event(event)
+
+    def dispatch_required(self, event: StreamEvent, handler_name: str) -> None:
+        """Synchronously deliver an event once to one required named handler.
+
+        Unlike ordinary cross-subscriber dispatch, this safety-critical path
+        never samples, retries, or suppresses attempts. The named handler must
+        be registered exactly once, enabled, and explicitly confirm delivery
+        by returning ``True``.
+
+        Args:
+            event: The event to deliver.
+            handler_name: Exact registered handler name.
+
+        Raises:
+            RuntimeError: If the handler cannot confirm one successful delivery.
+        """
+        if METRICS_AVAILABLE:
+            record_event_dispatched(event.type.value)
+
+        matches = [
+            handler
+            for name, handler in self._subscribers.get(event.type, [])
+            if name == handler_name
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"Required cross-subscriber '{handler_name}' must be registered exactly once "
+                f"for {event.type.value}; found {len(matches)}"
+            )
+
+        stats = self._stats.get(handler_name)
+        if stats is None:
+            raise RuntimeError(f"Required cross-subscriber '{handler_name}' has no runtime state")
+        if not stats.enabled:
+            stats.events_skipped += 1
+            raise RuntimeError(f"Required cross-subscriber '{handler_name}' is disabled")
+
+        filter_func = self._filters.get(handler_name)
+        if filter_func is not None:
+            try:
+                accepted = filter_func(event)
+            except (RuntimeError, TypeError, AttributeError, ValueError, KeyError) as exc:
+                stats.events_failed += 1
+                raise RuntimeError(
+                    f"Required cross-subscriber '{handler_name}' filter failed"
+                ) from exc
+            if not accepted:
+                stats.events_skipped += 1
+                raise RuntimeError(f"Required cross-subscriber '{handler_name}' rejected the event")
+
+        if stats.sample_rate != 1.0:
+            stats.events_skipped += 1
+            raise RuntimeError(
+                f"Required cross-subscriber '{handler_name}' cannot use sampled delivery"
+            )
+
+        handler = matches[0]
+        start_time = time.time()
+        delivery_error: Exception | None = None
+        try:
+            confirmed = handler(event)
+            if confirmed is not True:
+                delivery_error = RuntimeError("handler did not confirm delivery")
+        except Exception as exc:  # noqa: BLE001 - propagate all delivery failures
+            delivery_error = exc
+
+        elapsed_ms = (time.time() - start_time) * 1000
+        stats.last_event_time = datetime.now()
+        stats.total_latency_ms += elapsed_ms
+        stats.min_latency_ms = min(stats.min_latency_ms, elapsed_ms)
+        stats.max_latency_ms = max(stats.max_latency_ms, elapsed_ms)
+        stats.record_latency(elapsed_ms)
+
+        if delivery_error is None:
+            stats.events_processed += 1
+            self._circuit_breaker.record_success(handler_name)
+        else:
+            stats.events_failed += 1
+            self._circuit_breaker.record_failure(handler_name)
+            if METRICS_AVAILABLE:
+                set_circuit_breaker_state(
+                    handler_name,
+                    not self._circuit_breaker.is_available(handler_name),
+                )
+
+        if METRICS_AVAILABLE:
+            record_handler_call(
+                handler_name,
+                "success" if delivery_error is None else "failure",
+                elapsed_ms,
+            )
+
+        if SLO_METRICS_AVAILABLE:
+            check_and_record_slo(
+                f"cross_subscriber_{handler_name}",
+                elapsed_ms,
+                percentile="p99",
+            )
+
+        if delivery_error is not None:
+            raise RuntimeError(
+                f"Required cross-subscriber '{handler_name}' failed to confirm delivery"
+            ) from delivery_error
 
     def _add_to_batch(self, event: StreamEvent) -> None:
         """Add event to batch queue for later processing.

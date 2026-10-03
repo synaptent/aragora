@@ -36,6 +36,32 @@ from aragora.debate.convergence import (
 )
 
 
+@pytest.fixture
+def real_embeddings_backend():
+    """Build a SentenceTransformerBackend on the real model, or skip.
+
+    The real-similarity assertions encode genuine model semantics; the harness
+    fake/mock embeddings are hash-based and cannot satisfy them, and a broken
+    model download must skip rather than error.
+    """
+    import sentence_transformers as st
+
+    if getattr(st, "__version__", "") == "0.0.0-test-fake":
+        pytest.skip("Real embedding model unavailable: sentence_transformers is test-fake")
+    # Clear ALL caches to ensure we get real models, not mocks from earlier tests
+    SentenceTransformerBackend.clear_cache()
+    SentenceTransformerBackend._model_cache = None
+    SentenceTransformerBackend._model_name_cache = None
+    try:
+        backend = SentenceTransformerBackend()
+    except Exception as e:  # noqa: BLE001 - any load failure means unavailable
+        pytest.skip(f"Real embedding model unavailable: {type(e).__name__}: {e}")
+    impl_module = type(backend.model).__module__
+    if impl_module.startswith(("tests.", "unittest.mock")):
+        pytest.skip(f"Real embedding model unavailable: model is a harness mock ({impl_module})")
+    return backend
+
+
 # =============================================================================
 # Jaccard Backend Tests
 # =============================================================================
@@ -203,13 +229,9 @@ class TestSentenceTransformerBackend:
         assert similarity > 0.99
 
     @pytest.mark.slow
-    def test_semantic_similarity_captured(self):
+    def test_semantic_similarity_captured(self, real_embeddings_backend):
         """Should understand semantic similarity (requires real embeddings)."""
-        # Clear ALL caches to ensure we get real models, not mocks from earlier tests
-        SentenceTransformerBackend.clear_cache()
-        SentenceTransformerBackend._model_cache = None
-        SentenceTransformerBackend._model_name_cache = None
-        backend = SentenceTransformerBackend()
+        backend = real_embeddings_backend
         text1 = "I prefer TypeScript for type safety"
         text2 = "TypeScript is better because it has types"
         similarity = backend.compute_similarity(text1, text2)
@@ -591,13 +613,9 @@ class TestBatchSimilarityMethods:
 
     @pytest.mark.slow
     @requires_sentence_transformers
-    def test_compute_pairwise_similarities_basic(self):
+    def test_compute_pairwise_similarities_basic(self, real_embeddings_backend):
         """Test pairwise similarities (requires real embeddings)."""
-        # Clear ALL caches to ensure we get real models, not mocks from earlier tests
-        SentenceTransformerBackend.clear_cache()
-        SentenceTransformerBackend._model_cache = None
-        SentenceTransformerBackend._model_name_cache = None
-        backend = SentenceTransformerBackend()
+        backend = real_embeddings_backend
         texts_a = ["hello world", "good morning", "python programming"]
         texts_b = ["hello world", "good evening", "javascript coding"]
 

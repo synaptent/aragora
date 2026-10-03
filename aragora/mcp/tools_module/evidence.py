@@ -96,7 +96,7 @@ async def cite_evidence_tool(
         return {"error": "debate_id and evidence_id are required"}
 
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:
@@ -148,7 +148,7 @@ async def verify_citation_tool(
     if not url:
         return {"error": "url is required"}
 
-    from aragora.server.http_client_pool import get_http_pool
+    from aragora.observability.http_client_pool import get_http_pool
 
     try:
         pool = get_http_pool()

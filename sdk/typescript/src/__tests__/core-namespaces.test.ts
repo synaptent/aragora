@@ -214,6 +214,36 @@ describe('Core Namespace APIs', () => {
       expect(result.signature.signature_valid).toBe(true);
       expect(result.integrity.integrity_valid).toBe(true);
     });
+
+    it('should return the signing key PEM from the well-known text endpoint', async () => {
+      const client = createClient({ baseUrl: 'https://api.example.com' });
+      const pem = '-----BEGIN PUBLIC KEY-----\nreal-key\n-----END PUBLIC KEY-----\n';
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(pem),
+      });
+
+      await expect(client.receipts.signingKeyPem()).resolves.toBe(pem);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/.well-known/aragora-odr-signing-key',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({ Accept: 'application/x-pem-file' }),
+        })
+      );
+    });
+
+    it('should keep the text contract on empty text responses (string, not {})', async () => {
+      const client = createClient({ baseUrl: 'https://api.example.com' });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(''),
+      });
+
+      await expect(client.receipts.signingKeyPem()).resolves.toBe('');
+    });
   });
 
   describe('gauntlet namespace', () => {

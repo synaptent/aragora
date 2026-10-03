@@ -21,7 +21,7 @@ import sqlite3
 import tempfile
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -180,56 +180,60 @@ class TestConfidenceDecayCalculation:
 
     def test_decay_is_one_for_now(self, memory: ContinuumMemory) -> None:
         """Test decay factor is 1.0 for entries updated now."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         decay = memory.calculate_glacial_decay(now)
 
         assert abs(decay - 1.0) < 0.01
 
     def test_decay_is_half_at_30_days(self, memory: ContinuumMemory) -> None:
         """Test decay factor is 0.5 at exactly 30 days."""
-        thirty_days_ago = datetime.now() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
         decay = memory.calculate_glacial_decay(thirty_days_ago)
 
         assert abs(decay - 0.5) < 0.01
 
     def test_decay_is_quarter_at_60_days(self, memory: ContinuumMemory) -> None:
         """Test decay factor is 0.25 at 60 days (two half-lives)."""
-        sixty_days_ago = datetime.now() - timedelta(days=60)
+        sixty_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=60)
         decay = memory.calculate_glacial_decay(sixty_days_ago)
 
         assert abs(decay - 0.25) < 0.01
 
     def test_decay_is_eighth_at_90_days(self, memory: ContinuumMemory) -> None:
         """Test decay factor is 0.125 at 90 days (three half-lives)."""
-        ninety_days_ago = datetime.now() - timedelta(days=90)
+        ninety_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)
         decay = memory.calculate_glacial_decay(ninety_days_ago)
 
         assert abs(decay - 0.125) < 0.02
 
     def test_decay_handles_iso_string(self, memory: ContinuumMemory) -> None:
         """Test decay calculation handles ISO string timestamps."""
-        thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+        thirty_days_ago = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+        ).isoformat()
         decay = memory.calculate_glacial_decay(thirty_days_ago)
 
         assert abs(decay - 0.5) < 0.01
 
     def test_decay_handles_timezone_aware_string(self, memory: ContinuumMemory) -> None:
         """Test decay handles timezone-aware ISO strings."""
-        thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat() + "Z"
+        thirty_days_ago = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+        ).isoformat() + "Z"
         decay = memory.calculate_glacial_decay(thirty_days_ago)
 
         assert abs(decay - 0.5) < 0.02  # Slightly larger tolerance for TZ conversion
 
     def test_decay_clamps_to_one_for_future(self, memory: ContinuumMemory) -> None:
         """Test decay factor is clamped to 1.0 for future timestamps."""
-        future = datetime.now() + timedelta(days=1)
+        future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
         decay = memory.calculate_glacial_decay(future)
 
         assert decay == 1.0
 
     def test_decay_approaches_zero_for_very_old(self, memory: ContinuumMemory) -> None:
         """Test decay approaches 0 for very old entries."""
-        one_year_ago = datetime.now() - timedelta(days=365)
+        one_year_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=365)
         decay = memory.calculate_glacial_decay(one_year_ago)
 
         # 365/30 = ~12 half-lives, so decay should be very small
@@ -641,7 +645,9 @@ class TestArchivalOperations:
 
     def test_glacial_cleanup_skips_red_line(self, memory: ContinuumMemory) -> None:
         """Test cleanup skips red-lined glacial entries."""
-        old_time = (datetime.now() - timedelta(days=365)).isoformat()
+        old_time = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=365)
+        ).isoformat()
 
         # Add old red-lined entry
         with memory.connection() as conn:

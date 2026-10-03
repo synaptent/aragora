@@ -9,11 +9,9 @@ from aragora.events.subscribers.config import (
     SubscriberStats,
     AsyncDispatchConfig,
 )
-from aragora.events.subscribers.notification_handlers import NotificationHandlersMixin
 
 __all__ = [
     "RetryConfig",
     "SubscriberStats",
     "AsyncDispatchConfig",
-    "NotificationHandlersMixin",
 ]

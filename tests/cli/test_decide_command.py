@@ -136,7 +136,7 @@ def test_cmd_decide_demo_falls_back_without_aragora_debate(capsys) -> None:
 
     out = capsys.readouterr().out
     assert "ARAGORA DECIDE (Demo Mode)" in out
-    assert "Built-in mock fallback" in out
+    assert "Built-in offline demo agents" in out
     assert "Dry run mode - no receipt saved" in out
 
 

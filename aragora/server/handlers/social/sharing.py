@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import logging
 import secrets
+import sys
 import threading
 import time
+import types
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -659,3 +662,23 @@ __all__ = [
     "ShareStore",
     "get_share_store",
 ]
+
+
+_DEPRECATED_SHARE_SYMBOLS = frozenset({"DebateVisibility", "ShareSettings"})
+
+
+class _SharingCompatibilityModule(types.ModuleType):
+    """Warn when callers use legacy share-model exports."""
+
+    def __getattribute__(self, name: str) -> Any:
+        if name in _DEPRECATED_SHARE_SYMBOLS:
+            warnings.warn(
+                f"aragora.server.handlers.social.sharing.{name} is deprecated; "
+                f"import {name} from aragora.storage.share_models instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return super().__getattribute__(name)
+
+
+sys.modules[__name__].__class__ = _SharingCompatibilityModule

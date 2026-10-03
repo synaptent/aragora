@@ -369,7 +369,7 @@ class DistributedSchedulerAdapter:
             task_type=task_type,
             payload=payload,
             priority=cp_priority,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=timeout_seconds if timeout_seconds is not None else 300.0,
             metadata=metadata,
         )
 

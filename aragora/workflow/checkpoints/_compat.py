@@ -53,7 +53,7 @@ _get_redis_client: _RedisClientGetter | None = None
 REDIS_AVAILABLE = False
 
 try:
-    from aragora.server.redis_config import get_redis_client as _redis_getter
+    from aragora.utils.redis_config import get_redis_client as _redis_getter
 
     _get_redis_client = _redis_getter
     REDIS_AVAILABLE = True

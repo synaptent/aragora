@@ -472,6 +472,13 @@ async def _shutdown_cmd_ask_resources() -> None:
         logger.debug("Ask spam moderation shutdown skipped: %s", exc)
 
     try:
+        from aragora.events.dispatcher import shutdown_dispatcher
+
+        shutdown_dispatcher(wait=True)
+    except Exception as exc:  # noqa: BLE001 - shutdown must never hide CLI result
+        logger.debug("Ask dispatcher shutdown skipped: %s", exc)
+
+    try:
         from aragora.server.startup.database import close_postgres_pool
 
         await close_postgres_pool()
@@ -479,7 +486,7 @@ async def _shutdown_cmd_ask_resources() -> None:
         logger.debug("Ask postgres shutdown skipped: %s", exc)
 
     try:
-        from aragora.server.http_client_pool import close_http_pool
+        from aragora.observability.http_client_pool import close_http_pool
 
         await close_http_pool()
     except Exception as exc:  # noqa: BLE001 - shutdown must never hide CLI result
@@ -519,13 +526,6 @@ async def _shutdown_cmd_ask_resources() -> None:
         DatabaseManager.clear_instances()
     except Exception as exc:  # noqa: BLE001 - shutdown must never hide CLI result
         logger.debug("Ask SQLite manager shutdown skipped: %s", exc)
-
-    try:
-        from aragora.events.dispatcher import shutdown_dispatcher
-
-        shutdown_dispatcher(wait=True)
-    except Exception as exc:  # noqa: BLE001 - shutdown must never hide CLI result
-        logger.debug("Ask dispatcher shutdown skipped: %s", exc)
 
     # Give async transport/connector close callbacks one loop turn before
     # asyncio.run() tears the loop down. This avoids intermittent unclosed
@@ -868,7 +868,11 @@ def _persist_debate_receipt(result: Any, verbose: bool = False) -> str | None:
         from datetime import datetime, timezone
         from pathlib import Path
 
-        from aragora.gauntlet.receipt_models import DecisionReceipt
+        from aragora.gauntlet.receipt_models import (
+            DecisionReceipt,
+            crux_cards_from_metadata,
+            receipt_schema_version,
+        )
 
         receipts_dir = Path.home() / ".aragora" / "receipts"
         receipts_dir.mkdir(parents=True, exist_ok=True)
@@ -893,7 +897,7 @@ def _persist_debate_receipt(result: Any, verbose: bool = False) -> str | None:
                     "agent": agent_name,
                     "role": str(getattr(msg, "role", "") or ""),
                     "round": int(getattr(msg, "round", 0) or 0),
-                    "response": content[:2000],
+                    "response": content,
                     "provider": str(model_meta.get("provider", "") or ""),
                     "provider_display": str(model_meta.get("provider_display", "") or ""),
                     "model": str(model_meta.get("model", "") or ""),
@@ -952,11 +956,11 @@ def _persist_debate_receipt(result: Any, verbose: bool = False) -> str | None:
             "probes_run": 0,
             "vulnerabilities_found": 0,
             "verdict": "PASS" if consensus_reached else "CONDITIONAL",
-            "verdict_reasoning": final_answer[:2000],
+            "verdict_reasoning": final_answer,
             "robustness_score": round(confidence, 4) if confidence else 0.0,
             "consensus_reached": consensus_reached,
             "confidence": round(confidence, 4) if confidence else 0.0,
-            "final_answer": final_answer[:2000],
+            "final_answer": final_answer,
             "rounds_used": getattr(result, "rounds_used", 0),
             "agents": agents,
             "agents_requested": requested_roster or agents,
@@ -983,11 +987,19 @@ def _persist_debate_receipt(result: Any, verbose: bool = False) -> str | None:
                     "evidence_hash": input_hash,
                 }
             ],
-            "schema_version": "1.1",
         }
         model_comparison = metadata.get("model_comparison") if isinstance(metadata, dict) else None
         if isinstance(model_comparison, dict):
             receipt["model_comparison"] = model_comparison
+
+        # Crux cards (#8227): attached by the consensus phase when the debate
+        # ran with enable_crux_cards (--crux-cards). Shared helpers enforce
+        # the "only carry non-empty blocks" invariant and the schema-version
+        # bump (1.2 when cruxes bind into the hash) with from_debate_result.
+        cruxes = crux_cards_from_metadata(metadata)
+        if cruxes is not None:
+            receipt["cruxes"] = cruxes
+        receipt["schema_version"] = receipt_schema_version(cruxes)
 
         receipt["artifact_hash"] = DecisionReceipt.from_dict(receipt).artifact_hash
         receipt["checksum"] = receipt["artifact_hash"]
@@ -1682,6 +1694,52 @@ def cmd_ask(args: argparse.Namespace) -> None:
                 "This task was interpreted from an ambiguous input and requires confirmation."
             )
 
+    # Crux cards (#8227): only the local run_debate path honors
+    # enable_crux_cards, so the flag uniformly requires local execution.
+    # Graph/matrix are rejected unconditionally (they conflict with local
+    # execution below anyway). Explicit API configuration (--api, --api-url,
+    # ARAGORA_API_URL) is rejected only when the run is not already local
+    # (--local/--demo/ARAGORA_OFFLINE) — a merely-exported ARAGORA_API_URL
+    # must not reject a run that could never dispatch to it. Checked up
+    # front, before context engineering burns LLM work or ARAGORA_OFFLINE is
+    # mutated. Otherwise local execution is forced below (mirroring --demo),
+    # with a Note so the auto-discovery path is never silent.
+    crux_cards_requested = bool(getattr(args, "crux_cards", False))
+    if crux_cards_requested:
+        from aragora.utils.env import is_offline_mode as _crux_is_offline
+
+        if getattr(args, "graph", False) or getattr(args, "matrix", False):
+            print(
+                "--crux-cards currently requires local execution; graph/matrix "
+                "debates do not honor it. Remove --graph/--matrix or drop "
+                "--crux-cards.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        already_local = (
+            getattr(args, "local", False) or getattr(args, "demo", False) or _crux_is_offline()
+        )
+        crux_api_url = getattr(args, "api_url", None)
+        if not already_local and (
+            getattr(args, "api", False)
+            or _is_explicitly_configured_api_url(
+                crux_api_url or DEFAULT_API_URL, flag_passed=crux_api_url is not None
+            )
+        ):
+            print(
+                "--crux-cards currently requires local execution; API debates do "
+                "not honor it. Add --local, remove --api/--api-url and unset "
+                "ARAGORA_API_URL, or drop --crux-cards.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        if not getattr(args, "local", False):
+            print(
+                "Note: --crux-cards is only honored by local execution; "
+                "running the debate locally.",
+                file=sys.stderr,
+            )
+
     explicit_codebase_context = bool(getattr(args, "codebase_context", False))
     mode_name = str(getattr(args, "mode", "") or "").strip().lower()
     inferred_codebase_context = mode_name == "orchestrator" or _looks_like_self_improvement_task(
@@ -1810,6 +1868,10 @@ def cmd_ask(args: argparse.Namespace) -> None:
         protocol_overrides["enable_evidence_weighting"] = False
     if not getattr(args, "trending", True):
         protocol_overrides["enable_trending_injection"] = False
+    if crux_cards_requested:
+        # Crux cards (#8227): attach load-bearing disagreements to the debate
+        # result metadata so the decision receipt carries a cruxes block.
+        protocol_overrides["enable_crux_cards"] = True
     # Note: ELO weighting is controlled via WeightCalculatorConfig, passed via protocol
 
     # Demo mode forces local execution
@@ -1866,6 +1928,11 @@ def cmd_ask(args: argparse.Namespace) -> None:
 
     requested_api = getattr(args, "api", False)
     requested_local = getattr(args, "local", False)
+    if crux_cards_requested:
+        # Explicit API configuration was rejected above; force the local path
+        # (like --demo does) so enable_crux_cards is honored even when a
+        # trusted API server would otherwise be auto-selected.
+        requested_local = True
     graph_mode = getattr(args, "graph", False)
     matrix_mode = getattr(args, "matrix", False)
     decision_integrity = bool(getattr(args, "decision_integrity", False))
@@ -2998,6 +3065,15 @@ def cmd_ask(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
     if _result_has_only_agent_failure_outputs(result):
+        # Surface a substantive final answer if one exists (issue #9304): the
+        # engine can synthesize a real answer even when round messages were
+        # placeholders — hiding it behind a bare exit-1 buries user value.
+        final = str(getattr(result, "final_answer", "") or "")
+        if final and not _looks_like_agent_failure_response(final):
+            print("\n" + "=" * 60)
+            print("FINAL ANSWER (degraded run — agent rounds reported errors):")
+            print("=" * 60)
+            print(final)
         print(
             "Debate failed: all selected agents returned provider/error placeholders. "
             f"Run 'aragora validate-env --smoke --agents {agents} --verbose' and retry.",

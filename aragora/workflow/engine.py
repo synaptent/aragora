@@ -16,10 +16,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import threading
 import time
 import uuid
+import weakref
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 from collections.abc import Callable
 
 from aragora.events.types import StreamEventType
@@ -79,6 +81,9 @@ class WorkflowEngine:
         result = await engine.resume(workflow_id, checkpoint)
     """
 
+    _instances: ClassVar[weakref.WeakSet[WorkflowEngine]] = weakref.WeakSet()
+    _instances_lock: ClassVar[threading.RLock] = threading.RLock()
+
     def __init__(
         self,
         config: WorkflowConfig | None = None,
@@ -99,6 +104,8 @@ class WorkflowEngine:
         self._should_terminate: bool = False
         self._termination_reason: str | None = None
         self._results: list[StepResult] = []
+        with WorkflowEngine._instances_lock:
+            WorkflowEngine._instances.add(self)
 
         # Checkpoint storage - use provided store or fall back to file-based
         self._checkpoint_store: CheckpointStore = checkpoint_store or get_checkpoint_store()
@@ -554,6 +561,7 @@ class WorkflowEngine:
         # Reset execution state
         self._results = []
         self._should_terminate = False
+        self._termination_reason = None
 
         start_time = time.time()
 
@@ -1128,6 +1136,15 @@ class WorkflowEngine:
         self._should_terminate = True
         self._termination_reason = reason
         logger.info("Workflow termination requested: %s", reason)
+
+    @classmethod
+    def pause_all(cls, reason: str = "Emergency brake") -> None:
+        """Request termination on every live workflow engine instance."""
+        with WorkflowEngine._instances_lock:
+            engines = list(WorkflowEngine._instances)
+        for engine in engines:
+            engine.request_termination(reason)
+        logger.critical("Workflow emergency brake activated: " + reason)
 
     def check_termination(self) -> tuple[bool, str | None]:
         """Check if termination has been requested."""

@@ -96,7 +96,8 @@ async def record_debate_tokens(
 
         if agent_input > 0 or agent_output > 0:
             # Get provider and model info
-            provider = getattr(agent, "provider", None) or getattr(agent, "agent_type", "unknown")
+            provider_id = getattr(agent, "provider", None) or getattr(agent, "agent_type", None)
+            provider = str(provider_id) if provider_id else "unknown"
             model = getattr(agent, "model", "unknown")
             agent_name = getattr(agent, "name", str(agent))
 

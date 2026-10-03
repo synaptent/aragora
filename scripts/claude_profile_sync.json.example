@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to ~/.aragora/claude_profile_sync.json (or set ARAGORA_PROFILE_SYNC_CONFIG) and fill in your real accounts. This file holds operator email->profile mappings and is intentionally NOT tracked in git. 'sync_target' is a strict 1:1 email->profile map (VibeProxy holds one org per email, so a shared login's second org must NOT be synced). 'native_only' lists profiles that stay on interactive login, with the reason.",
+  "sync_target": {
+    "you+work@example.com": "max-01",
+    "you+personal@example.com": "max-02"
+  },
+  "native_only": {
+    "max-03": "shares an email with another profile but is a different org; native login only",
+    "max-04": "no VibeProxy account for this email; native login only"
+  }
+}

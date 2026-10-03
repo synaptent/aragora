@@ -49,7 +49,7 @@ class TestComputerUseConfig:
     def test_default_values(self):
         """Test default configuration values."""
         config = ComputerUseConfig()
-        assert config.model == "claude-opus-4-8"
+        assert config.model == "claude-opus-5"
         assert config.max_tokens == 4096
         assert config.temperature == 0.0
         assert config.display_width == 1920

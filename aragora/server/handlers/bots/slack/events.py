@@ -235,7 +235,7 @@ async def handle_slack_events(request: Any) -> HandlerResult:
             logger.info("Slack mention from %s in %s: %s", user, channel, text[:100])
 
             clean_text = re.sub(r"<@[^>]+>", "", text).strip()
-            decision_integrity = None
+            decision_integrity: dict[str, Any] | None = None
             if clean_text:
                 parts = clean_text.split(maxsplit=1)
                 command = parts[0].lower()

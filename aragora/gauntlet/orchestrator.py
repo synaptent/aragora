@@ -975,10 +975,32 @@ class GauntletOrchestrator:
             f"Scores: risk={risk_score:.0%}, robustness={robustness_score:.0%}",
         )
 
-        # Determine verdict
-        verdict, confidence = self._determine_verdict(
-            critical, high, medium, risk_score, robustness_score, dissenting_views
+        # Zero-adversarial-work gate (issue #9303): APPROVED means "survived
+        # adversarial scrutiny". If NO attacks ran, NO probes ran, NO audit ran,
+        # and nothing was verified or found, there was no scrutiny to survive —
+        # measured live 2026-07-15: a quick-profile run with 0 attacks / 0%
+        # coverage minted APPROVED at 95%. Fail closed to NEEDS_REVIEW @ 0.
+        zero_evidence = _no_adversarial_work(
+            redteam_result,
+            probe_report,
+            audit_verdict,
+            verified_claims,
+            unverified_claims,
+            all_findings,
         )
+
+        # Determine verdict
+        if zero_evidence:
+            verdict, confidence = Verdict.NEEDS_REVIEW, 0.0
+            # No redteam ran, so robustness defaulted to a perfect 1.0 —
+            # 100% robustness on a path where nothing executed is the same
+            # hollow-receipt lie in a different field (claude #9306 r4 [P2]).
+            robustness_score = 0.0
+            coverage_score = 0.0
+        else:
+            verdict, confidence = self._determine_verdict(
+                critical, high, medium, risk_score, robustness_score, dissenting_views
+            )
         self._emit_progress(
             "Aggregation",
             3,
@@ -1636,3 +1658,24 @@ HIPAA_GAUNTLET = get_compliance_gauntlet("hipaa") if PERSONAS_AVAILABLE else Non
 AI_ACT_GAUNTLET = get_compliance_gauntlet("ai_act") if PERSONAS_AVAILABLE else None
 SECURITY_GAUNTLET = get_compliance_gauntlet("security") if PERSONAS_AVAILABLE else None
 SOX_GAUNTLET = get_compliance_gauntlet("sox") if PERSONAS_AVAILABLE else None
+
+
+def _no_adversarial_work(
+    redteam: Any,
+    probe: Any,
+    audit: Any,
+    verified_claims: Any,
+    unverified_claims: Any,
+    findings: Any,
+) -> bool:
+    """True when the run produced ZERO adversarial evidence (issue #9303).
+
+    APPROVED means "survived adversarial scrutiny"; with no attacks, no
+    probes, no audit, no claims examined, and no findings there was no
+    scrutiny to survive, and the verdict must fail closed to NEEDS_REVIEW.
+    """
+    attacks_ran = bool(redteam and getattr(redteam, "total_attacks", 0) > 0)
+    probes_ran = bool(probe and getattr(probe, "probes_run", 0) > 0)
+    audit_ran = audit is not None
+    claims_examined = bool(verified_claims or unverified_claims)
+    return not (attacks_ran or probes_ran or audit_ran or claims_examined or bool(findings))

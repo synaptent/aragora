@@ -92,7 +92,7 @@ def get_redis_client() -> redis.Redis | None:
 
     # Try centralized redis_config first (preferred)
     try:
-        from aragora.server.redis_config import get_redis_client as get_shared_client
+        from aragora.utils.redis_config import get_redis_client as get_shared_client
 
         shared_client = get_shared_client()
         if shared_client is not None:
@@ -478,7 +478,8 @@ class RedisRateLimiter:
             # Use Redis hash to store per-instance metrics
             instance_key = f"{self._metrics_key}{self.instance_id}"
             with self._lock:
-                metrics_data = {
+                # Keyed wider than str to satisfy redis-py's invariant Mapping type.
+                metrics_data: dict[str | bytes, bytes | float | int | str] = {
                     "requests_allowed": str(self._requests_allowed),
                     "requests_rejected": str(self._requests_rejected),
                     "redis_failures": str(self._redis_failures),

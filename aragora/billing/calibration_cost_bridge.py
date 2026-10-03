@@ -35,13 +35,30 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from aragora.agents.calibration import CalibrationTracker, CalibrationSummary
     from aragora.billing.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
+
+
+class CalibrationSummary(Protocol):
+    """Structural calibration result consumed by billing."""
+
+    total_predictions: int
+    ece: float
+    accuracy: float
+    is_overconfident: bool
+    is_underconfident: bool
+
+
+class CalibrationTracker(Protocol):
+    """Structural calibration tracker consumed by billing."""
+
+    def get_calibration_summary(self, agent_name: str) -> CalibrationSummary | None: ...
+
+    def get_all_agents(self) -> list[str]: ...
 
 
 @dataclass

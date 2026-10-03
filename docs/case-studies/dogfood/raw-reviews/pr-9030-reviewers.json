@@ -1,0 +1,22 @@
+[
+  {
+    "family": "grok",
+    "agent_type": "grok",
+    "ok": true,
+    "text": "Verdict: CHANGES-REQUESTED\n- [P2] domain_matcher.py:477: _detect_with_llm now returns None (new empty-content path + changed invalid-text path) but is annotated `-> list[tuple[str, float]]`, risking type errors or unhandled None at callers\n- [P2] tests/routing/test_domain_matcher_root.py:30: removal of anthropic.types monkey-patch may regress other tests that relied on the real TextBlock shape rather than SimpleNamespace",
+    "error": "",
+    "elapsed_s": 11.7,
+    "verdict": "CHANGES_REQUESTED",
+    "model": "grok-4-latest"
+  },
+  {
+    "family": "mistral",
+    "agent_type": "mistral-api",
+    "ok": true,
+    "text": "Verdict: CHANGES-REQUESTED\n\n- [P1] `aragora/routing/domain_matcher.py` line 482: Returning `None` on empty content breaks the caller’s expectation of a list; the existing fallback logic in `detect()` will crash when it tries to iterate over `None`. Revert to `return []`.\n- [P2] `aragora/routing/domain_matcher.py` line 488: Same issue—returning `None` instead of `[]` risks a regression in the caller.\n- [P3] `tests/routing/test_domain_matcher_root.py` lines 15–21: Removed the `anthropic` module mock setup, but the test suite still relies on it elsewhere; this may cause unrelated tests to fail if they run after this one. Either restore the mock or ensure all tests are isolated.",
+    "error": "",
+    "elapsed_s": 4.5,
+    "verdict": "CHANGES_REQUESTED",
+    "model": "mistral-large-2512"
+  }
+]

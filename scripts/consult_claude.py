@@ -8,14 +8,18 @@ timeouts. The known failure mode this fixes: ad-hoc ``timeout 120 claude -p
 
 Backends, in order:
 
-1. ``claude`` CLI (subscription auth) — routed through the authenticated
+1. Local VibeProxy — used only when ``ARAGORA_MODEL_TRANSPORT`` is explicitly
+   set to ``vibeproxy-prefer`` or ``vibeproxy-required``. Loopback alone does
+   not authenticate the process receiving a prompt, so direct mode is the
+   default.
+2. ``claude`` CLI (subscription auth) — routed through the authenticated
    ``claude_profile.sh`` pool when available, with ``--model`` forwarded and a
    hard subprocess timeout.
-2. Anthropic Messages API — used only with explicit ``--api-fallback`` opt-in
+3. Anthropic Messages API — used only with explicit ``--api-fallback`` opt-in
    after CLI attempts fail. The key comes from ``ANTHROPIC_API_KEY`` or the
    aragora secrets manager; if neither is present the attempt is recorded as a
    normal failed backend attempt.
-3. OpenRouter Chat Completions API — used only with explicit
+4. OpenRouter Chat Completions API — used only with explicit
    ``--openrouter-fallback`` opt-in after CLI/API attempts fail. This is useful
    when the Claude subscription CLI is quota-exhausted but an OpenRouter key is
    available. The key comes from ``OPENROUTER_API_KEY`` or the aragora secrets
@@ -56,8 +60,16 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from aragora.agents.transports.vibeproxy import (  # noqa: E402
+    ModelTransportPolicy,
+    TransportMode,
+    VibeProxyConfigurationError,
+    VibeProxyTimeoutError,
+    VibeProxyUnavailableError,
+)
+
 DEFAULT_MODEL = "claude-fable-5"
-FALLBACK_MODEL = "claude-opus-4-8"
+FALLBACK_MODEL = "claude-opus-5"
 DEFAULT_TIMEOUT_SECONDS = 600
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -70,6 +82,13 @@ MAX_API_RESPONSE_BYTES = 4 * 1024 * 1024
 API_UNSUPPORTED_MODELS = {"claude-fable-5"}
 MAX_PROMPT_BYTES = 512 * 1024
 API_RESPONSE_READ_CHUNK_BYTES = 64 * 1024
+_CLI_RATE_LIMIT_MARKERS = (
+    "you've hit your session limit",
+    "you have hit your session limit",
+    "rate limit exceeded",
+    "usage limit reached",
+    "hit your usage limit",
+)
 
 EXIT_OK = 0
 EXIT_TIMEOUT = 2
@@ -87,6 +106,18 @@ def _safe_cli_error(*, returncode: int | None = None, empty: bool | None = None)
     if empty is not None:
         parts.append(f"empty={empty}")
     return ", ".join(parts)
+
+
+def _classify_cli_failure(text: str) -> dict[str, bool | str]:
+    """Classify known CLI failures without returning raw model or account output."""
+
+    lowered = text.lower()
+    if any(marker in lowered for marker in _CLI_RATE_LIMIT_MARKERS):
+        return {
+            "rate_limited": True,
+            "failure_kind": "rate_limited",
+        }
+    return {"failure_kind": "cli_error"}
 
 
 def _safe_api_error(message: str) -> str:
@@ -183,11 +214,16 @@ def _run_cli(prompt: str, model: str, timeout: float) -> dict:
     elapsed = round(time.monotonic() - started, 1)
     text = _strip_preamble(stdout) if used_profile else stdout.strip()
     if proc.returncode != 0:
+        classification = _classify_cli_failure(text)
+        error = _safe_cli_error(returncode=proc.returncode, empty=not text)
+        if classification.get("rate_limited"):
+            error = f"claude CLI rate limited, rc={proc.returncode}"
         return {
             "ok": False,
             "backend": backend,
             "elapsed_s": elapsed,
-            "error": _safe_cli_error(returncode=proc.returncode, empty=not text),
+            **classification,
+            "error": error,
         }
     if text:
         return {"ok": True, "backend": backend, "elapsed_s": elapsed, "text": text}
@@ -366,6 +402,72 @@ def _run_api(prompt: str, model: str, timeout: float, system: str | None) -> dic
     return {"ok": True, "backend": "api", "elapsed_s": elapsed, "text": text}
 
 
+def _run_vibeproxy(
+    prompt: str,
+    model: str,
+    timeout: float,
+    system: str | None,
+    policy: ModelTransportPolicy,
+) -> dict:
+    """One bounded VibeProxy Claude attempt. Never exposes local credentials."""
+
+    started = time.monotonic()
+    try:
+        route = policy.resolve("anthropic", model, capabilities=("chat",))
+        if route.transport != "vibeproxy" or policy.client is None:
+            return {
+                "ok": False,
+                "backend": "vibeproxy",
+                "timed_out": False,
+                "failure_kind": "transport_unavailable",
+                "error": route.fallback_reason or "VibeProxy route unavailable",
+            }
+        text = policy.client.anthropic_message(
+            model=route.resolved_model,
+            prompt=prompt,
+            timeout=timeout,
+            system=system,
+            max_tokens=API_MAX_TOKENS,
+        )
+    except VibeProxyTimeoutError as exc:
+        return {
+            "ok": False,
+            "backend": "vibeproxy",
+            "timed_out": True,
+            "error": str(exc),
+        }
+    except VibeProxyConfigurationError as exc:
+        return {
+            "ok": False,
+            "backend": "vibeproxy",
+            "timed_out": False,
+            "failure_kind": "configuration_error",
+            "error": str(exc),
+        }
+    except VibeProxyUnavailableError as exc:
+        return {
+            "ok": False,
+            "backend": "vibeproxy",
+            "timed_out": False,
+            "failure_kind": "backend_failed",
+            "error": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "backend": "vibeproxy",
+            "timed_out": False,
+            "failure_kind": "backend_failed",
+            "error": f"VibeProxy attempt failed: {type(exc).__name__}",
+        }
+    return {
+        "ok": True,
+        "backend": "vibeproxy",
+        "elapsed_s": round(time.monotonic() - started, 1),
+        "text": text,
+    }
+
+
 def _run_openrouter_api(prompt: str, model: str, timeout: float, system: str | None) -> dict:
     """One bounded OpenRouter Chat Completions attempt. Never raises."""
     key = _resolve_openrouter_api_key()
@@ -492,11 +594,12 @@ def _planned_attempt_count(
     fallback_model: str | None,
     api_fallback: bool,
     openrouter_fallback: bool,
+    vibeproxy_attempts: int = 0,
 ) -> int:
     cli_attempts = 1 + int(bool(fallback_model and fallback_model != model))
     api_attempts = len(_api_models(model, fallback_model)) if api_fallback else 0
     openrouter_attempts = int(openrouter_fallback)
-    return cli_attempts + api_attempts + openrouter_attempts
+    return vibeproxy_attempts + cli_attempts + api_attempts + openrouter_attempts
 
 
 def _default_overall_timeout(
@@ -506,13 +609,37 @@ def _default_overall_timeout(
     fallback_model: str | None,
     api_fallback: bool,
     openrouter_fallback: bool,
+    vibeproxy_attempts: int = 0,
 ) -> float:
     return timeout * _planned_attempt_count(
         model=model,
         fallback_model=fallback_model,
         api_fallback=api_fallback,
         openrouter_fallback=openrouter_fallback,
+        vibeproxy_attempts=vibeproxy_attempts,
     )
+
+
+def _configuration_failure(model: str, error: str, attempts: list[dict] | None = None) -> dict:
+    return {
+        "ok": False,
+        "model": model,
+        "timed_out": False,
+        "budget_exhausted": False,
+        "rate_limited": False,
+        "usage_error": True,
+        "attempts": list(attempts or []),
+        "error": error,
+    }
+
+
+def _attempts_timed_out(attempts: list[dict]) -> bool:
+    """Ignore unavailable transport preflights when classifying execution timeout."""
+
+    executed = [
+        attempt for attempt in attempts if attempt.get("failure_kind") != "transport_unavailable"
+    ]
+    return bool(executed) and all(bool(attempt.get("timed_out")) for attempt in executed)
 
 
 def consult(
@@ -536,17 +663,76 @@ def consult(
     _validate_timeout(timeout, "timeout")
     if overall_timeout is not None:
         _validate_timeout(overall_timeout, "overall_timeout")
+    if not isinstance(model, str) or not model.strip():
+        return _configuration_failure(str(model or ""), "model must be a non-empty string")
+    model = model.strip()
+    if fallback_model is not None:
+        if not isinstance(fallback_model, str):
+            return _configuration_failure(model, "fallback_model must be a string or null")
+        fallback_model = fallback_model.strip() or None
     cli_prompt = _compose_prompt(prompt, system)
     attempts: list[dict] = []
     started = time.monotonic()
-    if overall_timeout is None:
-        overall_timeout = _default_overall_timeout(
-            timeout=timeout,
-            model=model,
-            fallback_model=fallback_model,
-            api_fallback=api_fallback,
-            openrouter_fallback=openrouter_fallback,
+    try:
+        vibeproxy_policy = ModelTransportPolicy.from_env(default_mode=TransportMode.DIRECT)
+    except VibeProxyConfigurationError as exc:
+        attempts.append(
+            {
+                "model": model,
+                "ok": False,
+                "backend": "vibeproxy",
+                "timed_out": False,
+                "failure_kind": "configuration_error",
+                "error": str(exc),
+            }
         )
+        return _configuration_failure(model, str(exc), attempts)
+    vibeproxy_models = list(
+        dict.fromkeys(candidate for candidate in (model, fallback_model) if candidate)
+    )
+    vibeproxy_attempts = (
+        len(vibeproxy_models) if vibeproxy_policy.mode is not TransportMode.DIRECT else 0
+    )
+    if overall_timeout is None:
+        if vibeproxy_policy.mode is TransportMode.REQUIRED:
+            overall_timeout = timeout * vibeproxy_attempts
+        else:
+            overall_timeout = _default_overall_timeout(
+                timeout=timeout,
+                model=model,
+                fallback_model=fallback_model,
+                api_fallback=api_fallback,
+                openrouter_fallback=openrouter_fallback,
+                vibeproxy_attempts=vibeproxy_attempts,
+            )
+
+    if vibeproxy_policy.mode is not TransportMode.DIRECT:
+        for vibeproxy_model in vibeproxy_models:
+            attempt_timeout = _remaining_timeout(started, overall_timeout, timeout)
+            if attempt_timeout <= 0:
+                _append_budget_exhausted(attempts, model=vibeproxy_model, backend="vibeproxy")
+                continue
+            result = _run_vibeproxy(
+                prompt,
+                vibeproxy_model,
+                attempt_timeout,
+                system,
+                vibeproxy_policy,
+            )
+            attempts.append({"model": vibeproxy_model, **result})
+            if result.get("ok"):
+                return {**result, "model": vibeproxy_model, "attempts": attempts}
+        if vibeproxy_policy.mode is TransportMode.REQUIRED:
+            return {
+                "ok": False,
+                "model": str(attempts[-1].get("model", model)) if attempts else model,
+                "timed_out": _attempts_timed_out(attempts),
+                "budget_exhausted": any(a.get("budget_exhausted") for a in attempts),
+                "rate_limited": False,
+                "attempts": attempts,
+                "error": "; ".join(str(a.get("error")) for a in attempts),
+            }
+
     attempt_timeout = _remaining_timeout(started, overall_timeout, timeout)
     if attempt_timeout <= 0:
         _append_budget_exhausted(attempts, model=model, backend="cli")
@@ -555,7 +741,8 @@ def consult(
         attempts.append({"model": model, **result})
         if result.get("ok"):
             return {**result, "model": model, "attempts": attempts}
-    if fallback_model and fallback_model != model:
+    cli_rate_limited = bool(attempts and attempts[-1].get("rate_limited"))
+    if fallback_model and fallback_model != model and not cli_rate_limited:
         attempt_timeout = _remaining_timeout(started, overall_timeout, timeout)
         if attempt_timeout <= 0:
             _append_budget_exhausted(attempts, model=fallback_model, backend="cli")
@@ -588,13 +775,15 @@ def consult(
             attempts.append({"model": openrouter_model, **result})
             if result.get("ok"):
                 return {**result, "model": openrouter_model, "attempts": attempts}
-    timed_out = all(a.get("timed_out") for a in attempts) and bool(attempts)
+    timed_out = _attempts_timed_out(attempts)
     budget_exhausted = any(a.get("budget_exhausted") for a in attempts)
+    rate_limited = any(a.get("rate_limited") for a in attempts)
     return {
         "ok": False,
         "model": str(attempts[-1].get("model", model)) if attempts else model,
         "timed_out": timed_out,
         "budget_exhausted": budget_exhausted,
+        "rate_limited": rate_limited,
         "attempts": attempts,
         "error": "; ".join(str(a.get("error")) for a in attempts),
     }
@@ -771,6 +960,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"consult failed: {result.get('error')}", file=sys.stderr)
     if result.get("ok"):
         return EXIT_OK
+    if result.get("usage_error"):
+        return EXIT_USAGE
     return EXIT_TIMEOUT if result.get("timed_out") else EXIT_ALL_FAILED
 
 

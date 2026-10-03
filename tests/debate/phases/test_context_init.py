@@ -412,6 +412,21 @@ class TestInitialize:
     """Tests for full initialization flow."""
 
     @pytest.mark.asyncio
+    async def test_optional_embedding_failure_is_isolated(self, caplog):
+        """Optional context providers cannot abort an explicit-agent debate."""
+
+        async def failing_embedding_context():
+            raise RuntimeError("Gemini Embedding API_KEY_INVALID")
+
+        with caplog.at_level("DEBUG"):
+            await ContextInitializer._safe_async(
+                failing_embedding_context(),
+                "knowledge_mound",
+            )
+
+        assert "context_enrichment_failed label=knowledge_mound" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_initializes_debate_result(self):
         """Creates DebateResult on context."""
         ctx = MockDebateContext()

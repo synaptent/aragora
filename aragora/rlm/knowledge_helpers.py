@@ -167,14 +167,26 @@ def load_knowledge_context(
 def _to_knowledge_item(raw: Any, source: str) -> KnowledgeItem:
     """Convert raw knowledge data to KnowledgeItem."""
     if isinstance(raw, dict):
+        content = raw.get("content")
+        if content is None:
+            content = raw.get("text")
+        if content is None:
+            content = ""
+
+        relationships = raw.get("relationships")
+        if relationships is None:
+            relationships = raw.get("related_ids")
+        if relationships is None:
+            relationships = []
+
         return KnowledgeItem(
             id=raw.get("id", ""),
-            content=raw.get("content", raw.get("text", "")),
+            content=content,
             source=source,
             confidence=raw.get("confidence", 0.5),
             created_at=raw.get("created_at", ""),
             metadata=raw.get("metadata", {}),
-            relationships=raw.get("relationships", raw.get("related_ids", [])),
+            relationships=relationships,
         )
     elif hasattr(raw, "model_dump"):
         data = raw.model_dump()

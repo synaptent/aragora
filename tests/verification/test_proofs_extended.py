@@ -550,6 +550,24 @@ class TestClaimVerifierExtended:
         assert status["has_proofs"] is True
         assert status["status"] == "pending"
 
+    def test_claim_verification_status_ignores_missing_stored_result(self):
+        """Status should remain pending when a stored result is missing."""
+        verifier = ClaimVerifier()
+        proof = VerificationProof(
+            id="missing-result-proof",
+            claim_id="missing-result-claim",
+            proof_type=ProofType.ASSERTION,
+            description="Missing result proof",
+            code="result = True",
+        )
+        verifier.add_proof(proof)
+        verifier.results[proof.id] = None  # type: ignore[assignment]
+
+        status = verifier.get_claim_verification_status("missing-result-claim")
+
+        assert status["has_proofs"] is True
+        assert status["status"] == "pending"
+
     @pytest.mark.asyncio
     async def test_claim_verification_status_verified(self):
         """Status should indicate verified when all proofs pass."""

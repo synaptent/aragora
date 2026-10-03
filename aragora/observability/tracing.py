@@ -743,13 +743,13 @@ def trace_decision(func: F) -> F:
 
         # Extract attributes from request
         request_id = getattr(request, "request_id", "unknown")
-        decision_type = getattr(request, "decision_type", None)
+        decision_type = cast(Any, getattr(request, "decision_type", None))
         decision_type_str = (
             decision_type.value if hasattr(decision_type, "value") else str(decision_type)
         )
-        source = getattr(request, "source", None)
+        source = cast(Any, getattr(request, "source", None))
         source_str = source.value if hasattr(source, "value") else str(source)
-        priority = getattr(request, "priority", None)
+        priority = cast(Any, getattr(request, "priority", None))
         priority_str = priority.value if hasattr(priority, "value") else str(priority)
 
         with tracer.start_as_current_span("decision.route") as span:
@@ -916,7 +916,7 @@ def build_trace_headers() -> dict[str, str]:
     headers: dict[str, str] = {}
 
     try:
-        from aragora.server.middleware.tracing import (
+        from aragora.observability.middleware.tracing import (
             get_trace_id,
             get_span_id,
             TRACE_ID_HEADER,

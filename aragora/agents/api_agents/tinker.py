@@ -101,12 +101,13 @@ class TinkerAgent(APIAgent):
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
         """
+        resolved_api_key = api_key or os.getenv("TINKER_API_KEY") or ""
         super().__init__(
             name=name,
             model=model,
             role=role,
             timeout=timeout,
-            api_key=api_key or os.getenv("TINKER_API_KEY", ""),
+            api_key=resolved_api_key,
             temperature=temperature,
         )
         self.agent_type = "tinker"
@@ -117,7 +118,7 @@ class TinkerAgent(APIAgent):
         # Tinker client (lazy initialized)
         self._client: TinkerClient | None = None
         self._config = TinkerConfig(
-            api_key=self.api_key,
+            api_key=resolved_api_key,
             base_model=model,
             timeout=float(timeout),
         )

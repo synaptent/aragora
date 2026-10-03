@@ -17,14 +17,14 @@ test.describe('Debate Export', () => {
 
   test('should show export options on click', async ({ page }) => {
     await page.goto('/debate/test-debate');
-    
+
     const exportButton = page.locator('button, a').filter({
       hasText: /export|download/i
     }).first();
-    
+
     if (await exportButton.isVisible()) {
       await exportButton.click();
-      
+
       // Should show format options
       const formatOptions = page.locator('text=/pdf|html|markdown|json/i').first();
       await expect(formatOptions).toBeVisible({ timeout: 5000 });
@@ -42,25 +42,25 @@ test.describe('Debate Export', () => {
     });
 
     await page.goto('/debate/test-debate');
-    
+
     const exportButton = page.locator('button, a').filter({
       hasText: /export|download/i
     }).first();
-    
+
     if (await exportButton.isVisible()) {
       await exportButton.click();
-      
+
       // Find PDF option
       const pdfOption = page.locator('button, a').filter({
         hasText: /pdf/i
       }).first();
-      
+
       if (await pdfOption.isVisible()) {
         // Set up download listener
         const downloadPromise = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
-        
+
         await pdfOption.click();
-        
+
         // May or may not trigger download in test env
         await downloadPromise;
       }
@@ -77,18 +77,18 @@ test.describe('Debate Export', () => {
     });
 
     await page.goto('/debate/test-debate');
-    
+
     const exportButton = page.locator('button, a').filter({
       hasText: /export|download/i
     }).first();
-    
+
     if (await exportButton.isVisible()) {
       await exportButton.click();
-      
+
       const htmlOption = page.locator('button, a').filter({
         hasText: /html/i
       }).first();
-      
+
       if (await htmlOption.isVisible()) {
         await htmlOption.click();
         await page.waitForTimeout(1000);
@@ -106,18 +106,18 @@ test.describe('Debate Export', () => {
     });
 
     await page.goto('/debate/test-debate');
-    
+
     const exportButton = page.locator('button, a').filter({
       hasText: /export|download/i
     }).first();
-    
+
     if (await exportButton.isVisible()) {
       await exportButton.click();
-      
+
       const jsonOption = page.locator('button, a').filter({
         hasText: /json/i
       }).first();
-      
+
       if (await jsonOption.isVisible()) {
         await jsonOption.click();
         await page.waitForTimeout(1000);
@@ -136,26 +136,26 @@ test.describe('Debate Export', () => {
     });
 
     await page.goto('/debate/test-debate');
-    
+
     const exportButton = page.locator('button, a').filter({
       hasText: /export|download/i
     }).first();
-    
+
     if (await exportButton.isVisible()) {
       await exportButton.click();
-      
+
       const formatOption = page.locator('button, a').filter({
         hasText: /pdf|html|json/i
       }).first();
-      
+
       if (await formatOption.isVisible()) {
         await formatOption.click();
-        
+
         // Should show loading
         const loading = page.locator('[class*="loading"], [class*="spinner"]').or(
           page.locator('text=/exporting|generating|loading/i')
         ).first();
-        
+
         await expect(loading).toBeVisible({ timeout: 1000 });
       }
     }
@@ -171,26 +171,26 @@ test.describe('Debate Export', () => {
     });
 
     await page.goto('/debate/test-debate');
-    
+
     const exportButton = page.locator('button, a').filter({
       hasText: /export|download/i
     }).first();
-    
+
     if (await exportButton.isVisible()) {
       await exportButton.click();
-      
+
       const formatOption = page.locator('button, a').filter({
         hasText: /pdf|html|json/i
       }).first();
-      
+
       if (await formatOption.isVisible()) {
         await formatOption.click();
-        
+
         // Should show error
         const error = page.locator('[class*="error"], [role="alert"]').or(
           page.locator('text=/error|failed/i')
         ).first();
-        
+
         await expect(error).toBeVisible({ timeout: 5000 });
       }
     }
@@ -205,11 +205,11 @@ test.describe('Debate Sharing', () => {
 
   test('should have share button', async ({ page }) => {
     await page.goto('/debate/test-debate');
-    
+
     const shareButton = page.locator('button, a').filter({
       hasText: /share|copy.*link/i
     }).first();
-    
+
     // Share functionality may or may not be visible
     if (await shareButton.isVisible()) {
       await expect(shareButton).toBeEnabled();
@@ -218,14 +218,14 @@ test.describe('Debate Sharing', () => {
 
   test('should copy link to clipboard', async ({ page }) => {
     await page.goto('/debate/test-debate');
-    
+
     const shareButton = page.locator('button, a').filter({
       hasText: /share|copy/i
     }).first();
-    
+
     if (await shareButton.isVisible()) {
       await shareButton.click();
-      
+
       // Should show confirmation
       const confirmation = page.locator('text=/copied|link/i').first();
       await expect(confirmation).toBeVisible({ timeout: 3000 });

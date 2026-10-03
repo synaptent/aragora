@@ -1073,6 +1073,7 @@ class AragoraClient:
         )
 
         # Extract debate_id from response (may be DebateCreateResponse or dict)
+        debate_id: str | None
         if hasattr(debate, "debate_id"):
             debate_id = debate.debate_id
         else:

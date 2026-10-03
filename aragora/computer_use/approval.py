@@ -213,7 +213,7 @@ class WebhookNotifier(ApprovalNotifier):
     async def _send_webhook(self, payload: dict[str, Any]) -> None:
         """Send webhook notification."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             headers = {"Content-Type": "application/json"}
             if self._auth_token:
@@ -302,6 +302,16 @@ class ChatApprovalNotifier(ApprovalNotifier):
 
 class ApprovalWorkflow:
     """Manages human-in-the-loop approval workflow for computer-use."""
+
+    approval_context_type = ApprovalContext
+    approval_priority_high = ApprovalPriority.HIGH
+    approval_category_map = {
+        "gateway": ApprovalCategory.SYSTEM_MODIFICATION,
+        "device": ApprovalCategory.EXTERNAL_SYSTEM,
+        "computer_use": ApprovalCategory.DESTRUCTIVE_ACTION,
+    }
+    approval_category_unknown = ApprovalCategory.UNKNOWN
+    approval_status_approved = ApprovalStatus.APPROVED
 
     def __init__(
         self,

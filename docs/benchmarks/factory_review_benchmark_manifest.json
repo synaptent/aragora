@@ -20,11 +20,12 @@
       "pr_url": "https://github.com/droid-code-review-evals/droid-sentry/pull/6",
       "title": "Enhanced Pagination Performance for High-Volume Audit Logs",
       "base_ref": "master",
+      "base_sha": "1a440b410a2b617f22db936658bb3272e4774ac6",
       "head_ref": "performance-enhancement-complete",
       "head_sha": "cb7212e11dbdbc1813237ad129c7bc108f944e3d",
       "validation_path": "results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-sentry_pr_6_validation.json",
       "validation_blob_sha": "29067be0cc2bc91fa32c6669436d83cd851ebbb4",
-      "validation_url": "https://raw.githubusercontent.com/droid-code-review-evals/review-droid-benchmark/main/results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-sentry_pr_6_validation.json",
+      "validation_url": "https://raw.githubusercontent.com/droid-code-review-evals/review-droid-benchmark/2dfbbd6edcd5eea19495e725d611cb104c9e8f4d/results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-sentry_pr_6_validation.json",
       "reason": "Python runtime bug plus a known false positive in validation output"
     },
     {
@@ -36,11 +37,12 @@
       "pr_url": "https://github.com/droid-code-review-evals/droid-grafana/pull/1",
       "title": "Anonymous: Add configurable device limit",
       "base_ref": "enhance-anonymous-access",
+      "base_sha": "ed865831071a0c0a63c75ad0cfa6661107dabcaf",
       "head_ref": "implement-device-limits",
       "head_sha": "3647ba7360b8d157e4a294a650a365b6aca070d8",
       "validation_path": "results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-grafana_pr_1_validation.json",
       "validation_blob_sha": "f1a2057d21993c39dd761ad4083c9133f4f9bf45",
-      "validation_url": "https://raw.githubusercontent.com/droid-code-review-evals/review-droid-benchmark/main/results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-grafana_pr_1_validation.json",
+      "validation_url": "https://raw.githubusercontent.com/droid-code-review-evals/review-droid-benchmark/2dfbbd6edcd5eea19495e725d611cb104c9e8f4d/results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-grafana_pr_1_validation.json",
       "reason": "Go race-condition finding"
     },
     {
@@ -52,11 +54,12 @@
       "pr_url": "https://github.com/droid-code-review-evals/droid-keycloak/pull/7",
       "title": "Add HTML sanitizer for translated message resources",
       "base_ref": "feature-html-sanitizer-baseline",
+      "base_sha": "21d53112849fe55f328f3de2f071989b8763de61",
       "head_ref": "feature-html-sanitizer-implementation",
       "head_sha": "5d77e7ea7d431aa0a6b65904457b7471bd050e81",
       "validation_path": "results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-keycloak_pr_7_validation.json",
       "validation_blob_sha": "95f5e20c1d6b510c96a425b63ba3ded4bd2d9442",
-      "validation_url": "https://raw.githubusercontent.com/droid-code-review-evals/review-droid-benchmark/main/results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-keycloak_pr_7_validation.json",
+      "validation_url": "https://raw.githubusercontent.com/droid-code-review-evals/review-droid-benchmark/2dfbbd6edcd5eea19495e725d611cb104c9e8f4d/results/review_droid_run_gpt_5p2_2026-01-28/validations/droid-keycloak_pr_7_validation.json",
       "reason": "Java/properties logic and runtime findings"
     }
   ],

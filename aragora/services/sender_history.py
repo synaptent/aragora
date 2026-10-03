@@ -227,6 +227,12 @@ class SenderHistoryService:
             self._connection.commit()
             logger.info("[sender-history] Initialized database at %s", self.db_path)
 
+    def _require_connection(self) -> sqlite3.Connection:
+        """Return the initialized database connection."""
+        if self._connection is None:
+            raise RuntimeError("Sender history database is not initialized")
+        return self._connection
+
     async def close(self) -> None:
         """Close database connection."""
         async with self._lock:
@@ -259,8 +265,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
 
             # Insert interaction log
             cursor.execute(
@@ -353,7 +360,7 @@ class SenderHistoryService:
                     (user_id, sender_email.lower()),
                 )
 
-            self._connection.commit()
+            connection.commit()
 
             # Invalidate cache
             cache_key = f"{user_id}:{sender_email.lower()}"
@@ -379,8 +386,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(
                 """
                 SELECT *
@@ -595,8 +603,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(
                 """
                 SELECT
@@ -679,8 +688,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             now = datetime.now().isoformat()
 
             cursor.execute(
@@ -693,7 +703,7 @@ class SenderHistoryService:
                 """,
                 (user_id, sender_email.lower(), int(is_vip), now, int(is_vip), now),
             )
-            self._connection.commit()
+            connection.commit()
 
             # Invalidate cache
             cache_key = f"{user_id}:{sender_email.lower()}"
@@ -716,8 +726,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             now = datetime.now().isoformat()
 
             cursor.execute(
@@ -730,7 +741,7 @@ class SenderHistoryService:
                 """,
                 (user_id, sender_email.lower(), int(is_blocked), now, int(is_blocked), now),
             )
-            self._connection.commit()
+            connection.commit()
 
             # Invalidate cache
             cache_key = f"{user_id}:{sender_email.lower()}"
@@ -749,8 +760,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(
                 """
                 SELECT sender_email
@@ -788,8 +800,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(
                 """
                 SELECT is_blocked
@@ -815,8 +828,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(
                 """
                 SELECT sender_email
@@ -854,8 +868,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(
                 """
                 INSERT INTO priority_feedback
@@ -872,7 +887,7 @@ class SenderHistoryService:
                     feedback_type,
                 ),
             )
-            self._connection.commit()
+            connection.commit()
 
     async def get_prediction_accuracy(
         self,
@@ -892,8 +907,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
             cursor.execute(
@@ -944,8 +960,9 @@ class SenderHistoryService:
         async with self._lock:
             if not self._connection:
                 await self.initialize()
+            connection = self._require_connection()
 
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
 
             if order_by == "total_emails":
                 order_clause = "total_emails DESC"

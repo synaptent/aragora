@@ -213,6 +213,45 @@ describe('AragoraClient', () => {
       expect(result).toBeNull();
     });
 
+    it('should store a continuum memory entry', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ id: 'mem-123', tier: 'slow' })),
+      });
+
+      const result = await client.storeMemoryEntry('Important insight', {
+        tier: 'slow',
+        importance: 0.9,
+      });
+
+      expect(result.id).toBe('mem-123');
+      expect(result.tier).toBe('slow');
+      const [url, init] = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      expect(url).toContain('/api/v1/memory/store');
+      expect(JSON.parse(init.body)).toEqual({
+        content: 'Important insight',
+        tier: 'slow',
+        importance: 0.9,
+      });
+    });
+
+    it('should delete a continuum memory entry by ID', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({
+          success: true,
+          message: 'Memory mem-123 deleted successfully',
+        })),
+      });
+
+      const result = await client.deleteMemoryEntry('mem-123');
+
+      expect(result.success).toBe(true);
+      const [url, init] = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      expect(url).toContain('/api/v1/memory/continuum/mem-123');
+      expect(init.method).toBe('DELETE');
+    });
+
     it('should search memory', async () => {
       const mockEntries = {
         entries: [

@@ -436,7 +436,7 @@ class StoresMixin:
     def _check_sync_store(self) -> dict[str, Any]:
         """Check sync store health."""
         try:
-            from aragora.connectors.enterprise.sync_store import SyncStore  # noqa: F401
+            from aragora.storage.sync_store import SyncStore  # noqa: F401
 
             sync_store = self.ctx.get("sync_store")
             if sync_store is not None:

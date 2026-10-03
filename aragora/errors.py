@@ -3,7 +3,7 @@ Unified error module for Aragora.
 
 This module provides a single import point for all Aragora exceptions,
 re-exporting errors from both the base exception hierarchy (aragora.exceptions)
-and the server/API error hierarchy (aragora.server.errors).
+and the foundation API error hierarchy (aragora.api_errors).
 
 The hierarchy is unified: all API errors inherit from AragoraError.
 
@@ -153,9 +153,9 @@ from aragora.exceptions import (
 )
 
 # =============================================================================
-# Server/API Error Hierarchy (from aragora.server.errors)
+# API Error Hierarchy (from aragora.api_errors)
 # =============================================================================
-from aragora.server.errors import (
+from aragora.api_errors import (
     # Error codes
     ErrorCode,
     # Context
@@ -181,10 +181,10 @@ from aragora.server.errors import (
 )
 
 # Domain errors - import with API prefix to avoid confusion
-from aragora.server.errors import DebateError as APIDebateError
-from aragora.server.errors import MemoryError as APIMemoryError
-from aragora.server.errors import VerificationError as APIVerificationError
-from aragora.server.errors import (
+from aragora.api_errors import DebateError as APIDebateError
+from aragora.api_errors import MemoryError as APIMemoryError
+from aragora.api_errors import VerificationError as APIVerificationError
+from aragora.api_errors import (
     # Utilities
     EXCEPTION_MAP,
     ERROR_SUGGESTIONS,
@@ -298,7 +298,7 @@ __all__ = [
     "Z3NotAvailableError",
     "VerificationTimeoutError",
     # =========================================================================
-    # API hierarchy (aragora.server.errors)
+    # API hierarchy (aragora.api_errors)
     # =========================================================================
     "ErrorCode",
     "ErrorContext",

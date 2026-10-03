@@ -188,6 +188,27 @@ def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
 
 
+GIT_BOT_NAME = "github-actions[bot]"
+GIT_BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+def ensure_git_identity(repo_path: Path) -> tuple[bool, str]:
+    """Ensure a git author identity exists so revert/amend commits succeed.
+
+    CI runners often have no git identity configured; without one, ``git
+    revert`` fails with "Author identity unknown / empty ident name". An
+    already-configured identity (local or global) is left untouched.
+    """
+    for key, value in (("user.name", GIT_BOT_NAME), ("user.email", GIT_BOT_EMAIL)):
+        check_proc = _run(["git", "config", key], cwd=repo_path)
+        if check_proc.returncode == 0 and check_proc.stdout.strip():
+            continue
+        set_proc = _run(["git", "config", key, value], cwd=repo_path)
+        if set_proc.returncode != 0:
+            return False, set_proc.stderr.strip() or f"failed to set git {key}"
+    return True, "ok"
+
+
 def _append_markers_to_last_commit(repo_path: Path) -> tuple[bool, str]:
     body_proc = _run(["git", "log", "-1", "--pretty=%B"], cwd=repo_path)
     if body_proc.returncode != 0:
@@ -204,6 +225,10 @@ def _append_markers_to_last_commit(repo_path: Path) -> tuple[bool, str]:
 
 
 def perform_revert(repo_path: Path, *, target_sha: str, base_branch: str) -> tuple[bool, str]:
+    identity_ok, identity_msg = ensure_git_identity(repo_path)
+    if not identity_ok:
+        return False, identity_msg
+
     fetch_proc = _run(["git", "fetch", "origin", base_branch], cwd=repo_path)
     if fetch_proc.returncode != 0:
         return False, fetch_proc.stderr.strip() or "git fetch failed"

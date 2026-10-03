@@ -476,7 +476,7 @@ class CodebaseAuditor:
     def findings_to_proposals(
         self,
         findings: list[AuditFinding],
-        max_proposals: int = None,
+        max_proposals: int | None = None,
     ) -> list[ImprovementProposal]:
         """Convert audit findings to structured improvement proposals.
 

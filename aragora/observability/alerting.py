@@ -629,11 +629,9 @@ class MetricsCollector:
     async def _collect_debate_metrics(self, snapshot: MetricsSnapshot) -> None:
         """Collect debate-related metrics."""
         try:
-            from aragora.observability.metrics.debate import ACTIVE_DEBATES
+            from aragora.observability.server_metrics import ACTIVE_DEBATES
 
-            if ACTIVE_DEBATES is not None:
-                # Prometheus Gauge value
-                snapshot.active_debates = int(ACTIVE_DEBATES._value.get())
+            snapshot.active_debates = int(ACTIVE_DEBATES.get())
         except (ImportError, AttributeError):
             pass
 

@@ -81,7 +81,9 @@ async def run_live():
     agents = []
     for agent_type, role in [("anthropic-api", "proposer"), ("openai-api", "critic")]:
         try:
-            agents.append(create_agent(model_type=agent_type, name=f"{agent_type}-{role}", role=role))
+            agents.append(
+                create_agent(model_type=agent_type, name=f"{agent_type}-{role}", role=role)
+            )
         except Exception:
             pass
 

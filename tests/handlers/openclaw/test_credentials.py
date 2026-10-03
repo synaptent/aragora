@@ -859,6 +859,31 @@ class TestRotateCredential:
             )
             assert _status(result) == 500
 
+    def test_rotate_credential_disappears_during_rotation_returns_404(
+        self, handler, mock_http, sample_credential
+    ):
+        """A credential deleted after lookup fails closed as not found."""
+        with (
+            patch(
+                "aragora.server.handlers.openclaw.credentials._get_credential_rotation_limiter",
+            ) as mock_limiter,
+            patch(
+                "aragora.server.handlers.openclaw.credentials._get_store",
+            ) as mock_store,
+        ):
+            mock_limiter.return_value.is_allowed.return_value = True
+            mock_store.return_value.get_credential.return_value = sample_credential
+            mock_store.return_value.rotate_credential.return_value = None
+
+            result = handler._handle_rotate_credential(
+                sample_credential.id,
+                {"secret": "new-secret-value-12345678"},
+                mock_http(method="POST"),
+            )
+
+            assert _status(result) == 404
+            assert "not found" in _body(result)["error"].lower()
+
 
 # ============================================================================
 # Delete Credential (DELETE /:id)

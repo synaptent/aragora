@@ -18,7 +18,7 @@ import math
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from collections.abc import Generator
@@ -246,10 +246,10 @@ class ContinuumGlacialMixin:
         else:
             updated_dt = updated_at
 
-        now = datetime.now()
-        if updated_dt.tzinfo is not None and now.tzinfo is None:
-            # Make both naive for comparison
-            updated_dt = updated_dt.replace(tzinfo=None)
+        # Rows are stamped with naive-UTC strings, so age against naive-UTC now
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if updated_dt.tzinfo is not None:
+            updated_dt = updated_dt.astimezone(timezone.utc).replace(tzinfo=None)
 
         days_elapsed = (now - updated_dt).total_seconds() / 86400
         if days_elapsed <= 0:

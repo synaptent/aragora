@@ -26,12 +26,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 from collections.abc import Callable, Coroutine
 
 from aragora.exceptions import REDIS_CONNECTION_ERRORS
+from aragora.server.startup.billing import init_billing_edge_adapters
+from aragora.server.startup.security import init_security_edge_adapters
 
 logger = logging.getLogger(__name__)
 
@@ -832,6 +835,22 @@ async def parallel_init(
         if not status.get("_parallel_init_success"):
             logger.error("Initialization failed")
     """
+    from aragora.server.startup.control_plane import register_control_plane_event_contributors
+    from aragora.server.startup.event_subscribers import register_webhook_store
+
+    register_control_plane_event_contributors()
+    register_webhook_store()
+
+    strict_startup = os.environ.get("ARAGORA_STRICT_STARTUP", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if strict_startup:
+        graceful_degradation = False
+    security_edge_adapters = init_security_edge_adapters(strict=strict_startup)
+    billing_edge_adapters = init_billing_edge_adapters(strict=strict_startup)
+
     initializer = ParallelInitializer(
         nomic_dir=nomic_dir,
         stream_emitter=stream_emitter,
@@ -842,6 +861,8 @@ async def parallel_init(
 
     # Build status dict compatible with run_startup_sequence()
     status = dict(result.results)
+    status["security_edge_adapters"] = security_edge_adapters
+    status["billing_edge_adapters"] = billing_edge_adapters
     status["_parallel_init_success"] = result.success
     status["_parallel_init_duration_ms"] = result.total_duration_ms
     status["_parallel_init_phases"] = [p.to_dict() for p in result.phases]

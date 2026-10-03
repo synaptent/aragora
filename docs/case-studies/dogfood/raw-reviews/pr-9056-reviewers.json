@@ -1,0 +1,22 @@
+[
+  {
+    "family": "grok",
+    "agent_type": "grok",
+    "ok": true,
+    "text": "Verdict: PASS\n\nNo findings.",
+    "error": "",
+    "elapsed_s": 7.9,
+    "verdict": "PASS",
+    "model": "grok-4-latest"
+  },
+  {
+    "family": "mistral",
+    "agent_type": "mistral-api",
+    "ok": true,
+    "text": "Verdict: PASS\n\n- [P2] `aragora/swarm/merge_quorum_reconcile.py` L245: `run.run_id if run else None` could mask a logic error if `run` is unexpectedly `None` when `needs_adjudication=True` (though tests cover this, consider an explicit `assert run is not None` for defense-in-depth).",
+    "error": "",
+    "elapsed_s": 2.3,
+    "verdict": "PASS",
+    "model": "mistral-large-2512"
+  }
+]

@@ -1710,12 +1710,16 @@ export interface ContinuumStoreOptions {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * @deprecated Only used by the deprecated `storeToContinuum`. The live store
+ * endpoint (POST /api/v1/memory/store) returns `{ id, tier }` without `created_at`.
+ */
 export interface ContinuumStoreResult {
   /** Unique identifier for the stored memory entry */
   id: string;
   /** The tier where the content was stored */
   tier: string;
-  /** Timestamp when the entry was created */
+  /** Timestamp when the entry was created (never returned by the live API) */
   created_at: string;
 }
 

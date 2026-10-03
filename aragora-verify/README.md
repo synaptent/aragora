@@ -42,7 +42,23 @@ aragora-verify receipt.odr.json --pubkey key.pem --chain intent-chain.jsonl
 
 # Machine-readable result
 aragora-verify receipt.odr.json --pubkey key.pem --json
+
+# Confirm the ACTA-02 projection envelope really carries this receipt
+aragora-verify receipt.odr.json --pubkey key.pem --acta receipt.acta.json
+
+# v0.2 signature policy: fix the expiry clock, fail on expiry, demand a signer
+aragora-verify receipt.odr.json --pubkey key.pem --now 2026-01-15T12:00:00Z
+aragora-verify receipt.odr.json --pubkey key.pem --strict-expiry
+aragora-verify receipt.odr.json --pubkey key.pem --require-issuer aragora
 ```
+
+A v0.2 signature that carries `expires_at` and has passed it still verifies, with
+an `expired at <timestamp>` warning; `--strict-expiry` turns that warning into a
+failure. `--require-issuer NAME` needs at least one signature whose
+signer-committed `issuer` is NAME to verify under `--pubkey`, and **a verified but
+expired signature satisfies it unless `--strict-expiry` is given as well**. On a
+v0.1 document `issuer` is not covered by the signature, so `--require-issuer` can
+never pass there.
 
 Exit code `0` means verified (no failed checks, and any present signatures were
 checked); `1` means a check failed; `2` is a usage/input error; `3` means the
@@ -51,7 +67,10 @@ receipt is structurally OK but carries signatures that were **not** checked
 not reported as `0`/VERIFIED.
 
 The public key for receipts emitted by an Aragora deployment is published at
-`GET /.well-known/aragora-odr-signing-key` and `GET /api/v2/receipts/signing-key`.
+`GET /.well-known/aragora-odr-signing-key` and `GET /api/v2/receipts/signing-key`
+(both endpoints are live in the Aragora unified server; see #8804/#8809). Verify
+that a specific deployment actually serves the key at those paths before relying
+on them for automated verification.
 
 ### Weakening vs. failing
 

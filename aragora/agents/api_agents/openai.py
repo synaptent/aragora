@@ -5,14 +5,38 @@ Supports web search tool for web-capable responses when URLs
 or web-related keywords are detected in the prompt.
 """
 
+import asyncio
 import logging
 import re
+import time
+from collections.abc import AsyncGenerator
+from concurrent.futures import ThreadPoolExecutor
 
 from aragora.agents.api_agents.base import APIAgent
-from aragora.core_types import AgentRole
-from aragora.agents.api_agents.common import get_primary_api_key
+from aragora.agents.api_agents.common import (
+    AgentAPIError,
+    AgentCircuitOpenError,
+    get_primary_api_key,
+)
 from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
 from aragora.agents.registry import AgentRegistry
+from aragora.agents.transports.vibeproxy import (
+    ModelTransportPolicy,
+    OpenAIProtocol,
+    TransportMode,
+    VibeProxyConfigurationError,
+    VibeProxyResponseError,
+    VibeProxyTimeoutError,
+    VibeProxyUnavailableError,
+)
+from aragora.core import Message
+from aragora.core_types import AgentRole
+from aragora.observability.metrics.agents import (
+    ErrorType,
+    record_circuit_breaker_rejection,
+    record_provider_call,
+    record_provider_token_usage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +57,29 @@ _WEB_SEARCH_PATTERNS = [
 ]
 
 
+# Cap for VibeProxy catalog discovery (4x the client's 1.5s connect timeout):
+# bounds how long a wedged proxy can delay PREFER-mode fallback to direct.
+_PROXY_DISCOVERY_TIMEOUT_SECONDS = 6.0
+
+# Dedicated bounded executor for blocking VibeProxy legs so slow proxy
+# inferences cannot starve the event loop's shared default executor.
+# Threads are spawned lazily on first use.
+_PROXY_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="vibeproxy-openai")
+
+
+def _resolve_openai_base_url() -> str:
+    """OPENAI_BASE_URL override for gateways/proxies (issue #9304)."""
+    import os
+
+    raw = os.environ.get("OPENAI_BASE_URL", "").strip().rstrip("/")
+    if not raw:
+        return "https://api.openai.com/v1"
+    return raw if raw.endswith("/v1") else raw + "/v1"
+
+
 @AgentRegistry.register(
     "openai-api",
-    default_model="gpt-5.5",
+    default_model="gpt-5.6-sol",
     default_name="openai-api",
     agent_type="API",
     env_vars="OPENAI_API_KEY",
@@ -58,13 +102,14 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
     # OPENAI_API_KEY never blocks a debate. Distinct OpenRouter model IDs
     # are kept only where the Pro tier is explicitly requested.
     OPENROUTER_MODEL_MAP = {
+        "gpt-5.6-sol": "openai/gpt-5.6-sol",
         "gpt-5.5": "openai/gpt-5.5",
-        "gpt-5.4": "openai/gpt-5.5",
-        "gpt-5.4-pro": "openai/gpt-5.5",
-        "gpt-5.3": "openai/gpt-5.5",
-        "gpt-5.3-chat-latest": "openai/gpt-5.5",
-        "gpt-5.3-codex": "openai/gpt-5.5",
-        "gpt-4.1": "openai/gpt-5.5",
+        "gpt-5.4": "openai/gpt-5.6-sol",
+        "gpt-5.4-pro": "openai/gpt-5.6-sol",
+        "gpt-5.3": "openai/gpt-5.6-sol",
+        "gpt-5.3-chat-latest": "openai/gpt-5.6-sol",
+        "gpt-5.3-codex": "openai/gpt-5.6-sol",
+        "gpt-4.1": "openai/gpt-5.6-sol",
         "gpt-4.1-mini": "openai/gpt-5.5",
         "gpt-4.1-nano": "openai/gpt-5.5",
         "gpt-4o": "openai/gpt-5.5",
@@ -82,12 +127,16 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
     def __init__(
         self,
         name: str = "openai-api",
-        model: str = "gpt-5.5",
+        model: str = "gpt-5.6-sol",
         role: AgentRole = "proposer",
         timeout: int = 120,
         api_key: str | None = None,
         enable_fallback: bool | None = None,  # None = use config setting
+        model_transport: ModelTransportPolicy | None = None,  # None = from env
     ) -> None:
+        import os
+
+        self._uses_official_openai_endpoint = not os.environ.get("OPENAI_BASE_URL", "").strip()
         super().__init__(
             name=name,
             model=model,
@@ -95,7 +144,8 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
             timeout=timeout,
             api_key=api_key
             or get_primary_api_key("OPENAI_API_KEY", allow_openrouter_fallback=True),
-            base_url="https://api.openai.com/v1",
+            # OPENAI_BASE_URL supports BYOK gateways/proxies (issue #9304).
+            base_url=_resolve_openai_base_url(),
         )
         self.agent_type = "openai"
         # Use config setting if not explicitly provided
@@ -108,6 +158,29 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
         self._fallback_agent = None
         self.enable_web_search = True  # Enable web search tool by default
         self._current_prompt = ""  # Track current prompt for web search detection
+        if model_transport is not None:
+            # Per-instance override: callers that must stay on a fixed
+            # transport (e.g. server surfaces pinning DIRECT) are immune to the
+            # ambient ARAGORA_MODEL_TRANSPORT environment opt-in.
+            self._model_transport_policy = model_transport
+            return
+        try:
+            self._model_transport_policy = ModelTransportPolicy.from_env(
+                default_mode=TransportMode.DIRECT
+            )
+        except VibeProxyConfigurationError as exc:
+            # REQUIRED stays fail-closed on a bad environment; every other mode
+            # degrades to the direct path so agent construction never fails for
+            # callers that never touch VibeProxy.
+            raw_mode = os.environ.get("ARAGORA_MODEL_TRANSPORT", "").strip().lower()
+            if raw_mode == TransportMode.REQUIRED.value:
+                raise
+            logger.warning(
+                "[%s] invalid VibeProxy transport configuration; using direct transport: %s",
+                name,
+                exc,
+            )
+            self._model_transport_policy = ModelTransportPolicy(TransportMode.DIRECT)
 
     def _needs_web_search(self, prompt: str) -> bool:
         """Detect if the prompt would benefit from web search.
@@ -143,6 +216,246 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
                 ]
             }
         return None
+
+    def _can_route_exact_chat(self, full_prompt: str) -> bool:
+        """Return whether this request is inside the contract-tested proxy slice."""
+
+        return (
+            self._model_transport_policy.mode is not TransportMode.DIRECT
+            and self._uses_official_openai_endpoint
+            and not self._needs_web_search(full_prompt)
+        )
+
+    def _reject_if_required_ineligible(self, reason: str) -> None:
+        """REQUIRED mode is an egress boundary: never silently fall back to a
+        direct api.openai.com call for requests the proxy slice cannot serve."""
+
+        if self._model_transport_policy.mode is TransportMode.REQUIRED:
+            raise AgentAPIError(
+                f"vibeproxy-required cannot serve this request ({reason}); "
+                "web search, tools, custom endpoints, and streaming are outside "
+                "the contract-tested proxy slice",
+                agent_name=self.name,
+            )
+
+    async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
+        """Route exact, non-streaming OpenAI Chat requests through VibeProxy.
+
+        In PREFER mode, web search, streaming, custom endpoints, and any request
+        the policy does not resolve exactly continue through the established
+        direct path. In REQUIRED mode those requests fail closed instead.
+        """
+
+        full_prompt = prompt
+        if context:
+            full_prompt = self._build_context_prompt(context) + prompt
+        if not self._can_route_exact_chat(full_prompt):
+            self._reject_if_required_ineligible("web search or custom endpoint requested")
+            return await super().generate(prompt, context)
+
+        start_time = time.perf_counter()
+        cb = getattr(self, "_circuit_breaker", None)
+        if cb is not None and not cb.can_proceed():
+            record_circuit_breaker_rejection(self.agent_type)
+            record_provider_call(
+                provider=self.agent_type,
+                success=False,
+                error_type=ErrorType.CIRCUIT_OPEN,
+                latency_seconds=time.perf_counter() - start_time,
+                model=self.model,
+            )
+            raise AgentCircuitOpenError(
+                f"Circuit breaker open for {self.name} - too many recent failures",
+                agent_name=self.name,
+            )
+
+        messages = self._build_messages(full_prompt)
+        payload = self._build_payload(messages, stream=False)
+        # Defensively keep future tool-bearing extensions on the direct path.
+        if payload.get("tools"):
+            self._reject_if_required_ineligible("tool-bearing payload")
+            return await super().generate(prompt, context)
+
+        estimated_budget_usd = self._estimate_budget_cost_usd(payload)
+        from aragora.billing import budget_guard
+
+        budget_guard.assert_within_budget(
+            estimated_budget_usd,
+            label=getattr(self, "name", None),
+        )
+
+        deadline = time.monotonic() + float(self.timeout)
+
+        def remaining_timeout() -> float:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise VibeProxyTimeoutError("VibeProxy OpenAI request timed out")
+            return remaining
+
+        loop = asyncio.get_running_loop()
+        try:
+            # Blocking legs run on a dedicated bounded executor (not the shared
+            # default one), and each leg computes its timeout at thread start so
+            # executor queue wait consumes the deadline instead of escaping it.
+            # Discovery is wall-clock bounded by wait_for — covering executor
+            # queue wait, not just the socket timeout — so a wedged proxy can
+            # never delay PREFER-mode fallback by more than the discovery cap.
+            discovery_cap = min(remaining_timeout(), _PROXY_DISCOVERY_TIMEOUT_SECONDS)
+            try:
+                # asyncio.TimeoutError is distinct from builtin TimeoutError on
+                # Python 3.10; catch both (they unify from 3.11 onward).
+                route = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        _PROXY_EXECUTOR,
+                        lambda: self._model_transport_policy.resolve(
+                            "openai",
+                            self.model,
+                            ("chat",),
+                            timeout=discovery_cap,
+                        ),
+                    ),
+                    timeout=discovery_cap,
+                )
+            except (TimeoutError, asyncio.TimeoutError) as exc:
+                raise VibeProxyTimeoutError(
+                    "VibeProxy discovery exceeded the wall-clock cap"
+                ) from exc
+            if route.transport == "direct":
+                # resolve() downgrades proxy unavailability to a direct route in
+                # PREFER mode; record the proxy-leg failure so a wedged proxy is
+                # not metrically invisible on this path.
+                if route.fallback_reason:
+                    logger.warning(
+                        "[%s] VibeProxy route unavailable; using direct path: %s",
+                        self.name,
+                        route.fallback_reason,
+                    )
+                    record_provider_call(
+                        provider="vibeproxy",
+                        success=False,
+                        error_type=ErrorType.API_ERROR,
+                        latency_seconds=time.perf_counter() - start_time,
+                        model=self.model,
+                    )
+                return await super().generate(prompt, context)
+
+            client = self._model_transport_policy.client
+            if client is None:
+                raise VibeProxyUnavailableError("VibeProxy client is not configured")
+            proxy_payload = dict(payload)
+            proxy_payload["model"] = route.resolved_model
+            # The request leg is deliberately NOT wrapped in wait_for: the
+            # executor job cannot be cancelled, so abandoning it on a wall-clock
+            # race could run a duplicate inference (proxy completes after the
+            # direct fallback starts). remaining_timeout() evaluated at thread
+            # start already bounds the leg — it raises immediately if executor
+            # queue wait exhausted the deadline, and otherwise caps the socket
+            # wait at the remaining budget — so the caller is bounded without
+            # an orphaned in-flight inference.
+            data = await loop.run_in_executor(
+                _PROXY_EXECUTOR,
+                lambda: client.openai_request(
+                    protocol=OpenAIProtocol.CHAT,
+                    model=route.resolved_model,
+                    payload=proxy_payload,
+                    timeout=remaining_timeout(),
+                ),
+            )
+            # A well-formed HTTP 200 whose body is malformed or empty is still
+            # proxy unavailability: PREFER falls back, REQUIRED fails closed.
+            # Shape surprises (choices not a list, message None, content not a
+            # str) must not escape as raw TypeError/AttributeError.
+            try:
+                content = self._parse_response(data)
+                if not isinstance(content, str) or not content.strip():
+                    raise VibeProxyResponseError("VibeProxy returned an empty response")
+            except VibeProxyResponseError:
+                raise
+            except (AgentAPIError, TypeError, AttributeError) as exc:
+                raise VibeProxyResponseError(
+                    "VibeProxy returned a malformed OpenAI response"
+                ) from exc
+        except (VibeProxyConfigurationError, VibeProxyUnavailableError) as exc:
+            if self._model_transport_policy.mode is TransportMode.PREFER:
+                logger.warning(
+                    "[%s] VibeProxy OpenAI request unavailable; using direct path: %s",
+                    self.name,
+                    exc,
+                )
+                # Record the proxy-leg failure under its own provider label so a
+                # wedged proxy is visible without skewing openai failure rates
+                # (the direct fallback records its own outcome).
+                record_provider_call(
+                    provider="vibeproxy",
+                    success=False,
+                    error_type=(
+                        ErrorType.TIMEOUT
+                        if isinstance(exc, VibeProxyTimeoutError)
+                        else ErrorType.API_ERROR
+                    ),
+                    latency_seconds=time.perf_counter() - start_time,
+                    model=self.model,
+                )
+                return await super().generate(prompt, context)
+            if cb is not None:
+                cb.record_failure()
+            record_provider_call(
+                provider=self.agent_type,
+                success=False,
+                error_type=(
+                    ErrorType.TIMEOUT
+                    if isinstance(exc, VibeProxyTimeoutError)
+                    else ErrorType.API_ERROR
+                ),
+                latency_seconds=time.perf_counter() - start_time,
+                model=self.model,
+            )
+            raise AgentAPIError(
+                f"required VibeProxy OpenAI request failed: {exc}",
+                agent_name=self.name,
+            ) from exc
+
+        usage = data.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0) if isinstance(usage, dict) else 0
+        output_tokens = usage.get("completion_tokens", 0) if isinstance(usage, dict) else 0
+        if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+            input_tokens = 0
+            output_tokens = 0
+        usage_has_tokens = bool(input_tokens or output_tokens)
+        self._record_token_usage(tokens_in=input_tokens, tokens_out=output_tokens)
+
+        if not usage_has_tokens and estimated_budget_usd > 0:
+            budget_guard.record_spend(estimated_budget_usd)
+        if cb is not None:
+            cb.record_success()
+        # The proxy leg records under "vibeproxy" only (successes and failures
+        # both), never additionally under the agent provider: one logical
+        # inference must not increment two provider series.
+        record_provider_call(
+            provider="vibeproxy",
+            success=True,
+            latency_seconds=time.perf_counter() - start_time,
+            model=self.model,
+        )
+        record_provider_token_usage(
+            provider=self.agent_type,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        return content
+
+    async def generate_stream(
+        self, prompt: str, context: list[Message] | None = None
+    ) -> AsyncGenerator[str, None]:
+        """Streaming is outside the contract-tested proxy slice.
+
+        PREFER mode streams through the established direct path; REQUIRED mode
+        fails closed so the egress boundary also covers streaming requests.
+        """
+
+        self._reject_if_required_ineligible("streaming requested")
+        async for chunk in super().generate_stream(prompt, context):
+            yield chunk
 
 
 __all__ = ["OpenAIAPIAgent"]

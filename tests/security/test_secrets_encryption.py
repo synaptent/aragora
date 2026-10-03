@@ -146,7 +146,7 @@ class TestSyncStoreEncryption:
 
     def test_encrypt_config_with_credentials(self):
         """Test connector config encryption."""
-        from aragora.connectors.enterprise.sync_store import (
+        from aragora.storage.sync_store import (
             _encrypt_config,
             _decrypt_config,
         )
@@ -176,7 +176,7 @@ class TestSyncStoreEncryption:
 
     def test_encryption_disabled_passthrough(self):
         """Test that use_encryption=False passes through unchanged."""
-        from aragora.connectors.enterprise.sync_store import (
+        from aragora.storage.sync_store import (
             _encrypt_config,
             _decrypt_config,
         )

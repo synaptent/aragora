@@ -257,8 +257,9 @@ class AcademicAuditor(BaseAuditor):
         for pattern_def in CITATION_PATTERNS:
             # Check in-text citations
             for match in pattern_def.in_text_pattern.finditer(content):
-                author = match.group(1) if match.lastindex >= 1 else ""
-                year = match.group(2) if match.lastindex >= 2 else None
+                lastindex = match.lastindex or 0
+                author = match.group(1) if lastindex >= 1 else ""
+                year = match.group(2) if lastindex >= 2 else None
 
                 citation = ExtractedCitation(
                     text=match.group(0),
@@ -274,10 +275,11 @@ class AcademicAuditor(BaseAuditor):
 
             # Check reference entries (line by line)
             for line in content.split("\n"):
-                match = pattern_def.reference_pattern.match(line.strip())
-                if match:
-                    author = match.group(1) if match.lastindex >= 1 else ""
-                    year = match.group(2) if match.lastindex >= 2 else None
+                reference_match = pattern_def.reference_pattern.match(line.strip())
+                if reference_match:
+                    lastindex = reference_match.lastindex or 0
+                    author = reference_match.group(1) if lastindex >= 1 else ""
+                    year = reference_match.group(2) if lastindex >= 2 else None
 
                     citation = ExtractedCitation(
                         text=line.strip()[:200],
@@ -544,13 +546,14 @@ class CitationExtractor:
 
         for pattern_def in patterns:
             for match in pattern_def.in_text_pattern.finditer(text):
+                lastindex = match.lastindex or 0
                 results.append(
                     {
                         "type": "in_text",
                         "style": pattern_def.style.value,
                         "text": match.group(0),
-                        "author": match.group(1) if match.lastindex >= 1 else None,
-                        "year": match.group(2) if match.lastindex >= 2 else None,
+                        "author": match.group(1) if lastindex >= 1 else None,
+                        "year": match.group(2) if lastindex >= 2 else None,
                         "position": match.start(),
                     }
                 )

@@ -8,7 +8,7 @@ All functions operate on ContinuumMemory instances passed as the first parameter
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, cast
 
 from aragora.memory.tier_manager import DEFAULT_TIER_CONFIGS, MemoryTier
@@ -161,7 +161,10 @@ def cleanup_expired_memories(
             else:
                 retention_hours = config.half_life_hours * retention_multiplier
 
-            cutoff = datetime.now() - timedelta(hours=retention_hours)
+            # Naive-UTC clock: rows are stamped with naive-UTC strings
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+                hours=retention_hours
+            )
             cutoff_str = cutoff.isoformat()
 
             # Build tenant filter clause if needed

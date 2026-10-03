@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 from collections.abc import Callable
 from uuid import uuid4
 
@@ -121,7 +121,10 @@ class FindingAssignment:
             team_name=data.get("team_name", ""),
             assigned_by=data.get("assigned_by", ""),
             assigned_by_name=data.get("assigned_by_name", ""),
-            assigned_at=parse_timestamp(data.get("assigned_at"), default=utc_now()),
+            assigned_at=cast(
+                datetime,
+                parse_timestamp(data.get("assigned_at"), default=utc_now()),
+            ),
             priority=AssignmentPriority(data.get("priority", "medium")),
             due_date=parse_timestamp(data.get("due_date")),
             sla_hours=data.get("sla_hours"),

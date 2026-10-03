@@ -3,9 +3,9 @@
 
 name: proposer
 # OpenRouter-first so a missing Anthropic key never blocks debates.
-# anthropic/claude-opus-4.8 via OpenRouter is the frontier Claude model.
+# anthropic/claude-opus-5 via OpenRouter is the frontier Claude model.
 model_type: openrouter
-model: anthropic/claude-opus-4.8
+model: anthropic/claude-opus-5
 
 role: proposer
 stance: affirmative

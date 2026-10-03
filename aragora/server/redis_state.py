@@ -44,9 +44,11 @@ DEBATE_TTL_SECONDS = 86400  # 24 hours
 INSTANCE_ID = os.environ.get("ARAGORA_INSTANCE_ID", f"instance-{os.getpid()}")
 
 # Optional aioredis/redis import
+aioredis: Any
 try:
-    import redis.asyncio as aioredis
+    import redis.asyncio as _aioredis
 
+    aioredis = _aioredis
     REDIS_AVAILABLE = True
 except ImportError:
     aioredis = None
@@ -134,7 +136,7 @@ class RedisStateManager:
         Returns:
             True if connected, False otherwise
         """
-        if not REDIS_AVAILABLE:
+        if not REDIS_AVAILABLE or aioredis is None:
             logger.debug("Redis not available (aioredis not installed)")
             return False
 
@@ -145,7 +147,7 @@ class RedisStateManager:
                 decode_responses=True,
             )
             # Test connection
-            await self._redis.ping()
+            await self._require_redis().ping()
             self._connected = True
             logger.info("Connected to Redis at %s", self._redis_url)
             return True
@@ -172,6 +174,13 @@ class RedisStateManager:
     def is_connected(self) -> bool:
         """Check if connected to Redis."""
         return self._connected and self._redis is not None
+
+    def _require_redis(self) -> Any:
+        """Return the connected Redis client or fail closed."""
+        client = self._redis
+        if client is None:
+            raise RuntimeError("Redis client not available")
+        return client
 
     @property
     def server_start_time(self) -> float:
@@ -216,9 +225,10 @@ class RedisStateManager:
         )
 
         if self.is_connected:
+            redis = self._require_redis()
             key = f"{self.DEBATE_PREFIX}:{debate_id}"
-            await self._redis.setex(key, DEBATE_TTL_SECONDS, state.to_json())
-            await self._redis.sadd(self.ACTIVE_DEBATES_KEY, debate_id)
+            await redis.setex(key, DEBATE_TTL_SECONDS, state.to_json())
+            await redis.sadd(self.ACTIVE_DEBATES_KEY, debate_id)
 
             # Publish event
             await self._publish_event(
@@ -246,9 +256,10 @@ class RedisStateManager:
         state = await self.get_debate(debate_id)
 
         if self.is_connected:
+            redis = self._require_redis()
             key = f"{self.DEBATE_PREFIX}:{debate_id}"
-            await self._redis.delete(key)
-            await self._redis.srem(self.ACTIVE_DEBATES_KEY, debate_id)
+            await redis.delete(key)
+            await redis.srem(self.ACTIVE_DEBATES_KEY, debate_id)
 
             # Publish event
             await self._publish_event(
@@ -269,7 +280,7 @@ class RedisStateManager:
             return None
 
         key = f"{self.DEBATE_PREFIX}:{debate_id}"
-        data = await self._redis.get(key)
+        data = await self._require_redis().get(key)
 
         if data:
             return DebateState.from_json(data)
@@ -281,7 +292,7 @@ class RedisStateManager:
             return {}
 
         # Get all active debate IDs
-        debate_ids = await self._redis.smembers(self.ACTIVE_DEBATES_KEY)
+        debate_ids = await self._require_redis().smembers(self.ACTIVE_DEBATES_KEY)
         if not debate_ids:
             return {}
 
@@ -298,7 +309,7 @@ class RedisStateManager:
         """Get count of active debates."""
         if not self.is_connected:
             return 0
-        return await self._redis.scard(self.ACTIVE_DEBATES_KEY)
+        return await self._require_redis().scard(self.ACTIVE_DEBATES_KEY)
 
     async def update_debate_status(
         self,
@@ -328,7 +339,7 @@ class RedisStateManager:
         # Save updated state
         if self.is_connected:
             key = f"{self.DEBATE_PREFIX}:{debate_id}"
-            await self._redis.setex(key, DEBATE_TTL_SECONDS, state.to_json())
+            await self._require_redis().setex(key, DEBATE_TTL_SECONDS, state.to_json())
 
             # Publish event
             await self._publish_event(
@@ -362,7 +373,7 @@ class RedisStateManager:
         # Save updated state
         if self.is_connected:
             key = f"{self.DEBATE_PREFIX}:{debate_id}"
-            await self._redis.setex(key, DEBATE_TTL_SECONDS, state.to_json())
+            await self._require_redis().setex(key, DEBATE_TTL_SECONDS, state.to_json())
 
             # Publish event for real-time broadcast
             await self._publish_event(
@@ -389,7 +400,7 @@ class RedisStateManager:
             "timestamp": time.time(),
             "instance_id": self._instance_id,
         }
-        await self._redis.publish(self.EVENTS_CHANNEL, json.dumps(event))
+        await self._require_redis().publish(self.EVENTS_CHANNEL, json.dumps(event))
 
     async def subscribe(self, pattern: str = "*") -> AsyncGenerator[dict, None]:
         """Subscribe to events matching a pattern.
@@ -403,11 +414,12 @@ class RedisStateManager:
         if not self.is_connected:
             return
 
-        self._pubsub = self._redis.pubsub()
-        await self._pubsub.subscribe(self.EVENTS_CHANNEL)
+        pubsub = self._require_redis().pubsub()
+        self._pubsub = pubsub
+        await pubsub.subscribe(self.EVENTS_CHANNEL)
 
         try:
-            async for message in self._pubsub.listen():
+            async for message in pubsub.listen():
                 if message["type"] == "message":
                     try:
                         event = json.loads(message["data"])
@@ -417,7 +429,7 @@ class RedisStateManager:
                     except json.JSONDecodeError:
                         logger.warning("Invalid event JSON: %s", message["data"])
         finally:
-            await self._pubsub.unsubscribe()
+            await pubsub.unsubscribe()
 
     # ==================== Health & Metrics ====================
 
@@ -433,7 +445,7 @@ class RedisStateManager:
         if self.is_connected:
             try:
                 start = time.time()
-                await self._redis.ping()
+                await self._require_redis().ping()
                 result["ping_ms"] = (time.time() - start) * 1000
                 result["active_debates"] = await self.get_active_debate_count()
             except REDIS_CONNECTION_ERRORS as e:

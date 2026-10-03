@@ -998,6 +998,96 @@ def test_merge_ready_prompt_fails_closed_for_string_not_ready_entry(tmp_path: Pa
     assert "I authorize normal protected squash merge" not in prompt
 
 
+def test_merge_ready_packet_preserves_structured_transport_failure(tmp_path: Path) -> None:
+    transport_failure = {
+        "status": "transport_blocked",
+        "transport_blocked": True,
+        "preserve_no_mutate": True,
+        "error_kind": "github_transport",
+        "error": "gh pr list failed: HTTP 504: Gateway Timeout",
+        "admin_squash_order": [],
+        "entries": [],
+    }
+
+    def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, json.dumps(transport_failure), "")
+
+    packet = prompt_builder.build_merge_ready_packet(
+        repo_root=tmp_path,
+        limit=40,
+        command_runner=fake_runner,
+    )
+
+    assert packet["status"] == "transport_blocked"
+    assert packet["error_kind"] == "github_transport"
+    assert packet["preserve_no_mutate"] is True
+    assert packet["returncode"] == 1
+
+
+def test_json_or_empty_wraps_non_dict_json_from_failed_command() -> None:
+    payload = [{"name": "lint", "state": "SUCCESS"}]
+    result = subprocess.CompletedProcess(
+        ["gh", "pr", "checks"],
+        1,
+        json.dumps(payload),
+        "HTTP 502: Bad Gateway",
+    )
+
+    assert prompt_builder._json_or_empty(result) == {
+        "error": "HTTP 502: Bad Gateway",
+        "returncode": 1,
+        "payload": payload,
+    }
+
+
+def test_json_or_empty_preserves_non_dict_json_from_successful_command() -> None:
+    payload = [{"name": "lint", "state": "SUCCESS"}]
+    result = subprocess.CompletedProcess(
+        ["gh", "pr", "checks"],
+        0,
+        json.dumps(payload),
+        "",
+    )
+
+    assert prompt_builder._json_or_empty(result) == payload
+
+
+def test_merge_ready_prompt_reports_transport_failure_before_candidate_parsing(
+    tmp_path: Path,
+) -> None:
+    packet = {
+        "status": "transport_blocked",
+        "transport_blocked": True,
+        "preserve_no_mutate": True,
+        "error_kind": "github_transport",
+        "error": "gh pr list failed: HTTP 504: Gateway Timeout",
+        "admin_squash_order": [],
+        "entries": [],
+        "returncode": 1,
+    }
+
+    prompt = prompt_builder.build_merge_ready_prompt(packet, repo_root=tmp_path)
+
+    assert "merge-packet transport blocked (github_transport)" in prompt
+    assert "HTTP 504: Gateway Timeout" in prompt
+    assert "preserve_no_mutate=true" in prompt
+    assert "missing a parseable pr_number" not in prompt
+    assert "I authorize normal protected squash merge" not in prompt
+
+
+def test_merge_ready_prompt_rejects_authorized_packet_from_failed_command(
+    tmp_path: Path,
+) -> None:
+    packet = _merge_ready_packet()
+    packet["live_pr"] = _merge_ready_live_pr()
+    packet["returncode"] = 1
+
+    prompt = prompt_builder.build_merge_ready_prompt(packet, repo_root=tmp_path)
+
+    assert "merge-packet command failed with return code 1" in prompt
+    assert "I authorize normal protected squash merge" not in prompt
+
+
 def test_packet_authorizes_blocks_string_not_ready_pr() -> None:
     packet = {
         "entries": [
@@ -1077,6 +1167,34 @@ def test_merge_ready_packet_adds_live_metadata_for_selected_pr(tmp_path: Path) -
         "--json",
         "number,state,isDraft,headRefOid,mergeable,mergeStateStatus,url",
     ] in calls
+
+
+def test_merge_ready_packet_rejects_failed_live_metadata_with_json_stdout(
+    tmp_path: Path,
+) -> None:
+    def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        if "merge-packet" in command:
+            return subprocess.CompletedProcess(command, 0, json.dumps(_merge_ready_packet()), "")
+        if command[:3] == ["gh", "pr", "view"]:
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                json.dumps(_merge_ready_live_pr()),
+                "",
+            )
+        return subprocess.CompletedProcess(command, 1, "", "unexpected")
+
+    packet = prompt_builder.build_merge_ready_packet(
+        repo_root=tmp_path,
+        pr=7828,
+        command_runner=fake_runner,
+    )
+    prompt = prompt_builder.build_merge_ready_prompt(packet, repo_root=tmp_path, pr=7828)
+
+    assert packet["live_pr"]["returncode"] == 1
+    assert packet["live_pr"]["error"] == "command failed with return code 1"
+    assert "live PR metadata for PR #7828 is unavailable" in prompt
+    assert "I authorize normal protected squash merge" not in prompt
 
 
 def test_decision_packet_detects_merged_pr_with_active_tmux_evidence_lane(

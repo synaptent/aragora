@@ -28,21 +28,21 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from collections.abc import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from aragora.server.middleware.tracing import get_trace_id
+from aragora.observability.middleware.tracing import get_trace_id
 
 if TYPE_CHECKING:
+    from aragora.events.types import EventEmitter, StreamEvent
     from aragora.storage.webhook_config_store import WebhookConfig
-    from aragora.server.stream.emitter import SyncEventEmitter
-    from aragora.events.types import StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +173,68 @@ class DeliveryResult:
     duration_ms: float = 0.0
 
 
+class WebhookStore(Protocol):
+    """Lower-layer contract for webhook lookup and delivery recording."""
+
+    def get_for_event(self, event_type: str) -> list[WebhookConfig]:
+        """Return active webhooks interested in an event type."""
+        ...
+
+    def record_delivery(
+        self,
+        webhook_id: str,
+        status_code: int,
+        success: bool = True,
+    ) -> None:
+        """Record a webhook delivery result."""
+        ...
+
+
+WebhookStoreProvider = Callable[[], WebhookStore | None]
+_webhook_store_provider: WebhookStoreProvider | None = None
+_webhook_store_provider_lock = threading.Lock()
+_webhook_store_provider_last_warning: float | None = None
+WEBHOOK_STORE_PROVIDER_WARNING_INTERVAL = 60.0
+
+
+def register_webhook_store_provider(provider: WebhookStoreProvider | None) -> None:
+    """Register the higher-layer provider used by the webhook dispatcher."""
+    global _webhook_store_provider, _webhook_store_provider_last_warning
+    with _webhook_store_provider_lock:
+        _webhook_store_provider = provider
+        _webhook_store_provider_last_warning = None
+
+
+def _warn_webhook_store_provider_failure(error: Exception) -> None:
+    """Emit a throttled warning when a registered provider cannot resolve."""
+    global _webhook_store_provider_last_warning
+
+    now = time.monotonic()
+    with _webhook_store_provider_lock:
+        last_warning = _webhook_store_provider_last_warning
+        if (
+            last_warning is not None
+            and now - last_warning < WEBHOOK_STORE_PROVIDER_WARNING_INTERVAL
+        ):
+            return
+        _webhook_store_provider_last_warning = now
+
+    logger.warning("Webhook store provider failed: %s", error)
+
+
+def _resolve_webhook_store() -> WebhookStore | None:
+    """Resolve webhook storage without importing a server composition surface."""
+    with _webhook_store_provider_lock:
+        provider = _webhook_store_provider
+    if provider is None:
+        return None
+    try:
+        return provider()
+    except (ImportError, OSError, RuntimeError, ValueError, sqlite3.Error) as e:
+        _warn_webhook_store_provider_failure(e)
+        return None
+
+
 def dispatch_webhook(
     webhook: WebhookConfig,
     payload: dict,
@@ -189,8 +251,7 @@ def dispatch_webhook(
     Returns:
         Tuple of (success, status_code, error_message)
     """
-    # Import here to avoid circular dependency
-    from aragora.server.handlers.webhooks import generate_signature
+    from aragora.security.webhook_signing import generate_signature
 
     # SSRF protection: validate webhook URL before making outbound request
     from aragora.security.ssrf_protection import validate_url
@@ -286,15 +347,25 @@ def dispatch_webhook_with_retry(
         DeliveryResult with outcome
     """
     # Import metrics and tracing (lazy to avoid circular imports)
+    record_webhook_retry: Callable[[str, int], None] | None
     try:
-        from aragora.observability.metrics.webhook import record_webhook_retry
+        from aragora.observability.metrics.webhook import (
+            record_webhook_retry as _record_webhook_retry,
+        )
     except ImportError:
         record_webhook_retry = None
+    else:
+        record_webhook_retry = _record_webhook_retry
 
+    trace_webhook_delivery: Callable[..., Any] | None
     try:
-        from aragora.observability.tracing import trace_webhook_delivery
+        from aragora.observability.tracing import (
+            trace_webhook_delivery as _trace_webhook_delivery,
+        )
     except ImportError:
         trace_webhook_delivery = None
+    else:
+        trace_webhook_delivery = _trace_webhook_delivery
 
     event_type = payload.get("event", "unknown")
     correlation_id = (
@@ -437,12 +508,12 @@ class WebhookDispatcher:
         self._rate_limited = 0
         self._lock = threading.Lock()
 
-    def subscribe_to_stream(self, event_emitter: SyncEventEmitter) -> None:
+    def subscribe_to_stream(self, event_emitter: EventEmitter) -> None:
         """
         Subscribe to an event emitter to receive events.
 
         Args:
-            event_emitter: SyncEventEmitter instance to subscribe to
+            event_emitter: Events-layer emitter interface to subscribe to
         """
 
         def on_event(event: StreamEvent):
@@ -472,10 +543,9 @@ class WebhookDispatcher:
                 self._rate_limited += 1
             return
 
-        # Import here to avoid circular dependency
-        from aragora.server.handlers.webhooks import get_webhook_store
-
-        store = get_webhook_store()
+        store = _resolve_webhook_store()
+        if store is None:
+            return
         webhooks = store.get_for_event(event_type)
 
         if not webhooks:
@@ -496,12 +566,16 @@ class WebhookDispatcher:
                 self._deliver_webhook,
                 webhook,
                 payload.copy(),
+                store,
             )
 
-    def _deliver_webhook(self, webhook: WebhookConfig, payload: dict) -> None:
+    def _deliver_webhook(
+        self,
+        webhook: WebhookConfig,
+        payload: dict,
+        store: WebhookStore,
+    ) -> None:
         """Deliver webhook in background thread."""
-        from aragora.server.handlers.webhooks import get_webhook_store
-
         # Import metrics (lazy to avoid circular imports)
         try:
             from aragora.observability.metrics.webhook import record_webhook_delivery
@@ -529,7 +603,6 @@ class WebhookDispatcher:
             )
 
         # Record delivery in store
-        store = get_webhook_store()
         store.record_delivery(
             webhook_id=webhook.id,
             status_code=result.status_code,
@@ -701,6 +774,7 @@ __all__ = [
     "dispatch_event",
     "dispatch_webhook",
     "dispatch_webhook_with_retry",
+    "register_webhook_store_provider",
     "shutdown_dispatcher",
     "DeliveryResult",
     # Receipt delivery helpers

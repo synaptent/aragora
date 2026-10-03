@@ -1,0 +1,65 @@
+name: PR Cancelled-Run Guardian
+
+# M1 re-trigger guardian from docs/governance/PR_RUN_CANCELLATION_DIAGNOSIS.md:
+# an external cancellation actor intermittently cancels non-required advisory
+# pull_request runs at the checkout step (~50% of Portability Lint PR runs),
+# leaving terminal-cancelled "failures" that mask real coverage and tax
+# settlement. This guardian re-runs each such cancellation exactly once.
+#
+# Scope guarantees (mirrors aragora-merge-quorum-retrigger.yml):
+#   * It NEVER evaluates checks, posts comments, approves, or merges.
+#   * Its only privileged action is POST /actions/runs/{id}/rerun, and only for
+#     cancelled runs at a PR's CURRENT head with run_attempt == 1 (the
+#     stateless once-per-run marker that bounds rerun loops).
+#   * It does NOT check out or execute any PR code.
+#
+# This file lives under .github/workflows/, so per REVIEW_AUTHORITY_PRINCIPLES.md
+# every change to it is Tier 4 and requires explicit human preapproval before
+# implementation and before merge.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply reruns (false = dry-run report only)"
+        required: false
+        default: "true"
+        type: string
+
+concurrency:
+  group: pr-cancelled-run-guardian
+  # Never self-cancel into a misleading state (same posture as the enforcing
+  # quorum workflows).
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+
+jobs:
+  guardian:
+    name: pr-cancelled-run-guardian
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Base-repo code only; this workflow never checks out PR code.
+          persist-credentials: false
+
+      - name: Re-run externally cancelled PR runs once
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          APPLY: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.apply }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--repo "$GITHUB_REPOSITORY" --max-runs 300 --ttl-hours 6)
+          if [[ "$APPLY" == "true" ]]; then
+            args+=(--apply)
+          fi
+          python3 scripts/retrigger_cancelled_pr_runs.py "${args[@]}"

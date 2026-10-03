@@ -11,7 +11,7 @@ Provides:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -71,7 +71,7 @@ class PlanManagementHandler(BaseHandler):
             plan_id = parts[3]
             is_valid, err = validate_path_segment(plan_id, "plan_id", SAFE_ID_PATTERN)
             if not is_valid:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
 
             if len(parts) == 4:
                 return self._get_plan(plan_id)
@@ -98,7 +98,7 @@ class PlanManagementHandler(BaseHandler):
             plan_id = parts[3]
             is_valid, err = validate_path_segment(plan_id, "plan_id", SAFE_ID_PATTERN)
             if not is_valid:
-                return error_response(err, 400)
+                return error_response(cast(str, err), 400)
             return self._approve_plan(plan_id, handler)
 
         return None

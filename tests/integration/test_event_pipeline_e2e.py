@@ -29,10 +29,14 @@ from aragora.events.types import StreamEvent, StreamEventType
 
 @pytest.fixture(autouse=True)
 def _reset_dispatcher_cache():
-    """Reset the lazy-loaded dispatcher availability flag between tests."""
+    """Reset dispatcher availability and provider state between tests."""
+    from aragora.events.dispatcher import register_webhook_store_provider
+
     original = handler_events._dispatcher_available
+    register_webhook_store_provider(None)
     yield
     handler_events._dispatcher_available = original
+    register_webhook_store_provider(None)
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +191,10 @@ class TestDispatcherDelivery:
         mock_store = MagicMock()
         mock_store.get_for_event.return_value = []  # No webhooks registered
 
-        with (
-            patch("aragora.events.dispatcher.get_event_rate_limiter", return_value=None),
-            patch("aragora.server.handlers.webhooks.get_webhook_store", return_value=mock_store),
-        ):
+        from aragora.events.dispatcher import register_webhook_store_provider
+
+        register_webhook_store_provider(lambda: mock_store)
+        with patch("aragora.events.dispatcher.get_event_rate_limiter", return_value=None):
             dispatcher.dispatch_event("debates.created", {"handler": "debates"})
 
         mock_store.get_for_event.assert_called_once_with("debates.created")
@@ -356,13 +360,9 @@ class TestEndToEndPipeline:
             dispatcher_mod.get_dispatcher = lambda: test_dispatcher
             # Reset the lazy flag so dispatch_event import succeeds
             handler_events._dispatcher_available = None
+            dispatcher_mod.register_webhook_store_provider(lambda: mock_store)
 
-            with (
-                patch("aragora.events.dispatcher.get_event_rate_limiter", return_value=None),
-                patch(
-                    "aragora.server.handlers.webhooks.get_webhook_store", return_value=mock_store
-                ),
-            ):
+            with patch("aragora.events.dispatcher.get_event_rate_limiter", return_value=None):
                 emit_handler_event("devops", "started", {"pipeline": "deploy-prod"})
 
             # The dispatcher should have queried the store for this event type

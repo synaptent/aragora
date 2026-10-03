@@ -771,6 +771,55 @@ class TestRegisterAllAgents:
             AgentRegistry._registry.clear()
             AgentRegistry._registry.update(original)
 
+    def test_register_all_agents_self_heals_cleared_registry(self):
+        """A cleared registry is repopulated even when agent modules are cached.
+
+        Regression test for #8277: under xdist a test that clears (or rebinds)
+        AgentFactory._registry used to permanently break agent lookup for the
+        rest of the worker, because aragora.agents.cli_agents stays cached in
+        sys.modules so its @AgentRegistry.register decorators never re-run.
+        """
+        from aragora.agents.registry import AgentRegistry, register_all_agents
+
+        register_all_agents()
+        assert AgentRegistry.is_registered("claude")
+
+        AgentRegistry.clear()
+        assert not AgentRegistry.is_registered("claude")
+
+        register_all_agents()
+        assert AgentRegistry.is_registered("claude")
+        assert AgentRegistry.is_registered("openai")
+
+    def test_register_all_agents_self_heals_rebound_registry(self):
+        """Healing also works when _registry was replaced with a new dict."""
+        from aragora.agents.registry import AgentRegistry, register_all_agents
+
+        register_all_agents()
+        AgentRegistry._registry = {}
+
+        register_all_agents()
+        assert AgentRegistry.is_registered("claude")
+
+    def test_register_all_agents_does_not_clobber_existing_entries(self):
+        """Healing only fills gaps; deliberate overrides are preserved."""
+        from aragora.agents.registry import AgentRegistry, RegistrySpec, register_all_agents
+
+        register_all_agents()
+        sentinel = RegistrySpec(
+            name="claude",
+            agent_class=object,
+            default_model=None,
+            default_name="claude",
+            agent_type="CLI",
+            requires=None,
+            env_vars=None,
+        )
+        AgentRegistry._registry["claude"] = sentinel
+
+        register_all_agents()
+        assert AgentRegistry.get_spec("claude") is sentinel
+
 
 # =============================================================================
 # Module Exports Tests

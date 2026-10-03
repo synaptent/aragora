@@ -41,6 +41,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from aragora.agents.transports.vibeproxy import TransportMode  # noqa: E402
+from scripts.consult_claude import FALLBACK_MODEL as CONSULT_FALLBACK_MODEL  # noqa: E402
+
 DEFAULT_TIMEOUT_SECONDS = 900
 CONTEXT_STEP_TIMEOUT_SECONDS = 30
 DIGEST_TIMEOUT_SECONDS = 120
@@ -55,6 +62,7 @@ SAFE_CONTEXT_SUBDIRS = (
 )
 DEFAULT_OUTPUT_DIR = ".aragora/goal_cycles"
 DEFAULT_MODEL = "claude-fable-5"
+MODEL_TRANSPORT_MODES = frozenset(mode.value for mode in TransportMode)
 MAX_ACTIVE_PROCESS_LINES = 40
 ACTIVE_PROCESS_SCRIPT_NAMES = frozenset(
     {
@@ -547,7 +555,20 @@ def run_consult(
     openrouter_fallback: bool = False,
     openrouter_model: str | None = None,
 ) -> dict:
-    enabled_attempts = 2 + int(openrouter_fallback)
+    transport_mode = os.environ.get("ARAGORA_MODEL_TRANSPORT", "direct").strip() or "direct"
+    if transport_mode not in MODEL_TRANSPORT_MODES:
+        return {
+            "ok": False,
+            "error": f"invalid ARAGORA_MODEL_TRANSPORT: {transport_mode}",
+        }
+    models = tuple(
+        dict.fromkeys(candidate for candidate in (model, CONSULT_FALLBACK_MODEL) if candidate)
+    )
+    vibeproxy_attempts = 0 if transport_mode == "direct" else len(models)
+    if transport_mode == "vibeproxy-required":
+        enabled_attempts = vibeproxy_attempts
+    else:
+        enabled_attempts = len(models) + vibeproxy_attempts + int(openrouter_fallback)
     overall_timeout = timeout * enabled_attempts
     command = [
         sys.executable,

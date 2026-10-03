@@ -12,12 +12,18 @@ Features:
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
 
 CheckpointStatus = Literal["active", "resumed", "expired"]
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class CheckpointsAPI:
@@ -159,30 +165,6 @@ class CheckpointsAPI:
     # Debate-Specific Checkpoint Operations
     # =========================================================================
 
-    def list_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """
-        List checkpoints for a specific debate.
-
-        Args:
-            debate_id: The debate identifier.
-
-        Returns:
-            Dict with list of checkpoints for this debate.
-        """
-        return self._client._request("GET", f"/api/v1/debates/{debate_id}/checkpoints")
-
-    def create_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """
-        Create a checkpoint for a running debate.
-
-        Args:
-            debate_id: The debate identifier.
-
-        Returns:
-            The created checkpoint.
-        """
-        return self._client._request("POST", f"/api/v1/debates/{debate_id}/checkpoint")
-
     def pause_debate(self, debate_id: str) -> dict[str, Any]:
         """
         Pause a debate and create a checkpoint.
@@ -269,6 +251,27 @@ class CheckpointsAPI:
             "GET",
             f"/api/v1/km/checkpoints/{name}/compare",
             params={"compare_to": compare_to},
+        )
+
+    def compare_km_checkpoints(self, checkpoint_a: str, checkpoint_b: str) -> dict[str, Any]:
+        """
+        Compare two named Knowledge Mound checkpoints directly.
+
+        Uses the documented POST /api/v1/km/checkpoints/compare contract
+        (body: checkpoint_a, checkpoint_b).
+
+        Args:
+            checkpoint_a: First checkpoint name.
+            checkpoint_b: Second checkpoint name.
+
+        Returns:
+            Dict with checkpoint_a, checkpoint_b, additions, deletions,
+            modifications, and details.
+        """
+        return self._client._request(
+            "POST",
+            "/api/v1/km/checkpoints/compare",
+            json={"checkpoint_a": checkpoint_a, "checkpoint_b": checkpoint_b},
         )
 
     def restore_km(self, name: str) -> dict[str, Any]:
@@ -373,14 +376,6 @@ class AsyncCheckpointsAPI:
     # Debate-Specific Checkpoint Operations
     # =========================================================================
 
-    async def list_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """List checkpoints for a specific debate."""
-        return await self._client._request("GET", f"/api/v1/debates/{debate_id}/checkpoints")
-
-    async def create_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """Create a checkpoint for a running debate."""
-        return await self._client._request("POST", f"/api/v1/debates/{debate_id}/checkpoint")
-
     async def pause_debate(self, debate_id: str) -> dict[str, Any]:
         """Pause a debate and create a checkpoint."""
         return await self._client._request("POST", f"/api/v1/debates/{debate_id}/pause")
@@ -423,6 +418,18 @@ class AsyncCheckpointsAPI:
             "GET",
             f"/api/v1/km/checkpoints/{name}/compare",
             params={"compare_to": compare_to},
+        )
+
+    async def compare_km_checkpoints(self, checkpoint_a: str, checkpoint_b: str) -> dict[str, Any]:
+        """Compare two named Knowledge Mound checkpoints directly.
+
+        Uses the documented POST /api/v1/km/checkpoints/compare contract
+        (body: checkpoint_a, checkpoint_b).
+        """
+        return await self._client._request(
+            "POST",
+            "/api/v1/km/checkpoints/compare",
+            json={"checkpoint_a": checkpoint_a, "checkpoint_b": checkpoint_b},
         )
 
     async def restore_km(self, name: str) -> dict[str, Any]:

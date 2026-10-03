@@ -23,6 +23,8 @@ import logging
 import os
 from typing import Any, cast
 
+from aragora.config.distributed import is_distributed_state_required
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,12 +95,7 @@ def validate_all(strict: bool = False) -> dict[str, Any]:
             warnings.append("ARAGORA_BASE_URL should use HTTPS in production")
 
     # Check Redis configuration for horizontal scaling
-    try:
-        from aragora.control_plane.leader import is_distributed_state_required
-
-        distributed_required = is_distributed_state_required()
-    except ImportError:
-        distributed_required = False
+    distributed_required = is_distributed_state_required()
 
     state_backend = env_vars.get("ARAGORA_STATE_BACKEND", "")
     redis_url = env_vars.get("ARAGORA_REDIS_URL", "") or env_vars.get("REDIS_URL", "")

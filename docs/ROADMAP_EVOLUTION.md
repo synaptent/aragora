@@ -14,7 +14,7 @@ The narrow surviving ideas have been re-homed as **sub-bullets under existing tr
 - diversity floor in ensemble selection → sub-bullet under G5
 - cheap-signal-to-verification routing as a benchmarked decision policy → sub-bullet under B4
 
-The biology-flavored framings that motivate them live in a non-canonical brief that has since been archived at [archive/research/2026-04-18-biological-timescale-analogies-brief.md](archive/research/2026-04-18-biological-timescale-analogies-brief.md).
+The biology-flavored framings that motivate them live in a non-canonical research brief dated 2026-04-18 that has since been archived.
 
 **Do not cite this file. Do not add content here.** Everything that survived the critique lives in the two docs referenced above.
 

@@ -107,12 +107,16 @@ class AragoraSlackBot:
     def _register_event_handlers(self) -> None:
         """Register Slack event handlers."""
 
-        @self._app.event("app_mention")
+        app = self._app
+        if app is None:
+            raise RuntimeError("Slack app is not initialized; call setup() first")
+
+        @app.event("app_mention")
         async def handle_app_mention(event: dict[str, Any], say: Callable) -> None:
             """Handle @mentions of the bot."""
             await self._handle_mention(event, say)
 
-        @self._app.event("message")
+        @app.event("message")
         async def handle_message(event: dict[str, Any], say: Callable) -> None:
             """Handle direct messages and channel messages."""
             # Skip bot messages and thread replies to avoid loops
@@ -127,7 +131,11 @@ class AragoraSlackBot:
     def _register_slash_commands(self) -> None:
         """Register Slack slash commands."""
 
-        @self._app.command("/aragora")
+        app = self._app
+        if app is None:
+            raise RuntimeError("Slack app is not initialized; call setup() first")
+
+        @app.command("/aragora")
         async def handle_aragora_command(
             ack: Callable, body: dict[str, Any], respond: Callable
         ) -> None:
@@ -139,7 +147,7 @@ class AragoraSlackBot:
             args = parts[1] if len(parts) > 1 else ""
             await self._handle_slash_command(body, command, args, respond)
 
-        @self._app.command("/debate")
+        @app.command("/debate")
         async def handle_debate_command(
             ack: Callable, body: dict[str, Any], respond: Callable
         ) -> None:
@@ -148,7 +156,7 @@ class AragoraSlackBot:
             topic = body.get("text", "").strip()
             await self._handle_slash_command(body, "debate", topic, respond)
 
-        @self._app.command("/gauntlet")
+        @app.command("/gauntlet")
         async def handle_gauntlet_command(
             ack: Callable, body: dict[str, Any], respond: Callable
         ) -> None:
@@ -157,7 +165,7 @@ class AragoraSlackBot:
             statement = body.get("text", "").strip()
             await self._handle_slash_command(body, "gauntlet", statement, respond)
 
-        @self._app.command("/aragora-status")
+        @app.command("/aragora-status")
         async def handle_status_command(
             ack: Callable, body: dict[str, Any], respond: Callable
         ) -> None:

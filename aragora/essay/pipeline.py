@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from aragora.agents.base import create_agent
+from aragora.agents.base import AgentType, create_agent
 from aragora.essay.prompts import (
     build_drafting_prompt,
     build_extraction_prompt,
@@ -40,7 +41,9 @@ class EssayRefinementPipeline:
         Path to a YAML rubric file.  ``None`` uses the built-in default.
     """
 
-    models: list[str] = field(default_factory=lambda: ["anthropic-api", "openai-api", "gemini"])
+    models: list[AgentType] = field(
+        default_factory=lambda: ["anthropic-api", "openai-api", "gemini"]
+    )
     target_words: int = 1200
     max_rounds: int = 3
     quality_threshold: float = 0.8
@@ -210,7 +213,7 @@ class EssayRefinementPipeline:
         Returns a list of dicts with keys ``text``, ``model``, and ``model_index``.
         """
 
-        async def _draft_one(model_type: str, idx: int) -> dict[str, Any]:
+        async def _draft_one(model_type: AgentType, idx: int) -> dict[str, Any]:
             agent = create_agent(model_type, name=f"drafter-{idx}", role="proposer")
             prompt = build_drafting_prompt(
                 thesis,
@@ -226,7 +229,7 @@ class EssayRefinementPipeline:
 
     async def _evaluate_drafts(
         self,
-        drafts: list[str] | list[dict[str, Any]],
+        drafts: Sequence[str | dict[str, Any]],
         rubric: dict[str, Any],
     ) -> tuple[list[EssayScore], list[dict[str, str]], list[dict[str, Any]]]:
         """Evaluate each draft with multiple models and return aggregated results.
@@ -251,7 +254,10 @@ class EssayRefinementPipeline:
         for model in evaluator_models:
             judge = create_agent(model, name=f"judge-{model}", role="critic")
             for i, draft in enumerate(drafts):
-                draft_text = draft["text"] if isinstance(draft, dict) else draft
+                if isinstance(draft, str):
+                    draft_text = draft
+                else:
+                    draft_text = draft["text"]
                 score = await evaluate_essay(
                     draft_text,
                     judge,

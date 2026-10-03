@@ -419,7 +419,7 @@ def init_computer_use() -> tuple[Any | None, Any | None, Any | None, Any | None]
                 approval_workflow=approval_workflow,
                 approval_enforcer=approval_enforcer,
             )
-            if ComputerUseOrchestrator
+            if ComputerUseOrchestrator and ComputerUseConfig
             else None
         )
 

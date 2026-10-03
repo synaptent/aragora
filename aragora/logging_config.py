@@ -47,7 +47,7 @@ def _get_trace_context() -> dict[str, str | None]:
         Dict with trace_id and span_id (may be None if not in trace context)
     """
     try:
-        from aragora.server.middleware.tracing import get_span_id, get_trace_id
+        from aragora.observability.middleware.tracing import get_span_id, get_trace_id
 
         return {
             "trace_id": get_trace_id(),
@@ -491,7 +491,7 @@ def log_function(
     return decorator
 
 
-def log_request(logger: StructuredLogger = None):
+def log_request(logger: StructuredLogger | None = None):
     """
     Decorator to log HTTP request handling.
 

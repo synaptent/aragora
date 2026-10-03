@@ -1,0 +1,267 @@
+name: Nightly Core (Trust Signal)
+
+# M-TRUST (#9239) exit gate: a small nightly signal that is trustworthy
+# enough to be treated as a green baseline. The full matrix
+# (nightly-full-matrix.yml) is retained as advisory debt; this workflow is
+# intentionally scoped small so it can be relied on independently of the
+# noisier stress guards.
+#
+# Design constraints (per #9239 acceptance):
+#   * SMALL: bounded to the tests most sensitive to real product-runtime
+#     regressions (debate/agents/memory/knowledge). Not a substitute for the
+#     full suite — a *signal*, not a completeness proof.
+#   * ISOLATED: single-process, no xdist workers, no pytest-randomly. This
+#     avoids order-pollution false positives so the signal actually means
+#     "the product is healthy", not "we lost the coin flip".
+#   * VERDICT-EMITTING: writes a machine-readable verdict artifact each night
+#     so the exit-gate tracker can count green nights (>=12 of 14) without
+#     scraping logs.
+#   * DECOUPLED: only runs on schedule + workflow_dispatch (never on PRs). A
+#     red PR fast-lane cannot mask it; a red nightly-core cannot block a PR.
+
+on:
+  schedule:
+    # Nightly at 03:15 UTC (offset from the full matrix at 04:30 so we can
+    # observe them independently).
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-core-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-core:
+    name: Nightly Core Trust Signal (${{ matrix.scope_name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      # One single-process job PER DIRECTORY: both first nights proved the
+      # combined scope cannot finish single-process inside any sane budget
+      # (verdict=timeout, 0 tests). Splitting keeps the lane's core design
+      # property — no xdist, so the verdict measures product health, never
+      # worker-distribution pollution (#8277 class) — while a slow directory
+      # degrades only its own verdict instead of blanking the whole night.
+      fail-fast: false
+      matrix:
+        include:
+          - scope_name: debate
+            scope_path: tests/debate
+          - scope_name: agents
+            scope_path: tests/agents
+          - scope_name: memory
+            scope_path: tests/memory
+          - scope_name: knowledge
+            scope_path: tests/knowledge
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          bash scripts/ci_install_project.sh --extras test
+          python -m pip install pytest-timeout
+
+      - name: Prepare artifact directory
+        run: mkdir -p artifacts/nightly-core
+
+      - name: Run nightly-core suite (single process, no randomization)
+        id: nightly-core-run
+        # Step-level timeout BELOW the job budget: when the suite overruns, this
+        # step is killed but the verdict/artifact steps still run (a job-level
+        # timeout would skip even if:always() steps) — so every night emits a
+        # classifiable artifact. rc is then unset and the verdict is 'timeout'.
+        timeout-minutes: 50
+        continue-on-error: true
+        env:
+          PYTHONPATH: .:aragora-debate/src
+          # Explicitly disable pytest-randomly so the order is deterministic
+          # even if the plugin is present via pyproject/pytest.ini.
+          PYTEST_ADDOPTS: "-p no:randomly"
+        run: |
+          set +e
+          pytest \
+            ${{ matrix.scope_path }} \
+            -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
+            --timeout=60 \
+            --tb=short \
+            -q \
+            --junitxml=artifacts/nightly-core/junit.xml
+          rc=$?
+          echo "rc=$rc" >> $GITHUB_OUTPUT
+          exit 0
+
+      - name: Emit nightly-core verdict
+        if: always()
+        shell: bash
+        env:
+          RUN_RC: ${{ steps.nightly-core-run.outputs.rc }}
+          RUN_OUTCOME: ${{ steps.nightly-core-run.outcome }}
+          SCOPE_PATH: ${{ matrix.scope_path }}
+          SCOPE_NAME: ${{ matrix.scope_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+
+          out_dir = Path("artifacts/nightly-core")
+          out_dir.mkdir(parents=True, exist_ok=True)
+
+          rc_raw = os.environ.get("RUN_RC", "")
+          outcome = os.environ.get("RUN_OUTCOME", "").strip().lower()
+          # rc missing + step skipped = a PRE-RUN step failed (checkout/setup/
+          # install): infra failure, not a budget fact. rc missing + step ran =
+          # the 50-min step timeout killed pytest.
+          no_rc = rc_raw.strip() == ""
+          skipped = outcome == "skipped"
+          timed_out = no_rc and not skipped
+          try:
+              rc = int(rc_raw)
+          except ValueError:
+              rc = -1
+
+          junit_path = out_dir / "junit.xml"
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          failing_nodes = []
+          if junit_path.exists():
+              try:
+                  root = ET.parse(junit_path).getroot()
+              except ET.ParseError:
+                  root = None
+              if root is not None:
+                  for suite in root.iter("testsuite"):
+                      for key in totals:
+                          try:
+                              totals[key] += int(suite.get(key, "0"))
+                          except ValueError:
+                              pass
+                  for tc in root.iter("testcase"):
+                      if tc.find("failure") is None and tc.find("error") is None:
+                          continue
+                      classname = tc.get("classname", "")
+                      testname = tc.get("name", "")
+                      # JUnit classname is dotted MODULE path + optional CLASS
+                      # segments (tests.foo.test_mod.TestBar). Blind dot->slash
+                      # produces invalid IDs for class-based tests; find the
+                      # longest prefix that is a real module file instead.
+                      node_id = testname
+                      if classname:
+                          parts = classname.split(".")
+                          node_id = f"{classname.replace('.', '/')}.py::{testname}"
+                          for i in range(len(parts), 0, -1):
+                              candidate = "/".join(parts[:i]) + ".py"
+                              if Path(candidate).exists():
+                                  segs = [candidate, *parts[i:], testname]
+                                  node_id = "::".join(segs)
+                                  break
+                      failing_nodes.append(node_id)
+
+          if skipped:
+              # Pre-run step failed; pytest never started. Infra fact.
+              verdict = "infra"
+          elif timed_out:
+              # Step timeout killed pytest before rc was written: budget fact,
+              # not product-health evidence. Counted neither green nor red by
+              # the >=12/14 tracker.
+              verdict = "timeout"
+          elif rc == 0 and totals["failures"] == 0 and totals["errors"] == 0:
+              verdict = "green"
+          else:
+              verdict = "red"
+
+          summary = {
+              "verdict": verdict,
+              "rc": rc,
+              "totals": totals,
+              "failing_nodes": failing_nodes,
+              "run_number": os.environ.get("RUN_NUMBER", ""),
+              "run_id": os.environ.get("RUN_ID", ""),
+              "sha": os.environ.get("SHA", ""),
+              "recorded_at": datetime.now(timezone.utc).isoformat(),
+              "workflow": "nightly-core",
+              "scope": [os.environ.get("SCOPE_PATH", "")],
+              "scope_name": os.environ.get("SCOPE_NAME", ""),
+              "notes": "Isolated single-process run; pytest-randomly disabled.",
+          }
+
+          verdict_path = out_dir / "verdict.json"
+          verdict_path.write_text(json.dumps(summary, indent=2))
+
+          # Also emit a plaintext oneliner for quick log scanning.
+          oneline = (
+              f"nightly-core: verdict={verdict} rc={rc} "
+              f"tests={totals['tests']} failures={totals['failures']} "
+              f"errors={totals['errors']} skipped={totals['skipped']}"
+          )
+          (out_dir / "verdict.txt").write_text(oneline + "\n")
+          print(oneline)
+          PY
+
+      - name: Upload nightly-core artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-core-${{ matrix.scope_name }}-${{ github.run_number }}-${{ github.run_attempt }}
+          path: artifacts/nightly-core/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report verdict as job status
+        shell: bash
+        run: |
+          # Job conclusion must tell the SAME story as verdict.json: red means
+          # product-health failure; timeout/infra fail the job as an attention
+          # flag but are labeled as what they are (counted neither green nor
+          # red by the >=12/14 tracker).
+          verdict=$(python -c "import json; print(json.load(open('artifacts/nightly-core/verdict.json'))['verdict'])" 2>/dev/null || echo "infra")
+          case "$verdict" in
+            green)
+              echo "nightly-core verdict=green" ;;
+            red)
+              echo "::error::nightly-core verdict=red. See artifact nightly-core-${{ matrix.scope_name }}-${{ github.run_number }}-${{ github.run_attempt }} for junit + verdict.json."
+              exit 1 ;;
+            *)
+              echo "::error::nightly-core verdict=$verdict (not a product-health signal; excluded from the green/red night count). See the uploaded artifact."
+              exit 1 ;;
+          esac

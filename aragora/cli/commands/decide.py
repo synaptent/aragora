@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
-from aragora.server.decision_integrity_utils import execute_decision_plan_with_backbone
+from aragora.pipeline.decision_integrity_utils import execute_decision_plan_with_backbone
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def _seed_cli_backbone_run(
 ) -> str:
     """Seed a RunLedger for CLI-created plans and mirror receipt state."""
     from aragora.pipeline.executor import store_plan
-    from aragora.server.decision_integrity_utils import (
+    from aragora.pipeline.decision_integrity_utils import (
         ensure_decision_plan_backbone_run,
         sync_decision_plan_backbone_receipt,
     )
@@ -91,7 +91,8 @@ def _run_decide_demo_builtin_fallback(
             "before execution."
         ),
         "dissent": [
-            "Operational risks are still estimated because the full aragora-debate package is unavailable."
+            "Operational risks in this demo are estimated by built-in offline agents; "
+            "wire real LLM providers (Claude/OpenAI/etc.) via `aragora decide` with credentials for production-grade risk analysis."
         ],
         "consensus_proof": {
             "reached": True,
@@ -104,7 +105,8 @@ def _run_decide_demo_builtin_fallback(
         "mode": "demo (builtin fallback)",
     }
 
-    print("  Note: Built-in mock fallback (aragora-debate package unavailable)")
+    print("  Mode: Built-in offline demo agents (no API keys required)")
+    print("        (aragora-debate package unavailable; using built-in fallback)")
     print()
     print("=" * 60)
     print("DECISION SUMMARY")

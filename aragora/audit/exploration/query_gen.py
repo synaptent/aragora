@@ -210,7 +210,7 @@ class QueryGenerator:
         self,
         gaps: list[UnderstandingGap],
         objective: str,
-        asked_questions: list[Question] = None,
+        asked_questions: list[Question] | None = None,
     ) -> list[Question]:
         """Generate questions to fill understanding gaps.
 
@@ -354,7 +354,7 @@ class QueryGenerator:
         self,
         questions: list[Question],
         objective: str,
-        recent_insights: list[Insight] = None,
+        recent_insights: list[Insight] | None = None,
     ) -> list[Question]:
         """Prioritize questions based on objective relevance.
 

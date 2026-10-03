@@ -21,6 +21,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from aragora.cli.commands.review_queue_comment_verdicts import extract_finding_lines
+
 # Tier 0-2 can settle unattended on a green model quorum (auto-merge path);
 # Tier 3-4 require a head-bound human risk settlement by a trusted operator.
 AUTO_MERGE_MAX_TIER = 2
@@ -210,13 +212,20 @@ def summarize_collect(payload: Mapping[str, Any]) -> dict[str, Any]:
             # A malformed (non-dict) item must not crash the flatten the way the
             # top-level error envelope is already guarded against -- skip it.
             continue
+        body = str(it.get("body") or "")
         items.append(
             {
                 "family": it.get("family"),
                 "verdict": it.get("verdict"),
                 "would_count": bool(it.get("would_count")),
                 "counted_reviewer_ids": list(it.get("counted_reviewer_ids") or []),
+                # ``problems`` are countability codes ("blocking_or_negative_verdict",
+                # "no_counted_model_family", ...). They say a reviewer dissented but
+                # never WHY, so a dissent used to cost a second full reviewer run to
+                # diagnose. ``findings`` carries the reviewer's actual [Pn] lines.
                 "problems": list(it.get("problems") or []),
+                "findings": extract_finding_lines(body),
+                "body": body,
             }
         )
     return {

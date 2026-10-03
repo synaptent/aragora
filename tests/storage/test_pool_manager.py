@@ -11,6 +11,8 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -38,6 +40,21 @@ def reset_pool_state():
     reset_shared_pool()
     yield
     reset_shared_pool()
+
+
+@pytest.fixture(autouse=True)
+def nest_asyncio_stub(monkeypatch):
+    """Replace nest_asyncio with a stub while these tests run.
+
+    initialize_shared_pool() calls nest_asyncio.apply(), which patches
+    asyncio.run and the event loop policy for the whole process. Later tests
+    on the same pytest worker then fail with "Event loop is closed". No test
+    here exercises nested event loops.
+    """
+    stub = types.ModuleType("nest_asyncio")
+    stub.apply = MagicMock()
+    monkeypatch.setitem(sys.modules, "nest_asyncio", stub)
+    return stub
 
 
 @pytest.fixture
@@ -149,7 +166,7 @@ class TestInitializeSharedPool:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_initializes_pool_successfully(self, mock_pool):
+    async def test_initializes_pool_successfully(self, mock_pool, nest_asyncio_stub):
         """initialize_shared_pool creates pool on success."""
         from aragora.storage.connection_factory import StorageBackendType
 
@@ -161,6 +178,7 @@ class TestInitializeSharedPool:
         mock_ps_mod = MagicMock()
         mock_ps_mod._pool = None
         mock_ps_mod.get_postgres_pool = AsyncMock(return_value=mock_pool)
+        original_asyncio_run = asyncio.run
 
         with (
             patch.dict("os.environ", {"ARAGORA_USE_SHARED_POOL": "true"}),
@@ -178,6 +196,9 @@ class TestInitializeSharedPool:
 
             assert result is mock_pool
             assert is_pool_initialized() is True
+            nest_asyncio_stub.apply.assert_called_once_with(asyncio.get_running_loop())
+
+        assert asyncio.run is original_asyncio_run
 
     @pytest.mark.asyncio
     async def test_retries_on_failure(self):
@@ -362,7 +383,11 @@ class TestGetPoolEventLoop:
     def test_returns_none_when_not_initialized(self):
         """get_pool_event_loop returns None when pool not initialized."""
         reset_shared_pool()
-        result = get_pool_event_loop()
+        with pytest.warns(
+            DeprecationWarning,
+            match=r"aragora\.storage\.pool_manager\.get_pool_event_loop",
+        ):
+            result = get_pool_event_loop()
         assert result is None
 
     @pytest.mark.asyncio
@@ -391,7 +416,11 @@ class TestGetPoolEventLoop:
             ),
         ):
             await initialize_shared_pool()
-            result = get_pool_event_loop()
+            with pytest.warns(
+                DeprecationWarning,
+                match=r"aragora\.storage\.pool_manager\.get_pool_event_loop",
+            ):
+                result = get_pool_event_loop()
 
             assert result is not None
             assert result is asyncio.get_running_loop()

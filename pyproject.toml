@@ -4,9 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aragora"
-version = "2.9.0"
+version = "2.11.1"
 description = "Auditable execution control plane for AI-assisted decisions: multi-model review in, a verifiable Decision Receipt out"
-readme = {text = "# Aragora\n\nAragora is an auditable execution control plane for AI-assisted decisions: multi-model review in, a verifiable Decision Receipt out. Installing this distribution provides the `aragora` CLI and the full `aragora` package. The small standalone debate wedge is published separately as `aragora-debate` (see the `aragora-debate/` subproject).", content-type = "text/markdown"}
+readme = {text = """
+# Aragora
+
+Aragora is an auditable execution control plane for AI-assisted decisions:
+multi-model review in, a verifiable Decision Receipt out. Installing this
+distribution provides the `aragora` CLI and the full `aragora` package.
+
+## Try it without an API key
+
+```bash
+pip install aragora
+aragora demo --offline --receipt aragora-demo-receipt.json
+aragora receipt verify aragora-demo-receipt.json
+```
+
+The demo writes a native Decision Receipt and the final command verifies it
+locally. See the [full Aragora documentation](https://github.com/synaptent/aragora#readme)
+for provider-backed reviews and the independent Open Decision Receipt flow.
+The smaller debate engine is published separately as
+[`aragora-debate`](https://pypi.org/project/aragora-debate/).
+""", content-type = "text/markdown"}
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
@@ -50,8 +70,22 @@ dependencies = [
     # gateway and the other optional stacks stay in their extras ([gateway],
     # [enterprise], ...). The aiohttp floor matches the [blockchain]/[all]
     # extras for one consistent pin.
-    "aiohttp>=3.14.1,<4.0",
-    "websockets>=13.0,<15.1",
+    "aiohttp>=3.14.3,<4.0",
+    "websockets>=13.0,<16.2",
+    # XXE-safe XML parsing, imported at module level by aragora.pulse.ingestor
+    # (via aragora/pulse/__init__.py), aragora.auth.saml, and
+    # aragora.connectors.{arxiv,feeds.ingestor}. Server readiness feature
+    # detection reaches aragora.pulse transitively, so a plain install must
+    # provide it. Pin matches LEGACY_CONTROL_PLANE_BASE_DEPS in
+    # scripts/ci_install_project.sh, which already side-loads it in CI (the
+    # reason this gap never surfaced there).
+    "defusedxml>=0.7,<1.0",
+    # Ed25519 receipt signing (aragora/gauntlet/odr_signing.py) and AES-GCM
+    # encryption import this lazily, so a plain install could still reach a
+    # configured signing key and then fail. Declared in base so the documented
+    # `ARAGORA_ODR_SIGNING_KEY_FILE` path works from `pip install aragora`,
+    # with the same GHSA-537c-gmf6-5ccf floor as the uv constraint below.
+    "cryptography>=48.0.1,<51.0",
 ]
 
 [project.scripts]
@@ -65,14 +99,14 @@ test = [
     "PyYAML>=6.0.3,<7.0",
     "pytest>=9.1.1,<10.0",
     "pytest-asyncio>=1.4.0,<2.0",
-    "twine>=6.2.0,<7.0",
+    "twine>=6.2.0,<8.0",
 ]
 gateway = [
-    "fastapi>=0.138.0,<1.0",
-    "uvicorn>=0.49.0,<1.0",
+    "fastapi>=0.139.0,<1.0",
+    "uvicorn>=0.50.0,<1.0",
 ]
 blockchain = [
-    "aiohttp>=3.14.1,<4.0",
+    "aiohttp>=3.14.3,<4.0",
     "web3>=7.16.0,<8.0",
 ]
 enterprise = [
@@ -85,11 +119,12 @@ connectors = [
     "aio-pika>=9.6.2,<10.0",
 ]
 experimental = [
-    "playwright>=1.60.0,<2.0",
+    "playwright>=1.61.0,<2.0",
 ]
 dev = [
     "mypy>=2.1.0,<3.0",
     "mypy-baseline>=0.7.4,<0.8",
+    "ruff==0.14.14",
     "types-PyYAML>=6.0.12.20260518,<7.0",
     "types-croniter>=6.2.2.20260518,<7.0",
     "bandit>=1.9.4,<2.0",
@@ -101,19 +136,19 @@ dev = [
     # Build backend for the in-repo aragora-verify package so the ODR
     # walkthrough CLI smoke tests build the wheel offline-deterministically
     # in CI (tests/gauntlet/test_odr_walkthrough_fixture.py).
-    "hatchling>=1.18,<2.0",
+    "hatchling>=1.30.1,<2.0",
 ]
 all = [
-    "fastapi>=0.138.0,<1.0",
-    "uvicorn>=0.49.0,<1.0",
-    "aiohttp>=3.14.1,<4.0",
+    "fastapi>=0.139.0,<1.0",
+    "uvicorn>=0.50.0,<1.0",
+    "aiohttp>=3.14.3,<4.0",
     "web3>=7.16.0,<8.0",
     "asyncpg>=0.31.0,<1.0",
     "python3-saml>=1.16.0,<2.0",
     "supabase>=2.31.0,<3.0",
     "aiokafka>=0.14.0,<1.0",
     "aio-pika>=9.6.2,<10.0",
-    "playwright>=1.60.0,<2.0",
+    "playwright>=1.61.0,<2.0",
 ]
 
 [project.urls]
@@ -122,32 +157,39 @@ Repository = "https://github.com/synaptent/aragora"
 Issues = "https://github.com/synaptent/aragora/issues"
 
 # -----------------------------------------------------------------------------
-# uv resolver constraints — security floors for transitively-pulled packages.
+# uv resolver constraints — security floors for the pip-audit security gate
+# (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
+# to regardless of how a package is reached (direct or transitive):
 #
-# These constrain the locked versions of dependencies that are NOT declared
-# directly (so they stay out of the published wheel's metadata) but must be
-# floored to non-vulnerable releases for the pip-audit security gate
-# (scripts/run_pip_audit_gate.py):
-#
-#   * cryptography >=48.0.1 — fixes GHSA-537c-gmf6-5ccf. Pulled in via
-#     pyjwt[crypto] / secretstorage and used at runtime for AES-256-GCM
-#     encryption (aragora/security/encryption.py). The floor is 48.0.1; the
-#     resolver actually lands on 49.0.0 (a 46 -> 49 jump across three majors).
-#     cryptography's hazmat AES-GCM surface is stable across this range and the
-#     46->49 deprecations are in unused legacy x509/serialization helpers;
-#     verified by exercising encrypt/decrypt + AAD on 49.0.0. pyjwt and
-#     secretstorage floor cryptography far below 48, so nothing caps the bump.
+#   * cryptography >=48.0.1 — fixes GHSA-537c-gmf6-5ccf. Also a direct base
+#     dependency above (Ed25519 receipt signing, AES-256-GCM encryption); this
+#     entry keeps the lock floor pinned even if a transitive path (pyjwt[crypto],
+#     secretstorage) is what pulls it in. The hazmat AES-GCM surface is stable
+#     across 46 -> 50 and the deprecations are in unused legacy x509 helpers.
 #   * starlette >=1.3.1 — fixes CVE-2026-54283, CVE-2026-54282, CVE-2026-48818,
 #     CVE-2026-48817. Pulled in via fastapi (gateway/all extras). fastapi
 #     0.136.3 requires only ``starlette>=0.46.0`` (no upper bound) and already
 #     resolves to the starlette 1.x line, so this stays on fastapi 0.x — no
 #     FastAPI 1.x migration required. Aragora's only direct starlette usage is
 #     BaseHTTPMiddleware / Response / StreamingResponse, all stable across 1.x.
+#   * pyjwt >=2.15.0 — fixes PYSEC-2026-4140, PYSEC-2026-4141, PYSEC-2026-4142,
+#     PYSEC-2026-4143, PYSEC-2026-4144, PYSEC-2026-4145, PYSEC-2026-4146,
+#     PYSEC-2026-4147, PYSEC-2026-4148, PYSEC-2026-4149, PYSEC-2026-4150,
+#     PYSEC-2026-4151, PYSEC-2026-4152. Pulled in via supabase-auth. 2.14.0
+#     clears every id except PYSEC-2026-4141, which is fixed only in 2.15.0.
+#   * urllib3 >=2.8.0 — fixes PYSEC-2026-4175, PYSEC-2026-4176,
+#     PYSEC-2026-4177. Pulled in via requests (also id, twine, types-requests).
+#   * virtualenv >=21.7.13 — fixes PYSEC-2026-4011, PYSEC-2026-4012,
+#     PYSEC-2026-4013, PYSEC-2026-4014 (PYSEC-2026-4013 needs 21.7.13). Pulled
+#     in via pre-commit (dev tooling only).
 # -----------------------------------------------------------------------------
 [tool.uv]
 constraint-dependencies = [
     "cryptography>=48.0.1",
+    "pyjwt>=2.15.0",
     "starlette>=1.3.1",
+    "urllib3>=2.8.0",
+    "virtualenv>=21.7.13",
 ]
 
 [tool.setuptools.packages.find]
@@ -194,6 +236,9 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "tests/*" = ["T201", "F401", "F821", "F841", "BLE001", "G004", "S101"]
 "aragora/**/test_*.py" = ["S101"]
 "aragora/**/tests/*" = ["S101"]
+# Benchmarks intentionally assert SLOs; Liftmode is an operational CLI with an optional-secrets fallback.
+"benchmarks/*.py" = ["S101"]
+"deploy/liftmode/briefing.py" = ["T201", "BLE001"]
 "examples/*" = ["T201", "BLE001"]
 "sdk/cookbook/*" = ["T201", "BLE001", "F841"]
 "deprecated/*" = ["UP"]
@@ -213,7 +258,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/server/handlers/knowledge_base/mound/*.py" = ["BLE001", "G004"]
 "aragora/server/handlers/external_agents.py" = ["BLE001", "G004"]
 "aragora/server/handlers/receipts.py" = ["BLE001", "G004"]
-"aragora/server/handlers/sme_success_dashboard.py" = ["BLE001", "G004"]
+"aragora/server/handlers/sme/sme_success_dashboard.py" = ["BLE001", "G004"]
 "aragora/server/persistent_origin_store.py" = ["BLE001", "G004"]
 "aragora/server/state.py" = ["BLE001", "G004"]
 "aragora/server/openapi_impl.py" = ["BLE001", "G004"]

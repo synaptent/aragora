@@ -975,15 +975,25 @@ class TestHandleBatchExportMethod:
     """Tests for the _handle_batch_export method."""
 
     def test_batch_export_post_no_body(self, mock_http_handler):
+        mock_http_handler.command = "POST"
         handler = _make_handler(json_body=None)
         result = handler._handle_batch_export("/api/debates/export/batch", {}, mock_http_handler)
         assert _status(result) == 400
 
     def test_batch_export_post_with_body(self, mock_http_handler):
+        mock_http_handler.command = "POST"
         handler = _make_handler(json_body={"debate_ids": ["d1", "d2"], "format": "json"})
         handler._start_batch_export = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler._handle_batch_export("/api/debates/export/batch", {}, mock_http_handler)
         handler._start_batch_export.assert_called_once()
+
+    def test_batch_export_get_lists_jobs(self, mock_http_handler):
+        """GET on the batch-export root must reach the list branch, not the
+        POST start-export branch (which shadowed it and returned 400)."""
+        handler = _make_handler(json_body=None)
+        handler._list_batch_exports = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
+        result = handler._handle_batch_export("/api/debates/export/batch", {}, mock_http_handler)
+        handler._list_batch_exports.assert_called_once()
 
     def test_batch_export_status(self, mock_http_handler):
         """Batch export status extracts parts[4] from /api/debates/export/batch/{id}/status."""

@@ -400,9 +400,9 @@ class TestAlertEscalatedToWorkflowBrake:
                 "alert_id": "alert_1",
             },
         )
-        with patch("aragora.workflow.engine.get_workflow_engine") as mock_get:
+        with patch("aragora.workflow.engine.WorkflowEngine.pause_all") as pause_all:
             handler._handle_alert_escalated_to_workflow_brake(event)
-            mock_get.assert_not_called()
+            pause_all.assert_not_called()
 
     def test_pauses_workflows_on_critical(self, make_event):
         handler = self._get_handler()
@@ -415,14 +415,13 @@ class TestAlertEscalatedToWorkflowBrake:
             },
         )
 
-        mock_engine = MagicMock()
-        with patch("aragora.workflow.engine.get_workflow_engine", return_value=mock_engine):
+        with patch("aragora.workflow.engine.WorkflowEngine.pause_all") as pause_all:
             handler._handle_alert_escalated_to_workflow_brake(event)
-            mock_engine.pause_all.assert_called_once()
-            call_kwargs = mock_engine.pause_all.call_args[1]
+            pause_all.assert_called_once()
+            call_kwargs = pause_all.call_args[1]
             assert "Database connection pool" in call_kwargs["reason"]
 
-    def test_falls_back_to_emergency_stop(self, make_event):
+    def test_pauses_workflows_on_emergency(self, make_event):
         handler = self._get_handler()
         event = make_event(
             StreamEventType.ALERT_ESCALATED,
@@ -433,12 +432,9 @@ class TestAlertEscalatedToWorkflowBrake:
             },
         )
 
-        mock_engine = MagicMock(spec=[])
-        mock_engine.emergency_stop = MagicMock()
-        # Remove pause_all so fallback triggers
-        with patch("aragora.workflow.engine.get_workflow_engine", return_value=mock_engine):
+        with patch("aragora.workflow.engine.WorkflowEngine.pause_all") as pause_all:
             handler._handle_alert_escalated_to_workflow_brake(event)
-            mock_engine.emergency_stop.assert_called_once()
+            pause_all.assert_called_once()
 
     def test_graceful_on_import_error(self, make_event):
         handler = self._get_handler()

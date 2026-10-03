@@ -408,6 +408,16 @@ class TestProviderPricing:
         assert p.output_cost_per_1k > 0
         assert p.context_window > 0
 
+    @pytest.mark.parametrize("family", ["glm", "minimax", "tencent", "bytedance"])
+    def test_chinese_openrouter_reviewer_models_have_nonzero_pricing(self, family: str) -> None:
+        from aragora.swarm.quorum_evidence import _OPENROUTER_REVIEWER_MODELS
+
+        model_key = _OPENROUTER_REVIEWER_MODELS[family].split("/", 1)[1]
+        pricing = PROVIDER_PRICING[model_key]
+        assert pricing.input_cost_per_1k > 0
+        assert pricing.output_cost_per_1k > 0
+        assert pricing.context_window > 0
+
     def test_get_estimated_cost(self) -> None:
         cost = get_estimated_cost("gpt-4o-mini", input_tokens=1000, output_tokens=1000)
         assert cost > 0

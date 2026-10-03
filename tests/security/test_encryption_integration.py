@@ -460,16 +460,14 @@ class TestEncryptionEnforcement:
 
     def test_sync_store_encryption_enforcement(self):
         """SyncStore should enforce encryption when required."""
-        from aragora.connectors.enterprise.sync_store import _encrypt_config
+        from aragora.storage.sync_store import _encrypt_config
         from aragora.security.encryption import EncryptionError
 
         config = {"api_key": "secret", "endpoint": "https://api.example.com"}
 
         # Mock crypto unavailable + encryption required
-        with patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", False):
-            with patch(
-                "aragora.connectors.enterprise.sync_store.is_encryption_required", return_value=True
-            ):
+        with patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", False):
+            with patch("aragora.storage.sync_store.is_encryption_required", return_value=True):
                 with pytest.raises(EncryptionError) as exc_info:
                     _encrypt_config(config, use_encryption=True, connector_id="salesforce")
 

@@ -26,6 +26,8 @@ from uuid import uuid4
 
 from aragora.config import get_api_key
 
+from aragora.models.compat import first_text_block, strip_sampling_params
+
 logger = logging.getLogger(__name__)
 
 
@@ -848,7 +850,7 @@ Provide your comparison:"""
 
         except ImportError:
             # Fallback to direct API call using HTTP pool
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             api_key = get_api_key("ANTHROPIC_API_KEY", required=False)
             if not api_key:
@@ -863,17 +865,22 @@ Provide your comparison:"""
                         "anthropic-version": "2023-06-01",
                         "content-type": "application/json",
                     },
-                    json={
-                        "model": self._config.model,
-                        "max_tokens": self._config.max_tokens,
-                        "temperature": self._config.temperature,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
+                    json=strip_sampling_params(
+                        {
+                            "model": self._config.model,
+                            "max_tokens": self._config.max_tokens,
+                            "temperature": self._config.temperature,
+                            "messages": [{"role": "user", "content": prompt}],
+                        },
+                        self._config.model,
+                    ),
                     timeout=60.0,
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["content"][0]["text"]
+                # Modern Claude models emit a leading thinking block; scan for
+                # the text block rather than indexing position 0.
+                return first_text_block(data.get("content"))
 
     def _parse_evaluation(self, text: str) -> dict[EvaluationDimension, DimensionScore]:
         """Parse evaluation response into dimension scores."""

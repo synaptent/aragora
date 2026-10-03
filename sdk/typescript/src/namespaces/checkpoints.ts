@@ -63,10 +63,15 @@ export class CheckpointsAPI {
 
   /**
    * List all checkpoints.
+   *
+   * Supports filtering by debate via `debate_id` and by `status`
+   * (documented GET /api/v1/checkpoints query params).
    */
   async list(params?: {
     limit?: number;
     offset?: number;
+    debate_id?: string;
+    status?: string;
   }): Promise<{ checkpoints: Checkpoint[]; total: number }> {
     return this.client.request('GET', '/api/v1/checkpoints', {
       params: params as Record<string, unknown>,
@@ -111,20 +116,6 @@ export class CheckpointsAPI {
     return this.client.request('POST', `/api/v1/checkpoints/${checkpointId}/intervention`, {
       body,
     });
-  }
-
-  /**
-   * List checkpoints for a specific debate.
-   */
-  async listForDebate(debateId: string): Promise<{ checkpoints: Checkpoint[] }> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/checkpoints`);
-  }
-
-  /**
-   * Create a checkpoint for a running debate.
-   */
-  async createForDebate(debateId: string): Promise<Checkpoint> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/checkpoint`);
   }
 
   /**
@@ -175,6 +166,21 @@ export class CheckpointsAPI {
   ): Promise<CheckpointComparison> {
     return this.client.request('GET', `/api/v1/km/checkpoints/${name}/compare`, {
       params: { compare_to: compareTo },
+    });
+  }
+
+  /**
+   * Compare two named Knowledge Mound checkpoints directly.
+   *
+   * Uses the documented POST /api/v1/km/checkpoints/compare contract
+   * (body: checkpoint_a, checkpoint_b).
+   */
+  async compareKMCheckpoints(
+    checkpointA: string,
+    checkpointB: string
+  ): Promise<CheckpointComparison> {
+    return this.client.request('POST', '/api/v1/km/checkpoints/compare', {
+      body: { checkpoint_a: checkpointA, checkpoint_b: checkpointB },
     });
   }
 

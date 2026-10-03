@@ -384,6 +384,15 @@ class TestAddUserVotes:
         # Only one vote added
         assert "Yes" in counts
 
+    def test_skips_missing_user_vote_entries(self):
+        """Partially populated event batches ignore empty user-vote entries."""
+        processor = VoteProcessor(user_votes=[None, {"choice": "Yes", "intensity": 5}])
+
+        counts, total = processor.add_user_votes(Counter(), 0.0, {"Yes": "Yes"})
+
+        assert counts["Yes"] == pytest.approx(0.5)
+        assert total == pytest.approx(0.5)
+
 
 class TestNormalizeChoiceToAgent:
     """Tests for choice normalization."""
@@ -526,6 +535,16 @@ class TestHandleVoteSuccess:
         processor._handle_vote_success(ctx, agent, vote)
 
         hook.assert_called_once_with("claude", "Yes", 0.85)
+
+    def test_ignores_disabled_on_vote_hook(self):
+        """An explicitly disabled optional hook is not called."""
+        ctx = MockDebateContext()
+        agent = MockAgent("claude")
+        vote = MockVote("claude", "Yes", 0.85)
+
+        processor = VoteProcessor(hooks={"on_vote": None})
+
+        processor._handle_vote_success(ctx, agent, vote)
 
     def test_records_vote(self):
         """Records vote with recorder."""

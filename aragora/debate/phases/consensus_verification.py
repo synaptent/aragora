@@ -15,6 +15,8 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 from collections.abc import Callable
 
+from aragora.debate.phases._phase_invariant import require_phase_result
+
 if TYPE_CHECKING:
     from aragora.debate.context import DebateContext
 
@@ -90,7 +92,7 @@ class ConsensusVerifier:
 
         verification_bonus = getattr(self.protocol, "verification_weight_bonus", 0.2)
         verification_timeout = getattr(self.protocol, "verification_timeout_seconds", 5.0)
-        result = ctx.result
+        result = require_phase_result(ctx)
 
         for agent_name, proposal_text in proposals.items():
             # Map agent name to canonical choice
@@ -170,8 +172,8 @@ class ConsensusVerifier:
         if not self.elo_system:
             return
 
-        result = ctx.result
-        if not hasattr(result, "verification_results") or not result.verification_results:
+        result = require_phase_result(ctx)
+        if not result.verification_results:
             return
 
         # Extract domain from context

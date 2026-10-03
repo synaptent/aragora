@@ -414,6 +414,34 @@ def test_discovery_helpers_are_delegated():
     assert me.DEFAULT_MAX_MERGES == 1
 
 
+@pytest.mark.parametrize(
+    "quorum_rows",
+    [
+        [
+            {"name": "aragora-merge-quorum", "conclusion": "FAILURE"},
+            {"name": "aragora-merge-quorum", "conclusion": "SUCCESS"},
+        ],
+        [
+            {"name": "aragora-merge-quorum", "conclusion": "SUCCESS"},
+            {"name": "aragora-merge-quorum", "conclusion": "FAILURE"},
+        ],
+    ],
+)
+def test_quorum_prefilter_fetches_packet_when_any_historical_row_succeeded(quorum_rows):
+    view = _view(statusCheckRollup=quorum_rows)
+    assert me._amqg._cheaply_promising(view) is True
+
+
+def test_quorum_prefilter_skips_packet_when_no_quorum_row_succeeded():
+    view = _view(
+        statusCheckRollup=[
+            {"name": "aragora-merge-quorum", "conclusion": "FAILURE"},
+            {"name": "aragora-merge-quorum", "conclusion": "CANCELLED"},
+        ]
+    )
+    assert me._amqg._cheaply_promising(view) is False
+
+
 def _cli_args(tmp_path: Path, *extra: str) -> list[str]:
     return [
         "--repo",

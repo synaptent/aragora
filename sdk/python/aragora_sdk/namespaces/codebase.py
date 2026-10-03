@@ -101,7 +101,6 @@ class CodebaseAPI:
             data["repo"] = repo
         return self._client.request("POST", "/api/v1/codebase/clear-cache", json=data)
 
-
     # =========================================================================
     # Top-level Analysis
     # =========================================================================
@@ -390,7 +389,9 @@ class AsyncCodebaseAPI:
 
     async def create_finding_issue(self, finding_id: str) -> dict[str, Any]:
         """Create issue for a finding."""
-        return await self._client.request("GET", f"/api/v1/codebase/findings/{finding_id}/create-issue")
+        return await self._client.request(
+            "GET", f"/api/v1/codebase/findings/{finding_id}/create-issue"
+        )
 
     async def dismiss_finding(self, finding_id: str) -> dict[str, Any]:
         """Dismiss a finding."""
@@ -474,11 +475,15 @@ class AsyncCodebaseAPI:
 
     async def analyze_repo_metrics(self, repo: str, **kwargs: Any) -> dict[str, Any]:
         """Run metrics analysis for a repo."""
-        return await self._client.request("POST", f"/api/v1/codebase/{repo}/metrics/analyze", json=kwargs)
+        return await self._client.request(
+            "POST", f"/api/v1/codebase/{repo}/metrics/analyze", json=kwargs
+        )
 
     async def get_repo_file_metrics(self, repo: str, file_path: str) -> dict[str, Any]:
         """Get file metrics for a repo."""
-        return await self._client.request("GET", f"/api/v1/codebase/{repo}/metrics/file/{file_path}")
+        return await self._client.request(
+            "GET", f"/api/v1/codebase/{repo}/metrics/file/{file_path}"
+        )
 
     async def get_repo_metrics_history(self, repo: str) -> dict[str, Any]:
         """Get metrics history for a repo."""
@@ -514,7 +519,9 @@ class AsyncCodebaseAPI:
 
     async def start_repo_secrets_scan(self, repo: str, **kwargs: Any) -> dict[str, Any]:
         """Start secrets scan for a repo."""
-        return await self._client.request("POST", f"/api/v1/codebase/{repo}/scan/secrets", json=kwargs)
+        return await self._client.request(
+            "POST", f"/api/v1/codebase/{repo}/scan/secrets", json=kwargs
+        )
 
     async def get_repo_latest_secrets_scan(self, repo: str) -> dict[str, Any]:
         """Get latest secrets scan for a repo."""
@@ -546,10 +553,10 @@ class AsyncCodebaseAPI:
 
     async def understand_repo(self, repo: str, **kwargs: Any) -> dict[str, Any]:
         """Understand a repo."""
-        return await self._client.request("POST", f"/api/v1/codebase/{repo}/understand", json=kwargs)
+        return await self._client.request(
+            "POST", f"/api/v1/codebase/{repo}/understand", json=kwargs
+        )
 
     async def get_repo_vulnerabilities(self, repo: str) -> dict[str, Any]:
         """Get repo vulnerabilities."""
         return await self._client.request("GET", f"/api/v1/codebase/{repo}/vulnerabilities")
-
-

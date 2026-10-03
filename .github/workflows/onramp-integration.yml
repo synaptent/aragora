@@ -71,7 +71,7 @@ jobs:
           fi
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.18.0"
       - name: Build frontend with playground
         working-directory: aragora/live
         run: |

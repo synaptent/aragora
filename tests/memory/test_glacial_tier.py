@@ -516,45 +516,47 @@ class TestGlacialConfidenceDecay:
 
     def test_decay_factor_is_one_for_just_updated(self, cms):
         """Test decay factor is 1.0 for entries updated now."""
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        now = datetime.now()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         decay = cms.calculate_glacial_decay(now)
 
         assert abs(decay - 1.0) < 0.01
 
     def test_decay_factor_is_half_at_30_days(self, cms):
         """Test decay factor is 0.5 at exactly 30 days old."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        thirty_days_ago = datetime.now() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
         decay = cms.calculate_glacial_decay(thirty_days_ago)
 
         assert abs(decay - 0.5) < 0.01
 
     def test_decay_factor_is_quarter_at_60_days(self, cms):
         """Test decay factor is 0.25 at 60 days old (two half-lives)."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        sixty_days_ago = datetime.now() - timedelta(days=60)
+        sixty_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=60)
         decay = cms.calculate_glacial_decay(sixty_days_ago)
 
         assert abs(decay - 0.25) < 0.01
 
     def test_decay_handles_string_timestamp(self, cms):
         """Test decay calculation handles ISO string timestamps."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+        thirty_days_ago = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+        ).isoformat()
         decay = cms.calculate_glacial_decay(thirty_days_ago)
 
         assert abs(decay - 0.5) < 0.01
 
     def test_decay_clamps_to_one_for_future_timestamps(self, cms):
         """Test decay factor is clamped to 1.0 for future timestamps."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        future = datetime.now() + timedelta(days=1)
+        future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
         decay = cms.calculate_glacial_decay(future)
 
         assert decay == 1.0

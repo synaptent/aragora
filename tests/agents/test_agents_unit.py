@@ -455,7 +455,8 @@ class TestOpenRouterModelMapping:
 
         mapping = CLIAgent.OPENROUTER_MODEL_MAP
         assert "gemini-3.1-pro-preview" in mapping
-        assert "google/" in mapping.get("gemini-3.1-pro-preview", "")
+        assert mapping["gemini-3.1-pro-preview"] == "google/gemini-3.1-pro-preview"
+        assert mapping["gemini-3.1-pro"] == "google/gemini-3.1-pro-preview"
 
     def test_grok_model_mapping(self):
         """Test Grok models map to OpenRouter correctly."""
@@ -894,7 +895,7 @@ class TestKiloCodeAgentConfiguration:
         from aragora.agents.cli_agents import KiloCodeAgent
 
         agent = KiloCodeAgent(name="test")
-        assert agent.provider_id == "google/gemini-3.1-pro"
+        assert agent.provider_id == "google/gemini-3.1-pro-preview"
 
     def test_custom_provider_id(self):
         """Test custom provider ID."""

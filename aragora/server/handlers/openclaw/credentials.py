@@ -131,7 +131,7 @@ def _get_credential_rotation_limiter() -> CredentialRotationRateLimiter:
     try:
         import sys
 
-        gateway_module = sys.modules.get("aragora.server.handlers.openclaw_gateway")
+        gateway_module = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
         override = (
             getattr(gateway_module, "_get_credential_rotation_limiter", None)
             if gateway_module
@@ -217,8 +217,8 @@ class CredentialHandlerMixin(OpenClawMixinBase):
             name = body.get("name")
             validation_name = name.replace(" ", "_") if isinstance(name, str) else name
             is_valid, error = validate_credential_name(validation_name)
-            if not is_valid:
-                return error_response(error, 400)
+            if not is_valid or not isinstance(name, str):
+                return error_response(error or "Invalid credential name", 400)
 
             # Validate credential type
             credential_type_str = body.get("type")
@@ -234,8 +234,8 @@ class CredentialHandlerMixin(OpenClawMixinBase):
             # Validate secret value
             secret_value = body.get("secret")
             is_valid, error = validate_credential_secret(secret_value, credential_type_str)
-            if not is_valid:
-                return error_response(error, 400)
+            if not is_valid or not isinstance(secret_value, str):
+                return error_response(error or "Invalid credential secret", 400)
 
             # Optional expiration
             expires_at = None
@@ -249,7 +249,7 @@ class CredentialHandlerMixin(OpenClawMixinBase):
             metadata = body.get("metadata", {})
             is_valid, error = validate_metadata(metadata, MAX_CREDENTIAL_METADATA_SIZE)
             if not is_valid:
-                return error_response(error, 400)
+                return error_response(error or "Invalid credential metadata", 400)
 
             credential = store.store_credential(
                 name=name.strip(),
@@ -342,11 +342,13 @@ class CredentialHandlerMixin(OpenClawMixinBase):
             is_valid, error = validate_credential_secret(
                 new_secret, credential.credential_type.value
             )
-            if not is_valid:
-                return error_response(error, 400)
+            if not is_valid or not isinstance(new_secret, str):
+                return error_response(error or "Invalid credential secret", 400)
 
             # Rotate
             credential = store.rotate_credential(credential_id, new_secret)
+            if credential is None:
+                return error_response(f"Credential not found: {credential_id}", 404)
 
             # Audit
             store.add_audit_entry(

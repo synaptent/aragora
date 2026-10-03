@@ -186,23 +186,23 @@ class ConfigValidator:
 
         # Validate URL formats
         for var in cls.URL_VARS:
-            value = os.getenv(var)
-            if value:
-                if not (value.startswith("http://") or value.startswith("https://")):
+            url_value = os.getenv(var)
+            if url_value:
+                if not (url_value.startswith("http://") or url_value.startswith("https://")):
                     if var == "REDIS_URL":
-                        if not value.startswith("redis://"):
+                        if not url_value.startswith("redis://"):
                             errors.append(f"{var} must be a valid Redis URL (redis://...)")
                     else:
                         errors.append(f"{var} must be a valid URL (http:// or https://)")
 
         # Validate integer formats
         for var in cls.INTEGER_VARS:
-            value = os.getenv(var)
-            if value:
+            integer_value = os.getenv(var)
+            if integer_value:
                 try:
-                    int(value)
+                    int(integer_value)
                 except ValueError:
-                    errors.append(f"{var} must be an integer, got: {value}")
+                    errors.append(f"{var} must be an integer, got: {integer_value}")
 
         # Check database configuration in production
         if is_production:

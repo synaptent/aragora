@@ -11,7 +11,7 @@ import asyncio
 import json as _json
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from aragora.config.secrets import get_secret_presence
 
@@ -146,6 +146,8 @@ def select_issues_for_batch(
     )
 
     blocked_scope_entries = set(blocked_scopes or set())
+    eligible_skip_labels = cast(set[str] | None, skip_labels)
+    eligible_require_labels = cast(set[str] | None, require_labels)
 
     if limit is not None and limit <= 1:
         if issue_number is not None:
@@ -153,8 +155,8 @@ def select_issues_for_batch(
             selected = (
                 select_eligible_issue(
                     [target],
-                    skip_labels=skip_labels,
-                    require_labels=require_labels,
+                    skip_labels=eligible_skip_labels,
+                    require_labels=eligible_require_labels,
                     blocked_scopes=blocked_scope_entries,
                 )
                 if target is not None
@@ -163,8 +165,8 @@ def select_issues_for_batch(
             return [selected] if selected is not None else []
         selected = select_eligible_issue(
             issues,
-            skip_labels=skip_labels,
-            require_labels=require_labels,
+            skip_labels=eligible_skip_labels,
+            require_labels=eligible_require_labels,
             blocked_scopes=blocked_scope_entries,
         )
         return [selected] if selected is not None else []
@@ -174,8 +176,8 @@ def select_issues_for_batch(
         selected = (
             select_eligible_issue(
                 [target],
-                skip_labels=skip_labels,
-                require_labels=require_labels,
+                skip_labels=eligible_skip_labels,
+                require_labels=eligible_require_labels,
                 blocked_scopes=blocked_scope_entries,
             )
             if target is not None
@@ -196,8 +198,8 @@ def select_issues_for_batch(
     for issue in issues:
         candidate = select_eligible_issue(
             [issue],
-            skip_labels=skip_labels,
-            require_labels=require_labels,
+            skip_labels=eligible_skip_labels,
+            require_labels=eligible_require_labels,
             blocked_scopes=claimed_scopes,
         )
         if candidate is None:

@@ -24,17 +24,45 @@ from aragora.server.stream.emitter import (
     SyncEventEmitter,
     TokenBucket,
     normalize_intensity,
+    set_global_emitter,
 )
-from aragora.server.stream.events import (
+from aragora.events.types import (
     AudienceMessage,
     StreamEvent,
     StreamEventType,
 )
+from aragora.storage import receipt_signing
+from aragora.storage.receipt_signing import SignatureMetadata, SignedReceipt
 
 
 # ===========================================================================
 # Test Fixtures
 # ===========================================================================
+
+
+def test_receipt_verification_observer_broadcasts_receipt_id():
+    """Server stream composition registers canonical receipt telemetry."""
+    emitter = MagicMock()
+    signed_receipt = SignedReceipt(
+        receipt_data={"receipt_id": "receipt-123"},
+        signature="signature",
+        signature_metadata=SignatureMetadata(
+            algorithm="HMAC-SHA256",
+            timestamp="2026-07-12T12:00:00+00:00",
+            key_id="key-123",
+        ),
+    )
+    set_global_emitter(emitter)
+    try:
+        observer = receipt_signing._receipt_verification_observer
+        assert observer is not None
+        observer(signed_receipt, True)
+    finally:
+        set_global_emitter(None)
+
+    event = emitter.emit.call_args.args[0]
+    assert event.type is StreamEventType.RECEIPT_VERIFIED
+    assert event.data == {"receipt_id": "receipt-123", "valid": True}
 
 
 @pytest.fixture

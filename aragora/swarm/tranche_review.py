@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aragora.swarm.campaign import CampaignProject, CampaignReviewer, _changed_files_from_run
 from aragora.swarm.tranche import (
@@ -291,7 +291,7 @@ def run_verification_passed(run_dict: dict[str, Any], *, has_verification_comman
         item.get("exit_code") for item in work_orders if item.get("exit_code") is not None
     ]
     if exit_codes:
-        return all(int(code) == 0 for code in exit_codes)
+        return all(int(cast(Any, code)) == 0 for code in exit_codes)
     return not has_verification_commands
 
 
