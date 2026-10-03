@@ -22,6 +22,8 @@ import os
 from dataclasses import dataclass
 from typing import cast
 
+from aragora.config.secrets import SecretNotFoundError, SecretSourceError, get_secret
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,14 +134,35 @@ class ConfigValidator:
         """
         errors: list[str] = []
         warnings: list[str] = []
+        secret_values: dict[str, str | None] = {}
+        secret_source_errors: set[str] = set()
+
+        def _secret_value(name: str) -> str | None:
+            if name not in secret_values:
+                try:
+                    secret_values[name] = get_secret(name)
+                except SecretSourceError:
+                    secret_values[name] = None
+                    secret_source_errors.add(name)
+                except (SecretNotFoundError, OSError, RuntimeError, ValueError):
+                    secret_values[name] = None
+            return secret_values[name]
 
         # Check production mode requirements
-        is_production = os.getenv("ARAGORA_ENV", "development").lower() == "production"
+        env_mode = (
+            os.getenv("ARAGORA_ENV") or os.getenv("ARAGORA_ENVIRONMENT") or "development"
+        ).lower()
+        is_production = env_mode in ("production", "prod", "staging", "stage")
 
         if is_production:
             for var in cls.PRODUCTION_REQUIRED:
-                if not os.getenv(var):
-                    errors.append(f"Missing required environment variable in production: {var}")
+                if not _secret_value(var):
+                    if var in secret_source_errors:
+                        errors.append(f"Invalid managed custody configuration for {var}")
+                    else:
+                        errors.append(
+                            f"Missing required configuration in production/staging: {var}"
+                        )
 
             # SECURITY: Check for insecure development-only variables in production
             for var, description in cls.INSECURE_DEV_ONLY_VARS.items():
@@ -151,7 +174,7 @@ class ConfigValidator:
                     )
 
         # Check LLM API keys
-        has_llm_key = any(os.getenv(key) for key in cls.LLM_API_KEYS)
+        has_llm_key = any(_secret_value(key) for key in cls.LLM_API_KEYS)
         if not has_llm_key:
             msg = f"No LLM API key configured. Set at least one of: {', '.join(cls.LLM_API_KEYS)}"
             if is_production:
@@ -161,8 +184,8 @@ class ConfigValidator:
 
         # SECURITY: Warn if production env vars are set but ARAGORA_ENV is not production
         # This catches accidental deployments with development settings
-        aragora_env = os.getenv("ARAGORA_ENV", "development").lower()
-        if aragora_env not in ("production", "prod", "staging", "stage"):
+        aragora_env = env_mode
+        if not is_production:
             has_production_vars = any(
                 os.getenv(var) for var in ["ARAGORA_API_TOKEN", "DATABASE_URL", "REDIS_URL"]
             )
@@ -175,25 +198,24 @@ class ConfigValidator:
 
         # Check secret requirements
         for var, req in cls.SECRET_REQUIREMENTS.items():
-            value = os.getenv(var, "")
-            if value:
+            secret_value = _secret_value(var)
+            if secret_value:
                 min_len = cast(int, req["min_length"])
-                if len(value) < min_len:
+                if len(secret_value) < min_len:
                     errors.append(
                         f"{var} ({req['description']}) must be at least "
-                        f"{min_len} characters, got {len(value)}"
+                        f"{min_len} characters, got {len(secret_value)}"
                     )
 
         # Validate URL formats
         for var in cls.URL_VARS:
-            url_value = os.getenv(var)
+            url_value = _secret_value(var)
             if url_value:
-                if not (url_value.startswith("http://") or url_value.startswith("https://")):
-                    if var == "REDIS_URL":
-                        if not url_value.startswith("redis://"):
-                            errors.append(f"{var} must be a valid Redis URL (redis://...)")
-                    else:
-                        errors.append(f"{var} must be a valid URL (http:// or https://)")
+                if var == "REDIS_URL":
+                    if not url_value.startswith("redis://"):
+                        errors.append(f"{var} must be a valid Redis URL (redis://...)")
+                elif not (url_value.startswith("http://") or url_value.startswith("https://")):
+                    errors.append(f"{var} must be a valid URL (http:// or https://)")
 
         # Validate integer formats
         for var in cls.INTEGER_VARS:
@@ -206,7 +228,7 @@ class ConfigValidator:
 
         # Check database configuration in production
         if is_production:
-            db_url = os.getenv("DATABASE_URL", "")
+            db_url = _secret_value("DATABASE_URL")
             if db_url:
                 # Ensure PostgreSQL is used in production (not SQLite)
                 if "sqlite" in db_url.lower():
@@ -264,7 +286,7 @@ class ConfigValidator:
         # Check Redis configuration for production multi-instance deployments
         # In-memory rate limiting and session storage don't work across instances
         if is_production:
-            redis_url = os.getenv("REDIS_URL")
+            redis_url = _secret_value("REDIS_URL")
             instance_count = os.getenv("ARAGORA_INSTANCE_COUNT", "1")
 
             # Check if running multiple instances without Redis

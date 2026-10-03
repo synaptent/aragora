@@ -366,7 +366,7 @@ class TestCheckProductionRequirements:
                 missing = check_production_requirements()
                 assert any("DATABASE_URL" in m for m in missing)
 
-    def test_production_all_requirements_met(self):
+    def test_production_all_requirements_met(self, tmp_path):
         with patch.dict(
             "os.environ",
             {
@@ -376,6 +376,7 @@ class TestCheckProductionRequirements:
                 "DATABASE_URL": "postgresql://localhost/db",
                 "JWT_SECRET": "secret",
                 "ARAGORA_REQUIRE_DATABASE": "true",
+                "ARAGORA_SECRETS_DIR": str(tmp_path.resolve()),
             },
             clear=True,
         ):
@@ -390,6 +391,65 @@ class TestCheckProductionRequirements:
                     m for m in missing if "required" in m.lower() or "missing" in m.lower()
                 ]
                 assert production_missing == [] or all("warning" in m.lower() for m in missing)
+
+
+class TestStrictSecretsCustodyRequirement:
+    """Strict secrets mode must name a managed custody backend at startup."""
+
+    MESSAGE_KEY = "no managed secret custody is configured"
+
+    def _missing(self, env: dict[str, str]) -> list[str]:
+        with patch.dict("os.environ", env, clear=True):
+            with patch(
+                "aragora.control_plane.leader.is_distributed_state_required",
+                return_value=False,
+            ):
+                return check_production_requirements()
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            {"ARAGORA_ENV": "production"},
+            {"ARAGORA_ENV": "staging"},
+            {"ARAGORA_ENV": "development", "ARAGORA_SECRETS_STRICT": "true"},
+        ],
+    )
+    def test_strict_mode_without_custody_fails_with_both_fixes(self, env):
+        custody = [m for m in self._missing(env) if self.MESSAGE_KEY in m]
+        assert len(custody) == 1
+        assert "ARAGORA_SECRETS_DIR" in custody[0]
+        assert "ARAGORA_USE_SECRETS_MANAGER=true" in custody[0]
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            {"ARAGORA_USE_SECRETS_MANAGER": "true"},
+            {"AWS_EXECUTION_ENV": "AWS_ECS_FARGATE"},
+            {"ARAGORA_SECRETS_STRICT": "false"},
+        ],
+    )
+    def test_configured_custody_or_non_strict_passes(self, extra):
+        missing = self._missing({"ARAGORA_ENV": "production", **extra})
+        assert not [m for m in missing if "Strict secrets mode is on" in m]
+
+    def test_usable_mounted_directory_passes(self, tmp_path):
+        secrets_dir = tmp_path.resolve() / "secrets"
+        secrets_dir.mkdir(mode=0o700)
+        missing = self._missing(
+            {"ARAGORA_ENV": "production", "ARAGORA_SECRETS_DIR": str(secrets_dir)}
+        )
+        assert not [m for m in missing if "Strict secrets mode is on" in m]
+
+    @pytest.mark.parametrize("configured", ["relative/secrets", "/nonexistent/aragora-secrets"])
+    def test_unusable_mounted_directory_fails_loud(self, configured):
+        missing = self._missing({"ARAGORA_ENV": "staging", "ARAGORA_SECRETS_DIR": configured})
+        custody = [m for m in missing if "ARAGORA_SECRETS_DIR is not usable" in m]
+        assert len(custody) == 1
+        assert "Strict secrets mode is on" in custody[0]
+
+    def test_development_is_not_strict(self):
+        missing = self._missing({"ARAGORA_ENV": "development"})
+        assert not [m for m in missing if self.MESSAGE_KEY in m]
 
 
 # ---------------------------------------------------------------------------

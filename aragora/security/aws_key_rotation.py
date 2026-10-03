@@ -1016,21 +1016,32 @@ class RotationMonitor:
 
         # Refresh the global secret cache to pick up any rotated values
         try:
-            from aragora.config.secrets import refresh_secrets
+            from aragora.config.secrets import SecretSourceError, refresh_secrets
 
             refresh_secrets()
             self._reload_count += 1
             logger.debug("Secret cache refreshed (reload #%d)", self._reload_count)
-        except (ImportError, RuntimeError, ValueError, OSError) as e:
+        except (SecretSourceError, ImportError, RuntimeError, ValueError, OSError) as e:
             logger.warning("Failed to refresh secret cache: %s", e)
 
         # Hydrate environment with latest values for hot-reload
         try:
-            from aragora.config.secrets import hydrate_env_from_secrets
+            from aragora.config.secrets import (
+                SecretNotFoundError,
+                SecretSourceError,
+                hydrate_env_from_secrets,
+            )
 
             hydrate_env_from_secrets(overwrite=True)
-        except (ImportError, RuntimeError, ValueError, OSError) as e:
-            logger.debug("Secret hydration skipped: %s", e)
+        except (
+            SecretNotFoundError,
+            SecretSourceError,
+            ImportError,
+            RuntimeError,
+            ValueError,
+            OSError,
+        ) as e:
+            logger.warning("Secret hydration skipped: %s", e)
 
     def get_status(self) -> dict[str, Any]:
         """Get monitor status for the admin endpoint."""
