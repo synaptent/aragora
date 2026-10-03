@@ -25,10 +25,8 @@ from .stores import (
 )
 from .sessions import _create_and_link_session
 
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +82,7 @@ def _get_persistence_loop() -> asyncio.AbstractEventLoop | None:
         pass
 
     try:
-        from aragora.storage.pool_manager import get_pool_event_loop
+        from aragora.utils.async_utils import get_pool_event_loop
 
         pool_loop = get_pool_event_loop()
         if pool_loop is not None and pool_loop.is_running():

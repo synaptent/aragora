@@ -24,7 +24,7 @@ from aragora.debate.phases import (
     VotingPhase,
 )
 from aragora.debate.prompt_builder import PromptBuilder
-from aragora.debate.protocol import user_vote_multiplier
+from aragora.protocols.debate import user_vote_multiplier
 from aragora.reasoning.claims import fast_extract_claims
 from aragora.reasoning.evidence_grounding import EvidenceGrounder
 from aragora.debate.phase_executor import PhaseConfig, PhaseExecutor
@@ -276,7 +276,12 @@ def init_phases(arena: Arena) -> None:
     )
 
     # Auto-initialize PopulationManager for genome evolution when auto_evolve is enabled
-    if arena.auto_evolve and arena.population_manager is None and GENESIS_AVAILABLE:
+    if (
+        arena.auto_evolve
+        and arena.population_manager is None
+        and GENESIS_AVAILABLE
+        and _PopulationManager is not None
+    ):
         try:
             arena.population_manager = _PopulationManager()
             logger.info("population_manager auto-initialized for genome evolution")

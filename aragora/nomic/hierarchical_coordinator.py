@@ -405,7 +405,7 @@ class HierarchicalCoordinator:
         try:
             from aragora.debate.orchestrator import Arena
             from aragora.core import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             prompt = self._build_judge_prompt(goal, decomposition, reports)
 
