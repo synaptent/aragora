@@ -323,8 +323,6 @@ def _require_knowledge() -> None:
         raise HTTPException(status_code=503, detail="Knowledge subsystem not available")
 
 
-# Same text and code as the v1 knowledge handler's closure, so both API versions
-# answer a closed fact route alike.
 FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
 FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
 
