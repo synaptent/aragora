@@ -1,0 +1,54 @@
+{
+  "session_id": "elves-2026-08-19-aws-retirement-migration-9391",
+  "version": "1.12.0",
+  "status": "in_progress",
+  "branch": "codex/aws-retirement-migration-9391",
+  "base_sha": "6955ab420ed959dcce9cece4120b298453adc9c3",
+  "collision_tripwire": "a9b5de83502426ff83415e64b9b27dc562161e1d",
+  "plan_path": "docs/plans/aws-retirement-migration-9391.md",
+  "survival_guide_path": "docs/elves/aws-retirement-migration-9391/survival-guide.md",
+  "learnings_path": "docs/elves/aws-retirement-migration-9391/learnings.md",
+  "execution_log_path": "docs/elves/aws-retirement-migration-9391/execution-log.md",
+  "pr_number": 9800,
+  "staging_plan_head": "80c53f71b9fff14e6657f3f209402f50f50f948b",
+  "lease": {
+    "lease_id": "803c32bd-760",
+    "work_id": "issue:9391",
+    "owner_session_id": "codex-elves-aws-retirement-9391-20260819"
+  },
+  "continuation_guard": {
+    "remaining_batches": 6,
+    "stop_allowed": false,
+    "checkpoint_is_stop": false,
+    "next_required_action": "Write the Batch 1 contract and pre-implementation survey, then implement provider-neutral mounted-directory secret custody"
+  },
+  "test_baseline": {
+    "passed": 125,
+    "total": 125,
+    "skipped": 0,
+    "status": "captured",
+    "scope": "tests/config/test_secrets.py tests/gauntlet/test_odr_signing.py tests/scripts/test_verify_receipt.py"
+  },
+  "current_batch": {
+    "id": 1,
+    "name": "Provider-neutral secret custody",
+    "status": "in_progress"
+  },
+  "batches": [
+    {"id": 1, "name": "Provider-neutral secret custody", "status": "in_progress", "commit": null, "rollback_tag": "elves/aws-retirement-migration-9391/pre-batch-1", "started_at": "2026-08-19T14:31:39Z", "completed_at": null},
+    {"id": 2, "name": "Non-AWS ODR signing", "status": "planned", "commit": null, "rollback_tag": "elves/pre-batch-2", "started_at": null, "completed_at": null},
+    {"id": 3, "name": "Canary deployment pack", "status": "planned", "commit": null, "rollback_tag": "elves/pre-batch-3", "started_at": null, "completed_at": null},
+    {"id": 4, "name": "External canary verifier", "status": "planned", "commit": null, "rollback_tag": "elves/pre-batch-4", "started_at": null, "completed_at": null},
+    {"id": 5, "name": "Live canary and evidence", "status": "planned", "commit": null, "rollback_tag": "elves/pre-batch-5", "started_at": null, "completed_at": null},
+    {"id": 6, "name": "AWS retirement follow-up packet", "status": "planned", "commit": null, "rollback_tag": "elves/pre-batch-6", "started_at": null, "completed_at": null}
+  ],
+  "review_comments": [],
+  "active_compute": [],
+  "staging_constraints": {
+    "docker_daemon": "unavailable",
+    "supabase_auth": "available",
+    "hcloud_auth": "unavailable",
+    "cloudflare_auth": "unavailable",
+    "online_aragora_runners": 5
+  }
+}
