@@ -33,6 +33,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
+from aragora.security.approval_mappings import (
+    PolicyActionType,
+    resolve_policy_action_type,
+    unknown_action_type_reason,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -165,7 +171,7 @@ class ApprovalWorkflowAdapter(Protocol):
 class PolicyActionRequest:
     """Layer-neutral policy request compatible with action policy engines."""
 
-    action_type: _PolicyActionType
+    action_type: PolicyActionType
     user_id: str
     session_id: str
     workspace_id: str
@@ -176,37 +182,12 @@ class PolicyActionRequest:
     tenant_id: str | None
 
 
-class _PolicyActionType(str, Enum):
-    """Enum-compatible action types expected by policy implementations."""
-
-    SHELL = "shell"
-    FILE_READ = "file_read"
-    FILE_WRITE = "file_write"
-    FILE_DELETE = "file_delete"
-    BROWSER = "browser"
-    API = "api"
-    SCREENSHOT = "screenshot"
-    KEYBOARD = "keyboard"
-    MOUSE = "mouse"
-
-
 class _StructuralPolicyEvaluationAdapter:
     """Evaluate policy objects through their existing structural interface."""
 
     @staticmethod
     def _request(request: EnforcementRequest) -> PolicyActionRequest | None:
-        action_type_map = {
-            "shell": _PolicyActionType.SHELL,
-            "file_read": _PolicyActionType.FILE_READ,
-            "file_write": _PolicyActionType.FILE_WRITE,
-            "file_delete": _PolicyActionType.FILE_DELETE,
-            "browser": _PolicyActionType.BROWSER,
-            "api": _PolicyActionType.API,
-            "screenshot": _PolicyActionType.SCREENSHOT,
-            "keyboard": _PolicyActionType.KEYBOARD,
-            "mouse": _PolicyActionType.MOUSE,
-        }
-        action_type = action_type_map.get(request.action_type)
+        action_type = resolve_policy_action_type(request.action_type)
         if action_type is None:
             return None
         return PolicyActionRequest(
@@ -226,7 +207,7 @@ class _StructuralPolicyEvaluationAdapter:
         if policy_request is None:
             return PolicyEvaluation(
                 result=EnforcementResult.ALLOWED,
-                reason=f"Unknown action type '{request.action_type}'; not policy-controlled",
+                reason=unknown_action_type_reason(request.action_type),
             )
 
         result = policy.evaluate(policy_request)
