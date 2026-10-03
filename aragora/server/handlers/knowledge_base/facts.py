@@ -155,8 +155,14 @@ class FactsOperationsMixin:
     @ttl_cache(ttl_seconds=CACHE_TTL_FACTS, key_prefix="knowledge_facts", skip_first=True)
     @handle_errors("list facts")
     @require_permission("knowledge:read")
-    def _handle_list_facts(self: FactsHandlerProtocol, query_params: dict) -> HandlerResult:
-        """Handle GET /api/knowledge/facts - List facts."""
+    def _handle_list_facts(
+        self: FactsHandlerProtocol, query_params: dict, handler: Any = None
+    ) -> HandlerResult:
+        """Handle GET /api/knowledge/facts - List facts.
+
+        ``handler`` is unused here; ``@require_permission`` reads the request's
+        authorization context from it.
+        """
         workspace_id = get_bounded_string_param(query_params, "workspace_id", None, max_length=100)
         topic = get_bounded_string_param(query_params, "topic", None, max_length=200)
         min_confidence = get_bounded_float_param(
@@ -285,6 +291,8 @@ class FactsOperationsMixin:
         workspace_id = data.get("workspace_id", "default")
 
         store = self._get_fact_store()
+        # Store deduplication matches statement and the caller-supplied workspace
+        # only, so it would hand another organization's existing fact to this caller.
         fact = store.add_fact(
             statement=statement,
             workspace_id=workspace_id,
@@ -293,6 +301,7 @@ class FactsOperationsMixin:
             confidence=data.get("confidence", 0.5),
             topics=data.get("topics", []),
             metadata=data.get("metadata", {}),
+            deduplicate=False,
         )
 
         return json_response(fact.to_dict(), status=201)
