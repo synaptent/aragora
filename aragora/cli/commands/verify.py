@@ -145,6 +145,7 @@ _INTEGRITY_HASH_FIELDS: tuple[str, ...] = (
 # before the 1.2 stamp existed, so receipts with cruxes + schema_version 1.1
 # hashed without schema_version and must keep verifying.
 _SCHEMA_VERSION_CRUXES = "1.2"
+_SCHEMA_VERSION_EVIDENCE = "1.3"
 
 
 def _integrity_hash_fields(data: dict[str, Any]) -> tuple[str, ...]:
@@ -154,7 +155,57 @@ def _integrity_hash_fields(data: dict[str, Any]) -> tuple[str, ...]:
         fields = fields + ("cruxes",)
         if data.get("schema_version") == _SCHEMA_VERSION_CRUXES:
             fields = fields + ("schema_version",)
+    if data.get("schema_version") == _SCHEMA_VERSION_EVIDENCE:
+        fields = fields + (
+            "decision_payload",
+            "decision_payload_hash",
+            "evidence_references",
+            "schema_version",
+        )
     return fields
+
+
+def _inline_decision_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _inline_decision_value(value[key])
+            for key in sorted(value, key=lambda item: str(item))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_inline_decision_value(item) for item in value]
+    if isinstance(value, set):
+        normalized = [_inline_decision_value(item) for item in value]
+        return sorted(normalized, key=lambda item: json.dumps(item, sort_keys=True, default=str))
+    return value
+
+
+def _inline_evidence_references(references: Any) -> list[dict[str, Any]]:
+    normalized = [
+        value
+        for reference in references or []
+        if isinstance((value := _inline_decision_value(reference)), dict)
+    ]
+    return sorted(
+        normalized,
+        key=lambda item: (
+            str(item.get("evidence_id", "")),
+            str(item.get("path", "")),
+            json.dumps(item, sort_keys=True, default=str),
+        ),
+    )
+
+
+def _inline_decision_payload_hash(data: dict[str, Any]) -> str:
+    content = json.dumps(
+        {
+            "decision_payload": _inline_decision_value(data.get("decision_payload") or {}),
+            "evidence_references": _inline_evidence_references(data.get("evidence_references")),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(content.encode()).hexdigest()
 
 
 # Decision-integrity fields covered by the legacy ``checksum`` field.
@@ -212,6 +263,12 @@ def _inline_artifact_hash(data: dict[str, Any]) -> str:
         schema_version = data.get("schema_version", "1.0")
         if schema_version == _SCHEMA_VERSION_CRUXES:
             payload["schema_version"] = schema_version
+    if data.get("schema_version") == _SCHEMA_VERSION_EVIDENCE:
+        payload["schema_version"] = _SCHEMA_VERSION_EVIDENCE
+        payload["decision_payload_hash"] = data.get("decision_payload_hash", "")
+        payload["evidence_references"] = _inline_evidence_references(
+            data.get("evidence_references")
+        )
     content = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(content.encode()).hexdigest()
 
@@ -368,18 +425,29 @@ def _verify_receipt(data: dict[str, Any], *, verbose: bool = False) -> dict[str,
     # covers neither cruxes nor schema_version, so accepting it alone would
     # let an attacker strip ``artifact_hash`` and evade crux/downgrade
     # tamper-protection. Pre-crux receipts keep the legacy fallback.
-    requires_full_artifact_hash = (
-        data.get("cruxes") is not None or data.get("schema_version") == _SCHEMA_VERSION_CRUXES
-    )
+    requires_full_artifact_hash = data.get("cruxes") is not None or data.get("schema_version") in {
+        _SCHEMA_VERSION_CRUXES,
+        _SCHEMA_VERSION_EVIDENCE,
+    }
     if (
         requires_full_artifact_hash
         and not stored_artifact_hash
         and not _looks_like_artifact_hash_alias(stored_checksum)
     ):
         proof_failures.append(
-            "crux receipt (cruxes present or schema >= 1.2) requires the full "
-            "artifact_hash; the legacy checksum does not cover cruxes/schema_version"
+            "receipt with crux/evidence content requires the full artifact_hash; "
+            "the legacy checksum does not cover schema-bound decision evidence"
         )
+    if data.get("schema_version") == _SCHEMA_VERSION_EVIDENCE:
+        stored_decision_hash = data.get("decision_payload_hash")
+        expected_decision_hash = _inline_decision_payload_hash(data)
+        if not stored_decision_hash:
+            proof_failures.append("schema 1.3 receipt is missing decision_payload_hash")
+        elif stored_decision_hash != expected_decision_hash:
+            proof_failures.append(
+                f"decision_payload_hash mismatch: stored={stored_decision_hash[:16]}..., "
+                f"recomputed={expected_decision_hash[:16]}..."
+            )
     if stored_artifact_hash:
         expected_artifact_hash = _recompute_artifact_hash(data)
         covered_fields.extend(_integrity_hash_fields(data))

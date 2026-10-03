@@ -13,6 +13,7 @@ Explore the documentation in this section to learn more.
 ## In This Section
 
 - [Aragora Roadmap Revision: Local Advocates as an Augmentation Layer (Draft v0.1)](./aragora-roadmap-revision-advocates)
+- [Chinese-Routed Reviewer Families for #9071](./chinese-routed-reviewer-families-9071)
 - [Essay Refinement Pipeline — Implementation Spec](./essay-refinement-pipeline)
 - [Finding-Severity Dissent Gate (Tier 4 Pre-Approval)](./finding-severity-gate)
 - [Independent Verifier Guide — aragora-verify](./independent-verifier-guide)
@@ -22,7 +23,7 @@ Explore the documentation in this section to learn more.
 - [Model Lineage Disclosure for Reviewer Attestations](./model-lineage-disclosure)
 - [Model Quorum Family Expansion (Pre-Approval Design, Tier 4 implementation)](./model-quorum-family-expansion)
 - [Native DecisionReceipt → ODR field mapping](./odr-native-mapping)
-- [Open Decision Receipt (ODR) — Content Profile v0.1](./open-decision-receipt)
+- [Open Decision Receipt (ODR) — Content Profile v0.2](./open-decision-receipt)
 - [Quorum Evidence Re-Trigger (B1, Tier 4 Pre-Approval + Draft Implementation)](./quorum-evidence-retrigger)
 - [Receipt Lineage Reconciliation](./receipt-lineage-reconciliation)
 - [Tamper-Evident Audit Trail (TET) — Specification](./tamper-evident-trail)

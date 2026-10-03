@@ -11,16 +11,19 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import parse_qs
 
 from aragora.config import DEFAULT_ROUNDS
 from aragora.utils.public_urls import public_receipt_url
 
+if TYPE_CHECKING:
+    from aragora.agents.base import AgentType
+
 try:
     from aragora.server.storage import get_debates_db
 except ImportError:  # pragma: no cover - optional dependency for tests
-    get_debates_db = None
+    get_debates_db = None  # type: ignore[assignment]
 
 from .config import (
     ARAGORA_API_BASE_URL,
@@ -506,7 +509,7 @@ Reply in thread to add suggestions to ongoing debates
             for i, (agent_type, model) in enumerate(detected[:3]):
                 agents.append(
                     create_agent(
-                        agent_type,
+                        cast("AgentType", agent_type),
                         name=f"agent-{i}",
                         role=roles[i % len(roles)],
                         model=model,

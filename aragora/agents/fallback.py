@@ -140,7 +140,7 @@ class QuotaFallbackMixin:
 
     # Override these in subclasses for provider-specific model mappings
     OPENROUTER_MODEL_MAP: dict[str, str] = {}
-    DEFAULT_FALLBACK_MODEL: str = "anthropic/claude-opus-4.8"
+    DEFAULT_FALLBACK_MODEL: str = "anthropic/claude-opus-5"
 
     # Instance-level cached fallback agent (set by _get_cached_fallback_agent)
     _fallback_agent: OpenRouterAgent | None = None

@@ -860,7 +860,7 @@ call it before any credentials are set up.
                             "providers": {
                                 "anthropic": {
                                     "available": True,
-                                    "model": "claude-opus-4-8",
+                                    "model": "claude-opus-5",
                                 },
                                 "openai": {"available": True, "model": "gpt-5.3"},
                                 "openrouter": {

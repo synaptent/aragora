@@ -31,7 +31,7 @@ from aragora.connectors.enterprise.base import (
     SyncState,
 )
 from aragora.reasoning.provenance import SourceType
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 logger = logging.getLogger(__name__)
 

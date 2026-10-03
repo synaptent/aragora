@@ -8,6 +8,7 @@ using Weaviate as the vector database.
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,16 +20,20 @@ logger = logging.getLogger(__name__)
 WeaviateConnectionError: type[Exception]
 
 try:
-    import weaviate
-    from weaviate.classes.config import Configure, Property, DataType
-    from weaviate.classes.query import MetadataQuery, Filter
-    from weaviate.exceptions import WeaviateConnectionError as _WeaviateConnectionError
+    # weaviate's package __init__ calls a bare warnings.simplefilter("default")
+    # (and its transitive imports register more filters), globally rewriting the
+    # ambient warning policy; the scoped guard confines that to this import.
+    with warnings.catch_warnings():
+        import weaviate
+        from weaviate.classes.config import Configure, Property, DataType
+        from weaviate.classes.query import MetadataQuery, Filter
+        from weaviate.exceptions import WeaviateConnectionError as _WeaviateConnectionError
 
     WeaviateConnectionError = _WeaviateConnectionError
     WEAVIATE_AVAILABLE = True
 except ImportError:
     WEAVIATE_AVAILABLE = False
-    weaviate = None
+    weaviate = None  # type: ignore[assignment]
 
     class _FallbackWeaviateConnectionError(Exception):
         """Fallback exception when Weaviate is not available."""

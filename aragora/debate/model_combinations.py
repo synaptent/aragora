@@ -19,7 +19,7 @@ from typing import Any, cast
 from aragora.agents.spec import AgentSpec
 from aragora.config import DEFAULT_ROUNDS
 from aragora.core import Environment
-from aragora.debate.protocol import DebateProtocol
+from aragora.protocols.debate import DebateProtocol
 
 DEFAULT_TEAM_ROLES: tuple[str, ...] = ("proposer", "critic", "synthesizer")
 

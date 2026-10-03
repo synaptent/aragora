@@ -131,41 +131,43 @@ class PipelineTransitionsAPI:
         )
 
     def transition(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
-        """Trigger a stage transition for a pipeline item."""
-        return self._client.request(
-            "POST",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition",
-            json={"target_stage": target_stage},
+        """Reject a fictional v2 stage-transition operation."""
+        raise NotImplementedError(
+            "transition() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     def get_history(self, pipeline_id: str, item_id: str) -> list[dict[str, Any]]:
-        """Get transition history for a pipeline item."""
-        return self._client.request(
-            "GET",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions",
+        """Reject a fictional v2 transition-history operation."""
+        raise NotImplementedError(
+            "get_history() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     def validate(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
-        """Validate whether a transition is allowed."""
-        return self._client.request(
-            "POST",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/validate",
-            json={"target_stage": target_stage},
+        """Reject a fictional v2 transition-validation operation."""
+        raise NotImplementedError(
+            "validate() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     def available(self, pipeline_id: str, item_id: str) -> dict[str, Any]:
-        """Get available transitions for the current stage."""
-        return self._client.request(
-            "GET",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions/available",
+        """Reject a fictional v2 available-transitions operation."""
+        raise NotImplementedError(
+            "available() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     def rollback(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
-        """Rollback to a previous stage."""
-        return self._client.request(
-            "POST",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/rollback",
-            json={"target_stage": target_stage},
+        """Reject a fictional v2 rollback operation."""
+        raise NotImplementedError(
+            "rollback() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
 
@@ -251,39 +253,41 @@ class AsyncPipelineTransitionsAPI:
         )
 
     async def transition(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
-        """Trigger a stage transition for a pipeline item."""
-        return await self._client.request(
-            "POST",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition",
-            json={"target_stage": target_stage},
+        """Reject a fictional v2 stage-transition operation."""
+        raise NotImplementedError(
+            "transition() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     async def get_history(self, pipeline_id: str, item_id: str) -> list[dict[str, Any]]:
-        """Get transition history for a pipeline item."""
-        return await self._client.request(
-            "GET",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions",
+        """Reject a fictional v2 transition-history operation."""
+        raise NotImplementedError(
+            "get_history() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     async def validate(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
-        """Validate whether a transition is allowed."""
-        return await self._client.request(
-            "POST",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/validate",
-            json={"target_stage": target_stage},
+        """Reject a fictional v2 transition-validation operation."""
+        raise NotImplementedError(
+            "validate() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     async def available(self, pipeline_id: str, item_id: str) -> dict[str, Any]:
-        """Get available transitions for the current stage."""
-        return await self._client.request(
-            "GET",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions/available",
+        """Reject a fictional v2 available-transitions operation."""
+        raise NotImplementedError(
+            "available() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )
 
     async def rollback(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
-        """Rollback to a previous stage."""
-        return await self._client.request(
-            "POST",
-            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/rollback",
-            json={"target_stage": target_stage},
+        """Reject a fictional v2 rollback operation."""
+        raise NotImplementedError(
+            "rollback() is unavailable because Aragora exposes no live v2 "
+            "pipeline-transition endpoint. Use the supported v1 stage-transition methods "
+            "ideas_to_goals(), goals_to_tasks(), tasks_to_workflow(), or execute() instead."
         )

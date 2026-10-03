@@ -14,7 +14,7 @@ metadata:
 Ask Claude Fable 5 a question and get an answer back through bounded backend
 attempts. This replaces ad-hoc `timeout 120 claude -p "..."` calls, which hang
 or expire with no output. The default backend order is `claude-fable-5` then
-`claude-opus-4-8` through the local `claude` CLI. CLI attempts pass the prompt
+`claude-opus-5` through the local `claude` CLI. CLI attempts pass the prompt
 via stdin and use an empty MCP configuration. Explicit
 `ARAGORA_MODEL_TRANSPORT=vibeproxy-prefer` tries those exact models through
 VibeProxy before the CLI; `vibeproxy-required` fails closed instead of using

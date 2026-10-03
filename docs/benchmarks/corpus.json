@@ -1,7 +1,7 @@
 {
   "corpus_id": "tw-01-bounded-execution-v1",
-  "revision": 6,
-  "recorded_on": "2026-06-05",
+  "revision": 7,
+  "recorded_on": "2026-08-19",
   "success_contract": "mergeable_pr_or_merged_pr",
   "run_cadence": "weekly_or_better",
   "change_control": "Issue membership stays fixed until an explicit corpus revision edits this file.",
@@ -15,7 +15,17 @@
     "verified": "Autonomy has already landed a merged PR closing this issue, attested by the `closedByPullRequestsReferences` GraphQL edge. Primary proof surface; gates `truth_success_rate_verified`.",
     "in_progress": "Issue is OPEN at corpus authoring time, bounded, and has been dispatched at least once to the autonomous boss loop (a recorded `worker_outcome` in .aragora/overnight/boss_metrics.jsonl). Autonomy is on the hook to resolve it. Excluded from `truth_success_rate_verified` until it graduates."
   },
+  "revision_evidence": {
+    "normalization_receipt": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/normalization-receipt.json",
+    "bootstrap_metrics": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/bootstrap-metrics.jsonl",
+    "scope": "Historical bootstrap provenance only; no revision-7 execution success is claimed."
+  },
   "revision_log": [
+    {
+      "revision": 7,
+      "recorded_on": "2026-08-19",
+      "change": "Restock the exhausted corpus with five OPEN missing-test-coverage issues (#5749, #5751, #5753, #5754, #5755). Each has one recorded historical worker_outcome, an existing source module, an absent declared test target explicitly marked as a new file, and an accepted current sanitizer result. Retire all eight closed rev-6 in-progress members rather than expand the fixed historical verified control cohort with work completed before the rev-7 launch. Membership becomes 10: five historical verified members plus five current in-progress members. Tracked revision_evidence makes the bootstrap inputs auditable and explicitly claims no fresh rev-7 success."
+    },
     {
       "revision": 6,
       "recorded_on": "2026-06-05",
@@ -243,225 +253,144 @@
       "honesty_note": "Promoted from rev-4 staging on 2026-05-14 after 2 recorded worker_outcome row(s) in boss_metrics.jsonl. Graduated to verified in revision 5 after strict GitHub linkage showed merged PR #7380 closes this issue."
     },
     {
-      "issue_id": 5426,
-      "title": "Add operator-snapshot subcommand to agent_bridge.py",
-      "execution_class": "small_refactor",
+      "issue_id": 5749,
+      "title": "Add unit tests for swarm/supervisor_workers.py",
+      "execution_class": "missing_test_coverage",
       "expected_status": "in_progress",
       "scope_hint": [
-        "aragora/swarm/agent_bridge.py"
+        "aragora/swarm/supervisor_workers.py",
+        "tests/swarm/test_supervisor_workers.py"
       ],
       "known_constraints": [
-        "single-PR scope refactor as described in the issue body",
-        "no behavioral change in callers"
+        "create the declared test file and cover worker dispatch, lease management, and failure handling",
+        "do not modify the source module"
       ],
-      "source_reference": "github.com/synaptent/aragora/issues/5426",
-      "added_in_revision": 4,
+      "source_reference": "github.com/synaptent/aragora/issues/5749",
+      "added_in_revision": 7,
       "github_labels": [
-        "autonomous"
+        "autonomous",
+        "triage:verified-real"
       ],
       "dispatch_provenance": {
-        "lease_id": "rev4-dispatch",
+        "lease_id": "pre-rev7-sanitizer",
         "tick_count": 1,
         "terminal_classes": [
-          "deliverable_pr_created"
+          "blocked_validation_target_missing"
         ]
       },
-      "honesty_note": "Promoted from rev-4 staging on 2026-05-14 after 1 recorded worker_outcome row(s) in boss_metrics.jsonl. Terminal class history: deliverable_pr_created."
+      "honesty_note": "Added in rev-7 after the exact issue body was normalized to declare its missing validation target as a new file and the current sanitizer returned accepted. One historical worker_outcome exists; it failed only on the now-corrected missing-target declaration."
     },
     {
-      "issue_id": 5427,
-      "title": "Add __all__ exports to aragora/swarm/rescue_events.py and rescue_planner.py",
-      "execution_class": "small_refactor",
+      "issue_id": 5751,
+      "title": "Add unit tests for swarm/claude_session_runner.py",
+      "execution_class": "missing_test_coverage",
       "expected_status": "in_progress",
       "scope_hint": [
-        "aragora/swarm/rescue_events.py",
-        "aragora/swarm/rescue_planner.py"
+        "aragora/swarm/claude_session_runner.py",
+        "tests/swarm/test_claude_session_runner.py"
       ],
       "known_constraints": [
-        "single-PR scope refactor as described in the issue body",
-        "no behavioral change in callers"
+        "create the declared test file and cover initialization, command building, output parsing, and error handling",
+        "mock external process and CLI calls; do not modify the source module"
       ],
-      "source_reference": "github.com/synaptent/aragora/issues/5427",
-      "added_in_revision": 4,
+      "source_reference": "github.com/synaptent/aragora/issues/5751",
+      "added_in_revision": 7,
       "github_labels": [
-        "autonomous"
+        "autonomous",
+        "triage:verified-real"
       ],
       "dispatch_provenance": {
-        "lease_id": "rev4-dispatch",
+        "lease_id": "pre-rev7-sanitizer",
         "tick_count": 1,
         "terminal_classes": [
-          "deliverable_pr_created"
+          "blocked_validation_target_missing"
         ]
       },
-      "honesty_note": "Promoted from rev-4 staging on 2026-05-14 after 1 recorded worker_outcome row(s) in boss_metrics.jsonl. Terminal class history: deliverable_pr_created."
+      "honesty_note": "Added in rev-7 after the exact issue body was normalized to declare its missing validation target as a new file and the current sanitizer returned accepted. One historical worker_outcome exists; it failed only on the now-corrected missing-target declaration."
     },
     {
-      "issue_id": 5839,
-      "title": "[TW-02] Restock stale issues in tw-01-bounded-execution-v1 rev-1",
-      "execution_class": "benchmark_corpus_maintenance",
+      "issue_id": 5753,
+      "title": "Add unit tests for pipeline/receipt_generator.py",
+      "execution_class": "missing_test_coverage",
       "expected_status": "in_progress",
       "scope_hint": [
-        "docs/benchmarks/corpus.json"
+        "aragora/pipeline/receipt_generator.py",
+        "tests/pipeline/test_receipt_generator.py"
       ],
       "known_constraints": [
-        "retire or replace each stale closed corpus issue",
-        "rerun the recurring benchmark truth publication until corpus_freshness.status is fresh",
-        "keep the recurring TW-02 status surface linked to this follow-up issue until the stale set is cleared"
+        "create the declared test file and cover receipt creation, field population, hash generation, and serialization",
+        "do not modify the source module"
       ],
-      "source_reference": "github.com/synaptent/aragora/issues/5839",
-      "added_in_revision": 4,
+      "source_reference": "github.com/synaptent/aragora/issues/5753",
+      "added_in_revision": 7,
       "github_labels": [
-        "autonomous"
+        "autonomous",
+        "triage:verified-real"
       ],
       "dispatch_provenance": {
-        "lease_id": "feb5e30b-3d0",
+        "lease_id": "pre-rev7-sanitizer",
         "tick_count": 1,
         "terminal_classes": [
-          "dispatch"
+          "blocked_validation_target_missing"
         ]
       },
-      "honesty_note": "TW-02 follow-up issue keeps the status surface linked while the stale rev-3 members are cleared and fresh replacement members are selected."
+      "honesty_note": "Added in rev-7 after the exact issue body was normalized to declare its missing validation target as a new file and the current sanitizer returned accepted. One historical worker_outcome exists; it failed only on the now-corrected missing-target declaration."
     },
     {
-      "issue_id": 5844,
-      "title": "[CS-01..03] Reconcile docs/status surfaces to current proof",
-      "execution_class": "docs_reconciliation",
-      "expected_status": "in_progress",
-      "scope_hint": [
-        "docs/status/NEXT_STEPS_CANONICAL.md",
-        "docs/status/ACTIVE_EXECUTION_ISSUES.md",
-        "docs/status/B0_BENCHMARK_TRUTH_STATUS.md"
-      ],
-      "known_constraints": [
-        "update the named doc file(s) to reflect current code reality",
-        "no code edits"
-      ],
-      "source_reference": "github.com/synaptent/aragora/issues/5844",
-      "added_in_revision": 4,
-      "github_labels": [
-        "autonomous"
-      ],
-      "dispatch_provenance": {
-        "lease_id": "rev4-dispatch",
-        "tick_count": 5,
-        "terminal_classes": [
-          "blocked_auth_failure",
-          "blocked_not_dispatch_bounded"
-        ]
-      },
-      "honesty_note": "Promoted from rev-4 staging on 2026-05-14 after 5 recorded worker_outcome row(s) in boss_metrics.jsonl. Terminal class history: blocked_auth_failure, blocked_not_dispatch_bounded."
-    },
-    {
-      "issue_id": 5182,
-      "title": "[B0-cohort] Add unit tests for server/handlers/orchestration/protocols.py",
+      "issue_id": 5754,
+      "title": "Add unit tests for pipeline/verification_plan.py",
       "execution_class": "missing_test_coverage",
       "expected_status": "in_progress",
       "scope_hint": [
-        "aragora/server/handlers/orchestration/protocols.py",
-        "tests/server/handlers/orchestration/test_protocols.py"
+        "aragora/pipeline/verification_plan.py",
+        "tests/pipeline/test_verification_plan.py"
       ],
       "known_constraints": [
-        "add unit tests covering happy and edge cases for the named module",
-        "do not modify production code under aragora/ unless strictly required by the test scaffold"
+        "create the declared test file and cover plan construction, step ordering, and validation logic",
+        "do not modify the source module"
       ],
-      "source_reference": "github.com/synaptent/aragora/issues/5182",
-      "added_in_revision": 6,
+      "source_reference": "github.com/synaptent/aragora/issues/5754",
+      "added_in_revision": 7,
       "github_labels": [
-        "autonomous"
+        "autonomous",
+        "triage:verified-real"
       ],
       "dispatch_provenance": {
-        "lease_id": "rev6-restock",
-        "tick_count": 2,
+        "lease_id": "pre-rev7-sanitizer",
+        "tick_count": 1,
         "terminal_classes": [
-          "blocked_not_dispatch_bounded",
-          "deliverable_pr_created"
+          "blocked_validation_target_missing"
         ]
       },
-      "honesty_note": "Restocked in rev-6 (2026-06-05) to hold the corpus denominator at 13 after retiring four superseded-by-sibling closures. Open B0-cohort bounded test-coverage issue with 2 recorded worker_outcome rows in boss_metrics.jsonl (terminal classes blocked_not_dispatch_bounded, deliverable_pr_created); never graduated. Same execution_class as the graduated rev-5 verified cohort (#5185/#5187/#5197/#5198/#5200)."
+      "honesty_note": "Added in rev-7 after the exact issue body was normalized to declare its missing validation target as a new file and the current sanitizer returned accepted. One historical worker_outcome exists; it failed only on the now-corrected missing-target declaration."
     },
     {
-      "issue_id": 5183,
-      "title": "[B0-cohort] Add unit tests for control_plane/workers/testfixer_task_worker.py",
+      "issue_id": 5755,
+      "title": "Add unit tests for pipeline/backbone_errors.py",
       "execution_class": "missing_test_coverage",
       "expected_status": "in_progress",
       "scope_hint": [
-        "aragora/control_plane/workers/testfixer_task_worker.py",
-        "tests/control_plane/workers/test_testfixer_task_worker.py"
+        "aragora/pipeline/backbone_errors.py",
+        "tests/pipeline/test_backbone_errors.py"
       ],
       "known_constraints": [
-        "add unit tests covering happy and edge cases for the named module",
-        "do not modify production code under aragora/ unless strictly required by the test scaffold"
+        "create the declared test file and cover error construction, inheritance, serialization, and terminal-truth mapping",
+        "do not modify the source module"
       ],
-      "source_reference": "github.com/synaptent/aragora/issues/5183",
-      "added_in_revision": 6,
+      "source_reference": "github.com/synaptent/aragora/issues/5755",
+      "added_in_revision": 7,
       "github_labels": [
-        "autonomous"
+        "autonomous",
+        "triage:verified-real"
       ],
       "dispatch_provenance": {
-        "lease_id": "rev6-restock",
-        "tick_count": 2,
+        "lease_id": "pre-rev7-sanitizer",
+        "tick_count": 1,
         "terminal_classes": [
-          "blocked_not_dispatch_bounded",
-          "deliverable_pr_created"
+          "blocked_validation_target_missing"
         ]
       },
-      "honesty_note": "Restocked in rev-6 (2026-06-05) to hold the corpus denominator at 13 after retiring four superseded-by-sibling closures. Open B0-cohort bounded test-coverage issue with 2 recorded worker_outcome rows in boss_metrics.jsonl (terminal classes blocked_not_dispatch_bounded, deliverable_pr_created); never graduated. Same execution_class as the graduated rev-5 verified cohort (#5185/#5187/#5197/#5198/#5200)."
-    },
-    {
-      "issue_id": 5184,
-      "title": "[B0-cohort] Add unit tests for server/handlers/bots/slack/signature.py",
-      "execution_class": "missing_test_coverage",
-      "expected_status": "in_progress",
-      "scope_hint": [
-        "aragora/server/handlers/bots/slack/signature.py",
-        "tests/server/handlers/bots/slack/test_signature.py"
-      ],
-      "known_constraints": [
-        "add unit tests covering happy and edge cases for the named module",
-        "do not modify production code under aragora/ unless strictly required by the test scaffold"
-      ],
-      "source_reference": "github.com/synaptent/aragora/issues/5184",
-      "added_in_revision": 6,
-      "github_labels": [
-        "autonomous"
-      ],
-      "dispatch_provenance": {
-        "lease_id": "rev6-restock",
-        "tick_count": 2,
-        "terminal_classes": [
-          "blocked_not_dispatch_bounded",
-          "deliverable_pr_created"
-        ]
-      },
-      "honesty_note": "Restocked in rev-6 (2026-06-05) to hold the corpus denominator at 13 after retiring four superseded-by-sibling closures. Open B0-cohort bounded test-coverage issue with 2 recorded worker_outcome rows in boss_metrics.jsonl (terminal classes blocked_not_dispatch_bounded, deliverable_pr_created); never graduated. Same execution_class as the graduated rev-5 verified cohort (#5185/#5187/#5197/#5198/#5200)."
-    },
-    {
-      "issue_id": 5186,
-      "title": "[B0-cohort] Add unit tests for agents/errors.py",
-      "execution_class": "missing_test_coverage",
-      "expected_status": "in_progress",
-      "scope_hint": [
-        "aragora/agents/errors.py",
-        "tests/agents/test_errors.py"
-      ],
-      "known_constraints": [
-        "add unit tests covering happy and edge cases for the named module",
-        "do not modify production code under aragora/ unless strictly required by the test scaffold"
-      ],
-      "source_reference": "github.com/synaptent/aragora/issues/5186",
-      "added_in_revision": 6,
-      "github_labels": [
-        "autonomous"
-      ],
-      "dispatch_provenance": {
-        "lease_id": "rev6-restock",
-        "tick_count": 2,
-        "terminal_classes": [
-          "blocked_not_dispatch_bounded",
-          "deliverable_pr_created"
-        ]
-      },
-      "honesty_note": "Restocked in rev-6 (2026-06-05) to hold the corpus denominator at 13 after retiring four superseded-by-sibling closures. Open B0-cohort bounded test-coverage issue with 2 recorded worker_outcome rows in boss_metrics.jsonl (terminal classes blocked_not_dispatch_bounded, deliverable_pr_created); never graduated. Same execution_class as the graduated rev-5 verified cohort (#5185/#5187/#5197/#5198/#5200)."
+      "honesty_note": "Added in rev-7 after the exact issue body was normalized to declare its missing validation target as a new file and the current sanitizer returned accepted. One historical worker_outcome exists; it failed only on the now-corrected missing-target declaration."
     }
   ],
   "rev4_silent_closure_findings_2026-05-14": [
@@ -476,6 +405,40 @@
     {
       "issue_id": 5765,
       "reason": "Discovered during rev-4 promotion preparation: issue is CLOSED on GitHub with no closedByPullRequestsReferences edge despite 1 recorded worker_outcome row(s) (terminal classes: deliverable_pr_created). Cannot promote as in_progress (issue is closed); cannot promote as verified (no verified PR link). Likely a silent founder closure or manual stale closure. Excluded from the rev-4 first-promotion slice; tracked for re-staging if a verified PR link is later established."
+    }
+  ],
+  "retired_in_revision_7": [
+    {
+      "issue_id": 5426,
+      "reason": "Graduated through merged PR #7517 before the rev-7 launch. Retired instead of promoted so the verified control cohort remains the original five rev-5 members and pre-launch work does not expand the rev-7 proof denominator."
+    },
+    {
+      "issue_id": 5427,
+      "reason": "Graduated through merged PR #7516 before the rev-7 launch. Retired instead of promoted so the verified control cohort remains the original five rev-5 members and pre-launch work does not expand the rev-7 proof denominator."
+    },
+    {
+      "issue_id": 5839,
+      "reason": "Graduated through merged PR #7796 before the rev-7 launch. Retired instead of promoted because this benchmark-maintenance issue is outside the single missing-test-coverage execution class used by rev-7."
+    },
+    {
+      "issue_id": 5844,
+      "reason": "Graduated through merged PR #7789 before the rev-7 launch. Retired instead of promoted because this documentation-reconciliation issue is outside the single missing-test-coverage execution class used by rev-7."
+    },
+    {
+      "issue_id": 5182,
+      "reason": "Graduated through merged PR #8103 before the rev-7 launch. Retired instead of promoted so the verified control cohort remains the original five rev-5 members and pre-launch work does not expand the rev-7 proof denominator."
+    },
+    {
+      "issue_id": 5183,
+      "reason": "Graduated through merged PR #8102 before the rev-7 launch. Retired instead of promoted so the verified control cohort remains the original five rev-5 members and pre-launch work does not expand the rev-7 proof denominator."
+    },
+    {
+      "issue_id": 5184,
+      "reason": "Graduated through merged PR #8097 before the rev-7 launch. Retired instead of promoted so the verified control cohort remains the original five rev-5 members and pre-launch work does not expand the rev-7 proof denominator."
+    },
+    {
+      "issue_id": 5186,
+      "reason": "Graduated through merged PR #8100 before the rev-7 launch. Retired instead of promoted so the verified control cohort remains the original five rev-5 members and pre-launch work does not expand the rev-7 proof denominator."
     }
   ]
 }

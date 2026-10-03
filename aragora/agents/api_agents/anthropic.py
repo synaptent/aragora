@@ -31,6 +31,7 @@ from aragora.agents.api_agents.common import (
 )
 from aragora.agents.fallback import QuotaFallbackMixin
 from aragora.agents.registry import AgentRegistry
+from aragora.models.compat import first_text_block, strip_sampling_params
 from aragora.observability.metrics.agents import (
     ErrorType,
     record_circuit_breaker_rejection,
@@ -74,7 +75,7 @@ def _resolve_base_url(env_name: str, default: str) -> str:
 
 @AgentRegistry.register(
     "anthropic-api",
-    default_model="claude-opus-4-8",
+    default_model="claude-opus-5",
     default_name="claude-api",
     agent_type="API",
     env_vars="ANTHROPIC_API_KEY",
@@ -90,27 +91,28 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
     """
 
     # Model mapping from Anthropic to OpenRouter format (used by QuotaFallbackMixin)
-    # Every legacy Anthropic ID maps to the current frontier (Opus 4.8) via
+    # Every legacy Anthropic ID maps to the current frontier (Opus 5) via
     # OpenRouter so a missing or revoked direct key never blocks a debate and
     # weaker historical models are transparently upgraded.
     OPENROUTER_MODEL_MAP = {
         "claude-fable-5": "anthropic/claude-fable-5",
-        "claude-opus-4-8": "anthropic/claude-opus-4.8",
-        "claude-opus-4-7": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-6": "anthropic/claude-opus-4.8",
-        "claude-opus-4-5-20251101": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-20250514": "anthropic/claude-opus-4.8",
-        "claude-haiku-4-5-20251001": "anthropic/claude-opus-4.8",
-        "claude-3-5-sonnet-20241022": "anthropic/claude-opus-4.8",
-        "claude-3-opus-20240229": "anthropic/claude-opus-4.8",
-        "claude-3-haiku-20240307": "anthropic/claude-opus-4.8",
+        "claude-opus-5": "anthropic/claude-opus-5",
+        "claude-opus-4-8": "anthropic/claude-opus-5",
+        "claude-opus-4-7": "anthropic/claude-opus-5",
+        "claude-sonnet-4-6": "anthropic/claude-opus-5",
+        "claude-opus-4-5-20251101": "anthropic/claude-opus-5",
+        "claude-sonnet-4-20250514": "anthropic/claude-opus-5",
+        "claude-haiku-4-5-20251001": "anthropic/claude-opus-5",
+        "claude-3-5-sonnet-20241022": "anthropic/claude-opus-5",
+        "claude-3-opus-20240229": "anthropic/claude-opus-5",
+        "claude-3-haiku-20240307": "anthropic/claude-opus-5",
     }
-    DEFAULT_FALLBACK_MODEL = "anthropic/claude-opus-4.8"
+    DEFAULT_FALLBACK_MODEL = "anthropic/claude-opus-5"
 
     def __init__(
         self,
         name: str = "claude-api",
-        model: str = "claude-opus-4-8",
+        model: str = "claude-opus-5",
         role: AgentRole = "proposer",
         timeout: int = 120,
         api_key: str | None = None,
@@ -328,6 +330,13 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
         if self.top_p is not None:
             payload["top_p"] = self.top_p
 
+        # Claude Opus 4.7+ (incl. Opus 5 / Sonnet 5 / Fable 5) removed sampling
+        # parameters: a non-default temperature/top_p/top_k returns a 400. Strip
+        # them centrally so persona configs (e.g. the vertical specialists,
+        # which set temperature 0.1-0.3 + top_p) do not hard-fail on those
+        # models. Guide behaviour with prompting instead.
+        strip_sampling_params(payload, self.model)
+
         if self.system_prompt:
             payload["system"] = self.system_prompt
 
@@ -408,14 +417,22 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
                     )
 
                     try:
+                        # A response with no "content" key at all is malformed,
+                        # not merely empty — surface it as a format error the way
+                        # the old content[0] KeyError did.
+                        if "content" not in data:
+                            raise KeyError("content")
+
                         # Extract text and thinking from response content blocks
                         content_blocks = data.get("content", [])
                         output, thinking = self._parse_content_blocks(content_blocks)
                         self._last_thinking_trace = thinking
 
                         if not output:
-                            # Fallback to old format
-                            output = data["content"][0]["text"]
+                            # Fallback to old format. Must not index content[0]:
+                            # on a thinking-by-default model that is a thinking
+                            # block, not text.
+                            output = first_text_block(data.get("content"))
 
                         if not output or not output.strip():
                             if self._circuit_breaker is not None:
@@ -553,6 +570,10 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
             payload["temperature"] = self.temperature
         if self.top_p is not None:
             payload["top_p"] = self.top_p
+
+        # Claude Opus 4.7+ (incl. the Opus 5 default) reject sampling
+        # params with a 400. No-ops for every other model.
+        strip_sampling_params(payload, self.model)
 
         if self.system_prompt:
             payload["system"] = self.system_prompt

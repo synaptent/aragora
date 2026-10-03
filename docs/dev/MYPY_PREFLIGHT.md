@@ -26,6 +26,10 @@ The script:
 3. Otherwise runs `mypy --pretty <files...>` using the repo's existing config
    and exits with mypy's exit code (plus a short remediation hint on failure).
 
+The gate selects files from **committed state only** — python edits outside
+the committed diff (staged, unstaged, or untracked) are never type-checked
+(the script prints a stderr warning naming them), so run it after committing.
+
 ## Integration suggestion
 
 Call it from Phase 2 (verification) of any lane that touches Python:

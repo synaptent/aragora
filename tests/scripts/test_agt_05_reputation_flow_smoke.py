@@ -51,7 +51,7 @@ class TestComputeDeltas:
 
     def test_well_calibrated_agent_has_positive_total(self) -> None:
         deltas, _ = smoke.compute_deltas()
-        total = sum(d.delta for d in deltas if d.agent_id == "claude-opus-4-8")
+        total = sum(d.delta for d in deltas if d.agent_id == "claude-opus-5")
         assert total > 0.0
         # Calibrated at p in {0.90, 0.85, 0.10} against outcomes {yes, yes, no}.
         # Each Brier <= 0.04 -> payout >= 0.92 -> delta >= 9.2; sum >= 27.
@@ -209,9 +209,9 @@ def test_store_scores_match_smoke_table_in_e2e_run(tmp_path: Path) -> None:
     assert rc == 0
     reloaded = ReputationStore.load_from_file(ledger)
     # Should have the canonical 3 agents.
-    assert set(reloaded.agent_ids()) == {"claude-opus-4-8", "gpt-4.1", "demo-anti"}
-    # claude-opus-4-8 has been well-calibrated -> positive score even after decay.
-    claude_score = reloaded.get_score("claude-opus-4-8")
+    assert set(reloaded.agent_ids()) == {"claude-opus-5", "gpt-4.1", "demo-anti"}
+    # claude-opus-5 has been well-calibrated -> positive score even after decay.
+    claude_score = reloaded.get_score("claude-opus-5")
     assert claude_score > 0.0
     # demo-anti has been systematically wrong -> negative score.
     anti_score = reloaded.get_score("demo-anti")

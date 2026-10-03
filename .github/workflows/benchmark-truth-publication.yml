@@ -324,6 +324,46 @@ jobs:
             --report-root docs/status/generated/rescue_productization \
             --output docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md
 
+      - name: Sync docs-site mirrors
+        shell: bash
+        # Scope: repair the mirror drift this workflow itself creates, nothing
+        # more. The status pages it renders are mirrored into docs-site, and
+        # docs-build.yml fails closed when a docs/** change lands without its
+        # mirror — so without this every daily PR is red on `build` and, once
+        # merged, hands that red to the next unrelated docs PR.
+        #
+        # This deliberately does NOT re-implement docs-build's full closure
+        # (doc_stats, capability-matrix, legacy-entrypoint and CLI-reference
+        # checks). Chasing parity means re-deriving another job's gate inside a
+        # publisher that cannot see it change. docs-build stays the authority;
+        # this only stops the publisher from being a drift source. Note that
+        # staging the sync's whole output does absorb unrelated mirror drift
+        # that reached main (`build` is not a required check) into the bot
+        # commit — unavoidable if the PR is to be green, and worth naming.
+        #
+        # Separate from the publish step so repository JavaScript does not run
+        # in the step holding BENCHMARK_TRUTH_PR_TOKEN, and so a sync failure
+        # is attributable in the run log. (The checkout token still persists in
+        # .git/config for the whole job; this narrows the PAT's exposure, not
+        # all credentials.)
+        #
+        # Uses the runner's ambient node (v23.5.0 on mac-studio, already probed
+        # by "Ensure local toolchain on PATH"); sync-docs.js needs only fs/path.
+        # Do NOT add actions/setup-node here: dispatching this workflow with it
+        # killed the runner mid-step (run 30134420462 — the job ended with
+        # Setup Node still in_progress and every later step pending, which
+        # continue-on-error cannot rescue because the failure is the runner,
+        # not the step).
+        #
+        # Non-fatal by design: the neighbouring publish step's contract is to
+        # degrade and warn rather than leave the daily cron red. Aborting here
+        # would discard the day's rendered surfaces after --ensure-issues has
+        # already mutated GitHub issues, and the worst case of continuing is
+        # today's status quo — a red `build` on the PR.
+        run: |
+          cd docs-site && node scripts/sync-docs.js \
+            || echo "::warning::docs-site mirror sync failed; PR will red the build check"
+
       - name: Publish workflow summary
         run: |
           cat docs/status/B0_BENCHMARK_TRUTH_STATUS.md >> "$GITHUB_STEP_SUMMARY"
@@ -348,6 +388,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add \
             docs/benchmarks/benchmark_corpus_freshness.json \
             docs/benchmarks/rescue_productization.json \
@@ -356,6 +397,14 @@ jobs:
             docs/status/generated/benchmark_scorecards \
             docs/status/generated/benchmark_truth_artifacts \
             docs/status/generated/rescue_productization
+
+          # Stage every mirror the sync rewrote, not a hand-listed subset —
+          # sync-docs also regenerates category index pages, and naming only
+          # the two status mirrors would leave the rest dirty. `-u` restricts
+          # this to tracked files: the checkout runs with `clean: false`, so
+          # `-A` here could sweep untracked leftovers from earlier runs into
+          # the publication commit.
+          git add -u docs-site/docs
 
           if git diff --cached --quiet; then
             echo "No recurring trust-loop surface changes to commit."

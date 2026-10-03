@@ -33,12 +33,13 @@ from aragora.debate.arena_phases import create_phase_executor, init_phases
 from aragora.debate.batch_loaders import debate_loader_context
 from aragora.debate.context import DebateContext
 from aragora.debate.hierarchy import HierarchyConfig
-from aragora.debate.protocol import CircuitBreaker, DebateProtocol
+from aragora.protocols.debate import DebateProtocol
+from aragora.resilience import CircuitBreaker
 from aragora.logging_config import get_logger as get_structured_logger
 from aragora.observability.n1_detector import n1_detection_scope
 from aragora.observability.tracing import add_span_attributes, get_tracer
 from aragora.debate.performance_monitor import get_debate_monitor
-from aragora.server.metrics import ACTIVE_DEBATES
+from aragora.observability.server_metrics import ACTIVE_DEBATES
 from aragora.spectate.stream import SpectatorStream
 
 # Extracted sibling modules
@@ -1152,6 +1153,15 @@ class Arena(ArenaDelegatesMixin):
 
         if not os.environ.get("PYTEST_CURRENT_TEST"):
             return
+
+        # In-flight webhook workers record delivery results through the store
+        # reset below, so they must finish before its connections close.
+        try:
+            from aragora.events.dispatcher import shutdown_dispatcher
+
+            shutdown_dispatcher(wait=True)
+        except (ImportError, RuntimeError, OSError):
+            pass
 
         try:
             from aragora.storage.receipt_store import close_receipt_store

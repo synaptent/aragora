@@ -48,6 +48,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol as _TypingProtocol, Sequence
 
+from aragora.models import by_any_id
 from aragora.pdb.panel_config import PDBPanelSlot
 from aragora.pdb.protocol import (
     SlotCritiqueResponse,
@@ -161,13 +162,14 @@ OPENROUTER_BACKED_FAMILIES: frozenset[str] = frozenset({FAMILY_DEEPSEEK, FAMILY_
 # - OpenAI pricing page (GPT-5 / GPT-4.1 family)
 # - Google Gemini API pricing (Gemini 3.1 Pro / 3 Flash)
 # - xAI docs (Grok 4 / 4.2 pricing)
-# - OpenRouter model catalog (DeepSeek chat, Moonshot Kimi K2.6,
+# - OpenRouter model catalog (DeepSeek chat, Moonshot Kimi K3 and legacy K2,
 #   Qwen3-235B-A22B and Qwen3 Max variants)
 # - Mistral La Plateforme pricing (Mistral Large 2411 / 2512)
 _PRICE_PER_MTOK: Mapping[str, tuple[float, float]] = {
     # Anthropic
     # Live catalog 2026-07-16 (enforced by tests/models/test_catalog.py).
     "claude-fable-5": (10.00, 50.00),
+    "claude-opus-5": (5.00, 25.00),
     "claude-opus-4-8": (5.00, 25.00),
     "claude-opus-4.8": (5.00, 25.00),
     "claude-opus-4-7": (5.00, 25.00),
@@ -242,18 +244,25 @@ _PRICE_PER_MTOK: Mapping[str, tuple[float, float]] = {
     "deepseek-v3.2-exp": (0.27, 1.10),
     "deepseek-r1": (0.55, 2.19),
     "deepseek-reasoner": (0.55, 2.19),
-    "kimi-k2.7-code": (0.75, 3.50),
+    "kimi-k3": (3.00, 15.00),
+    "kimi-k2.7-code": (0.71, 3.50),
     "kimi-k2.6": (0.7448, 4.655),
     "kimi-k2.5": (0.44, 2.00),
     "kimi-k2": (0.57, 2.30),
     "kimi-k2-0905": (0.57, 2.30),
     "kimi-k2-thinking": (0.57, 2.30),
     "moonshot-v1-128k": (0.57, 2.30),
+    "qwen3.8-max": (2.00, 6.00),
     "qwen3-235b-a22b": (0.14, 0.28),
     "qwen3-max": (0.60, 1.80),
     "qwen3.7-max": (1.475, 4.425),
     "qwen3.5-plus-02-15": (0.60, 1.80),
     "qwen-2.5-72b-instruct": (0.30, 0.80),
+    "sonar-reasoning-pro": (2.00, 8.00),
+    "command-a": (2.50, 10.00),
+    "command-a-03-2025": (2.50, 10.00),
+    "jamba-large-1.7": (2.00, 8.00),
+    "jamba-large": (2.00, 8.00),
     # Mistral (direct API)
     "mistral-large-2512": (2.00, 6.00),
     "mistral-large-2411": (2.00, 6.00),
@@ -282,6 +291,13 @@ def estimate_cost_usd(
     """
     tokens_in = max(0, int(tokens_in or 0))
     tokens_out = max(0, int(tokens_out or 0))
+    spec = by_any_id(model)
+    if spec is not None:
+        # Tier-aware catalog rates (documented long-context pricing);
+        # identical to the flat row below the threshold.
+        in_price, out_price = spec.rates_for(tokens_in)
+        cost = (tokens_in / 1_000_000.0) * in_price + (tokens_out / 1_000_000.0) * out_price
+        return round(cost, 6)
     rates = _PRICE_PER_MTOK.get(model)
     if rates is None:
         # Strip provider prefixes (``anthropic/...`` etc.) and try again.

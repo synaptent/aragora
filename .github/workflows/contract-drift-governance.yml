@@ -1,179 +1,207 @@
 name: Contract Drift Governance
 
-on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
-    paths:
-      - 'aragora/server/handlers/**'
-      - 'sdk/**'
-      - 'docs/api/openapi*.json'
-      - 'scripts/check_contract_drift_ratchet.py'
-      - 'scripts/generate_contract_drift_inventory.py'
-      - 'scripts/contract_drift_report.py'
-      - 'scripts/generate_contract_drift_backlog.py'
-      - 'scripts/generate_contract_drift_issue_plan.py'
-      - 'scripts/baselines/**'
-      - '.github/workflows/contract-drift-governance.yml'
-  schedule:
-    - cron: '0 5 * * 1'
-  workflow_dispatch:
+permissions:
+  checks: read
+  contents: read
 
-concurrency:
-  group: contract-drift-governance-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+on:
+  pull_request: {types: [opened, synchronize, reopened, ready_for_review], branches: [main]}
+  push: {branches: [main]}
+  schedule: [{cron: '0 5 * * 1'}]
+  workflow_dispatch:
+    inputs:
+      historical_backfill:
+        description: Run the exact historical-backfill receipt path
+        required: true
+        type: boolean
+        default: false
+      historical_base_sha:
+        description: Exact historical PR base SHA
+        required: false
+        type: string
+      historical_head_sha:
+        description: Exact historical PR head SHA
+        required: false
+        type: string
+      historical_merge_sha:
+        description: Exact historical squash-merge SHA
+        required: false
+        type: string
+      historical_first_parent_sha:
+        description: Exact historical merge first-parent SHA
+        required: false
+        type: string
+
+concurrency: {group: "contract-drift-governance-${{ github.event.pull_request.number || github.ref }}", cancel-in-progress: "${{ github.event_name == 'pull_request' }}"}
 
 jobs:
-  governance:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+  pr-delta:
+    name: contract-drift-pr-delta
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
+    env: {BASE_SHA: "${{ github.event.pull_request.base.sha }}", HEAD_SHA: "${{ github.event.pull_request.head.sha }}"}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Verify checkout integrity
-        shell: bash
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - {uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065, with: {python-version: "3.11"}}
+      - id: admission
         run: |
-          if [[ ! -f pyproject.toml ]]; then
-            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
-            git sparse-checkout disable || true
-            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
-            git reset --hard FETCH_HEAD
-            git clean -ffd || true
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_SHA" "$HEAD_SHA"
+          python3 -B scripts/check_contract_drift_ratchet.py --mode pr \
+            --base-ref "$BASE_SHA" --head-ref "$HEAD_SHA" --strict --json \
+            --repo-root "$GITHUB_WORKSPACE" | tee contract-drift-pr-delta.json
+      - if: always() && !cancelled()
+        uses: actions/upload-artifact@v4
+        with: {name: "contract-drift-pr-delta-${{ github.event.pull_request.head.sha }}", path: contract-drift-pr-delta.json}
+      - if: always()
+        run: |
+          test "${{ steps.admission.outcome }}" = "success"
+          test -s contract-drift-pr-delta.json
+          git show "$BASE_SHA":scripts/baselines/contract_drift_inventory.json | grep -q '"accepted_authority"' || grep -q '"error_code": "authority_transition_required"' contract-drift-pr-delta.json
+
+  main-receipt:
+    name: contract-drift-main-receipt
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
+    outputs:
+      analyzer_artifact_id: ${{ steps.receipt-upload.outputs.artifact-id }}
+    env:
+      EVENT_NAME: "${{ github.event_name }}"
+      HISTORICAL_BACKFILL: "${{ inputs.historical_backfill || false }}"
+      HISTORICAL_BASE_SHA: "${{ inputs.historical_base_sha || '' }}"
+      HISTORICAL_HEAD_SHA: "${{ inputs.historical_head_sha || '' }}"
+      HISTORICAL_MERGE_SHA: "${{ inputs.historical_merge_sha || '' }}"
+      HISTORICAL_FIRST_PARENT_SHA: "${{ inputs.historical_first_parent_sha || '' }}"
+      SOURCE_SHA: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && github.sha || github.event_name == 'push' && github.event.after || github.sha }}"
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && github.sha || github.event_name == 'push' && github.event.after || github.sha }}"}
+      - {uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065, with: {python-version: "3.11"}}
+      - name: Fetch exact historical PR head
+        if: github.event_name == 'workflow_dispatch' && inputs.historical_backfill
+        run: |
+          set -euo pipefail
+          FULL_SHA='^[0-9a-f]{40}$'
+          [[ "$HISTORICAL_HEAD_SHA" =~ $FULL_SHA ]]
+          HISTORICAL_PR_REF="refs/pull/9320/head"
+          HISTORICAL_LOCAL_REF="refs/cdg-historical-backfill/9320/head"
+          git fetch --no-tags --force origin "${HISTORICAL_PR_REF}:${HISTORICAL_LOCAL_REF}"
+          test "$(git rev-parse --verify "${HISTORICAL_LOCAL_REF}^{commit}")" = "$HISTORICAL_HEAD_SHA"
+      - name: Run contract drift receipt analyzer
+        run: |
+          set -euo pipefail
+          ARGS=(--mode receipt --ref "$SOURCE_SHA" --repo-root "$GITHUB_WORKSPACE" --json)
+          if [[ "${EVENT_NAME:-}" == "workflow_dispatch" && "${HISTORICAL_BACKFILL:-false}" == "true" ]]; then
+            FULL_SHA='^[0-9a-f]{40}$'
+            [[ "$HISTORICAL_BASE_SHA" =~ $FULL_SHA ]]
+            [[ "$HISTORICAL_HEAD_SHA" =~ $FULL_SHA ]]
+            [[ "$HISTORICAL_MERGE_SHA" =~ $FULL_SHA ]]
+            [[ "$HISTORICAL_FIRST_PARENT_SHA" =~ $FULL_SHA ]]
+            ARGS+=(
+              --historical-base-sha "$HISTORICAL_BASE_SHA"
+              --historical-head-sha "$HISTORICAL_HEAD_SHA"
+              --historical-merge-sha "$HISTORICAL_MERGE_SHA"
+              --historical-first-parent-sha "$HISTORICAL_FIRST_PARENT_SHA"
+            )
           fi
-          if [[ ! -f pyproject.toml ]]; then
-            echo "::warning::Standard recovery failed; attempting archive restore"
-            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          python3 -B scripts/check_contract_drift_ratchet.py "${ARGS[@]}" \
+            | tee contract-drift-main-receipt-analyzer.json
+          if [[ "${EVENT_NAME:-}" != "workflow_dispatch" || "${HISTORICAL_BACKFILL:-false}" != "true" ]]; then
+            cp contract-drift-main-receipt-analyzer.json contract-drift-main-receipt.json
           fi
-          if [[ ! -f pyproject.toml ]]; then
-            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
-            echo "PWD=$(pwd)"
-            ls -la
-            exit 1
-          fi
-
-      - name: Set up Python
-        uses: ./.github/actions/setup-python-safe
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          bash scripts/ci_install_project.sh --extras dev
-          USER_BASE="$(python -m site --user-base)"
-          echo "${USER_BASE}/bin" >> "$GITHUB_PATH"
-
-      - name: Generate drift summary and planning artifacts
-        run: |
-          python scripts/contract_drift_report.py \
-            --json-out /tmp/contract-drift-summary.json \
-            --md-out /tmp/contract-drift-summary.md
-
-          python scripts/generate_contract_drift_backlog.py \
-            --markdown-out /tmp/CONTRACT_DRIFT_BACKLOG.md \
-            --json-out /tmp/CONTRACT_DRIFT_BACKLOG.json
-
-          python scripts/generate_contract_drift_issue_plan.py \
-            --backlog-json /tmp/CONTRACT_DRIFT_BACKLOG.json \
-            --markdown-out /tmp/CONTRACT_DRIFT_ISSUE_PLAN.md \
-            --json-out /tmp/CONTRACT_DRIFT_ISSUE_PLAN.json
-
-      - name: Fetch drift cohort commit
-        run: |
-          # 2026-04-17 program cohort commit: the ratchet derives cohort
-          # membership from it (git show) and fails closed if unavailable.
-          git fetch --no-tags --depth=1 origin 5cc7a81b77aeb6680613d441f74d72c435c8443c
-
-      - name: Fetch PR base ref
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-
-      - name: Enforce weekly ratchet
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            # Per-PR gate: strict non-worsening delta vs the base ref.
-            python scripts/check_contract_drift_ratchet.py \
-              --mode pr --base-ref "origin/${BASE_REF}" \
-              --strict --json > /tmp/contract-drift-ratchet.json
-          else
-            # Cron/dispatch/main: program-level burn-down schedule.
-            python scripts/check_contract_drift_ratchet.py \
-              --mode program --strict --json > /tmp/contract-drift-ratchet.json
-          fi
-
-      - name: Write ratchet summary
-        if: ${{ always() && !cancelled() }}
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          p = Path('/tmp/contract-drift-ratchet.json')
-          if not p.exists():
-              print('Ratchet output missing')
-              raise SystemExit(0)
-
-          data = json.loads(p.read_text())
-          program = data['program']
-          current = data['current']
-          target = data['target']
-
-          lines = [
-              '## Contract Drift Ratchet',
-              '',
-              f"- Mode: `{data.get('mode', 'program')}`",
-              f"- As of: `{program['as_of']}`",
-              f"- Start total: `{program['start_total_items']}`",
-              f"- Current total: `{current['total_items']}`",
-              f"- Target max: `{target['max_open_items']}`",
-              f"- Delta to target: `{data['delta_to_target']:+d}`",
-              f"- Program passing: `{data.get('program_passing', data['passing'])}`",
-              f"- Passing: `{data['passing']}`",
-          ]
-          for cls in data.get('classes', []):
-              lines.append(
-                  f"- Class `{cls['name']}`: open `{cls['open_items']}` / "
-                  f"target `{cls['target_max']}` (passing: `{cls['passing']}`)"
-              )
-          pr_delta = data.get('pr_delta')
-          if pr_delta:
-              lines.append(f"- PR delta vs `{pr_delta['base_ref']}`:")
-              for key, d in pr_delta['counts'].items():
-                  lines.append(
-                      f"  - `{key}`: {d['base']} -> {d['head']} ({d['delta']:+d})"
-                  )
-
-          summary = Path(Path.cwd() / 'ratchet-summary.md')
-          summary.write_text('\n'.join(lines) + '\n')
-          print(summary.read_text())
-          PY
-
-          if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f ratchet-summary.md ]; then
-            cat ratchet-summary.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload governance artifacts
-        if: ${{ always() && !cancelled() }}
+      - if: success()
+        id: receipt-upload
         uses: actions/upload-artifact@v4
         with:
-          name: contract-drift-governance
-          path: |
-            /tmp/contract-drift-summary.json
-            /tmp/contract-drift-summary.md
-            /tmp/CONTRACT_DRIFT_BACKLOG.json
-            /tmp/CONTRACT_DRIFT_BACKLOG.md
-            /tmp/CONTRACT_DRIFT_ISSUE_PLAN.json
-            /tmp/CONTRACT_DRIFT_ISSUE_PLAN.md
-            /tmp/contract-drift-ratchet.json
-            ratchet-summary.md
-          retention-days: 30
+          name: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && format('contract-drift-main-receipt-analyzer-{0}', github.sha) || format('contract-drift-main-receipt-{0}', github.sha) }}"
+          path: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && 'contract-drift-main-receipt-analyzer.json' || 'contract-drift-main-receipt.json' }}"
+
+  historical-backfill-dispatch:
+    name: contract-drift-historical-backfill-dispatch
+    needs: main-receipt
+    if: success() && github.event_name == 'workflow_dispatch' && inputs.historical_backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    env:
+      ANALYZER_ARTIFACT_ID: "${{ needs.main-receipt.outputs.analyzer_artifact_id }}"
+      SOURCE_SHA: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && github.sha || github.event_name == 'push' && github.event.after || github.sha }}"
+    steps:
+      - name: Finalize completed historical receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$ANALYZER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          SOURCE_REF="${GITHUB_REF#refs/heads/}"
+          if [[ "$SOURCE_REF" == "$GITHUB_REF" ]]; then
+            SOURCE_REF="${GITHUB_REF#refs/tags/}"
+          fi
+          test -n "$SOURCE_REF"
+          test "$SOURCE_REF" != "$GITHUB_REF"
+          PRODUCER_JOB_ID="$(
+            gh api --method GET -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=1" \
+              --jq '.jobs[] | select(.name == "contract-drift-main-receipt") | .id'
+          )"
+          [[ "$PRODUCER_JOB_ID" =~ ^[1-9][0-9]*$ ]]
+          FINALIZER_PAYLOAD="$(
+            jq -cn \
+              --argjson artifact_id "$ANALYZER_ARTIFACT_ID" \
+              --argjson job_id "$PRODUCER_JOB_ID" \
+              --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+              --argjson workflow_run_id "$GITHUB_RUN_ID" \
+              --arg source_sha "$SOURCE_SHA" \
+              '{artifact_id:$artifact_id,job_id:$job_id,run_attempt:$run_attempt,source_sha:$source_sha,workflow_run_id:$workflow_run_id}'
+          )"
+          jq -e '
+            (keys | sort) == ["artifact_id","job_id","run_attempt","source_sha","workflow_run_id"] and
+            (.artifact_id | type == "number" and . > 0) and
+            (.job_id | type == "number" and . > 0) and
+            (.run_attempt | type == "number" and . > 0) and
+            (.source_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+            (.workflow_run_id | type == "number" and . > 0)
+          ' <<<"$FINALIZER_PAYLOAD" >/dev/null
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/contract-drift-historical-backfill-finalizer.yml/dispatches" \
+            -f ref="$SOURCE_REF" \
+            -f "inputs[producer_identity]=$FINALIZER_PAYLOAD"
+
+  program-trajectory:
+    name: contract-drift-program-trajectory
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || !inputs.historical_backfill)
+    runs-on: ubuntu-latest
+    # INFORMATIONAL while the Receipt-First paydown (#9966 row 10) catches up
+    # to the date-driven target: the strict --mode program check fails on
+    # every push to main (398 active units on 2026-09-06, 288 on 2026-09-14,
+    # vs a target of 75 and shrinking), so the red workflow run carried no
+    # information. JOB-level continue-on-error only decouples the WORKFLOW
+    # RUN conclusion: this job's own check still concludes failure when the
+    # analyzer exits non-zero (the live-state verifier requires that
+    # truthful red), the analyzer step stays unconditioned and strict, and
+    # the trajectory artifact still uploads. Never move this key to the
+    # analyzer step: a step-level continue-on-error would turn the job green
+    # and mask the analyzer. Re-tighten (remove this key) in the same PR that
+    # brings total_items at or below max_open_items on main.
+    # Operator decision 2026-09-07; policy tests pin this exact shape.
+    continue-on-error: true
+    env: {SOURCE_SHA: "${{ github.event_name == 'push' && github.event.after || github.sha }}"}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ github.event_name == 'push' && github.event.after || github.sha }}"}
+      - {uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065, with: {python-version: "3.11"}}
+      - run: |
+          set -euo pipefail
+          python3 -B scripts/check_contract_drift_ratchet.py --mode program \
+            --ref "$SOURCE_SHA" --as-of "$(date -u +%F)" --strict --json \
+            --repo-root "$GITHUB_WORKSPACE" | tee contract-drift-program-trajectory.json
+      - if: always() && !cancelled()
+        uses: actions/upload-artifact@v4
+        with: {name: "contract-drift-program-trajectory-${{ github.sha }}", path: contract-drift-program-trajectory.json}

@@ -565,8 +565,8 @@ class TestRedisRateLimiter:
             # May return None or may connect to localhost depending on environment
             # Just ensure it doesn't crash
         finally:
-            # Restore original
-            if original:
+            # Restore original (an empty string is a real value; skip only when unset)
+            if original is not None:
                 os.environ["ARAGORA_REDIS_URL"] = original
             reset_redis_client()
 

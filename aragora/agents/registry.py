@@ -97,7 +97,7 @@ class AgentFactory:
         # Registration (done in agent modules)
         @AgentFactory.register(
             "claude",
-            default_model="claude-opus-4-8",
+            default_model="claude-opus-5",
             agent_type="CLI",
             requires="claude CLI (npm install -g @anthropic-ai/claude-code)",
         )

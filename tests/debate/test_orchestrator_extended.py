@@ -233,7 +233,7 @@ class TestEventEmissionInterface:
 
     def test_stream_event_type_exists(self):
         """StreamEventType enum exists."""
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         # Should have common event types
         assert hasattr(StreamEventType, "DEBATE_START")
@@ -241,7 +241,7 @@ class TestEventEmissionInterface:
 
     def test_stream_event_exists(self):
         """StreamEvent dataclass exists."""
-        from aragora.server.stream.events import StreamEvent
+        from aragora.events.types import StreamEvent
 
         event = StreamEvent(
             type=MagicMock(),

@@ -149,7 +149,7 @@ Zero required dependencies. The debate engine runs anywhere Python runs -- your 
 pip install aragora
 ```
 
-3,084 API operations. SDKs in Python (184 namespaces) and TypeScript (183 namespaces). Slack, Teams, Discord, and Telegram connectors. WebSocket streaming with 190+ event types. Workflow engine with 50+ pre-built templates.
+3,205 API operations. SDKs in Python (184 namespaces) and TypeScript (183 namespaces). Slack, Teams, Discord, and Telegram connectors. WebSocket streaming with 190+ event types. Workflow engine with 50+ pre-built templates.
 
 ### CLI for every workflow
 

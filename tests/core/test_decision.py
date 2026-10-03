@@ -969,7 +969,7 @@ class TestDecisionRouterRouteMethods:
         from types import SimpleNamespace
 
         from aragora.evidence.store import InMemoryEvidenceStore
-        from aragora.server.documents import DocumentStore
+        from aragora.documents.parsing import DocumentStore
 
         # Stub agent lookup
         monkeypatch.setattr(

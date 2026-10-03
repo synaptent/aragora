@@ -265,9 +265,33 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Evaluate TypeScript SDK result
+        env:
+          CLASSIFIER_RESULT: ${{ needs.changes.result }}
+          WORKER_RESULT: ${{ needs.typescript-sdk-run.result }}
+          IN_SCOPE: ${{ needs.changes.outputs.run_typescript }}
         run: |
-          if [[ "${{ needs.typescript-sdk-run.result }}" == "failure" ]]; then
-            echo "::error::TypeScript SDK type check failed"
+          set -euo pipefail
+          if [[ "$CLASSIFIER_RESULT" != "success" ]]; then
+            echo "::error::Change classification concluded '$CLASSIFIER_RESULT'; its scope verdict cannot be trusted. Failing closed."
             exit 1
           fi
-          echo "TypeScript SDK passed (or skipped — no relevant changes)"
+          case "$IN_SCOPE" in
+            true)
+              if [[ "$WORKER_RESULT" != "success" ]]; then
+                echo "::error::TypeScript SDK type check concluded '$WORKER_RESULT' (expected 'success'). Failing closed."
+                exit 1
+              fi
+              echo "TypeScript SDK type check passed."
+              ;;
+            false)
+              if [[ "$WORKER_RESULT" != "skipped" ]]; then
+                echo "::error::TypeScript SDK type check was out of scope but concluded '$WORKER_RESULT'. Failing closed."
+                exit 1
+              fi
+              echo "TypeScript SDK type check not required — no relevant changes."
+              ;;
+            *)
+              echo "::error::Change classification produced invalid IN_SCOPE value '$IN_SCOPE' (expected exactly 'true' or 'false'). Failing closed."
+              exit 1
+              ;;
+          esac

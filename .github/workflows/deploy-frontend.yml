@@ -29,7 +29,7 @@ permissions:
   packages: write
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '24.18.0'
   REGISTRY: ghcr.io
   LIVE_FRONTEND_BASE_URL: ${{ vars.LIVE_FRONTEND_BASE_URL }}
 
@@ -301,16 +301,26 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
+      # Root context is required: aragora/live/package.json declares
+      # "@aragora/sdk": "file:../../sdk/typescript", which resolves outside an
+      # aragora/live-scoped context. Dockerfile.frontend copies the SDK in and
+      # mirrors the repo layout so that path resolves, and is the single frontend
+      # image definition. NEXT_PUBLIC_* is deliberately left at the Dockerfile's
+      # defaults -- see the note on the build-args-free step below.
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: aragora/live
-          file: aragora/live/Dockerfile
+          context: .
+          file: deploy/Dockerfile.frontend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            NEXT_PUBLIC_API_URL=https://api.aragora.ai
-            NEXT_PUBLIC_WS_URL=wss://api.aragora.ai
+          # No NEXT_PUBLIC_* build-args, deliberately. See the header comment in
+          # deploy/Dockerfile.frontend (#9647): Next.js inlines these into the client
+          # bundle, and this image is pulled by self-hosters who serve it from their
+          # own domain. A localhost default is what lets src/config.ts derive
+          # api.<serving-host>; baking vendor URLs here would silently route their
+          # browser traffic to Aragora's backend. aragora.ai does not run this image
+          # -- the Vercel lane above builds it directly with production values.

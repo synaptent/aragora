@@ -64,6 +64,7 @@ class MockDebateContext:
     env: MockEnv = field(default_factory=MockEnv)
     proposals: dict = field(default_factory=dict)
     context_messages: list = field(default_factory=list)
+    partial_messages: list = field(default_factory=list)
     debate_id: str = "test-debate-123"
     agent_failures: dict = field(default_factory=dict)
 
@@ -85,8 +86,10 @@ class MockDebateContext:
         self.agent_failures.setdefault(agent_name, []).append(record)
 
     def add_message(self, msg: Any) -> None:
-        """Add a message to context messages."""
+        """Mirror production message tracking."""
         self.context_messages.append(msg)
+        self.partial_messages.append(msg)
+        self.result.messages.append(msg)
 
 
 @dataclass
@@ -455,6 +458,35 @@ class TestExecuteCritiquePhase:
 
         # Should generate critiques since proposals are valid
         assert critique_cb.called
+        assert len(ctx.result.messages) == 1
+        assert len(ctx.context_messages) == 1
+        assert len(ctx.partial_messages) == 1
+
+    @pytest.mark.asyncio
+    async def test_uses_callback_bound_at_phase_entry(self):
+        """A later attribute mutation must not yield a silent None task result."""
+        mock_critique = create_critique(agent="critic1", target_agent="proposer1")
+        critique_cb = AsyncMock(return_value=mock_critique)
+        gen = CritiqueGenerator(critique_with_agent=critique_cb)
+
+        def select_critics(_proposal_agent, critics):
+            gen._critique_with_agent = None
+            return critics
+
+        gen._select_critics_for_proposal = select_critics
+        ctx = MockDebateContext(proposals={"proposer1": "A proposal"})
+
+        messages, critiques = await gen.execute_critique_phase(
+            ctx=ctx,
+            critics=[MockAgent(name="critic1")],
+            round_num=1,
+            partial_messages=[],
+            partial_critiques=[],
+        )
+
+        assert len(messages) == 1
+        assert len(critiques) == 1
+        critique_cb.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_skips_empty_proposals(self):

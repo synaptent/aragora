@@ -3,14 +3,14 @@
 # as any change to charter §2/§3. IDs are permanent: never reused, never renumbered.
 meta:
   charter: docs/architecture/INTENDED_ARCHITECTURE.md
-  version: "0.5"
+  version: "0.6"
   status: DRAFT
   # Ratified iff the charter file exists on main with 'Status: RATIFIED vN.N' via an
   # operator-approved PR. While DRAFT, only entries with binding_in_draft: true bind.
   # Entries carrying 'ruled: 2026-07-06' encode operator adopt-or-retire rulings (#8851,
   # decision packet + four adversarial salvage audits); they remain PROPOSED pending
   # ratification — the ruling fixes the disposition, not the binding status.
-  generated: "2026-07-06"
+  generated: "2026-08-18"
 
 authorities:
   - id: ARCH-001
@@ -119,12 +119,17 @@ authorities:
     authority: aragora/queue
     layer: L3
     disposition: adopt
+    binding_in_draft: true
+    decision_record: docs/architecture/QUEUE_ADOPTION_DISPOSITION.md
     registry_refs: [CHR-P4A-004]
     ruled: "2026-07-06"
     notes: >-
-      ADOPT as authority confirmed — operator ruling 2026-07-06 (#8851), salvage-audited.
-      LIVE, not dormant: GauntletWorker default-on in aragora/server/startup/workers.py;
-      scripts/queue_worker.py entrypoint
+      ADOPT as the public durable-job API and transport authority — operator ruling
+      2026-07-06 and binding activation 2026-08-18 (#8851 item 3). LIVE via
+      scripts/queue_worker.py and API/bot producers. aragora/storage/job_queue_store.py
+      is a bounded current backend split used by existing workers; it may not gain new
+      direct consumers and must converge behind aragora/queue rather than become a peer
+      authority.
   - id: ARCH-016
     concern: product-dag-workflows
     authority: aragora/workflow
@@ -398,7 +403,6 @@ package_states:
   aragora/streaming: UNMAPPED
   aragora/swarm: MAPPED
   aragora/sync: UNMAPPED
-  aragora/tasks: MAPPED
   aragora/telemetry: MAPPED
   aragora/templates: UNMAPPED
   aragora/tenancy: UNMAPPED
@@ -457,6 +461,20 @@ registry:
     deadline: null
     owner: null
     evidence: "removed #8890; re-added charter-blind #8893 (specimen, #8905); re-removed #8909 (2026-07-05). Home: aragora/debate/queue_executor.py"
+    superseded_by: null
+  - id: CHR-X-014
+    state: REMOVED
+    binding_in_draft: true
+    ruled: "2026-07-06"
+    paths: [aragora/tasks/]
+    symbols: []
+    deadline: null
+    owner: null
+    evidence: >-
+      PR #9057; operator ruling 2026-07-06 (#8851), salvage-audited. Task routing
+      moved to aragora/server/handlers/tasks/execution.py and the dedicated router
+      tests moved to tests/server/handlers/tasks/test_task_router.py. SDK
+      /api/v2/tasks remains handler-backed.
     superseded_by: null
 
   # --- 3b. PENDING (no new importers/callers; execute after ratification/#8851) ---
@@ -594,19 +612,6 @@ registry:
     deadline: null
     owner: null
     evidence: "per #8851 ruling; flip ARAGORA_ENABLE_AGENT_FABRIC default->false first (extensions.py:39)"
-    superseded_by: null
-  - id: CHR-X-014
-    state: PENDING
-    ruled: "2026-07-06"
-    paths: [aragora/tasks/]
-    symbols: []
-    deadline: null
-    owner: null
-    evidence: >-
-      RETIRE now — operator ruling 2026-07-06 (#8851), salvage-audited. Inline
-      router.py (incl. VALID_TASK_TYPES) into aragora/server/handlers/tasks/execution.py;
-      REQUIRED: port the 18 passing tests from tests/tasks/test_router.py to the inlined
-      location. SDK /api/v2/tasks unaffected (handler-backed)
     superseded_by: null
   - id: CHR-X-015
     state: PENDING

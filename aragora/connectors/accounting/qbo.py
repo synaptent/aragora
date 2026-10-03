@@ -34,7 +34,7 @@ from aragora.connectors.exceptions import (
     ConnectorTimeoutError,
 )
 from aragora.resilience import CircuitBreaker
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 # Re-export models for backward compatibility
 from aragora.connectors.accounting.qbo_models import (  # noqa: F401

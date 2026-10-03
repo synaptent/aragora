@@ -9,6 +9,7 @@ to skip a maintained exact-name governance test.
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 import sys
 from types import ModuleType
@@ -55,7 +56,6 @@ MATCHER_BASE = "6137552e4419862b895b096eef1ae36ff8ad210a"
 MATCHER_MERGE = "e8a0d165242737d3226b6d3360aa9e8ec014fd75"
 MATCHER_TREE = "65c567a51ed4d19d411b9f874163e8a39675d396"
 STAGE1_MERGE = "9482fc2dffdb6425d2405389c13f46d5954ac467"
-QUORUM_EVIDENCE_PATH = "aragora/swarm/quorum_evidence.py"
 
 
 def _assignment_node(source: str, assignment_name: str) -> ast.Assign | ast.AnnAssign:
@@ -241,6 +241,10 @@ def test_classifier_and_merge_train_constants_match() -> None:
         tier4_merge_train.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
         == review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
     )
+    successor_builder = "scripts/build_contract_drift_historical_backfill.py"
+    assert successor_builder in review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert review_queue._classify_model_review_tier([successor_builder])[0] == 4
+    assert tier4_merge_train.matches_serialized_path(successor_builder) == successor_builder
 
 
 @pytest.mark.parametrize("path", EXPECTED_AUTHORITY_PREFIXES)
@@ -311,36 +315,79 @@ def test_executable_authority_dependencies_are_tier4(path: str) -> None:
 
 def test_quorum_evidence_module_imports_do_not_resolve_below_tier4(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    ref = _git_text(repo_root, "rev-parse", "HEAD").strip()
+    tree = _git_text(repo_root, "write-tree").strip()
+    commit_env = {
+        **os.environ,
+        "GIT_AUTHOR_EMAIL": "cdg-test@example.invalid",
+        "GIT_AUTHOR_NAME": "cdg-test",
+        "GIT_COMMITTER_EMAIL": "cdg-test@example.invalid",
+        "GIT_COMMITTER_NAME": "cdg-test",
+    }
+    ref = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "commit-tree",
+            tree,
+            "-p",
+            _git_text(repo_root, "rev-parse", "HEAD").strip(),
+        ],
+        input="temporary complete authority closure fixture\n",
+        capture_output=True,
+        check=True,
+        text=True,
+        env=commit_env,
+    ).stdout.strip()
+    monkeypatch.setattr(
+        generate_contract_drift_inventory,
+        "_resolve_full_commit",
+        lambda _repo_root, candidate: candidate,
+    )
+    manifest_scratch = tmp_path / "manifest-scratch"
+    manifest_scratch.mkdir()
+    manifest = generate_contract_drift_inventory.build_authority_manifest(
+        repo_root,
+        ref,
+        scratch_root=manifest_scratch,
+    )
+    closure = {item["path"]: item for item in manifest["repo_files"]}
     extraction_root = tmp_path / "exact-ref"
     generate_contract_drift_inventory._extract_exact_ref(
         repo_root,
         ref,
         extraction_root,
     )
-    imported_paths = sorted(
+    module_imports = sorted(
         {
-            path
-            for path, _kind in generate_contract_drift_inventory._python_import_edges(
+            (source_path, imported_path)
+            for source_path in closure
+            if Path(source_path).suffix == ".py"
+            for imported_path, _kind in generate_contract_drift_inventory._python_import_edges(
                 extraction_root,
-                QUORUM_EVIDENCE_PATH,
+                source_path,
                 include_function_bodies=False,
             )
+            if imported_path != source_path
         }
     )
-    policy = generate_contract_drift_inventory._invoke_exact_ref_policy(
-        extraction_root,
-        imported_paths,
-        scratch_root=tmp_path / "classifier-scratch",
-    )
-    classifications = {item["path"]: item for item in policy.get("classifications", [])}
 
-    assert set(classifications) == set(imported_paths)
-    below_tier4 = sorted(
-        path for path, classification in classifications.items() if classification.get("tier") != 4
-    )
+    missing_from_closure = [
+        (source_path, imported_path)
+        for source_path, imported_path in module_imports
+        if imported_path not in closure
+    ]
+    assert missing_from_closure == []
+    below_tier4 = [
+        (source_path, imported_path)
+        for source_path, imported_path in module_imports
+        if closure[imported_path]["tier"] != 4
+        or closure[imported_path]["matched_rule"]
+        != closure[imported_path]["merge_train_matched_rule"]
+    ]
     assert below_tier4 == []
 
 

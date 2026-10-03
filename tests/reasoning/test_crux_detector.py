@@ -1261,3 +1261,122 @@ class TestCruxDetectorIntegration:
             assert "claim_id" in crux_data
             assert "crux_score" in crux_data
             assert "influence_score" in crux_data
+
+
+def _net(claims, edges):
+    from aragora.reasoning.belief import BeliefNetwork
+    from aragora.reasoning.claims import RelationType
+
+    network = BeliefNetwork(max_iterations=3)
+    for cid, author in claims:
+        network.add_claim(claim_id=cid, statement=cid, author=author, initial_confidence=0.8)
+    for src, dst, rel, strength in edges:
+        network.add_factor(src, dst, getattr(RelationType, rel), strength)
+    return network
+
+
+def _scores(network):
+    from aragora.reasoning.crux_detector import CruxDetector
+
+    network.propagate()  # exactly as detect_cruxes does
+    return {
+        network.nodes[nid].claim_id: (round(d, 3), c)
+        for nid, (d, c) in CruxDetector(network).compute_disagreement_scores().items()
+    }
+
+
+def test_every_contester_is_named_not_just_the_first():
+    """#9644: with >=2 contesters the mean-and-threshold test excluded them all.
+
+    Under a uniform prior each contester sits 0.6/(k+1) from the mean, which a
+    strict `> 0.2` cut drops for every k >= 2 — i.e. exactly the 3+ agent
+    debates that are the normal configuration.
+    """
+    net = _net(
+        [("p", "claude"), ("c1", "codex"), ("c2", "gemini")],
+        [("c1", "p", "CONTRADICTS", 0.7), ("c2", "p", "CONTRADICTS", 0.6)],
+    )
+    assert _scores(net)["p"][1] == ["codex", "gemini"]
+
+
+def test_attribution_is_not_inverted_by_symmetric_traversal():
+    """A critiqued proposer must not be recorded as contesting the critique.
+
+    Edge direction is the recorded fact: `S CONTRADICTS A` says S's author
+    contests A, and says nothing about A's author contesting S.
+    """
+    net = _net(
+        [("p", "claude"), ("c1", "codex")],
+        [("c1", "p", "CONTRADICTS", 0.8)],
+    )
+    scores = _scores(net)
+    assert scores["p"][1] == ["codex"]
+    assert scores["c1"][1] == [], "claude never contested codex's critique"
+
+
+def test_supports_edges_never_produce_dissent():
+    """A supporter must never be attributed as a dissenter in a receipt."""
+    net = _net(
+        [("a", "alice"), ("b", "bob")],
+        [("b", "a", "SUPPORTS", 0.9)],
+    )
+    assert _scores(net)["a"] == (0.0, [])
+
+
+def test_severity_drives_the_disagreement_score():
+    """`factor.strength` carries critique severity and must not be discarded."""
+    weak = _scores(_net([("a", "alice"), ("b", "bob")], [("b", "a", "CONTRADICTS", 0.1)]))
+    strong = _scores(_net([("a", "alice"), ("b", "bob")], [("b", "a", "CONTRADICTS", 0.9)]))
+    assert weak["a"][0] < strong["a"][0]
+
+
+def test_supporters_damp_a_contested_claim():
+    """One contester against one ally scores below one contester alone."""
+    alone = _scores(_net([("a", "alice"), ("b", "bob")], [("b", "a", "CONTRADICTS", 0.8)]))
+    balanced = _scores(
+        _net(
+            [("a", "alice"), ("b", "bob"), ("c", "carol")],
+            [("b", "a", "CONTRADICTS", 0.8), ("c", "a", "SUPPORTS", 0.8)],
+        )
+    )
+    assert balanced["a"][0] < alone["a"][0]
+    assert balanced["a"][1] == ["bob"]
+
+
+def test_author_is_never_listed_as_contesting_its_own_claim():
+    """This list becomes DecisionReceipt dissent attribution."""
+    net = _net(
+        [("a", "alice"), ("b", "alice"), ("c", "bob")],
+        [("b", "a", "CONTRADICTS", 0.9), ("c", "a", "CONTRADICTS", 0.9)],
+    )
+    scores = _scores(net)
+    assert scores["a"][1] == ["bob"], "a self-critique is not dissent"
+
+
+def test_zero_strength_contradiction_names_nobody():
+    """A named contester and a zero score would tell contradictory stories.
+
+    `total_disagreements` counts claims scoring > 0, so a zero-weight
+    contradiction would list an agent as contesting a claim that the same
+    result says nothing contested.
+    """
+    net = _net([("a", "alice"), ("b", "bob")], [("b", "a", "CONTRADICTS", 0.0)])
+    assert _scores(net)["a"] == (0.0, [])
+
+
+def test_more_contesters_never_lower_the_score():
+    """Monotonic in contester count — a wider dispute is not a smaller one.
+
+    Averaging contest strengths let a weak second objection drag the score below
+    the strong first one (0.7 alone, 0.4 once a 0.1 nitpick joined), so a claim
+    contested by more agents could rank as less contested.
+    """
+    one = _scores(_net([("a", "alice"), ("b", "bob")], [("b", "a", "CONTRADICTS", 0.7)]))
+    two = _scores(
+        _net(
+            [("a", "alice"), ("b", "bob"), ("c", "carol")],
+            [("b", "a", "CONTRADICTS", 0.7), ("c", "a", "CONTRADICTS", 0.1)],
+        )
+    )
+    assert two["a"][0] >= one["a"][0]
+    assert two["a"][1] == ["bob", "carol"]

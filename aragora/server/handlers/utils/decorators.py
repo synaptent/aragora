@@ -578,6 +578,12 @@ PERMISSION_MATRIX: dict[str, list[str]] = {
     # Checkpoints
     "checkpoints:read": ["member", "admin", "owner"],
     "checkpoints:delete": ["admin", "owner"],
+    # Knowledge Mound permissions (KM checkpoints, knowledge reads)
+    "knowledge:read": ["member", "admin", "owner"],
+    "knowledge:write": ["admin", "owner"],
+    "knowledge:delete": ["admin", "owner"],
+    # Ralph campaign observability dashboard (read-only)
+    "ralph:read": ["member", "admin", "owner"],
     # Finance/Accounting permissions
     "finance:read": ["member", "admin", "owner"],
     "finance:write": ["admin", "owner"],

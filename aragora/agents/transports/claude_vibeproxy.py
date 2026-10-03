@@ -16,7 +16,7 @@ from aragora.agents.transports.vibeproxy import (
     VibeProxyUnavailableError,
 )
 
-DEFAULT_CLAUDE_MODEL = "claude-opus-4-8"
+DEFAULT_CLAUDE_MODEL = "claude-opus-5"
 VIBEPROXY_HARNESS = "local VibeProxy Anthropic Messages transport"
 VIBEPROXY_TIMEOUT_ENV = "ARAGORA_COLLECT_EVIDENCE_VIBEPROXY_TIMEOUT_SECONDS"
 DEFAULT_VIBEPROXY_TIMEOUT_SECONDS = 120.0

@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 
 from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+from aragora.agents.api_agents.common import AgentAPIError, AgentStreamError
+from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
 
 
 class TestAnthropicAgentInitialization:
@@ -110,10 +112,11 @@ class TestAnthropicGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -133,10 +136,11 @@ class TestAnthropicGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -160,10 +164,11 @@ class TestAnthropicGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_anthropic_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_anthropic_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -188,30 +193,25 @@ class TestAnthropicGenerate:
             enable_fallback=True,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 429
-        mock_response.text = AsyncMock(return_value="Rate limit exceeded")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        mock_response = make_mock_response(status=429, text="Rate limit exceeded")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with patch.object(agent, "_build_fallback_providers", return_value=[]):
                 with patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False):
-                    # Should log warning when fallback unavailable (warning now comes from mixin)
+                    # The warning comes from QuotaFallbackMixin.fallback_generate; with no
+                    # providers the 429 then surfaces as a non-retryable AgentAPIError.
                     with patch("aragora.agents.fallback.logger") as mock_logger:
-                        # May return error string or raise - just verify warning logged
-                        try:
+                        with pytest.raises(
+                            AgentAPIError, match="Anthropic API error 429"
+                        ) as exc_info:
                             await agent.generate("Test prompt")
-                        except Exception:
-                            pass  # Some errors may still propagate
+                        assert exc_info.value.status_code == 429
                         mock_logger.warning.assert_called()
+                        assert any(
+                            "no fallback provider" in call.args[0]
+                            for call in mock_logger.warning.call_args_list
+                        )
 
     @pytest.mark.asyncio
     async def test_context_included_in_prompt(self, agent):
@@ -230,12 +230,13 @@ class TestAnthropicGenerate:
             nonlocal captured_payload
             captured_payload = kwargs.get("json", {})
             return MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = capture_post
 
         context = [
@@ -283,10 +284,11 @@ class TestAnthropicStreaming:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -303,31 +305,17 @@ class TestAnthropicStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_error_response(self, agent):
-        """Test streaming with error response raises or returns error."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        """Test streaming with a non-quota 5xx raises AgentStreamError."""
+        mock_response = make_mock_response(status=500, text="Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            # Error may raise or return error message depending on decorator
-            chunks = []
-            try:
+            chunks: list[str] = []
+            with pytest.raises(AgentStreamError, match="Anthropic streaming API error 500"):
                 async for chunk in agent.generate_stream("Test"):
                     chunks.append(chunk)
-                # If no exception, result should indicate error
-                result = "".join(chunks)
-                assert "error" in result.lower() or result == ""
-            except (RuntimeError, Exception):
-                pass  # Expected behavior - error raised
+            # The error is raised before any stream data is read, so nothing is yielded.
+            assert chunks == []
 
 
 class TestAnthropicCritique:
@@ -379,7 +367,7 @@ class TestAnthropicModelMapping:
         """Test fallback agent upgrades legacy Anthropic IDs to the frontier.
 
         The OPENROUTER_MODEL_MAP intentionally routes every legacy Claude ID
-        to the current frontier (Opus 4.8) via OpenRouter so weaker historical
+        to the current frontier (Opus 5) via OpenRouter so weaker historical
         models are transparently upgraded and a missing direct-provider key
         never blocks functionality.
         """
@@ -390,7 +378,7 @@ class TestAnthropicModelMapping:
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "router-key"}):
             fallback = agent._get_cached_fallback_agent()
-            assert fallback.model == "anthropic/claude-opus-4.8"
+            assert fallback.model == "anthropic/claude-opus-5"
 
 
 if __name__ == "__main__":

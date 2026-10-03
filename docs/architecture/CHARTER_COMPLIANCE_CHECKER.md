@@ -4,7 +4,7 @@
 reads `docs/architecture/charters.yaml` and a Git diff, then reports citable
 `CHR-*` and related `ARCH-*` rows when a change appears to re-add a chartered
 removed surface, excluded placement, or parked/pending surface that is
-machine-checkable from added lines. The `package_states` map mirrors all 145
+machine-checkable from added lines. The `package_states` map mirrors all 144
 rows in Intended Architecture Appendix A and catches new Python modules under
 an `UNMAPPED` package. A new package absent from the map fails closed as
 `UNMAPPED`; edits to existing files remain maintenance and are not flagged by

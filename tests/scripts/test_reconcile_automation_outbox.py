@@ -52,6 +52,24 @@ def _write_outbox_handoff(
     return path
 
 
+def _write_non_handoff_report(outbox_dir: Path, *, key: str) -> Path:
+    outbox_dir.mkdir(parents=True, exist_ok=True)
+    path = outbox_dir / f"{key}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "candidate_notes": [{"pr": 9001, "selected": False, "reason": "parked elsewhere"}],
+                "cycle_dir": ".aragora/goal_cycles/20260708T121303Z",
+                "idempotency_key": key,
+                "main_required_check_state": [],
+                "rows": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_terminal_receipt_keys_falls_back_to_receipt_filename(tmp_path: Path) -> None:
     receipt_dir = tmp_path / "receipts"
     receipt_dir.mkdir()
@@ -114,6 +132,206 @@ def test_explicit_dry_run_flag_keeps_read_only_default(
     assert "mode: DRY-RUN" in out
     assert "DRY-RUN" in out
     assert not (tmp_path / ".aragora" / "cleanup-state").exists()
+
+
+def test_branchless_report_classifies_as_non_handoff_report_without_mutation(
+    tmp_path: Path, capsys: Any
+) -> None:
+    key = "queue-drain-park-reconciliation-20260708T121926Z"
+    report = _write_non_handoff_report(
+        tmp_path / ".aragora" / "automation-outbox",
+        key=key,
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 1
+    assert payload["counts"]["skipped_unparseable"] == 0
+    assert payload["actions"][0]["decision"] == "archive_report"
+    assert payload["actions"][0]["terminal_disposition"]["disposition"] == ("non_handoff_report")
+    assert report.exists()
+    assert not (tmp_path / ".aragora" / "automation-outbox-archive").exists()
+
+
+def test_apply_archives_non_handoff_report_with_terminal_disposition(
+    tmp_path: Path, capsys: Any
+) -> None:
+    key = "queue-drain-park-reconciliation-20260708T121926Z"
+    report = _write_non_handoff_report(
+        tmp_path / ".aragora" / "automation-outbox",
+        key=key,
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--apply", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    archive = tmp_path / ".aragora" / "automation-outbox-archive" / report.name
+    archived = json.loads(archive.read_text(encoding="utf-8"))
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 1
+    assert payload["counts"]["skipped_unparseable"] == 0
+    assert payload["archived"] == 1
+    assert not report.exists()
+    assert archived["idempotency_key"] == key
+    assert archived["terminal_disposition"]["disposition"] == "non_handoff_report"
+    assert "not an automation handoff" in archived["terminal_disposition"]["reason"]
+
+
+def test_branch_backed_handoff_still_uses_missing_branch_classification(
+    tmp_path: Path,
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    outbox_dir = tmp_path / ".aragora" / "automation-outbox"
+    _write_outbox_handoff(outbox_dir, branch="codex/missing", key="open-pr-codex-missing")
+
+    monkeypatch.setattr(mod, "check_github_cli_health", lambda _root: _ready_github())
+    monkeypatch.setattr(mod, "open_pr_heads", lambda *_args: {})
+    monkeypatch.setattr(
+        mod,
+        "run_git",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["git"], returncode=128, stdout="", stderr="missing ref"
+        ),
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["missing_branch"] == 1
+    assert payload["counts"]["non_handoff_report"] == 0
+    assert payload["counts"]["skipped_unparseable"] == 0
+    assert payload["actions"][0]["decision"] == "archive"
+    assert payload["actions"][0]["reason"] == "branch no longer exists"
+
+
+def test_malformed_report_without_idempotency_key_stays_unparseable(
+    tmp_path: Path, capsys: Any
+) -> None:
+    outbox_dir = tmp_path / ".aragora" / "automation-outbox"
+    outbox_dir.mkdir(parents=True)
+    (outbox_dir / "branchless-report-without-key.json").write_text(
+        json.dumps({"rows": [], "candidate_notes": []}),
+        encoding="utf-8",
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 0
+    assert payload["counts"]["skipped_unparseable"] == 1
+
+
+def test_branchless_generic_check_payload_is_not_non_handoff_report(
+    tmp_path: Path, capsys: Any
+) -> None:
+    outbox_dir = tmp_path / ".aragora" / "automation-outbox"
+    outbox_dir.mkdir(parents=True)
+    (outbox_dir / "branchless-generic-check-payload.json").write_text(
+        json.dumps(
+            {
+                "idempotency_key": "branchless-generic-check-payload",
+                "required_contexts": ["lint", "typecheck"],
+                "rows": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 0
+    assert payload["counts"]["skipped_unparseable"] == 1
+    assert payload["actions"] == []
+    assert not (tmp_path / ".aragora" / "automation-outbox-archive").exists()
+
+
+def test_branchless_preservation_payload_is_not_non_handoff_report(
+    tmp_path: Path, capsys: Any
+) -> None:
+    outbox_dir = tmp_path / ".aragora" / "automation-outbox"
+    outbox_dir.mkdir(parents=True)
+    (outbox_dir / "open-pr-preservation-marker.json").write_text(
+        json.dumps(
+            {
+                "constraints": ["preserve local work before cleanup"],
+                "idempotency_key": "open-pr-preservation-marker",
+                "worktree": str(tmp_path / "preserved-worktree"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 0
+    assert payload["counts"]["skipped_unparseable"] == 1
+    assert payload["actions"] == []
+    assert not (tmp_path / ".aragora" / "automation-outbox-archive").exists()
+
+
+def test_branchless_preservation_payload_with_report_keys_stays_protected(
+    tmp_path: Path, capsys: Any
+) -> None:
+    outbox_dir = tmp_path / ".aragora" / "automation-outbox"
+    outbox_dir.mkdir(parents=True)
+    (outbox_dir / "open-pr-preservation-with-report-keys.json").write_text(
+        json.dumps(
+            {
+                "desired_head": "abc123",
+                "idempotency_key": "open-pr-preservation-with-report-keys",
+                "required_contexts": ["lint", "typecheck"],
+                "rows": [{"name": "lint", "state": "success"}],
+                "worktree": str(tmp_path / "preserved-worktree"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 0
+    assert payload["counts"]["skipped_unparseable"] == 1
+    assert payload["actions"] == []
+    assert not (tmp_path / ".aragora" / "automation-outbox-archive").exists()
+
+
+@pytest.mark.parametrize("head_key", ["head", "commit"])
+def test_branchless_top_level_head_preservation_payload_stays_protected(
+    tmp_path: Path, capsys: Any, head_key: str
+) -> None:
+    outbox_dir = tmp_path / ".aragora" / "automation-outbox"
+    outbox_dir.mkdir(parents=True)
+    (outbox_dir / f"open-pr-preservation-with-{head_key}.json").write_text(
+        json.dumps(
+            {
+                head_key: "abc123",
+                "idempotency_key": f"open-pr-preservation-with-{head_key}",
+                "required_contexts": ["lint", "typecheck"],
+                "rows": [{"name": "lint", "state": "success"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rc = mod.main(["--repo", str(tmp_path), "--dry-run", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["counts"]["non_handoff_report"] == 0
+    assert payload["counts"]["skipped_unparseable"] == 1
+    assert payload["actions"] == []
+    assert not (tmp_path / ".aragora" / "automation-outbox-archive").exists()
 
 
 def test_github_open_pr_state_fails_closed_when_open_pr_fetch_returns_none(

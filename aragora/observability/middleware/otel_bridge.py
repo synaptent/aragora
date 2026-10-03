@@ -50,6 +50,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from aragora.observability.middleware.trace_state import set_span_exporter
+
 logger = logging.getLogger(__name__)
 
 # OpenTelemetry imports - optional
@@ -299,6 +301,7 @@ def init_otel_bridge(config: OTelBridgeConfig | None = None) -> bool:
         if is_initialized():
             _tracer = otel_get_tracer("aragora.middleware", config.service_version)
             _otel_available = True
+            set_span_exporter(export_span_to_otel)
             logger.info(
                 "OpenTelemetry bridge initialized via unified setup: service=%s, sampler=%s",
                 config.service_name,
@@ -379,6 +382,7 @@ def init_otel_bridge(config: OTelBridgeConfig | None = None) -> bool:
         # Get tracer
         _tracer = trace.get_tracer("aragora.middleware", config.service_version)
         _otel_available = True
+        set_span_exporter(export_span_to_otel)
 
         logger.info(
             "OpenTelemetry bridge initialized (direct): endpoint=%s, service=%s, sampler=%s",
@@ -405,7 +409,7 @@ def export_span_to_otel(span: Any) -> None:
     Converts the middleware Span object to an OpenTelemetry span and exports it.
 
     Args:
-        span: Internal Span object from aragora.observability.middleware.tracing
+        span: Internal Span object from aragora.observability.middleware.trace_state
     """
     if not _otel_available or _tracer is None:
         return
@@ -460,7 +464,7 @@ def inject_trace_context(headers: dict[str, str]) -> dict[str, str]:
     if not _otel_available or _propagator is None:
         # Fall back to internal trace context
         try:
-            from aragora.observability.middleware.tracing import get_span_id, get_trace_id
+            from aragora.observability.middleware.trace_state import get_span_id, get_trace_id
 
             trace_id = get_trace_id()
             span_id = get_span_id()
@@ -515,7 +519,7 @@ def get_current_trace_id() -> str | None:
     """
     if not _otel_available:
         try:
-            from aragora.observability.middleware.tracing import get_trace_id
+            from aragora.observability.middleware.trace_state import get_trace_id
 
             return get_trace_id()
         except ImportError:
@@ -541,7 +545,7 @@ def get_current_span_id() -> str | None:
     """
     if not _otel_available:
         try:
-            from aragora.observability.middleware.tracing import get_span_id
+            from aragora.observability.middleware.trace_state import get_span_id
 
             return get_span_id()
         except ImportError:
@@ -575,7 +579,7 @@ def create_span_context(
     if not _otel_available or _tracer is None:
         # Fall back to internal tracing
         try:
-            from aragora.observability.middleware.tracing import trace_context
+            from aragora.observability.middleware.trace_state import trace_context
 
             return trace_context(operation)
         except ImportError:
@@ -619,6 +623,7 @@ def shutdown_otel_bridge() -> None:
     finally:
         _otel_available = False
         _tracer = None
+        set_span_exporter(None)
 
 
 def is_otel_available() -> bool:

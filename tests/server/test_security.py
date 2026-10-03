@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
+from aragora.config.settings import AuthSettings, get_settings, reset_settings
 from aragora.server.auth import AuthConfig, check_auth
 from aragora.storage.debate_storage import _escape_like_pattern, DebateStorage
 
@@ -643,8 +644,55 @@ class TestCheckAuthIntegration:
             auth_config.api_token = original_token
 
 
+def _auth_settings_env_names() -> set[str]:
+    """Environment variable names AuthSettings reads (aliases plus prefix + field name)."""
+    prefix = str(AuthSettings.model_config.get("env_prefix") or "")
+    names: set[str] = set()
+    for field_name, field in AuthSettings.model_fields.items():
+        for alias in (field.validation_alias, field.alias):
+            if isinstance(alias, str):
+                names.add(alias)
+            else:
+                # AliasChoices exposes .choices; AliasPath entries are not env names.
+                for choice in getattr(alias, "choices", None) or ():
+                    if isinstance(choice, str):
+                        names.add(choice)
+        names.add(f"{prefix}{field_name}".upper())
+    return names
+
+
 class TestConfigureFromEnv:
     """Test environment variable configuration."""
+
+    @pytest.fixture(autouse=True)
+    def _presettle_auth_settings(self, monkeypatch):
+        """Parse AuthSettings before the test body's env patches take effect.
+
+        AuthConfig.__init__ reads get_settings().auth lazily. A test that ran
+        earlier in the same worker may leave the lru-cached Settings cleared
+        (reset_settings()) or its auth block unparsed; AuthSettings would then
+        be parsed inside this class's patch.dict scope, where ARAGORA_TOKEN_TTL
+        deliberately violates the ge=60 int field and raises ValidationError
+        before configure_from_env() ever runs. Scrub AuthSettings' env inputs
+        and parse it here so the bodies exercise configure_from_env() alone.
+        """
+        # pydantic-settings matches env names case-insensitively, so scrub every
+        # case variant of each name, not just the exact alias spelling.
+        targets = {name.casefold() for name in _auth_settings_env_names()}
+        for env_name in list(os.environ):
+            if env_name.casefold() in targets:
+                monkeypatch.delenv(env_name, raising=False)
+        # On a cold cache get_settings() re-hydrates os.environ from Secrets
+        # Manager with overwrite=True, which would undo the scrub above.
+        monkeypatch.setattr(
+            "aragora.config.secrets.hydrate_env_from_secrets",
+            lambda *args, **kwargs: {},
+        )
+        _ = get_settings().auth
+        yield
+        # Drop the scrubbed-defaults Settings parsed above so it cannot serve
+        # later tests that run after monkeypatch restores the real env.
+        reset_settings()
 
     def test_configure_from_env_token(self):
         """Should load token from environment."""
@@ -986,11 +1034,21 @@ class TestPathParameterInjection:
             "agent_1",
             "CodexModel",
             "gemini-pro",
+            "gemini-3.1-pro-preview",  # dotted model version (#9994)
+            "claude-fable-5.1",
         ]
 
         for name in valid_names:
             is_valid, error = validate_agent_name(name)
             assert is_valid is True, f"Should accept: {name} (got: {error})"
+
+    def test_agent_name_slash_and_leading_dot_rejected(self):
+        """Provider-qualified slugs and dot-led tokens are not valid agent path segments."""
+        from aragora.server.handlers.base import validate_agent_name
+
+        for name in ["anthropic/claude-fable-5.1", ".hidden", "..", "../claude"]:
+            is_valid, _ = validate_agent_name(name)
+            assert is_valid is False, f"Should reject: {name}"
 
     def test_empty_values_rejected(self):
         """Empty values should be rejected."""

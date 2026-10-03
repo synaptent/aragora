@@ -37,6 +37,13 @@ Production dispatch still invokes ``handle_debate_end`` exactly once so outcome
 classification and the existing fail-soft behavior remain observable while
 workflow execution is implemented separately.
 
+``PostDebateWorkflowSubscriber.classify_outcome`` is the single DEBATE_END
+payload-to-outcome contract. Canonical producers (arena hooks, the spectator
+bridge, the stuck-debate watchdog, the cancel handler and the controller error
+path) mostly omit consensus fields, so cancellation, timeout and error are read
+from ``cancelled``/``timed_out``/``error``/``status``, and a payload without
+``consensus_reached`` is an ordinary completion rather than ``no_consensus``.
+
 Handles:
 - Debate end -> Post-debate workflow outcome classification
 - Alert escalated -> Workflow emergency brake (pause/stop active workflows)
@@ -45,6 +52,7 @@ Handles:
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from aragora.events.cross_subscribers import get_registered_subscribers, register_subscriber
@@ -63,7 +71,22 @@ WORKFLOW_EVENT_SUBSCRIBER_HANDLER_NAMES = frozenset(
     }
 )
 
-# Default workflow templates for common debate outcomes
+#: Every outcome ``PostDebateWorkflowSubscriber.classify_outcome`` can return.
+DEBATE_END_OUTCOMES = frozenset(
+    {
+        "consensus_high_confidence",
+        "consensus_low_confidence",
+        "no_consensus",
+        "timeout",
+        "cancelled",
+        "error",
+        "completed",
+    }
+)
+
+# Default workflow templates for common debate outcomes. ``cancelled``,
+# ``error`` and ``completed`` are deliberately unmapped: those debates carry no
+# consensus verdict to implement, review or escalate.
 OUTCOME_WORKFLOW_MAP: dict[str, str] = {
     "consensus_high_confidence": "post_debate_implement",
     "consensus_low_confidence": "post_debate_review",
@@ -112,22 +135,41 @@ class PostDebateWorkflowSubscriber:
             logger.warning("PostDebateWorkflow handler error: %s", e)
             self.stats["errors"] += 1
 
+    def classify_outcome(self, data: Mapping[str, Any]) -> str:
+        """Map a DEBATE_END payload to one of ``DEBATE_END_OUTCOMES``.
+
+        Terminal status wins over consensus, in this order: timeout
+        (``timed_out`` or ``status == "timeout"``), cancellation (``cancelled``
+        or ``status == "cancelled"``), then error (``error`` or
+        ``status == "error"``). Only a payload that states ``consensus_reached``
+        is classified by consensus and confidence; one without it is an
+        ordinary ``completed`` debate, never ``no_consensus``.
+        """
+        raw_status = data.get("status")
+        status = raw_status.strip().lower() if isinstance(raw_status, str) else ""
+
+        if data.get("timed_out") or status == "timeout":
+            return "timeout"
+        if data.get("cancelled") or status == "cancelled":
+            return "cancelled"
+        if data.get("error") or status == "error":
+            return "error"
+
+        consensus_reached = data.get("consensus_reached")
+        if consensus_reached is None:
+            return "completed"
+        if not consensus_reached:
+            return "no_consensus"
+        if data.get("confidence", 0.0) >= self.min_confidence_for_auto:
+            return "consensus_high_confidence"
+        return "consensus_low_confidence"
+
     def _process_outcome(self, data: dict[str, Any]) -> None:
         """Process a debate outcome and determine which workflow to trigger."""
         debate_id = data.get("debate_id", "")
         consensus_reached = data.get("consensus_reached", False)
         confidence = data.get("confidence", 0.0)
-        timed_out = data.get("timed_out", False)
-
-        # Classify the outcome
-        if timed_out:
-            outcome_key = "timeout"
-        elif consensus_reached and confidence >= self.min_confidence_for_auto:
-            outcome_key = "consensus_high_confidence"
-        elif consensus_reached:
-            outcome_key = "consensus_low_confidence"
-        else:
-            outcome_key = "no_consensus"
+        outcome_key = self.classify_outcome(data)
 
         template_name = self.workflow_map.get(outcome_key)
         if not template_name:

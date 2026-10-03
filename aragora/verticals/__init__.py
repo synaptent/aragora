@@ -15,7 +15,7 @@ Usage:
     software_agent = VerticalRegistry.create_specialist(
         "software",
         name="code-reviewer-1",
-        model="claude-opus-4-8",
+        model="claude-opus-5",
     )
 
     # Use in workflows

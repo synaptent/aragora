@@ -127,16 +127,20 @@ def _pr_sort_key(pr: dict[str, Any]) -> tuple[str, int]:
     value sorts first (treated as oldest) so it still yields a stable order.
     """
     created = str(pr.get("createdAt") or pr.get("created_at") or "")
+    raw_number = pr.get("number")
     try:
-        number = int(pr.get("number"))
+        number = int(raw_number) if raw_number is not None else 0
     except (TypeError, ValueError):
         number = 0
     return (created, number)
 
 
 def _pr_number(pr: dict[str, Any]) -> int | None:
+    raw_number = pr.get("number")
+    if raw_number is None:
+        return None
     try:
-        return int(pr.get("number"))
+        return int(raw_number)
     except (TypeError, ValueError):
         return None
 
@@ -445,6 +449,7 @@ CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (
     "aragora/cli/commands/__init__.py",
     "aragora/cli/commands/review_queue_comment_verdicts.py",
     "aragora/cli/commands/review_queue_parsers.py",
+    "aragora/cli/commands/review_queue_render.py",
     "aragora/cli/commands/review_queue_rest_fallback.py",
     "aragora/cli/commands/review_queue_transport.py",
     "aragora/cli/commands/review_queue_unstable.py",
@@ -509,6 +514,7 @@ CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (
     "scripts/add_openapi_param_descriptions.py",
     "scripts/audit_openapi_docs.py",
     "scripts/audit_test_skips.py",
+    "scripts/build_contract_drift_historical_backfill.py",
     "scripts/capability_gap_report.py",
     "scripts/check_capability_matrix_sync.py",
     "scripts/check_cross_sdk_parity.py",
@@ -530,6 +536,7 @@ CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (
     "scripts/generate_sdk_types.py",
     "scripts/gh_app_env.py",
     "scripts/guard_repo_clean.py",
+    "scripts/openapi_release_envelope.py",
     "scripts/pre_release_check.py",
     "scripts/reconcile_status_docs.py",
     "scripts/run_pip_audit_gate.py",

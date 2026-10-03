@@ -37,14 +37,26 @@ class TwitterBookmarksIngestor(BaseIdeaIngestor):
     source_type = "twitter_bookmark"
 
     async def ingest(self, source: str | Path) -> list[IdeaNode]:
-        """Parse bookmarks.js and return IdeaNodes.
+        """Parse bookmarks.js — or fetch live via ``api:`` — into IdeaNodes.
 
         Args:
-            source: Path to the bookmarks.js file from Twitter data export.
+            source: Path to the bookmarks.js file from Twitter data export,
+                or an ``api:`` string (optionally ``api:<max_items>``) to
+                fetch new bookmarks from the X API v2 (OAuth2 user context).
 
         Returns:
             List of IdeaNode objects, one per bookmark.
         """
+        from aragora.ideacloud.ingestion.x_api import fetch_live_entries, is_api_source
+
+        if is_api_source(source):
+            entries, self._pending_commit = await fetch_live_entries(self.source_type, str(source))
+            api_nodes = [
+                node for entry in entries if (node := _bookmark_entry_to_node({"bookmark": entry}))
+            ]
+            logger.info("Ingested %d bookmarks from X API", len(api_nodes))
+            return api_nodes
+
         path = Path(source)
         if not path.exists():
             raise FileNotFoundError(f"Bookmarks file not found: {path}")

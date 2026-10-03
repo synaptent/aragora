@@ -177,7 +177,7 @@ class TestDispatcherMetricsIntegration:
     def test_dispatcher_records_delivery_metrics(self):
         """Test that dispatcher records delivery metrics."""
         from aragora.events.dispatcher import dispatch_webhook_with_retry
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         # Create a test webhook
         webhook = WebhookConfig(
@@ -197,7 +197,7 @@ class TestDispatcherMetricsIntegration:
     def test_dispatcher_records_retry_metrics(self):
         """Test that dispatcher records retry metrics."""
         from aragora.events.dispatcher import dispatch_webhook_with_retry
-        from aragora.server.handlers.webhooks import WebhookConfig
+        from aragora.server.handlers.webhook_management import WebhookConfig
 
         webhook = WebhookConfig(
             id="test-456",

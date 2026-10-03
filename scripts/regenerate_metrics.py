@@ -287,7 +287,10 @@ def gather_metrics() -> MetricsSnapshot:
             key="rbac_permission_calls",
             label="@require_permission decorator calls",
             value=permission_calls,
-            command="git grep -E '@require_permission\\(' -- aragora | wc -l",
+            # The pathspec must stay restricted to .py files: the generator
+            # counts decorator calls, and non-.py hits (README/YAML prose
+            # mentions) would inflate a reproduction over all tracked files.
+            command="git grep -E '@require_permission\\(' -- 'aragora/*.py' | wc -l",
             source="aragora/",
         )
     )
@@ -308,7 +311,10 @@ def gather_metrics() -> MetricsSnapshot:
             key="rbac_unique_permissions",
             label="Unique permission strings",
             value=unique_permissions,
-            command='git grep -h -o -E "@require_permission\\([\'\\"][^\'\\"]+[\'\\"]\\)" -- aragora | sed -E "s/.*[\'\\"]([^\'\\"]+)[\'\\"].*/\\1/" | sort -u | wc -l',
+            # Same .py-only pathspec as the calls row: permission strings quoted
+            # in tracked prose (README/YAML) would otherwise add values the
+            # generator never counts.
+            command='git grep -h -o -E "@require_permission\\([\'\\"][^\'\\"]+[\'\\"]\\)" -- \'aragora/*.py\' | sed -E "s/.*[\'\\"]([^\'\\"]+)[\'\\"].*/\\1/" | sort -u | wc -l',
             source="aragora/",
         )
     )

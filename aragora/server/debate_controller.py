@@ -40,6 +40,7 @@ from aragora.server.debate_utils import (
 from aragora.server.errors import safe_error_message
 from aragora.server.http_utils import run_async
 from aragora.server.state import get_state_manager
+from aragora.models.compat import first_text_block
 from aragora.server.stream import (
     StreamEvent,
     StreamEventType,
@@ -856,8 +857,9 @@ class DebateController:
                 timeout=5.0,
             )
             # Parse JSON from response
-            content_block = response.content[0]
-            content = str(getattr(content_block, "text", "")).strip()
+            # Thinking-capable models emit a leading thinking block; scan for
+            # the text block rather than indexing position 0.
+            content = first_text_block(response.content).strip()
             # Handle potential markdown code blocks
             if content.startswith("```"):
                 content = content.split("```")[1]
@@ -1856,7 +1858,7 @@ class DebateController:
 
                 if user_id and isinstance(flow_id, str):
                     try:
-                        from aragora.server.handlers.onboarding import _track_event
+                        from aragora.server.handlers.sme.onboarding import _track_event
 
                         _track_event(
                             "first_receipt_generated",

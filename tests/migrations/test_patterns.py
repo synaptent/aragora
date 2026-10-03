@@ -624,6 +624,120 @@ class TestSafeCreateIndex:
 
 
 # ---------------------------------------------------------------------------
+# get_missing_columns / create_index_if_columns_exist tests
+# ---------------------------------------------------------------------------
+
+
+class TestGetMissingColumns:
+    """Tests for get_missing_columns function."""
+
+    def test_all_columns_present(self, sqlite_backend_with_table):
+        from aragora.migrations.patterns import get_missing_columns
+
+        assert get_missing_columns(sqlite_backend_with_table, "test_table", ["id", "status"]) == []
+
+    def test_reports_missing_columns_in_request_order(self, sqlite_backend_with_table):
+        from aragora.migrations.patterns import get_missing_columns
+
+        missing = get_missing_columns(
+            sqlite_backend_with_table, "test_table", ["scheduled_at", "name", "priority"]
+        )
+
+        assert missing == ["scheduled_at", "priority"]
+
+    def test_absent_table_raises(self, sqlite_backend):
+        from aragora.migrations.patterns import get_missing_columns
+
+        with pytest.raises(ValueError, match="not found"):
+            get_missing_columns(sqlite_backend, "no_such_table", ["id"])
+
+    def test_sqlite_matches_column_names_case_insensitively(self, sqlite_backend):
+        from aragora.migrations.patterns import get_missing_columns
+
+        sqlite_backend.execute_write("CREATE TABLE mixed (Status TEXT)")
+
+        assert get_missing_columns(sqlite_backend, "mixed", ["status", "STATUS"]) == []
+
+    def test_rejects_invalid_identifiers(self, sqlite_backend_with_table):
+        from aragora.migrations.patterns import get_missing_columns
+
+        with pytest.raises(ValueError):
+            get_missing_columns(sqlite_backend_with_table, "test_table; DROP", ["id"])
+        with pytest.raises(ValueError):
+            get_missing_columns(sqlite_backend_with_table, "test_table", ["id DESC"])
+
+    def test_postgresql_resolves_table_like_ddl_does(self):
+        """PostgreSQL looks the table up through to_regclass, as CREATE INDEX will."""
+        from aragora.migrations.patterns import get_missing_columns
+
+        calls: list[tuple[str, tuple]] = []
+
+        class PostgreSQLBackend:
+            def fetch_one(self, sql: str, params: tuple = ()) -> tuple | None:
+                calls.append((sql, params))
+                return ("job_queue",)
+
+            def fetch_all(self, sql: str, params: tuple = ()) -> list[tuple]:
+                calls.append((sql, params))
+                return [("status",), ("priority",)]
+
+        missing = get_missing_columns(
+            PostgreSQLBackend(), "job_queue", ["status", "priority", "scheduled_at"]
+        )
+
+        assert missing == ["scheduled_at"]
+        assert all("to_regclass(%s)" in sql for sql, _ in calls)
+        assert "attisdropped" in calls[-1][0]
+        assert {params for _, params in calls} == {('"job_queue"',)}
+
+    def test_postgresql_table_off_search_path_raises(self):
+        from aragora.migrations.patterns import get_missing_columns
+
+        class PostgreSQLBackend:
+            def fetch_one(self, sql: str, params: tuple = ()) -> tuple | None:
+                return (None,)
+
+        with pytest.raises(ValueError, match="search_path"):
+            get_missing_columns(PostgreSQLBackend(), "job_queue", ["status"])
+
+
+class TestCreateIndexIfColumnsExist:
+    """Tests for create_index_if_columns_exist function."""
+
+    def test_creates_index_when_columns_exist(self, sqlite_backend_with_table):
+        from aragora.migrations.patterns import create_index_if_columns_exist
+
+        created = create_index_if_columns_exist(
+            sqlite_backend_with_table, "idx_test_status", "test_table", ["status", "name"]
+        )
+
+        assert created is True
+        indexes = sqlite_backend_with_table.fetch_all(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_test_status'"
+        )
+        assert len(indexes) == 1
+
+    def test_skips_and_warns_when_a_column_is_missing(self, sqlite_backend_with_table, caplog):
+        from aragora.migrations.patterns import create_index_if_columns_exist
+
+        with caplog.at_level("WARNING", logger="aragora.migrations.patterns"):
+            created = create_index_if_columns_exist(
+                sqlite_backend_with_table,
+                "idx_test_scheduled",
+                "test_table",
+                ["status", "scheduled_at"],
+            )
+
+        assert created is False
+        indexes = sqlite_backend_with_table.fetch_all(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_test_scheduled'"
+        )
+        assert indexes == []
+        assert "idx_test_scheduled" in caplog.text
+        assert "scheduled_at" in caplog.text
+
+
+# ---------------------------------------------------------------------------
 # safe_drop_index tests
 # ---------------------------------------------------------------------------
 
@@ -787,8 +901,11 @@ class TestPostgreSQLSpecificBehavior:
 
         safe_create_index(mock_backend, "idx_test", "users", ["email"], concurrently=True)
 
-        call_args = mock_backend.execute_write.call_args[0][0]
+        connection = mock_backend.connection.return_value.__enter__.return_value
+        cursor = connection.cursor.return_value.__enter__.return_value
+        call_args = cursor.execute.call_args[0][0]
         assert "CONCURRENTLY" in call_args
+        mock_backend.execute_write.assert_not_called()
 
     def test_drop_index_concurrently_pg(self):
         from aragora.migrations.patterns import safe_drop_index
@@ -798,8 +915,11 @@ class TestPostgreSQLSpecificBehavior:
 
         safe_drop_index(mock_backend, "idx_test", concurrently=True)
 
-        call_args = mock_backend.execute_write.call_args[0][0]
+        connection = mock_backend.connection.return_value.__enter__.return_value
+        cursor = connection.cursor.return_value.__enter__.return_value
+        call_args = cursor.execute.call_args[0][0]
         assert "CONCURRENTLY" in call_args
+        mock_backend.execute_write.assert_not_called()
 
     def test_drop_column_verifies_unused_pg(self):
         from aragora.migrations.patterns import safe_drop_column

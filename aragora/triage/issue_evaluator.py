@@ -144,9 +144,11 @@ class PanelMember:
 DEFAULT_PANEL: tuple[PanelMember, ...] = (
     PanelMember(
         agent_type="anthropic-api",
-        model_id="claude-opus-4-8",
-        estimated_input_cost_per_1k=0.015,
-        estimated_output_cost_per_1k=0.075,
+        model_id="claude-opus-5",
+        # Opus 5 is $5/$25 per MTok (catalog 2026-07-24). The previous
+        # 0.015/0.075 here were stale Opus 4.1-era ($15/$75) rates.
+        estimated_input_cost_per_1k=0.005,
+        estimated_output_cost_per_1k=0.025,
         nickname="opus",
     ),
     PanelMember(

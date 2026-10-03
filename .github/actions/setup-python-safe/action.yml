@@ -24,8 +24,32 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        TOOL_CACHE="${RUNNER_TEMP:-/tmp}/hostedtoolcache"
-        mkdir -p "${TOOL_CACHE}"
+
+        is_usable_tool_cache() {
+          local candidate="$1"
+          local probe_dir
+
+          [[ -n "${candidate}" && -d "${candidate}" ]] || return 1
+          probe_dir="$(mktemp -d "${candidate%/}/.setup-python-safe.XXXXXX" 2>/dev/null)" || return 1
+          rmdir "${probe_dir}"
+        }
+
+        TOOL_CACHE=""
+        for candidate in "${RUNNER_TOOL_CACHE:-}" "${AGENT_TOOLSDIRECTORY:-}"; do
+          if is_usable_tool_cache "${candidate}"; then
+            TOOL_CACHE="${candidate}"
+            break
+          fi
+        done
+
+        if [[ -z "${TOOL_CACHE}" ]]; then
+          TOOL_CACHE="${RUNNER_TEMP:-/tmp}/hostedtoolcache"
+          if ! mkdir -p "${TOOL_CACHE}" || ! is_usable_tool_cache "${TOOL_CACHE}"; then
+            echo "::error::Unable to create writable Python tool cache: ${TOOL_CACHE}"
+            exit 1
+          fi
+        fi
+
         echo "AGENT_TOOLSDIRECTORY=${TOOL_CACHE}" >> "${GITHUB_ENV}"
         echo "RUNNER_TOOL_CACHE=${TOOL_CACHE}" >> "${GITHUB_ENV}"
 
@@ -169,3 +193,11 @@ runs:
 
         "${LOCAL_BIN}/python" --version
         "${LOCAL_BIN}/python" -m pip --version
+
+    - name: Verify Python toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        python --version
+        python -c 'import ssl'
+        python -m pip --version

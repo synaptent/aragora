@@ -26,7 +26,7 @@ from collections.abc import Callable
 if TYPE_CHECKING:
     from aragora.core import Vote
     from aragora.debate.convergence import SimilarityBackend
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -439,7 +439,7 @@ class VotingEngine:
     def count_votes(
         self,
         votes: list[Vote],
-        user_votes: list[dict[str, Any] | None] = None,
+        user_votes: list[dict[str, Any]] | None = None,
         require_majority: bool = False,
         min_margin: float = 0.0,
     ) -> VoteResult:

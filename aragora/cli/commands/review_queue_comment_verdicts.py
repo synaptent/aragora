@@ -167,6 +167,12 @@ _DEFAULT_BLOCKING_MARKER_STRIP = re.compile(r"^(?:\*\*)?\[(?:p0|p1|p2)\](?:\*\*)
 _PRIORITY_MARKER = re.compile(r"^(?:\*\*)?\[(?P<sev>p0|p1)\](?:\*\*)?(?:\s|$|[:.;—–-])", re.I)
 _PRIORITY_MARKER_STRIP = re.compile(r"^(?:\*\*)?\[(?:p0|p1)\](?:\*\*)?\s*", re.I)
 
+# Any-severity variants, used ONLY by the diagnostic :func:`extract_finding_lines`.
+# Kept separate from the gate markers above so widening the diagnostic view can
+# never widen what counts as blocking.
+_ANY_PRIORITY_MARKER = re.compile(r"^(?:\*\*)?\[(?P<sev>p\d)\](?:\*\*)?(?:\s|$|[:.;—–-])", re.I)
+_ANY_PRIORITY_MARKER_STRIP = re.compile(r"^(?:\*\*)?\[p\d\](?:\*\*)?\s*", re.I)
+
 
 def _strip_decoration(text: str) -> str:
     return re.sub(r"^(?:[#>\-*+\s]+|\d+[.)]\s+)+", "", text.strip())
@@ -350,6 +356,45 @@ def highest_blocking_severity(body: str) -> str | None:
         if severity == "P1":
             best = "P1"
     return best
+
+
+def extract_finding_lines(body: str) -> list[str]:
+    """Return every real ``[Pn]`` finding line in ``body``, at any severity.
+
+    Purely **diagnostic**: this reports what a reviewer wrote so a dissent can be
+    read without re-running the reviewer. It gates nothing — blocking severity
+    stays :func:`highest_blocking_severity` / :func:`has_blocking_finding_or_label`,
+    which are deliberately ``[P0]``/``[P1]`` only.
+
+    Severity is deliberately *not* filtered here: a ``[P2]``-only dissent is the
+    common case a human needs to read (it blocks by default, and is advisory only
+    under ``ARAGORA_ENABLE_SEVERITY_GATED_DISSENT``), so hiding it would leave the
+    exact gap this exists to close.
+
+    Reuses :func:`_semantic_review_lines` and the same decoration/no-finding-head
+    handling as the gate, so a fenced or blockquoted ``[P2]`` example that the gate
+    ignores is never reported here as a live finding.
+    """
+    findings: list[str] = []
+    for stripped in _semantic_review_lines(body):
+        if not stripped:
+            continue
+        line = _strip_decoration(stripped)
+        marker = _ANY_PRIORITY_MARKER.match(line)
+        if not marker:
+            continue
+        rest = _ANY_PRIORITY_MARKER_STRIP.sub("", line)
+        head = _normalize_value(rest).split(":", 1)[0].strip(" .;—–-")
+        if head in _NO_FINDING_HEADS:
+            # "[P2] None" / "[P3] N/A" are explicit non-findings.
+            continue
+        # Re-emit as a normalised "[Pn] text" line. `_strip_decoration` removes the
+        # leading "- **" of a bolded bullet but leaves the closing "**" stranded on
+        # the marker, so echoing the raw line would print "[P2]** ...".
+        severity = marker.group("sev").upper()
+        detail = rest.lstrip(" :.;—–-").strip()
+        findings.append(f"[{severity}] {detail}" if detail else f"[{severity}]")
+    return findings
 
 
 def has_blocking_finding_or_label(body: str) -> bool:

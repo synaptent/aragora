@@ -1424,8 +1424,8 @@ class TestCLIAgentModelMapping:
     def test_claude_model_mapping(self):
         """Should map Claude models correctly."""
         agent = ClaudeAgent(name="test", model="claude-opus-4-8")
-        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-8") == "anthropic/claude-opus-4.8"
-        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-7") == "anthropic/claude-opus-4.8"
+        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-8") == "anthropic/claude-opus-5"
+        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-7") == "anthropic/claude-opus-5"
 
     def test_codex_model_mapping(self):
         """Should map Codex models correctly."""
@@ -1441,7 +1441,7 @@ class TestCLIAgentModelMapping:
     def test_grok_model_mapping(self):
         """Should map Grok models correctly."""
         agent = GrokCLIAgent(name="test", model="grok-3")
-        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4"
+        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4.5"
 
     def test_deepseek_model_mapping(self):
         """Should map Deepseek models correctly."""
@@ -1467,7 +1467,7 @@ class TestCLIAgentModelMapping:
 
                 call_kwargs = mock_or.call_args[1]
                 # Should default to the current frontier Claude model.
-                assert call_kwargs["model"] == "anthropic/claude-opus-4.8"
+                assert call_kwargs["model"] == "anthropic/claude-opus-5"
 
 
 # =============================================================================

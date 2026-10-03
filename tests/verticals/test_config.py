@@ -135,7 +135,7 @@ class TestComplianceConfig:
 class TestModelConfig:
     def test_defaults(self):
         mc = ModelConfig()
-        assert mc.primary_model == "claude-opus-4-8"
+        assert mc.primary_model == "claude-opus-5"
         assert mc.primary_provider == "anthropic"
         assert mc.specialist_model is None
         assert mc.specialist_quantization is None

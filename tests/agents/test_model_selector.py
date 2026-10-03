@@ -51,6 +51,27 @@ class TestModelProfiles:
         assert claude.max_context_tokens == 200000
         assert claude.supports_vision is True
 
+    def test_kimi_profile_tracks_k3_runtime_metadata(self):
+        kimi = MODEL_PROFILES["kimi"]
+
+        assert kimi.model_id == "kimi-k3"
+        assert kimi.display_name == "Kimi K3"
+        assert kimi.provider == "moonshot"
+        assert kimi.max_context_tokens == 1_048_576
+        assert kimi.max_output_tokens == 32_768
+        assert (kimi.cost_input_per_1k, kimi.cost_output_per_1k) == (0.003, 0.015)
+        assert kimi.supports_vision is True
+
+    def test_qwen_profile_tracks_qwen38_max_runtime_metadata(self):
+        qwen = MODEL_PROFILES["qwen"]
+
+        assert qwen.model_id == "qwen3.8-max"
+        assert qwen.display_name == "Qwen 3.8 Max"
+        assert qwen.provider == "alibaba"
+        assert qwen.max_context_tokens == 1_000_000
+        assert qwen.max_output_tokens == 131_072
+        assert (qwen.cost_input_per_1k, qwen.cost_output_per_1k) == (0.002, 0.006)
+
     def test_all_profiles_have_required_fields(self):
         """Verify all profiles have required fields populated."""
         for name, profile in MODEL_PROFILES.items():

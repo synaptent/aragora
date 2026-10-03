@@ -38,6 +38,7 @@ Operational runbooks for responding to Aragora alerts and incidents.
 | First-Error Diagnostic Receipts | [first-error-receipt-protocol.md](./first-error-receipt-protocol.md) | Exact-main diagnostic ownership, durable logs and reports, outcome classification, and conservative worktree reclaim |
 | Outbox Disposition | [outbox-disposition-rubric.md](./outbox-disposition-rubric.md) | Read-only rubric for classifying automation outbox-depth blockers before any publisher or reconcile mutation |
 | Harvest Disposition | [harvest-disposition-rubric.md](./harvest-disposition-rubric.md) | Claim, classify, and receipt stale #8993 worktree harvest items without mutating shared-root or source worktree state |
+| Second-Signal Completion | [second-signal-completion-rubric.md](./second-signal-completion-rubric.md) | Conductor rubric for completing a missing model-family signal without bypassing evidence gates |
 
 ## Incident Severity Levels
 

@@ -325,6 +325,21 @@ _ADAPTER_DEFS: list[tuple[str, str, dict[str, Any]]] = [
         },
     ),
     (
+        ".executable_claim_adapter",
+        "ExecutableClaimAdapter",
+        {
+            "name": "executable_claim",
+            "required_deps": [],
+            "forward_method": "ingest_claim_results",
+            "reverse_method": None,
+            "priority": 61,
+            # ingest_claim_results takes the claim results to persist, so it cannot
+            # answer the coordinator's no-argument forward-sync call.
+            "enabled_by_default": False,
+            "config_key": "km_executable_claim_adapter",
+        },
+    ),
+    (
         ".supermemory_adapter",
         "SupermemoryAdapter",
         {
@@ -1183,7 +1198,9 @@ _ADAPTER_NAME_ALIASES: dict[str, str] = {
     "insight": "insights",
 }
 
-_MOUND_AWARE_ADAPTERS = frozenset({"culture", "receipt", "outcome", "pipeline", "codebase"})
+_MOUND_AWARE_ADAPTERS = frozenset(
+    {"culture", "receipt", "outcome", "pipeline", "codebase", "executable_claim"}
+)
 
 
 def _extract_mound_dependencies(mound: Any) -> dict[str, Any]:

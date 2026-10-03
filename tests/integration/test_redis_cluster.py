@@ -118,7 +118,7 @@ class TestRedisClusterClient:
 
     def test_cluster_client_import(self):
         """Test that RedisClusterClient can be imported."""
-        from aragora.server.redis_cluster import (
+        from aragora.storage.redis_cluster import (
             RedisClusterClient,
             ClusterConfig,
             ClusterMode,
@@ -131,7 +131,7 @@ class TestRedisClusterClient:
 
     def test_cluster_config_from_env(self):
         """Test ClusterConfig creation from environment."""
-        from aragora.server.redis_cluster import get_cluster_config
+        from aragora.storage.redis_cluster import get_cluster_config
 
         with patch.dict(
             os.environ,
@@ -152,7 +152,7 @@ class TestRedisClusterClient:
 
     def test_cluster_config_parses_nodes_correctly(self):
         """Test that node parsing handles various formats."""
-        from aragora.server.redis_cluster import get_cluster_config
+        from aragora.storage.redis_cluster import get_cluster_config
 
         # Test with just hostnames (default port)
         with patch.dict(
@@ -168,7 +168,7 @@ class TestRedisClusterClient:
 
     def test_cluster_client_slot_calculation(self):
         """Test CRC16 slot calculation for cluster keys."""
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         client = RedisClusterClient(ClusterConfig(nodes=[]))
 
@@ -184,7 +184,7 @@ class TestRedisClusterClient:
 
     def test_cluster_health_monitor(self):
         """Test ClusterHealthMonitor functionality."""
-        from aragora.server.redis_cluster import ClusterHealthMonitor
+        from aragora.storage.redis_cluster import ClusterHealthMonitor
 
         monitor = ClusterHealthMonitor(check_interval=1.0)
 
@@ -209,7 +209,7 @@ class TestRedisClusterOperations:
 
     def test_cluster_get_set_operations(self):
         """Test basic get/set operations through cluster client."""
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         with patch("redis.from_url") as mock_from_url:
             mock_redis = MagicMock()
@@ -226,7 +226,7 @@ class TestRedisClusterOperations:
 
     def test_cluster_hash_operations(self):
         """Test hash operations through cluster client."""
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         # Just verify methods exist
         client = RedisClusterClient(ClusterConfig(nodes=[]))
@@ -237,7 +237,7 @@ class TestRedisClusterOperations:
 
     def test_cluster_sorted_set_operations(self):
         """Test sorted set operations through cluster client."""
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         # Just verify methods exist (used for rate limiting)
         client = RedisClusterClient(ClusterConfig(nodes=[]))
@@ -252,7 +252,7 @@ class TestRedisFailover:
 
     def test_reconnect_on_cluster_error(self):
         """Test that client reconnects on MOVED/CLUSTERDOWN errors."""
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         client = RedisClusterClient(ClusterConfig(nodes=[("localhost", 6379)]))
 
@@ -264,7 +264,7 @@ class TestRedisFailover:
 
     def test_health_check_triggers_reconnect(self):
         """Test that health check failures can trigger reconnection."""
-        from aragora.server.redis_cluster import ClusterHealthMonitor
+        from aragora.storage.redis_cluster import ClusterHealthMonitor
 
         monitor = ClusterHealthMonitor(check_interval=0.1)
 
@@ -286,7 +286,7 @@ class TestRedisAsyncRetry:
 
     def test_async_retry_method_exists(self):
         """Test that async retry method exists."""
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         client = RedisClusterClient(ClusterConfig(nodes=[]))
         assert hasattr(client, "_execute_with_retry_async")
@@ -300,7 +300,7 @@ class TestRedisAsyncRetry:
         """Test that async retry uses asyncio.sleep instead of time.sleep."""
         import asyncio
         from unittest.mock import AsyncMock
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         client = RedisClusterClient(ClusterConfig(nodes=[]))
 
@@ -343,7 +343,7 @@ class TestRedisAsyncRetry:
     async def test_async_retry_does_not_block_event_loop(self):
         """Test that async retry doesn't block concurrent async operations."""
         import asyncio
-        from aragora.server.redis_cluster import RedisClusterClient, ClusterConfig
+        from aragora.storage.redis_cluster import RedisClusterClient, ClusterConfig
 
         client = RedisClusterClient(ClusterConfig(nodes=[]))
 
