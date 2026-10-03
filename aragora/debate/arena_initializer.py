@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from aragora.debate.autonomic_executor import AutonomicExecutor
     from aragora.debate.event_bridge import EventEmitterBridge
     from aragora.evolution.evolver import PromptEvolver as PromptEvolverType
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class CoreComponents:
     memory: Any
     hooks: dict
     hook_manager: Any
-    event_emitter: EventEmitterProtocol | None
+    event_emitter: LegacyEventEmitterProtocol | None
     spectator: SpectatorStream
     debate_embeddings: Any
     insight_store: Any
@@ -158,7 +158,7 @@ class ArenaInitializer:
         memory,
         event_hooks: dict | None,
         hook_manager,
-        event_emitter: EventEmitterProtocol | None,
+        event_emitter: LegacyEventEmitterProtocol | None,
         spectator: SpectatorStream | None,
         debate_embeddings,
         insight_store,
