@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import json
 import sys
 import time
@@ -39,6 +40,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import aragora.utils.redis_config as redis_config
 from aragora.server.handlers.admin.health.kubernetes import (
     liveness_probe,
     readiness_probe_fast,
@@ -118,14 +120,6 @@ def _make_handler_registry_module(exact_routes: dict | None = None):
     route_index = MagicMock()
     route_index._exact_routes = exact_routes if exact_routes is not None else {"/api/health": True}
     mod.get_route_index = lambda: route_index
-    return mod
-
-
-def _make_redis_cache_module(pool: Any = MagicMock()):
-    """Create a fake aragora.utils.redis_config module."""
-    mod = types.ModuleType("aragora.utils.redis_config")
-    mod.get_redis_pool = lambda: pool
-    mod.__dict__["redis_pool_initialized"] = lambda: pool is not None
     return mod
 
 
@@ -228,13 +222,30 @@ def _remove_handler_registry():
     return patch.dict(sys.modules, {"aragora.server.handler_registry.core": None})
 
 
-def _remove_redis_cache():
+def _block_redis_config_import():
+    """Make ``import aragora.utils.redis_config`` raise ImportError."""
     return patch.dict(sys.modules, {"aragora.utils.redis_config": None})
 
 
-def _patch_redis_cache(pool=MagicMock()):
-    mod = _make_redis_cache_module(pool)
-    return patch.dict(sys.modules, {"aragora.utils.redis_config": mod})
+@contextlib.contextmanager
+def _real_redis_pool_state(pool: Any):
+    """Set the real shared pool global to ``pool`` for the duration.
+
+    Fails if the code under test builds the pool or changes the Redis
+    availability latch.
+    """
+    latch = object()
+    with (
+        patch.object(redis_config, "_redis_pool", pool),
+        patch.object(redis_config, "_redis_available", latch),
+        patch.object(
+            redis_config,
+            "get_redis_pool",
+            side_effect=AssertionError("readiness_probe_fast called get_redis_pool"),
+        ),
+    ):
+        yield
+        assert redis_config._redis_available is latch
 
 
 def _remove_postgres_pool():
@@ -689,35 +700,38 @@ class TestReadinessProbeFastElo:
 
 
 class TestReadinessProbeFastRedis:
-    """Test readiness_probe_fast() Redis pool check."""
+    """Test readiness_probe_fast() Redis pool check.
 
-    def _run(self, handler):
-        with _remove_degraded(), _remove_unified_server(), _remove_handler_registry():
+    Only ARAGORA_REDIS_URL configures the shared pool, so REDIS_URL alone is
+    reported as "not_configured".
+    """
+
+    def _run(self, handler, pool: Any = None):
+        with (
+            _remove_degraded(),
+            _remove_unified_server(),
+            _remove_handler_registry(),
+            _real_redis_pool_state(pool),
+        ):
             return readiness_probe_fast(handler)
 
-    def test_redis_pool_exists_when_env_set(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
-        handler = _make_mock_handler()
-        with (
-            _remove_degraded(),
-            _remove_unified_server(),
-            _remove_handler_registry(),
-            _patch_redis_cache(pool=MagicMock()),
-        ):
-            result = readiness_probe_fast(handler)
+    def test_redis_pool_exists_when_aragora_url_set(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+        result = self._run(_make_mock_handler(), pool=MagicMock())
         assert _body(result)["checks"]["redis_pool"] is True
+        assert _status(result) == 200
 
-    def test_redis_pool_none_when_env_set(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
-        handler = _make_mock_handler()
-        with (
-            _remove_degraded(),
-            _remove_unified_server(),
-            _remove_handler_registry(),
-            _patch_redis_cache(pool=None),
-        ):
-            result = readiness_probe_fast(handler)
+    def test_redis_pool_not_built_when_aragora_url_set(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+        result = self._run(_make_mock_handler(), pool=None)
         assert _body(result)["checks"]["redis_pool"] is False
+        assert _status(result) == 200
+
+    def test_redis_url_alone_is_not_configured(self, monkeypatch):
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
+        result = self._run(_make_mock_handler(), pool=None)
+        assert _body(result)["checks"]["redis_pool"] == "not_configured"
+        assert _status(result) == 200
 
     def test_redis_import_error_when_env_set(self, monkeypatch):
         monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
@@ -726,29 +740,19 @@ class TestReadinessProbeFastRedis:
             _remove_degraded(),
             _remove_unified_server(),
             _remove_handler_registry(),
-            _remove_redis_cache(),
+            _block_redis_config_import(),
         ):
             result = readiness_probe_fast(handler)
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
     def test_redis_accessor_missing_when_env_set(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
-        handler = _make_mock_handler()
-        # Deliberately omit the accessor; the obsolete getter must remain unused.
-        mod = types.ModuleType("aragora.utils.redis_config")
-        mod.get_redis_pool = MagicMock(side_effect=RuntimeError("Pool error"))
-        with (
-            _remove_degraded(),
-            _remove_unified_server(),
-            _remove_handler_registry(),
-            patch.dict(sys.modules, {"aragora.utils.redis_config": mod}),
-        ):
-            result = readiness_probe_fast(handler)
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+        monkeypatch.delattr(redis_config, "redis_pool_initialized")
+        result = self._run(_make_mock_handler(), pool=MagicMock())
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
     def test_redis_not_configured_without_env(self):
-        handler = _make_mock_handler()
-        result = self._run(handler)
+        result = self._run(_make_mock_handler(), pool=MagicMock())
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
 
