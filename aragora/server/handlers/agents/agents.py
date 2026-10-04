@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from urllib.parse import unquote
 
 from aragora.events.handler_events import emit_handler_event, QUERIED
 from typing import TYPE_CHECKING, Any
@@ -49,7 +50,6 @@ from aragora.config import (
 )
 
 logger = logging.getLogger(__name__)
-from aragora.server.validation import SAFE_ID_PATTERN_WITH_DOTS
 from aragora.server.versioning.compat import strip_version_prefix
 
 from ..base import (
@@ -135,6 +135,28 @@ def _single_segment(path: str, prefix: str) -> str | None:
 
 # /api/matches/stats is served by MatchesStatsHandler.
 _MATCHES_STATS_SEGMENT = "stats"
+
+# unquote() passes these through literally instead of failing.
+_MALFORMED_PERCENT_ESCAPE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+
+def _decode_match_id(segment: str) -> str | None:
+    """Percent-decode one raw path segment into an exact stored key, or None if undecodable.
+
+    Generated match IDs embed free-text task strings, so the decoded key may
+    contain any character, including "/" and "%"; it is only ever compared for
+    equality against stored keys.
+    """
+    if _MALFORMED_PERCENT_ESCAPE.search(segment):
+        return None
+    try:
+        key = unquote(segment, errors="strict")
+    except UnicodeDecodeError:
+        return None
+    # PostgreSQL TEXT cannot store NUL, so no portable key contains one.
+    if "\x00" in key:
+        return None
+    return key
 
 
 class AgentsHandler(  # type: ignore[misc]
@@ -321,13 +343,11 @@ class AgentsHandler(  # type: ignore[misc]
                     return error_response(err, 400)
             return self._get_recent_matches(limit, loop_id)
 
-        match_id = _single_segment(path, "/api/matches/")
-        if match_id is not None and match_id != _MATCHES_STATS_SEGMENT:
-            # Generated match IDs embed agent names, which may carry dotted
-            # model versions ("general-gemini-3.1-pro-preview-vs-claude-<hex>").
-            is_valid, err = validate_path_segment(match_id, "match_id", SAFE_ID_PATTERN_WITH_DOTS)
-            if not is_valid:
-                return error_response(err or "Invalid match_id", 400)
+        raw_match_id = _single_segment(path, "/api/matches/")
+        if raw_match_id is not None and raw_match_id != _MATCHES_STATS_SEGMENT:
+            match_id = _decode_match_id(raw_match_id)
+            if match_id is None:
+                return error_response("Invalid match_id encoding", 400)
             return self._get_match(match_id)
 
         # Agent comparison

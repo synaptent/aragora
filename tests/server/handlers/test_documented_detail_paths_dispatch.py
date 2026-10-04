@@ -26,6 +26,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
+from urllib.parse import quote, urlparse
 
 import pytest
 
@@ -40,11 +41,13 @@ from aragora.server.handlers.debates.critique import CritiqueHandler
 
 
 @pytest.fixture(autouse=True)
-def _reset_limiters():
+def _reset_limiters(monkeypatch: pytest.MonkeyPatch):
     from aragora.server.handlers.agents import agents as agents_mod
     from aragora.server.handlers.debates import critique as critique_mod
 
-    agents_mod._agent_limiter = agents_mod.RateLimiter(requests_per_minute=60)
+    monkeypatch.setattr(
+        agents_mod, "_agent_limiter", agents_mod.RateLimiter(requests_per_minute=60)
+    )
     critique_mod._critique_limiter._buckets.clear()
     try:
         from aragora.server.handlers.admin.cache import clear_cache
@@ -104,6 +107,11 @@ def _dispatch(instance: Any, index: RouteIndex, path: str) -> tuple[bool, int | 
     raw = instance.wfile.getvalue()
     body = json.loads(raw) if raw else None
     return handled, status, body
+
+
+def _get_target(instance: Any, index: RouteIndex, target: str) -> tuple[bool, int | None, Any]:
+    """Dispatch a raw request-target the way the request lifecycle does: ``urlparse(...).path``."""
+    return _dispatch(instance, index, urlparse(target).path)
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +241,36 @@ def elo(tmp_path: Path) -> EloSystem:
     return system
 
 
+@pytest.fixture
+def match_dispatch(elo: EloSystem) -> tuple[Any, RouteIndex]:
+    ctx = {"elo_system": elo}
+    return _make_dispatch_instance(
+        {
+            "_agents_handler": AgentsHandler(server_context=ctx),
+            "_matches_stats_handler": MatchesStatsHandler(ctx),
+        }
+    )
+
+
+@pytest.fixture
+def get_match_spy(elo: EloSystem, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    spy = MagicMock(wraps=elo.get_match)
+    monkeypatch.setattr(elo, "get_match", spy)
+    return spy
+
+
+def _record_generated(elo: EloSystem, participants: list[str], **labels: str) -> str:
+    """Record a match without a debate_id so the real generator builds its ID."""
+    before = {m["debate_id"] for m in elo.get_recent_matches(limit=100)}
+    elo.record_match(
+        participants=participants,
+        scores={name: float(i == 0) for i, name in enumerate(participants)},
+        **labels,
+    )
+    [match_id] = {m["debate_id"] for m in elo.get_recent_matches(limit=100)} - before
+    return match_id
+
+
 class TestEloGetMatch:
     def test_returns_recent_matches_row_shape(self, elo: EloSystem) -> None:
         match = elo.get_match("debate-abc")
@@ -295,14 +333,115 @@ class TestMatchDetailDispatch:
         assert handled is True
         assert status == 503
 
-    @pytest.mark.parametrize("match_id", ["bad!id", ".leading-dot"])
-    def test_invalid_match_id_is_400(self, elo: EloSystem, match_id: str) -> None:
-        instance, index = _make_dispatch_instance(
-            {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
-        )
-        handled, status, _ = _dispatch(instance, index, "/api/v1/matches/" + match_id)
-        assert handled is True
-        assert status == 400
+    @pytest.mark.parametrize("prefix", ["/api/matches/", "/api/v1/matches/"])
+    @pytest.mark.parametrize(
+        "task",
+        [
+            "Design a rate limiter",
+            "rate/limiter",
+            "Diseño de caché ✓",
+            "100% uptime",
+            "50%2F50 split",
+            "Why? #1; a+b&c=d",
+            "Line one\nLine two\tend",
+        ],
+    )
+    def test_serves_free_text_generated_match_id_exactly(
+        self, elo: EloSystem, match_dispatch, prefix: str, task: str
+    ) -> None:
+        match_id = _record_generated(elo, ["claude", "codex"], task=task)
+        assert match_id.startswith(f"{task}-claude-vs-codex-")
+        target = prefix + quote(match_id, safe="") + "?view=full"
+        handled, status, body = _get_target(*match_dispatch, target)
+        assert (handled, status) == (True, 200)
+        assert body == json.loads(json.dumps(elo.get_match(match_id)))
+        assert body["debate_id"] == match_id
+
+    def test_serves_157_character_generated_match_id(self, elo: EloSystem, match_dispatch) -> None:
+        participants = [f"agent-{n}-" + "x" * 24 for n in range(4)]
+        match_id = _record_generated(elo, participants, domain="general")
+        assert len(match_id) == 157
+        target = "/api/v1/matches/" + quote(match_id, safe="")
+        handled, status, body = _get_target(*match_dispatch, target)
+        assert (handled, status) == (True, 200)
+        assert body["debate_id"] == match_id
+
+    @pytest.mark.parametrize(
+        ("raw_segment", "key"),
+        [
+            ("debate-ab%25", "debate-ab%"),
+            ("debate_abc", "debate_abc"),
+            ("DEBATE-ABC", "DEBATE-ABC"),
+            ("debate-abc%27%20OR%20%271%27%3D%271", "debate-abc' OR '1'='1"),
+            ("..%2F..%2Fetc%2Fpasswd", "../../etc/passwd"),
+            ("debate-abc%252F", "debate-abc%2F"),
+            ("%73tats", "stats"),
+            ("%72ecent", "recent"),
+        ],
+    )
+    def test_lookup_is_one_exact_key_with_no_pattern_or_path_meaning(
+        self, match_dispatch, get_match_spy: MagicMock, raw_segment: str, key: str
+    ) -> None:
+        handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/" + raw_segment)
+        assert (handled, status) == (True, 404)
+        get_match_spy.assert_called_once_with(key)
+
+    @pytest.mark.parametrize(
+        "raw_segment",
+        ["%zz", "debate-abc%", "debate-abc%2", "%FF", "%C3", "%ED%A0%80", "%00", "debate-abc%00"],
+    )
+    def test_undecodable_or_nul_match_id_is_400_without_lookup(
+        self, match_dispatch, get_match_spy: MagicMock, raw_segment: str
+    ) -> None:
+        handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/" + raw_segment)
+        assert (handled, status) == (True, 400)
+        get_match_spy.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "/api/v1/matches/debate-abc/extra",
+            "/api/v1/matches/debate-abc/",
+            "/api/matches/rate/limiter-claude-vs-codex-0a1b2c3d",
+        ],
+    )
+    def test_raw_extra_segments_stay_unclaimed(
+        self, match_dispatch, get_match_spy: MagicMock, target: str
+    ) -> None:
+        handled, _, _ = _get_target(*match_dispatch, target)
+        assert handled is False
+        get_match_spy.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("denial", "expected"),
+        [
+            pytest.param("unauthenticated", 401, marks=pytest.mark.no_auto_auth),
+            pytest.param("no_permission", 403, marks=pytest.mark.no_auto_auth),
+            ("rate_limited", 429),
+        ],
+    )
+    def test_denials_return_before_any_lookup(
+        self,
+        match_dispatch,
+        get_match_spy: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        denial: str,
+        expected: int,
+    ) -> None:
+        from aragora.rbac.models import AuthorizationContext
+        from aragora.server.handlers import secure
+        from aragora.server.handlers.agents import agents as agents_mod
+
+        async def _no_grants(request: Any, require_auth: bool = False) -> AuthorizationContext:
+            return AuthorizationContext(user_id="u-1", org_id=None, roles=set(), permissions=set())
+
+        if denial == "no_permission":
+            monkeypatch.setattr(secure, "get_auth_context", _no_grants)
+        elif denial == "rate_limited":
+            monkeypatch.setattr(agents_mod._agent_limiter, "is_allowed", lambda _ip: False)
+        handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/rate%2Flimiter")
+        assert (handled, status) == (True, expected)
+        get_match_spy.assert_not_called()
 
     def test_stats_and_recent_keep_their_owners(self, elo: EloSystem) -> None:
         ctx = {"elo_system": elo}
