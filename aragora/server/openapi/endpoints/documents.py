@@ -1,13 +1,17 @@
 """Document and media endpoint definitions."""
 
-from aragora.server.openapi.helpers import _ok_response
+from aragora.server.openapi.helpers import STANDARD_ERRORS, _ok_response
 
 DOCUMENT_ENDPOINTS = {
     "/api/documents": {
         "get": {
             "tags": ["Documents"],
             "summary": "List documents",
-            "description": "Get list of uploaded documents available for debate context.",
+            "description": (
+                "Get list of uploaded documents available for debate context. Lists only "
+                "documents owned by the caller's organization; requires a signed-in user "
+                "with an organization."
+            ),
             "operationId": "listDocuments",
             "responses": {
                 "200": _ok_response(
@@ -28,8 +32,11 @@ DOCUMENT_ENDPOINTS = {
                         },
                         "total": {"type": "integer"},
                     },
-                )
+                ),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
             },
+            "security": [{"bearerAuth": []}],
         },
     },
     "/api/documents/formats": {
@@ -55,7 +62,11 @@ DOCUMENT_ENDPOINTS = {
         "post": {
             "tags": ["Documents"],
             "summary": "Upload document",
-            "description": "Upload a document to be used as context in debates.",
+            "description": (
+                "Upload a document to be used as context in debates, as multipart/form-data "
+                "or as a raw body named by the X-Filename header. The document is owned by "
+                "the caller's organization; requires a signed-in user with an organization."
+            ),
             "operationId": "createDocumentsUpload",
             "requestBody": {
                 "content": {
@@ -85,7 +96,9 @@ DOCUMENT_ENDPOINTS = {
                         "size_bytes": {"type": "integer"},
                         "status": {"type": "string"},
                     },
-                )
+                ),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
             },
             "security": [{"bearerAuth": []}],
         },

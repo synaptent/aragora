@@ -52,7 +52,7 @@ class TestListDocumentsEndpoint:
     @pytest.fixture
     def mock_store(self):
         store = Mock()
-        store.list_all.return_value = [
+        store.list_for_org.return_value = [
             {"id": "doc1", "filename": "test.pdf", "word_count": 100},
             {"id": "doc2", "filename": "other.txt", "word_count": 50},
         ]
@@ -65,12 +65,14 @@ class TestListDocumentsEndpoint:
         ctx = {"document_store": mock_store}
         return DocumentHandler(ctx)
 
-    def test_list_documents_returns_documents(self, doc_handler):
+    def test_list_documents_returns_documents(self, doc_handler, mock_store):
         result = doc_handler.handle("/api/v1/documents", {}, None)
         assert result.status_code == 200
         data = json.loads(result.body)
         assert data["count"] == 2
         assert len(data["documents"]) == 2
+        mock_store.list_for_org.assert_called_once_with("test-org-456")
+        mock_store.list_all.assert_not_called()
 
     def test_list_documents_no_store_returns_empty(self):
         from aragora.server.handlers.features import DocumentHandler
@@ -110,6 +112,7 @@ class TestGetDocumentEndpoint:
     def mock_store(self):
         store = Mock()
         doc = Mock()
+        doc.org_id = "test-org-456"
         doc.to_dict.return_value = {
             "id": "doc123",
             "filename": "test.pdf",
@@ -138,7 +141,16 @@ class TestGetDocumentEndpoint:
         result = doc_handler.handle("/api/v1/documents/missing", {}, None)
         assert result.status_code == 404
         data = json.loads(result.body)
-        assert "error" in data
+        assert data == {"error": "Document not found", "code": "not_found"}
+
+    @pytest.mark.parametrize("owner", ["other-org", None])
+    def test_get_document_of_another_or_unknown_owner_is_not_found(
+        self, doc_handler, mock_store, owner
+    ):
+        mock_store.get.return_value.org_id = owner
+        result = doc_handler.handle("/api/v1/documents/doc123", {}, None)
+        assert result.status_code == 404
+        assert json.loads(result.body) == {"error": "Document not found", "code": "not_found"}
 
     def test_get_document_no_store_returns_500(self):
         from aragora.server.handlers.features import DocumentHandler

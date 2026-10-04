@@ -65,6 +65,8 @@ class MockDocument:
     page_count: int = 1
     preview: str = "Hello world..."
     content: str = "Hello world"
+    # The org of the user patch_user_auth signs every request in as.
+    org_id: str | None = "test-org-001"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -84,6 +86,9 @@ class MockDocumentStore:
 
     def list_all(self) -> list[dict]:
         return [doc.to_dict() for doc in self._docs.values()]
+
+    def list_for_org(self, org_id: str) -> list[dict]:
+        return [doc.to_dict() for doc in self._docs.values() if doc.org_id == org_id]
 
     def get(self, doc_id: str) -> MockDocument | None:
         return self._docs.get(doc_id)
@@ -324,25 +329,25 @@ class TestListDocuments:
         assert "error" in body
 
     def test_list_store_exception(self, handler, store):
-        store.list_all = MagicMock(side_effect=ValueError("DB error"))
+        store.list_for_org = MagicMock(side_effect=ValueError("DB error"))
         mock = MockHTTPHandler(command="GET")
         result = handler.handle("/api/v1/documents", {}, mock)
         assert _status(result) == 500
 
     def test_list_store_key_error(self, handler, store):
-        store.list_all = MagicMock(side_effect=KeyError("missing key"))
+        store.list_for_org = MagicMock(side_effect=KeyError("missing key"))
         mock = MockHTTPHandler(command="GET")
         result = handler.handle("/api/v1/documents", {}, mock)
         assert _status(result) == 500
 
     def test_list_store_os_error(self, handler, store):
-        store.list_all = MagicMock(side_effect=OSError("disk error"))
+        store.list_for_org = MagicMock(side_effect=OSError("disk error"))
         mock = MockHTTPHandler(command="GET")
         result = handler.handle("/api/v1/documents", {}, mock)
         assert _status(result) == 500
 
     def test_list_store_type_error(self, handler, store):
-        store.list_all = MagicMock(side_effect=TypeError("wrong type"))
+        store.list_for_org = MagicMock(side_effect=TypeError("wrong type"))
         mock = MockHTTPHandler(command="GET")
         result = handler.handle("/api/v1/documents", {}, mock)
         assert _status(result) == 500
