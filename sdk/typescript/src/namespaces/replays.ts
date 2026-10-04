@@ -109,7 +109,11 @@ interface ReplaysClientInterface {
   request<T>(
     method: string,
     path: string,
-    options?: { params?: Record<string, unknown>; json?: Record<string, unknown> }
+    options?: {
+      params?: Record<string, unknown>;
+      json?: Record<string, unknown>;
+      responseType?: 'json' | 'text';
+    }
   ): Promise<T>;
 }
 
@@ -188,7 +192,7 @@ export class ReplaysAPI {
    * Get HTML visualization of the replay.
    */
   async getHtml(replayId: string): Promise<string> {
-    return this.client.request('GET', `/api/replays/${replayId}/html`);
+    return this.client.request('GET', `/api/replays/${replayId}/html`, { responseType: 'text' });
   }
 
   /**
@@ -204,13 +208,6 @@ export class ReplaysAPI {
     }
   ): Promise<ReplayFork> {
     return this.client.request('POST', `/api/replays/${replayId}/fork`, { json: options });
-  }
-
-  /**
-   * List forks created from a replay.
-   */
-  async listForks(replayId: string): Promise<{ forks: ReplayFork[] }> {
-    return this.client.request('GET', `/api/replays/${replayId}/forks`);
   }
 
   /**

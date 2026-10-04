@@ -105,6 +105,108 @@ class TestTeamsAuthentication:
             await connector._get_access_token()
 
 
+class TestTeamsTenantSeparation:
+    """The Azure AD tenant authenticates; the base tenant keys sync state."""
+
+    @staticmethod
+    def _credentials(teams_tenant_id: str | None) -> MagicMock:
+        credentials = MagicMock()
+        credentials.get_credential = AsyncMock(
+            side_effect=lambda key: {
+                "TEAMS_TENANT_ID": teams_tenant_id,
+                "TEAMS_CLIENT_ID": "test-client-id",
+                "TEAMS_CLIENT_SECRET": "test-secret",
+            }.get(key)
+        )
+        return credentials
+
+    @staticmethod
+    async def _token_url(connector: TeamsEnterpriseConnector) -> str:
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"access_token": "token", "expires_in": 3600}
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await connector._get_access_token()
+
+        return mock_client_instance.post.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_azure_tenant_keeps_base_tenant_and_authenticates_against_it(self, tmp_path):
+        connector = TeamsEnterpriseConnector(tenant_id="azure-tenant-guid", state_dir=tmp_path)
+        connector.credentials = self._credentials("credential-tenant")
+
+        assert connector.tenant_id == "default"
+        assert connector.azure_tenant_id == "azure-tenant-guid"
+        assert connector.connector_id == "teams-enterprise-azure-tenant-guid"
+        assert await self._token_url(connector) == (
+            "https://login.microsoftonline.com/azure-tenant-guid/oauth2/v2.0/token"
+        )
+
+    @pytest.mark.asyncio
+    async def test_without_azure_tenant_falls_back_to_teams_tenant_id_credential(self, tmp_path):
+        connector = TeamsEnterpriseConnector(state_dir=tmp_path)
+        connector.credentials = self._credentials("credential-tenant")
+
+        assert connector.tenant_id == "default"
+        assert connector.azure_tenant_id is None
+        assert await self._token_url(connector) == (
+            "https://login.microsoftonline.com/credential-tenant/oauth2/v2.0/token"
+        )
+
+    @pytest.mark.parametrize(
+        ("kwargs", "state_file"),
+        [
+            ({}, "teams-enterprise_default.json"),
+            ({"tenant_id": "azure-tenant-guid"}, "teams-enterprise-azure-tenant-guid_default.json"),
+        ],
+    )
+    def test_state_is_keyed_by_azure_tenant_and_base_tenant(self, tmp_path, kwargs, state_file):
+        connector = TeamsEnterpriseConnector(state_dir=tmp_path, **kwargs)
+
+        assert connector.state_path == tmp_path / state_file
+        assert connector.load_state().tenant_id == "default"
+
+    def test_without_azure_tenant_connector_id_does_not_read_credentials(self, tmp_path):
+        credentials = self._credentials("credential-tenant")
+        connector = TeamsEnterpriseConnector(state_dir=tmp_path, credentials=credentials)
+
+        assert connector.connector_id == "teams-enterprise"
+        assert connector.load_state().connector_id == "teams-enterprise"
+        credentials.get_credential.assert_not_called()
+
+    def test_two_azure_tenants_sharing_a_state_dir_keep_separate_sync_keys(self, tmp_path):
+        tenant_a = TeamsEnterpriseConnector(tenant_id="azure-tenant-a", state_dir=tmp_path)
+        tenant_b = TeamsEnterpriseConnector(tenant_id="azure-tenant-b", state_dir=tmp_path)
+
+        assert tenant_a.tenant_id == tenant_b.tenant_id == "default"
+        assert tenant_a.connector_id == "teams-enterprise-azure-tenant-a"
+        assert tenant_b.connector_id == "teams-enterprise-azure-tenant-b"
+        assert tenant_a.state_path == tmp_path / "teams-enterprise-azure-tenant-a_default.json"
+        assert tenant_b.state_path == tmp_path / "teams-enterprise-azure-tenant-b_default.json"
+
+        state_a = tenant_a.load_state()
+        state_a.cursor = "tenant-a-delta-link"
+        tenant_a.save_state()
+        state_b = tenant_b.load_state()
+
+        assert state_a.connector_id == "teams-enterprise-azure-tenant-a"
+        assert state_b.connector_id == "teams-enterprise-azure-tenant-b"
+        assert state_b.tenant_id == "default"
+        assert state_b.cursor is None
+
+        assert tenant_a._circuit_breaker is not None
+        assert tenant_b._circuit_breaker is not None
+        assert tenant_a._circuit_breaker.name == "connector_teams-enterprise-azure-tenant-a_default"
+        assert tenant_b._circuit_breaker.name == "connector_teams-enterprise-azure-tenant-b_default"
+        assert tenant_a._circuit_breaker is not tenant_b._circuit_breaker
+
+
 class TestTeamAndChannelEnumeration:
     """Test team and channel listing."""
 

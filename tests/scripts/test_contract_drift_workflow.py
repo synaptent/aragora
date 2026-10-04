@@ -255,12 +255,46 @@ def test_pr_admission_is_event_bound_absolute_and_terminal():
     assert receipt["env"]["SOURCE_SHA"] == HISTORICAL_SOURCE_SHA_EXPR
     assert program["env"]["SOURCE_SHA"] == SOURCE_SHA_EXPR
     assert "needs" not in receipt and "needs" not in program
-    assert "--mode program" in str(program) and "continue-on-error" not in str(program)
+    assert "--mode program" in str(program)
+    # PR admission and the main receipt stay strict end to end: no
+    # continue-on-error at any level in either job.
+    assert "continue-on-error" not in str(JOBS["pr-delta"])
+    assert "continue-on-error" not in str(receipt)
+    _assert_program_trajectory_informational_shape(program)
+
+
+def _assert_program_trajectory_informational_shape(program: dict) -> None:
+    """Operator decision 2026-09-07 (#10026): the trajectory job is
+    informational at the WORKFLOW-RUN level only, while the paydown catches
+    up to the date-driven target.
+
+    GitHub semantics make the two levels different: a job-level
+    ``continue-on-error`` keeps the job's own check concluding ``failure``
+    when the analyzer exits non-zero (the truthful red that
+    ``verify_contract_drift_workflow_state`` requires) and only stops that
+    failure from failing the workflow run; a step-level key on the analyzer
+    would instead turn the job green and mask the analyzer. So the key is
+    pinned to exactly the job level, with an explicit re-tighten condition.
+    """
+    assert program.get("continue-on-error") == "true", (
+        "program-trajectory is informational at the job level while the paydown "
+        "catches up (operator decision 2026-09-07); re-tighten in the PR that "
+        "brings total_items at or below max_open_items"
+    )
+    for step in program["steps"]:
+        assert "continue-on-error" not in step, (
+            "no step-level continue-on-error: the analyzer's exit code must keep "
+            "deciding the job's own conclusion"
+        )
+    comment = TEXT.split("  program-trajectory:", 1)[1].split("continue-on-error: true", 1)[0]
+    assert "Re-tighten" in comment and "max_open_items" in comment, (
+        "the job-level key must carry its re-tighten condition"
+    )
 
 
 def test_program_trajectory_upload_is_sha_qualified_and_never_masks_the_analyzer():
     program = JOBS["program-trajectory"]
-    assert "continue-on-error" not in program  # job level: analyzer red stays red
+    _assert_program_trajectory_informational_shape(program)
     *_, analyzer, upload = program["steps"]
     # The analyzer stays the unconditioned terminal enforcement step: no `if`
     # and no `continue-on-error`, so its exit code alone decides the job.
@@ -1397,9 +1431,9 @@ def test_live_verifier_selects_the_newest_routine_run_past_historical_backfill_d
 
 def test_program_trajectory_preserves_real_red_exit(tmp_path):
     program = JOBS["program-trajectory"]
-    assert "continue-on-error" not in str(program)
+    _assert_program_trajectory_informational_shape(program)
     analyzer = _analyzer_step(program_id := "program-trajectory")
-    assert "if" not in analyzer, program_id
+    assert "if" not in analyzer and "continue-on-error" not in analyzer, program_id
     env = {"SOURCE_SHA": "c" * 40, "GITHUB_WORKSPACE": str(tmp_path)}
     result = _simulate_step(
         _analyzer_step_text(program), env=env, cwd=tmp_path, stubs={"python3": 7}
@@ -1616,11 +1650,12 @@ def test_trajectory_failure_does_not_block_main_receipt(tmp_path):
 
 def test_main_receipt_success_does_not_mask_trajectory_failure(tmp_path):
     program = JOBS["program-trajectory"]
-    assert "continue-on-error" not in str(program)
+    _assert_program_trajectory_informational_shape(program)
     # The trajectory job has no aggregator step that could rewrite its
     # conclusion: the analyzer is the last conditioned enforcement point and
     # the only later step is the always-on artifact upload.
     *_, analyzer, upload = program["steps"]
+    assert "continue-on-error" not in analyzer and "continue-on-error" not in upload
     assert "check_contract_drift_ratchet.py" in analyzer["run"]
     assert upload["uses"].startswith("actions/upload-artifact@")
     env = {

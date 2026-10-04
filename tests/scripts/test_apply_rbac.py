@@ -46,7 +46,7 @@ EXPECTED_EXACT_EXCLUDED_FILES = {
     "auth/store.py",
     "features/marketplace/store.py",
     "openclaw/store.py",
-    "explainability_store.py",
+    "decisions/explainability_store.py",
 }
 
 

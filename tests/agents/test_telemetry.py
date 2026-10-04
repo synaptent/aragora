@@ -924,7 +924,7 @@ class TestDefaultPrometheusCollector:
         telemetry.complete()
 
         # Should not raise even if Prometheus is unavailable
-        with patch.dict("sys.modules", {"aragora.server.prometheus": None}):
+        with patch.dict("sys.modules", {"aragora.observability.prometheus": None}):
             _default_prometheus_collector(telemetry)
 
     def test_prometheus_collector_records_generation(self):
@@ -948,7 +948,7 @@ class TestDefaultPrometheusCollector:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.server.prometheus": MagicMock(
+                "aragora.observability.prometheus": MagicMock(
                     record_agent_generation=mock_record_gen,
                     record_agent_failure=mock_record_fail,
                 )

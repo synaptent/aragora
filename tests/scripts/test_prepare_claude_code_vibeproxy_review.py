@@ -17,6 +17,36 @@ import pytest
 from scripts import prepare_claude_code_vibeproxy_review as runner
 
 
+@pytest.mark.parametrize(
+    "version",
+    ["2.0.0", "2.1.263", "2.1.268", "2.99.1000", "2.2.0-rc.1", "2.2.0+build.7"],
+)
+def test_claude_code_major_two_version_accepted(version):
+    runner.validate_cli_version(f"{version} (Claude Code)")
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "1.9.999 (Claude Code)",
+        "3.0.0 (Claude Code)",
+        "20.1.268 (Claude Code)",
+        "2.1 (Claude Code)",
+        "2.x.268 (Claude Code)",
+        "2.1.268 (Other Tool)",
+        "2.1.268",
+        "prefix 2.1.268 (Claude Code)",
+        "2.1.268 (Claude Code) trailing",
+        "2.1.268 (Claude Code)\n3.0.0 (Claude Code)",
+        "2.\u0661.268 (Claude Code)",
+        "",
+    ],
+)
+def test_unsupported_or_malformed_cli_version_rejected(version):
+    with pytest.raises(ValueError, match="unsupported_cli_version"):
+        runner.validate_cli_version(version)
+
+
 @pytest.fixture
 def source(tmp_path):
     repo = tmp_path / "source"
@@ -316,7 +346,10 @@ def test_retry_or_compaction_terminates_promptly(tmp_path, subtype):
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="Execution refuses non-macOS containment")
-def test_prepared_artifact_end_to_end_with_fake_cli_and_gateway(source, tmp_path, monkeypatch):
+@pytest.mark.parametrize("cli_version", ["2.1.263", "2.1.268", "2.99.1000"])
+def test_prepared_artifact_end_to_end_with_fake_cli_and_gateway(
+    source, tmp_path, monkeypatch, cli_version
+):
     chunks = [
         (path, offset)
         for path in source.changed
@@ -361,7 +394,7 @@ def test_prepared_artifact_end_to_end_with_fake_cli_and_gateway(source, tmp_path
 
     def version_or_git(command, **kwargs):
         if command[-1] == "--version":
-            return f"{runner.CLI_VERSION} (Claude Code)\n".encode()
+            return f"{cli_version} (Claude Code)\n".encode()
         return check_output(command, **kwargs)
 
     monkeypatch.setattr(runner.subprocess, "check_output", version_or_git)
@@ -425,6 +458,7 @@ def test_prepared_artifact_end_to_end_with_fake_cli_and_gateway(source, tmp_path
         gateway_thread.join(timeout=3)
     assert result["status"] == "prepared_non_countable", result
     assert result["would_count"] is False and result["non_countable"] is True
+    assert result["provenance"]["version"] == f"{cli_version} (Claude Code)"
     assert result["coverage_complete"] and len(result["coverage"]["pricing.py"]) == 1002
     assert result["provenance"]["upstream_attestation"] == "UNMEASURED"
     assert result["provenance"]["fallback_allowed"] is False

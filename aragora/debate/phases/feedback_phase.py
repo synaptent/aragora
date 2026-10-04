@@ -781,7 +781,7 @@ class FeedbackPhase:
             # Emit event for real-time clients
             if self.event_emitter:
                 try:
-                    from aragora.server.stream.events import StreamEvent, StreamEventType
+                    from aragora.events.types import StreamEvent, StreamEventType
 
                     self.event_emitter.emit(
                         StreamEvent(

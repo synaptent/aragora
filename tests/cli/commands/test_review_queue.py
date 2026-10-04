@@ -3487,6 +3487,27 @@ class TestModelReviewQuorum:
         assert pin["trusted_creator"] == "scarmani"
         assert any("settlement-creator pin" in reason for reason in quorum["reasons"])
 
+    def test_protected_squash_settlement_does_not_authorize_admin_consumers(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        pr["comments"][-1]["body"] = (
+            "Tier-4 Human Settlement Authorization\n"
+            f"Exact head: {pr['headRefOid']}\n"
+            "Authorized action: protected_squash_merge\n"
+            "Human-risk settlement: I accept the Tier 4 risk for this PR."
+        )
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [self._settlement_status("scarmani")],
+            pr=pr,
+            files=files,
+        )
+        assert quorum["admin_squash_allowed"] is False
+        assert quorum["status"] == "human_preapproval_required"
+        assert quorum["counted_model_families"] == ["claude", "openai"]
+
     def test_settlement_creator_an0mium_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The #8169 precedent gap: an automation-capable login posting the
         status must NOT count, even though every other condition holds."""

@@ -543,7 +543,7 @@ class ShutdownPhaseBuilder:
         # HTTP client pool
         async def close_http_client_pool():
             try:
-                from aragora.server.http_client_pool import HTTPClientPool
+                from aragora.observability.http_client_pool import HTTPClientPool
 
                 pool = HTTPClientPool.get_instance()
                 if pool and not pool._closed:

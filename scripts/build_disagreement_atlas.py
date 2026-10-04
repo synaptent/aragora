@@ -1389,6 +1389,21 @@ def _rel_to(path: Path, base: Path) -> str:
         return path.name
 
 
+def sample_path_for(out: Path) -> Path:
+    """``atlas-v1.jsonl`` -> ``atlas-v1.sample.jsonl``; any other name gains ``.sample.jsonl``."""
+    stem = out.name[: -len(".jsonl")] if out.name.endswith(".jsonl") else out.name
+    return out.with_name(f"{stem}.sample.jsonl")
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    if a.resolve() == b.resolve():
+        return True
+    try:
+        return a.samefile(b)
+    except OSError:
+        return False
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     stats: Counter = Counter()
     index = _load_json(args.cache_dir / "index.json", {})
@@ -1406,12 +1421,19 @@ def cmd_build(args: argparse.Namespace) -> int:
         stats=stats,
     )
     out: Path = args.out
+    sample_path = sample_path_for(out)
+    # A sample written through a symlink or hard link to the dataset would
+    # truncate it while the manifest still hashes the full payload.
+    if _same_file(out, sample_path):
+        raise RuntimeError(
+            f"sample path {sample_path} resolves to the dataset {out}; "
+            "remove the alias or choose another --out name"
+        )
     payload = write_jsonl(records, out)
     out_dir = out.parent
     base = args.repo_root
 
     sample_info: tuple[str, bytes, int] | None = None
-    sample_path = out_dir / out.name.replace(".jsonl", ".sample.jsonl")
     if len(payload) > FULL_COMMIT_LIMIT_BYTES or args.force_sample or sample_path.exists():
         sample = select_sample(records, SAMPLE_SIZE)
         sample_bytes = write_jsonl(sample, sample_path)

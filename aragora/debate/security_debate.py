@@ -83,7 +83,7 @@ async def run_security_debate(
     """
     from aragora.core_types import DebateResult, Environment
     from aragora.debate.orchestrator import Arena
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.debate.security_question import build_security_debate_question
 
     # Build the debate question from security findings

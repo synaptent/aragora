@@ -20,10 +20,10 @@ if TYPE_CHECKING:
     from aragora.debate.context import DebateContext
     from aragora.debate.delegation import DelegationStrategy
     from aragora.debate.hierarchy import AgentHierarchy
-    from aragora.debate.protocol import CircuitBreaker
     from aragora.memory.continuum.core import ContinuumMemory
     from aragora.memory.store import CritiqueStore
     from aragora.ranking.pattern_matcher import TaskPatternMatcher
+    from aragora.resilience import CircuitBreaker
     from aragora.reputation.selection_bridge import ReputationBridgeConfig
     from aragora.reputation.store import ReputationStore
 

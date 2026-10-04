@@ -909,7 +909,7 @@ class TestWebhookExtended:
         mock_pool.get_session = MagicMock(return_value=mock_session_ctx)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await webhook.emit("on_checkpoint", {"test": "data"})

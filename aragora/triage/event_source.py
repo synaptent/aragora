@@ -117,7 +117,7 @@ _REJECT_RECS = frozenset(
 def resolve_store_root(override: str | Path | None = None) -> Path:
     """Resolve the canonical review-queue store root.
 
-    Mirrors :func:`aragora.server.handlers.review_queue._review_queue_root`
+    Mirrors :func:`aragora.server.handlers.governance.review_queue._review_queue_root`
     (and the CLI's ``_review_queue_root``) so the adapter reads from
     the same tree the writers use.
 
