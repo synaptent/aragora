@@ -38,3 +38,15 @@ import-and-call tests at both paths.
 | `aragora.swarm.shift_ledger:HEALTHY_STOP_PREFIXES` | `aragora.evaluation.shift_ledger:HEALTHY_STOP_PREFIXES` | #10307 | not before M4 seal |
 | `aragora.swarm.shift_ledger:LedgerEntry` | `aragora.evaluation.shift_ledger:LedgerEntry` | #10307 | not before M4 seal |
 | `aragora.swarm.shift_ledger:ShiftLedger` | `aragora.evaluation.shift_ledger:ShiftLedger` | #10307 | not before M4 seal |
+| `aragora.persistence.db_config:CONSOLIDATED_DB_MAPPING` | `aragora.config.data_dir:CONSOLIDATED_DB_MAPPING` | #10316 | not before M4 seal |
+| `aragora.persistence.db_config:DatabaseMode` | `aragora.config.data_dir:DatabaseMode` | #10316 | not before M4 seal |
+| `aragora.persistence.db_config:DatabaseType` | `aragora.config.data_dir:DatabaseType` | #10316 | not before M4 seal |
+| `aragora.persistence.db_config:LEGACY_DB_NAMES` | `aragora.config.data_dir:LEGACY_DB_NAMES` | #10316 | not before M4 seal |
+| `aragora.persistence.db_config:get_db_mode` | `aragora.config.data_dir:get_db_mode` | #10316 | not before M4 seal |
+| `aragora.persistence.db_config:get_default_data_dir` | `aragora.config.data_dir:get_default_data_dir` | #10316 | not before M4 seal |
+| `aragora.tenancy.context:_current_tenant` | `aragora.config.tenant_context:_current_tenant` | #10316 | not before M4 seal |
+| `aragora.tenancy.context:_current_tenant_id` | `aragora.config.tenant_context:_current_tenant_id` | #10316 | not before M4 seal |
+| `aragora.tenancy.context:get_current_tenant` | `aragora.config.tenant_context:get_current_tenant` | #10316 | not before M4 seal |
+| `aragora.tenancy.context:get_current_tenant_id` | `aragora.config.tenant_context:get_current_tenant_id` | #10316 | not before M4 seal |
+| `aragora.tenancy.context:set_tenant` | `aragora.config.tenant_context:set_tenant` | #10316 | not before M4 seal |
+| `aragora.tenancy.context:set_tenant_id` | `aragora.config.tenant_context:set_tenant_id` | #10316 | not before M4 seal |
