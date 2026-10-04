@@ -10,7 +10,7 @@ Covers:
 - PDF export with Content-Disposition header
 - Edge cases: empty receipt ID, short paths, missing format
 - _get_receipt_store lazy loader: ImportError fallback
-- RBAC permission (debates:export) enforcement via no_auto_auth
+- Org scoping: anonymous 401, other-org and unknown-owner receipts 404
 """
 
 from __future__ import annotations
@@ -27,6 +27,11 @@ from aragora.server.handlers.receipt_export import (
     _VALID_FORMATS,
 )
 from aragora.server.handlers.utils.responses import HandlerResult
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+# The org ``org_scoped_request_user`` authenticates every request as.
+TEST_ORG = "test-org-001"
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +116,7 @@ def mock_http_handler():
 def mock_receipt():
     """Create a mock receipt object with to_dict()."""
     receipt = MagicMock()
+    receipt.org_id = TEST_ORG
     receipt.to_dict.return_value = {
         "receipt_id": "r-123",
         "decision": "approved",
@@ -127,6 +133,7 @@ def plain_receipt():
         "receipt_id": "r-plain",
         "decision": "rejected",
         "confidence": 0.42,
+        "org_id": TEST_ORG,
     }
 
 
@@ -228,10 +235,10 @@ class TestGetReceiptStore:
     """Tests for the _get_receipt_store lazy loader."""
 
     def test_returns_store_when_import_succeeds(self):
-        """When gauntlet.receipt module is available, returns a store."""
+        """When the receipt store module is available, returns a store."""
         mock_store = MagicMock()
         with patch(
-            "aragora.gauntlet.receipt.get_receipt_store",
+            "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
             create=True,
         ):
@@ -239,10 +246,10 @@ class TestGetReceiptStore:
             assert result is mock_store
 
     def test_returns_none_on_import_error(self):
-        """When gauntlet.receipt is not importable, returns None."""
+        """When the receipt store module is not importable, returns None."""
         with patch(
             "builtins.__import__",
-            side_effect=_make_import_error("aragora.gauntlet.receipt"),
+            side_effect=_make_import_error("aragora.storage.receipt_store"),
         ):
             result = _get_receipt_store()
             assert result is None
@@ -251,7 +258,7 @@ class TestGetReceiptStore:
         """_get_receipt_store must never propagate ImportError."""
         with patch(
             "builtins.__import__",
-            side_effect=_make_import_error("aragora.gauntlet.receipt"),
+            side_effect=_make_import_error("aragora.storage.receipt_store"),
         ):
             # Should not raise
             _get_receipt_store()
@@ -347,7 +354,7 @@ class TestHandleFormatValidation:
     def test_default_format_is_json(self, handler, mock_http_handler, mock_receipt):
         """When no format is specified, defaults to json."""
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
             return_value=mock_store,
@@ -371,7 +378,7 @@ class TestHandleReceiptNotFound:
 
     def test_not_found_when_store_returns_none(self, handler, mock_http_handler):
         mock_store = MagicMock()
-        mock_store.get.return_value = None
+        mock_store.get_for_org.return_value = None
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
             return_value=mock_store,
@@ -397,7 +404,7 @@ class TestHandleReceiptNotFound:
             )
             assert _status(result) == 404
 
-    def test_not_found_includes_receipt_id_in_message(self, handler, mock_http_handler):
+    def test_not_found_does_not_echo_receipt_id(self, handler, mock_http_handler):
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
             return_value=None,
@@ -407,8 +414,53 @@ class TestHandleReceiptNotFound:
                 {"format": "json"},
                 mock_http_handler,
             )
-            body = _body(result)
-            assert "r-unique-id" in body.get("error", "")
+            assert _body(result) == {"error": "Receipt not found", "code": "not_found"}
+
+
+# ---------------------------------------------------------------------------
+# handle() — org scoping
+# ---------------------------------------------------------------------------
+
+
+class TestHandleOrgScope:
+    """Only the receipt's own org can export it."""
+
+    def _export(self, mock_http_handler, *, store=None, ctx=None):
+        h = ReceiptExportHandler(ctx=ctx or {})
+        with patch(
+            "aragora.server.handlers.receipt_export._get_receipt_store",
+            return_value=store,
+        ):
+            return h.handle("/api/v1/receipts/r-1/export", {"format": "json"}, mock_http_handler)
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_gets_401_without_store_lookup(self, mock_http_handler):
+        store = MagicMock()
+        result = self._export(mock_http_handler, store=store)
+        assert _status(result) == 401
+        store.get_for_org.assert_not_called()
+
+    def test_store_lookup_is_scoped_to_caller_org(self, mock_http_handler):
+        store = MagicMock()
+        store.get_for_org.return_value = None
+        result = self._export(mock_http_handler, store=store)
+        assert _status(result) == 404
+        store.get_for_org.assert_called_once_with("r-1", TEST_ORG)
+        store.get.assert_not_called()
+
+    @pytest.mark.parametrize("owner", ["other-org", None, ""])
+    def test_ctx_receipt_of_other_or_unknown_org_is_404(self, mock_http_handler, owner):
+        receipt = {"receipt_id": "r-1", "org_id": owner}
+        result = self._export(mock_http_handler, ctx={"receipt_store": {"r-1": receipt}})
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Receipt not found", "code": "not_found"}
+
+    def test_ctx_object_receipt_of_other_org_is_404(self, mock_http_handler):
+        receipt = MagicMock()
+        receipt.org_id = "other-org"
+        result = self._export(mock_http_handler, ctx={"receipt_store": {"r-1": receipt}})
+        assert _status(result) == 404
+        receipt.to_dict.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +489,7 @@ class TestHandleCtxFallback:
         self, mock_http_handler, mock_receipt
     ):
         mock_store = MagicMock()
-        mock_store.get.return_value = None
+        mock_store.get_for_org.return_value = None
         ctx = {"receipt_store": {"r-fallback": mock_receipt}}
         h = ReceiptExportHandler(ctx=ctx)
         with patch(
@@ -491,7 +543,7 @@ class TestHandleJsonExport:
 
     def test_json_export_with_to_dict(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -510,7 +562,7 @@ class TestHandleJsonExport:
 
     def test_json_export_with_plain_dict(self, mock_http_handler, plain_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = plain_receipt
+        mock_store.get_for_org.return_value = plain_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -528,7 +580,7 @@ class TestHandleJsonExport:
 
     def test_json_export_calls_to_dict(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -552,7 +604,7 @@ class TestHandleHtmlExport:
 
     def test_html_export_returns_200(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -573,7 +625,7 @@ class TestHandleHtmlExport:
 
     def test_html_export_content_type(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -594,7 +646,7 @@ class TestHandleHtmlExport:
 
     def test_html_export_body_is_bytes(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         html_content = "<html><body>Test Receipt</body></html>"
         with (
@@ -617,7 +669,7 @@ class TestHandleHtmlExport:
 
     def test_html_export_content_disposition(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -641,7 +693,7 @@ class TestHandleHtmlExport:
 
     def test_html_export_calls_receipt_to_html(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -671,7 +723,7 @@ class TestHandlePdfExport:
 
     def test_pdf_export_returns_200(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -692,7 +744,7 @@ class TestHandlePdfExport:
 
     def test_pdf_export_content_type(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -713,7 +765,7 @@ class TestHandlePdfExport:
 
     def test_pdf_export_body_is_bytes(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         pdf_bytes = b"%PDF-1.4 binary content"
         with (
@@ -735,7 +787,7 @@ class TestHandlePdfExport:
 
     def test_pdf_export_content_disposition(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -759,7 +811,7 @@ class TestHandlePdfExport:
 
     def test_pdf_export_calls_receipt_to_pdf(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with (
             patch(
@@ -789,7 +841,7 @@ class TestReceiptIdExtraction:
 
     def test_extracts_simple_id(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -800,11 +852,11 @@ class TestReceiptIdExtraction:
                 {"format": "json"},
                 mock_http_handler,
             )
-            mock_store.get.assert_called_once_with("abc123")
+            mock_store.get_for_org.assert_called_once_with("abc123", TEST_ORG)
 
     def test_extracts_uuid_id(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         receipt_id = "550e8400-e29b-41d4-a716-446655440000"
         with patch(
@@ -816,12 +868,12 @@ class TestReceiptIdExtraction:
                 {"format": "json"},
                 mock_http_handler,
             )
-            mock_store.get.assert_called_once_with(receipt_id)
+            mock_store.get_for_org.assert_called_once_with(receipt_id, TEST_ORG)
 
     def test_extracts_receipt_id_at_correct_index(self, mock_http_handler, mock_receipt):
         """Path /api/v1/receipts/{id}/export -> parts[3] after strip('/').split('/')."""
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -834,7 +886,7 @@ class TestReceiptIdExtraction:
             )
             # After strip("/").split("/"), parts = ["api", "v1", "receipts", "my-id", "export"]
             # parts[3] = "my-id"
-            mock_store.get.assert_called_once_with("my-id")
+            mock_store.get_for_org.assert_called_once_with("my-id", TEST_ORG)
 
 
 # ---------------------------------------------------------------------------
@@ -847,12 +899,14 @@ class TestStorePriority:
 
     def test_store_receipt_takes_priority_over_ctx(self, mock_http_handler):
         store_receipt = MagicMock()
+        store_receipt.org_id = TEST_ORG
         store_receipt.to_dict.return_value = {"source": "store"}
         ctx_receipt = MagicMock()
+        ctx_receipt.org_id = TEST_ORG
         ctx_receipt.to_dict.return_value = {"source": "ctx"}
 
         mock_store = MagicMock()
-        mock_store.get.return_value = store_receipt
+        mock_store.get_for_org.return_value = store_receipt
 
         h = ReceiptExportHandler(ctx={"receipt_store": {"r-123": ctx_receipt}})
         with patch(
@@ -869,10 +923,11 @@ class TestStorePriority:
 
     def test_ctx_used_only_when_store_returns_none(self, mock_http_handler):
         ctx_receipt = MagicMock()
+        ctx_receipt.org_id = TEST_ORG
         ctx_receipt.to_dict.return_value = {"source": "ctx"}
 
         mock_store = MagicMock()
-        mock_store.get.return_value = None
+        mock_store.get_for_org.return_value = None
 
         h = ReceiptExportHandler(ctx={"receipt_store": {"r-123": ctx_receipt}})
         with patch(
@@ -898,7 +953,7 @@ class TestHandleEdgeCases:
 
     def test_receipt_with_special_characters_in_id(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -952,7 +1007,7 @@ class TestHandleEdgeCases:
 
     def test_empty_query_params_defaults_to_json(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         with patch(
             "aragora.server.handlers.receipt_export._get_receipt_store",
@@ -968,7 +1023,7 @@ class TestHandleEdgeCases:
 
     def test_html_export_with_unicode_content(self, mock_http_handler, mock_receipt):
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
         h = ReceiptExportHandler(ctx={})
         unicode_html = "<html><body>Receipt: \u00e9\u00e8\u00ea \u00fc\u00f6\u00e4</body></html>"
         with (

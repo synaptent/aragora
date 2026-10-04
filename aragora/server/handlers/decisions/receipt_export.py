@@ -3,6 +3,9 @@ Receipt Export Handler.
 
 Provides an endpoint to export decision receipts in multiple formats:
 - GET /api/v1/receipts/:id/export?format=html|pdf|json
+
+Only a member of the receipt's org can export it; another org's receipt, an
+unknown-owner receipt and a missing one all get the same 404.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from aragora.server.handlers.base import (
     json_response,
 )
 from aragora.server.handlers.utils.responses import HandlerResult as HR
+from aragora.tenancy.record_scope import record_not_found, record_visible, require_org_scope
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,7 @@ _VALID_FORMATS = {"json", "html", "pdf"}
 def _get_receipt_store():
     """Lazy-load receipt store."""
     try:
-        from aragora.gauntlet.receipt import get_receipt_store
+        from aragora.storage.receipt_store import get_receipt_store
 
         return get_receipt_store()
     except ImportError:
@@ -59,6 +63,10 @@ class ReceiptExportHandler(BaseHandler):
         if not receipt_id:
             return error_response("Missing receipt ID", 400)
 
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         export_format = query_params.get("format", "json")
         if export_format not in _VALID_FORMATS:
             return error_response(
@@ -70,7 +78,7 @@ class ReceiptExportHandler(BaseHandler):
         store = _get_receipt_store()
         receipt = None
         if store is not None:
-            receipt = store.get(receipt_id)
+            receipt = store.get_for_org(receipt_id, scope.org_id)
 
         if receipt is None:
             # Also check ctx for any receipt storage
@@ -78,8 +86,11 @@ class ReceiptExportHandler(BaseHandler):
             if hasattr(receipt_data, "get"):
                 receipt = receipt_data.get(receipt_id)
 
-        if receipt is None:
-            return error_response(f"Receipt '{receipt_id}' not found", 404)
+        owner = (
+            receipt.get("org_id") if isinstance(receipt, dict) else getattr(receipt, "org_id", None)
+        )
+        if receipt is None or not record_visible(owner, scope):
+            return record_not_found("Receipt")
 
         if export_format == "json":
             data = receipt.to_dict() if hasattr(receipt, "to_dict") else receipt
