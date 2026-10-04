@@ -68,6 +68,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.lazy_stores import LazyStoreFactory
 from aragora.server.handlers.utils.receipt_delivery_history import (
+    DELIVERY_ORG_KEY as _DELIVERY_ORG_KEY,
     get_receipt_delivery_history_store,
 )
 from aragora.server.handlers.utils.rate_limit import rate_limit
@@ -508,10 +509,6 @@ def _extract_decision_receipt_payload(receipt: Any) -> dict[str, Any]:
     except (ImportError, ValueError, TypeError):
         return payload
 
-
-#: Delivery-history field naming the org that owns the delivered receipt;
-#: stripped from every listing.
-_DELIVERY_ORG_KEY = "_org_id"
 
 _V1_PREFIX = "/api/v1/receipts"
 _V1_ACTIONS = frozenset({"verify", "export", "deliver"})

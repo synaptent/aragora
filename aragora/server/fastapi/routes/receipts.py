@@ -1,6 +1,10 @@
 """
 Receipt Endpoints (FastAPI v2).
 
+Every route except the public share-token view requires an org and only
+sees receipts owned by the caller's org; other-org and unknown-owner
+receipts answer exactly like missing ones.
+
 Provides async receipt management endpoints:
 - List receipts with pagination
 - Get receipt by ID
@@ -23,6 +27,7 @@ import json
 import logging
 import os
 import zipfile
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from enum import Enum
 from inspect import signature
@@ -32,8 +37,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found_error,
+    record_visible,
+    require_org_scope_fastapi,
+)
+
 from ..dependencies.auth import require_permission
-from ..middleware.error_handling import NotFoundError
+from ..middleware.error_handling import APIError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -372,6 +384,34 @@ def _store_accepts_keyword_argument(store: Any, method_name: str, keyword: str) 
     )
 
 
+def _receipt_org_id(receipt: Any) -> Any:
+    if isinstance(receipt, dict):
+        return receipt.get("org_id")
+    return getattr(receipt, "org_id", None)
+
+
+def _owned_receipts(receipts: Iterable[Any], scope: OrgScope) -> list[Any]:
+    return [receipt for receipt in receipts if record_visible(_receipt_org_id(receipt), scope)]
+
+
+async def _find_owned_receipt(store: Any, receipt_id: str, scope: OrgScope) -> Any | None:
+    """The receipt with this id when the caller's org owns it, else None.
+
+    The ownership check is repeated after the org-filtered query so a store
+    that ignores the filter still cannot leak another org's receipt.
+    """
+    receipt = None
+    if hasattr(store, "get_for_org"):
+        receipt = await _call_store_method(store, "get_for_org", receipt_id, scope.org_id)
+    elif hasattr(store, "get"):
+        receipt = await _call_store_method(store, "get", receipt_id)
+    elif hasattr(store, "get_by_id"):
+        receipt = await _call_store_method(store, "get_by_id", receipt_id)
+    if not receipt or not record_visible(_receipt_org_id(receipt), scope):
+        return None
+    return receipt
+
+
 async def _consume_share_access(share_store: Any, token: str) -> tuple[str, dict[str, Any] | None]:
     """Consume one receipt-share access, preferring atomic store support."""
     consume_result = None
@@ -492,10 +532,13 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
-def _derive_delivery_aggregates_from_history() -> tuple[int, int, int, float | None]:
-    """Summarize the shared delivery-history bridge for truthful receipt metrics."""
+def _derive_delivery_aggregates_from_history(
+    scope: OrgScope,
+) -> tuple[int, int, int, float | None]:
+    """Summarize the caller org's entries in the shared delivery-history bridge."""
 
     from aragora.server.handlers.utils.receipt_delivery_history import (
+        DELIVERY_ORG_KEY,
         get_receipt_delivery_history_store,
     )
 
@@ -504,6 +547,8 @@ def _derive_delivery_aggregates_from_history() -> tuple[int, int, int, float | N
     failed = 0
 
     for item in get_receipt_delivery_history_store():
+        if not record_visible(item.get(DELIVERY_ORG_KEY), scope):
+            continue
         if item.get("is_test"):
             continue
         if not (item.get("receipt_id") or item.get("receiptId")):
@@ -520,7 +565,9 @@ def _derive_delivery_aggregates_from_history() -> tuple[int, int, int, float | N
     return delivered, pending, failed, delivery_rate
 
 
-def _resolve_delivery_aggregates(stats: dict[str, Any]) -> tuple[int, int, int, float | None]:
+def _resolve_delivery_aggregates(
+    stats: dict[str, Any], scope: OrgScope
+) -> tuple[int, int, int, float | None]:
     """Prefer store-provided delivery aggregates, then backfill from history."""
 
     delivered = _coerce_int(stats.get("delivered"))
@@ -543,7 +590,7 @@ def _resolve_delivery_aggregates(stats: dict[str, Any]) -> tuple[int, int, int, 
         return delivered or 0, pending or 0, failed or 0, delivery_rate
 
     history_delivered, history_pending, history_failed, history_delivery_rate = (
-        _derive_delivery_aggregates_from_history()
+        _derive_delivery_aggregates_from_history(scope)
     )
 
     resolved_delivered = delivered if delivered is not None else history_delivered
@@ -737,9 +784,10 @@ async def list_receipts(
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     verdict: str | None = Query(None, description="Filter by verdict"),
     debate_id: str | None = Query(None, description="Filter by debate ID"),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> ReceiptListResponse:
-    """List all receipts with pagination."""
+    """List the caller org's receipts with pagination."""
     try:
         filter_kwargs: dict[str, Any] = {}
         if verdict:
@@ -747,66 +795,39 @@ async def list_receipts(
         if debate_id:
             filter_kwargs["debate_id"] = debate_id
 
-        if hasattr(store, "list_recent"):
-            list_recent_kwargs: dict[str, Any] = {
-                "limit": limit,
-                "offset": offset,
-                "verdict": verdict,
-            }
-            if debate_id and _store_accepts_keyword_argument(store, "list_recent", "debate_id"):
-                list_recent_kwargs["debate_id"] = debate_id
-
-            results = await _call_store_method(
-                store,
-                "list_recent",
-                **list_recent_kwargs,
-            )
-            if debate_id and "debate_id" not in list_recent_kwargs:
-                results = [
-                    receipt
-                    for receipt in results
-                    if _extract_receipt_payload(receipt).get("debate_id") == debate_id
-                ]
-        elif hasattr(store, "list"):
-            results = await _call_store_method(
-                store, "list", limit=limit, offset=offset, **filter_kwargs
-            )
-        elif hasattr(store, "list_all"):
-            all_receipts = await _call_store_method(store, "list_all")
-            if verdict:
-                all_receipts = [
-                    r
-                    for r in all_receipts
-                    if (r.get("verdict") if isinstance(r, dict) else getattr(r, "verdict", ""))
-                    == verdict
-                ]
-            if debate_id:
-                all_receipts = [
-                    receipt
-                    for receipt in all_receipts
-                    if _extract_receipt_payload(receipt).get("debate_id") == debate_id
-                ]
-            results = all_receipts[offset : offset + limit]
-        else:
-            results = []
-
-        if hasattr(store, "count"):
-            count_kwargs: dict[str, Any] = {"verdict": verdict}
-            if debate_id and _store_accepts_keyword_argument(store, "count", "debate_id"):
-                count_kwargs["debate_id"] = debate_id
-            total = await _call_store_method(store, "count", **count_kwargs)
-            if debate_id and "debate_id" not in count_kwargs and hasattr(store, "list_all"):
-                all_receipts = await _call_store_method(store, "list_all")
-                total = sum(
-                    1
-                    for receipt in all_receipts
-                    if _extract_receipt_payload(receipt).get("debate_id") == debate_id
-                    and (not verdict or _extract_receipt_payload(receipt).get("verdict") == verdict)
+        results: list[Any]
+        if hasattr(store, "list_for_org"):
+            results = list(
+                await _call_store_method(
+                    store,
+                    "list_for_org",
+                    scope.org_id,
+                    limit=limit,
+                    offset=offset,
+                    **filter_kwargs,
                 )
+            )
+            if hasattr(store, "count_for_org"):
+                total = await _call_store_method(
+                    store, "count_for_org", scope.org_id, **filter_kwargs
+                )
+            else:
+                total = len(results)
+        elif hasattr(store, "list_all"):
+            owned = [
+                receipt
+                for receipt in _owned_receipts(await _call_store_method(store, "list_all"), scope)
+                if all(
+                    _extract_receipt_payload(receipt).get(key) == value
+                    for key, value in filter_kwargs.items()
+                )
+            ]
+            total = len(owned)
+            results = owned[offset : offset + limit]
         else:
-            total = len(results)
+            results, total = [], 0
 
-        receipts = [_to_receipt_summary(r) for r in results]
+        receipts = [_to_receipt_summary(r) for r in _owned_receipts(results, scope)]
 
         return ReceiptListResponse(receipts=receipts, total=total, limit=limit, offset=offset)
 
@@ -829,9 +850,10 @@ async def search_receipts(
     debate_id: str | None = Query(None, description="Filter by debate ID"),
     date_from: str | None = Query(None, description="Start date (ISO format)"),
     date_to: str | None = Query(None, description="End date (ISO format)"),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> ReceiptSearchResponse:
-    """Search receipts by query, date range, debate ID, and other filters."""
+    """Search the caller org's receipts by query, date range, debate ID, and other filters."""
     try:
         results: list[Any] = []
         total = 0
@@ -848,13 +870,16 @@ async def search_receipts(
         if date_to:
             search_kwargs["date_to"] = date_to
 
-        if hasattr(store, "search"):
-            raw_results = await _call_store_method(store, "search", query=q, **search_kwargs)
-            results = list(raw_results)
-            if hasattr(store, "search_count"):
+        if hasattr(store, "search_for_org"):
+            raw_results = await _call_store_method(
+                store, "search_for_org", scope.org_id, query=q, **search_kwargs
+            )
+            results = _owned_receipts(raw_results, scope)
+            if hasattr(store, "search_count_for_org"):
                 total = await _call_store_method(
                     store,
-                    "search_count",
+                    "search_count_for_org",
+                    scope.org_id,
                     query=q,
                     verdict=verdict,
                     risk_level=risk_level,
@@ -862,7 +887,7 @@ async def search_receipts(
             else:
                 total = len(results)
         elif hasattr(store, "list_all"):
-            all_receipts = await _call_store_method(store, "list_all")
+            all_receipts = _owned_receipts(await _call_store_method(store, "list_all"), scope)
             query_lower = q.lower()
             for r in all_receipts:
                 data = r if isinstance(r, dict) else (r.to_dict() if hasattr(r, "to_dict") else {})
@@ -885,18 +910,19 @@ async def search_receipts(
 @router.get("/receipts/stats", response_model=ReceiptStatsResponse)
 async def get_receipt_stats(
     request: Request,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> ReceiptStatsResponse:
-    """Get receipt statistics including counts by verdict and risk level."""
+    """Get the caller org's receipt statistics by verdict and risk level."""
     try:
         stats: dict[str, Any] = {}
 
-        if hasattr(store, "get_stats"):
-            raw_stats = await _call_store_method(store, "get_stats")
+        if hasattr(store, "stats_for_org"):
+            raw_stats = await _call_store_method(store, "stats_for_org", scope.org_id)
             if isinstance(raw_stats, dict):
                 stats = raw_stats
 
-        delivered, pending, failed, delivery_rate = _resolve_delivery_aggregates(stats)
+        delivered, pending, failed, delivery_rate = _resolve_delivery_aggregates(stats, scope)
 
         return ReceiptStatsResponse(
             total=stats.get("total", stats.get("total_count", 0)),
@@ -975,20 +1001,17 @@ async def get_shared_receipt(
 @router.post("/receipts/batch-verify", response_model=BatchVerifyResponse)
 async def batch_verify_receipts(
     body: BatchVerifyRequest,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> BatchVerifyResponse:
-    """Verify multiple receipts at once (up to 100)."""
+    """Verify multiple receipts of the caller's org at once (up to 100)."""
     try:
         results: list[BatchVerifyResult] = []
         verified_count = 0
 
         for rid in body.receipt_ids:
             try:
-                receipt_data = None
-                if hasattr(store, "get"):
-                    receipt_data = await _call_store_method(store, "get", rid)
-                elif hasattr(store, "get_by_id"):
-                    receipt_data = await _call_store_method(store, "get_by_id", rid)
+                receipt_data = await _find_owned_receipt(store, rid, scope)
 
                 if not receipt_data:
                     results.append(
@@ -1068,9 +1091,10 @@ async def batch_verify_receipts(
 @router.post("/receipts/batch-export", response_model=BatchExportResponse)
 async def batch_export_receipts(
     body: BatchExportRequest,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> BatchExportResponse | Response:
-    """Export multiple receipts at once (up to 100), defaulting to the legacy ZIP surface."""
+    """Export up to 100 of the caller org's receipts, defaulting to the legacy ZIP surface."""
     try:
         items: list[BatchExportItem] = []
         archive_items: list[tuple[str, str, str | bytes]] = []
@@ -1090,11 +1114,7 @@ async def batch_export_receipts(
 
         for rid in body.receipt_ids:
             try:
-                receipt_data = None
-                if hasattr(store, "get"):
-                    receipt_data = await _call_store_method(store, "get", rid)
-                elif hasattr(store, "get_by_id"):
-                    receipt_data = await _call_store_method(store, "get_by_id", rid)
+                receipt_data = await _find_owned_receipt(store, rid, scope)
 
                 if not receipt_data:
                     failed_ids.append(rid)
@@ -1151,19 +1171,16 @@ async def batch_export_receipts(
 @router.get("/receipts/{receipt_id}", response_model=ReceiptDetail)
 async def get_receipt(
     receipt_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> ReceiptDetail:
     """Get receipt by ID with full details including findings and verification data."""
     try:
-        receipt_data = None
-
-        if hasattr(store, "get"):
-            receipt_data = await _call_store_method(store, "get", receipt_id)
-        elif hasattr(store, "get_by_id"):
-            receipt_data = await _call_store_method(store, "get_by_id", receipt_id)
-
+        receipt_data = await _find_owned_receipt(store, receipt_id, scope)
         if not receipt_data:
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+            raise record_not_found_error("Receipt")
+
+        from aragora.export.decision_receipt import agent_display_names
 
         data = _extract_receipt_payload(receipt_data)
         return ReceiptDetail(
@@ -1190,14 +1207,14 @@ async def get_receipt(
             unresolved_tensions=data.get("unresolved_tensions", []),
             verified_claims=data.get("verified_claims", []),
             unverified_claims=data.get("unverified_claims", []),
-            agents_involved=data.get("agents_involved", []),
+            agents_involved=agent_display_names(data.get("agents_involved")),
             rounds_completed=data.get("rounds_completed", 0),
             duration_seconds=data.get("duration_seconds", 0.0),
             audit_trail_id=data.get("audit_trail_id"),
             checksum=data.get("checksum", ""),
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error getting receipt %s: %s", receipt_id, e)
@@ -1213,21 +1230,16 @@ async def share_receipt(
     receipt_id: str,
     body: CreateShareRequest,
     _auth: Any = Depends(require_permission("receipts:share")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
     share_store=Depends(get_receipt_share_store),
 ) -> ShareReceiptResponse:
-    """Create a time-limited public share link for a receipt."""
+    """Create a time-limited public share link for one of the caller org's receipts."""
     try:
         import secrets
 
-        receipt_data = None
-        if hasattr(store, "get"):
-            receipt_data = await _call_store_method(store, "get", receipt_id)
-        elif hasattr(store, "get_by_id"):
-            receipt_data = await _call_store_method(store, "get_by_id", receipt_id)
-
-        if not receipt_data:
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+        if not await _find_owned_receipt(store, receipt_id, scope):
+            raise record_not_found_error("Receipt")
 
         token = secrets.token_urlsafe(24)
         expires_at_ts = datetime.now(timezone.utc).timestamp() + (body.expires_in_hours * 3600)
@@ -1249,7 +1261,7 @@ async def share_receipt(
             max_accesses=body.max_accesses,
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error sharing receipt %s: %s", receipt_id, e)
@@ -1264,18 +1276,14 @@ async def get_formatted_receipt(
     receipt_id: str,
     channel_type: str,
     compact: bool = Query(False, description="Return a compact formatter payload"),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> FormattedReceiptResponse:
     """Return the receipt payload formatted for a specific channel."""
     try:
-        receipt_data = None
-        if hasattr(store, "get"):
-            receipt_data = await _call_store_method(store, "get", receipt_id)
-        elif hasattr(store, "get_by_id"):
-            receipt_data = await _call_store_method(store, "get_by_id", receipt_id)
-
+        receipt_data = await _find_owned_receipt(store, receipt_id, scope)
         if not receipt_data:
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+            raise record_not_found_error("Receipt")
 
         from aragora.channels.formatter import format_receipt_for_channel
 
@@ -1289,7 +1297,7 @@ async def get_formatted_receipt(
             channel_type=channel_type,
             formatted=formatted,
         )
-    except NotFoundError:
+    except APIError:
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1308,18 +1316,14 @@ async def send_receipt_to_channel(
     body: SendToChannelRequest,
     request: Request,
     _auth: Any = Depends(require_permission("receipts:share")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> SendToChannelResponse:
-    """Send a receipt to a configured channel using the legacy delivery adapters."""
+    """Send one of the caller org's receipts to a configured channel."""
     try:
-        receipt_data = None
-        if hasattr(store, "get"):
-            receipt_data = await _call_store_method(store, "get", receipt_id)
-        elif hasattr(store, "get_by_id"):
-            receipt_data = await _call_store_method(store, "get_by_id", receipt_id)
-
+        receipt_data = await _find_owned_receipt(store, receipt_id, scope)
         if not receipt_data:
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+            raise record_not_found_error("Receipt")
 
         from aragora.channels.formatter import format_receipt_for_channel
         from aragora.server.handlers.decisions.receipts import ReceiptsHandler
@@ -1357,6 +1361,7 @@ async def send_receipt_to_channel(
             workspace_id=body.workspace_id,
             status="success",
             result=result,
+            org_id=scope.org_id,
         )
         return SendToChannelResponse(
             sent=True,
@@ -1367,7 +1372,7 @@ async def send_receipt_to_channel(
         )
     except HTTPException:
         raise
-    except NotFoundError:
+    except APIError:
         raise
     except ImportError as e:
         logger.exception("Missing dependency for receipt delivery to %s: %s", body.channel_type, e)
@@ -1380,16 +1385,25 @@ async def send_receipt_to_channel(
 @router.post("/receipts/{receipt_id}/verify-signature", response_model=SignatureVerifyResponse)
 async def verify_receipt_signature(
     receipt_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> SignatureVerifyResponse:
-    """Verify a stored receipt's cryptographic signature."""
+    """Verify the cryptographic signature of one of the caller org's receipts."""
     try:
         if not hasattr(store, "verify_signature"):
             raise HTTPException(
                 status_code=501, detail="Receipt signature verification unavailable"
             )
 
-        result = await _call_store_method(store, "verify_signature", receipt_id)
+        if not await _find_owned_receipt(store, receipt_id, scope):
+            raise record_not_found_error("Receipt")
+
+        if _store_accepts_keyword_argument(store, "verify_signature", "org_id"):
+            result = await _call_store_method(
+                store, "verify_signature", receipt_id, org_id=scope.org_id
+            )
+        else:
+            result = await _call_store_method(store, "verify_signature", receipt_id)
         if hasattr(result, "to_dict"):
             payload = result.to_dict()
             error = getattr(result, "error", None)
@@ -1400,12 +1414,12 @@ async def verify_receipt_signature(
             raise TypeError("Unexpected signature verification result")
 
         if isinstance(error, str) and "not found" in error.lower():
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+            raise record_not_found_error("Receipt")
 
         return SignatureVerifyResponse(**payload)
     except HTTPException:
         raise
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error verifying receipt signature %s: %s", receipt_id, e)
@@ -1415,28 +1429,24 @@ async def verify_receipt_signature(
 @router.post("/receipts/{receipt_id}/verify", response_model=VerifyResponse)
 async def verify_receipt_post(
     receipt_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> VerifyResponse:
     """Verify receipt integrity (POST variant)."""
-    return await verify_receipt(receipt_id=receipt_id, store=store)
+    return await verify_receipt(receipt_id=receipt_id, scope=scope, store=store)
 
 
 @router.get("/receipts/{receipt_id}/verify", response_model=VerifyResponse)
 async def verify_receipt(
     receipt_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> VerifyResponse:
-    """Verify receipt integrity by checking the checksum."""
+    """Verify the integrity of one of the caller org's receipts by checking the checksum."""
     try:
-        receipt_data = None
-
-        if hasattr(store, "get"):
-            receipt_data = await _call_store_method(store, "get", receipt_id)
-        elif hasattr(store, "get_by_id"):
-            receipt_data = await _call_store_method(store, "get_by_id", receipt_id)
-
+        receipt_data = await _find_owned_receipt(store, receipt_id, scope)
         if not receipt_data:
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+            raise record_not_found_error("Receipt")
 
         try:
             from aragora.export.decision_receipt import DecisionReceipt
@@ -1484,7 +1494,7 @@ async def verify_receipt(
                 details={"error": "Verification failed"},
             )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error verifying receipt %s: %s", receipt_id, e)
@@ -1499,19 +1509,14 @@ async def export_receipt(
         False,
         description="Return the exported bytes directly instead of a JSON wrapper.",
     ),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_receipt_store),
 ) -> ExportResponse | Response:
-    """Export receipt in the specified format."""
+    """Export one of the caller org's receipts in the specified format."""
     try:
-        receipt_data = None
-
-        if hasattr(store, "get"):
-            receipt_data = await _call_store_method(store, "get", receipt_id)
-        elif hasattr(store, "get_by_id"):
-            receipt_data = await _call_store_method(store, "get_by_id", receipt_id)
-
+        receipt_data = await _find_owned_receipt(store, receipt_id, scope)
         if not receipt_data:
-            raise NotFoundError(f"Receipt {receipt_id} not found")
+            raise record_not_found_error("Receipt")
 
         try:
             from aragora.export.decision_receipt import DecisionReceipt
@@ -1590,7 +1595,7 @@ async def export_receipt(
                 detail=f"Export module not available: {e}",
             )
 
-    except NotFoundError:
+    except APIError:
         raise
     except HTTPException:
         raise
