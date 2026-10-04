@@ -351,7 +351,7 @@ def _extract_rounds(record: Any) -> list[dict[str, Any]]:
     if isinstance(rounds, list):
         normalized_rounds: list[dict[str, Any]] = []
         for index, round_data in enumerate(rounds, start=1):
-            round_dict = (
+            round_dict: dict[str, Any] = (
                 dict(round_data) if isinstance(round_data, dict) else _coerce_dict(round_data)
             )
             if not round_dict:
