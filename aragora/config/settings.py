@@ -25,7 +25,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def _default_nomic_dir() -> str:
     """Resolve default data dir for database files."""
-    from aragora.persistence.db_config import get_default_data_dir
+    from aragora.config.data_dir import get_default_data_dir
 
     return str(get_default_data_dir())
 
