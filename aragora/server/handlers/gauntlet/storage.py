@@ -53,9 +53,12 @@ async def resolve_gauntlet_run(
     storage = get_storage()
     stored = await _call_nonblocking(storage, "get", gauntlet_id)
     inflight = await _call_nonblocking(storage, "get_inflight", gauntlet_id)
-    if not stored and inflight and inflight.status in ("failed", "cancelled"):
+    inflight_ended = bool(inflight) and inflight.status in ("failed", "cancelled")
+    # The in-process runner can end in this cache without updating its older inflight row.
+    cache_ended = cached is not None and cached.get("status") in ("failed", "cancelled")
+    if not stored and (inflight_ended or cache_ended):
         stored = await _call_nonblocking(storage, "get", gauntlet_id)
-        if not stored:
+        if not stored and inflight_ended:
             return inflight.to_dict()  # Survives a failed queue terminal-state write.
     job = await get_job_store().get(gauntlet_id) if is_durable_queue_enabled() else None
     # Reconcile absence after any later terminal observation, including delivery failure.
@@ -87,6 +90,8 @@ async def resolve_gauntlet_run(
         else:
             run["status"] = "running" if status == JobStatus.PROCESSING else "pending"
         return run
+    if cache_ended:
+        return cached
     return inflight.to_dict() if inflight else cached
 
 

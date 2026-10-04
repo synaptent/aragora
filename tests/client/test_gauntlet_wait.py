@@ -648,3 +648,85 @@ async def test_completion_reread_preserves_failures(monkeypatch, fault, terminal
                 assert json.loads(response.body)["code"] == "GAUNTLET_501"
             assert b"private" not in response.body
         assert store.get.call_args_list == [call(RUN_ID), call(RUN_ID)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("saved_before_end", [False, True])
+@pytest.mark.parametrize("durable", [False, True])
+@pytest.mark.parametrize("inflight_status", ["pending", "running"])
+@pytest.mark.parametrize("terminal", ["failed", "cancelled"])
+async def test_ended_cache_outranks_older_inflight_row(
+    monkeypatch, saved_before_end, durable, inflight_status, terminal
+):
+    from aragora.server.handlers.gauntlet import results, storage
+    from aragora.storage import job_queue_store
+
+    run = state("running" if saved_before_end else terminal)
+    persisted = {"gauntlet_id": RUN_ID, "verdict": "NEEDS_REVIEW"}
+
+    def get(_key):
+        if store.get.call_count == 1:
+            # The live cache entry can end while the first result read is in flight.
+            run.update(status=terminal, error="No agents could be created")
+            return None
+        return persisted if saved_before_end else None
+
+    inflight = SimpleNamespace(status=inflight_status, to_dict=lambda: state(inflight_status))
+    store = SimpleNamespace(
+        get=MagicMock(side_effect=get), get_inflight=MagicMock(return_value=inflight)
+    )
+    monkeypatch.setattr(
+        job_queue_store, "get_job_store", lambda: SimpleNamespace(get=AsyncMock(return_value=None))
+    )
+    monkeypatch.setattr(storage, "is_durable_queue_enabled", lambda: durable)
+    monkeypatch.setattr(results, "_get_storage_proxy", lambda: store)
+    monkeypatch.setattr(results, "get_gauntlet_runs", lambda: {RUN_ID: run})
+
+    response = await inspect.unwrap(results.GauntletResultsMixin._get_status)(None, RUN_ID)
+    assert response.status_code == 200
+    body = json.loads(response.body)
+    if saved_before_end:
+        assert body["status"] == "completed" and body["result"] == persisted
+    else:
+        assert body == {**state(terminal), "error": "No agents could be created"}
+    assert store.get.call_args_list == [call(RUN_ID), call(RUN_ID)]
+
+
+def test_in_process_failure_before_orchestration_stops_the_wait(polling, monkeypatch, tmp_path):
+    from aragora.gauntlet.storage import GauntletStorage
+    from aragora.server.handlers.gauntlet import receipts, results, runner, storage
+
+    api, client, clock = polling
+    store = GauntletStorage(str(tmp_path / "results.db"), backend="sqlite")
+    store.save_inflight(RUN_ID, "pending", "spec", "fixture", "hash", None, "default", [])
+    runs = {RUN_ID: {**state("pending"), "input_summary": "fixture"}}
+    monkeypatch.setattr(storage, "is_durable_queue_enabled", lambda: False)
+    monkeypatch.setattr(runner, "get_gauntlet_broadcast_fn", lambda: None)
+    for module in (runner, receipts, results):
+        monkeypatch.setattr(module, "get_gauntlet_runs", lambda: runs)
+        monkeypatch.setattr(module, "_get_storage_proxy", lambda: store)
+    owner = SimpleNamespace(_auto_persist_receipt=AsyncMock())
+    try:
+        asyncio.run(
+            runner.GauntletRunnerMixin._run_gauntlet_async(
+                owner, RUN_ID, "fixture", "spec", None, [], "default"
+            )
+        )
+        assert runs[RUN_ID]["status"] == "failed"
+        assert store.get_inflight(RUN_ID).status == "running"  # The producer's older row.
+
+        def read(path):
+            assert path == STATUS_PATH
+            response = asyncio.run(
+                inspect.unwrap(results.GauntletResultsMixin._get_status)(None, RUN_ID)
+            )
+            assert response.status_code == 200
+            return json.loads(response.body)
+
+        client._get.side_effect = read
+        with pytest.raises(AragoraAPIError, match="failed"):
+            api.run_and_wait("fixture", timeout=900)
+        assert clock.sleeps == []
+        owner._auto_persist_receipt.assert_not_called()
+    finally:
+        store.close()
