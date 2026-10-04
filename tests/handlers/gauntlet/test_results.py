@@ -25,6 +25,11 @@ from aragora.server.handlers.gauntlet.results import GauntletResultsMixin
 from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
 from aragora.server.handlers.utils.responses import HandlerResult
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,6 +48,7 @@ class FakeInflight:
     gauntlet_id: str
     status: str = "running"
     progress: float = 0.5
+    org_id: str | None = TEST_ORG
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -241,11 +247,12 @@ class TestGetStatus:
     async def test_returns_in_memory_run(self, mixin):
         runs = get_gauntlet_runs()
         runs["run-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "run-1",
             "status": "running",
             "result_obj": "SHOULD_BE_EXCLUDED",
         }
-        result = await mixin._get_status("run-1")
+        result = await mixin._get_status("run-1", scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["gauntlet_id"] == "run-1"
@@ -255,16 +262,25 @@ class TestGetStatus:
     @pytest.mark.asyncio
     async def test_returns_inflight_from_storage(self, mixin, mock_storage):
         mock_storage.get_inflight.return_value = FakeInflight("run-2")
-        result = await mixin._get_status("run-2")
+        result = await mixin._get_status("run-2", scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["gauntlet_id"] == "run-2"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("owner", ["org-other", None])
+    async def test_inflight_of_another_or_no_org_is_not_found(self, mixin, mock_storage, owner):
+        mock_storage.get_inflight.return_value = FakeInflight("run-2", org_id=owner)
+        result = await mixin._get_status("run-2", scope=TEST_SCOPE)
+        assert result.status_code == 404
+        assert _parse(result) == {"error": "Gauntlet run not found", "code": "not_found"}
+        mock_storage.get.assert_called_once_with("run-2", TEST_ORG)
+
+    @pytest.mark.asyncio
     async def test_returns_completed_from_storage(self, mixin, mock_storage):
         mock_storage.get_inflight.return_value = None
         mock_storage.get.return_value = {"verdict": "APPROVED", "confidence": 0.9}
-        result = await mixin._get_status("run-3")
+        result = await mixin._get_status("run-3", scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["status"] == "completed"
@@ -274,33 +290,33 @@ class TestGetStatus:
     async def test_not_found(self, mixin, mock_storage):
         mock_storage.get_inflight.return_value = None
         mock_storage.get.return_value = None
-        result = await mixin._get_status("nonexistent")
+        result = await mixin._get_status("nonexistent", scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_storage_error_returns_404(self, mixin, mock_storage):
         mock_storage.get_inflight.side_effect = RuntimeError("db down")
-        result = await mixin._get_status("err-1")
+        result = await mixin._get_status("err-1", scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_storage_os_error_returns_404(self, mixin, mock_storage):
         mock_storage.get_inflight.side_effect = OSError("disk error")
-        result = await mixin._get_status("err-2")
+        result = await mixin._get_status("err-2", scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_storage_value_error_returns_404(self, mixin, mock_storage):
         mock_storage.get_inflight.side_effect = ValueError("bad data")
-        result = await mixin._get_status("err-3")
+        result = await mixin._get_status("err-3", scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_in_memory_takes_precedence_over_storage(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
-        runs["dup-1"] = {"gauntlet_id": "dup-1", "status": "pending"}
+        runs["dup-1"] = {"org_id": TEST_ORG, "gauntlet_id": "dup-1", "status": "pending"}
         mock_storage.get.return_value = {"verdict": "APPROVED"}
-        result = await mixin._get_status("dup-1")
+        result = await mixin._get_status("dup-1", scope=TEST_SCOPE)
         data = _parse(result)
         assert data["status"] == "pending"
         # Storage should NOT be called because in-memory matched first
@@ -310,12 +326,13 @@ class TestGetStatus:
     async def test_strips_result_obj_from_response(self, mixin):
         runs = get_gauntlet_runs()
         runs["strip-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "strip-1",
             "status": "completed",
             "result_obj": MagicMock(),
             "result": {"verdict": "PASS"},
         }
-        result = await mixin._get_status("strip-1")
+        result = await mixin._get_status("strip-1", scope=TEST_SCOPE)
         data = _parse(result)
         assert "result_obj" not in data
         assert "result" in data
@@ -330,7 +347,7 @@ class TestListResults:
     """Tests for _list_results endpoint."""
 
     def test_empty_results(self, mixin, mock_storage):
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["results"] == []
@@ -341,7 +358,7 @@ class TestListResults:
     def test_with_results(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = [FakeResultRow()]
         mock_storage.count.return_value = 1
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         data = _parse(result)
         assert len(data["results"]) == 1
         assert data["results"][0]["gauntlet_id"] == "g-001"
@@ -350,7 +367,7 @@ class TestListResults:
 
     def test_custom_limit_and_offset(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = []
-        result = mixin._list_results({"limit": "5", "offset": "10"})
+        result = mixin._list_results({"limit": "5", "offset": "10"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["limit"] == 5
         assert data["offset"] == 10
@@ -359,52 +376,55 @@ class TestListResults:
             offset=10,
             verdict=None,
             min_severity=None,
+            org_id=TEST_ORG,
         )
 
     def test_limit_clamped_to_max_100(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = []
-        result = mixin._list_results({"limit": "500"})
+        result = mixin._list_results({"limit": "500"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["limit"] == 100
 
     def test_limit_clamped_to_min_1(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = []
-        result = mixin._list_results({"limit": "0"})
+        result = mixin._list_results({"limit": "0"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["limit"] == 1
 
     def test_negative_offset_clamped_to_zero(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = []
-        result = mixin._list_results({"offset": "-5"})
+        result = mixin._list_results({"offset": "-5"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["offset"] == 0
 
     def test_verdict_filter(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = []
-        mixin._list_results({"verdict": "APPROVED"})
+        mixin._list_results({"verdict": "APPROVED"}, scope=TEST_SCOPE)
         mock_storage.list_recent.assert_called_once_with(
             limit=20,
             offset=0,
             verdict="APPROVED",
             min_severity=None,
+            org_id=TEST_ORG,
         )
-        mock_storage.count.assert_called_once_with(verdict="APPROVED")
+        mock_storage.count.assert_called_once_with(org_id=TEST_ORG, verdict="APPROVED")
 
     def test_min_severity_filter(self, mixin, mock_storage):
         mock_storage.list_recent.return_value = []
-        mixin._list_results({"min_severity": "high"})
+        mixin._list_results({"min_severity": "high"}, scope=TEST_SCOPE)
         mock_storage.list_recent.assert_called_once_with(
             limit=20,
             offset=0,
             verdict=None,
             min_severity="high",
+            org_id=TEST_ORG,
         )
 
     def test_input_summary_truncation(self, mixin, mock_storage):
         row = FakeResultRow(input_summary="A" * 200)
         mock_storage.list_recent.return_value = [row]
         mock_storage.count.return_value = 1
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         data = _parse(result)
         summary = data["results"][0]["input_summary"]
         assert summary.endswith("...")
@@ -414,28 +434,28 @@ class TestListResults:
         row = FakeResultRow(input_summary="Short")
         mock_storage.list_recent.return_value = [row]
         mock_storage.count.return_value = 1
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["results"][0]["input_summary"] == "Short"
 
     def test_storage_error_returns_500(self, mixin, mock_storage):
         mock_storage.list_recent.side_effect = RuntimeError("db down")
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_storage_os_error_returns_500(self, mixin, mock_storage):
         mock_storage.list_recent.side_effect = OSError("disk")
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_storage_type_error_returns_500(self, mixin, mock_storage):
         mock_storage.list_recent.side_effect = TypeError("bad type")
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_storage_value_error_returns_500(self, mixin, mock_storage):
         mock_storage.list_recent.side_effect = ValueError("bad val")
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_created_at_serialized_as_iso(self, mixin, mock_storage):
@@ -443,7 +463,7 @@ class TestListResults:
         row = FakeResultRow(created_at=dt)
         mock_storage.list_recent.return_value = [row]
         mock_storage.count.return_value = 1
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["results"][0]["created_at"] == "2025-06-15T12:00:00"
 
@@ -455,7 +475,7 @@ class TestListResults:
         ]
         mock_storage.list_recent.return_value = rows
         mock_storage.count.return_value = 3
-        result = mixin._list_results({})
+        result = mixin._list_results({}, scope=TEST_SCOPE)
         data = _parse(result)
         assert len(data["results"]) == 3
         assert data["total"] == 3
@@ -471,7 +491,7 @@ class TestCompareResults:
 
     def test_compare_success(self, mixin, mock_storage):
         mock_storage.compare.return_value = {"id1": "a", "id2": "b", "diff": {"score_delta": 0.1}}
-        result = mixin._compare_results("a", "b", {})
+        result = mixin._compare_results("a", "b", {}, scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["id1"] == "a"
@@ -479,27 +499,27 @@ class TestCompareResults:
 
     def test_compare_not_found(self, mixin, mock_storage):
         mock_storage.compare.return_value = None
-        result = mixin._compare_results("a", "b", {})
+        result = mixin._compare_results("a", "b", {}, scope=TEST_SCOPE)
         assert result.status_code == 404
 
     def test_compare_runtime_error(self, mixin, mock_storage):
         mock_storage.compare.side_effect = RuntimeError("fail")
-        result = mixin._compare_results("a", "b", {})
+        result = mixin._compare_results("a", "b", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_compare_os_error(self, mixin, mock_storage):
         mock_storage.compare.side_effect = OSError("disk")
-        result = mixin._compare_results("a", "b", {})
+        result = mixin._compare_results("a", "b", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_compare_type_error(self, mixin, mock_storage):
         mock_storage.compare.side_effect = TypeError("bad")
-        result = mixin._compare_results("a", "b", {})
+        result = mixin._compare_results("a", "b", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_compare_value_error(self, mixin, mock_storage):
         mock_storage.compare.side_effect = ValueError("bad")
-        result = mixin._compare_results("a", "b", {})
+        result = mixin._compare_results("a", "b", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
 
@@ -513,7 +533,7 @@ class TestDeleteResult:
 
     def test_delete_success_from_storage(self, mixin, mock_storage):
         mock_storage.delete.return_value = True
-        result = mixin._delete_result("del-1", {})
+        result = mixin._delete_result("del-1", {}, scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["deleted"] is True
@@ -521,43 +541,43 @@ class TestDeleteResult:
 
     def test_delete_removes_from_memory(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
-        runs["del-2"] = {"gauntlet_id": "del-2", "status": "completed"}
+        runs["del-2"] = {"org_id": TEST_ORG, "gauntlet_id": "del-2", "status": "completed"}
         mock_storage.delete.return_value = True
-        result = mixin._delete_result("del-2", {})
+        result = mixin._delete_result("del-2", {}, scope=TEST_SCOPE)
         assert result.status_code == 200
         assert "del-2" not in runs
 
     def test_delete_not_found(self, mixin, mock_storage):
         mock_storage.delete.return_value = False
-        result = mixin._delete_result("missing", {})
+        result = mixin._delete_result("missing", {}, scope=TEST_SCOPE)
         assert result.status_code == 404
 
     def test_delete_runtime_error(self, mixin, mock_storage):
         mock_storage.delete.side_effect = RuntimeError("fail")
-        result = mixin._delete_result("err", {})
+        result = mixin._delete_result("err", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_delete_os_error(self, mixin, mock_storage):
         mock_storage.delete.side_effect = OSError("disk")
-        result = mixin._delete_result("err", {})
+        result = mixin._delete_result("err", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_delete_key_error(self, mixin, mock_storage):
         mock_storage.delete.side_effect = KeyError("missing")
-        result = mixin._delete_result("err", {})
+        result = mixin._delete_result("err", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_delete_value_error(self, mixin, mock_storage):
         mock_storage.delete.side_effect = ValueError("bad")
-        result = mixin._delete_result("err", {})
+        result = mixin._delete_result("err", {}, scope=TEST_SCOPE)
         assert result.status_code == 500
 
     def test_delete_memory_only_then_storage_not_found(self, mixin, mock_storage):
         """Deleting from memory succeeds but storage says not found."""
         runs = get_gauntlet_runs()
-        runs["mem-only"] = {"gauntlet_id": "mem-only", "status": "pending"}
+        runs["mem-only"] = {"org_id": TEST_ORG, "gauntlet_id": "mem-only", "status": "pending"}
         mock_storage.delete.return_value = False
-        result = mixin._delete_result("mem-only", {})
+        result = mixin._delete_result("mem-only", {}, scope=TEST_SCOPE)
         # Storage returned False so handler returns 404
         assert result.status_code == 404
         # But it was removed from memory

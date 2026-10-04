@@ -357,7 +357,7 @@ class TestGauntletComparison:
         ):
             result = await handler.handle(mock_http_handler.path, {}, mock_http_handler)
 
-        mock_compare.assert_called_once_with(gauntlet_id, compare_id, {})
+        mock_compare.assert_called_once_with(gauntlet_id, compare_id, {}, scope=TEST_SCOPE)
         assert result is expected
 
 
@@ -414,6 +414,7 @@ class TestGauntletRunInMemory:
 
         # Create a mock run
         _gauntlet_runs["test-id"] = {
+            "org_id": TEST_ORG,
             "id": "test-id",
             "status": "running",
             "created_at": "2025-01-01T00:00:00Z",
@@ -570,7 +571,7 @@ class TestGauntletReceiptsList:
 
     def test_list_receipts_returns_empty_when_no_store(self, handler):
         """_list_receipts returns empty list when receipt store is not available."""
-        result = handler._list_receipts({})
+        result = handler._list_receipts({}, scope=TEST_SCOPE)
         assert result is not None
         assert result.status_code == 200
 
@@ -589,7 +590,7 @@ class TestGauntletReceiptsList:
             "aragora.storage.receipt_store.get_receipt_store",
             side_effect=ImportError("receipt store not available"),
         ):
-            result = handler._list_receipts({})
+            result = handler._list_receipts({}, scope=TEST_SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -620,13 +621,13 @@ class TestGauntletReceiptsList:
         }
 
         mock_store = MagicMock()
-        mock_store.list.return_value = [mock_receipt]
+        mock_store.list_for_org.return_value = [mock_receipt]
 
         with patch(
             "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
         ):
-            result = handler._list_receipts({"limit": "5"})
+            result = handler._list_receipts({"limit": "5"}, scope=TEST_SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -653,49 +654,49 @@ class TestGauntletReceiptsList:
         from unittest.mock import MagicMock
 
         mock_store = MagicMock()
-        mock_store.list.return_value = []
+        mock_store.list_for_org.return_value = []
 
         with patch(
             "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
         ):
-            handler._list_receipts({"limit": "25"})
+            handler._list_receipts({"limit": "25"}, scope=TEST_SCOPE)
 
-        mock_store.list.assert_called_once_with(limit=25, verdict=None)
+        mock_store.list_for_org.assert_called_once_with(TEST_ORG, limit=25, verdict=None)
 
     def test_list_receipts_clamps_limit(self, handler):
         """_list_receipts clamps limit to 1-100 range."""
         from unittest.mock import MagicMock
 
         mock_store = MagicMock()
-        mock_store.list.return_value = []
+        mock_store.list_for_org.return_value = []
 
         with patch(
             "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
         ):
             # Over 100 should be clamped
-            handler._list_receipts({"limit": "999"})
-            mock_store.list.assert_called_with(limit=100, verdict=None)
+            handler._list_receipts({"limit": "999"}, scope=TEST_SCOPE)
+            mock_store.list_for_org.assert_called_with(TEST_ORG, limit=100, verdict=None)
 
             # Under 1 should be clamped
-            handler._list_receipts({"limit": "0"})
-            mock_store.list.assert_called_with(limit=1, verdict=None)
+            handler._list_receipts({"limit": "0"}, scope=TEST_SCOPE)
+            mock_store.list_for_org.assert_called_with(TEST_ORG, limit=1, verdict=None)
 
     def test_list_receipts_verdict_filter(self, handler):
         """_list_receipts passes verdict filter to store."""
         from unittest.mock import MagicMock
 
         mock_store = MagicMock()
-        mock_store.list.return_value = []
+        mock_store.list_for_org.return_value = []
 
         with patch(
             "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
         ):
-            handler._list_receipts({"verdict": "PASS"})
+            handler._list_receipts({"verdict": "PASS"}, scope=TEST_SCOPE)
 
-        mock_store.list.assert_called_once_with(limit=10, verdict="PASS")
+        mock_store.list_for_org.assert_called_once_with(TEST_ORG, limit=10, verdict="PASS")
 
     def test_list_receipts_findings_count_from_risk_summary(self, handler):
         """_list_receipts extracts findings_count from risk_summary when vulnerabilities_found is missing."""
@@ -718,13 +719,13 @@ class TestGauntletReceiptsList:
         }
 
         mock_store = MagicMock()
-        mock_store.list.return_value = [mock_receipt]
+        mock_store.list_for_org.return_value = [mock_receipt]
 
         with patch(
             "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
         ):
-            result = handler._list_receipts({})
+            result = handler._list_receipts({}, scope=TEST_SCOPE)
 
         body = json.loads(result.body) if isinstance(result.body, bytes) else result.body
         receipt = body["receipts"][0]
@@ -737,13 +738,13 @@ class TestGauntletReceiptsList:
         from unittest.mock import MagicMock
 
         mock_store = MagicMock()
-        mock_store.list.side_effect = RuntimeError("DB connection failed")
+        mock_store.list_for_org.side_effect = RuntimeError("DB connection failed")
 
         with patch(
             "aragora.storage.receipt_store.get_receipt_store",
             return_value=mock_store,
         ):
-            result = handler._list_receipts({})
+            result = handler._list_receipts({}, scope=TEST_SCOPE)
 
         assert result.status_code == 200
         body = json.loads(result.body) if isinstance(result.body, bytes) else result.body
@@ -767,7 +768,7 @@ class TestGauntletReceiptsList:
                 "/api/v1/gauntlet/receipts", {"limit": "5"}, mock_http_handler
             )
 
-        mock_list.assert_called_once_with({"limit": "5"})
+        mock_list.assert_called_once_with({"limit": "5"}, scope=TEST_SCOPE)
         assert result is not None
 
     @pytest.mark.asyncio
@@ -788,7 +789,7 @@ class TestGauntletReceiptsList:
                 "/api/gauntlet/receipts", {"limit": "3"}, mock_http_handler
             )
 
-        mock_list.assert_called_once_with({"limit": "3"})
+        mock_list.assert_called_once_with({"limit": "3"}, scope=TEST_SCOPE)
         assert result is not None
         # Legacy route should get deprecation header
         assert result.headers.get("Deprecation") == "true"

@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import OrgScope, record_not_found, record_visible
 
 from ..base import (
     HandlerResult,
@@ -27,7 +28,7 @@ from ..base import (
     safe_error_message,
 )
 from ..openapi_decorator import api_endpoint
-from .storage import get_gauntlet_runs
+from .storage import get_gauntlet_runs, get_owned_run
 
 
 def _get_storage_proxy():
@@ -120,13 +121,11 @@ class GauntletResultsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    async def _get_status(self, gauntlet_id: str) -> HandlerResult:
+    async def _get_status(self, gauntlet_id: str, *, scope: OrgScope) -> HandlerResult:
         """Get gauntlet run status."""
-        gauntlet_runs = get_gauntlet_runs()
-
         # Check in-memory first (for pending/running)
-        if gauntlet_id in gauntlet_runs:
-            run = gauntlet_runs[gauntlet_id]
+        run = get_owned_run(gauntlet_id, scope)
+        if run is not None:
             safe_run = {k: v for k, v in run.items() if k != "result_obj"}
             return json_response(safe_run)
 
@@ -136,11 +135,11 @@ class GauntletResultsMixin:
 
             # Check inflight table first (for in-progress runs after restart)
             inflight = storage.get_inflight(gauntlet_id)
-            if inflight:
+            if inflight and record_visible(inflight.org_id, scope):
                 return json_response(inflight.to_dict())
 
             # Check completed results table
-            stored = storage.get(gauntlet_id)
+            stored = storage.get(gauntlet_id, scope.org_id)
             if stored:
                 return json_response(
                     {
@@ -152,7 +151,7 @@ class GauntletResultsMixin:
         except (OSError, RuntimeError, ValueError) as e:
             logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
 
-        return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
+        return record_not_found("Gauntlet run")
 
     @api_endpoint(
         method="GET",
@@ -177,8 +176,8 @@ class GauntletResultsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    def _list_results(self, query_params: dict) -> HandlerResult:
-        """List recent gauntlet results with pagination."""
+    def _list_results(self, query_params: dict, *, scope: OrgScope) -> HandlerResult:
+        """List the caller org's recent gauntlet results with pagination."""
         try:
             storage = _get_storage_proxy()
 
@@ -196,9 +195,10 @@ class GauntletResultsMixin:
                 offset=offset,
                 verdict=verdict,
                 min_severity=min_severity,
+                org_id=scope.org_id,
             )
 
-            total = storage.count(verdict=verdict)
+            total = storage.count(org_id=scope.org_id, verdict=verdict)
 
             return json_response(
                 {
@@ -244,19 +244,21 @@ class GauntletResultsMixin:
         responses={
             "200": {"description": "Comparison results"},
             "401": {"description": "Authentication required"},
-            "404": {"description": "One or both gauntlet runs not found"},
+            "404": {"description": "One or both gauntlet runs not found in the caller's org"},
             "500": {"description": "Comparison failed"},
         },
     )
     @require_permission("gauntlet:compare")
-    def _compare_results(self, id1: str, id2: str, query_params: dict) -> HandlerResult:
-        """Compare two gauntlet results."""
+    def _compare_results(
+        self, id1: str, id2: str, query_params: dict, *, scope: OrgScope
+    ) -> HandlerResult:
+        """Compare two of the caller org's gauntlet results."""
         try:
             storage = _get_storage_proxy()
-            comparison = storage.compare(id1, id2)
+            comparison = storage.compare(id1, id2, org_id=scope.org_id)
 
             if comparison is None:
-                return error_response("One or both gauntlet runs not found", 404)
+                return record_not_found("Gauntlet run")
 
             return json_response(comparison)
         except (OSError, RuntimeError, ValueError, TypeError) as e:
@@ -280,23 +282,25 @@ class GauntletResultsMixin:
         },
     )
     @require_permission("gauntlet:delete")
-    def _delete_result(self, gauntlet_id: str, query_params: dict) -> HandlerResult:
-        """Delete a gauntlet result."""
+    def _delete_result(
+        self, gauntlet_id: str, query_params: dict, *, scope: OrgScope
+    ) -> HandlerResult:
+        """Delete one of the caller org's gauntlet results."""
         gauntlet_runs = get_gauntlet_runs()
 
         try:
             # Remove from in-memory if present
-            if gauntlet_id in gauntlet_runs:
+            if get_owned_run(gauntlet_id, scope) is not None:
                 del gauntlet_runs[gauntlet_id]
 
             # Remove from persistent storage
             storage = _get_storage_proxy()
-            deleted = storage.delete(gauntlet_id)
+            deleted = storage.delete(gauntlet_id, org_id=scope.org_id)
 
             if deleted:
                 return json_response({"deleted": True, "gauntlet_id": gauntlet_id})
             else:
-                return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
+                return record_not_found("Gauntlet run")
         except (OSError, RuntimeError, ValueError, KeyError) as e:
             logger.error("Failed to delete result: %s", e)
             return error_response(safe_error_message(e, "delete result"), 500)

@@ -23,6 +23,11 @@ from aragora.server.handlers.gauntlet import (
     _gauntlet_runs,
 )
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 # ===========================================================================
 # Test Fixtures and Mocks
@@ -127,7 +132,7 @@ class TestDirectRouteMatching:
                 "/api/v1/gauntlet/results", query_params, handler
             )
 
-            mock_list.assert_called_once_with(query_params)
+            mock_list.assert_called_once_with(query_params, scope=TEST_SCOPE)
 
 
 # ===========================================================================
@@ -145,6 +150,7 @@ class TestParameterizedRouteMatching:
 
         # Add a completed run for the receipt endpoint
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "completed",
             "result": {"verdict": "APPROVED", "confidence": 0.9},
@@ -273,7 +279,7 @@ class TestParameterizedRouteMatching:
 
             result = await gauntlet_handler.handle("/api/v1/gauntlet/gauntlet-test123", {}, handler)
 
-            mock_status.assert_called_once_with("gauntlet-test123")
+            mock_status.assert_called_once_with("gauntlet-test123", scope=TEST_SCOPE)
 
 
 # ===========================================================================
