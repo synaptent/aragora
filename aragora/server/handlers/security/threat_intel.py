@@ -194,14 +194,16 @@ class ThreatIntelHandler(BaseHandler):
             )
 
             # Calculate summary
-            malicious = sum(1 for r in results if r.is_malicious)
+            malicious = sum(1 for r in results.values() if r.is_malicious)
             suspicious = sum(
-                1 for r in results if r.threat_type == ThreatType.SUSPICIOUS and not r.is_malicious
+                1
+                for r in results.values()
+                if r.threat_type == ThreatType.SUSPICIOUS and not r.is_malicious
             )
 
             return self.success_response(
                 {
-                    "results": [r.to_dict() for r in results],
+                    "results": [r.to_dict() for r in results.values()],
                     "summary": {
                         "total": len(results),
                         "malicious": malicious,
