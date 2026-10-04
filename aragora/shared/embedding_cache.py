@@ -15,6 +15,14 @@ and does not use TTL (embeddings don't expire).
 MIGRATION NOTE:
     New code should use aragora.core.embeddings for embedding operations.
     This module remains for numpy-specific caching in convergence detection.
+
+Persistence:
+    This module sits in the foundation layer and does not know where the
+    embeddings database lives. A persistent cache created without an explicit
+    ``db_path`` asks the resolver installed with
+    :func:`register_default_db_path_resolver`; the debate cache package
+    (``aragora.debate.cache``) installs one that points at the persistence
+    database. Without a resolver such a request raises ``RuntimeError``.
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ import hashlib
 import logging
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 
 try:
     import numpy as np
@@ -39,6 +48,30 @@ def _require_numpy(operation: str) -> None:
     """Raise ImportError with helpful message if numpy is not available."""
     if not HAS_NUMPY:
         raise ImportError(f"numpy is required for {operation}. Install with: pip install numpy")
+
+
+_default_db_path_resolver: Callable[[], str] | None = None
+
+
+def register_default_db_path_resolver(resolver: Callable[[], str]) -> None:
+    """Install the callable that returns the default embeddings database path.
+
+    It is used when a persistent cache is requested without ``db_path``. A new
+    registration replaces the previous one.
+    """
+    global _default_db_path_resolver
+    _default_db_path_resolver = resolver
+
+
+def _resolve_default_db_path() -> str:
+    resolver = _default_db_path_resolver
+    if resolver is None:
+        raise RuntimeError(
+            "No default embeddings database path resolver is registered. Pass "
+            "db_path explicitly, or import aragora.debate.cache, which registers "
+            "the persistence database path."
+        )
+    return resolver()
 
 
 class EmbeddingCache:
@@ -246,12 +279,7 @@ class EmbeddingCacheManager:
             if debate_id not in self._caches:
                 db_path = self._default_db_path
                 if self._default_persist and db_path is None:
-                    from aragora.persistence.db_config import (
-                        DatabaseType,
-                        get_db_path_str,
-                    )
-
-                    db_path = get_db_path_str(DatabaseType.EMBEDDINGS)
+                    db_path = _resolve_default_db_path()
 
                 self._caches[debate_id] = EmbeddingCache(
                     max_size=self._default_max_size,
@@ -354,14 +382,8 @@ def get_embedding_cache(
 
     with _embedding_cache_lock:
         if _embedding_cache is None:
-            # Default to core.db for persistence
             if persist and db_path is None:
-                from aragora.persistence.db_config import (
-                    DatabaseType,
-                    get_db_path_str,
-                )
-
-                db_path = get_db_path_str(DatabaseType.EMBEDDINGS)
+                db_path = _resolve_default_db_path()
 
             _embedding_cache = EmbeddingCache(
                 max_size=max_size,
@@ -398,4 +420,5 @@ __all__ = [
     "get_scoped_embedding_cache",
     "cleanup_embedding_cache",
     "reset_embedding_cache",
+    "register_default_db_path_resolver",
 ]

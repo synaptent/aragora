@@ -5,7 +5,7 @@ This module provides access to caching utilities from a central location.
 
 Available caches:
 - TTLCache: Generic LRU cache with TTL expiry (from aragora.utils.cache)
-- EmbeddingCache: Specialized cache for numpy embeddings (from aragora.debate.cache)
+- EmbeddingCache: Specialized cache for numpy embeddings (from aragora.shared.embedding_cache)
 
 For general-purpose caching, use TTLCache:
     from aragora.shared.caching import TTLCache
@@ -18,7 +18,7 @@ For embedding-specific caching with persistence:
 
 # Re-export from canonical locations
 from aragora.utils.cache import TTLCache, lru_cache_with_ttl, ttl_cache, async_ttl_cache
-from aragora.debate.cache.embeddings_lru import (
+from aragora.shared.embedding_cache import (
     EmbeddingCache,
     EmbeddingCacheManager,
     get_scoped_embedding_cache,
