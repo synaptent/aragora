@@ -718,12 +718,18 @@ def rotate_encryption_key(
             old_version,
             old_version + 1,
         )
-        # Audit log would go here
-        _audit_security(
-            event_type="key_rotation",
-            actor_id="system",
-            reason="dry_run_key_rotation",
-        )
+        try:
+            _audit_security(
+                event_type="key_rotation",
+                actor_id="system",
+                reason="dry_run_key_rotation",
+            )
+        except ImportError as e:
+            logger.warning(
+                "Migration audit provider could not load its audit backend; "
+                "dry-run key rotation event was not emitted: %s",
+                e,
+            )
         return result
 
     try:

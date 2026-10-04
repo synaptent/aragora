@@ -494,6 +494,22 @@ class TestMigrationAuditProvider:
         assert result.success is True
         assert "Migration audit provider not registered" in caplog.text
 
+    def test_dry_run_audit_import_failure_is_logged(self, encryption_service, caplog):
+        register_migration_audit_provider(
+            MagicMock(side_effect=ImportError("audit backend unavailable"))
+        )
+
+        with caplog.at_level(logging.WARNING, logger="aragora.security.migration"):
+            with patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ):
+                result = rotate_encryption_key(dry_run=True, stores=[])
+
+        assert result.success is True
+        assert "dry-run key rotation event was not emitted" in caplog.text
+        assert "audit backend unavailable" in caplog.text
+
     def test_live_audit_import_failure_remains_best_effort(self, encryption_service):
         old_key = MagicMock(version=1)
         new_key = MagicMock(key_id="default", version=2)
