@@ -570,6 +570,18 @@ _CODEX_DEFAULT_MODEL = _CODEX_DEFAULT_MODELS[0]
 _REVIEWER_TIMEOUT_ENV = "ARAGORA_COLLECT_EVIDENCE_REVIEWER_TIMEOUT_SECONDS"
 _CODEX_OPENAI_HARNESS = "Codex CLI OpenAI harness"
 _CODEX_APPROVAL_POLICY_CONFIG = 'approval_policy="never"'
+# Opt-in pinned review: read-only argv validated on Claude Code 2.1.288 (vendor-enforced limits).
+_CLAUDE_REVIEW_CHECKOUT_ENV = "ARAGORA_CLAUDE_REVIEW_CHECKOUT"
+_CLAUDE_REVIEW_EXPECTED_HEAD_ENV = "ARAGORA_CLAUDE_REVIEW_EXPECTED_HEAD"
+_RESTRICTED_CLAUDE_ARGV = (
+    "claude -p --safe-mode --restricted --tools Read,Grep,Glob --disallowedTools "
+    "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Agent,Skill --permission-prompts none "
+    "--disable-slash-commands --strict-mcp-config --mcp-config {mcp} --output-format stream-json "
+    "--verbose --include-hook-events"
+).split()
+_RESTRICTED_FILE_TOOLS = frozenset({"Read", "Grep", "Glob"})
+# The CLI lists this session-control tool even under --tools; it touches no files.
+_RESTRICTED_ALLOWED_TOOLS = _RESTRICTED_FILE_TOOLS | {"EndConversation"}
 _REVIEWER_CLEANUP_TIMEOUT = 10
 # Reviewers each block up to their own (timeout-guarded, process-isolated) run,
 # so running them serially made wall-time the *sum* of every reviewer's timeout
@@ -1996,13 +2008,16 @@ def _claude_empty_mcp_config_file() -> Iterator[Path]:
         path.unlink(missing_ok=True)
 
 
-def _claude_reviewer_command(mcp_config_path: Path) -> list[str]:
+def _claude_reviewer_command(mcp_config_path: Path, *, restricted: bool = False) -> list[str]:
     """Argv for the merge-gate claude reviewer with MCP servers disabled.
 
     The reviewer only reads a diff to emit a verdict, so it needs no MCP
     servers. Disabling them avoids claude's startup MCP handshake, which blocks
     until the full timeout when a local MCP server is wedged.
     """
+    if restricted:
+        mcp = str(mcp_config_path)
+        return [mcp if token == "{mcp}" else token for token in _RESTRICTED_CLAUDE_ARGV]
     return ["claude", "-p", "--strict-mcp-config", "--mcp-config", str(mcp_config_path)]
 
 
@@ -2080,9 +2095,128 @@ def _cli_liveness_probe(family: str, argv: list[str]) -> str | None:
     return None
 
 
+class _ProvenanceError(Exception):
+    """The pinned read-only context of a restricted Claude review is not proven."""
+
+
+def _claude_review_context() -> tuple[str, str] | None:
+    checkout = os.environ.get(_CLAUDE_REVIEW_CHECKOUT_ENV, "").strip()
+    head = os.environ.get(_CLAUDE_REVIEW_EXPECTED_HEAD_ENV, "").strip()
+    return (checkout, head) if checkout or head else None
+
+
+def _provenance_unavailable(detail: str) -> ReviewerResult:
+    fail = f"provenance unavailable: {detail}"
+    return ReviewerResult("claude", "", False, fail, allow_transport_fallback=False, grounded=False)
+
+
+def _pinned_git(cwd: str, *args: str, check: bool = True) -> str:
+    argv = ["git", "--no-optional-locks", "-C", cwd, *args]
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=30, check=False)
+    if proc.returncode and check:
+        raise _ProvenanceError(f"git {args[0]} failed in {cwd}")
+    return "" if proc.returncode else proc.stdout.strip()
+
+
+def _pinned_checkout_state(checkout: str, expected_head: str) -> dict[str, str]:
+    """HEAD, ref and status of a clean checkout toplevel at ``expected_head``."""
+    if not checkout or not re.fullmatch(r"[0-9a-f]{40}", expected_head):
+        raise _ProvenanceError("checkout and 40-hex expected head must be set together")
+    real = os.path.realpath(checkout)
+    if os.path.realpath(_pinned_git(real, "rev-parse", "--show-toplevel")) != real:
+        raise _ProvenanceError(f"{real} is not a checkout toplevel")
+    ref = _pinned_git(real, "symbolic-ref", "-q", "HEAD", check=False) or "HEAD"
+    state = {"head": _pinned_git(real, "rev-parse", "HEAD"), "ref": ref}
+    state["ref_object"] = _pinned_git(real, "rev-parse", ref)
+    state["status"] = _pinned_git(real, "status", "--porcelain", "--untracked-files=all")
+    if state["head"] != expected_head or state["status"]:
+        raise _ProvenanceError(f"checkout is not clean at expected head {expected_head[:12]}")
+    return state
+
+
+def _attest_restricted_stream(stdout: str, cwd: str) -> str:
+    """Final review text, only when the stream proves the restricted read-only session."""
+    try:
+        events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+        kinds = [f"{event.get('type')}/{event.get('subtype')}" for event in events]
+    except (ValueError, AttributeError):
+        raise _ProvenanceError("unparseable or non-object stream event") from None
+    inits = [event for event, kind in zip(events, kinds) if kind == "system/init"]
+    if not inits:
+        raise _ProvenanceError("no system/init event")
+    model = os.environ.get("ANTHROPIC_MODEL", "").strip()
+    for init in inits:
+        tools = init.get("tools")
+        names = set(map(str, tools)) if isinstance(tools, list) else set()
+        if not names & _RESTRICTED_FILE_TOOLS or not names <= _RESTRICTED_ALLOWED_TOOLS:
+            raise _ProvenanceError(f"init tools outside Read/Grep/Glob: {tools!r}")
+        pinned = init.get("mcp_servers") == [] and os.path.realpath(str(init.get("cwd"))) == cwd
+        if not pinned or (model and init.get("model") != model):
+            raise _ProvenanceError("init MCP servers, model or cwd differ from the pinned session")
+    if any("hook" in kind.lower() for kind in kinds):
+        raise _ProvenanceError("hook event in the stream")
+    used = {
+        str(block.get("name"))
+        for event in events
+        if event.get("type") == "assistant" and isinstance(event.get("message"), dict)
+        for block in event["message"].get("content") or []
+        if isinstance(block, dict) and block.get("type") == "tool_use"
+    }
+    if used - _RESTRICTED_ALLOWED_TOOLS:
+        raise _ProvenanceError(f"disallowed tool use: {sorted(used - _RESTRICTED_ALLOWED_TOOLS)}")
+    final = ([event for event in events if event.get("type") == "result"] or [{}])[-1]
+    text = final.get("result")
+    if final.get("is_error") is not False or not isinstance(text, str) or not text.strip():
+        raise _ProvenanceError("no successful final result")
+    return text.strip()
+
+
+def _attested_claude_run(argv: list[str], stage: str, data: str, seconds: float, cwd: str) -> str:
+    proc = subprocess.run(
+        argv, input=data, capture_output=True, text=True, timeout=seconds, cwd=cwd, check=False
+    )
+    if proc.returncode:
+        detail = _bounded_cli_failure_detail(proc.stderr, proc.stdout, redact=data)
+        wall = f"{_CREDENTIAL_UNHEALTHY_PREFIX}(claude): " if _is_credential_wall(detail) else ""
+        raise _ProvenanceError(f"{wall}claude CLI {stage} exit {proc.returncode}: {detail}")
+    return _attest_restricted_stream(proc.stdout or "", cwd)
+
+
+def _run_pinned_claude_cli(prompt: str, timeout: float, checkout: str, head: str) -> ReviewerResult:
+    """Review a clean checkout pinned at ``head`` through the validated read-only argv.
+
+    Fails closed (``provenance unavailable``, no fallback) unless the checkout pre-check,
+    the attested probe and review streams, and the unchanged-checkout post-check all hold.
+    """
+    try:
+        before = _pinned_checkout_state(checkout, head)
+        cwd = os.path.realpath(checkout)
+        probe_timeout = _timeout_seconds(_CLI_PROBE_TIMEOUT_ENV, _CLI_PROBE_TIMEOUT)
+        with _claude_empty_mcp_config_file() as mcp_config_path:
+            argv = _claude_reviewer_command(mcp_config_path, restricted=True)
+            _attested_claude_run(argv, "probe", _CLI_PROBE_PROMPT, probe_timeout, cwd)
+            text = _attested_claude_run(argv, "review", prompt, timeout, cwd)
+        try:
+            after = _pinned_checkout_state(checkout, head)
+        except _ProvenanceError:
+            after = {}
+        if after != before:
+            raise _ProvenanceError("reviewer context mutated during the review")
+    except _ProvenanceError as exc:
+        return _provenance_unavailable(str(exc))
+    except subprocess.TimeoutExpired as exc:
+        return _provenance_unavailable(f"{exc.cmd[0]} timed out after {exc.timeout:g}s")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return _provenance_unavailable(f"{type(exc).__name__}: {str(exc)[:200]}")
+    harness = f"Claude Code CLI restricted read-only (Read Grep Glob) at {head[:12]}"
+    return ReviewerResult("claude", _cap_text(text), True, harness=harness)
+
+
 def _run_claude_cli(prompt: str, *, timeout: float | None = None) -> ReviewerResult:
     if timeout is None:
         timeout = _timeout_seconds(_CLAUDE_TIMEOUT_ENV, _CLAUDE_TIMEOUT)
+    if context := _claude_review_context():
+        return _run_pinned_claude_cli(prompt, timeout, *context)
     try:
         with _claude_empty_mcp_config_file() as mcp_config_path:
             argv = _claude_reviewer_command(mcp_config_path)
@@ -2163,6 +2297,12 @@ def _run_claude_reviewer(prompt: str) -> ReviewerResult:
     post as advisory evidence and never count for or against a quorum.
     """
     timeout = _timeout_seconds(_CLAUDE_TIMEOUT_ENV, _CLAUDE_TIMEOUT)
+
+    if _claude_review_context():
+        # A pinned review is the restricted CLI or nothing: no proxy or API stand-in.
+        if _claude_transport_mode_is_required():
+            return _provenance_unavailable("vibeproxy-required conflicts with a pinned CLI review")
+        return _run_claude_cli(prompt, timeout=timeout)
 
     if _claude_transport_mode_is_required():
         # ``vibeproxy-required`` means "the proxy or nothing": it must never reach the
@@ -2982,6 +3122,9 @@ def collect_evidence(
     head_committed_at = str(ctx.get("head_committed_at") or "")
     if not head_sha:
         raise ValueError(f"could not resolve head SHA for PR #{pr} in {repo}")
+    pinned_head = os.environ.get(_CLAUDE_REVIEW_EXPECTED_HEAD_ENV, "").strip()
+    if pinned_head and pinned_head != head_sha:
+        raise ValueError(f"PR #{pr} head {head_sha} is not the expected head {pinned_head}")
 
     tier = tier_fetcher(repo, pr)
     action, action_reason = decide_action(tier, apply)
@@ -3899,6 +4042,8 @@ def run_collect_cli(
     reviewer_timeout_seconds: float | None = None,
     overall_timeout_seconds: float | None = None,
     printer: Callable[[str], None] = print,
+    claude_review_checkout: str | None = None,
+    claude_review_expected_head: str | None = None,
 ) -> int:
     """Shared entry point for the script and ``review-queue collect-evidence``.
 
@@ -3922,6 +4067,11 @@ def run_collect_cli(
         env_overrides = _reviewer_timeout_env_overrides(
             reviewer_timeout_seconds, overall_timeout_seconds
         )
+        if bool(claude_review_checkout) != bool(claude_review_expected_head):
+            raise ValueError("claude review checkout and expected head must be given together")
+        if claude_review_checkout and claude_review_expected_head:
+            env_overrides[_CLAUDE_REVIEW_CHECKOUT_ENV] = claude_review_checkout
+            env_overrides[_CLAUDE_REVIEW_EXPECTED_HEAD_ENV] = claude_review_expected_head
         with _scoped_env(env_overrides):
             if prepared_json is None:
                 outcome = collect_evidence(
