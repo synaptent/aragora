@@ -681,11 +681,17 @@ class UnifiedApprovalEnforcer:
                 decision.reason,
             )
 
-            decision.approval_request_id = route.approval_request_id
-            decision.metadata["approval_context"] = {
-                "category": route.category,
-                "priority": route.priority,
-            }
+            # Read every route field before mutating the decision so a malformed
+            # route never publishes partial approval metadata.
+            try:
+                approval_request_id = route.approval_request_id
+                approval_context = {"category": route.category, "priority": route.priority}
+            except AttributeError as e:
+                logger.warning("Approval workflow adapter returned a malformed route: %s", e)
+                return decision
+
+            decision.approval_request_id = approval_request_id
+            decision.metadata["approval_context"] = approval_context
 
             return decision
 

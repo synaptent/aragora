@@ -12,6 +12,7 @@ import ast
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -456,6 +457,53 @@ class TestFailClosed:
         assert await enforcer.wait_for_approval("ext-1") is False
         token = await enforcer.enforce(_forced_request(approval_id="ext-1"))
         assert token.result == EnforcementResult.PENDING_APPROVAL
+
+
+def _route_adapter(**route_fields: str) -> Any:
+    class RouteAdapter(ApproveEverythingAdapter):
+        async def request_approval(self, workflow: Any, request: Any, reason: str) -> Any:
+            return SimpleNamespace(**route_fields)
+
+    return RouteAdapter()
+
+
+def _enforcer_with(adapter: Any, registration: str) -> UnifiedApprovalEnforcer:
+    if registration == "global":
+        register_approval_workflow_adapter(adapter)
+        return UnifiedApprovalEnforcer(approval_workflow=ExternalWorkflow())
+    return UnifiedApprovalEnforcer(
+        approval_workflow=ExternalWorkflow(), approval_workflow_adapter=adapter
+    )
+
+
+class TestMalformedApprovalRoute:
+    ROUTE = {"approval_request_id": "route-1", "category": "gateway", "priority": "high"}
+
+    @pytest.mark.parametrize("registration", ["explicit", "global"])
+    @pytest.mark.parametrize("missing", ["approval_request_id", "category", "priority"])
+    async def test_route_missing_a_field_stays_pending_without_partial_metadata(
+        self, missing, registration
+    ):
+        fields = {name: value for name, value in self.ROUTE.items() if name != missing}
+        enforcer = _enforcer_with(_route_adapter(**fields), registration)
+
+        decision = await enforcer.enforce(_forced_request())
+
+        assert decision.result == EnforcementResult.PENDING_APPROVAL
+        assert decision.reason == "needs a human"
+        assert decision.approval_request_id is None
+        assert "approval_context" not in decision.metadata
+        assert enforcer.get_recent_decisions() == [decision]
+
+    @pytest.mark.parametrize("registration", ["explicit", "global"])
+    async def test_well_formed_route_is_published(self, registration):
+        enforcer = _enforcer_with(_route_adapter(**self.ROUTE), registration)
+
+        decision = await enforcer.enforce(_forced_request())
+
+        assert decision.result == EnforcementResult.PENDING_APPROVAL
+        assert decision.approval_request_id == "route-1"
+        assert decision.metadata["approval_context"] == {"category": "gateway", "priority": "high"}
 
 
 def test_approval_enforcer_does_not_import_computer_use():
