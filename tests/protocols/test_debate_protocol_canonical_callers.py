@@ -19,6 +19,7 @@ MIGRATED_CALLERS = (
     "aragora/cli/commands/crux.py",
     "aragora/control_plane/arena_bridge.py",
     "aragora/core/decision_router.py",
+    "aragora/debate/team_selector.py",
     "aragora/essay/roles.py",
     "aragora/golden.py",
     "aragora/inbox/debate_router.py",
@@ -29,6 +30,7 @@ MIGRATED_CALLERS = (
     "aragora/nomic/testfixer/validators/arena_validator.py",
     "aragora/pipeline/dag_operations.py",
     "aragora/server/debate_factory.py",
+    "aragora/server/handlers/github/pr_review.py",
     "aragora/templates/__init__.py",
     "aragora/workflow/nodes/nomic.py",
 )
