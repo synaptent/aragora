@@ -41,6 +41,9 @@ from aragora.server.handlers.features.folder_upload import (
     FolderUploadJob,
     FolderUploadStatus,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="test_org", user_id="test_user", role="admin")
 
 
 @pytest.fixture(autouse=True)
@@ -56,6 +59,7 @@ def mock_auth():
     mock_user = MagicMock()
     mock_user.is_authenticated = True
     mock_user.user_id = "test_user"
+    mock_user.org_id = "test_org"
     mock_user.role = "admin"
     mock_user.error_reason = None
 
@@ -186,10 +190,6 @@ class TestFolderScan:
 
         with (
             patch.object(handler, "read_json_body_validated", return_value=({}, None)),
-            patch(
-                "aragora.server.handlers.features.folder_upload.require_user_auth",
-                lambda f: f,
-            ),
         ):
             result = await handler._scan_folder(mock_handler)
             assert result.status_code == 400
@@ -204,10 +204,6 @@ class TestFolderScan:
                 handler,
                 "read_json_body_validated",
                 return_value=({"path": "/nonexistent/path"}, None),
-            ),
-            patch(
-                "aragora.server.handlers.features.folder_upload.require_user_auth",
-                lambda f: f,
             ),
             patch("aragora.server.handlers.features.folder_upload.Path") as MockPath,
         ):
@@ -229,10 +225,6 @@ class TestFolderScan:
                 "read_json_body_validated",
                 return_value=({"path": "/test/file.txt"}, None),
             ),
-            patch(
-                "aragora.server.handlers.features.folder_upload.require_user_auth",
-                lambda f: f,
-            ),
             patch("aragora.server.handlers.features.folder_upload.Path") as MockPath,
         ):
             mock_path = MagicMock()
@@ -253,12 +245,8 @@ class TestFolderUploadStart:
 
         with (
             patch.object(handler, "read_json_body_validated", return_value=({}, None)),
-            patch(
-                "aragora.server.handlers.features.folder_upload.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._start_upload(mock_handler)
+            result = handler._start_upload(mock_handler, SCOPE)
             assert result.status_code == 400
 
     def test_start_upload_path_not_exists(self, handler):
@@ -271,17 +259,13 @@ class TestFolderUploadStart:
                 "read_json_body_validated",
                 return_value=({"path": "/nonexistent"}, None),
             ),
-            patch(
-                "aragora.server.handlers.features.folder_upload.require_user_auth",
-                lambda f: f,
-            ),
             patch("aragora.server.handlers.features.folder_upload.Path") as MockPath,
         ):
             mock_path = MagicMock()
             mock_path.exists.return_value = False
             MockPath.return_value = mock_path
 
-            result = handler._start_upload(mock_handler)
+            result = handler._start_upload(mock_handler, SCOPE)
             assert result.status_code == 404
 
 
@@ -290,7 +274,7 @@ class TestGetFolderUploadStatus:
 
     def test_get_status_not_found(self, handler):
         """Test getting status for non-existent folder."""
-        result = handler._get_upload_status("invalid-folder")
+        result = handler._get_upload_status("invalid-folder", SCOPE)
         assert result.status_code == 404
 
     def test_get_status_success(self, handler):
@@ -304,10 +288,11 @@ class TestGetFolderUploadStatus:
             updated_at=now,
             total_files_found=10,
             files_uploaded=5,
+            org_id="test_org",
         )
         FolderUploadHandler._jobs["folder123"] = job
 
-        result = handler._get_upload_status("folder123")
+        result = handler._get_upload_status("folder123", SCOPE)
         assert result.status_code == 200
 
 
@@ -316,7 +301,7 @@ class TestFolderList:
 
     def test_list_folders_empty(self, handler):
         """Test listing folders when none exist."""
-        result = handler._list_folders({})
+        result = handler._list_folders({}, SCOPE)
         assert result.status_code == 200
 
         import json
@@ -334,10 +319,19 @@ class TestFolderList:
             status=FolderUploadStatus.COMPLETED,
             created_at=now,
             updated_at=now,
+            org_id="test_org",
         )
         FolderUploadHandler._jobs["folder123"] = job
+        FolderUploadHandler._jobs["other"] = FolderUploadJob(
+            folder_id="other",
+            root_path="/test/other",
+            status=FolderUploadStatus.COMPLETED,
+            created_at=now,
+            updated_at=now,
+            org_id="other_org",
+        )
 
-        result = handler._list_folders({})
+        result = handler._list_folders({}, SCOPE)
         assert result.status_code == 200
 
         import json
@@ -351,7 +345,7 @@ class TestFolderDelete:
 
     def test_delete_folder_not_found(self, handler):
         """Test deleting non-existent folder."""
-        result = handler._delete_folder("invalid-folder")
+        result = handler._delete_folder("invalid-folder", SCOPE)
         assert result.status_code == 404
 
     def test_delete_folder_success(self, handler):
@@ -364,12 +358,30 @@ class TestFolderDelete:
             created_at=now,
             updated_at=now,
             user_id="test_user",  # Match mock user
+            org_id="test_org",
         )
         FolderUploadHandler._jobs["folder123"] = job
 
-        result = handler._delete_folder("folder123")
+        result = handler._delete_folder("folder123", SCOPE)
         assert result.status_code == 200
         assert "folder123" not in FolderUploadHandler._jobs
+
+    def test_delete_other_org_folder_is_not_found(self, handler):
+        """Another org's folder answers 404 and is left in place."""
+        now = datetime.now(timezone.utc)
+        FolderUploadHandler._jobs["theirs"] = FolderUploadJob(
+            folder_id="theirs",
+            root_path="/test/path",
+            status=FolderUploadStatus.COMPLETED,
+            created_at=now,
+            updated_at=now,
+            user_id="test_user",
+            org_id="other_org",
+        )
+
+        result = handler._delete_folder("theirs", SCOPE)
+        assert result.status_code == 404
+        assert "theirs" in FolderUploadHandler._jobs
 
 
 class TestFolderJobStatusUpdate:

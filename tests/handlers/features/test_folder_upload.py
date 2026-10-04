@@ -35,6 +35,9 @@ from aragora.server.handlers.features.folder_upload import (
     FolderUploadStatus,
     _validate_upload_path,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +96,7 @@ def _make_job(
     folder_id: str | None = None,
     status: FolderUploadStatus = FolderUploadStatus.COMPLETED,
     user_id: str | None = "test-user-001",
+    org_id: str | None = "test-org-001",
     included_count: int = 5,
     files_uploaded: int = 5,
     total_files_found: int = 10,
@@ -114,6 +118,7 @@ def _make_job(
         created_at=now,
         updated_at=now,
         user_id=user_id,
+        org_id=org_id,
         total_files_found=total_files_found,
         included_count=included_count,
         excluded_count=excluded_count,
@@ -166,34 +171,12 @@ def mock_user_ctx():
 
 @pytest.fixture(autouse=True)
 def patch_user_auth(mock_user_ctx):
-    """Patch extract_user_from_request to bypass JWT auth for all tests.
-
-    The require_user_auth decorator scans args for an object with .headers
-    attribute. For _scan_folder and _start_upload, the HTTP handler is passed
-    directly so it works. For _delete_folder, the handler is NOT forwarded
-    from handle_delete, so we also need to patch the decorator wrapper to
-    always inject the mock user context.
-    """
+    """Authenticate every request as test-user-001 of test-org-001."""
     with patch(
         "aragora.billing.jwt_auth.extract_user_from_request",
         return_value=mock_user_ctx,
     ):
-        # Patch the already-decorated _delete_folder to bypass require_user_auth.
-        # The decorator chain is: require_user_auth -> handle_errors -> _delete_folder
-        # We skip past require_user_auth and call handle_errors wrapper directly.
-        original_delete = getattr(FolderUploadHandler, "_delete_folder")
-        # __wrapped__ of the require_user_auth wrapper points to the handle_errors wrapper
-        inner_delete = getattr(original_delete, "__wrapped__", original_delete)
-
-        from functools import wraps
-
-        @wraps(inner_delete)
-        def patched_delete(self, *args, **kwargs):
-            kwargs["user"] = mock_user_ctx
-            return inner_delete(self, *args, **kwargs)
-
-        with patch.object(FolderUploadHandler, "_delete_folder", patched_delete):
-            yield
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -270,6 +253,7 @@ class TestFolderUploadJob:
         assert d["root_path"] == "/tmp/test-folder"
         assert d["status"] == "completed"
         assert d["user_id"] == "test-user-001"
+        assert d["org_id"] == "test-org-001"
 
     def test_to_dict_scan_section(self):
         job = _make_job(
@@ -1036,10 +1020,11 @@ class TestDeleteFolder:
 
     @pytest.fixture(autouse=True)
     def _bypass_auth(self):
-        """Bypass require_user_auth for delete tests."""
+        """Authenticate delete requests as test-user-001 of test-org-001."""
         mock_user = MagicMock()
         mock_user.is_authenticated = True
         mock_user.user_id = "test-user-001"
+        mock_user.org_id = "test-org-001"
         mock_user.role = "admin"
         with patch(
             "aragora.billing.jwt_auth.extract_user_from_request",
@@ -1312,7 +1297,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-1", tmp_path, {})
+            handler._run_upload_job("bg-1", tmp_path, {}, SCOPE)
 
         assert FolderUploadHandler._jobs["bg-1"].status == FolderUploadStatus.COMPLETED
 
@@ -1351,7 +1336,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-2", tmp_path, {})
+            handler._run_upload_job("bg-2", tmp_path, {}, SCOPE)
 
         assert FolderUploadHandler._jobs["bg-2"].status == FolderUploadStatus.FAILED
 
@@ -1369,7 +1354,7 @@ class TestRunUploadJob:
             # ModuleNotFoundError (subclass of ImportError) is not caught by
             # _run_upload_job's outer except block
             with pytest.raises(ModuleNotFoundError):
-                handler._run_upload_job("bg-3", tmp_path, {})
+                handler._run_upload_job("bg-3", tmp_path, {}, SCOPE)
 
     def test_run_upload_job_updates_scan_results(self, handler, tmp_path):
         """Upload job populates scan result fields on the job."""
@@ -1403,7 +1388,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-4", tmp_path, {})
+            handler._run_upload_job("bg-4", tmp_path, {}, SCOPE)
 
         j = FolderUploadHandler._jobs["bg-4"]
         assert j.total_files_found == 10
@@ -1445,7 +1430,7 @@ class TestRunUploadJob:
                 "aragora.server.documents": None,
             },
         ):
-            handler_with_store._run_upload_job("bg-5", tmp_path, {})
+            handler_with_store._run_upload_job("bg-5", tmp_path, {}, SCOPE)
 
         assert FolderUploadHandler._jobs["bg-5"].status == FolderUploadStatus.FAILED
 
@@ -1469,7 +1454,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-6", tmp_path, {})
+            handler._run_upload_job("bg-6", tmp_path, {}, SCOPE)
 
         assert FolderUploadHandler._jobs["bg-6"].status == FolderUploadStatus.FAILED
 
@@ -1599,3 +1584,130 @@ class TestEdgeCases:
         r2 = handler.handle("/api/v1/documents/folders/ind-2", {}, http)
         assert _body(r1)["progress"]["files_uploaded"] == 1
         assert _body(r2)["progress"]["files_uploaded"] == 99
+
+
+# ===========================================================================
+# Org scope
+# ===========================================================================
+
+
+def _user(org_id: str | None, user_id: str = "test-user-001") -> MagicMock:
+    user = MagicMock()
+    user.is_authenticated = bool(user_id)
+    user.user_id = user_id
+    user.org_id = org_id
+    user.role = "admin"
+    return user
+
+
+class TestOrgScope:
+    """Folder uploads belong to the org of the user who started them."""
+
+    @pytest.fixture
+    def as_user(self):
+        def _as(user):
+            return patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=user)
+
+        return _as
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method,path",
+        [
+            ("GET", "/api/v1/documents/folders"),
+            ("GET", "/api/v1/documents/folders/f-1"),
+            ("GET", "/api/v1/documents/folder/upload/f-1/status"),
+            ("DELETE", "/api/v1/documents/folders/f-1"),
+            ("POST", "/api/v1/documents/folder/scan"),
+            ("POST", "/api/v1/documents/folder/upload"),
+        ],
+    )
+    async def test_anonymous_gets_401(self, handler, as_user, method, path, tmp_path):
+        FolderUploadHandler._jobs["f-1"] = _make_job(folder_id="f-1")
+        anonymous = MagicMock(is_authenticated=False, user_id=None, org_id=None)
+        http = _make_http(body={"path": str(tmp_path)})
+        with as_user(anonymous):
+            if method == "GET":
+                result = handler.handle(path, {}, http)
+            elif method == "DELETE":
+                result = handler.handle_delete(path, {}, http)
+            else:
+                result = await handler.handle_post(path, {}, http)
+        assert _status(result) == 401
+        assert "f-1" in FolderUploadHandler._jobs
+        assert len(FolderUploadHandler._jobs) == 1
+
+    def test_user_without_org_gets_403(self, handler, as_user):
+        with as_user(_user(None)):
+            result = handler.handle("/api/v1/documents/folders", {}, _make_http())
+        assert _status(result) == 403
+        assert _body(result)["code"] == "org_required"
+
+    @pytest.mark.parametrize("owner_org", ["other-org", None])
+    def test_other_org_and_unknown_owner_jobs_answer_404(self, handler, owner_org):
+        FolderUploadHandler._jobs["f-x"] = _make_job(folder_id="f-x", org_id=owner_org)
+        http = _make_http()
+
+        for result in (
+            handler.handle("/api/v1/documents/folders/f-x", {}, http),
+            handler.handle("/api/v1/documents/folder/upload/f-x/status", {}, http),
+            handler.handle_delete("/api/v1/documents/folders/f-x", {}, http),
+        ):
+            assert _status(result) == 404
+            assert _body(result) == {"error": "Folder not found", "code": "not_found"}
+        assert "f-x" in FolderUploadHandler._jobs
+
+    def test_missing_job_answers_same_404(self, handler):
+        result = handler.handle("/api/v1/documents/folders/nope", {}, _make_http())
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Folder not found", "code": "not_found"}
+
+    def test_list_only_returns_callers_org(self, handler):
+        FolderUploadHandler._jobs["mine"] = _make_job(folder_id="mine")
+        FolderUploadHandler._jobs["theirs"] = _make_job(folder_id="theirs", org_id="other-org")
+        FolderUploadHandler._jobs["unknown"] = _make_job(folder_id="unknown", org_id=None)
+
+        result = handler.handle("/api/v1/documents/folders", {}, _make_http())
+        body = _body(result)
+        assert [f["folder_id"] for f in body["folders"]] == ["mine"]
+        assert body["count"] == 1
+
+    def test_same_org_other_user_cannot_delete(self, handler, as_user):
+        FolderUploadHandler._jobs["f-1"] = _make_job(folder_id="f-1")
+        with as_user(_user("test-org-001", user_id="someone-else")):
+            result = handler.handle_delete("/api/v1/documents/folders/f-1", {}, _make_http())
+        assert _status(result) == 403
+        assert "f-1" in FolderUploadHandler._jobs
+
+    @pytest.mark.asyncio
+    async def test_upload_job_records_caller_org(self, handler, tmp_path, monkeypatch):
+        monkeypatch.setattr(threading.Thread, "start", lambda self: None)
+        result = await handler.handle_post(
+            "/api/v1/documents/folder/upload", {}, _make_http(body={"path": str(tmp_path)})
+        )
+        job = FolderUploadHandler._jobs[_body(result)["folder_id"]]
+        assert job.org_id == "test-org-001"
+        assert job.user_id == "test-user-001"
+
+    def test_uploaded_documents_are_stored_under_callers_org(self, tmp_path):
+        from aragora.documents.parsing import DocumentStore
+
+        folder = tmp_path / "folder"
+        folder.mkdir()
+        (folder / "notes.txt").write_text("quarterly plan notes")
+        store = DocumentStore(tmp_path / "docs")
+        handler = FolderUploadHandler(ctx={"document_store": store})
+        FolderUploadHandler._jobs["f-up"] = _make_job(
+            folder_id="f-up", status=FolderUploadStatus.PENDING, document_ids=[]
+        )
+
+        handler._run_upload_job("f-up", folder, {}, SCOPE)
+
+        job = FolderUploadHandler._jobs["f-up"]
+        assert job.status == FolderUploadStatus.COMPLETED
+        assert len(job.document_ids) == 1
+        doc = store.get(job.document_ids[0])
+        assert doc.org_id == "test-org-001"
+        assert doc.created_by == "test-user-001"
+        assert [d["id"] for d in store.list_for_org("test-org-001")] == job.document_ids
+        assert store.list_for_org("other-org") == []
