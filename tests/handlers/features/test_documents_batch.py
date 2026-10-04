@@ -43,6 +43,14 @@ from aragora.server.handlers.features.documents_batch import (
     MAX_TOTAL_BATCH_SIZE_MB,
     _batch_upload_limiter,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+TEST_ORG = "test-org-001"
+TEST_USER = "test-user-001"
+SCOPE = OrgScope(org_id=TEST_ORG, user_id=TEST_USER, role="admin")
+NOT_FOUND = {"error": "Job not found", "code": "not_found"}
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +120,7 @@ class MockDocument:
     doc_id: str = "doc-001"
     filename: str = "test.txt"
     text: str = "Hello world content for testing"
+    org_id: str | None = "test-org-001"
 
     def to_summary(self) -> dict[str, Any]:
         return {"id": self.doc_id, "filename": self.filename}
@@ -126,6 +135,7 @@ class MockJob:
     document: MockDocument | None = None
     chunks: list[MockChunk] | None = None
     error_message: str | None = None
+    org_id: str | None = "test-org-001"
 
 
 @dataclass
@@ -176,7 +186,10 @@ class MockBatchProcessor:
         self._statuses: dict[str, dict] = {}
         self._results: dict[str, MockJob] = {}
         self._cancelled: set[str] = set()
+        self._removed: set[str] = set()
+        self._removable: set[str] = set()
         self._stats = {"queued": 0, "processing": 0, "completed": 0, "failed": 0}
+        self.stats_calls: list[dict] = []
 
     async def submit(
         self,
@@ -188,6 +201,9 @@ class MockBatchProcessor:
         chunk_size=512,
         chunk_overlap=50,
         tags=None,
+        uploaded_by=None,
+        org_id=None,
+        document_id=None,
     ) -> str:
         job_id = f"job-{len(self._submitted):03d}"
         self._submitted.append(
@@ -196,6 +212,9 @@ class MockBatchProcessor:
                 "filename": filename,
                 "workspace_id": workspace_id,
                 "priority": priority,
+                "uploaded_by": uploaded_by,
+                "org_id": org_id,
+                "document_id": document_id,
             }
         )
         return job_id
@@ -212,7 +231,14 @@ class MockBatchProcessor:
         self._cancelled.add(job_id)
         return True
 
-    def get_stats(self) -> dict:
+    async def remove(self, job_id: str) -> bool:
+        if job_id not in self._removable:
+            return False
+        self._removed.add(job_id)
+        return True
+
+    def get_stats(self, org_id: str | None = None) -> dict:
+        self.stats_calls.append({"org_id": org_id})
         return self._stats
 
 
@@ -377,6 +403,7 @@ class TestGetProcessingStats:
         assert _status(result) == 200
         body = _body(result)
         assert body["processor"] == {"queued": 5}
+        mock_proc.get_stats.assert_called_once_with(org_id=TEST_ORG)
 
 
 # ===========================================================================
@@ -416,7 +443,23 @@ class TestListKnowledgeJobs:
         assert body["filters"]["workspace_id"] == "ws-001"
         assert body["filters"]["status"] == "processing"
         assert body["filters"]["limit"] == 50
-        mock_get.assert_called_once_with(workspace_id="ws-001", status="processing", limit=50)
+        mock_get.assert_called_once_with(
+            workspace_id="ws-001", status="processing", limit=50, org_id=TEST_ORG
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_jobs_with_single_value_filters(self, handler, mock_http):
+        """The live server passes each query parameter as one string."""
+        with patch(
+            "aragora.knowledge.integration.get_all_jobs",
+            return_value=[],
+        ) as mock_get:
+            query = {"workspace_id": "ws-001", "status": "processing"}
+            result = await handler.handle("/api/v1/knowledge/jobs", query, mock_http)
+        assert _status(result) == 200
+        mock_get.assert_called_once_with(
+            workspace_id="ws-001", status="processing", limit=100, org_id=TEST_ORG
+        )
 
     @pytest.mark.asyncio
     async def test_list_jobs_no_filters(self, handler, mock_http):
@@ -504,7 +547,7 @@ class TestGetKnowledgeJobStatus:
         """The documented v1 path should dispatch to job-status lookup."""
         with patch(
             "aragora.knowledge.integration.get_job_status",
-            return_value={"id": "kj-001", "status": "completed"},
+            return_value={"id": "kj-001", "status": "completed", "metadata": {"org_id": TEST_ORG}},
         ):
             result = await handler.handle("/api/v1/knowledge/jobs/kj-001", {}, mock_http)
         assert _status(result) == 200
@@ -516,9 +559,9 @@ class TestGetKnowledgeJobStatus:
         """The internal helper still returns the same payload."""
         with patch(
             "aragora.knowledge.integration.get_job_status",
-            return_value={"id": "kj-001", "status": "completed"},
+            return_value={"id": "kj-001", "status": "completed", "metadata": {"org_id": TEST_ORG}},
         ):
-            result = handler._get_knowledge_job_status("kj-001")
+            result = handler._get_knowledge_job_status("kj-001", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["id"] == "kj-001"
@@ -529,7 +572,7 @@ class TestGetKnowledgeJobStatus:
             "aragora.knowledge.integration.get_job_status",
             return_value=None,
         ):
-            result = handler._get_knowledge_job_status("kj-nonexistent")
+            result = handler._get_knowledge_job_status("kj-nonexistent", SCOPE)
         assert _status(result) == 404
 
     @pytest.mark.asyncio
@@ -541,7 +584,7 @@ class TestGetKnowledgeJobStatus:
                 if "aragora.knowledge.integration" in name
                 else _real_import(name, *a, **kw),
             ):
-                result = handler._get_knowledge_job_status("kj-001")
+                result = handler._get_knowledge_job_status("kj-001", SCOPE)
         assert _status(result) == 503
 
     @pytest.mark.asyncio
@@ -550,7 +593,7 @@ class TestGetKnowledgeJobStatus:
             "aragora.knowledge.integration.get_job_status",
             side_effect=KeyError("invalid"),
         ):
-            result = handler._get_knowledge_job_status("kj-001")
+            result = handler._get_knowledge_job_status("kj-001", SCOPE)
         assert _status(result) == 404
 
     @pytest.mark.asyncio
@@ -559,7 +602,7 @@ class TestGetKnowledgeJobStatus:
             "aragora.knowledge.integration.get_job_status",
             side_effect=ValueError("bad"),
         ):
-            result = handler._get_knowledge_job_status("kj-001")
+            result = handler._get_knowledge_job_status("kj-001", SCOPE)
         assert _status(result) == 404
 
     @pytest.mark.asyncio
@@ -568,7 +611,7 @@ class TestGetKnowledgeJobStatus:
             "aragora.knowledge.integration.get_job_status",
             side_effect=AttributeError("oops"),
         ):
-            result = handler._get_knowledge_job_status("kj-001")
+            result = handler._get_knowledge_job_status("kj-001", SCOPE)
         assert _status(result) == 500
 
 
@@ -583,7 +626,11 @@ class TestGetJobStatus:
     @pytest.mark.asyncio
     async def test_v1_path_dispatches(self, handler_with_processor, processor, mock_http):
         """The documented v1 batch-status path should dispatch."""
-        processor._statuses["job-001"] = {"status": "processing", "progress": 0.5}
+        processor._statuses["job-001"] = {
+            "status": "processing",
+            "progress": 0.5,
+            "org_id": TEST_ORG,
+        }
         result = await handler_with_processor.handle(
             "/api/v1/documents/batch/job-001", {}, mock_http
         )
@@ -594,8 +641,12 @@ class TestGetJobStatus:
 
     @pytest.mark.asyncio
     async def test_get_status_found_via_internal(self, handler_with_processor, processor):
-        processor._statuses["job-001"] = {"status": "processing", "progress": 0.5}
-        result = await handler_with_processor._get_job_status("job-001")
+        processor._statuses["job-001"] = {
+            "status": "processing",
+            "progress": 0.5,
+            "org_id": TEST_ORG,
+        }
+        result = await handler_with_processor._get_job_status("job-001", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["status"] == "processing"
@@ -603,8 +654,9 @@ class TestGetJobStatus:
 
     @pytest.mark.asyncio
     async def test_get_status_not_found_via_internal(self, handler_with_processor):
-        result = await handler_with_processor._get_job_status("nonexistent")
+        result = await handler_with_processor._get_job_status("nonexistent", SCOPE)
         assert _status(result) == 404
+        assert _body(result) == NOT_FOUND
 
 
 # ===========================================================================
@@ -643,7 +695,7 @@ class TestGetJobResults:
             chunks=[MockChunk()],
         )
         processor._results["job-001"] = job
-        result = await handler_with_processor._get_job_results("job-001")
+        result = await handler_with_processor._get_job_results("job-001", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["job_id"] == "job-001"
@@ -662,7 +714,7 @@ class TestGetJobResults:
             error_message="Parse error",
         )
         processor._results["job-002"] = job
-        result = await handler_with_processor._get_job_results("job-002")
+        result = await handler_with_processor._get_job_results("job-002", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["status"] == "failed"
@@ -677,7 +729,7 @@ class TestGetJobResults:
             progress=0.75,
         )
         processor._results["job-003"] = job
-        result = await handler_with_processor._get_job_results("job-003")
+        result = await handler_with_processor._get_job_results("job-003", SCOPE)
         assert _status(result) == 202
         body = _body(result)
         assert body["status"] == "processing"
@@ -693,14 +745,14 @@ class TestGetJobResults:
             progress=0.0,
         )
         processor._results["job-004"] = job
-        result = await handler_with_processor._get_job_results("job-004")
+        result = await handler_with_processor._get_job_results("job-004", SCOPE)
         assert _status(result) == 202
         body = _body(result)
         assert body["status"] == "queued"
 
     @pytest.mark.asyncio
     async def test_results_not_found(self, handler_with_processor):
-        result = await handler_with_processor._get_job_results("nonexistent")
+        result = await handler_with_processor._get_job_results("nonexistent", SCOPE)
         assert _status(result) == 404
 
     @pytest.mark.asyncio
@@ -713,7 +765,7 @@ class TestGetJobResults:
             chunks=None,
         )
         processor._results["job-005"] = job
-        result = await handler_with_processor._get_job_results("job-005")
+        result = await handler_with_processor._get_job_results("job-005", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert "document" not in body
@@ -730,7 +782,7 @@ class TestGetJobResults:
             chunks=chunks,
         )
         processor._results["job-006"] = job
-        result = await handler_with_processor._get_job_results("job-006")
+        result = await handler_with_processor._get_job_results("job-006", SCOPE)
         body = _body(result)
         assert body["chunks"]["total"] == 15
         assert len(body["chunks"]["items"]) == 10  # Only first 10
@@ -747,7 +799,7 @@ class TestGetJobResults:
             chunks=chunks,
         )
         processor._results["job-007"] = job
-        result = await handler_with_processor._get_job_results("job-007")
+        result = await handler_with_processor._get_job_results("job-007", SCOPE)
         body = _body(result)
         preview = body["chunks"]["items"][0]["preview"]
         assert preview.endswith("...")
@@ -764,7 +816,7 @@ class TestGetJobResults:
             chunks=chunks,
         )
         processor._results["job-008"] = job
-        result = await handler_with_processor._get_job_results("job-008")
+        result = await handler_with_processor._get_job_results("job-008", SCOPE)
         body = _body(result)
         assert body["chunks"]["items"][0]["preview"] == "short"
 
@@ -783,7 +835,7 @@ class TestGetJobResults:
             chunks=chunks,
         )
         processor._results["job-009"] = job
-        result = await handler_with_processor._get_job_results("job-009")
+        result = await handler_with_processor._get_job_results("job-009", SCOPE)
         body = _body(result)
         assert body["chunks"]["total_tokens"] == 350
 
@@ -797,8 +849,9 @@ class TestCancelJob:
     """Tests for DELETE /api/v1/documents/batch/{job_id}."""
 
     @pytest.mark.asyncio
-    async def test_v1_path_dispatches(self, handler_with_processor, mock_http):
+    async def test_v1_path_dispatches(self, handler_with_processor, processor, mock_http):
         """The documented v1 delete path should dispatch."""
+        processor._results["job-001"] = MockJob(id="job-001", status=MockJobStatus.QUEUED)
         result = await handler_with_processor.handle_delete(
             "/api/v1/documents/batch/job-001", {}, mock_http
         )
@@ -808,8 +861,9 @@ class TestCancelJob:
         assert body["job_id"] == "job-001"
 
     @pytest.mark.asyncio
-    async def test_cancel_success_via_internal(self, handler_with_processor):
-        result = await handler_with_processor._cancel_job("job-001")
+    async def test_cancel_success_via_internal(self, handler_with_processor, processor):
+        processor._results["job-001"] = MockJob(id="job-001", status=MockJobStatus.QUEUED)
+        result = await handler_with_processor._cancel_job("job-001", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["cancelled"] is True
@@ -817,9 +871,28 @@ class TestCancelJob:
 
     @pytest.mark.asyncio
     async def test_cancel_already_cancelled_via_internal(self, handler_with_processor, processor):
+        processor._results["job-001"] = MockJob(id="job-001")
         processor._cancelled.add("job-001")
-        result = await handler_with_processor._cancel_job("job-001")
+        result = await handler_with_processor._cancel_job("job-001", SCOPE)
         assert _status(result) == 400
+
+    @pytest.mark.asyncio
+    async def test_delete_finished_job_via_internal(self, handler_with_processor, processor):
+        """A job that can no longer be cancelled is removed instead."""
+        processor._results["job-001"] = MockJob(id="job-001")
+        processor._cancelled.add("job-001")
+        processor._removable.add("job-001")
+        result = await handler_with_processor._cancel_job("job-001", SCOPE)
+        assert _status(result) == 200
+        assert _body(result) == {"deleted": True, "job_id": "job-001"}
+        assert processor._removed == {"job-001"}
+
+    @pytest.mark.asyncio
+    async def test_cancel_missing_job_via_internal(self, handler_with_processor, processor):
+        result = await handler_with_processor._cancel_job("nonexistent", SCOPE)
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND
+        assert processor._cancelled == set()
 
     @pytest.mark.asyncio
     async def test_cancel_non_batch_path(self, handler_with_processor, mock_http):
@@ -838,16 +911,18 @@ class TestGetDocumentChunks:
     """Tests for GET /api/v1/documents/{doc_id}/chunks."""
 
     @pytest.mark.asyncio
-    async def test_v1_path_dispatches_for_chunks(self, handler, mock_http):
+    async def test_v1_path_dispatches_for_chunks(self, handler_with_document_store, mock_http):
         """The documented v1 chunks path should dispatch."""
-        result = await handler.handle("/api/v1/documents/doc-001/chunks", {}, mock_http)
+        result = await handler_with_document_store.handle(
+            "/api/v1/documents/doc-001/chunks", {}, mock_http
+        )
         assert _status(result) == 200
         body = _body(result)
         assert body["document_id"] == "doc-001"
         assert body["chunks"] == []
 
-    def test_chunks_default_params_via_internal(self, handler):
-        result = handler._get_document_chunks("doc-001")
+    def test_chunks_default_params_via_internal(self, handler_with_document_store):
+        result = handler_with_document_store._get_document_chunks("doc-001", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["document_id"] == "doc-001"
@@ -856,23 +931,38 @@ class TestGetDocumentChunks:
         assert body["limit"] == 100
         assert body["offset"] == 0
 
-    def test_chunks_custom_params_via_internal(self, handler):
-        result = handler._get_document_chunks("doc-001", limit=25, offset=10)
+    def test_chunks_custom_params_via_internal(self, handler_with_document_store):
+        result = handler_with_document_store._get_document_chunks(
+            "doc-001", SCOPE, limit=25, offset=10
+        )
         assert _status(result) == 200
         body = _body(result)
         assert body["limit"] == 25
         assert body["offset"] == 10
 
-    def test_chunks_different_doc_id(self, handler):
-        result = handler._get_document_chunks("my-special-doc")
+    def test_chunks_different_doc_id(self, handler_with_document_store):
+        result = handler_with_document_store._get_document_chunks("my-special-doc", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["document_id"] == "my-special-doc"
 
-    def test_chunks_message_mentions_phase_2(self, handler):
-        result = handler._get_document_chunks("doc-001")
+    def test_chunks_message_mentions_phase_2(self, handler_with_document_store):
+        result = handler_with_document_store._get_document_chunks("doc-001", SCOPE)
         body = _body(result)
         assert "Phase 2" in body["message"]
+
+    def test_chunks_not_found_without_document_store(self, handler):
+        """Without a document store no document is visible, so chunks are 404."""
+        result = handler._get_document_chunks("doc-001", SCOPE)
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Document not found", "code": "not_found"}
+
+    def test_chunks_not_found_in_store(self):
+        store = MagicMock()
+        store.get.return_value = None
+        h = DocumentBatchHandler(server_context={"document_store": store})
+        result = h._get_document_chunks("doc-001", SCOPE)
+        assert _status(result) == 404
 
 
 # ===========================================================================
@@ -895,14 +985,14 @@ class TestGetDocumentContext:
         assert body["context"] == "Hello world content for testing"
 
     def test_context_not_found_no_store(self, handler):
-        result = handler._get_document_context("doc-001")
+        result = handler._get_document_context("doc-001", SCOPE)
         assert _status(result) == 404
 
     def test_context_not_found_in_store(self):
         store = MagicMock()
         store.get.return_value = None
         h = DocumentBatchHandler(server_context={"document_store": store})
-        result = h._get_document_context("doc-001")
+        result = h._get_document_context("doc-001", SCOPE)
         assert _status(result) == 404
 
     def test_context_found_no_truncation(self):
@@ -915,7 +1005,7 @@ class TestGetDocumentContext:
             "aragora.documents.chunking.token_counter.get_token_counter",
             return_value=mock_counter,
         ):
-            result = h._get_document_context("doc-001")
+            result = h._get_document_context("doc-001", SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["document_id"] == "doc-001"
@@ -932,7 +1022,7 @@ class TestGetDocumentContext:
             "aragora.documents.chunking.token_counter.get_token_counter",
             return_value=mock_counter,
         ):
-            result = h._get_document_context("doc-001", max_tokens=10)
+            result = h._get_document_context("doc-001", SCOPE, max_tokens=10)
         assert _status(result) == 200
         body = _body(result)
         assert body["truncated"] is True
@@ -948,7 +1038,7 @@ class TestGetDocumentContext:
             "aragora.documents.chunking.token_counter.get_token_counter",
             return_value=mock_counter,
         ):
-            result = h._get_document_context("doc-001", model="claude-3")
+            result = h._get_document_context("doc-001", SCOPE, model="claude-3")
         assert _status(result) == 200
         body = _body(result)
         assert body["model"] == "claude-3"
@@ -963,7 +1053,7 @@ class TestGetDocumentContext:
             "aragora.documents.chunking.token_counter.get_token_counter",
             return_value=mock_counter,
         ):
-            result = h._get_document_context("doc-001")
+            result = h._get_document_context("doc-001", SCOPE)
         body = _body(result)
         assert body["max_tokens"] == 4096
 
@@ -977,7 +1067,7 @@ class TestGetDocumentContext:
             "aragora.documents.chunking.token_counter.get_token_counter",
             return_value=mock_counter,
         ):
-            result = h._get_document_context("doc-001")
+            result = h._get_document_context("doc-001", SCOPE)
         body = _body(result)
         assert body["token_count"] == 3  # "one two three" = 3 words
 
@@ -1754,3 +1844,188 @@ class TestEdgeCases:
         """Delete on path that doesn't start with batch prefix returns None."""
         result = await handler_with_processor.handle_delete("/api/v1/something/else", {}, mock_http)
         assert result is None
+
+
+# ===========================================================================
+# Org scope
+# ===========================================================================
+
+
+class TestOrgScope:
+    """Every route is scoped to the caller's org."""
+
+    @pytest.mark.no_auto_auth
+    @pytest.mark.asyncio
+    async def test_anonymous_caller_gets_401(self, handler_with_processor, mock_http, monkeypatch):
+        from aragora.server import auth as server_auth
+
+        monkeypatch.setattr(server_auth.auth_config, "enabled", False)
+        monkeypatch.setattr(server_auth.auth_config, "api_token", None)
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: None,
+        )
+        result = await handler_with_processor.handle(
+            "/api/v1/documents/processing/stats", {}, mock_http
+        )
+        assert _status(result) == 401
+        assert _body(result) == {"error": "Authentication required", "code": "auth_required"}
+
+    @pytest.mark.asyncio
+    async def test_unrecognized_path_skips_scope_check(self, handler, mock_http, monkeypatch):
+        def _fail(*_a, **_kw):
+            raise AssertionError("scope check must not run for unrecognized paths")
+
+        monkeypatch.setattr("aragora.billing.jwt_auth.extract_user_from_request", _fail)
+        assert await handler.handle("/api/v1/unrelated", {}, mock_http) is None
+
+    @pytest.mark.asyncio
+    async def test_other_org_job_status_is_404(self, handler_with_processor, processor, mock_http):
+        processor._statuses["job-x"] = {"status": "completed", "org_id": "other-org"}
+        result = await handler_with_processor.handle("/api/v1/documents/batch/job-x", {}, mock_http)
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_unknown_owner_job_status_is_404(self, handler_with_processor, processor):
+        processor._statuses["job-x"] = {"status": "completed"}
+        result = await handler_with_processor._get_job_status("job-x", SCOPE)
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_other_org_job_results_is_404(self, handler_with_processor, processor, mock_http):
+        processor._results["job-x"] = MockJob(id="job-x", org_id="other-org")
+        result = await handler_with_processor.handle(
+            "/api/v1/documents/batch/job-x/results", {}, mock_http
+        )
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_other_org_job_delete_is_404_without_side_effects(
+        self, handler_with_processor, processor, mock_http
+    ):
+        processor._results["job-x"] = MockJob(id="job-x", org_id="other-org")
+        processor._removable.add("job-x")
+        processor.cancel = AsyncMock(return_value=True)
+        processor.remove = AsyncMock(return_value=True)
+        result = await handler_with_processor.handle_delete(
+            "/api/v1/documents/batch/job-x", {}, mock_http
+        )
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND
+        processor.cancel.assert_not_called()
+        processor.remove.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_other_org_document_chunks_is_404(self, mock_http):
+        store = MagicMock()
+        store.get.return_value = MockDocument(org_id="other-org")
+        h = DocumentBatchHandler(server_context={"document_store": store})
+        result = await h.handle("/api/v1/documents/doc-001/chunks", {}, mock_http)
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Document not found", "code": "not_found"}
+
+    @pytest.mark.asyncio
+    async def test_other_org_document_context_is_404(self, mock_http):
+        store = MagicMock()
+        store.get.return_value = MockDocument(org_id="other-org")
+        h = DocumentBatchHandler(server_context={"document_store": store})
+        result = await h.handle("/api/v1/documents/doc-001/context", {}, mock_http)
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Document not found", "code": "not_found"}
+
+    @pytest.mark.asyncio
+    async def test_stats_requested_for_caller_org(
+        self, handler_with_processor, processor, mock_http
+    ):
+        result = await handler_with_processor.handle(
+            "/api/v1/documents/processing/stats", {}, mock_http
+        )
+        assert _status(result) == 200
+        assert processor.stats_calls == [{"org_id": TEST_ORG}]
+
+    @pytest.mark.asyncio
+    async def test_knowledge_job_list_passes_org(self, handler, mock_http):
+        with patch("aragora.knowledge.integration.get_all_jobs", return_value=[]) as mock_get:
+            result = await handler.handle("/api/v1/knowledge/jobs", {}, mock_http)
+        assert _status(result) == 200
+        mock_get.assert_called_once_with(workspace_id=None, status=None, limit=100, org_id=TEST_ORG)
+
+    @pytest.mark.asyncio
+    async def test_other_org_knowledge_job_is_404(self, handler, mock_http):
+        with patch(
+            "aragora.knowledge.integration.get_job_status",
+            return_value={"id": "kj-x", "status": "completed", "metadata": {"org_id": "other-org"}},
+        ):
+            result = await handler.handle("/api/v1/knowledge/jobs/kj-x", {}, mock_http)
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Knowledge job not found", "code": "not_found"}
+
+    @pytest.mark.asyncio
+    async def test_unknown_owner_knowledge_job_is_404(self, handler):
+        with patch(
+            "aragora.knowledge.integration.get_job_status",
+            return_value={"id": "kj-x", "status": "completed"},
+        ):
+            result = handler._get_knowledge_job_status("kj-x", SCOPE)
+        assert _status(result) == 404
+
+    @pytest.mark.asyncio
+    async def test_upload_records_org_and_uploader(self, handler_with_processor, processor):
+        http = _make_multipart_handler(
+            files=[("test.txt", b"hello")],
+            form_fields={"process_knowledge": "true"},
+        )
+        with (
+            patch("aragora.documents.ingestion.batch_processor.JobPriority") as MockJP,
+            patch(
+                "aragora.documents.chunking.token_counter.get_token_counter",
+                return_value=MockTokenCounter(),
+            ),
+            patch(
+                "aragora.knowledge.integration.queue_document_processing",
+                return_value="kp-001",
+            ) as mock_queue,
+        ):
+            MockJP.NORMAL = "normal"
+            result = await handler_with_processor.handle_post("/api/v1/documents/batch", {}, http)
+        assert _status(result) == 202
+        submitted = processor._submitted[0]
+        assert submitted["org_id"] == TEST_ORG
+        assert submitted["uploaded_by"] == TEST_USER
+        assert submitted["document_id"] is None
+        metadata = mock_queue.call_args.kwargs["metadata"]
+        assert metadata["org_id"] == TEST_ORG
+        assert metadata["user_id"] == TEST_USER
+        assert metadata["owner_id"] == TEST_USER
+
+    @pytest.mark.asyncio
+    async def test_upload_saves_documents_under_caller_org(self, processor):
+        store = MagicMock()
+        store.add.return_value = "doc-saved"
+        h = DocumentBatchHandler(
+            server_context={"batch_processor": processor, "document_store": store}
+        )
+        http = _make_multipart_handler(
+            files=[("test.txt", b"hello")],
+            form_fields={"process_knowledge": "false"},
+        )
+        parsed = MockDocument()
+        with (
+            patch("aragora.documents.ingestion.batch_processor.JobPriority") as MockJP,
+            patch(
+                "aragora.documents.chunking.token_counter.get_token_counter",
+                return_value=MockTokenCounter(),
+            ),
+            patch("aragora.documents.parsing.parse_document", return_value=parsed) as mock_parse,
+        ):
+            MockJP.NORMAL = "normal"
+            result = await h.handle_post("/api/v1/documents/batch", {}, http)
+        assert _status(result) == 202
+        mock_parse.assert_called_once_with(
+            b"hello", "test.txt", org_id=TEST_ORG, created_by=TEST_USER
+        )
+        store.add.assert_called_once_with(parsed)
+        assert processor._submitted[0]["document_id"] == "doc-saved"
