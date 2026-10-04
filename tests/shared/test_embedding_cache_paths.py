@@ -12,6 +12,9 @@ import ast
 import importlib
 import inspect
 import logging
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -106,6 +109,51 @@ def test_unregistered_resolver_raises_for_default_persistent_caches(monkeypatch)
     manager.configure(persist=True)
     with pytest.raises(RuntimeError, match="database path resolver"):
         manager.get_cache("d-unregistered")
+
+
+_FACADE_PROBE = """
+import sys
+{preimport}
+from aragora.shared.caching import EmbeddingCacheManager
+manager = EmbeddingCacheManager()
+manager.configure(persist=True)
+try:
+    print("db_path=" + manager.get_cache("d-probe").db_path)
+except RuntimeError as exc:
+    print("error=" + str(exc))
+print("debate_loaded=" + str("aragora.debate" in sys.modules))
+"""
+
+
+def _run_facade_probe(preimport: str, data_dir: Path) -> dict[str, str]:
+    env = {
+        **os.environ,
+        "ARAGORA_DATA_DIR": str(data_dir),
+        "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", _FACADE_PROBE.format(preimport=preimport)],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+        check=True,
+    )
+    return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+
+
+def test_shared_facade_alone_fails_explicitly_for_default_persistent_cache(tmp_path: Path) -> None:
+    out = _run_facade_probe("", tmp_path)
+    assert out["debate_loaded"] == "False"
+    assert "error" in out and "db_path" not in out
+    assert "Pass db_path explicitly" in out["error"]
+    assert "import aragora.debate.cache" in out["error"]
+
+
+def test_shared_facade_uses_persistence_path_once_debate_cache_registered(tmp_path: Path) -> None:
+    out = _run_facade_probe("import aragora.debate.cache", tmp_path)
+    assert out["db_path"].startswith(str(tmp_path))
+    assert out["db_path"].endswith(".db")
 
 
 def test_explicit_db_path_needs_no_resolver(monkeypatch, tmp_path: Path) -> None:
