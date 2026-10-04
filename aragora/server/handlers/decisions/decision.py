@@ -6,6 +6,10 @@ Provides REST API endpoints for unified decision-making capabilities:
 - GET  /api/v1/decisions/:id - Get decision result by ID
 - GET  /api/v1/decisions/:id/status - Get decision status for polling
 
+Every route needs an authenticated member of an organization. Decisions belong
+to the org that created them; another org's (or an unknown owner's) decision is
+reported exactly like a missing one.
+
 Usage:
     # In unified_server.py
     from aragora.server.handlers.decisions.decision import DecisionHandler
@@ -30,6 +34,7 @@ from aragora.server.handlers.base import (
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.utils.lazy_stores import LazyStoreFactory
 from aragora.server.validation.query_params import safe_query_int
+from aragora.tenancy.record_scope import OrgScope, record_not_found, require_org_scope
 
 logger = logging.getLogger(__name__)
 
@@ -73,31 +78,53 @@ _decision_result_store = LazyStoreFactory(
 _decision_results_fallback: dict[str, dict[str, Any]] = {}
 
 
-def _save_result(request_id: str, data: dict[str, Any]) -> None:
-    """Save a decision result to persistent store with fallback."""
+def _save_result(
+    request_id: str,
+    data: dict[str, Any],
+    *,
+    org_id: str | None = None,
+    created_by: str | None = None,
+) -> None:
+    """Save a decision result, owned by ``org_id``, to persistent store with fallback."""
     store = _decision_result_store.get()
     if store:
         try:
-            store.save(request_id, data)
+            store.save(request_id, data, org_id=org_id, created_by=created_by)
             return
         except (KeyError, ValueError, OSError, TypeError) as e:
             logger.warning("Failed to persist result, using fallback: %s", e)
-    # Fallback to in-memory
-    _decision_results_fallback[request_id] = data
+    # Fallback to in-memory; an existing owner is kept, as in the store.
+    previous = _decision_results_fallback.get(request_id) or {}
+    owner_org = previous.get("org_id") or org_id or data.get("org_id")
+    owner_user = (
+        previous.get("created_by")
+        if previous.get("org_id")
+        else (created_by or data.get("created_by"))
+    )
+    _decision_results_fallback[request_id] = {
+        **data,
+        "org_id": owner_org,
+        "created_by": owner_user,
+    }
 
 
-def _get_result(request_id: str) -> dict[str, Any] | None:
-    """Get a decision result from persistent store with fallback."""
+def _get_result(request_id: str, org_id: str | None) -> dict[str, Any] | None:
+    """Get a decision result owned by ``org_id``; None when missing or owned elsewhere."""
+    if not org_id:
+        return None
     store = _decision_result_store.get()
     if store:
         try:
-            result = store.get(request_id)
+            result = store.get_for_org(request_id, org_id)
             if result:
                 return result
         except (KeyError, ValueError, OSError, TypeError) as e:
             logger.warning("Failed to retrieve from store: %s", e)
     # Fallback to in-memory
-    return _decision_results_fallback.get(request_id)
+    result = _decision_results_fallback.get(request_id)
+    if result is None or result.get("org_id") != org_id:
+        return None
+    return result
 
 
 class DecisionHandler(BaseHandler):
@@ -128,18 +155,23 @@ class DecisionHandler(BaseHandler):
     @require_permission("decisions:read")
     def handle(self, path: str, query_params: dict, handler=None) -> HandlerResult | None:
         """Handle GET requests."""
+        if path != "/api/v1/decisions" and not path.startswith("/api/v1/decisions/"):
+            return None
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         if path == "/api/v1/decisions":
             # List recent decisions (optional)
-            return self._list_decisions(query_params)
+            return self._list_decisions(query_params, scope)
 
-        if path.startswith("/api/v1/decisions/"):
-            parts = path.split("/")
-            # parts = ['', 'api', 'v1', 'decisions', '<request_id>', ...]
-            if len(parts) >= 5:
-                request_id = parts[4]
-                if len(parts) == 6 and parts[5] == "status":
-                    return self._get_decision_status(request_id)
-                return self._get_decision(request_id)
+        parts = path.split("/")
+        # parts = ['', 'api', 'v1', 'decisions', '<request_id>', ...]
+        if len(parts) >= 5:
+            request_id = parts[4]
+            if len(parts) == 6 and parts[5] == "status":
+                return self._get_decision_status(request_id, scope)
+            return self._get_decision(request_id, scope)
 
         return None
 
@@ -148,11 +180,17 @@ class DecisionHandler(BaseHandler):
         self, path: str, query_params: dict, handler=None
     ) -> HandlerResult | None:
         """Handle POST requests."""
+        if path != "/api/v1/decisions" and not path.startswith("/api/v1/decisions/"):
+            return None
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         if path == "/api/v1/decisions":
             _, perm_error = self.require_permission_or_error(handler, "decisions:create")
             if perm_error:
                 return perm_error
-            return await self._create_decision(handler)
+            return await self._create_decision(handler, scope)
 
         # Handle /api/v1/decisions/:id/cancel
         if path.startswith("/api/v1/decisions/") and path.endswith("/cancel"):
@@ -162,7 +200,7 @@ class DecisionHandler(BaseHandler):
                 _, perm_error = self.require_permission_or_error(handler, "decisions:update")
                 if perm_error:
                     return perm_error
-                return await self._cancel_decision(request_id, handler)
+                return await self._cancel_decision(request_id, handler, scope)
 
         # Handle /api/v1/decisions/:id/retry
         if path.startswith("/api/v1/decisions/") and path.endswith("/retry"):
@@ -172,11 +210,11 @@ class DecisionHandler(BaseHandler):
                 _, perm_error = self.require_permission_or_error(handler, "decisions:update")
                 if perm_error:
                     return perm_error
-                return await self._retry_decision(request_id, handler)
+                return await self._retry_decision(request_id, handler, scope)
 
         return None
 
-    async def _create_decision(self, handler) -> HandlerResult:
+    async def _create_decision(self, handler, scope: OrgScope) -> HandlerResult:
         """
         Create a new decision request.
 
@@ -224,12 +262,10 @@ class DecisionHandler(BaseHandler):
 
             request = DecisionRequest.from_http(body, headers)
 
-            # Set user context from auth if not provided
-            if auth_ctx.authenticated:
-                if not request.context.user_id:
-                    request.context.user_id = auth_ctx.user_id
-                if not request.context.workspace_id:
-                    request.context.workspace_id = auth_ctx.org_id
+            # The decision always acts for the caller: a user or workspace in
+            # the body must not select another tenant's identity or knowledge.
+            request.context.user_id = scope.user_id
+            request.context.workspace_id = scope.org_id
 
         except ValueError as e:
             logger.warning("Handler error: %s", e)
@@ -281,6 +317,8 @@ class DecisionHandler(BaseHandler):
                     "result": result.to_dict(),
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                 },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
 
             return json_response(
@@ -307,6 +345,8 @@ class DecisionHandler(BaseHandler):
                     "status": "timeout",
                     "error": "Decision timed out",
                 },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
             return error_response("Decision request timed out", 408)
 
@@ -319,29 +359,27 @@ class DecisionHandler(BaseHandler):
                     "status": "failed",
                     "error": "Decision processing failed",
                 },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
             logger.warning("Handler error: %s", e)
             return error_response("Decision processing failed", 500)
 
-    def _get_decision(self, request_id: str) -> HandlerResult:
+    def _get_decision(self, request_id: str, scope: OrgScope) -> HandlerResult:
         """Get a decision result by ID."""
-        result = _get_result(request_id)
+        result = _get_result(request_id, scope.org_id)
         if result:
             return json_response(result)
-        return error_response("Decision not found", 404)
+        return record_not_found("Decision")
 
-    def _get_decision_status(self, request_id: str) -> HandlerResult:
-        """Get decision status for polling."""
-        store = _decision_result_store.get()
-        if store:
-            try:
-                return json_response(store.get_status(request_id))
-            except (KeyError, ValueError, OSError, TypeError) as e:
-                logger.warning("Failed to get status from store: %s", e)
+    def _get_decision_status(self, request_id: str, scope: OrgScope) -> HandlerResult:
+        """Get decision status for polling.
 
-        # Fallback to in-memory
-        if request_id in _decision_results_fallback:
-            result = _decision_results_fallback[request_id]
+        A decision owned by another org reports ``not_found`` exactly like a
+        missing one.
+        """
+        result = _get_result(request_id, scope.org_id)
+        if result:
             return json_response(
                 {
                     "request_id": request_id,
@@ -356,15 +394,15 @@ class DecisionHandler(BaseHandler):
             }
         )
 
-    def _list_decisions(self, query_params: dict) -> HandlerResult:
-        """List recent decisions."""
+    def _list_decisions(self, query_params: dict, scope: OrgScope) -> HandlerResult:
+        """List the caller org's recent decisions."""
         limit = safe_query_int(query_params, "limit", default=20, min_val=1, max_val=100)
 
         store = _decision_result_store.get()
         if store:
             try:
-                decisions = store.list_recent(limit)
-                total = store.count()
+                decisions = store.list_recent_for_org(scope.org_id, limit)
+                total = store.count_for_org(scope.org_id)
                 return json_response(
                     {
                         "decisions": decisions,
@@ -375,7 +413,7 @@ class DecisionHandler(BaseHandler):
                 logger.warning("Failed to list from store: %s", e)
 
         # Fallback to in-memory
-        decisions = list(_decision_results_fallback.values())[-limit:]
+        owned = [d for d in _decision_results_fallback.values() if d.get("org_id") == scope.org_id]
         return json_response(
             {
                 "decisions": [
@@ -384,22 +422,22 @@ class DecisionHandler(BaseHandler):
                         "status": d.get("status"),
                         "completed_at": d.get("completed_at"),
                     }
-                    for d in decisions
+                    for d in owned[-limit:]
                 ],
-                "total": len(_decision_results_fallback),
+                "total": len(owned),
             }
         )
 
-    async def _cancel_decision(self, request_id: str, handler) -> HandlerResult:
+    async def _cancel_decision(self, request_id: str, handler, scope: OrgScope) -> HandlerResult:
         """
         Cancel a pending or running decision.
 
         Only decisions in PENDING or RUNNING status can be cancelled.
         """
         # Get current result
-        result = _get_result(request_id)
+        result = _get_result(request_id, scope.org_id)
         if not result:
-            return error_response("Decision not found", 404)
+            return record_not_found("Decision")
 
         current_status = result.get("status", "unknown")
 
@@ -428,7 +466,12 @@ class DecisionHandler(BaseHandler):
             result["cancellation_reason"] = reason
 
         # Persist the update
-        _save_result(request_id, result)
+        _save_result(
+            request_id,
+            result,
+            org_id=scope.org_id,
+            created_by=result.get("created_by") or scope.user_id,
+        )
 
         logger.info(
             "Decision %s cancelled by user. Reason: %s", request_id, reason or "not provided"
@@ -443,16 +486,17 @@ class DecisionHandler(BaseHandler):
             }
         )
 
-    async def _retry_decision(self, request_id: str, handler) -> HandlerResult:
+    async def _retry_decision(self, request_id: str, handler, scope: OrgScope) -> HandlerResult:
         """
         Retry a failed or cancelled decision.
 
-        Creates a new decision with the same parameters as the original.
+        Creates a new decision, owned by the caller's org, with the same
+        parameters as the original.
         """
         # Get original result
-        original = _get_result(request_id)
+        original = _get_result(request_id, scope.org_id)
         if not original:
-            return error_response("Decision not found", 404)
+            return record_not_found("Decision")
 
         current_status = original.get("status", "unknown")
 
@@ -504,6 +548,8 @@ class DecisionHandler(BaseHandler):
 
             request = DecisionRequest.from_http(new_body, {})
             request.request_id = new_request_id
+            request.context.user_id = scope.user_id
+            request.context.workspace_id = scope.org_id
 
             # Track retry lineage
             request.context.metadata = request.context.metadata or {}
@@ -528,6 +574,8 @@ class DecisionHandler(BaseHandler):
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                     "retried_from": request_id,
                 },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
 
             logger.info("Decision %s retried as %s", request_id, new_request_id)
@@ -553,6 +601,8 @@ class DecisionHandler(BaseHandler):
                     "error": "Decision retry timed out",
                     "retried_from": request_id,
                 },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
             return error_response("Decision retry timed out", 408)
 
@@ -566,6 +616,8 @@ class DecisionHandler(BaseHandler):
                     "error": "Decision retry failed",
                     "retried_from": request_id,
                 },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
             logger.warning("Handler error: %s", e)
             return error_response("Decision retry failed", 500)

@@ -18,6 +18,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+ORG = "test-org-001"
+USER = "test-user-001"
+OTHER_ORG = "other-org-999"
+NOT_FOUND_BODY = {"error": "Decision not found", "code": "not_found"}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -265,11 +272,13 @@ class TestListDecisions:
 
         mod._decision_results_fallback["dec_001"] = {
             "request_id": "dec_001",
+            "org_id": ORG,
             "status": "completed",
             "completed_at": "2026-01-01T00:00:00Z",
         }
         mod._decision_results_fallback["dec_002"] = {
             "request_id": "dec_002",
+            "org_id": ORG,
             "status": "failed",
             "completed_at": "2026-01-02T00:00:00Z",
         }
@@ -285,8 +294,10 @@ class TestListDecisions:
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.list_recent.return_value = [{"request_id": "dec_001", "status": "completed"}]
-        mock_store.count.return_value = 1
+        mock_store.list_recent_for_org.return_value = [
+            {"request_id": "dec_001", "status": "completed"}
+        ]
+        mock_store.count_for_org.return_value = 1
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
@@ -295,13 +306,16 @@ class TestListDecisions:
         body = _body(result)
         assert body["total"] == 1
         assert body["decisions"][0]["request_id"] == "dec_001"
+        mock_store.list_recent_for_org.assert_called_once_with(ORG, 20)
+        mock_store.count_for_org.assert_called_once_with(ORG)
+        mock_store.list_recent.assert_not_called()
 
     def test_list_decisions_store_error_falls_back(self, handler, mock_http_handler):
         """Falls back to in-memory when store raises."""
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.list_recent.side_effect = OSError("connection lost")
+        mock_store.list_recent_for_org.side_effect = OSError("connection lost")
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
@@ -320,6 +334,7 @@ class TestListDecisions:
         for i in range(5):
             mod._decision_results_fallback[f"dec_{i:03d}"] = {
                 "request_id": f"dec_{i:03d}",
+                "org_id": ORG,
                 "status": "completed",
             }
 
@@ -357,6 +372,7 @@ class TestGetDecision:
 
         mod._decision_results_fallback["dec_test123"] = {
             "request_id": "dec_test123",
+            "org_id": ORG,
             "status": "completed",
             "result": {"answer": "Yes"},
         }
@@ -371,9 +387,10 @@ class TestGetDecision:
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get.return_value = {
+        mock_store.get_for_org.return_value = {
             "request_id": "dec_store123",
             "status": "completed",
+            "org_id": ORG,
         }
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
@@ -392,19 +409,20 @@ class TestGetDecision:
 
         result = handler.handle("/api/v1/decisions/dec_nonexist", {}, mock_http_handler)
         assert _status(result) == 404
-        assert "not found" in _body(result).get("error", "").lower()
+        assert _body(result) == NOT_FOUND_BODY
 
     def test_get_decision_store_error_falls_back(self, handler, mock_http_handler):
         """Falls back to in-memory when store raises."""
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get.side_effect = TypeError("broken")
+        mock_store.get_for_org.side_effect = TypeError("broken")
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
         mod._decision_results_fallback["dec_fallback"] = {
             "request_id": "dec_fallback",
+            "org_id": ORG,
             "status": "completed",
         }
 
@@ -427,9 +445,10 @@ class TestGetDecisionStatus:
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get_status.return_value = {
+        mock_store.get_for_org.return_value = {
             "request_id": "dec_123",
             "status": "running",
+            "org_id": ORG,
         }
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
@@ -444,12 +463,13 @@ class TestGetDecisionStatus:
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get_status.side_effect = KeyError("missing")
+        mock_store.get_for_org.side_effect = KeyError("missing")
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
         mod._decision_results_fallback["dec_456"] = {
             "request_id": "dec_456",
+            "org_id": ORG,
             "status": "completed",
             "completed_at": "2026-01-01T00:00:00Z",
         }
@@ -482,6 +502,7 @@ class TestGetDecisionStatus:
 
         mod._decision_results_fallback["dec_789"] = {
             "request_id": "dec_789",
+            "org_id": ORG,
             "status": "pending",
         }
 
@@ -519,6 +540,7 @@ class TestGetRouting:
 
         mod._decision_results_fallback["myid"] = {
             "request_id": "myid",
+            "org_id": ORG,
             "status": "completed",
         }
 
@@ -967,12 +989,13 @@ class TestCreateDecision:
 
     @pytest.mark.asyncio
     async def test_create_decision_with_auth_context(self, handler):
-        """Auth context user_id and org_id fill in request context."""
+        """The caller's scope sets the request user and workspace, overriding the body."""
         mock_result = _MockDecisionResult(success=True)
         mock_router = MagicMock()
         mock_router.route = AsyncMock(return_value=mock_result)
 
         mock_request = _MockDecisionRequest()
+        mock_request.context = _MockDecisionContext(user_id="body-user", workspace_id="other-org")
 
         h = _make_http_handler({"content": "Test question"})
 
@@ -1012,8 +1035,8 @@ class TestCreateDecision:
                     result = await handler.handle_post("/api/v1/decisions", {}, h)
 
         assert _status(result) == 200
-        assert mock_request.context.user_id == "auth-user-001"
-        assert mock_request.context.workspace_id == "auth-org-001"
+        assert mock_request.context.user_id == USER
+        assert mock_request.context.workspace_id == ORG
 
     @pytest.mark.asyncio
     async def test_create_decision_rbac_failure(self, handler):
@@ -1080,6 +1103,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_cancel_001"] = {
             "request_id": "dec_cancel_001",
+            "org_id": ORG,
             "status": "pending",
         }
 
@@ -1107,6 +1131,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_cancel_002"] = {
             "request_id": "dec_cancel_002",
+            "org_id": ORG,
             "status": "running",
         }
 
@@ -1132,6 +1157,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_cancel_003"] = {
             "request_id": "dec_cancel_003",
+            "org_id": ORG,
             "status": "processing",
         }
 
@@ -1155,6 +1181,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_cancel_done"] = {
             "request_id": "dec_cancel_done",
+            "org_id": ORG,
             "status": "completed",
         }
 
@@ -1179,6 +1206,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_cancel_fail"] = {
             "request_id": "dec_cancel_fail",
+            "org_id": ORG,
             "status": "failed",
         }
 
@@ -1220,6 +1248,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_noreason"] = {
             "request_id": "dec_noreason",
+            "org_id": ORG,
             "status": "pending",
         }
 
@@ -1245,6 +1274,7 @@ class TestCancelDecision:
 
         mod._decision_results_fallback["dec_upd"] = {
             "request_id": "dec_upd",
+            "org_id": ORG,
             "status": "running",
         }
 
@@ -1296,6 +1326,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_001"] = {
             "request_id": "dec_retry_001",
+            "org_id": ORG,
             "status": "failed",
             "result": {
                 "request": {
@@ -1349,6 +1380,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_can"] = {
             "request_id": "dec_retry_can",
+            "org_id": ORG,
             "status": "cancelled",
             "result": {
                 "request": {"content": "Another question"},
@@ -1392,6 +1424,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_to"] = {
             "request_id": "dec_retry_to",
+            "org_id": ORG,
             "status": "timeout",
             "result": {"task": "Timeout question"},
         }
@@ -1433,6 +1466,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_done"] = {
             "request_id": "dec_retry_done",
+            "org_id": ORG,
             "status": "completed",
         }
 
@@ -1457,6 +1491,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_run"] = {
             "request_id": "dec_retry_run",
+            "org_id": ORG,
             "status": "running",
         }
 
@@ -1498,6 +1533,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_nocontent"] = {
             "request_id": "dec_retry_nocontent",
+            "org_id": ORG,
             "status": "failed",
             "result": {},
         }
@@ -1523,6 +1559,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_norouter"] = {
             "request_id": "dec_retry_norouter",
+            "org_id": ORG,
             "status": "failed",
             "result": {"request": {"content": "Question"}},
         }
@@ -1553,6 +1590,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_to2"] = {
             "request_id": "dec_retry_to2",
+            "org_id": ORG,
             "status": "failed",
             "result": {"request": {"content": "Question"}},
         }
@@ -1594,6 +1632,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_ce"] = {
             "request_id": "dec_retry_ce",
+            "org_id": ORG,
             "status": "failed",
             "result": {"request": {"content": "Question"}},
         }
@@ -1635,6 +1674,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_build"] = {
             "request_id": "dec_retry_build",
+            "org_id": ORG,
             "status": "failed",
             "result": {"request": {"content": "Question"}},
         }
@@ -1687,6 +1727,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_store"] = {
             "request_id": "dec_retry_store",
+            "org_id": ORG,
             "status": "failed",
             "result": {"request": {"content": "Question"}},
         }
@@ -1732,6 +1773,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_task"] = {
             "request_id": "dec_retry_task",
+            "org_id": ORG,
             "status": "failed",
             "result": {"task": "Question from task field"},
         }
@@ -1773,6 +1815,7 @@ class TestRetryDecision:
 
         mod._decision_results_fallback["dec_retry_top"] = {
             "request_id": "dec_retry_top",
+            "org_id": ORG,
             "status": "failed",
             "result": {},
             "content": "Top level content",
@@ -1897,15 +1940,17 @@ class TestSaveAndGetResult:
     """Tests for result persistence helpers."""
 
     def test_save_to_store(self):
-        """Saves to persistent store when available."""
+        """Saves to persistent store, passing the owner, when available."""
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
-        mod._save_result("test_id", {"status": "completed"})
-        mock_store.save.assert_called_once_with("test_id", {"status": "completed"})
+        mod._save_result("test_id", {"status": "completed"}, org_id=ORG, created_by=USER)
+        mock_store.save.assert_called_once_with(
+            "test_id", {"status": "completed"}, org_id=ORG, created_by=USER
+        )
 
     def test_save_fallback_on_store_error(self):
         """Falls back to in-memory when store raises."""
@@ -1916,8 +1961,11 @@ class TestSaveAndGetResult:
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
-        mod._save_result("test_id", {"status": "completed"})
-        assert mod._decision_results_fallback["test_id"]["status"] == "completed"
+        mod._save_result("test_id", {"status": "completed"}, org_id=ORG, created_by=USER)
+        saved = mod._decision_results_fallback["test_id"]
+        assert saved["status"] == "completed"
+        assert saved["org_id"] == ORG
+        assert saved["created_by"] == USER
 
     def test_save_to_fallback_when_no_store(self):
         """Saves to in-memory fallback when no store available."""
@@ -1926,32 +1974,55 @@ class TestSaveAndGetResult:
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = None
 
-        mod._save_result("test_id", {"status": "completed"})
+        mod._save_result("test_id", {"status": "completed"}, org_id=ORG, created_by=USER)
         assert mod._decision_results_fallback["test_id"]["status"] == "completed"
+        assert mod._decision_results_fallback["test_id"]["org_id"] == ORG
+
+    def test_save_fallback_keeps_existing_owner(self):
+        """A later fallback save carrying another org does not change the owner."""
+        import aragora.server.handlers.decision as mod
+
+        mod._decision_result_store = MagicMock()
+        mod._decision_result_store.get.return_value = None
+
+        mod._save_result("test_id", {"status": "pending"}, org_id=ORG, created_by=USER)
+        mod._save_result(
+            "test_id", {"status": "completed"}, org_id=OTHER_ORG, created_by="intruder"
+        )
+        saved = mod._decision_results_fallback["test_id"]
+        assert saved["status"] == "completed"
+        assert saved["org_id"] == ORG
+        assert saved["created_by"] == USER
 
     def test_get_from_store(self):
-        """Gets from persistent store when available."""
+        """Gets from persistent store, scoped to the org, when available."""
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get.return_value = {"request_id": "test_id", "status": "completed"}
+        mock_store.get_for_org.return_value = {
+            "request_id": "test_id",
+            "status": "completed",
+            "org_id": ORG,
+        }
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
-        result = mod._get_result("test_id")
+        result = mod._get_result("test_id", ORG)
         assert result["status"] == "completed"
+        mock_store.get_for_org.assert_called_once_with("test_id", ORG)
+        mock_store.get.assert_not_called()
 
     def test_get_fallback_on_store_error(self):
         """Falls back to in-memory when store raises."""
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get.side_effect = ValueError("broken")
+        mock_store.get_for_org.side_effect = ValueError("broken")
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
-        mod._decision_results_fallback["test_id"] = {"status": "completed"}
-        result = mod._get_result("test_id")
+        mod._decision_results_fallback["test_id"] = {"status": "completed", "org_id": ORG}
+        result = mod._get_result("test_id", ORG)
         assert result["status"] == "completed"
 
     def test_get_from_fallback_when_no_store(self):
@@ -1961,8 +2032,8 @@ class TestSaveAndGetResult:
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = None
 
-        mod._decision_results_fallback["test_id"] = {"status": "completed"}
-        result = mod._get_result("test_id")
+        mod._decision_results_fallback["test_id"] = {"status": "completed", "org_id": ORG}
+        result = mod._get_result("test_id", ORG)
         assert result["status"] == "completed"
 
     def test_get_returns_none_when_not_found(self):
@@ -1972,7 +2043,7 @@ class TestSaveAndGetResult:
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = None
 
-        result = mod._get_result("nonexistent")
+        result = mod._get_result("nonexistent", ORG)
         assert result is None
 
     def test_get_store_returns_none_falls_through(self):
@@ -1980,13 +2051,266 @@ class TestSaveAndGetResult:
         import aragora.server.handlers.decision as mod
 
         mock_store = MagicMock()
-        mock_store.get.return_value = None
+        mock_store.get_for_org.return_value = None
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = mock_store
 
-        mod._decision_results_fallback["test_id"] = {"status": "in_fallback"}
-        result = mod._get_result("test_id")
+        mod._decision_results_fallback["test_id"] = {"status": "in_fallback", "org_id": ORG}
+        result = mod._get_result("test_id", ORG)
         assert result["status"] == "in_fallback"
+
+    @pytest.mark.parametrize("owner", [OTHER_ORG, None])
+    def test_get_fallback_hides_entry_not_owned_by_org(self, owner):
+        """Fallback entries of another org or without an owner are not returned."""
+        import aragora.server.handlers.decision as mod
+
+        mod._decision_result_store = MagicMock()
+        mod._decision_result_store.get.return_value = None
+
+        mod._decision_results_fallback["test_id"] = {"status": "completed", "org_id": owner}
+        assert mod._get_result("test_id", ORG) is None
+
+    @pytest.mark.parametrize("org_id", [None, ""])
+    def test_get_without_org_returns_none(self, org_id):
+        """A falsy org never reads anything, not even ownerless entries."""
+        import aragora.server.handlers.decision as mod
+
+        mock_store = MagicMock()
+        mod._decision_result_store = MagicMock()
+        mod._decision_result_store.get.return_value = mock_store
+
+        mod._decision_results_fallback["test_id"] = {"status": "completed", "org_id": None}
+        assert mod._get_result("test_id", org_id) is None
+        mock_store.get_for_org.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Org ownership
+# ---------------------------------------------------------------------------
+
+
+def _use_fallback_only():
+    import aragora.server.handlers.decision as mod
+
+    mod._decision_result_store = MagicMock()
+    mod._decision_result_store.get.return_value = None
+    return mod
+
+
+def _seed(mod, request_id: str, org_id: str | None, status: str = "failed", **extra):
+    mod._decision_results_fallback[request_id] = {
+        "request_id": request_id,
+        "status": status,
+        "org_id": org_id,
+        "result": {"request": {"content": "Question"}},
+        **extra,
+    }
+
+
+class TestOrgOwnership:
+    """Decisions are visible only to the org that owns them."""
+
+    @pytest.mark.parametrize("owner", [OTHER_ORG, None])
+    def test_get_unowned_decision_is_identical_to_missing(self, handler, mock_http_handler, owner):
+        mod = _use_fallback_only()
+        _seed(mod, "dec_foreign", owner, status="completed")
+
+        foreign = handler.handle("/api/v1/decisions/dec_foreign", {}, mock_http_handler)
+        missing = handler.handle("/api/v1/decisions/dec_missing", {}, mock_http_handler)
+
+        assert _status(foreign) == _status(missing) == 404
+        assert _body(foreign) == _body(missing) == NOT_FOUND_BODY
+
+    def test_status_reports_not_found_for_other_org(self, handler, mock_http_handler):
+        mod = _use_fallback_only()
+        _seed(mod, "dec_foreign", OTHER_ORG, status="running", completed_at="2026-01-01")
+
+        result = handler.handle("/api/v1/decisions/dec_foreign/status", {}, mock_http_handler)
+
+        assert _status(result) == 200
+        assert _body(result) == {"request_id": "dec_foreign", "status": "not_found"}
+
+    def test_status_store_lookup_is_scoped_to_org(self, handler, mock_http_handler):
+        import aragora.server.handlers.decision as mod
+
+        mock_store = MagicMock()
+        mock_store.get_for_org.return_value = None
+        mod._decision_result_store = MagicMock()
+        mod._decision_result_store.get.return_value = mock_store
+
+        result = handler.handle("/api/v1/decisions/dec_x/status", {}, mock_http_handler)
+
+        assert _body(result)["status"] == "not_found"
+        mock_store.get_for_org.assert_called_once_with("dec_x", ORG)
+        mock_store.get_status.assert_not_called()
+
+    def test_list_returns_only_caller_org_entries(self, handler, mock_http_handler):
+        mod = _use_fallback_only()
+        _seed(mod, "dec_mine_1", ORG, status="completed")
+        _seed(mod, "dec_theirs", OTHER_ORG, status="completed")
+        _seed(mod, "dec_ownerless", None, status="completed")
+        _seed(mod, "dec_mine_2", ORG, status="pending")
+
+        body = _body(handler.handle("/api/v1/decisions", {}, mock_http_handler))
+
+        assert body["total"] == 2
+        assert [d["request_id"] for d in body["decisions"]] == ["dec_mine_1", "dec_mine_2"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("action", ["cancel", "retry"])
+    @pytest.mark.parametrize("owner", [OTHER_ORG, None])
+    async def test_mutation_of_unowned_decision_is_identical_to_missing(
+        self, handler, action, owner
+    ):
+        mod = _use_fallback_only()
+        status = "running" if action == "cancel" else "failed"
+        _seed(mod, "dec_foreign", owner, status=status)
+        before = dict(mod._decision_results_fallback["dec_foreign"])
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock()
+
+        with (
+            patch(
+                "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
+                return_value=(MagicMock(), None),
+            ),
+            patch(
+                "aragora.server.handlers.decision._get_decision_router",
+                return_value=mock_router,
+            ),
+            patch("aragora.server.handlers.decision._save_result") as mock_save,
+        ):
+            foreign = await handler.handle_post(
+                f"/api/v1/decisions/dec_foreign/{action}", {}, _make_http_handler({})
+            )
+            missing = await handler.handle_post(
+                f"/api/v1/decisions/dec_missing/{action}", {}, _make_http_handler({})
+            )
+
+        assert _status(foreign) == _status(missing) == 404
+        assert _body(foreign) == _body(missing) == NOT_FOUND_BODY
+        mock_save.assert_not_called()
+        mock_router.route.assert_not_called()
+        assert mod._decision_results_fallback == {"dec_foreign": before}
+
+    @pytest.mark.asyncio
+    async def test_cancel_keeps_original_creator(self, handler):
+        mod = _use_fallback_only()
+        _seed(mod, "dec_own", ORG, status="running", created_by="original-user")
+
+        with patch(
+            "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
+            return_value=(MagicMock(), None),
+        ):
+            result = await handler.handle_post(
+                "/api/v1/decisions/dec_own/cancel", {}, _make_http_handler({})
+            )
+
+        assert _status(result) == 200
+        saved = mod._decision_results_fallback["dec_own"]
+        assert saved["status"] == "cancelled"
+        assert saved["org_id"] == ORG
+        assert saved["created_by"] == "original-user"
+
+    @pytest.mark.asyncio
+    async def test_retry_saves_new_decision_for_caller(self, handler):
+        mod = _use_fallback_only()
+        _seed(mod, "dec_own", ORG, status="failed", created_by="original-user")
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(return_value=_MockDecisionResult(success=True))
+        mock_request = _MockDecisionRequest(request_id="ignored")
+        mock_request.context.metadata = {}
+
+        with (
+            patch(
+                "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
+                return_value=(MagicMock(), None),
+            ),
+            patch(
+                "aragora.server.handlers.decision._get_decision_router",
+                return_value=mock_router,
+            ),
+            patch("aragora.core.decision.DecisionRequest") as mock_dr_cls,
+        ):
+            mock_dr_cls.from_http.return_value = mock_request
+            result = await handler.handle_post(
+                "/api/v1/decisions/dec_own/retry", {}, _make_http_handler({})
+            )
+
+        new_id = _body(result)["request_id"]
+        saved = mod._decision_results_fallback[new_id]
+        assert saved["org_id"] == ORG
+        assert saved["created_by"] == USER
+
+    @pytest.mark.asyncio
+    async def test_create_saves_with_caller_org_and_user(self, handler):
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(return_value=_MockDecisionResult(success=True))
+
+        with (
+            patch(
+                "aragora.server.handlers.decision._get_decision_router",
+                return_value=mock_router,
+            ),
+            patch(
+                "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
+                return_value=(MagicMock(), None),
+            ),
+            patch(
+                "aragora.billing.auth.extract_user_from_request",
+                return_value=MagicMock(authenticated=False),
+            ),
+            patch("aragora.core.decision.DecisionRequest") as mock_dr_cls,
+            patch("aragora.server.handlers.decision._save_result") as mock_save,
+        ):
+            mock_dr_cls.from_http.return_value = _MockDecisionRequest(request_id="dec_created")
+            result = await handler.handle_post(
+                "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
+            )
+
+        assert _status(result) == 200
+        mock_save.assert_called_once()
+        args, kwargs = mock_save.call_args
+        assert args[0] == "dec_created"
+        assert kwargs == {"org_id": ORG, "created_by": USER}
+
+    @pytest.mark.no_auto_auth
+    @pytest.mark.asyncio
+    async def test_anonymous_post_is_rejected(self, handler):
+        _use_fallback_only()
+        with patch(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            return_value=MagicMock(is_authenticated=False),
+        ):
+            result = await handler.handle_post(
+                "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
+            )
+
+        assert _status(result) == 401
+        assert _body(result) == {"error": "Authentication required", "code": "auth_required"}
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_get_is_rejected(self, handler):
+        _use_fallback_only()
+        with patch(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            return_value=MagicMock(is_authenticated=False),
+        ):
+            result = handler.handle("/api/v1/decisions", {}, _make_http_handler())
+
+        assert _status(result) == 401
+
+    @pytest.mark.asyncio
+    async def test_authenticated_user_without_org_is_rejected(self, handler):
+        _use_fallback_only()
+        user = MagicMock(is_authenticated=True, user_id=USER, org_id=None, role="admin")
+        with patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=user):
+            result = await handler.handle_post(
+                "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
+            )
+
+        assert _status(result) == 403
+        assert _body(result)["code"] == "org_required"
 
 
 # ---------------------------------------------------------------------------
