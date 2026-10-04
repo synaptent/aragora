@@ -71,9 +71,10 @@ def get_receipt_store() -> Any:
     return _receipt_store_get()
 
 
-def _persist_receipt(receipt: Any, debate_id: str) -> str | None:
+def _persist_receipt(receipt: Any, debate_id: str, org_id: str | None = None) -> str | None:
     """Persist a DecisionReceipt to the receipt store for later retrieval.
 
+    ``org_id`` is the debate's owning org; the receipt belongs to it.
     Returns the receipt_id on success, None on failure.
     """
     try:
@@ -82,6 +83,8 @@ def _persist_receipt(receipt: Any, debate_id: str) -> str | None:
         store = get_receipt_store()
         receipt_dict = receipt.to_dict()
         receipt_dict.setdefault("debate_id", debate_id)
+        if org_id:
+            return store.save(receipt_dict, org_id=org_id)
         return store.save(receipt_dict)
     except (ImportError, KeyError, ValueError, OSError, AttributeError, TypeError) as exc:
         logger.debug("Receipt persistence failed: %s", exc)
@@ -327,7 +330,12 @@ class _DebatesHandlerProtocol(Protocol):
         self, debate: Any, debate_id: str, rc: _RequestConfig, handler: Any | None = None
     ) -> tuple[Any, dict[str, Any]]: ...
     def _persist_artifacts(
-        self, package: Any, debate_id: str, rc: _RequestConfig, response_payload: dict[str, Any]
+        self,
+        package: Any,
+        debate_id: str,
+        rc: _RequestConfig,
+        response_payload: dict[str, Any],
+        org_id: str | None = None,
     ) -> tuple[str | None, Any]: ...
     def _obsidian_writeback(self, package: Any, receipt_id: str | None) -> None: ...
     def _handle_workflow_mode(
@@ -417,8 +425,14 @@ class ImplementationOperationsMixin:
         package, response_payload = self._build_integrity_package(debate, debate_id, rc, handler)
 
         # Persist receipt and plan
+        get_org_id = getattr(storage, "get_org_id", None)
+        debate_org = get_org_id(debate_id) if callable(get_org_id) else None
         receipt_id, computer_use_plan = self._persist_artifacts(
-            package, debate_id, rc, response_payload
+            package,
+            debate_id,
+            rc,
+            response_payload,
+            org_id=debate_org if isinstance(debate_org, str) else None,
         )
 
         # Optional Obsidian writeback
@@ -507,11 +521,12 @@ class ImplementationOperationsMixin:
         debate_id: str,
         rc: _RequestConfig,
         response_payload: dict[str, Any],
+        org_id: str | None = None,
     ) -> tuple[str | None, Any]:
         """Persist receipt and plan; return ``(receipt_id, computer_use_plan)``."""
         receipt_id = None
         if package.receipt is not None:
-            receipt_id = _persist_receipt(package.receipt, debate_id)
+            receipt_id = _persist_receipt(package.receipt, debate_id, org_id)
             if receipt_id:
                 response_payload["receipt_id"] = receipt_id
 

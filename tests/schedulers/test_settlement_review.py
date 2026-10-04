@@ -24,6 +24,8 @@ class _StoredReceiptStub:
     data: dict
     created_at: float
     debate_id: str | None = None
+    org_id: str | None = None
+    created_by: str | None = None
 
 
 def _iso(dt: datetime) -> str:
@@ -40,7 +42,7 @@ class _InMemoryReceiptStore:
         items = self._items[::-1] if order == "desc" else self._items[:]
         return items[offset : offset + limit]
 
-    def save(self, data: dict) -> str:
+    def save(self, data: dict, *, org_id: str | None = None, created_by: str | None = None) -> str:
         receipt_id = str(data.get("receipt_id") or "")
         debate_id = str(data.get("debate_id") or "") or None
         timestamp_raw = data.get("timestamp")
@@ -62,11 +64,19 @@ class _InMemoryReceiptStore:
                     data=payload,
                     created_at=existing.created_at,
                     debate_id=debate_id or existing.debate_id,
+                    org_id=existing.org_id or org_id,
+                    created_by=existing.created_by or created_by,
                 )
                 return receipt_id
 
         self._items.append(
-            _StoredReceiptStub(data=payload, created_at=created_at, debate_id=debate_id)
+            _StoredReceiptStub(
+                data=payload,
+                created_at=created_at,
+                debate_id=debate_id,
+                org_id=org_id,
+                created_by=created_by,
+            )
         )
         return receipt_id
 

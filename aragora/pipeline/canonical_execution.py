@@ -692,7 +692,11 @@ def build_decision_receipt_payload(
         try:
             from aragora.storage.receipt_store import get_receipt_store
 
-            get_receipt_store().save(payload)
+            get_receipt_store().save(
+                payload,
+                org_id=getattr(plan, "org_id", None),
+                created_by=getattr(plan, "created_by", None),
+            )
         except (ImportError, RuntimeError, ValueError, TypeError, AttributeError) as exc:
             logger.debug("Decision receipt persistence skipped: %s", exc)
         return payload

@@ -535,9 +535,11 @@ class DebateRequest:
     enable_interventions: bool | None = None  # Enable intervention queue
     comparison_config: dict | None = None  # Candidate lineups for best-result selection
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
-    # Owning org. Callers set it from the authenticated user; from_dict never
-    # reads it from the request body so clients cannot pick the owner.
+    # Owning org and creating user. Callers set them from the authenticated
+    # user; from_dict never reads them from the request body so clients cannot
+    # pick the owner.
     org_id: str | None = None
+    created_by: str | None = None
 
     def __post_init__(self):
         if self.auto_select_config is None:
@@ -1133,6 +1135,7 @@ class DebateController:
             comparison_config=request.comparison_config,
             quality_pipeline=request.quality_pipeline,
             org_id=request.org_id,
+            created_by=request.created_by,
         )
 
         # Admission control: reject if at capacity
@@ -1855,7 +1858,11 @@ class DebateController:
             receipt_dict["checksum"] = hashlib.sha256(checksum_content.encode()).hexdigest()
 
             # Save receipt
-            receipt_store.save(receipt_dict)
+            receipt_store.save(
+                receipt_dict,
+                org_id=getattr(config, "org_id", None),
+                created_by=getattr(config, "created_by", None),
+            )
             logger.info("[debate] Generated receipt %s for debate %s", receipt_id, debate_id)
             self._record_epistemic_outcome(
                 debate_id=debate_id,
