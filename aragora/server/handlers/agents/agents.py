@@ -21,6 +21,9 @@ Endpoints:
 - GET /api/agent/{name}/head-to-head/{opponent} - Get head-to-head stats
 - GET /api/flips/recent - Get recent flips across all agents
 - GET /api/flips/summary - Get flip summary for dashboard
+- GET /api/flips/{flip_id} - Get one detected flip
+- GET /api/matches/recent - Get recent ELO matches
+- GET /api/matches/{match_id} - Get one ELO match by its debate ID
 
 View endpoints are in agent_rankings.py (AgentRankingsMixin).
 Profile endpoints are in agent_profiles.py (AgentProfilesMixin).
@@ -51,6 +54,7 @@ from aragora.server.versioning.compat import strip_version_prefix
 from ..base import (
     SAFE_AGENT_PATTERN,
     SAFE_ID_PATTERN,
+    SAFE_SLUG_PATTERN,
     HandlerResult,
     agent_to_dict,
     error_response,
@@ -118,6 +122,20 @@ def _missing_required_env_vars(env_vars: str | None) -> list[str]:
     return candidates
 
 
+def _single_segment(path: str, prefix: str) -> str | None:
+    """Return the one non-empty segment that follows ``prefix``, if that is all there is."""
+    if not path.startswith(prefix):
+        return None
+    segment = path[len(prefix) :]
+    if not segment or "/" in segment:
+        return None
+    return segment
+
+
+# /api/matches/stats is served by MatchesStatsHandler.
+_MATCHES_STATS_SEGMENT = "stats"
+
+
 class AgentsHandler(  # type: ignore[misc]
     AgentRankingsMixin,
     AgentProfilesMixin,
@@ -183,6 +201,9 @@ class AgentsHandler(  # type: ignore[misc]
             return True
         if path == "/api/matches/recent":
             return True
+        match_segment = _single_segment(path, "/api/matches/")
+        if match_segment is not None and match_segment != _MATCHES_STATS_SEGMENT:
+            return True
         if path.startswith("/api/agents/") and not path.startswith(
             (
                 "/api/agents/health",
@@ -196,7 +217,7 @@ class AgentsHandler(  # type: ignore[misc]
             return True
         if path.startswith("/api/agent/"):
             return True
-        if path.startswith("/api/flips/"):
+        if _single_segment(path, "/api/flips/") is not None:
             return True
         return False
 
@@ -299,6 +320,13 @@ class AgentsHandler(  # type: ignore[misc]
                     return error_response(err, 400)
             return self._get_recent_matches(limit, loop_id)
 
+        match_id = _single_segment(path, "/api/matches/")
+        if match_id is not None and match_id != _MATCHES_STATS_SEGMENT:
+            is_valid, err = validate_path_segment(match_id, "match_id", SAFE_SLUG_PATTERN)
+            if not is_valid:
+                return error_response(err or "Invalid match_id", 400)
+            return self._get_match(match_id)
+
         # Agent comparison
         if path == "/api/agent/compare":
             agents = query_params.get("agents", [])
@@ -317,6 +345,13 @@ class AgentsHandler(  # type: ignore[misc]
 
         if path == "/api/flips/summary":
             return self._get_flip_summary()
+
+        flip_id = _single_segment(path, "/api/flips/")
+        if flip_id is not None:
+            is_valid, err = validate_path_segment(flip_id, "flip_id", SAFE_SLUG_PATTERN)
+            if not is_valid:
+                return error_response(err or "Invalid flip_id", 400)
+            return self._get_flip(flip_id)
 
         return None
 
@@ -384,6 +419,28 @@ class AgentsHandler(  # type: ignore[misc]
     # ------------------------------------------------------------------
     # Core agent methods (kept in main handler)
     # ------------------------------------------------------------------
+
+    @api_endpoint(
+        method="GET",
+        path="/api/v1/matches/{match_id}",
+        summary="Get one ELO match by its debate ID",
+        tags=["Agents"],
+    )
+    @handle_errors("get match")
+    def _get_match(self, match_id: str) -> HandlerResult:
+        """Get one ELO match in the same shape as the recent-matches entries.
+
+        Recorded matches are keyed by their unique debate ID, which is the
+        only identifier the recent-matches rows expose.
+        """
+        elo = self.get_elo_system()
+        if not elo:
+            return error_response("ELO system not available", 503)
+
+        match = elo.get_match(match_id)
+        if match is None:
+            return error_response("Match not found", 404)
+        return json_response(match)
 
     @api_endpoint(
         method="GET",
