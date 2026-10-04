@@ -36,7 +36,7 @@ class _FakeHandler:
     def _check_spam_content(self, body):
         return None
 
-    def _create_debate_direct(self, handler, body):
+    def _create_debate_direct(self, handler, body, scope):
         from aragora.server.handlers.base import json_response
 
         debate_id = f"adhoc_{body.get('question', 'test')[:8]}"
@@ -87,7 +87,7 @@ class TestLegacyTaskFieldNormalization:
         """The 'task' field should be moved to 'question' in the body."""
         captured_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             captured_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -139,7 +139,7 @@ class TestLegacyTaskFieldNormalization:
         """After normalization, only 'question' should remain (task popped)."""
         captured_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             captured_body.update(body)
             from aragora.server.handlers.base import json_response
 

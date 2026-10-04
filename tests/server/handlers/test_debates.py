@@ -577,7 +577,10 @@ class TestDecisionRouterIntegration:
         with patch("aragora.server.debate_controller.DebateRequest") as mock_request_class:
             mock_request_class.from_dict.return_value = MagicMock()
 
-            result = handler._create_debate_direct(mock_http_handler, body)
+            from aragora.tenancy.record_scope import OrgScope
+
+            scope = OrgScope(org_id="org-1", user_id="user-1", role="member")
+            result = handler._create_debate_direct(mock_http_handler, body, scope)
 
         assert result is not None
         mock_controller.start_debate.assert_called_once()

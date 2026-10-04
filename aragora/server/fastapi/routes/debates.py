@@ -41,6 +41,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from aragora.agents.spec import AgentSpec
 from aragora.rbac.models import AuthorizationContext
+from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
 
 from ..dependencies.auth import require_permission
 from ..middleware.error_handling import NotFoundError
@@ -922,14 +923,15 @@ async def create_debate(
     body: CreateDebateRequest,
     request: Request,
     auth: AuthorizationContext = Depends(require_permission("debates:create")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     storage=Depends(get_storage),
 ) -> CreateDebateResponse:
     """
-    Create a new debate.
+    Create a new debate owned by the caller's org.
 
     Validates the request and delegates to the debate controller for
     actual debate orchestration. Returns the debate_id for polling/streaming.
-    Requires `debates:create` permission.
+    Requires `debates:create` permission and an org (403 ``org_required``).
     """
     try:
         # Build debate body in legacy format for controller compatibility
@@ -963,10 +965,7 @@ async def create_debate(
             logger.warning("Invalid debate request: %s", e)
             raise HTTPException(status_code=400, detail="Invalid debate request")
 
-        caller_org = getattr(auth, "org_id", None)
-        debate_request.org_id = (
-            caller_org if isinstance(caller_org, str) and caller_org.strip() else None
-        )
+        debate_request.org_id = scope.org_id
 
         try:
             controller = _get_debate_controller(request, storage)

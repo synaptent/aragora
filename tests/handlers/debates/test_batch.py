@@ -57,6 +57,15 @@ def bypass_rate_limiters(monkeypatch):
         pass
 
 
+@pytest.fixture(autouse=True)
+def org_user(monkeypatch):
+    """Batch submission requires an authenticated user with an org."""
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: _MockUserCtx(),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -170,6 +179,7 @@ def _mock_http_handler(command="POST"):
     """Create a mock HTTP handler object."""
     h = MagicMock()
     h.command = command
+    h.user_store = None
     h.headers = {"Content-Length": "2"}
     h.rfile = MagicMock()
     h.rfile.read.return_value = b"{}"
@@ -302,7 +312,7 @@ class TestSubmitBatch:
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_item = MagicMock()
         mock_from_dict.return_value = mock_item
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
         mock_run_async.return_value = "batch_abc123"
 
         h = _make_handler(
@@ -332,7 +342,7 @@ class TestSubmitBatch:
         """Status URL follows expected format."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
         mock_run_async.return_value = "batch_xyz789"
 
         h = _make_handler(json_body={"items": [{"question": "Test?"}]})
@@ -347,7 +357,7 @@ class TestSubmitBatch:
         """Queue submission failure returns 500."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
 
         with patch(
             "aragora.server.http_utils.run_async",
@@ -366,7 +376,7 @@ class TestSubmitBatch:
         """BatchItem.from_dict raising ValueError adds validation error."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.side_effect = ValueError("bad consensus")
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
 
         h = _make_handler(json_body={"items": [{"question": "Test question?"}]})
         result = h._submit_batch(_mock_http_handler())
@@ -387,7 +397,7 @@ class TestSubmitBatch:
         """Invalid webhook URL returns 400."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
         mock_validate_url.return_value = (False, "webhook_url must use http or https")
 
         h = _make_handler(
@@ -416,7 +426,7 @@ class TestSubmitBatch:
         """Invalid webhook headers return 400."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
         mock_validate_url.return_value = (True, "")
         mock_sanitize_headers.return_value = ({}, "webhook_headers contains invalid characters")
 
@@ -444,7 +454,7 @@ class TestSubmitBatch:
         """Non-integer max_parallel returns 400."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
 
         h = _make_handler(
             json_body={
@@ -467,7 +477,7 @@ class TestSubmitBatch:
         """max_parallel is clamped to [1, MAX_CONCURRENT_DEBATES]."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
-        mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
+        mock_extract_user.return_value = _MockUserCtx()
         mock_run_async.return_value = "batch_123"
 
         h = _make_handler(
@@ -576,10 +586,10 @@ class TestSubmitBatch:
     @patch("aragora.billing.jwt_auth.extract_user_from_request")
     @patch("aragora.server.debate_queue.get_debate_queue")
     @patch("aragora.server.http_utils.run_async")
-    def test_submit_batch_unauthenticated_user_skips_quota(
+    def test_submit_batch_unauthenticated_user_is_rejected(
         self, mock_run_async, mock_get_queue, mock_extract_user, mock_from_dict, mock_validate
     ):
-        """Unauthenticated user skips quota check."""
+        """Unauthenticated user gets 401 and nothing is queued."""
         mock_validate.return_value = _MockValidationResult(is_valid=True)
         mock_from_dict.return_value = MagicMock()
         mock_extract_user.return_value = _MockUserCtx(is_authenticated=False, org_id=None)
@@ -587,7 +597,8 @@ class TestSubmitBatch:
 
         h = _make_handler(json_body={"items": [{"question": "Test?"}]})
         result = h._submit_batch(_mock_http_handler())
-        assert _status(result) == 200
+        assert _status(result) == 401
+        mock_run_async.assert_not_called()
 
     # -----------------------------------------------------------------------
     # Usage increment
@@ -711,7 +722,7 @@ class TestSubmitBatch:
             patch("aragora.server.debate_queue.BatchItem.from_dict", return_value=MagicMock()),
             patch(
                 "aragora.billing.jwt_auth.extract_user_from_request",
-                return_value=_MockUserCtx(is_authenticated=False, org_id=None),
+                return_value=_MockUserCtx(),
             ),
             patch("aragora.server.http_utils.run_async", side_effect=smart_run_async),
         ):
@@ -729,7 +740,7 @@ class TestSubmitBatch:
             patch("aragora.server.debate_queue.BatchItem.from_dict", return_value=MagicMock()),
             patch(
                 "aragora.billing.jwt_auth.extract_user_from_request",
-                return_value=_MockUserCtx(is_authenticated=False, org_id=None),
+                return_value=_MockUserCtx(),
             ),
             patch("aragora.server.http_utils.run_async", return_value="batch_ok"),
         ):

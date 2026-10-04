@@ -38,6 +38,17 @@ def _make_batch_mixin():
 class TestBatchSubmission:
     """Tests for batch debate submission."""
 
+    @pytest.fixture(autouse=True)
+    def org_user(self, monkeypatch):
+        """Batch submission requires an authenticated user with an org."""
+        from aragora.billing.auth.context import UserAuthContext
+
+        user = UserAuthContext(authenticated=True, user_id="user-1", org_id="org-1")
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
+
     def test_submit_batch_empty_items_returns_error(self):
         """Should return error when items array is empty."""
         mixin = _make_batch_mixin()

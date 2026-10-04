@@ -17,6 +17,7 @@ from aragora.server.validation.schema import BATCH_SUBMIT_SCHEMA, validate_again
 
 from aragora.rbac.decorators import require_permission
 from aragora.resilience import with_timeout_sync
+from aragora.tenancy.record_scope import require_org_scope
 
 from ..base import (
     HandlerResult,
@@ -106,6 +107,10 @@ class BatchOperationsMixin:
             sanitize_webhook_headers,
             validate_webhook_url,
         )
+
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
 
         body = self.read_json_body(handler)
         if body is None:
@@ -198,13 +203,8 @@ class BatchOperationsMixin:
 
         user_ctx = extract_user_from_request(handler, user_store)
 
-        owner_org_id = None
-        if user_ctx is not None and user_ctx.is_authenticated:
-            candidate_org = getattr(user_ctx, "org_id", None)
-            if isinstance(candidate_org, str) and candidate_org.strip():
-                owner_org_id = candidate_org
         for item in items:
-            item.org_id = owner_org_id
+            item.org_id = scope.org_id
 
         if user_ctx and user_ctx.is_authenticated and user_ctx.org_id:
             if user_store and hasattr(user_store, "get_organization_by_id"):

@@ -10,6 +10,9 @@ os.environ.setdefault("ARAGORA_USE_SECRETS_MANAGER", "0")
 
 import aragora.server.debate_controller as debate_controller_mod
 from aragora.server.fastapi.routes.debates import CreateDebateRequest, create_debate, list_debates
+from aragora.tenancy.record_scope import OrgScope
+
+_SCOPE = OrgScope(org_id="org-1", user_id="user-1", role="member")
 
 
 class _SlowSyncStorage:
@@ -98,6 +101,7 @@ async def test_create_debate_does_not_block_event_loop_for_sync_controller(
         body=CreateDebateRequest(question="Should we cache debate summaries?"),
         request=None,
         auth=None,
+        scope=_SCOPE,
         storage=object(),
     )
     done.set()
@@ -136,6 +140,7 @@ async def test_create_debate_forwards_model_combinations(
         ),
         request=None,
         auth=None,
+        scope=_SCOPE,
         storage=object(),
     )
 

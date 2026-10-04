@@ -500,6 +500,18 @@ class TestGetDebateConvergence:
 # =============================================================================
 
 
+def _as_org_member(client):
+    from aragora.server.fastapi.dependencies.auth import require_authenticated
+    from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+
+    client.app.dependency_overrides[require_authenticated] = lambda: _make_auth_context(
+        "debates:create"
+    )
+    client.app.dependency_overrides[require_org_scope_fastapi] = lambda: OrgScope(
+        org_id="org-1", user_id="user-1", role="admin"
+    )
+
+
 class TestCreateDebate:
     """Tests for POST /api/v2/debates."""
 
@@ -508,14 +520,41 @@ class TestCreateDebate:
         response = client.post("/api/v2/debates", json={"question": "Review this selection"})
         assert response.status_code == 401
 
+    def test_requires_org_before_the_controller(self, client, monkeypatch):
+        """An authenticated caller without an org gets 403 org_required; nothing starts."""
+        from aragora.rbac.models import AuthorizationContext
+        from aragora.server.fastapi.dependencies.auth import require_authenticated
+
+        no_org = AuthorizationContext(
+            user_id="user-1", org_id=None, roles={"admin"}, permissions={"debates:create"}
+        )
+
+        async def _no_org_auth_context(request):
+            return no_org
+
+        monkeypatch.setattr(
+            "aragora.server.fastapi.dependencies.auth.get_auth_context", _no_org_auth_context
+        )
+        client.app.dependency_overrides[require_authenticated] = lambda: no_org
+        controller_getter = MagicMock()
+        with patch(
+            "aragora.server.fastapi.routes.debates._get_debate_controller", controller_getter
+        ):
+            response = client.post(
+                "/api/v2/debates",
+                json={"question": "Review this selection", "metadata": {"org_id": "org-1"}},
+            )
+        client.app.dependency_overrides.clear()
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "org_required"
+        controller_getter.assert_not_called()
+
     def test_creates_debate_for_browser_extension_contract(self, client):
         """Create debate passes extension payload through to the controller."""
         from aragora.server.debate_controller import DebateResponse
-        from aragora.server.fastapi.dependencies.auth import require_authenticated
 
-        client.app.dependency_overrides[require_authenticated] = lambda: _make_auth_context(
-            "debates:create"
-        )
+        _as_org_member(client)
 
         mock_controller = MagicMock()
         mock_controller.start_debate.return_value = DebateResponse(
@@ -565,11 +604,8 @@ class TestCreateDebate:
     def test_create_debate_stamps_caller_org_not_client_metadata(self, client):
         """The debate owner comes from the auth context, never from the body."""
         from aragora.server.debate_controller import DebateResponse
-        from aragora.server.fastapi.dependencies.auth import require_authenticated
 
-        client.app.dependency_overrides[require_authenticated] = lambda: _make_auth_context(
-            "debates:create"
-        )
+        _as_org_member(client)
         mock_controller = MagicMock()
         mock_controller.start_debate.return_value = DebateResponse(
             success=True, debate_id="adhoc_owned", status="created"
@@ -596,11 +632,8 @@ class TestCreateDebate:
     def test_maps_controller_failures_to_http_errors(self, client):
         """Create debate returns controller error details/status for popup display."""
         from aragora.server.debate_controller import DebateResponse
-        from aragora.server.fastapi.dependencies.auth import require_authenticated
 
-        client.app.dependency_overrides[require_authenticated] = lambda: _make_auth_context(
-            "debates:create"
-        )
+        _as_org_member(client)
 
         mock_controller = MagicMock()
         mock_controller.start_debate.return_value = DebateResponse(
