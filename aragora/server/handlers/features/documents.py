@@ -2,11 +2,16 @@
 Document management endpoint handlers.
 
 Endpoints:
-- GET /api/documents - List all uploaded documents
+- GET /api/documents - List the caller's org's documents
 - GET /api/documents/formats - Get supported file formats
 - GET /api/documents/{doc_id} - Get a document by ID
 - POST /api/documents/upload - Upload a document
 - DELETE /api/documents/{doc_id} - Delete a document by ID
+
+Every route except formats needs an authenticated user with an org (401
+``auth_required`` / 403 ``org_required``). Uploads are owned by the caller's
+org; another org's document, or one with an unknown owner, answers exactly
+like a missing document (404 ``not_found``).
 """
 
 from __future__ import annotations
@@ -21,6 +26,12 @@ from enum import Enum
 from typing import Any
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 from ..base import (
     BaseHandler,
@@ -28,7 +39,6 @@ from ..base import (
     error_response,
     handle_errors,
     json_response,
-    require_user_auth,
     safe_error_message,
 )
 from ..utils.file_validation import (
@@ -120,18 +130,24 @@ class DocumentHandler(BaseHandler):
     @require_permission("documents:read")
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route GET document requests to appropriate methods."""
-        if path == "/api/v1/documents":
-            return self._list_documents()
-
         if path == "/api/v1/documents/formats":
             return self._get_supported_formats()
 
+        if path == "/api/v1/documents":
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+            return self._list_documents(scope)
+
         if path.startswith("/api/v1/documents/") and not path.endswith("/upload"):
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
             # Extract doc_id from /api/v1/documents/{doc_id}
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._get_document(doc_id)
+            return self._get_document(doc_id, scope)
 
         return None
 
@@ -142,6 +158,12 @@ class DocumentHandler(BaseHandler):
     ) -> HandlerResult | None:
         """Route POST document requests to appropriate methods."""
         if path == "/api/v1/documents/upload":
+            # Before the rate limiter and the body read, so a refused caller
+            # consumes neither.
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+
             # Extract knowledge processing options from query params
             process_knowledge = query_params.get("process_knowledge", [None])[0]
             if process_knowledge is None:
@@ -153,6 +175,7 @@ class DocumentHandler(BaseHandler):
 
             return self._upload_document(
                 handler,
+                scope=scope,
                 process_knowledge=process_knowledge,
                 workspace_id=workspace_id,
             )
@@ -165,25 +188,27 @@ class DocumentHandler(BaseHandler):
     ) -> HandlerResult | None:
         """Route DELETE document requests to appropriate methods."""
         if path.startswith("/api/v1/documents/") and not path.endswith("/upload"):
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
             # Extract doc_id from /api/v1/documents/{doc_id}
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._delete_document(doc_id)
+            return self._delete_document(doc_id, scope)
         return None
 
     @require_permission("documents:delete")
-    def _delete_document(self, doc_id: str) -> HandlerResult:
-        """Delete a document by ID."""
+    def _delete_document(self, doc_id: str, scope: OrgScope) -> HandlerResult:
+        """Delete a document by ID if it belongs to the caller's org."""
         store = self.get_document_store()
         if not store:
             return error_response("Document storage not configured", 500)
 
         try:
-            # Check if document exists
             doc = store.get(doc_id)
-            if not doc:
-                return error_response(f"Document not found: {doc_id}", 404)
+            if doc is None or not record_visible(getattr(doc, "org_id", None), scope):
+                return record_not_found("Document")
 
             # Delete the document
             success = store.delete(doc_id)
@@ -202,8 +227,8 @@ class DocumentHandler(BaseHandler):
         """Get document store instance."""
         return self.ctx.get("document_store")
 
-    def _list_documents(self) -> HandlerResult:
-        """List all uploaded documents."""
+    def _list_documents(self, scope: OrgScope) -> HandlerResult:
+        """List the documents owned by the caller's org."""
         store = self.get_document_store()
         if not store:
             return json_response(
@@ -211,7 +236,7 @@ class DocumentHandler(BaseHandler):
             )
 
         try:
-            docs = store.list_all()
+            docs = store.list_for_org(scope.org_id)
             return json_response({"documents": docs, "count": len(docs)})
         except (KeyError, ValueError, OSError, TypeError) as e:
             return error_response(safe_error_message(e, "list documents"), 500)
@@ -231,17 +256,17 @@ class DocumentHandler(BaseHandler):
                 }
             )
 
-    def _get_document(self, doc_id: str) -> HandlerResult:
-        """Get a document by ID."""
+    def _get_document(self, doc_id: str, scope: OrgScope) -> HandlerResult:
+        """Get a document (with its full text) if it belongs to the caller's org."""
         store = self.get_document_store()
         if not store:
             return error_response("Document storage not configured", 500)
 
         try:
             doc = store.get(doc_id)
-            if doc:
-                return json_response(doc.to_dict())
-            return error_response(f"Document not found: {doc_id}", 404)
+            if doc is None or not record_visible(getattr(doc, "org_id", None), scope):
+                return record_not_found("Document")
+            return json_response(doc.to_dict())
         except (KeyError, ValueError, OSError, TypeError) as e:
             return error_response(safe_error_message(e, "get document"), 500)
 
@@ -308,12 +333,11 @@ class DocumentHandler(BaseHandler):
         # For simplicity, just return remote IP (full proxy handling is in unified_server)
         return remote_ip
 
-    @require_user_auth
     @handle_errors("document upload")
     def _upload_document(
         self,
         handler: Any,
-        user: Any = None,
+        scope: OrgScope,
         process_knowledge: bool = True,
         workspace_id: str = "default",
     ) -> HandlerResult:
@@ -324,7 +348,7 @@ class DocumentHandler(BaseHandler):
 
         Args:
             handler: HTTP request handler
-            user: Authenticated user (from decorator)
+            scope: The caller's org scope; the document is owned by its org
             process_knowledge: Whether to process through knowledge pipeline
             workspace_id: Workspace ID for knowledge processing
         """
@@ -419,8 +443,10 @@ class DocumentHandler(BaseHandler):
                 file_validation.details,
             ).to_response(file_validation.http_status)
 
-        # Verify actual content matches declared length (detect truncation)
-        if len(file_content) != content_length:
+        # A raw body is the file itself, so a short read means truncation. A
+        # multipart body also holds part headers and boundaries; its length is
+        # checked when the body is read.
+        if "multipart/form-data" not in content_type and len(file_content) != content_length:
             return UploadError(
                 UploadErrorCode.CORRUPTED_UPLOAD,
                 "Upload appears truncated or corrupted",
@@ -448,7 +474,9 @@ class DocumentHandler(BaseHandler):
         from aragora.server.errors import safe_error_message
 
         try:
-            doc = parse_document(file_content, filename)
+            doc = parse_document(
+                file_content, filename, org_id=scope.org_id, created_by=scope.user_id
+            )
             doc_id = store.add(doc)
 
             logger.info(
@@ -473,11 +501,11 @@ class DocumentHandler(BaseHandler):
                     from aragora.knowledge.integration import process_uploaded_document
 
                     metadata = {
-                        "user_id": getattr(user, "user_id", None),
-                        "owner_id": getattr(user, "user_id", None),
-                        "org_id": getattr(user, "org_id", None),
+                        "user_id": scope.user_id,
+                        "owner_id": scope.user_id,
+                        "org_id": scope.org_id,
                         "workspace_id": workspace_id,
-                        "tenant_id": workspace_id or getattr(user, "org_id", None),
+                        "tenant_id": workspace_id or scope.org_id,
                         "source": "documents_upload",
                         "document_store_id": doc_id,
                     }
@@ -595,6 +623,17 @@ class DocumentHandler(BaseHandler):
                 UploadError(UploadErrorCode.CORRUPTED_UPLOAD, "Failed to read upload body"),
             )
 
+        if len(body) != content_length:
+            return (
+                None,
+                None,
+                UploadError(
+                    UploadErrorCode.CORRUPTED_UPLOAD,
+                    "Upload appears truncated or corrupted",
+                    {"expected_bytes": content_length, "received_bytes": len(body)},
+                ),
+            )
+
         boundary_bytes = f"--{boundary}".encode()
         body_parts: list[bytes] = body.split(boundary_bytes)
 
@@ -620,10 +659,9 @@ class DocumentHandler(BaseHandler):
                 headers_raw = part[:header_end].decode("utf-8", errors="ignore")
                 file_data = part[header_end + 4 :]
 
-                # Remove trailing boundary markers
-                if file_data.endswith(b"--\r\n"):
-                    file_data = file_data[:-4]
-                elif file_data.endswith(b"\r\n"):
+                # The CRLF before the next boundary belongs to the delimiter
+                # (RFC 2046 §5.1.1), not to the file.
+                if file_data.endswith(b"\r\n"):
                     file_data = file_data[:-2]
 
                 # Extract and sanitize filename
