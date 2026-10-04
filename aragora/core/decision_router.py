@@ -120,19 +120,22 @@ def _import_metrics():
     _metrics_imported = True
 
 
-_warned_missing_audit_sink = False
+_warned_once: set[str] = set()
+
+
+def _warn_once(key: str, message: str, *args: Any) -> None:
+    # Hooks are resolved on every routed decision; one warning per process is enough.
+    if key not in _warned_once:
+        _warned_once.add(key)
+        logger.warning(message, *args)
 
 
 def _resolve_audit_sink() -> DecisionAuditSink | None:
     """Return the registered audit sink, or None; routing proceeds without an audit trail."""
-    global _warned_missing_audit_sink
     try:
         return get_decision_audit_sink()
     except DecisionRouteNotRegisteredError as e:
-        # route() resolves the sink on every call; one warning per process is enough.
-        if not _warned_missing_audit_sink:
-            _warned_missing_audit_sink = True
-            logger.warning("Routing decisions without an audit trail: %s", e)
+        _warn_once("audit_sink", "Routing decisions without an audit trail: %s", e)
         return None
 
 
@@ -560,6 +563,11 @@ class DecisionRouter:
 
                 self._debate_engine = Arena
 
+            if getattr(request.config, "decision_integrity", None):
+                # An explicitly requested integrity package cannot be built without a
+                # registered builder, so fail before the debate runs rather than after.
+                get_decision_integrity_builder()
+
             # Convert to debate format
             from aragora.agents import get_agents_by_names
             from aragora.core_types import Environment
@@ -705,10 +713,7 @@ class DecisionRouter:
         try:
             build_decision_integrity_payload = get_decision_integrity_builder()
         except DecisionRouteNotRegisteredError as exc:
-            if cfg_raw:
-                logger.warning("Decision integrity was requested but cannot be built: %s", exc)
-            else:
-                logger.debug("Decision integrity utilities unavailable: %s", exc)
+            _warn_once("integrity_builder", "Decision integrity package not built: %s", exc)
             return None
 
         return await build_decision_integrity_payload(

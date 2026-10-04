@@ -41,8 +41,10 @@ def isolated_hooks(monkeypatch):
     # registry only, so load the self-registering packages before swapping.
     import aragora.connectors.chat  # noqa: F401
     import aragora.pipeline  # noqa: F401
+    from aragora.core import decision_router as router_module
 
     monkeypatch.setattr(hooks, "_hooks", {})
+    monkeypatch.setattr(router_module, "_warned_once", set())
     return hooks
 
 
@@ -240,15 +242,44 @@ def _quick_router(answer: str) -> tuple[DecisionRouter, DecisionRequest]:
     return router, request
 
 
+def _debate_router() -> tuple[DecisionRouter, list[object]]:
+    arenas: list[object] = []
+
+    class StubArena:
+        def __init__(self, **_kwargs):
+            arenas.append(self)
+
+        async def run(self):
+            return SimpleNamespace(final_answer="Use LRU", consensus_reached=True)
+
+    router = DecisionRouter(
+        debate_engine=StubArena, enable_caching=False, enable_deduplication=False
+    )
+    return router, arenas
+
+
 async def test_router_optional_hooks_keep_their_fallbacks_when_unregistered(isolated_hooks, caplog):
     router = DecisionRouter(enable_voice_responses=True)
-    request = _request(DecisionType.DEBATE, decision_integrity={"include_plan": True})
+    request = _request(DecisionType.DEBATE)
 
     with caplog.at_level("WARNING", logger="aragora.core.decision_router"):
         assert await router._maybe_build_decision_integrity(request, SimpleNamespace()) is None
+        assert await router._maybe_build_decision_integrity(request, SimpleNamespace()) is None
     assert router._get_tts_bridge() is None
-    # A requested integrity package that cannot be built is reported, not dropped silently.
-    assert "Decision integrity was requested but cannot be built" in caplog.text
+    # A default package that cannot be built is reported once, not dropped silently.
+    assert caplog.text.count("Decision integrity package not built") == 1
+
+
+# Without a builder, a default debate still routes; an explicit integrity request fails
+# before the debate engine is constructed.
+@pytest.mark.parametrize(("integrity", "routed"), [({}, True), ({"include_plan": True}, False)])
+async def test_router_debate_without_an_integrity_builder(isolated_hooks, integrity, routed):
+    router, arenas = _debate_router()
+    request = _request(DecisionType.DEBATE, rounds=1, agents=[], decision_integrity=integrity)
+
+    result = await router.route(request)
+
+    assert (result.success, len(arenas), result.decision_integrity) == (routed, int(routed), None)
 
 
 async def test_router_calls_the_registered_integrity_builder_and_tts_factory(isolated_hooks):
@@ -298,10 +329,7 @@ async def test_router_writes_audit_events_through_the_registered_sink(isolated_h
     assert completed["error"] is None
 
 
-async def test_router_routes_without_an_audit_sink(isolated_hooks, monkeypatch, caplog):
-    from aragora.core import decision_router as router_module
-
-    monkeypatch.setattr(router_module, "_warned_missing_audit_sink", False)
+async def test_router_routes_without_an_audit_sink(isolated_hooks, caplog):
     router, request = _quick_router("ok")
 
     with caplog.at_level("WARNING", logger="aragora.core.decision_router"):
