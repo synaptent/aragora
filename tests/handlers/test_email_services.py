@@ -43,6 +43,12 @@ from aragora.server.handlers.email_services import (
     handle_resolve_followup,
 )
 from aragora.server.handlers.utils.responses import HandlerResult
+from aragora.services.followup_tracker import FollowUpPriority
+from aragora.services.snooze_recommender import SnoozeReason
+
+# The conftest principal; the module takes ownership from the auth context.
+OWNER = ("test-user-001", "test-org-001")
+MINE = {"user_id": OWNER[0], "org_id": OWNER[1]}
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +66,7 @@ def _body(result: HandlerResult) -> dict:
 def _status(result: HandlerResult) -> int:
     """Extract HTTP status code from a HandlerResult."""
     if isinstance(result, dict):
-        return result.get("status_code", result.get("status", 200))
+        return int(result.get("status_code") or result.get("status") or 200)
     return result.status_code
 
 
@@ -97,7 +103,6 @@ class MockFollowUp:
         expected_by=_SENTINEL,
         status=None,
         days_waiting=3,
-        urgency_score=0.7,
         reminder_count=0,
         is_overdue=False,
         resolved_at=None,
@@ -115,10 +120,11 @@ class MockFollowUp:
         )
         self.status = status or MockFollowUpStatus.PENDING
         self.days_waiting = days_waiting
-        self.urgency_score = urgency_score
+        self.priority = FollowUpPriority.NORMAL
         self.reminder_count = reminder_count
         self.is_overdue = is_overdue
-        self.resolved_at = resolved_at
+        self.reply_received_at = resolved_at
+        self.updated_at = resolved_at or datetime.now()
 
 
 class MockSnoozeSuggestion:
@@ -128,15 +134,13 @@ class MockSnoozeSuggestion:
         self,
         snooze_until=None,
         label="Later today",
-        reason="Low priority",
+        reason=SnoozeReason.WORK_HOURS,
         confidence=0.85,
-        source="rules",
     ):
         self.snooze_until = snooze_until or (datetime.now() + timedelta(hours=4))
         self.label = label
         self.reason = reason
         self.confidence = confidence
-        self.source = source
 
 
 class MockSnoozeRecommendation:
@@ -167,7 +171,8 @@ def _reset_module_singletons():
     email_mod._snooze_recommender = None
     email_mod._email_categorizer = None
     _snoozed_emails.clear()
-    yield
+    with patch.dict(email_mod._followup_owners, {"fu-001": OWNER, "fu-1": OWNER}, clear=True):
+        yield
     email_mod._followup_tracker = None
     email_mod._snooze_recommender = None
     email_mod._email_categorizer = None
@@ -211,7 +216,7 @@ def mock_categorizer():
 def mock_auth():
     """Create a mock auth context with full permissions."""
     ctx = MagicMock()
-    ctx.user_id = "test-user-001"
+    ctx.user_id, ctx.org_id = OWNER
     return ctx
 
 
@@ -520,9 +525,9 @@ class TestResolveFollowup:
         mock_tracker.resolve_followup.return_value = resolved
         result = await handle_resolve_followup("fu-001", {}, auth_context=mock_auth)
         assert _status(result) == 200
-        # Default status should be "manually_resolved"
+        # The default "manually_resolved" maps to the tracker's RESOLVED status
         call_kwargs = mock_tracker.resolve_followup.call_args.kwargs
-        assert call_kwargs["status"] == "manually_resolved"
+        assert call_kwargs["status"] == "resolved"
 
     @pytest.mark.asyncio
     async def test_resolve_with_notes(self, mock_tracker, mock_auth):
@@ -775,10 +780,10 @@ class TestApplySnooze:
         assert _status(result) == 401
 
     @pytest.mark.asyncio
-    async def test_apply_snooze_stores_user_id(self, mock_auth):
+    async def test_apply_snooze_stores_the_callers_identity(self, mock_auth):
         data = {"snooze_until": "2026-03-01T10:00:00Z"}
         await handle_apply_snooze("email-001", data, user_id="user1", auth_context=mock_auth)
-        assert _snoozed_emails["email-001"]["user_id"] == "user1"
+        assert _snoozed_emails["email-001"] | MINE == _snoozed_emails["email-001"]
 
     @pytest.mark.asyncio
     async def test_apply_snooze_overwrites_existing(self, mock_auth):
@@ -811,7 +816,7 @@ class TestCancelSnooze:
         # First add a snooze
         _snoozed_emails["email-001"] = {
             "email_id": "email-001",
-            "user_id": "user1",
+            **MINE,
             "snooze_until": datetime.now() + timedelta(hours=2),
             "label": "Later",
             "snoozed_at": datetime.now(),
@@ -855,14 +860,14 @@ class TestGetSnoozedEmails:
         now = datetime.now()
         _snoozed_emails["e-1"] = {
             "email_id": "e-1",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now + timedelta(hours=2),
             "label": "Later",
             "snoozed_at": now,
         }
         _snoozed_emails["e-2"] = {
             "email_id": "e-2",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now - timedelta(hours=1),  # Due
             "label": "Overdue",
             "snoozed_at": now - timedelta(hours=3),
@@ -878,7 +883,7 @@ class TestGetSnoozedEmails:
         now = datetime.now()
         _snoozed_emails["e-1"] = {
             "email_id": "e-1",
-            "user_id": "user-a",
+            **MINE,
             "snooze_until": now + timedelta(hours=2),
             "label": "A",
             "snoozed_at": now,
@@ -900,14 +905,14 @@ class TestGetSnoozedEmails:
         now = datetime.now()
         _snoozed_emails["e-later"] = {
             "email_id": "e-later",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now + timedelta(hours=5),
             "label": "Later",
             "snoozed_at": now,
         }
         _snoozed_emails["e-soon"] = {
             "email_id": "e-soon",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now + timedelta(hours=1),
             "label": "Soon",
             "snoozed_at": now,
@@ -936,7 +941,7 @@ class TestProcessDueSnoozes:
         now = datetime.now()
         _snoozed_emails["e-1"] = {
             "email_id": "e-1",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now + timedelta(hours=5),
             "label": "Later",
             "snoozed_at": now,
@@ -954,14 +959,14 @@ class TestProcessDueSnoozes:
         now = datetime.now()
         _snoozed_emails["e-due"] = {
             "email_id": "e-due",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now - timedelta(hours=1),
             "label": "Overdue",
             "snoozed_at": now - timedelta(hours=3),
         }
         _snoozed_emails["e-not-due"] = {
             "email_id": "e-not-due",
-            "user_id": "default",
+            **MINE,
             "snooze_until": now + timedelta(hours=5),
             "label": "Future",
             "snoozed_at": now,
@@ -1300,11 +1305,9 @@ class TestEmailServicesHandlerCanHandle:
 class TestEmailServicesHandlerPost:
     """Tests for EmailServicesHandler.handle_post.
 
-    Note: handle_post dispatches to standalone handler functions which do their
-    own _check_email_permission check. Since the handler class already verifies
-    auth via get_auth_context + check_permission, the standalone functions
-    receive no auth_context and would return 401. We patch _check_email_permission
-    to return None (allowed) for these routing tests.
+    Note: handle_post dispatches to standalone handler functions which repeat
+    the permission check on the auth context the handler passes them. We patch
+    _check_email_permission to return None (allowed) for these routing tests.
     """
 
     @pytest.fixture(autouse=True)
@@ -1397,7 +1400,6 @@ class TestEmailServicesHandlerGet:
 
     Note: handle_get calls standalone functions which do their own
     _check_email_permission. We patch it to return None (allowed).
-    The categories endpoint is handled separately in the handler (public).
     """
 
     @pytest.fixture(autouse=True)
@@ -1406,9 +1408,7 @@ class TestEmailServicesHandlerGet:
             yield
 
     @pytest.mark.asyncio
-    async def test_get_categories_public(self, handler, mock_http_handler):
-        """Categories endpoint is public (no auth needed via handler)."""
-
+    async def test_get_categories(self, handler, mock_http_handler):
         class MockEmailCategory(Enum):
             INVOICES = "invoices"
 
@@ -1474,7 +1474,7 @@ class TestEmailServicesHandlerDelete:
     async def test_delete_cancel_snooze(self, handler, mock_http_handler):
         _snoozed_emails["email-001"] = {
             "email_id": "email-001",
-            "user_id": "test-user-001",
+            **MINE,
             "snooze_until": datetime.now() + timedelta(hours=2),
             "label": "Later",
             "snoozed_at": datetime.now(),
@@ -1519,10 +1519,23 @@ class TestEmailServicesHandlerInit:
     def test_route_patterns_compiled(self, handler):
         assert len(handler._compiled_patterns) > 0
 
-    def test_handle_returns_none(self, handler):
-        """The sync handle() method returns None (routes go through async)."""
-        result = handler.handle("/api/v1/email/categories", {}, MagicMock())
+    @pytest.mark.asyncio
+    async def test_handle_returns_none_for_non_get_requests(self, handler):
+        """handle() serves GET only; the other methods have their own hooks."""
+        request = MagicMock()
+        request.command = "PATCH"
+        result = await handler.handle("/api/v1/email/categories", {}, request)
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_handle_delegates_get_to_handle_get(self, handler):
+        request = MagicMock()
+        request.command = "GET"
+        sentinel = MagicMock()
+        with patch.object(handler, "handle_get", AsyncMock(return_value=sentinel)) as handle_get:
+            result = await handler.handle("/api/v1/email/snoozed", {"a": "1"}, request)
+        assert result is sentinel
+        handle_get.assert_awaited_once_with("/api/v1/email/snoozed", {"a": "1"}, request)
 
 
 # ============================================================================
@@ -1570,7 +1583,7 @@ class TestEdgeCases:
         """Cancel and then re-snooze the same email."""
         _snoozed_emails["e-1"] = {
             "email_id": "e-1",
-            "user_id": "user1",
+            **MINE,
             "snooze_until": datetime.now() + timedelta(hours=1),
             "label": "Old",
             "snoozed_at": datetime.now(),
@@ -1600,7 +1613,7 @@ class TestEdgeCases:
         assert "2026-02-20" in data["resolved_at"]
 
     @pytest.mark.asyncio
-    async def test_resolve_followup_no_resolved_at(self, mock_tracker, mock_auth):
+    async def test_resolve_followup_resolved_at_is_the_update_time(self, mock_tracker, mock_auth):
         resolved = MockFollowUp(
             status=MockFollowUpStatus.RESOLVED,
             resolved_at=None,
@@ -1608,7 +1621,7 @@ class TestEdgeCases:
         mock_tracker.resolve_followup.return_value = resolved
         result = await handle_resolve_followup("fu-1", {}, auth_context=mock_auth)
         data = _data(result)
-        assert data["resolved_at"] is None
+        assert data["resolved_at"] == resolved.updated_at.isoformat()
 
     @pytest.mark.asyncio
     async def test_get_pending_expected_by_none(self, mock_tracker, mock_auth):
