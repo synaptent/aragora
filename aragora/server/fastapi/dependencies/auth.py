@@ -70,15 +70,26 @@ async def get_auth_context(request: Request) -> AuthorizationContext:
 
 async def require_authenticated(
     auth: AuthorizationContext = Depends(get_auth_context),
+    request: Request = None,  # type: ignore[assignment]  # FastAPI always injects it
 ) -> AuthorizationContext:
     """Require an authenticated user.
 
-    Raises 401 if the request is not authenticated.
+    Raises 401 if the request is not authenticated, except that a request
+    carrying only the static API token on an org-scoped route gets 403
+    ``org_required`` (the token identifies no user, so no org). Direct callers
+    may omit ``request``.
 
     Returns:
         AuthorizationContext for the authenticated user.
     """
     if auth.user_id == "anonymous":
+        if request is not None:
+            from aragora.server.fastapi.middleware.error_handling import APIError
+            from aragora.tenancy.record_scope import static_token_denial
+
+            denial = static_token_denial(request.url.path, request.headers)
+            if denial is not None:
+                raise APIError(denial.message, status_code=denial.status, code=denial.code)
         raise HTTPException(
             status_code=401,
             detail="Authentication required",
