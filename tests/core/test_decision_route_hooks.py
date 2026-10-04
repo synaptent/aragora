@@ -127,12 +127,29 @@ def _function_calls(path: Path, function_name: str) -> set[str]:
         ("aragora/server/unified_server.py", "_init_decision_router"),
         ("aragora/server/fastapi/factory.py", "lifespan"),
         ("scripts/control_plane_deliberation_worker.py", "run_worker"),
+        ("aragora/bots/commands.py", "_route_via_decision_router"),
     ],
 )
 def test_process_entrypoints_register_decision_routes(relative_path, function_name):
-    # Processes that can route decisions install the server-owned audit sink at startup.
+    # Entry points that can route decisions install every hook, including the audit sink.
     calls = _function_calls(REPO_ROOT / relative_path, function_name)
     assert "register_decision_routes" in calls
+
+
+def test_unified_server_creates_the_router_when_registration_cannot_import(monkeypatch):
+    import sys
+
+    from aragora.core import decision
+    from aragora.server import unified_server
+
+    router = object()
+    monkeypatch.setitem(sys.modules, "aragora.server.decision_routes", None)
+    monkeypatch.setattr(decision, "get_decision_router", lambda **_: router)
+    monkeypatch.setattr(unified_server.UnifiedHandler, "decision_router", None, raising=False)
+
+    unified_server.UnifiedServer._init_decision_router(SimpleNamespace())
+
+    assert unified_server.UnifiedHandler.decision_router is router
 
 
 def test_unified_audit_sink_writes_the_decision_events(monkeypatch):
@@ -222,12 +239,15 @@ def _quick_router(answer: str) -> tuple[DecisionRouter, DecisionRequest]:
     return router, request
 
 
-async def test_router_optional_hooks_keep_their_fallbacks_when_unregistered(isolated_hooks):
+async def test_router_optional_hooks_keep_their_fallbacks_when_unregistered(isolated_hooks, caplog):
     router = DecisionRouter(enable_voice_responses=True)
     request = _request(DecisionType.DEBATE, decision_integrity={"include_plan": True})
 
-    assert await router._maybe_build_decision_integrity(request, SimpleNamespace()) is None
+    with caplog.at_level("WARNING", logger="aragora.core.decision_router"):
+        assert await router._maybe_build_decision_integrity(request, SimpleNamespace()) is None
     assert router._get_tts_bridge() is None
+    # A requested integrity package that cannot be built is reported, not dropped silently.
+    assert "Decision integrity was requested but cannot be built" in caplog.text
 
 
 async def test_router_calls_the_registered_integrity_builder_and_tts_factory(isolated_hooks):

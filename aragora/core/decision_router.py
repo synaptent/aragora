@@ -675,7 +675,10 @@ class DecisionRouter:
         try:
             build_decision_integrity_payload = get_decision_integrity_builder()
         except DecisionRouteNotRegisteredError as exc:
-            logger.debug("Decision integrity utilities unavailable: %s", exc)
+            if cfg_raw:
+                logger.warning("Decision integrity was requested but cannot be built: %s", exc)
+            else:
+                logger.debug("Decision integrity utilities unavailable: %s", exc)
             return None
 
         return await build_decision_integrity_payload(
