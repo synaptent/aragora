@@ -134,6 +134,7 @@ class DebateConfig:
     enable_interventions: bool | None = None  # Enable intervention queue for human-in-the-loop
     comparison_config: dict | None = None  # Candidate lineups for best-result selection
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
+    org_id: str | None = None  # Owning org, from the authenticated creator
 
     @property
     def model_comparison(self) -> dict | None:

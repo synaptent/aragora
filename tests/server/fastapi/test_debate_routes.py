@@ -562,6 +562,37 @@ class TestCreateDebate:
         assert debate_request.metadata["source"] == "browser_extension_context_menu"
         assert debate_request.metadata["source_url"] == "https://example.com"
 
+    def test_create_debate_stamps_caller_org_not_client_metadata(self, client):
+        """The debate owner comes from the auth context, never from the body."""
+        from aragora.server.debate_controller import DebateResponse
+        from aragora.server.fastapi.dependencies.auth import require_authenticated
+
+        client.app.dependency_overrides[require_authenticated] = lambda: _make_auth_context(
+            "debates:create"
+        )
+        mock_controller = MagicMock()
+        mock_controller.start_debate.return_value = DebateResponse(
+            success=True, debate_id="adhoc_owned", status="created"
+        )
+
+        with patch(
+            "aragora.server.fastapi.routes.debates._get_debate_controller",
+            return_value=mock_controller,
+        ):
+            response = client.post(
+                "/api/v2/debates",
+                json={
+                    "question": "Should we shard the database?",
+                    "metadata": {"organization_id": "org-evil", "org_id": "org-evil"},
+                },
+            )
+
+        client.app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        debate_request = mock_controller.start_debate.call_args.args[0]
+        assert debate_request.org_id == "org-1"
+
     def test_maps_controller_failures_to_http_errors(self, client):
         """Create debate returns controller error details/status for popup display."""
         from aragora.server.debate_controller import DebateResponse

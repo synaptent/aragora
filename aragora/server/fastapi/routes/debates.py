@@ -963,6 +963,11 @@ async def create_debate(
             logger.warning("Invalid debate request: %s", e)
             raise HTTPException(status_code=400, detail="Invalid debate request")
 
+        caller_org = getattr(auth, "org_id", None)
+        debate_request.org_id = (
+            caller_org if isinstance(caller_org, str) and caller_org.strip() else None
+        )
+
         try:
             controller = _get_debate_controller(request, storage)
             response = await _call_sync_aware(controller.start_debate, debate_request)

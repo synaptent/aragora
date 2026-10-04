@@ -196,7 +196,15 @@ class BatchOperationsMixin:
         elif hasattr(handler.__class__, "user_store"):
             user_store = handler.__class__.user_store
 
-        user_ctx = extract_user_from_request(handler, user_store) if user_store else None
+        user_ctx = extract_user_from_request(handler, user_store)
+
+        owner_org_id = None
+        if user_ctx is not None and user_ctx.is_authenticated:
+            candidate_org = getattr(user_ctx, "org_id", None)
+            if isinstance(candidate_org, str) and candidate_org.strip():
+                owner_org_id = candidate_org
+        for item in items:
+            item.org_id = owner_org_id
 
         if user_ctx and user_ctx.is_authenticated and user_ctx.org_id:
             if user_store and hasattr(user_store, "get_organization_by_id"):
@@ -304,6 +312,9 @@ class BatchOperationsMixin:
 
     def _create_debate_executor(self: _DebatesHandlerProtocol) -> Callable[[BatchItem], Any]:
         """Create a debate executor function for the batch queue."""
+        # The controller refuses to start debates it cannot persist, so batch
+        # debates need the server's debate storage.
+        storage = self.ctx.get("storage")
 
         async def execute_debate(item: BatchItem) -> Any:
             """Execute a single debate from batch."""
@@ -318,6 +329,7 @@ class BatchOperationsMixin:
             controller = DebateController(
                 factory=factory,
                 emitter=emitter,
+                storage=storage,
             )
 
             request = DebateRequest(
@@ -325,6 +337,7 @@ class BatchOperationsMixin:
                 agents_str=item.agents,
                 rounds=item.rounds,
                 consensus=item.consensus,
+                org_id=item.org_id,
             )
 
             response = controller.start_debate(request)

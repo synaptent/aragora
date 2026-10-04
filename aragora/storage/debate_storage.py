@@ -260,9 +260,9 @@ class DebateStorage(SQLiteStore):
                 """
                 INSERT INTO debates (
                     id, slug, task, agents, artifact_json,
-                    consensus_reached, confidence
+                    consensus_reached, confidence, is_public
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
             """,
                 (
                     artifact.artifact_id,
@@ -345,6 +345,8 @@ class DebateStorage(SQLiteStore):
         Save debate data directly (without DebateArtifact).
 
         Useful for saving streaming debates before full artifact is built.
+        New debates are private (``is_public = 0``); only ``set_public``
+        (the share flow) makes a debate public.
 
         Args:
             debate_data: Debate data dict
@@ -361,9 +363,9 @@ class DebateStorage(SQLiteStore):
                 """
                 INSERT INTO debates (
                     id, slug, task, agents, artifact_json,
-                    consensus_reached, confidence, org_id
+                    consensus_reached, confidence, org_id, is_public
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
             """,
                 (
                     debate_id,
