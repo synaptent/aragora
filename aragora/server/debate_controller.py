@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -84,11 +85,31 @@ _FIRST_SUCCESSFUL_SELECTION_STRATEGY = "first_successful"
 _SUPPORTED_COMPARISON_SELECTION_STRATEGIES = {
     _DEFAULT_COMPARISON_SELECTION_STRATEGY,
 }
+_FALLBACK_DEBATE_DEADLINE_SECONDS = 900.0
+# run_async() applies its own timeout (30 s by default) around the debate
+# coroutine. It must outlast the debate deadline so the deadline, not
+# run_async, cancels the arena, with a little time for the arena to unwind.
+_RUN_ASYNC_CLEANUP_MARGIN_SECONDS = 15.0
 
 if TYPE_CHECKING:
     from aragora.server.stream import SyncEventEmitter
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_debate_deadline(protocol_timeout: Any) -> float:
+    """Return the finite deadline (seconds) for one server-run debate.
+
+    Uses the protocol's ``timeout_seconds``, else ``DEBATE_TIMEOUT_SECONDS``,
+    else a fixed default; zero, negative, non-finite and non-numeric values
+    are skipped so the debate never waits without bound.
+    """
+    for candidate in (protocol_timeout, DEBATE_TIMEOUT_SECONDS):
+        if isinstance(candidate, bool) or not isinstance(candidate, (int, float)):
+            continue
+        if math.isfinite(candidate) and candidate > 0:
+            return float(candidate)
+    return _FALLBACK_DEBATE_DEADLINE_SECONDS
 
 
 def _parse_budget_limit(value: Any) -> float | None:
@@ -1171,18 +1192,13 @@ class DebateController:
 
         self.factory.reset_circuit_breakers(arena)
 
-        protocol_timeout = getattr(arena.protocol, "timeout_seconds", 0)
-        timeout = (
-            protocol_timeout
-            if isinstance(protocol_timeout, (int, float)) and protocol_timeout > 0
-            else DEBATE_TIMEOUT_SECONDS
-        )
+        timeout = _resolve_debate_deadline(getattr(arena.protocol, "timeout_seconds", 0))
         update_debate_status(debate_id, "running")
 
         async def run_with_timeout():
             return await asyncio.wait_for(arena.run(), timeout=timeout)
 
-        result = run_async(run_with_timeout())
+        result = run_async(run_with_timeout(), timeout=timeout + _RUN_ASYNC_CLEANUP_MARGIN_SECONDS)
         duration_seconds = time.monotonic() - candidate_started
 
         quality_meta: dict[str, Any] | None = None
