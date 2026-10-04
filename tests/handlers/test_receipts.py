@@ -37,6 +37,8 @@ import pytest
 from aragora.server.handlers.receipts import ReceiptsHandler, _render_shared_receipt_html
 from aragora.storage.receipt_store import StoredReceipt
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,6 +62,35 @@ def _status(result) -> int:
     return result.status_code
 
 
+# The org the autouse auth fixture signs every request in as.
+TEST_ORG = "test-org-001"
+
+
+def _owned(receipt: Any, org_id: str) -> Any:
+    """``receipt`` when ``org_id`` owns it, else None (the store's org filter)."""
+    return receipt if receipt is not None and getattr(receipt, "org_id", None) == org_id else None
+
+
+def _scope_store_double(store: MagicMock) -> MagicMock:
+    """Answer the org-scoped store methods from the unscoped mocks a test configures."""
+    store.get_for_org.side_effect = lambda rid, org_id: _owned(store.get(rid), org_id)
+    store.get_by_gauntlet_for_org.side_effect = lambda gid, org_id: _owned(
+        store.get_by_gauntlet(gid), org_id
+    )
+    store.list_for_org.side_effect = lambda org_id, **kw: [
+        r for r in store.list(**kw) if _owned(r, org_id)
+    ]
+    store.count_for_org.side_effect = lambda org_id, **kw: store.count(**kw)
+    store.search_for_org.side_effect = lambda org_id, **kw: [
+        r for r in store.search(**kw) if _owned(r, org_id)
+    ]
+    store.search_count_for_org.side_effect = lambda org_id, **kw: store.search_count(**kw)
+    store.stats_for_org.side_effect = lambda org_id: store.get_stats()
+    store.retention_status_for_org.side_effect = lambda org_id: store.get_retention_status()
+    store.get_by_user_for_org.side_effect = lambda org_id, **kw: store.get_by_user(**kw)
+    return store
+
+
 class MockReceipt:
     """Mock receipt object returned by the store."""
 
@@ -79,8 +110,11 @@ class MockReceipt:
         coverage_score: float = 0.85,
         verification_coverage: float = 0.8,
         data: dict[str, Any] | None = None,
+        org_id: str | None = TEST_ORG,
     ):
         self.receipt_id = receipt_id
+        self.org_id = org_id
+        self.signature: str | None = None
         self.debate_id = debate_id
         self.verdict = verdict
         self.confidence = confidence
@@ -188,9 +222,8 @@ def mock_store():
     store.get_stats.return_value = {"total": 0, "by_verdict": {}}
     store.get_retention_status.return_value = {"policy": "7_years", "active": True}
     store.get_by_user.return_value = ([], 0)
-    store.get_signature.return_value = None
-    store.store_signature.return_value = None
-    return store
+    store.update_signature.return_value = True
+    return _scope_store_double(store)
 
 
 @pytest.fixture
@@ -293,7 +326,7 @@ class TestCanHandle:
         assert not handler.can_handle("/api/v2/debates", "GET")
 
     def test_wrong_version_rejected(self, handler):
-        assert not handler.can_handle("/api/v1/receipts", "GET")
+        assert not handler.can_handle("/api/v3/receipts", "GET")
 
     def test_delete_method_rejected(self, handler):
         assert not handler.can_handle("/api/v2/receipts", "DELETE")
@@ -672,6 +705,7 @@ class TestVerifyReceipt:
 
     @pytest.mark.asyncio
     async def test_verify_success(self, handler, mock_store):
+        mock_store.get.return_value = MockReceipt()
         mock_store.verify_signature.return_value = MockSignatureResult(valid=True)
         mock_store.verify_integrity.return_value = {"integrity_valid": True}
 
@@ -706,6 +740,7 @@ class TestVerifyReceipt:
     @pytest.mark.asyncio
     async def test_verify_signature_result_as_dict(self, handler, mock_store):
         """When signature result doesn't have to_dict, it's returned directly."""
+        mock_store.get.return_value = MockReceipt()
         mock_store.verify_signature.return_value = {"valid": True}
         mock_store.verify_integrity.return_value = {"integrity_valid": True}
 
@@ -725,6 +760,7 @@ class TestVerifyIntegrity:
 
     @pytest.mark.asyncio
     async def test_verify_integrity_success(self, handler, mock_store):
+        mock_store.get.return_value = MockReceipt()
         mock_store.verify_integrity.return_value = {"integrity_valid": True}
 
         result = await handler.handle("POST", "/api/v2/receipts/rcpt-001/verify")
@@ -745,6 +781,7 @@ class TestVerifyIntegrity:
     @pytest.mark.asyncio
     async def test_verify_integrity_valid_with_error(self, handler, mock_store):
         """When error exists but integrity is not explicitly False, return the result."""
+        mock_store.get.return_value = MockReceipt()
         mock_store.verify_integrity.return_value = {
             "integrity_valid": True,
             "error": "Some warning",
@@ -766,6 +803,7 @@ class TestVerifySignature:
 
     @pytest.mark.asyncio
     async def test_verify_signature_success(self, handler, mock_store):
+        mock_store.get.return_value = MockReceipt()
         mock_store.verify_signature.return_value = MockSignatureResult(valid=True)
 
         result = await handler.handle("POST", "/api/v2/receipts/rcpt-001/verify-signature")
@@ -784,6 +822,7 @@ class TestVerifySignature:
 
     @pytest.mark.asyncio
     async def test_verify_signature_invalid(self, handler, mock_store):
+        mock_store.get.return_value = MockReceipt()
         mock_store.verify_signature.return_value = MockSignatureResult(
             valid=False, error="Invalid signature"
         )
@@ -894,7 +933,7 @@ class TestSignBatch:
 
         # Instead, test via the import path within the sign batch logic
         mock_store.get.return_value = MockReceipt()
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": None}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": None}):
             result = await handler.handle(
                 "POST",
                 "/api/v2/receipts/sign-batch",
@@ -909,7 +948,7 @@ class TestSignBatch:
         mock_signing.ReceiptSigner.return_value = MagicMock()
         mock_signing.SignatoryInfo = MagicMock()
 
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": mock_signing}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": mock_signing}):
             result = await handler.handle(
                 "POST",
                 "/api/v2/receipts/sign-batch",
@@ -927,7 +966,7 @@ class TestSignBatch:
         mock_signing.ReceiptSigner.return_value = MagicMock()
         mock_signing.SignatoryInfo = MagicMock()
 
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": mock_signing}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": mock_signing}):
             result = await handler.handle(
                 "POST",
                 "/api/v2/receipts/sign-batch",
@@ -945,7 +984,7 @@ class TestSignBatch:
         mock_signing.HMACSigner.from_env.return_value = MagicMock()
         mock_signing.ReceiptSigner.return_value = MagicMock()
 
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": mock_signing}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": mock_signing}):
             result = await handler.handle(
                 "POST",
                 "/api/v2/receipts/sign-batch",
@@ -958,13 +997,14 @@ class TestSignBatch:
 
     @pytest.mark.asyncio
     async def test_sign_batch_already_signed(self, handler, mock_store):
-        mock_store.get.return_value = MockReceipt()
-        mock_store.get_signature.return_value = "existing-sig"
+        signed = MockReceipt()
+        signed.signature = "existing-sig"
+        mock_store.get.return_value = signed
         mock_signing = MagicMock()
         mock_signing.HMACSigner.from_env.return_value = MagicMock()
         mock_signing.ReceiptSigner.return_value = MagicMock()
 
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": mock_signing}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": mock_signing}):
             result = await handler.handle(
                 "POST",
                 "/api/v2/receipts/sign-batch",
@@ -978,17 +1018,18 @@ class TestSignBatch:
     @pytest.mark.asyncio
     async def test_sign_batch_success(self, handler, mock_store):
         mock_store.get.return_value = MockReceipt()
-        mock_store.get_signature.return_value = None
 
         mock_signer = MagicMock()
-        mock_signer.sign.return_value = b"signature"
+        mock_signer.sign.return_value.signature = "c2lnbmF0dXJl"
+        mock_signer.sign.return_value.signature_metadata.algorithm = "HMAC-SHA256"
+        mock_signer.sign.return_value.signature_metadata.key_id = "key-1"
 
         mock_signing = MagicMock()
         mock_signing.HMACSigner.from_env.return_value = MagicMock()
         mock_signing.ReceiptSigner.return_value = mock_signer
         mock_signing.SignatoryInfo = MagicMock()
 
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": mock_signing}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": mock_signing}):
             result = await handler.handle(
                 "POST",
                 "/api/v2/receipts/sign-batch",
@@ -998,6 +1039,9 @@ class TestSignBatch:
         assert _status(result) == 200
         assert body["results"][0]["status"] == "signed"
         assert body["summary"]["signed"] == 1
+        mock_store.update_signature.assert_called_once_with(
+            "rcpt-001", "c2lnbmF0dXJl", "HMAC-SHA256", "key-1"
+        )
 
 
 # ---------------------------------------------------------------------------

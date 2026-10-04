@@ -24,7 +24,17 @@ Endpoints:
     GET  /api/v2/receipts/share/:token                 - Access receipt via share token
     GET  /api/v2/receipts/signing-key                  - ODR signing public key (JSON envelope)
     GET  /.well-known/aragora-odr-signing-key          - ODR signing public key (raw PEM)
+    GET  /api/v1/receipts                              - Legacy/frontend receipt summaries
+    GET  /api/v1/receipts/:receipt_id                  - Legacy alias of the v2 receipt read
+    GET  /api/v1/receipts/:receipt_id/export           - Legacy alias of the v2 export
+    POST /api/v1/receipts/:receipt_id/verify           - Legacy integrity check (GET also accepted)
+    POST /api/v1/receipts/:receipt_id/deliver          - Legacy/frontend delivery bridge
     GET  /api/v1/receipts/deliveries                   - Legacy/frontend delivery history bridge
+
+Receipts are org-owned. Every route above answers only for receipts owned by
+the caller's org (another org's or an unknown-owner receipt is the same 404 as
+a missing one) except the public-by-design routes: the share-token read, the
+two signing-key routes and the stateless POST /api/v2/receipts/verify.
 
 These endpoints support the "defensible decisions" pillar with:
 - Cryptographic signature verification
@@ -64,6 +74,12 @@ from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.server.handlers.openapi_decorator import api_endpoint
 from aragora.rbac.decorators import PermissionDeniedError, require_permission
 from aragora.server.validation.query_params import safe_query_int
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,29 +95,6 @@ def _request_auth_context(handler: Any) -> Any | None:
 
     context = getattr(handler, "_auth_context", None)
     return context if isinstance(context, AuthorizationContext) else None
-
-
-def _auth_enabled() -> bool:
-    """True when the deployment requires authentication for protected routes."""
-    from aragora.server.auth import auth_config
-
-    return bool(auth_config.enabled)
-
-
-def _public_odr_export_enabled() -> bool:
-    """True when ``format=odr`` is served to a caller carrying no AuthorizationContext.
-
-    Read per request, like :func:`_auth_enabled`, so a deployment can be flipped
-    without a restart.
-    """
-    from aragora.config.env_helpers import env_bool
-
-    return env_bool("ARAGORA_ENABLE_PUBLIC_ODR_EXPORT", False)
-
-
-def _auth_required_response() -> HandlerResult:
-    """401 envelope matching the one the server's own auth layer emits."""
-    return json_response({"error": "Authentication required", "code": "auth_required"}, status=401)
 
 
 def _permission_denied_response(exc: Exception) -> HandlerResult:
@@ -516,6 +509,60 @@ def _extract_decision_receipt_payload(receipt: Any) -> dict[str, Any]:
         return payload
 
 
+#: Delivery-history field naming the org that owns the delivered receipt;
+#: stripped from every listing.
+_DELIVERY_ORG_KEY = "_org_id"
+
+_V1_PREFIX = "/api/v1/receipts"
+_V1_ACTIONS = frozenset({"verify", "export", "deliver"})
+#: v1 receipt paths owned by other handlers (gauntlet anchoring).
+_V1_FOREIGN_SEGMENTS = frozenset({"recent-anchors"})
+
+
+def _v1_receipt_route(path: str) -> tuple[str | None, str | None] | None:
+    """Parse a v1 receipt path into ``(receipt_id, action)``.
+
+    ``(None, None)`` is the list route and ``("deliveries", None)`` the delivery
+    history. Returns None for paths this handler does not serve, including the
+    gauntlet anchor routes (``recent-anchors``, ``{id}/anchor-status``).
+    """
+    if path != _V1_PREFIX and not path.startswith(_V1_PREFIX + "/"):
+        return None
+    rest = path[len(_V1_PREFIX) :].strip("/")
+    if not rest:
+        return None, None
+    segments = rest.split("/")
+    receipt_id = segments[0]
+    if not receipt_id or receipt_id in _V1_FOREIGN_SEGMENTS:
+        return None
+    if len(segments) == 1:
+        return receipt_id, None
+    if len(segments) == 2 and segments[1] in _V1_ACTIONS and receipt_id != "deliveries":
+        return receipt_id, segments[1]
+    return None
+
+
+def _v1_receipt_summary(receipt: Any) -> dict[str, Any]:
+    """The receipt summary the legacy ``GET /api/v1/receipts`` list returns."""
+    data = getattr(receipt, "data", None)
+    data = data if isinstance(data, dict) else {}
+    timestamp = data.get("timestamp")
+    created_at = getattr(receipt, "created_at", None)
+    if not timestamp and isinstance(created_at, (int, float)):
+        timestamp = datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
+    findings = data.get("findings")
+    return {
+        "receipt_id": getattr(receipt, "receipt_id", None),
+        "gauntlet_id": getattr(receipt, "gauntlet_id", None),
+        "timestamp": timestamp,
+        "verdict": getattr(receipt, "verdict", None),
+        "confidence": getattr(receipt, "confidence", None),
+        "risk_level": getattr(receipt, "risk_level", None),
+        "findings_count": len(findings) if isinstance(findings, list) else 0,
+        "checksum": getattr(receipt, "checksum", None),
+    }
+
+
 class ReceiptsHandler(BaseHandler):
     """
     HTTP handler for decision receipt operations.
@@ -531,6 +578,7 @@ class ReceiptsHandler(BaseHandler):
         "/api/v2/receipts/stats",
         "/api/v2/receipts/signing-key",
         "/.well-known/aragora-odr-signing-key",
+        "/api/v1/receipts",
         "/api/v1/receipts/deliveries",
         "/api/v1/receipts/*/deliver",
     ]
@@ -589,12 +637,9 @@ class ReceiptsHandler(BaseHandler):
             return method == "GET"
         if path.startswith("/api/v2/receipts"):
             return method in ("GET", "POST")
-        if path == "/api/v1/receipts/deliveries":
-            return method == "GET"
-        # v1 delivery bridge for frontend DeliveryModal
-        if path.startswith("/api/v1/receipts/") and path.endswith("/deliver"):
-            return method == "POST"
-        return False
+        # The route index asks without a method, so v1 paths answer by path
+        # alone; handle() rejects a method a route does not support.
+        return method in ("GET", "POST") and _v1_receipt_route(path) is not None
 
     @staticmethod
     def _normalize_receipt_path(path: str) -> str:
@@ -607,6 +652,8 @@ class ReceiptsHandler(BaseHandler):
         """
         if path == "/api/v1/receipts/deliveries/":
             return "/api/v1/receipts/deliveries"
+        if path == "/api/v1/receipts/":
+            return "/api/v1/receipts"
         if path == "/api/v2/receipts/":
             return "/api/v2/receipts"
         return path
@@ -682,71 +729,54 @@ class ReceiptsHandler(BaseHandler):
                     "Not found: POST an ODR document to /api/v2/receipts/verify", 404
                 )
 
+            # Access shared receipt (public endpoint)
+            if path.startswith("/api/v2/receipts/share/") and method == "GET":
+                token = path.split("/api/v2/receipts/share/")[1].rstrip("/")
+                return await self._get_shared_receipt(token, query_params, headers)
+
+            # Every other route reads or acts on org-owned receipts.
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+
+            if path == _V1_PREFIX or path.startswith(_V1_PREFIX + "/"):
+                return await self._handle_v1(path, method, body, query_params, handler, scope)
+
             # Stats endpoint
             if path == "/api/v2/receipts/stats" and method == "GET":
-                return await self._get_stats()
+                return await self._get_stats(scope)
 
             # Retention status endpoint (GDPR compliance)
             if path == "/api/v2/receipts/retention-status" and method == "GET":
-                return await self._get_retention_status()
+                return await self._get_retention_status(scope)
 
             # DSAR endpoint (GDPR Data Subject Access Request)
             if path.startswith("/api/v2/receipts/dsar/") and method == "GET":
                 parts = path.split("/")
                 if len(parts) >= 6:
                     user_id = parts[5]
-                    return await self._get_dsar(user_id, query_params)
+                    return await self._get_dsar(user_id, query_params, scope)
                 return error_response("User ID required for DSAR request", 400)
 
             # Search endpoint
             if path == "/api/v2/receipts/search" and method == "GET":
-                return await self._search_receipts(query_params)
+                return await self._search_receipts(query_params, scope)
 
             # Batch verification
             if path == "/api/v2/receipts/verify-batch" and method == "POST":
-                return await self._verify_batch(body)
+                return await self._verify_batch(body, scope)
 
             # Batch signing
             if path == "/api/v2/receipts/sign-batch" and method == "POST":
-                return await self._sign_batch(body)
+                return await self._sign_batch(body, scope)
 
             # Batch export
             if path == "/api/v2/receipts/batch-export" and method == "POST":
-                return await self._batch_export(body)
-
-            # Access shared receipt (public endpoint)
-            if path.startswith("/api/v2/receipts/share/") and method == "GET":
-                token = path.split("/api/v2/receipts/share/")[1].rstrip("/")
-                return await self._get_shared_receipt(token, query_params, headers)
-
-            # v1 delivery history bridge: GET /api/v1/receipts/deliveries
-            if path == "/api/v1/receipts/deliveries" and method == "GET":
-                return await self._list_delivery_history(query_params)
-
-            # v1 delivery bridge: POST /api/v1/receipts/{id}/deliver
-            # Maps frontend DeliveryModal calls to v2 send-to-channel logic
-            if (
-                path.startswith("/api/v1/receipts/")
-                and path.endswith("/deliver")
-                and method == "POST"
-            ):
-                parts_v1 = path.split("/")
-                if len(parts_v1) >= 5:
-                    receipt_id_v1 = parts_v1[4]
-                    # Map frontend 'channel' field to v2 'channel_type'
-                    delivery_body = {
-                        "channel_type": body.get("channel_type") or body.get("channel"),
-                        "channel_id": body.get("channel_id") or body.get("destination"),
-                        "workspace_id": body.get("workspace_id"),
-                        "options": body.get("options", {}),
-                    }
-                    if body.get("message"):
-                        delivery_body["options"]["custom_message"] = body["message"]
-                    return await self._send_to_channel(receipt_id_v1, delivery_body)
+                return await self._batch_export(body, scope)
 
             # List receipts
             if path == "/api/v2/receipts" and method == "GET":
-                return await self._list_receipts(query_params)
+                return await self._list_receipts(query_params, scope)
 
             # Receipt-specific routes
             if path.startswith("/api/v2/receipts/"):
@@ -756,74 +786,39 @@ class ReceiptsHandler(BaseHandler):
 
                 receipt_id = parts[4]
 
-                # Export endpoint. This dispatch is the single choke point for
-                # export authorization: the exemption rules in rbac/middleware.py
-                # and auth_checks.py only admit the request here, and every
-                # branch below fails closed. ODR is reachable without an
-                # AuthorizationContext only where ARAGORA_ENABLE_PUBLIC_ODR_EXPORT
-                # opens it; every format stays behind receipts:read for a caller
-                # that has one, answering 401 or 403 rather than surfacing the
-                # decorator's denial as a 500.
                 if len(parts) > 5 and parts[5] == "export":
-                    export_params = _last_query_values(query_params)
-                    auth_context = _request_auth_context(handler)
-                    if (export_params.get("format") or "json").strip().lower() == "odr":
-                        # The ODR branch is read-only, so it never falls through
-                        # to the write-capable methods of the export path.
-                        if method != "GET":
-                            return error_response(
-                                "Method not allowed: GET /api/v2/receipts/{id}/export?format=odr",
-                                405,
-                            )
-                        if auth_context is None:
-                            if _auth_enabled() and not _public_odr_export_enabled():
-                                return _auth_required_response()
-                            return await self._export_odr(receipt_id, export_params)
-                        try:
-                            return await self._export_odr_for_context(
-                                receipt_id, export_params, context=auth_context
-                            )
-                        except PermissionDeniedError as exc:
-                            return _permission_denied_response(exc)
-                    if auth_context is None:
-                        if _auth_enabled():
-                            return _auth_required_response()
-                        return await self._export_receipt(receipt_id, export_params)
-                    try:
-                        return await self._export_receipt(
-                            receipt_id, export_params, context=auth_context
-                        )
-                    except PermissionDeniedError as exc:
-                        return _permission_denied_response(exc)
+                    return await self._dispatch_export(
+                        receipt_id, method, query_params, handler, scope
+                    )
 
                 # Combined verification (signature + integrity)
                 if len(parts) > 5 and parts[5] == "verify" and method == "GET":
-                    return await self._verify_receipt(receipt_id)
+                    return await self._verify_receipt(receipt_id, scope)
 
                 # Integrity verification
                 if len(parts) > 5 and parts[5] == "verify" and method == "POST":
-                    return await self._verify_integrity(receipt_id)
+                    return await self._verify_integrity(receipt_id, scope)
 
                 # Signature verification
                 if len(parts) > 5 and parts[5] == "verify-signature" and method == "POST":
-                    return await self._verify_signature(receipt_id)
+                    return await self._verify_signature(receipt_id, scope)
 
                 # Share receipt
                 if len(parts) > 5 and parts[5] == "share" and method == "POST":
-                    return await self._share_receipt(receipt_id, body)
+                    return await self._share_receipt(receipt_id, body, scope)
 
                 # Send to channel
                 if len(parts) > 5 and parts[5] == "send-to-channel" and method == "POST":
-                    return await self._send_to_channel(receipt_id, body)
+                    return await self._send_to_channel(receipt_id, body, scope)
 
                 # Get formatted for channel
                 if len(parts) > 5 and parts[5] == "formatted" and method == "GET":
                     channel_type = parts[6] if len(parts) > 6 else "slack"
-                    return await self._get_formatted(receipt_id, channel_type, query_params)
+                    return await self._get_formatted(receipt_id, channel_type, query_params, scope)
 
                 # Get single receipt
                 if method == "GET":
-                    return await self._get_receipt(receipt_id)
+                    return await self._get_receipt(receipt_id, scope)
 
             return error_response("Not found", 404)
 
@@ -853,7 +848,7 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _list_receipts(self, query_params: dict[str, str]) -> HandlerResult:
+    async def _list_receipts(self, query_params: dict[str, str], scope: OrgScope) -> HandlerResult:
         """
         List receipts with filtering and pagination.
 
@@ -892,7 +887,8 @@ class ReceiptsHandler(BaseHandler):
         # Query store
         receipts = await _call_nonblocking(
             store,
-            "list",
+            "list_for_org",
+            scope.org_id,
             limit=limit,
             offset=offset,
             debate_id=debate_id,
@@ -907,7 +903,8 @@ class ReceiptsHandler(BaseHandler):
 
         total = await _call_nonblocking(
             store,
-            "count",
+            "count_for_org",
+            scope.org_id,
             debate_id=debate_id,
             verdict=verdict,
             risk_level=risk_level,
@@ -956,7 +953,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _search_receipts(self, query_params: dict[str, str]) -> HandlerResult:
+    async def _search_receipts(
+        self, query_params: dict[str, str], scope: OrgScope
+    ) -> HandlerResult:
         """
         Full-text search across receipt content.
 
@@ -988,7 +987,8 @@ class ReceiptsHandler(BaseHandler):
         # Perform search
         receipts = await _call_nonblocking(
             store,
-            "search",
+            "search_for_org",
+            scope.org_id,
             query=query,
             limit=limit,
             offset=offset,
@@ -998,7 +998,8 @@ class ReceiptsHandler(BaseHandler):
 
         total = await _call_nonblocking(
             store,
-            "search_count",
+            "search_count_for_org",
+            scope.org_id,
             query=query,
             verdict=verdict,
             risk_level=risk_level,
@@ -1037,19 +1038,160 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _get_receipt(self, receipt_id: str) -> HandlerResult:
-        """Get a specific receipt by ID."""
-        store = self._get_store()
-        receipt = await _call_nonblocking(store, "get", receipt_id)
-
-        if not receipt:
-            # Try by gauntlet_id
-            receipt = await _call_nonblocking(store, "get_by_gauntlet", receipt_id)
-
-        if not receipt:
-            return error_response("Receipt not found", 404)
+    async def _get_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+        """Get a specific receipt by ID or gauntlet ID."""
+        receipt = await self._find_owned_receipt(receipt_id, scope, by_gauntlet=True)
+        if receipt is None:
+            return record_not_found("Receipt")
 
         return json_response(receipt.to_full_dict())
+
+    async def _find_owned_receipt(
+        self, receipt_id: str, scope: OrgScope, *, by_gauntlet: bool = False
+    ) -> Any | None:
+        """The receipt with this id when the caller's org owns it, else None.
+
+        The store query is already org-filtered; the ownership check is
+        repeated here so a store that ignores the filter still cannot leak.
+        """
+        store = self._get_store()
+        receipt = await _call_nonblocking(store, "get_for_org", receipt_id, scope.org_id)
+        if not receipt and by_gauntlet:
+            receipt = await _call_nonblocking(
+                store, "get_by_gauntlet_for_org", receipt_id, scope.org_id
+            )
+        if not receipt or not record_visible(getattr(receipt, "org_id", None), scope):
+            return None
+        return receipt
+
+    async def _dispatch_export(
+        self,
+        receipt_id: str,
+        method: str,
+        query_params: dict[str, Any],
+        handler: Any,
+        scope: OrgScope,
+    ) -> HandlerResult:
+        """Serve ``/receipts/{id}/export`` in every format for the owning org.
+
+        Permission failures are answered 403 rather than surfacing the
+        decorator's denial as a 500.
+        """
+        export_params = _last_query_values(query_params)
+        auth_context = _request_auth_context(handler)
+        try:
+            if (export_params.get("format") or "json").strip().lower() == "odr":
+                # The ODR branch is read-only, so it never falls through to the
+                # write-capable methods of the export path.
+                if method != "GET":
+                    return error_response(
+                        "Method not allowed: GET /api/v2/receipts/{id}/export?format=odr",
+                        405,
+                    )
+                return await self._export_odr(
+                    receipt_id, export_params, scope, context=auth_context
+                )
+            return await self._export_receipt(
+                receipt_id, export_params, scope, context=auth_context
+            )
+        except PermissionDeniedError as exc:
+            return _permission_denied_response(exc)
+
+    async def _handle_v1(
+        self,
+        path: str,
+        method: str,
+        body: dict[str, Any],
+        query_params: dict[str, Any],
+        handler: Any,
+        scope: OrgScope,
+    ) -> HandlerResult:
+        """Serve the legacy ``/api/v1/receipts`` routes from the receipt store."""
+        route = _v1_receipt_route(path)
+        if route is None:
+            return error_response("Not found", 404)
+        receipt_id, action = route
+
+        if receipt_id is None:
+            if method == "GET":
+                return await self._list_v1_receipts(query_params, scope)
+        elif receipt_id == "deliveries" and action is None:
+            if method == "GET":
+                return await self._list_delivery_history(query_params, scope)
+        elif action is None:
+            if method == "GET":
+                return await self._get_receipt(receipt_id, scope)
+        elif action == "export":
+            return await self._dispatch_export(receipt_id, method, query_params, handler, scope)
+        elif action == "verify":
+            return await self._verify_v1_receipt(receipt_id, scope)
+        elif action == "deliver" and method == "POST":
+            # The frontend DeliveryModal names its fields differently from the
+            # v2 send-to-channel body.
+            options = dict(body.get("options") or {})
+            if body.get("message"):
+                options["custom_message"] = body["message"]
+            delivery_body = {
+                "channel_type": body.get("channel_type") or body.get("channel"),
+                "channel_id": body.get("channel_id") or body.get("destination"),
+                "workspace_id": body.get("workspace_id"),
+                "options": options,
+            }
+            return await self._send_to_channel(receipt_id, delivery_body, scope)
+        return error_response(f"Method not allowed: {method} {path}", 405)
+
+    @require_permission("receipts:read")
+    async def _list_v1_receipts(
+        self, query_params: dict[str, Any], scope: OrgScope
+    ) -> HandlerResult:
+        """List the caller org's receipts as legacy summaries."""
+        store = self._get_store()
+        limit = safe_query_int(query_params, "limit", default=20, max_val=100)
+        offset = safe_query_int(query_params, "offset", default=0, min_val=0, max_val=1000000)
+        verdict = query_params.get("verdict") or None
+        risk_level = query_params.get("risk_level") or None
+        receipts = await _call_nonblocking(
+            store,
+            "list_for_org",
+            scope.org_id,
+            limit=limit,
+            offset=offset,
+            verdict=verdict,
+            risk_level=risk_level,
+        )
+        total = await _call_nonblocking(
+            store, "count_for_org", scope.org_id, verdict=verdict, risk_level=risk_level
+        )
+        return json_response(
+            {
+                "receipts": [_v1_receipt_summary(receipt) for receipt in receipts],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+
+    @require_permission("receipts:verify")
+    async def _verify_v1_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+        """Integrity check in the legacy shape (``valid``/``match`` plus checksums)."""
+        if await self._find_owned_receipt(receipt_id, scope) is None:
+            return record_not_found("Receipt")
+        store = self._get_store()
+        result = await _call_nonblocking(store, "verify_integrity", receipt_id, org_id=scope.org_id)
+        if not isinstance(result, dict):
+            return error_response("Integrity verification failed", 500)
+        if "not found" in str(result.get("error") or "").lower():
+            return record_not_found("Receipt")
+        stored = result.get("stored_checksum")
+        computed = result.get("computed_checksum")
+        valid = bool(result.get("integrity_valid"))
+        return json_response(
+            {
+                **result,
+                "valid": valid,
+                "match": valid and stored is not None and stored == computed,
+            }
+        )
 
     @api_endpoint(
         method="GET",
@@ -1057,9 +1199,9 @@ class ReceiptsHandler(BaseHandler):
         summary="Export receipt",
         description=(
             "Export receipt in specified format (json, html, md, pdf, sarif, csv, odr). "
-            "The odr format returns the JCS-canonical Open Decision Receipt document and "
-            "is public: it is served without authentication so external auditors can "
-            "verify it offline. Every other format requires receipts:read."
+            "The odr format returns the JCS-canonical Open Decision Receipt document, "
+            "which an auditor can verify offline against the published signing key. "
+            "Every format requires a signed-in member of the receipt's organization."
         ),
         tags=["Receipts", "Export"],
         parameters=[
@@ -1101,7 +1243,7 @@ class ReceiptsHandler(BaseHandler):
                 },
             },
             "400": {"description": "Unsupported format or invalid odr_version"},
-            "401": {"description": "Authentication required for non-ODR formats"},
+            "401": {"description": "Authentication required"},
             "404": {"description": "Receipt not found"},
             "500": {"description": "Export failed"},
         },
@@ -1111,6 +1253,7 @@ class ReceiptsHandler(BaseHandler):
         self,
         receipt_id: str,
         query_params: dict[str, str],
+        scope: OrgScope,
         context: Any = None,
     ) -> HandlerResult:
         """
@@ -1121,11 +1264,9 @@ class ReceiptsHandler(BaseHandler):
             signed: Include signature if available (true/false)
         """
         del context  # consumed by @require_permission
-        store = self._get_store()
-        receipt = await _call_nonblocking(store, "get", receipt_id)
-
-        if not receipt:
-            return error_response("Receipt not found", 404)
+        receipt = await self._find_owned_receipt(receipt_id, scope)
+        if receipt is None:
+            return record_not_found("Receipt")
 
         export_format = query_params.get("format", "json").lower()
         download = query_params.get("download", "false").lower() == "true"
@@ -1266,20 +1407,20 @@ class ReceiptsHandler(BaseHandler):
             return error_response(safe_error_message(e, "receipt export"), 500)
 
     @require_permission("receipts:read")
-    async def _export_odr_for_context(
-        self, receipt_id: str, query_params: dict[str, str], context: Any
+    async def _export_odr(
+        self,
+        receipt_id: str,
+        query_params: dict[str, str],
+        scope: OrgScope,
+        context: Any = None,
     ) -> HandlerResult:
-        """Hold an authenticated caller to ``receipts.read`` before serving ODR."""
-        return await self._export_odr(receipt_id, query_params)
+        """Serve an owned receipt as a JCS-canonical Open Decision Receipt document.
 
-    async def _export_odr(self, receipt_id: str, query_params: dict[str, str]) -> HandlerResult:
-        """Serve a receipt as a JCS-canonical Open Decision Receipt document.
-
-        Public by design (architecture §2.10): an auditor holding only a
-        receipt id must be able to fetch the document and verify it offline
-        against the published signing key, subject to the
-        ``ARAGORA_ENABLE_PUBLIC_ODR_EXPORT`` gate the dispatch applies.
+        The document verifies offline against the published signing key, so a
+        member can hand it to an external auditor; fetching it requires
+        membership of the receipt's org.
         """
+        del context  # consumed by @require_permission
         from aragora.gauntlet.odr_export import resolve_odr_version
         from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest
         from aragora.gauntlet.odr_signing import OdrSigningError
@@ -1289,10 +1430,9 @@ class ReceiptsHandler(BaseHandler):
         except ValueError as e:
             return error_response(str(e), 400)
 
-        store = self._get_store()
-        receipt = await _call_nonblocking(store, "get", receipt_id)
-        if not receipt:
-            return error_response("Receipt not found", 404)
+        receipt = await self._find_owned_receipt(receipt_id, scope)
+        if receipt is None:
+            return record_not_found("Receipt")
 
         try:
             document = await asyncio.to_thread(
@@ -1469,11 +1609,17 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:verify")
-    async def _verify_receipt(self, receipt_id: str) -> HandlerResult:
+    async def _verify_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
         """Verify receipt integrity checksum and signature."""
+        if await self._find_owned_receipt(receipt_id, scope) is None:
+            return record_not_found("Receipt")
         store = self._get_store()
-        signature_result = await _call_nonblocking(store, "verify_signature", receipt_id)
-        integrity_result = await _call_nonblocking(store, "verify_integrity", receipt_id)
+        signature_result = await _call_nonblocking(
+            store, "verify_signature", receipt_id, org_id=scope.org_id
+        )
+        integrity_result = await _call_nonblocking(
+            store, "verify_integrity", receipt_id, org_id=scope.org_id
+        )
 
         signature_error = getattr(signature_result, "error", None)
         integrity_error = (
@@ -1481,9 +1627,9 @@ class ReceiptsHandler(BaseHandler):
         )
 
         if signature_error and "not found" in signature_error.lower():
-            return error_response("Receipt not found", 404)
+            return record_not_found("Receipt")
         if integrity_error and "not found" in integrity_error.lower():
-            return error_response("Receipt not found", 404)
+            return record_not_found("Receipt")
 
         return json_response(
             {
@@ -1510,14 +1656,16 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:verify")
-    async def _verify_integrity(self, receipt_id: str) -> HandlerResult:
+    async def _verify_integrity(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
         """Verify receipt integrity checksum."""
+        if await self._find_owned_receipt(receipt_id, scope) is None:
+            return record_not_found("Receipt")
         store = self._get_store()
-        result = await _call_nonblocking(store, "verify_integrity", receipt_id)
+        result = await _call_nonblocking(store, "verify_integrity", receipt_id, org_id=scope.org_id)
 
         if "error" in result and result.get("integrity_valid") is False:
             if "not found" in result.get("error", "").lower():
-                return error_response("Receipt not found", 404)
+                return record_not_found("Receipt")
 
         return json_response(result)
 
@@ -1536,18 +1684,20 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:verify")
-    async def _verify_signature(self, receipt_id: str) -> HandlerResult:
+    async def _verify_signature(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
         """Verify receipt cryptographic signature."""
+        if await self._find_owned_receipt(receipt_id, scope) is None:
+            return record_not_found("Receipt")
         store = self._get_store()
-        result = await _call_nonblocking(store, "verify_signature", receipt_id)
+        result = await _call_nonblocking(store, "verify_signature", receipt_id, org_id=scope.org_id)
 
         if result.error and "not found" in result.error.lower():
-            return error_response("Receipt not found", 404)
+            return record_not_found("Receipt")
 
         return json_response(result.to_dict())
 
     @require_permission("receipts:verify")
-    async def _verify_batch(self, body: dict[str, Any]) -> HandlerResult:
+    async def _verify_batch(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
         """
         Batch verify multiple receipt signatures.
 
@@ -1563,7 +1713,9 @@ class ReceiptsHandler(BaseHandler):
             return error_response("Maximum 100 receipts per batch", 400)
 
         store = self._get_store()
-        results, summary = await _call_nonblocking(store, "verify_batch", receipt_ids)
+        results, summary = await _call_nonblocking(
+            store, "verify_batch", receipt_ids, org_id=scope.org_id
+        )
 
         return json_response(
             {
@@ -1585,10 +1737,10 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _get_stats(self) -> HandlerResult:
-        """Get receipt statistics."""
+    async def _get_stats(self, scope: OrgScope) -> HandlerResult:
+        """Get statistics over the caller org's receipts."""
         store = self._get_store()
-        stats = await _call_nonblocking(store, "get_stats")
+        stats = await _call_nonblocking(store, "stats_for_org", scope.org_id)
 
         return json_response(
             {
@@ -1735,8 +1887,14 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @require_permission("receipts:read")
-    async def _list_delivery_history(self, query_params: dict[str, str]) -> HandlerResult:
-        """Return receipt delivery history in the legacy/frontend response shape."""
+    async def _list_delivery_history(
+        self, query_params: dict[str, str], scope: OrgScope
+    ) -> HandlerResult:
+        """Return the caller org's delivery history in the legacy/frontend shape.
+
+        Entries recorded without an org (older entries and other recorders)
+        are shown to nobody.
+        """
         limit = safe_query_int(query_params, "limit", default=50, max_val=100)
         offset = safe_query_int(query_params, "offset", default=0, min_val=0, max_val=1000000)
         receipt_id = (
@@ -1749,9 +1907,10 @@ class ReceiptsHandler(BaseHandler):
 
         history = list(get_receipt_delivery_history_store())
         filtered = [
-            item
+            {key: value for key, value in item.items() if key != _DELIVERY_ORG_KEY}
             for item in history
-            if (not receipt_id or item.get("receiptId") == receipt_id)
+            if record_visible(item.get(_DELIVERY_ORG_KEY), scope)
+            and (not receipt_id or item.get("receiptId") == receipt_id)
             and (not channel_type or item.get("channel") == channel_type)
             and (not status or item.get("status") == status)
         ]
@@ -1780,8 +1939,13 @@ class ReceiptsHandler(BaseHandler):
         status: str,
         result: dict[str, Any] | None = None,
         error: str | None = None,
+        org_id: str | None = None,
     ) -> None:
-        """Record a lightweight delivery event for frontend history views."""
+        """Record a lightweight delivery event for frontend history views.
+
+        ``org_id`` is the org that owns the receipt; only that org's members
+        see the entry in the delivery history.
+        """
         delivery_result = result or {}
         delivered_at = datetime.now(timezone.utc).isoformat()
         destination_name = (
@@ -1811,6 +1975,7 @@ class ReceiptsHandler(BaseHandler):
                 "message_id": message_id,
                 "errorMessage": error,
                 "error_message": error,
+                _DELIVERY_ORG_KEY: org_id,
             }
         )
         history = get_receipt_delivery_history_store()
@@ -1818,7 +1983,9 @@ class ReceiptsHandler(BaseHandler):
             del history[:-1000]
 
     @require_permission("receipts:share")
-    async def _send_to_channel(self, receipt_id: str, body: dict[str, Any]) -> HandlerResult:
+    async def _send_to_channel(
+        self, receipt_id: str, body: dict[str, Any], scope: OrgScope
+    ) -> HandlerResult:
         """
         Send a decision receipt to a specified channel.
 
@@ -1828,6 +1995,12 @@ class ReceiptsHandler(BaseHandler):
             workspace_id: Workspace/tenant ID (for Slack/Teams)
             options: Optional formatting options (compact, etc.)
         """
+        # Look the receipt up before validating the body so another org's id
+        # answers like a missing one whatever the body holds.
+        receipt = await self._find_owned_receipt(receipt_id, scope)
+        if receipt is None:
+            return record_not_found("Receipt")
+
         channel_type = body.get("channel_type")
         channel_id = body.get("channel_id")
         workspace_id = body.get("workspace_id")
@@ -1837,12 +2010,6 @@ class ReceiptsHandler(BaseHandler):
             return error_response("channel_type is required", 400)
         if not channel_id:
             return error_response("channel_id is required", 400)
-
-        # Get the receipt
-        store = self._get_store()
-        receipt = await _call_nonblocking(store, "get", receipt_id)
-        if not receipt:
-            return error_response("Receipt not found", 404)
 
         try:
             from aragora.channels.formatter import format_receipt_for_channel
@@ -1877,6 +2044,7 @@ class ReceiptsHandler(BaseHandler):
                 workspace_id=workspace_id,
                 status="success",
                 result=result,
+                org_id=scope.org_id,
             )
             return json_response(
                 {
@@ -1896,6 +2064,7 @@ class ReceiptsHandler(BaseHandler):
                 workspace_id=workspace_id,
                 status="failed",
                 error=safe_error_message(e, f"channel {channel_type}"),
+                org_id=scope.org_id,
             )
             logger.exception("Missing dependency for channel %s: %s", channel_type, e)
             return error_response(safe_error_message(e, f"channel {channel_type}"), 501)
@@ -1907,6 +2076,7 @@ class ReceiptsHandler(BaseHandler):
                 workspace_id=workspace_id,
                 status="failed",
                 error=safe_error_message(e, "receipt send"),
+                org_id=scope.org_id,
             )
             logger.exception("Failed to send receipt to channel: %s", e)
             return error_response(safe_error_message(e, "receipt send"), 500)
@@ -2053,17 +2223,16 @@ class ReceiptsHandler(BaseHandler):
         receipt_id: str,
         channel_type: str,
         query_params: dict[str, str],
+        scope: OrgScope,
     ) -> HandlerResult:
         """
         Get receipt formatted for a specific channel type.
 
         Returns the formatted payload without sending it.
         """
-        store = self._get_store()
-        receipt = await _call_nonblocking(store, "get", receipt_id)
-
-        if not receipt:
-            return error_response("Receipt not found", 404)
+        receipt = await self._find_owned_receipt(receipt_id, scope)
+        if receipt is None:
+            return record_not_found("Receipt")
 
         options = {
             "compact": query_params.get("compact", "").lower() == "true",
@@ -2092,14 +2261,16 @@ class ReceiptsHandler(BaseHandler):
             return error_response(safe_error_message(e, "receipt formatting"), 500)
 
     @require_permission("receipts:read")
-    async def _get_retention_status(self) -> HandlerResult:
+    async def _get_retention_status(self, scope: OrgScope) -> HandlerResult:
         """Get retention status for GDPR compliance. Endpoint: GET /api/v2/receipts/retention-status"""
         store = self._get_store()
-        status = await _call_nonblocking(store, "get_retention_status")
+        status = await _call_nonblocking(store, "retention_status_for_org", scope.org_id)
         return json_response(status)
 
     @require_permission("receipts:read")
-    async def _get_dsar(self, user_id: str, query_params: dict[str, str]) -> HandlerResult:
+    async def _get_dsar(
+        self, user_id: str, query_params: dict[str, str], scope: OrgScope
+    ) -> HandlerResult:
         """Handle GDPR DSAR. Endpoint: GET /api/v2/receipts/dsar/{user_id}"""
         if not user_id or len(user_id) < 3:
             return error_response("Valid user_id required (minimum 3 characters)", 400)
@@ -2110,7 +2281,8 @@ class ReceiptsHandler(BaseHandler):
 
         receipts, total = await _call_nonblocking(
             store,
-            "get_by_user",
+            "get_by_user_for_org",
+            scope.org_id,
             user_id=user_id,
             limit=limit,
             offset=offset,
@@ -2146,7 +2318,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:share")
-    async def _share_receipt(self, receipt_id: str, body: dict[str, Any]) -> HandlerResult:
+    async def _share_receipt(
+        self, receipt_id: str, body: dict[str, Any], scope: OrgScope
+    ) -> HandlerResult:
         """
         Create a shareable link for a receipt.
 
@@ -2157,11 +2331,9 @@ class ReceiptsHandler(BaseHandler):
         Returns:
             Share URL and token details
         """
-        store = self._get_store()
-        receipt = await _call_nonblocking(store, "get", receipt_id)
-
-        if not receipt:
-            return error_response("Receipt not found", 404)
+        receipt = await self._find_owned_receipt(receipt_id, scope)
+        if receipt is None:
+            return record_not_found("Receipt")
 
         # Parse options
         expires_in_hours = safe_query_int(body, "expires_in_hours", default=24, max_val=720)
@@ -2265,7 +2437,7 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @require_permission("receipts:sign")
-    async def _sign_batch(self, body: dict[str, Any]) -> HandlerResult:
+    async def _sign_batch(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
         """
         Batch sign multiple receipts.
 
@@ -2297,7 +2469,7 @@ class ReceiptsHandler(BaseHandler):
         skipped_count = 0
 
         try:
-            from aragora.gauntlet.signing import (
+            from aragora.storage.receipt_signing import (
                 Ed25519Signer,
                 HMACSigner,
                 ReceiptSigner,
@@ -2336,24 +2508,27 @@ class ReceiptsHandler(BaseHandler):
             signer = ReceiptSigner(backend=backend)
 
             for receipt_id in receipt_ids:
-                receipt = await _call_nonblocking(store, "get", receipt_id)
+                receipt = await self._find_owned_receipt(receipt_id, scope)
 
-                if not receipt:
+                if receipt is None:
                     results.append({"receipt_id": receipt_id, "status": "not_found"})
                     failed_count += 1
                     continue
 
-                # Check if already signed
-                if await _call_nonblocking(store, "get_signature", receipt_id):
+                if getattr(receipt, "signature", None):
                     results.append({"receipt_id": receipt_id, "status": "already_signed"})
                     skipped_count += 1
                     continue
 
                 try:
-                    # Sign the receipt with optional signatory info
-                    signature = signer.sign(receipt.data, signatory=signatory)
+                    signed = signer.sign(receipt.data, signatory=signatory)
                     await _call_nonblocking(
-                        store, "store_signature", receipt_id, signature, algorithm
+                        store,
+                        "update_signature",
+                        receipt_id,
+                        signed.signature,
+                        signed.signature_metadata.algorithm,
+                        signed.signature_metadata.key_id,
                     )
                     results.append({"receipt_id": receipt_id, "status": "signed"})
                     signed_count += 1
@@ -2384,7 +2559,7 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @require_permission("receipts:export")
-    async def _batch_export(self, body: dict[str, Any]) -> HandlerResult:
+    async def _batch_export(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
         """
         Batch export multiple receipts to a ZIP file.
 
@@ -2407,20 +2582,20 @@ class ReceiptsHandler(BaseHandler):
                 400,
             )
 
-        store = self._get_store()
-
         # Create ZIP in memory
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             exported_count = 0
             failed_ids = []
+            not_found_ids = []
 
             for receipt_id in receipt_ids:
-                receipt = await _call_nonblocking(store, "get", receipt_id)
+                receipt = await self._find_owned_receipt(receipt_id, scope)
 
-                if not receipt:
+                if receipt is None:
                     failed_ids.append(receipt_id)
+                    not_found_ids.append(receipt_id)
                     continue
 
                 try:
@@ -2462,6 +2637,7 @@ class ReceiptsHandler(BaseHandler):
                 "total_requested": len(receipt_ids),
                 "exported": exported_count,
                 "failed": failed_ids,
+                "not_found": not_found_ids,
             }
             import json
 
