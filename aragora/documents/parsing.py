@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -83,6 +84,10 @@ def _safe_path(storage_dir: Path, doc_id: str) -> Path | None:
     return doc_path
 
 
+def _optional_str(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
 # Optional PDF support
 PDF_AVAILABLE = False
 try:
@@ -106,7 +111,13 @@ except ImportError:
 
 @dataclass
 class ParsedDocument:
-    """A parsed document with extracted text."""
+    """A parsed document with extracted text.
+
+    ``org_id`` is the owning organization; None means the owner is unknown
+    (documents stored before ownership was recorded) and the document is
+    visible to no org. ``created_by`` is the uploading user and
+    ``content_sha256`` the SHA-256 hex digest of the uploaded bytes.
+    """
 
     id: str
     filename: str
@@ -117,6 +128,9 @@ class ParsedDocument:
     char_count: int = 0
     created_at: datetime = field(default_factory=datetime.now)
     preview: str = ""
+    org_id: str | None = None
+    created_by: str | None = None
+    content_sha256: str | None = None
 
     def __post_init__(self):
         self.word_count = len(self.text.split())
@@ -139,12 +153,22 @@ class ParsedDocument:
             "char_count": self.char_count,
             "created_at": self.created_at.isoformat(),
             "preview": self.preview,
+            "org_id": self.org_id,
+            "created_by": self.created_by,
+            "content_sha256": self.content_sha256,
         }
 
 
-def generate_doc_id(content: bytes, filename: str) -> str:
-    """Generate a unique document ID from content hash."""
+def generate_doc_id(content: bytes, filename: str, org_id: str | None = None) -> str:
+    """Document ID: the first 16 hex chars of sha256(org_id + content + filename).
+
+    Hashing the owning org keeps two orgs that upload identical bytes under the
+    same filename on separate records. Without an org the ID is the one used
+    before ownership was recorded.
+    """
     hasher = hashlib.sha256()
+    if org_id:
+        hasher.update(org_id.encode())
     hasher.update(content)
     hasher.update(filename.encode())
     return hasher.hexdigest()[:16]
@@ -227,7 +251,13 @@ def parse_text(content: bytes, filename: str) -> ParsedDocument:
     )
 
 
-def parse_document(content: bytes, filename: str) -> ParsedDocument:
+def parse_document(
+    content: bytes,
+    filename: str,
+    *,
+    org_id: str | None = None,
+    created_by: str | None = None,
+) -> ParsedDocument:
     """
     Parse a document and extract text based on file extension.
 
@@ -236,18 +266,26 @@ def parse_document(content: bytes, filename: str) -> ParsedDocument:
     - Word (.docx)
     - Text (.txt)
     - Markdown (.md)
+
+    The result records ``content_sha256`` of ``content``. With a non-blank
+    ``org_id`` it is owned by that org and ``created_by``, and its ID includes
+    the org (see :func:`generate_doc_id`); otherwise the owner is unknown.
     """
     filename_lower = filename.lower()
 
     if filename_lower.endswith(".pdf"):
-        return parse_pdf(content, filename)
+        doc = parse_pdf(content, filename)
     elif filename_lower.endswith(".docx"):
-        return parse_docx(content, filename)
-    elif filename_lower.endswith((".txt", ".md", ".markdown")):
-        return parse_text(content, filename)
+        doc = parse_docx(content, filename)
     else:
-        # Try parsing as plain text
-        return parse_text(content, filename)
+        doc = parse_text(content, filename)
+
+    doc.content_sha256 = hashlib.sha256(content).hexdigest()
+    if isinstance(org_id, str) and org_id.strip():
+        doc.org_id = org_id
+        doc.created_by = created_by
+        doc.id = generate_doc_id(content, filename, org_id)
+    return doc
 
 
 class DocumentStore:
@@ -314,26 +352,39 @@ class DocumentStore:
             text=data["text"],
             page_count=data.get("page_count", 1),
             preview=data.get("preview", ""),
+            org_id=_optional_str(data.get("org_id")),
+            created_by=_optional_str(data.get("created_by")),
+            content_sha256=_optional_str(data.get("content_sha256")),
         )
 
         self._cache[doc_id] = doc
         return doc
 
     def list_all(self) -> list[dict]:
-        """List all stored documents (metadata only)."""
-        docs = []
+        """List every stored document (metadata only), regardless of owner."""
+        return [summary for summary, _ in self._iter_summaries()]
+
+    def list_for_org(self, org_id: str) -> list[dict]:
+        """List the documents owned by ``org_id`` (metadata only).
+
+        Documents with an unknown owner are never listed, and a blank
+        ``org_id`` lists nothing.
+        """
+        if not isinstance(org_id, str) or not org_id:
+            return []
+        return [summary for summary, owner in self._iter_summaries() if owner == org_id]
+
+    def _iter_summaries(self) -> Iterator[tuple[dict, str | None]]:
         for doc_path in self.storage_dir.glob("*.json"):
             try:
                 with open(doc_path) as f:
                     data = json.load(f)
-                docs.append(
-                    {
-                        "id": data["id"],
-                        "filename": data["filename"],
-                        "word_count": data.get("word_count", 0),
-                        "preview": data.get("preview", "")[:100],
-                    }
-                )
+                summary = {
+                    "id": data["id"],
+                    "filename": data["filename"],
+                    "word_count": data.get("word_count", 0),
+                    "preview": data.get("preview", "")[:100],
+                }
             except json.JSONDecodeError as e:
                 logger.warning("Corrupted document file %s: %s", doc_path, e)
                 continue
@@ -343,7 +394,7 @@ class DocumentStore:
             except OSError as e:
                 logger.warning("Failed to read document %s: %s", doc_path, e)
                 continue
-        return docs
+            yield summary, _optional_str(data.get("org_id"))
 
     def delete(self, doc_id: str) -> bool:
         """Delete a document by ID.
