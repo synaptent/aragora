@@ -552,7 +552,7 @@ class FactStore(SQLiteStore):
         """
         org_sql, org_params = _org_clause(org_id, "f.org_id")
         org_sql += " AND EXISTS (SELECT 1 FROM facts a WHERE a.id = ? AND a.org_id = ?)"
-        org_params += (fact_id, org_id)
+        org_params += (fact_id, _require_org(org_id))
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()

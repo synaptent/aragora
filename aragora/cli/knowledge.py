@@ -324,7 +324,7 @@ def cmd_facts(args: Namespace) -> int:
             print("Error: fact_id required for 'show' action")
             return 1
 
-        fact = store.get_fact(args.fact_id)
+        fact = store.get_fact(args.fact_id)  # type: ignore[assignment]
         if not fact:
             print(f"Fact not found: {args.fact_id}")
             return 1
@@ -357,7 +357,7 @@ def cmd_facts(args: Namespace) -> int:
             return 1
 
         # Verify the fact exists first
-        fact = store.get_fact(args.fact_id)
+        fact = store.get_fact(args.fact_id)  # type: ignore[assignment]
         if not fact:
             print(f"Fact not found: {args.fact_id}")
             return 1
@@ -519,7 +519,7 @@ def cmd_jobs(args: Namespace) -> int:
             print("Error: job_id required for 'show' action")
             return 1
 
-        job = get_job_status(args.job_id)
+        job = get_job_status(args.job_id)  # type: ignore[assignment]
         if not job:
             print(f"Job not found: {args.job_id}")
             return 1

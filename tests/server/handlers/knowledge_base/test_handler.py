@@ -232,7 +232,7 @@ def mock_server_context() -> dict[str, Any]:
 def handler(mock_server_context) -> KnowledgeHandler:
     """Create a KnowledgeHandler instance."""
     h = KnowledgeHandler(mock_server_context)
-    h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
+    h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")  # type: ignore[assignment]
     return h
 
 

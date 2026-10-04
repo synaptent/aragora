@@ -75,7 +75,8 @@ def test_every_store_method_without_org_raises(store, call: str) -> None:
     with pytest.raises(OrgScopeRequiredError):
         UNSCOPED_CALLS[call](store, fid)
     assert _rows(store) == before
-    assert ScopedFactStore(store, ACME).get_fact(fid).confidence == 0.5
+    unchanged = ScopedFactStore(store, ACME).get_fact(fid)
+    assert unchanged is not None and unchanged.confidence == 0.5
 
 
 def test_same_workspace_name_is_a_separate_place_per_org(store) -> None:
@@ -110,7 +111,7 @@ def test_uuid_workspace_id_round_trips_verbatim(store) -> None:
     acme = ScopedFactStore(store, ACME)
     fact = acme.add_fact("Workspace ids are stored as given", workspace)
     assert fact.workspace_id == workspace
-    assert acme.get_fact(fact.id).workspace_id == workspace
+    assert getattr(acme.get_fact(fact.id), "workspace_id", None) == workspace
     assert [f.id for f in acme.list_facts(FactFilters(workspace_id=workspace))] == [fact.id]
     assert ScopedFactStore(store, BETA).list_facts(FactFilters(workspace_id=workspace)) == []
 
@@ -214,12 +215,8 @@ def test_evidence_fetch_no_longer_reads_an_unscoped_store(monkeypatch) -> None:
     from aragora.knowledge import fact_store as fact_store_module
     from aragora.skills.builtin import evidence_fetch
 
-    calls: list[str] = []
+    spy = MagicMock(return_value=[])
     monkeypatch.setitem(sys.modules, "aragora.server.http_client_pool", None)
-    monkeypatch.setattr(
-        fact_store_module.InMemoryFactStore,
-        "query_facts",
-        lambda self, *a, **k: calls.append("query_facts") or [],
-    )
+    monkeypatch.setattr(fact_store_module.InMemoryFactStore, "query_facts", spy)
     results = asyncio.run(evidence_fetch.EvidenceFetchSkill()._check_facts("Northwind"))
-    assert calls == [] and results == []
+    assert spy.call_count == 0 and results == []

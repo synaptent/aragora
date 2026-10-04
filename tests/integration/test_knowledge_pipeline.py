@@ -176,7 +176,7 @@ class TestKnowledgePipelineIntegration:
 
         # Wait for processing to complete (with timeout)
         max_wait = 10  # seconds
-        waited = 0
+        waited = 0.0
         while waited < max_wait:
             status = get_job_status(job_id)
             if status and status.get("status") in ("completed", "failed"):
@@ -490,7 +490,7 @@ class TestKnowledgeAuditIntegration:
 
         adapter = AuditKnowledgeAdapter(config)
         await adapter.initialize()
-        adapter._fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
+        adapter._fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")  # type: ignore[assignment]
 
         # Create a mock finding
         finding = AuditFinding(
@@ -537,7 +537,7 @@ class TestKnowledgeAuditIntegration:
 
         adapter = AuditKnowledgeAdapter(config)
         await adapter.initialize()
-        adapter._fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
+        adapter._fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")  # type: ignore[assignment]
 
         # Enrich some test chunks
         chunks = [

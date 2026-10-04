@@ -148,7 +148,8 @@ class TestKnowledgePipelineIntegration:
             min_fact_confidence=0.5,
         )
         return KnowledgePipeline(
-            config, fact_store=ScopedFactStore(InMemoryFactStore(), "org-test")
+            config,
+            fact_store=ScopedFactStore(InMemoryFactStore(), "org-test"),  # type: ignore[arg-type]
         )
 
     @pytest.mark.asyncio
@@ -257,7 +258,7 @@ class TestKnowledgePipelineIntegration:
         engine = DatasetQueryEngine(
             fact_store=fact_store,
             embedding_service=embedding_service,
-            agents=mock_agents,
+            agents=mock_agents,  # type: ignore[arg-type]
             default_agent=mock_agents[0],
         )
 
@@ -287,7 +288,7 @@ class TestFactExtractorIntegration:
 
         return create_fact_extractor(
             agents=[agent],
-            fact_store=store,
+            fact_store=store,  # type: ignore[arg-type]
             config=ExtractionConfig(
                 max_facts_per_chunk=5,
                 min_confidence_threshold=0.5,

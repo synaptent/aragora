@@ -108,7 +108,7 @@ def _v1(world, org_id: str | None = None):
 
     handler = KnowledgeHandler({"user_store": world.users, "fact_store": world.store})
     handler._fact_store = world.store
-    handler._auth_context = AuthorizationContext(
+    handler._auth_context = AuthorizationContext(  # type: ignore[attr-defined]
         user_id="u", org_id=org_id, roles={"owner"}, permissions={"*"}
     )
     return handler

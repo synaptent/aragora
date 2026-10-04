@@ -48,8 +48,8 @@ class MockRestrictedUser:
 
     def __init__(self, user_id: str = "restricted-user"):
         self.user_id = user_id
-        self.permissions = set()
-        self.roles = set()
+        self.permissions: set[str] = set()
+        self.roles: set[str] = set()
 
 
 def _make_http_handler(method: str = "GET", body: dict | None = None) -> MagicMock:
