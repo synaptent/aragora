@@ -9,6 +9,7 @@ Covers:
   Invalid ID validation (SAFE_ID_PATTERN)
   Routing edge cases
   Constructor / initialization
+  Org scoping (anonymous 401; other-org and unowned receipts hidden)
 """
 
 from __future__ import annotations
@@ -25,6 +26,11 @@ from aragora.server.handlers.pipeline.receipts import (
     _receipt_store,
     register_receipt,
 )
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+# The org ``org_scoped_request_user`` authenticates every request as.
+TEST_ORG = "test-org-001"
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +91,7 @@ def _make_receipt(
     pipeline_id: str = "pipe-1",
     status: str = "completed",
     content_hash: str | None = None,
+    org_id: str | None = TEST_ORG,
 ) -> dict[str, Any]:
     """Build a sample receipt dict."""
     execution = {"status": status, "duration_ms": 120}
@@ -99,6 +106,7 @@ def _make_receipt(
         "execution": execution,
         "provenance": provenance,
         "content_hash": content_hash,
+        "org_id": org_id,
     }
 
 
@@ -243,6 +251,7 @@ class TestListReceipts:
                 return [
                     {
                         "receipt_id": "km-rcpt-1",
+                        "org_id": TEST_ORG,
                         "pipeline_id": "pipe-km",
                         "generated_at": "2026-03-29T20:00:00Z",
                         "execution": {"status": "completed"},
@@ -288,6 +297,7 @@ class TestListReceipts:
                 return [
                     {
                         "receipt_id": "km-rcpt-1",
+                        "org_id": TEST_ORG,
                         "pipeline_id": "pipe-A",
                         "generated_at": "2026-03-29T20:00:00Z",
                         "execution": {"status": "completed"},
@@ -295,6 +305,7 @@ class TestListReceipts:
                     },
                     {
                         "receipt_id": "km-rcpt-2",
+                        "org_id": TEST_ORG,
                         "pipeline_id": "pipe-B",
                         "generated_at": "2026-03-29T20:01:00Z",
                         "execution": {"status": "failed"},
@@ -389,6 +400,7 @@ class TestListReceipts:
         """Receipt without execution block should report status 'unknown'."""
         _receipt_store["r1"] = {
             "receipt_id": "r1",
+            "org_id": TEST_ORG,
             "pipeline_id": "p1",
             "generated_at": "2026-01-01",
         }
@@ -647,6 +659,55 @@ class TestRateLimiting:
             )
             result = h.handle_get("/api/v1/receipts/rcpt-1/verify", {}, http)
         assert _status(result) == 429
+
+
+# ===========================================================================
+# Org scoping
+# ===========================================================================
+
+
+class TestOrgScope:
+    """A receipt is visible only to its own org; unowned receipts to nobody."""
+
+    NOT_FOUND = {"error": "Receipt not found", "code": "not_found"}
+
+    @pytest.mark.parametrize("owner", ["other-org", None])
+    @pytest.mark.parametrize("suffix", ["", "/verify"])
+    def test_foreign_or_unowned_receipt_is_a_plain_404(self, owner, suffix):
+        register_receipt(_make_receipt("rcpt-x", org_id=owner))
+        result = _make_handler().handle_get(
+            f"/api/v1/receipts/rcpt-x{suffix}", {}, _make_http_handler()
+        )
+        assert _status(result) == 404
+        assert _body(result) == self.NOT_FOUND
+
+    def test_list_shows_only_the_callers_org(self):
+        register_receipt(_make_receipt("mine"))
+        register_receipt(_make_receipt("theirs", org_id="other-org"))
+        register_receipt(_make_receipt("unowned", org_id=None))
+
+        class FakeReceiptAdapter:
+            def list_receipts(self, limit: int = 50) -> list[dict[str, Any]]:
+                return [
+                    {"receipt_id": "km-foreign", "org_id": "other-org"},
+                    {"receipt_id": "km-unowned"},
+                ]
+
+        with patch(
+            "aragora.knowledge.mound.adapters.receipt_adapter.get_receipt_adapter",
+            return_value=FakeReceiptAdapter(),
+        ):
+            result = _make_handler().handle_get("/api/v1/receipts", {}, _make_http_handler())
+
+        assert [r["receipt_id"] for r in _body(result)["receipts"]] == ["mine"]
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_caller_is_rejected(self):
+        register_receipt(_make_receipt("rcpt-1"))
+        h = _make_handler()
+        with patch.object(h, "_check_rate_limit", return_value=None):
+            result = h.handle_get("/api/v1/receipts/rcpt-1", {}, _make_http_handler())
+        assert _status(result) == 401
 
 
 __all__ = []

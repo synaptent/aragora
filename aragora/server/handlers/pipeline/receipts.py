@@ -7,6 +7,9 @@ Endpoints:
     GET  /api/v1/receipts              - List receipts with filtering
     GET  /api/v1/receipts/:id          - Get full receipt + provenance
     GET  /api/v1/receipts/:id/verify   - Re-verify SHA-256 hashes
+
+A receipt is visible only to members of the org named by its ``org_id``;
+receipts without one are visible to nobody.
 """
 
 from __future__ import annotations
@@ -16,6 +19,12 @@ import logging
 from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 try:
     from aragora.rbac.decorators import require_permission
@@ -95,13 +104,17 @@ class ReceiptExplorerHandler(BaseHandler):
         if rate_err:
             return rate_err
 
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         cleaned = strip_version_prefix(path)
         parts = cleaned.split("/")
         # parts[0]="" parts[1]="api" parts[2]="receipts" parts[3]=:id ...
 
         # GET /api/receipts
         if len(parts) == 3 and parts[2] == "receipts":
-            return self._list_receipts(query_params)
+            return self._list_receipts(query_params, scope)
 
         # GET /api/receipts/:id
         if len(parts) == 4 and parts[2] == "receipts":
@@ -109,7 +122,7 @@ class ReceiptExplorerHandler(BaseHandler):
             ok, err = validate_path_segment(receipt_id, "receipt_id", SAFE_ID_PATTERN)
             if not ok:
                 return error_response(cast(str, err), 400)
-            return self._get_receipt(receipt_id)
+            return self._get_receipt(receipt_id, scope)
 
         # GET /api/receipts/:id/verify
         if len(parts) == 5 and parts[2] == "receipts" and parts[4] == "verify":
@@ -117,11 +130,11 @@ class ReceiptExplorerHandler(BaseHandler):
             ok, err = validate_path_segment(receipt_id, "receipt_id", SAFE_ID_PATTERN)
             if not ok:
                 return error_response(cast(str, err), 400)
-            return self._verify_receipt(receipt_id)
+            return self._verify_receipt(receipt_id, scope)
 
         return None
 
-    def _list_receipts(self, params: dict[str, Any]) -> HandlerResult:
+    def _list_receipts(self, params: dict[str, Any], scope: OrgScope) -> HandlerResult:
         """List receipts with optional filtering."""
         pipeline_id = get_string_param(params, "pipeline_id")
         status = get_string_param(params, "status")
@@ -151,7 +164,8 @@ class ReceiptExplorerHandler(BaseHandler):
         receipts = [
             receipt
             for receipt in receipts_by_id.values()
-            if _receipt_matches_filters(receipt, pipeline_id=pipeline_id, status=status)
+            if record_visible(receipt.get("org_id"), scope)
+            and _receipt_matches_filters(receipt, pipeline_id=pipeline_id, status=status)
         ]
         receipts = receipts[:limit]
         return json_response(
@@ -170,18 +184,18 @@ class ReceiptExplorerHandler(BaseHandler):
             }
         )
 
-    def _get_receipt(self, receipt_id: str) -> HandlerResult:
+    def _get_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
         """Get full receipt with provenance."""
         receipt = _receipt_store.get(receipt_id)
-        if receipt is None:
-            return error_response("Receipt not found", 404)
+        if receipt is None or not record_visible(receipt.get("org_id"), scope):
+            return record_not_found("Receipt")
         return json_response(receipt)
 
-    def _verify_receipt(self, receipt_id: str) -> HandlerResult:
+    def _verify_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
         """Re-compute SHA-256 hash and compare to stored hash."""
         receipt = _receipt_store.get(receipt_id)
-        if receipt is None:
-            return error_response("Receipt not found", 404)
+        if receipt is None or not record_visible(receipt.get("org_id"), scope):
+            return record_not_found("Receipt")
 
         stored_hash = receipt.get("content_hash", "")
         pipeline_id = receipt.get("pipeline_id", "")

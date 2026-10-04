@@ -84,6 +84,7 @@ class MockReceipt:
     schema_version: str = "1.0"
     artifact_hash: str = "artifact_abc123"
     signature: str | None = None
+    org_id: str | None = "org-gauntlet"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -219,6 +220,25 @@ def _parse(result) -> dict[str, Any]:
 
 
 class TestReceiptExportHandler:
+    @pytest.fixture(autouse=True)
+    def org_member(self, monkeypatch):
+        """Requests come from an authenticated member of the receipt's org."""
+        from aragora.billing.auth.context import UserAuthContext
+
+        user = UserAuthContext(
+            authenticated=True,
+            user_id="user-gauntlet",
+            email="member@example.com",
+            org_id="org-gauntlet",
+            role="member",
+            token_type="access",
+        )
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
+        return user
+
     @pytest.fixture
     def handler(self):
         from aragora.server.handlers.receipt_export import ReceiptExportHandler
@@ -284,3 +304,17 @@ class TestReceiptExportHandler:
             "/api/v1/receipts/MISSING/export", {"format": "json"}, http
         )
         assert result.status_code == 404
+
+    @patch("aragora.server.handlers.receipt_export._get_receipt_store")
+    def test_other_org_receipt_is_not_found(self, mock_store_fn):
+        from aragora.server.handlers.receipt_export import ReceiptExportHandler
+
+        mock_store_fn.return_value = None
+        foreign = ReceiptExportHandler(
+            ctx={"receipt_store": {"REC-001": MockReceipt(org_id="org-other")}}
+        )
+        result = foreign.handle(
+            "/api/v1/receipts/REC-001/export", {"format": "json"}, _make_mock_handler()
+        )
+        assert result.status_code == 404
+        assert "REC-001" not in result.body.decode()

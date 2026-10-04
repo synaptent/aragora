@@ -27,6 +27,9 @@ from aragora.server.handlers.receipt_export import (
 )
 from aragora.server.handlers.utils.responses import HandlerResult
 
+# The org the autouse auth fixture signs every request in as.
+TEST_ORG = "test-org-001"
+
 
 # ===========================================================================
 # Helpers
@@ -65,8 +68,9 @@ def _make_mock_handler(
 class MockReceipt:
     """Mock receipt object."""
 
-    def __init__(self, receipt_id: str = "receipt-001"):
+    def __init__(self, receipt_id: str = "receipt-001", org_id: str | None = TEST_ORG):
         self.id = receipt_id
+        self.org_id = org_id
         self.debate_id = "debate-001"
         self.decision = "Approved"
         self.timestamp = "2026-02-14T10:00:00Z"
@@ -90,6 +94,10 @@ class MockReceiptStore:
 
     def get(self, receipt_id: str) -> MockReceipt | None:
         return self._receipts.get(receipt_id)
+
+    def get_for_org(self, receipt_id: str, org_id: str) -> MockReceipt | None:
+        receipt = self._receipts.get(receipt_id)
+        return receipt if receipt is not None and receipt.org_id == org_id else None
 
 
 # ===========================================================================
