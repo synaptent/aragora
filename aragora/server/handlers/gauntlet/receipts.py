@@ -21,10 +21,11 @@ from datetime import datetime
 from typing import Any
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import OrgScope
 
 from ..base import HandlerResult, error_response, get_int_param, get_string_param, json_response
 from ..openapi_decorator import api_endpoint
-from .storage import get_gauntlet_runs
+from .storage import get_gauntlet_runs, get_owned_run
 
 
 def _get_storage_proxy():
@@ -516,20 +517,21 @@ class GauntletReceiptsMixin:
             # Return 200 with verification failure details (not a client error)
             return json_response(verification_result)
 
-    async def _auto_persist_receipt(self, result: Any, gauntlet_id: str) -> None:
+    async def _auto_persist_receipt(
+        self, result: Any, gauntlet_id: str, *, scope: OrgScope
+    ) -> None:
         """Auto-persist decision receipt after gauntlet completion.
 
-        Generates and stores a decision receipt for compliance and audit trail.
+        Generates and stores a decision receipt for compliance and audit trail,
+        owned by the org (and user) that started the run.
         Optionally signs the receipt if ARAGORA_AUTO_SIGN_RECEIPTS=true.
         """
-        gauntlet_runs = get_gauntlet_runs()
-
         try:
             from aragora.gauntlet.receipt import DecisionReceipt
             from aragora.storage.receipt_store import StoredReceipt, get_receipt_store
 
             # Get run data for input hash
-            run = gauntlet_runs.get(gauntlet_id, {})
+            run = get_owned_run(gauntlet_id, scope) or {}
 
             # Generate receipt from result
             receipt = DecisionReceipt.from_mode_result(
@@ -576,6 +578,8 @@ class GauntletReceiptsMixin:
                 "save",
                 receipt_dict,
                 signed_receipt=signed_receipt,
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
             logger.info("Decision receipt auto-persisted: %s", receipt.receipt_id)
 

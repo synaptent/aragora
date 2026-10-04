@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, unquote
 from aragora.observability.metrics import track_handler
 from aragora.server.validation.entities import validate_gauntlet_id
 from aragora.server.versioning.compat import strip_version_prefix
+from aragora.tenancy.record_scope import OrgScope, require_org_scope
 
 from ..base import BaseHandler, HandlerResult, error_response
 from ..utils.rate_limit import rate_limit
@@ -74,6 +75,8 @@ class GauntletHandler(
         "/api/v1/receipts/*/anchor-status",
     ]
 
+    _PERSONAS_PATH = "/api/gauntlet/personas"
+
     # All gauntlet endpoints require authentication
     AUTH_REQUIRED_ENDPOINTS = [
         "/api/v1/gauntlet/run",
@@ -87,10 +90,9 @@ class GauntletHandler(
             set_gauntlet_broadcast_fn(emitter.emit)
 
         # Direct route mapping for exact path matches (normalized paths -> method -> handler)
-        # These are routes without path parameters
+        # These are org-scoped routes without path parameters
         self._direct_routes: dict[tuple[str, str], str] = {
             ("/api/gauntlet/run", "POST"): "_start_gauntlet",
-            ("/api/gauntlet/personas", "GET"): "_list_personas",
             ("/api/gauntlet/results", "GET"): "_list_results",
             ("/api/gauntlet/receipts", "GET"): "_list_receipts",
             ("/api/receipts/recent-anchors", "GET"): "_get_recent_anchors",
@@ -289,6 +291,17 @@ class GauntletHandler(
                 # Flatten single-value lists for convenience
                 query_params = {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
 
+        # Normalize path for routing (remove version prefix)
+        path = self._normalize_path(path)
+
+        # Runs, results, receipts and anchors belong to the org that created
+        # them; only the persona catalog is shared.
+        scope: OrgScope | None = None
+        if path != self._PERSONAS_PATH:
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+
         # Auth and permission checks
         user, err = self.require_auth_or_error(handler)
         if err:
@@ -298,22 +311,19 @@ class GauntletHandler(
         if perm_err:
             return perm_err
 
-        # Normalize path for routing (remove version prefix)
-        path = self._normalize_path(path)
-
         result: HandlerResult | None = None
 
         # Try direct route match first (exact path matches)
         route_key = (path, method)
-        if route_key in self._direct_routes:
+        if scope is None:
+            result = self._list_personas() if method == "GET" else None
+        elif route_key in self._direct_routes:
             handler_name = self._direct_routes[route_key]
             handler_method = getattr(self, handler_name)
             if handler_name == "_start_gauntlet":
-                result = await handler_method(handler)
-            elif handler_name in ("_list_results", "_list_receipts", "_get_recent_anchors"):
-                result = handler_method(query_params)
+                result = await handler_method(handler, scope=scope)
             else:
-                result = handler_method()
+                result = handler_method(query_params)
         else:
             # Try parameterized route matching
             result = await self._handle_parameterized_route(path, method, query_params, handler)

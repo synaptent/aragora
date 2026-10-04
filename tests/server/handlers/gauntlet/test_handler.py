@@ -335,5 +335,5 @@ class TestRouteMatching:
     def test_direct_routes_mapping(self, handler):
         """Test direct routes mapping is configured."""
         assert ("/api/gauntlet/run", "POST") in handler._direct_routes
-        assert ("/api/gauntlet/personas", "GET") in handler._direct_routes
+        assert ("/api/gauntlet/personas", "GET") not in handler._direct_routes
         assert ("/api/gauntlet/results", "GET") in handler._direct_routes

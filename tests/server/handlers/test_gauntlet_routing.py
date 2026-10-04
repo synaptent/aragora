@@ -88,9 +88,11 @@ class TestDirectRouteMatching:
         assert isinstance(gauntlet_handler._direct_routes, dict)
         assert len(gauntlet_handler._direct_routes) > 0
 
-    def test_personas_route_in_direct_routes(self, gauntlet_handler: GauntletHandler):
-        """GET /api/gauntlet/personas should be in direct routes."""
-        assert ("/api/gauntlet/personas", "GET") in gauntlet_handler._direct_routes
+    def test_personas_route_is_outside_the_org_scoped_direct_routes(
+        self, gauntlet_handler: GauntletHandler
+    ):
+        """GET /api/gauntlet/personas is the shared catalog, routed before org scoping."""
+        assert ("/api/gauntlet/personas", "GET") not in gauntlet_handler._direct_routes
 
     def test_run_route_in_direct_routes(self, gauntlet_handler: GauntletHandler):
         """POST /api/gauntlet/run should be in direct routes."""

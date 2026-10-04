@@ -349,9 +349,14 @@ class GauntletWorker:
                 duration_seconds=result.duration_seconds,
             )
 
-        # Persist result
+        # Persist result for the org that started the run
         try:
-            storage.save(result)
+            org_id = payload.get("org_id")
+            if not org_id:
+                # Jobs enqueued before the payload carried the org.
+                inflight = storage.get_inflight(gauntlet_id)
+                org_id = inflight.org_id if inflight else None
+            storage.save(result, org_id=org_id)
             storage.delete_inflight(gauntlet_id)
             logger.info("Gauntlet %s persisted to storage", gauntlet_id)
         except (OSError, RuntimeError, ValueError) as e:
@@ -400,6 +405,7 @@ async def enqueue_gauntlet_job(
     user_id: str | None = None,
     workspace_id: str | None = None,
     priority: int = 0,
+    org_id: str | None = None,
 ) -> QueuedJob:
     """
     Enqueue a gauntlet job for durable processing.
@@ -414,6 +420,7 @@ async def enqueue_gauntlet_job(
         user_id: Optional user ID
         workspace_id: Optional workspace ID
         priority: Job priority (higher = more urgent)
+        org_id: Org that started the run and owns its result
 
     Returns:
         The queued job
@@ -428,6 +435,7 @@ async def enqueue_gauntlet_job(
             "persona": persona,
             "agents": agents,
             "profile": profile,
+            "org_id": org_id,
         },
         priority=priority,
         user_id=user_id,
@@ -496,6 +504,7 @@ async def recover_interrupted_gauntlets() -> int:
                     agents=run.agents,
                     profile=run.profile,
                     priority=5,  # Higher priority for recovered jobs
+                    org_id=run.org_id,
                 )
                 recovered += 1
                 logger.info("Re-enqueued interrupted gauntlet: %s", run.gauntlet_id)

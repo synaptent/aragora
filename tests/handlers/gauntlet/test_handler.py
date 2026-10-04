@@ -26,6 +26,13 @@ from aragora.server.handlers.gauntlet.handler import GauntletHandler
 from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
 from aragora.server.handlers.utils.responses import HandlerResult
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -165,11 +172,11 @@ class TestInit:
         """Direct routes map is populated correctly."""
         h = GauntletHandler({})
         assert ("/api/gauntlet/run", "POST") in h._direct_routes
-        assert ("/api/gauntlet/personas", "GET") in h._direct_routes
         assert ("/api/gauntlet/results", "GET") in h._direct_routes
         assert h._direct_routes[("/api/gauntlet/run", "POST")] == "_start_gauntlet"
-        assert h._direct_routes[("/api/gauntlet/personas", "GET")] == "_list_personas"
         assert h._direct_routes[("/api/gauntlet/results", "GET")] == "_list_results"
+        # The persona catalog is shared, so it is routed outside the org-scoped table.
+        assert ("/api/gauntlet/personas", "GET") not in h._direct_routes
 
 
 # ============================================================================
@@ -606,7 +613,7 @@ class TestHandle:
         result = await handler.handle("/api/v1/gauntlet/run", {}, mock_h)
         assert result is not None
         assert _status(result) == 202
-        handler._start_gauntlet.assert_called_once_with(mock_h)
+        handler._start_gauntlet.assert_called_once_with(mock_h, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_route_get_personas(self, handler):
