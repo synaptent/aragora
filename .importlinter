@@ -12,9 +12,15 @@
 #   domain          debate, agents, memory, knowledge, ranking, reasoning,
 #                   evidence, evaluation, explainability, learning, ml
 #   infrastructure  storage, resilience, events, observability, security,
-#                   queue, db, caching, billing, backup, migrations
-#   foundation      config, core_types, exceptions, errors, utils, protocols,
-#                   types
+#                   queue, db, caching, billing, backup, migrations, cache,
+#                   deletion_coordinator, fabric, maintenance, monitoring,
+#                   performance, resilience_config, resilience_patterns,
+#                   runtime, sandbox, streaming, telemetry, transcription
+#   foundation      api_errors, config, core_types, exceptions, errors, utils,
+#                   protocols, types, __version__, _lazy_imports,
+#                   core_protocols, docs_only, http_client, models,
+#                   serialization, task_brief, topic_handler, topic_spec,
+#                   topics, type_protocols
 #
 # Siblings within a layer are colon-separated (":"), i.e. non-independent: they
 # may import one another freely; only the cross-layer direction is enforced.
@@ -64,5 +70,5 @@ layers =
     server : cli : mcp : gateway : bots : channels : integrations : connectors
     workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate
     debate : agents : memory : knowledge : ranking : reasoning : evidence : evaluation : explainability : learning : ml
-    storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations
-    api_errors : config : core_types : exceptions : errors : utils : protocols : types
+    storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations : cache : deletion_coordinator : fabric : maintenance : monitoring : performance : resilience_config : resilience_patterns : runtime : sandbox : streaming : telemetry : transcription
+    api_errors : config : core_types : exceptions : errors : utils : protocols : types : __version__ : _lazy_imports : core_protocols : docs_only : http_client : models : serialization : task_brief : topic_handler : topic_spec : topics : type_protocols
