@@ -594,13 +594,16 @@ class TestGauntletAPIRunAndWait:
             "gauntlet_id": "gnt-wait",
             "status": "running",
         }
-        mock_client._get.return_value = {
-            "receipt_id": "rcpt-wait",
-            "gauntlet_id": "gnt-wait",
-            "verdict": "approved",
-            "risk_score": 0.1,
-            "findings": [],
-        }
+        mock_client._get.side_effect = [
+            {"gauntlet_id": "gnt-wait", "status": "completed"},
+            {
+                "receipt_id": "rcpt-wait",
+                "gauntlet_id": "gnt-wait",
+                "verdict": "approved",
+                "risk_score": 0.1,
+                "findings": [],
+            },
+        ]
 
         result = gauntlet_api.run_and_wait("Content to analyze")
 
@@ -616,10 +619,10 @@ class TestGauntletAPIRunAndWait:
             "status": "running",
         }
 
-        # First call returns 404, second succeeds
-        error_404 = AragoraAPIError("Not found", status_code=404)
+        # Canonical run statuses precede the completed receipt.
         mock_client._get.side_effect = [
-            error_404,
+            {"gauntlet_id": "gnt-poll", "status": "running"},
+            {"gauntlet_id": "gnt-poll", "status": "completed"},
             {
                 "receipt_id": "rcpt-poll",
                 "gauntlet_id": "gnt-poll",
@@ -633,7 +636,7 @@ class TestGauntletAPIRunAndWait:
             result = gauntlet_api.run_and_wait("Polling content", timeout=60)
 
         assert result.verdict == "needs_review"
-        assert mock_client._get.call_count == 2
+        assert mock_client._get.call_count == 3
 
     def test_run_and_wait_timeout(self, gauntlet_api: GauntletAPI, mock_client: MagicMock):
         """Test run_and_wait() raises TimeoutError."""
@@ -641,11 +644,10 @@ class TestGauntletAPIRunAndWait:
             "gauntlet_id": "gnt-timeout",
             "status": "running",
         }
-        error_404 = AragoraAPIError("Not found", status_code=404)
-        mock_client._get.side_effect = error_404
+        mock_client._get.return_value = {"gauntlet_id": "gnt-timeout", "status": "running"}
 
         with patch("time.sleep"):
-            with patch("time.time", side_effect=[0, 0, 100, 100]):  # Simulate timeout
+            with patch("time.monotonic", side_effect=[0, 0, 100]):  # Simulate timeout
                 with pytest.raises(TimeoutError) as exc:
                     gauntlet_api.run_and_wait("Timeout content", timeout=10)
 

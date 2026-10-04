@@ -24,7 +24,7 @@ from aragora.rbac.decorators import require_permission
 
 from ..base import HandlerResult, error_response, get_int_param, get_string_param, json_response
 from ..openapi_decorator import api_endpoint
-from .storage import get_gauntlet_runs
+from .storage import _STORAGE_ERRORS, get_gauntlet_runs, resolve_gauntlet_run
 
 
 def _get_storage_proxy():
@@ -184,9 +184,15 @@ class GauntletReceiptsMixin:
         result = None
         result_obj = None
 
-        # Check in-memory first
-        if gauntlet_id in gauntlet_runs:
-            run = gauntlet_runs[gauntlet_id]
+        try:
+            run = await resolve_gauntlet_run(
+                gauntlet_id, gauntlet_runs.get(gauntlet_id), _get_storage_proxy
+            )
+            if run is None:
+                body, status = gauntlet_error_response(
+                    "gauntlet_not_found", {"gauntlet_id": gauntlet_id}
+                )
+                return json_response(body, status=status)
             if run["status"] != "completed":
                 body, status = gauntlet_error_response(
                     "not_completed", {"gauntlet_id": gauntlet_id}
@@ -194,24 +200,14 @@ class GauntletReceiptsMixin:
                 return json_response(body, status=status)
             result = run["result"]
             result_obj = run.get("result_obj")
-        else:
-            # Check persistent storage
-            try:
-                storage = _get_storage_proxy()
-                stored = await _call_nonblocking(storage, "get", gauntlet_id)
-                if stored:
-                    result = stored
-                else:
-                    body, status = gauntlet_error_response(
-                        "gauntlet_not_found", {"gauntlet_id": gauntlet_id}
-                    )
-                    return json_response(body, status=status)
-            except (OSError, RuntimeError, ValueError) as e:
-                logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
-                body, status = gauntlet_error_response(
-                    "storage_error", {"reason": "Storage lookup failed"}
-                )
-                return json_response(body, status=status)
+            if run is not gauntlet_runs.get(gauntlet_id):
+                run = None  # Stored-result conversion uses the result's own metadata.
+        except _STORAGE_ERRORS as e:
+            logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
+            body, status = gauntlet_error_response(
+                "storage_error", {"reason": "Storage lookup failed"}
+            )
+            return json_response(body, status=status)
 
         # Generate receipt
         if result_obj:
