@@ -4,8 +4,9 @@ Server-run debates go through ``run_async``, whose own timeout defaults to
 30 s. These tests check that the controller passes the debate's configured
 deadline (plus small cleanup margins) instead, that the arena's own deadline
 stops an overrunning debate and is recorded as a timeout, that the controller
-backstop still fires when the arena has no limit, and that missing or invalid
-deadline configuration falls back to a finite value.
+backstop still fires when the arena has no limit, that missing or invalid
+deadline configuration falls back to a finite value, and that comparison mode
+records a timeout only when every candidate stopped at its deadline.
 
 Time is virtual: the event loops below jump their clock forward whenever
 they would otherwise sleep, so a 45 s or 10,000 s fake debate completes in
@@ -20,7 +21,7 @@ import math
 import selectors
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, Mock
@@ -375,6 +376,124 @@ class TestArenaDeadlineWinsRace:
         assert execution_path.ran_on_this_path(arena)
         assert arena.cancelled_after == pytest.approx(45.0 + dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS)
         assert arena.cleaned_up is True
+        assert execution_path.leftover_tasks() == []
+
+
+class _FailingArena(_FakeArena):
+    """Arena stand-in whose debate fails with a genuine (non-deadline) error."""
+
+    async def _run_inner(self, correlation_id: str = "") -> Any:
+        self.loop = asyncio.get_running_loop()
+        raise RuntimeError("provider rejected the request")
+
+
+def _at_deadline() -> _FakeArena:
+    return _FakeArena(timeout_seconds=45, work_seconds=10_000)
+
+
+def _run_comparison(debate_id: str, arenas: list[Any]) -> tuple[DebateController, Mock, Mock]:
+    storage = Mock()
+    emitter = Mock()
+    controller = _controller(arenas[0], storage=storage, emitter=emitter)
+    controller.factory.create_arena.side_effect = arenas
+    controller._generate_debate_receipt = Mock()
+    controller._emit_leaderboard_update = Mock()
+    config = replace(
+        _config(debate_id),
+        comparison_config={
+            "agent_combinations": [["openai-api", "grok"] for _ in arenas],
+            "pick_best_result": True,
+        },
+    )
+
+    controller._run_debate(config, debate_id)
+
+    assert controller.factory.create_arena.call_count == len(arenas)
+    return controller, storage, emitter
+
+
+class TestComparisonModeDeadline:
+    def test_all_candidates_at_deadline_is_recorded_as_timeout(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"comparison-all-deadline-{execution_path.name}")
+        arenas = [_at_deadline(), _at_deadline()]
+
+        controller, storage, emitter = _run_comparison(debate_id, arenas)
+
+        assert all(execution_path.ran_on_this_path(arena) for arena in arenas)
+        assert [arena.cancelled_after for arena in arenas] == [pytest.approx(45.0)] * 2
+        state = get_state_manager().get_debate(debate_id)
+        assert state.status == "timeout"
+        assert state.metadata["error"] == "All 2 comparison candidates stopped at their deadline"
+        assert "result" not in state.metadata
+        storage.save_dict.assert_not_called()
+        controller._generate_debate_receipt.assert_not_called()
+        end_events = _debate_end_events(emitter)
+        assert [event.data["status"] for event in end_events] == ["timeout"]
+        assert end_events[0].data["debate_id"] == debate_id
+        assert execution_path.leftover_tasks() == []
+
+    def test_one_success_among_deadline_stops_keeps_the_success_result(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"comparison-one-success-{execution_path.name}")
+        arenas = [_at_deadline(), _FakeArena(timeout_seconds=45, work_seconds=10), _at_deadline()]
+
+        controller, storage, emitter = _run_comparison(debate_id, arenas)
+
+        state = get_state_manager().get_debate(debate_id)
+        assert state.status == "completed"
+        assert "error" not in state.metadata
+        result = state.metadata["result"]
+        assert result["final_answer"] == "done"
+        assert result["model_comparison"]["selected_candidate_index"] == 2
+        failures = result["model_comparison"]["failures"]
+        assert [failure["candidate_index"] for failure in failures] == [1, 3]
+        storage.save_dict.assert_called_once()
+        saved, kwargs = storage.save_dict.call_args
+        assert saved[0]["id"] == debate_id
+        assert kwargs == {"org_id": "org-a"}
+        controller._generate_debate_receipt.assert_called_once()
+        assert _debate_end_events(emitter) == []
+        assert execution_path.leftover_tasks() == []
+
+    @staticmethod
+    def _assert_validation_error_handling(debate_id: str, controller, storage, emitter) -> None:
+        state = get_state_manager().get_debate(debate_id)
+        assert state.status == "error"
+        assert state.metadata["error"] == (
+            "Debate validation failed. Check agent configuration and parameters."
+        )
+        storage.save_dict.assert_not_called()
+        controller._generate_debate_receipt.assert_not_called()
+        end_events = _debate_end_events(emitter)
+        assert len(end_events) == 1
+        assert "status" not in end_events[0].data
+        assert end_events[0].data["error"] == state.metadata["error"]
+
+    def test_genuine_candidate_errors_keep_the_error_handling(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"comparison-errors-{execution_path.name}")
+        arenas = [_FailingArena(timeout_seconds=45, work_seconds=0) for _ in range(2)]
+
+        controller, storage, emitter = _run_comparison(debate_id, arenas)
+
+        assert all(execution_path.ran_on_this_path(arena) for arena in arenas)
+        self._assert_validation_error_handling(debate_id, controller, storage, emitter)
+        assert execution_path.leftover_tasks() == []
+
+    def test_deadline_stop_and_genuine_error_keep_the_error_handling(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"comparison-mixed-{execution_path.name}")
+        arenas = [_at_deadline(), _FailingArena(timeout_seconds=45, work_seconds=0)]
+
+        controller, storage, emitter = _run_comparison(debate_id, arenas)
+
+        assert arenas[0].cancelled_after == pytest.approx(45.0)
+        self._assert_validation_error_handling(debate_id, controller, storage, emitter)
         assert execution_path.leftover_tasks() == []
 
 
