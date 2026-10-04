@@ -1,8 +1,8 @@
-"""Org isolation of the FastAPI v2 receipt routes.
+"""Org isolation of the FastAPI v2 receipt and gauntlet routes.
 
 Two orgs (real JWTs) and an anonymous caller exercise every route against a
-real SQLite receipt store holding receipts of org A, org B and receipts with
-no owner:
+real SQLite receipt store and gauntlet store holding records of org A, org B
+and records with no owner:
 
 * another org's record answers exactly like a missing one (same 404 body),
   and sharing or sending it has no side effect;
@@ -21,7 +21,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aragora.export.decision_receipt import DecisionReceipt
+from aragora.gauntlet.storage import GauntletStorage
 from aragora.server.fastapi import create_app
+from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
 from aragora.server.handlers.utils.receipt_delivery_history import (
     DELIVERY_ORG_KEY,
     get_receipt_delivery_history_store,
@@ -31,6 +33,14 @@ from aragora.storage.receipt_store import ReceiptStore
 ORG_A = "org-a"
 ORG_B = "org-b"
 RECEIPT_NOT_FOUND = {"error": "Receipt not found", "code": "not_found"}
+RUN_NOT_FOUND = {"error": "Gauntlet run not found", "code": "not_found"}
+
+GID_A = "gauntlet-20261004130000-aaaaaa"
+GID_B = "gauntlet-20261004130000-bbbbbb"
+GID_NULL = "gauntlet-20261004130000-000000"
+GID_LIVE_A = "gauntlet-20261004130100-cccccc"
+GID_INFLIGHT_A = "gauntlet-20261004130200-dddddd"
+GID_MISSING = "gauntlet-20261004130000-ffffff"
 
 
 def _receipt_payload(receipt_id: str) -> dict[str, Any]:
@@ -43,6 +53,35 @@ def _receipt_payload(receipt_id: str) -> dict[str, Any]:
         input_summary=f"isolation probe {receipt_id}",
         agents_involved=["claude", "codex"],
     ).to_dict()
+
+
+class _StoredResult:
+    """The attributes ``GauntletStorage.save`` reads from a gauntlet result."""
+
+    def __init__(self, gauntlet_id: str) -> None:
+        self.gauntlet_id = gauntlet_id
+        self.input_summary = f"isolation probe {gauntlet_id}"
+        self.input_hash = f"hash-{gauntlet_id}"
+        self.verdict = "pass"
+        self.confidence = 0.9
+        self.robustness_score = 0.8
+        self.total_findings = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gauntlet_id": self.gauntlet_id,
+            "verdict": self.verdict,
+            "confidence": self.confidence,
+            "findings": [
+                {
+                    "id": f"f-{self.gauntlet_id[-6:]}",
+                    "category": "security",
+                    "severity": "HIGH",
+                    "title": f"sentinel finding {self.gauntlet_id}",
+                    "description": "sentinel",
+                }
+            ],
+        }
 
 
 class _ShareStore:
@@ -93,9 +132,12 @@ def jwt_env(monkeypatch):
 @pytest.fixture(autouse=True)
 def _clean_shared_state():
     history = get_receipt_delivery_history_store()
+    runs = get_gauntlet_runs()
     history.clear()
+    runs.clear()
     yield
     history.clear()
+    runs.clear()
 
 
 def _bearer(user_id: str, org_id: str) -> dict[str, str]:
@@ -131,11 +173,41 @@ def share_store() -> _ShareStore:
 
 
 @pytest.fixture
-def client(receipt_store, share_store, fastapi_context_builder):
+def gauntlet_storage(tmp_path) -> GauntletStorage:
+    storage = GauntletStorage(db_path=str(tmp_path / "gauntlet.db"))
+    storage.save(_StoredResult(GID_A), org_id=ORG_A)
+    storage.save(_StoredResult(GID_B), org_id=ORG_B)
+    storage.save(_StoredResult(GID_NULL))
+    storage.save_inflight(
+        gauntlet_id=GID_INFLIGHT_A,
+        status="running",
+        input_type="spec",
+        input_summary="inflight probe",
+        input_hash="hash-inflight",
+        persona=None,
+        profile="default",
+        agents=["demo"],
+        org_id=ORG_A,
+    )
+    get_gauntlet_runs()[GID_LIVE_A] = {
+        "gauntlet_id": GID_LIVE_A,
+        "status": "completed",
+        "input_type": "spec",
+        "input_summary": "in-memory probe",
+        "org_id": ORG_A,
+        "created_by": "user-a",
+        "result": _StoredResult(GID_LIVE_A).to_dict(),
+    }
+    return storage
+
+
+@pytest.fixture
+def client(receipt_store, share_store, gauntlet_storage, fastapi_context_builder):
     app = create_app()
     app.state.context = fastapi_context_builder(
         receipt_store=receipt_store,
         receipt_share_store=share_store,
+        gauntlet_storage=gauntlet_storage,
     )
     # Not entered as a context manager: the app's startup would replace this context.
     test_client = TestClient(app, raise_server_exceptions=False)
@@ -170,6 +242,9 @@ _ALL_SCOPED_ROUTES = [
         "/api/v2/receipts/rcpt-a/send-to-channel",
         {"channel_type": "slack", "channel_id": "C1"},
     ),
+    ("POST", "/api/v2/gauntlet/run", {"input_content": "probe"}),
+    ("GET", f"/api/v2/gauntlet/{GID_A}/status", None),
+    ("GET", f"/api/v2/gauntlet/{GID_A}/findings", None),
 ]
 
 
@@ -261,6 +336,15 @@ class TestOtherOrg:
 
         assert (stats["delivered"], stats["failed"], stats["pending"]) == (1, 0, 0)
 
+    @pytest.mark.parametrize("gauntlet_id", [GID_A, GID_LIVE_A, GID_INFLIGHT_A, GID_NULL])
+    @pytest.mark.parametrize("suffix", ["status", "findings"])
+    def test_gauntlet_runs_answer_like_a_missing_run(self, client, as_b, gauntlet_id, suffix):
+        hidden = client.get(f"/api/v2/gauntlet/{gauntlet_id}/{suffix}", headers=as_b)
+        missing = client.get(f"/api/v2/gauntlet/{GID_MISSING}/{suffix}", headers=as_b)
+
+        assert (hidden.status_code, hidden.json()) == (404, RUN_NOT_FOUND)
+        assert (missing.status_code, missing.json()) == (404, RUN_NOT_FOUND)
+
 
 class TestOwner:
     @pytest.mark.parametrize(("method", "path"), _PER_ID_READS)
@@ -327,3 +411,51 @@ class TestOwner:
         assert [entry[DELIVERY_ORG_KEY] for entry in get_receipt_delivery_history_store()] == [
             ORG_A
         ]
+
+    @pytest.mark.parametrize("gauntlet_id", [GID_A, GID_LIVE_A, GID_INFLIGHT_A])
+    def test_gauntlet_status_succeeds(self, client, as_a, gauntlet_id):
+        response = client.get(f"/api/v2/gauntlet/{gauntlet_id}/status", headers=as_a)
+
+        assert response.status_code == 200
+        assert response.json()["gauntlet_id"] == gauntlet_id
+
+    @pytest.mark.parametrize("gauntlet_id", [GID_A, GID_LIVE_A])
+    def test_gauntlet_findings_succeed(self, client, as_a, gauntlet_id):
+        response = client.get(f"/api/v2/gauntlet/{gauntlet_id}/findings", headers=as_a)
+
+        assert response.status_code == 200
+        assert response.json()["total"] == 1
+
+    def test_gauntlet_findings_accept_numeric_severity_scores(self, client, as_a):
+        get_gauntlet_runs()[GID_LIVE_A]["result"]["findings"] = [
+            {
+                "id": "f-numeric",
+                "category": "probe",
+                "severity": 0.5,
+                "severity_level": "MEDIUM",
+                "title": "Probe: sycophancy",
+                "description": "sentinel",
+            }
+        ]
+
+        response = client.get(
+            f"/api/v2/gauntlet/{GID_LIVE_A}/findings?severity=medium", headers=as_a
+        )
+
+        assert response.status_code == 200
+        assert [(f["severity"], f["severity_level"]) for f in response.json()["findings"]] == [
+            ("0.5", "MEDIUM")
+        ]
+
+    def test_started_run_belongs_to_the_caller(self, client, as_a, as_b, gauntlet_storage):
+        response = client.post(
+            "/api/v2/gauntlet/run", json={"input_content": "ownership probe"}, headers=as_a
+        )
+
+        assert response.status_code == 202
+        gauntlet_id = response.json()["gauntlet_id"]
+        run = get_gauntlet_runs()[gauntlet_id]
+        assert (run["org_id"], run["created_by"]) == (ORG_A, "user-a")
+        assert gauntlet_storage.get_inflight(gauntlet_id).org_id == ORG_A
+        hidden = client.get(f"/api/v2/gauntlet/{gauntlet_id}/status", headers=as_b)
+        assert (hidden.status_code, hidden.json()) == (404, RUN_NOT_FOUND)

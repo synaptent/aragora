@@ -1,6 +1,9 @@
 """
 Gauntlet Endpoints (FastAPI v2).
 
+Runs belong to the org that started them; other-org and unknown-owner runs
+answer exactly like missing ones.
+
 Provides async gauntlet stress-test management endpoints:
 - Start a gauntlet run
 - Get run status
@@ -22,8 +25,14 @@ from pydantic import BaseModel, Field
 
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi.dependencies.auth import require_permission
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found_error,
+    record_visible,
+    require_org_scope_fastapi,
+)
 
-from ..middleware.error_handling import NotFoundError
+from ..middleware.error_handling import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +159,32 @@ async def _call_store_method(store: Any, method_name: str, *args: Any, **kwargs:
     return result
 
 
+def _owned_memory_run(run_id: str, scope: OrgScope) -> dict[str, Any] | None:
+    try:
+        from aragora.server.handlers.gauntlet.storage import get_owned_run
+    except ImportError:
+        return None
+    return get_owned_run(run_id, scope)
+
+
+async def _owned_inflight(store: Any, run_id: str, scope: OrgScope) -> Any | None:
+    if not hasattr(store, "get_inflight"):
+        return None
+    inflight = await _call_store_method(store, "get_inflight", run_id)
+    if not inflight:
+        return None
+    org_id = (
+        inflight.get("org_id") if isinstance(inflight, dict) else getattr(inflight, "org_id", None)
+    )
+    return inflight if record_visible(org_id, scope) else None
+
+
+async def _owned_result(store: Any, run_id: str, scope: OrgScope) -> Any | None:
+    if not hasattr(store, "get"):
+        return None
+    return await _call_store_method(store, "get", run_id, org_id=scope.org_id) or None
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -160,9 +195,10 @@ async def start_gauntlet(
     body: StartGauntletRequest,
     request: Request,
     auth: AuthorizationContext = Depends(require_permission("gauntlet:run")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
 ) -> StartGauntletResponse:
     """
-    Start a new gauntlet stress-test.
+    Start a new gauntlet stress-test owned by the caller's org.
 
     Returns immediately with a gauntlet ID. The gauntlet runs in the background.
     Use GET /gauntlet/{run_id}/status to poll for status.
@@ -191,6 +227,8 @@ async def start_gauntlet(
                 "profile": body.profile,
                 "created_at": datetime.now().isoformat(),
                 "result": None,
+                "org_id": scope.org_id,
+                "created_by": scope.user_id,
             }
         except (ImportError, RuntimeError) as e:
             logger.debug("Could not store gauntlet run in memory: %s", e)
@@ -212,6 +250,7 @@ async def start_gauntlet(
                         persona=body.persona,
                         profile=body.profile,
                         agents=body.agents,
+                        org_id=scope.org_id,
                     )
                 except (OSError, RuntimeError, ValueError) as e:
                     logger.warning("Failed to persist gauntlet run: %s", e)
@@ -230,74 +269,64 @@ async def start_gauntlet(
 @router.get("/gauntlet/{run_id}/status", response_model=GauntletStatusResponse)
 async def get_gauntlet_status(
     run_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_gauntlet_storage),
 ) -> GauntletStatusResponse:
     """
-    Get the status of a gauntlet run.
+    Get the status of a gauntlet run started by the caller's org.
 
     Returns current status, input info, and results if completed.
     """
     try:
-        # Check in-memory runs first
-        try:
-            from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
-
-            gauntlet_runs = get_gauntlet_runs()
-            if run_id in gauntlet_runs:
-                run = gauntlet_runs[run_id]
-                return GauntletStatusResponse(
-                    gauntlet_id=run.get("gauntlet_id", run_id),
-                    status=run.get("status", "unknown"),
-                    input_type=run.get("input_type", ""),
-                    input_summary=run.get("input_summary", ""),
-                    persona=run.get("persona"),
-                    created_at=run.get("created_at"),
-                    completed_at=run.get("completed_at"),
-                    result=run.get("result"),
-                    error=run.get("error"),
-                )
-        except (ImportError, RuntimeError):
-            pass
+        run = _owned_memory_run(run_id, scope)
+        if run is not None:
+            return GauntletStatusResponse(
+                gauntlet_id=run.get("gauntlet_id", run_id),
+                status=run.get("status", "unknown"),
+                input_type=run.get("input_type", ""),
+                input_summary=run.get("input_summary", ""),
+                persona=run.get("persona"),
+                created_at=run.get("created_at"),
+                completed_at=run.get("completed_at"),
+                result=run.get("result"),
+                error=run.get("error"),
+            )
 
         # Check persistent storage - inflight
-        if hasattr(store, "get_inflight"):
-            inflight = await _call_store_method(store, "get_inflight", run_id)
-            if inflight:
-                inflight_dict = inflight.to_dict() if hasattr(inflight, "to_dict") else inflight
-                return GauntletStatusResponse(
-                    gauntlet_id=run_id,
-                    status=inflight_dict.get("status", "unknown")
-                    if isinstance(inflight_dict, dict)
-                    else "unknown",
-                    input_type=inflight_dict.get("input_type", "")
-                    if isinstance(inflight_dict, dict)
-                    else "",
-                    input_summary=inflight_dict.get("input_summary", "")
-                    if isinstance(inflight_dict, dict)
-                    else "",
-                    persona=inflight_dict.get("persona")
-                    if isinstance(inflight_dict, dict)
-                    else None,
-                    created_at=inflight_dict.get("created_at")
-                    if isinstance(inflight_dict, dict)
-                    else None,
-                )
+        inflight = await _owned_inflight(store, run_id, scope)
+        if inflight:
+            inflight_dict = inflight.to_dict() if hasattr(inflight, "to_dict") else inflight
+            return GauntletStatusResponse(
+                gauntlet_id=run_id,
+                status=inflight_dict.get("status", "unknown")
+                if isinstance(inflight_dict, dict)
+                else "unknown",
+                input_type=inflight_dict.get("input_type", "")
+                if isinstance(inflight_dict, dict)
+                else "",
+                input_summary=inflight_dict.get("input_summary", "")
+                if isinstance(inflight_dict, dict)
+                else "",
+                persona=inflight_dict.get("persona") if isinstance(inflight_dict, dict) else None,
+                created_at=inflight_dict.get("created_at")
+                if isinstance(inflight_dict, dict)
+                else None,
+            )
 
         # Check completed results
-        if hasattr(store, "get"):
-            stored = await _call_store_method(store, "get", run_id)
-            if stored:
-                return GauntletStatusResponse(
-                    gauntlet_id=run_id,
-                    status="completed",
-                    result=stored
-                    if isinstance(stored, dict)
-                    else (stored.to_dict() if hasattr(stored, "to_dict") else None),
-                )
+        stored = await _owned_result(store, run_id, scope)
+        if stored:
+            return GauntletStatusResponse(
+                gauntlet_id=run_id,
+                status="completed",
+                result=stored
+                if isinstance(stored, dict)
+                else (stored.to_dict() if hasattr(stored, "to_dict") else None),
+            )
 
-        raise NotFoundError(f"Gauntlet run {run_id} not found")
+        raise record_not_found_error("Gauntlet run")
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error getting gauntlet status %s: %s", run_id, e)
@@ -312,10 +341,11 @@ async def get_gauntlet_findings(
     severity: str | None = Query(
         None, description="Filter by severity: CRITICAL, HIGH, MEDIUM, LOW"
     ),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store=Depends(get_gauntlet_storage),
 ) -> FindingsResponse:
     """
-    Get findings from a gauntlet run.
+    Get findings from a gauntlet run started by the caller's org.
 
     Returns paginated list of findings from the gauntlet stress-test.
     """
@@ -324,38 +354,30 @@ async def get_gauntlet_findings(
         verdict = None
         confidence = None
 
-        # Check in-memory runs first
-        try:
-            from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
-
-            gauntlet_runs = get_gauntlet_runs()
-            if run_id in gauntlet_runs:
-                run = gauntlet_runs[run_id]
-                if run.get("status") != "completed":
-                    return FindingsResponse(
-                        gauntlet_id=run_id,
-                        findings=[],
-                        total=0,
-                        verdict=None,
-                        confidence=None,
-                    )
-                result_data = run.get("result", {})
-        except (ImportError, RuntimeError):
-            pass
+        run = _owned_memory_run(run_id, scope)
+        if run is not None:
+            if run.get("status") != "completed":
+                return FindingsResponse(
+                    gauntlet_id=run_id,
+                    findings=[],
+                    total=0,
+                    verdict=None,
+                    confidence=None,
+                )
+            result_data = run.get("result", {})
 
         # Check persistent storage
         if result_data is None:
-            if hasattr(store, "get"):
-                stored = await _call_store_method(store, "get", run_id)
-                if stored:
-                    result_data = (
-                        stored
-                        if isinstance(stored, dict)
-                        else (stored.to_dict() if hasattr(stored, "to_dict") else {})
-                    )
+            stored = await _owned_result(store, run_id, scope)
+            if stored:
+                result_data = (
+                    stored
+                    if isinstance(stored, dict)
+                    else (stored.to_dict() if hasattr(stored, "to_dict") else {})
+                )
 
         if result_data is None:
-            raise NotFoundError(f"Gauntlet run {run_id} not found")
+            raise record_not_found_error("Gauntlet run")
 
         # Extract findings
         if isinstance(result_data, dict):
@@ -371,11 +393,13 @@ async def get_gauntlet_findings(
         findings = []
         for f in raw_findings:
             if isinstance(f, dict):
+                # Stored gauntlet results carry a numeric severity score next to
+                # the severity_level label; the response model takes strings.
                 finding = FindingSummary(
                     id=f.get("id", f.get("finding_id", "")),
                     category=f.get("category", ""),
-                    severity=f.get("severity", ""),
-                    severity_level=f.get("severity_level", f.get("severity", "")),
+                    severity=str(f.get("severity", "")),
+                    severity_level=str(f.get("severity_level", f.get("severity", ""))),
                     title=f.get("title", ""),
                     description=f.get("description", "")[:500],
                 )
@@ -383,8 +407,8 @@ async def get_gauntlet_findings(
                 finding = FindingSummary(
                     id=getattr(f, "finding_id", getattr(f, "id", "")),
                     category=getattr(f, "category", ""),
-                    severity=getattr(f, "severity", ""),
-                    severity_level=getattr(f, "severity_level", getattr(f, "severity", "")),
+                    severity=str(getattr(f, "severity", "")),
+                    severity_level=str(getattr(f, "severity_level", getattr(f, "severity", ""))),
                     title=getattr(f, "title", ""),
                     description=str(getattr(f, "description", ""))[:500],
                 )
@@ -411,7 +435,7 @@ async def get_gauntlet_findings(
             confidence=confidence,
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error getting gauntlet findings %s: %s", run_id, e)
