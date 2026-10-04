@@ -1020,6 +1020,10 @@ class UnifiedServer:
 
             register_user_store(stores["user_store"])
 
+        from aragora.server.receipt_link_resolver import install_receipt_link_resolver
+
+        install_receipt_link_resolver(getattr(UnifiedHandler, "storage", None))
+
         # Initialize DecisionRouter for unified decision routing
         self._init_decision_router()
 

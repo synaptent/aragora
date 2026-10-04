@@ -180,7 +180,7 @@ def test_schema_initialization_order_and_repeated_construction(monkeypatch, engi
         store = _schema_constructor(monkeypatch, backend, engine)
         assert backend.columns == required
         assert "idx_receipts_legal_hold" in backend.indexes
-        expected = ["table"] + ["alter"] * 8 + ["index"] * (9 if engine == "postgresql" else 8)
+        expected = ["table"] + ["alter"] * 11 + ["index"] * (10 if engine == "postgresql" else 9)
         assert backend.statements == expected
         assert store.SCHEMA_STATEMENTS is ReceiptStore.SCHEMA_STATEMENTS_SQLITE
         store.close()
@@ -286,12 +286,15 @@ def test_sqlite_schema_lifecycle_preserves_rows(tmp_path, sample_receipt_dict, e
                     payload = dict(store.get(rid).data, statement="updated")
                     store.save(payload)
                     assert store.get(rid).data["statement"] == "updated"
-                    # INSERT OR REPLACE resets optional columns, the unchanged SQLite save semantics.
+                    # A re-save is an upsert: columns save() does not write keep their values.
                     with sqlite3.connect(path) as conn:
                         assert conn.execute(
                             "SELECT timestamp_token, legal_hold FROM receipts WHERE receipt_id=?",
                             (rid,),
-                        ).fetchone() == (None, 0)
+                        ).fetchone() == (
+                            expected[rid]["timestamp_token"],
+                            expected[rid]["legal_hold"],
+                        )
                     assert store.count() == len(expected)
                 store.save(dict(sample_receipt_dict, receipt_id="new", gauntlet_id="new-gauntlet"))
                 assert store.count() == len(expected) + 1
