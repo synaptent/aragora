@@ -24,6 +24,11 @@ from aragora.server.handlers.gauntlet.runner import GauntletRunnerMixin
 from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
 from aragora.server.handlers.utils.responses import HandlerResult
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -134,10 +139,11 @@ class _Stub(GauntletRunnerMixin):
         """Stub: return body from handler."""
         return getattr(handler, "_parsed_body", None)
 
-    async def _auto_persist_receipt(self, result, gauntlet_id):
+    async def _auto_persist_receipt(self, result, gauntlet_id, *, scope):
         """Stub for receipt persistence."""
         self._auto_persist_called = True
         self._auto_persist_args = (result, gauntlet_id)
+        self._auto_persist_scope = scope
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +242,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ) as mock_task,
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
         body = _body(result)
@@ -265,7 +271,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         gauntlet_id = _body(result)["gauntlet_id"]
         runs = get_gauntlet_runs()
@@ -294,12 +300,13 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         mock_storage.save_inflight.assert_called_once()
         call_kwargs = mock_storage.save_inflight.call_args[1]
         assert call_kwargs["status"] == "pending"
         assert call_kwargs["input_type"] == "spec"
+        assert call_kwargs["org_id"] == TEST_ORG
 
     @pytest.mark.asyncio
     async def test_uses_fire_and_forget_when_durable_disabled(
@@ -323,7 +330,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ) as mock_task,
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
         mock_task.assert_called_once()
@@ -358,7 +365,7 @@ class TestStartGauntletSuccess:
                 },
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
         assert _body(result)["durable_queue"] is True
@@ -388,7 +395,7 @@ class TestStartGauntletSuccess:
                 {"aragora.server.workers.gauntlet_worker": None},
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         # Should still return 202 and fall back to fire-and-forget
         assert _status(result) == 202
@@ -419,7 +426,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         gauntlet_id = _body(result)["gauntlet_id"]
         runs = get_gauntlet_runs()
@@ -451,7 +458,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         gauntlet_id = _body(result)["gauntlet_id"]
         runs = get_gauntlet_runs()
@@ -481,7 +488,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         gauntlet_id = _body(result)["gauntlet_id"]
         runs = get_gauntlet_runs()
@@ -513,7 +520,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         # agents defaults to ["anthropic-api"] in the code
         assert _status(result) == 202
@@ -541,7 +548,7 @@ class TestStartGauntletSuccess:
                 "aragora.server.handlers.gauntlet.runner._cleanup_gauntlet_runs",
             ) as mock_cleanup,
         ):
-            await mixin._start_gauntlet(handler)
+            await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         mock_cleanup.assert_called_once()
 
@@ -561,7 +568,7 @@ class TestStartGauntletErrors:
             "aragora.billing.jwt_auth.extract_user_from_request",
             return_value=None,
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 400
         assert "Invalid" in _body(result)["error"]
@@ -579,7 +586,7 @@ class TestStartGauntletErrors:
                 return_value=None,
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 400
         assert "input_type" in _body(result)["error"]
@@ -608,7 +615,7 @@ class TestStartGauntletErrors:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         # Should still succeed despite storage failure
         assert _status(result) == 202
@@ -636,7 +643,7 @@ class TestStartGauntletErrors:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
 
@@ -663,7 +670,7 @@ class TestStartGauntletErrors:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
 
@@ -689,7 +696,7 @@ class TestStartGauntletQuota:
             "aragora.billing.jwt_auth.extract_user_from_request",
             return_value=user_ctx,
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 429
         body = _body(result)
@@ -724,7 +731,7 @@ class TestStartGauntletQuota:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
         user_store.increment_usage.assert_called_once_with("org-001", 1)
@@ -757,7 +764,7 @@ class TestStartGauntletQuota:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
 
@@ -785,7 +792,7 @@ class TestStartGauntletQuota:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
 
@@ -812,7 +819,7 @@ class TestStartGauntletQuota:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
         # Should not try to check org quota
@@ -842,7 +849,7 @@ class TestStartGauntletQuota:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
 
@@ -861,7 +868,7 @@ class TestStartGauntletQuota:
             "aragora.billing.jwt_auth.extract_user_from_request",
             return_value=user_ctx,
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         body = _body(result)
         assert body["tier"] == "starter"
@@ -900,7 +907,7 @@ class TestStartGauntletQuota:
                 "aragora.server.handlers.gauntlet.runner.create_tracked_task",
             ),
         ):
-            result = await mixin._start_gauntlet(handler)
+            result = await mixin._start_gauntlet(handler, scope=TEST_SCOPE)
 
         assert _status(result) == 202
         user_store.increment_usage.assert_called_once()
@@ -921,7 +928,7 @@ class TestRunGauntletAsyncSuccess:
     async def test_successful_run_stores_completed_result(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-test-001"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -953,7 +960,7 @@ class TestRunGauntletAsyncSuccess:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "test content", "spec", None, ["anthropic-api"], "default"
+                gid, "test content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "completed"
@@ -965,7 +972,7 @@ class TestRunGauntletAsyncSuccess:
     async def test_successful_run_persists_to_storage(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-test-persist"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -997,17 +1004,17 @@ class TestRunGauntletAsyncSuccess:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "test content", "spec", None, ["anthropic-api"], "default"
+                gid, "test content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
-        mock_storage.save.assert_called_once_with(fake_result)
+        mock_storage.save.assert_called_once_with(fake_result, org_id=TEST_ORG)
         mock_storage.delete_inflight.assert_called_once_with(gid)
 
     @pytest.mark.asyncio
     async def test_auto_persist_receipt_called(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-test-receipt"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1039,17 +1046,18 @@ class TestRunGauntletAsyncSuccess:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "test content", "spec", None, ["anthropic-api"], "default"
+                gid, "test content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert mixin._auto_persist_called is True
         assert mixin._auto_persist_args[1] == gid
+        assert mixin._auto_persist_scope == TEST_SCOPE
 
     @pytest.mark.asyncio
     async def test_result_findings_limited_to_20(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-test-findings"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         many_findings = [
             FakeFinding(finding_id=f"f-{i:03d}", title=f"Finding {i}") for i in range(30)
@@ -1084,7 +1092,7 @@ class TestRunGauntletAsyncSuccess:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "test content", "spec", None, ["anthropic-api"], "default"
+                gid, "test content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert len(runs[gid]["result"]["findings"]) == 20
@@ -1093,7 +1101,7 @@ class TestRunGauntletAsyncSuccess:
     async def test_finding_description_truncated_to_500(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-test-desc"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         long_finding = FakeFinding(description="D" * 1000)
         fake_result = FakeGauntletResult(all_findings=[long_finding], total_findings=1)
@@ -1126,7 +1134,7 @@ class TestRunGauntletAsyncSuccess:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "test content", "spec", None, ["anthropic-api"], "default"
+                gid, "test content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         desc = runs[gid]["result"]["findings"][0]["description"]
@@ -1157,7 +1165,7 @@ class TestRunGauntletInputTypes:
     async def test_input_type_mapping(self, mixin, mock_storage, input_type_str, expected_attr):
         runs = get_gauntlet_runs()
         gid = f"gauntlet-type-{input_type_str}"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1196,7 +1204,7 @@ class TestRunGauntletInputTypes:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", input_type_str, None, ["anthropic-api"], "default"
+                gid, "content", input_type_str, None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "completed"
@@ -1214,7 +1222,7 @@ class TestRunGauntletAsyncFailures:
     async def test_no_agents_created_marks_failed(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-no-agents"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         with (
             patch(
@@ -1238,7 +1246,9 @@ class TestRunGauntletAsyncFailures:
                 },
             ),
         ):
-            await mixin._run_gauntlet_async(gid, "content", "spec", None, ["bad-agent"], "default")
+            await mixin._run_gauntlet_async(
+                gid, "content", "spec", None, ["bad-agent"], "default", scope=TEST_SCOPE
+            )
 
         assert runs[gid]["status"] == "failed"
         assert runs[gid]["error"] == "No agents could be created"
@@ -1247,7 +1257,7 @@ class TestRunGauntletAsyncFailures:
     async def test_orchestrator_runtime_error_marks_failed(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-orch-fail"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         mock_orchestrator = AsyncMock()
         mock_orchestrator.run.side_effect = RuntimeError("orchestrator crashed")
@@ -1278,7 +1288,7 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "failed"
@@ -1288,7 +1298,7 @@ class TestRunGauntletAsyncFailures:
     async def test_orchestrator_os_error_marks_failed(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-os-fail"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         mock_orchestrator = AsyncMock()
         mock_orchestrator.run.side_effect = OSError("disk full")
@@ -1319,7 +1329,7 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "failed"
@@ -1329,7 +1339,7 @@ class TestRunGauntletAsyncFailures:
         """When gauntlet modules cannot be imported, run should fail gracefully."""
         runs = get_gauntlet_runs()
         gid = "gauntlet-import-fail"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         with (
             patch(
@@ -1344,7 +1354,7 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "failed"
@@ -1353,7 +1363,7 @@ class TestRunGauntletAsyncFailures:
     async def test_cancelled_error_marks_failed(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-cancel"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         mock_orchestrator = AsyncMock()
         mock_orchestrator.run.side_effect = asyncio.CancelledError()
@@ -1384,7 +1394,7 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "failed"
@@ -1393,7 +1403,7 @@ class TestRunGauntletAsyncFailures:
     async def test_failure_updates_persistent_status(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-persist-fail"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         mock_orchestrator = AsyncMock()
         mock_orchestrator.run.side_effect = RuntimeError("fail")
@@ -1424,7 +1434,7 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         # Should have been called at least twice: once for "running", once for "failed"
@@ -1438,7 +1448,7 @@ class TestRunGauntletAsyncFailures:
         """If storage.save() fails after orchestrator success, run still completes."""
         runs = get_gauntlet_runs()
         gid = "gauntlet-save-fail"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         mock_storage.save.side_effect = OSError("disk full")
 
@@ -1472,7 +1482,7 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         # Run should still be completed in memory
@@ -1483,7 +1493,7 @@ class TestRunGauntletAsyncFailures:
         """If some agents fail to create, run proceeds with the ones that succeed."""
         runs = get_gauntlet_runs()
         gid = "gauntlet-partial"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_agent = MagicMock()
         fake_agent.name = "good_agent"
@@ -1520,7 +1530,13 @@ class TestRunGauntletAsyncFailures:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["good-agent", "bad-agent"], "default"
+                gid,
+                "content",
+                "spec",
+                None,
+                ["good-agent", "bad-agent"],
+                "default",
+                scope=TEST_SCOPE,
             )
 
         assert runs[gid]["status"] == "completed"
@@ -1538,7 +1554,7 @@ class TestRunGauntletAsyncEmitter:
     async def test_emitter_start_called_when_broadcast_fn_set(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-emit-start"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1578,7 +1594,7 @@ class TestRunGauntletAsyncEmitter:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         mock_emitter_instance.emit_start.assert_called_once()
@@ -1589,7 +1605,7 @@ class TestRunGauntletAsyncEmitter:
     async def test_no_emitter_when_no_broadcast_fn(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-no-emit"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1621,7 +1637,7 @@ class TestRunGauntletAsyncEmitter:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         # Should complete without errors (no emitter calls)
@@ -1631,7 +1647,7 @@ class TestRunGauntletAsyncEmitter:
     async def test_emitter_verdict_includes_severity_counts(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-emit-verdict"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult(
             critical_findings=[FakeFinding(severity_level="critical")],
@@ -1674,7 +1690,7 @@ class TestRunGauntletAsyncEmitter:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         call_kwargs = mock_emitter_instance.emit_verdict.call_args[1]
@@ -1696,7 +1712,7 @@ class TestRunGauntletAsyncStatusUpdates:
     async def test_sets_running_status_before_execution(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-status-running"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         statuses_seen = []
 
@@ -1737,7 +1753,7 @@ class TestRunGauntletAsyncStatusUpdates:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         # When orchestrator.run was called, status should have been "running"
@@ -1747,7 +1763,7 @@ class TestRunGauntletAsyncStatusUpdates:
     async def test_updates_persistent_status_to_running(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-persist-running"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1779,7 +1795,7 @@ class TestRunGauntletAsyncStatusUpdates:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         # First call should be for "running" status
@@ -1791,7 +1807,7 @@ class TestRunGauntletAsyncStatusUpdates:
         """If update_inflight_status fails, run continues."""
         runs = get_gauntlet_runs()
         gid = "gauntlet-inflight-err"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         mock_storage.update_inflight_status.side_effect = OSError("db down")
 
@@ -1825,7 +1841,7 @@ class TestRunGauntletAsyncStatusUpdates:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["status"] == "completed"
@@ -1843,7 +1859,7 @@ class TestRunGauntletResultShape:
     async def test_result_dict_has_all_fields(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-shape"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1875,7 +1891,7 @@ class TestRunGauntletResultShape:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         result_dict = runs[gid]["result"]
@@ -1900,7 +1916,7 @@ class TestRunGauntletResultShape:
     async def test_completed_at_is_set(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-completed-at"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1932,7 +1948,7 @@ class TestRunGauntletResultShape:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert "completed_at" in runs[gid]
@@ -1943,7 +1959,7 @@ class TestRunGauntletResultShape:
     async def test_result_obj_stored_in_memory(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-result-obj"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         fake_result = FakeGauntletResult()
         mock_orchestrator = AsyncMock()
@@ -1975,7 +1991,7 @@ class TestRunGauntletResultShape:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         assert runs[gid]["result_obj"] is fake_result
@@ -1984,7 +2000,7 @@ class TestRunGauntletResultShape:
     async def test_finding_fields_in_result(self, mixin, mock_storage):
         runs = get_gauntlet_runs()
         gid = "gauntlet-finding-fields"
-        runs[gid] = {"gauntlet_id": gid, "status": "pending"}
+        runs[gid] = {"org_id": TEST_ORG, "gauntlet_id": gid, "status": "pending"}
 
         finding = FakeFinding(
             finding_id="f-test",
@@ -2024,7 +2040,7 @@ class TestRunGauntletResultShape:
             ),
         ):
             await mixin._run_gauntlet_async(
-                gid, "content", "spec", None, ["anthropic-api"], "default"
+                gid, "content", "spec", None, ["anthropic-api"], "default", scope=TEST_SCOPE
             )
 
         f = runs[gid]["result"]["findings"][0]

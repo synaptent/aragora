@@ -47,6 +47,11 @@ from aragora.server.handlers.gauntlet import (
     set_gauntlet_broadcast_fn,
 )
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 # ===========================================================================
 # Test Fixtures and Mocks
@@ -119,6 +124,7 @@ class MockInflightRun:
     current_phase: str | None = "analysis"
     progress_percent: float = 50.0
     error: str | None = None
+    org_id: str | None = TEST_ORG
 
     def to_dict(self) -> dict:
         return {
@@ -1786,6 +1792,8 @@ class TestGauntletStaleRecovery:
 
             assert count == 1
             mock_storage_instance.update_inflight_status.assert_called_once()
+            # The recovered run stays visible only to the org that started it.
+            assert _gauntlet_runs[stale_run.gauntlet_id]["org_id"] == TEST_ORG
 
     def test_recover_stale_runs_storage_error(self):
         """Test recovery handles storage errors gracefully."""

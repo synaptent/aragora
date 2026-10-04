@@ -20,6 +20,13 @@ from aragora.server.handlers.gauntlet import (
     _gauntlet_runs,
 )
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
 
 # ============================================================================
 # Test Fixtures

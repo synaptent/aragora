@@ -28,6 +28,11 @@ from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
 from aragora.server.handlers.utils.responses import HandlerResult
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 # Patch targets for lazy imports inside method bodies
 _DR = "aragora.gauntlet.receipt.DecisionReceipt"
 _GER = "aragora.gauntlet.errors.gauntlet_error_response"
@@ -1280,7 +1285,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-persist")
+            await mixin._auto_persist_receipt(fake_result, "g-persist", scope=TEST_SCOPE)
 
         mock_store.save.assert_called_once()
 
@@ -1304,7 +1309,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-signed-persist")
+            await mixin._auto_persist_receipt(fake_result, "g-signed-persist", scope=TEST_SCOPE)
 
         call_kwargs = mock_store.save.call_args
         assert call_kwargs is not None
@@ -1336,7 +1341,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-unsigned-persist")
+            await mixin._auto_persist_receipt(fake_result, "g-unsigned-persist", scope=TEST_SCOPE)
 
         call_kwargs = mock_store.save.call_args
         sr = call_kwargs.kwargs.get("signed_receipt") or call_kwargs[1].get("signed_receipt")
@@ -1347,7 +1352,7 @@ class TestAutoPersistReceipt:
         """Uses input_hash from in-memory run data."""
         fake_result = FakeResult()
         runs = get_gauntlet_runs()
-        runs["g-hash"] = {"input_hash": "custom-hash-123"}
+        runs["g-hash"] = {"org_id": TEST_ORG, "input_hash": "custom-hash-123"}
 
         with (
             patch(_DR) as MockDR,
@@ -1362,7 +1367,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-hash")
+            await mixin._auto_persist_receipt(fake_result, "g-hash", scope=TEST_SCOPE)
 
         MockDR.from_mode_result.assert_called_once_with(fake_result, input_hash="custom-hash-123")
 
@@ -1372,7 +1377,7 @@ class TestAutoPersistReceipt:
         fake_result = FakeResult()
 
         with patch.dict("sys.modules", {"aragora.gauntlet.receipt": None}):
-            await mixin._auto_persist_receipt(fake_result, "g-noimport")
+            await mixin._auto_persist_receipt(fake_result, "g-noimport", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_persist_runtime_error_handled(self, mixin, mock_receipt):
@@ -1392,7 +1397,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-rterr")
+            await mixin._auto_persist_receipt(fake_result, "g-rterr", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_persist_os_error_handled(self, mixin, mock_receipt):
@@ -1412,7 +1417,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-oserr")
+            await mixin._auto_persist_receipt(fake_result, "g-oserr", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_auto_sign_receipts_env_var(self, mixin, mock_receipt):
@@ -1444,7 +1449,7 @@ class TestAutoPersistReceipt:
             patch.dict("os.environ", {"ARAGORA_AUTO_SIGN_RECEIPTS": "true"}),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-autosign")
+            await mixin._auto_persist_receipt(fake_result, "g-autosign", scope=TEST_SCOPE)
 
         mock_store.update_signature.assert_called_once()
 
@@ -1471,7 +1476,7 @@ class TestAutoPersistReceipt:
 
             os.environ.pop("ARAGORA_AUTO_SIGN_RECEIPTS", None)
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-noautosign")
+            await mixin._auto_persist_receipt(fake_result, "g-noautosign", scope=TEST_SCOPE)
 
         mock_store.update_signature.assert_not_called()
 
@@ -1497,7 +1502,7 @@ class TestAutoPersistReceipt:
             patch.dict("os.environ", {"ARAGORA_AUTO_SIGN_RECEIPTS": "1"}),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-autosign-err")
+            await mixin._auto_persist_receipt(fake_result, "g-autosign-err", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_persist_save_does_not_block_event_loop(self, mixin, mock_receipt):
@@ -1528,7 +1533,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-slow-persist")
+            await mixin._auto_persist_receipt(fake_result, "g-slow-persist", scope=TEST_SCOPE)
 
         ticks = await task
 
@@ -1561,7 +1566,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-risk")
+            await mixin._auto_persist_receipt(fake_result, "g-risk", scope=TEST_SCOPE)
 
         assert stored_kwargs.get("risk_level") == "CRITICAL"
 
@@ -1592,7 +1597,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-riskscore")
+            await mixin._auto_persist_receipt(fake_result, "g-riskscore", scope=TEST_SCOPE)
 
         assert abs(stored_kwargs.get("risk_score", 0) - 0.25) < 0.001
 
@@ -1631,7 +1636,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-km")
+            await mixin._auto_persist_receipt(fake_result, "g-km", scope=TEST_SCOPE)
 
         mock_adapter.ingest_receipt.assert_called_once()
 
@@ -1655,7 +1660,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-km-noimport")
+            await mixin._auto_persist_receipt(fake_result, "g-km-noimport", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_km_ingestion_no_mound(self, mixin, mock_receipt):
@@ -1684,7 +1689,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-km-nomound")
+            await mixin._auto_persist_receipt(fake_result, "g-km-nomound", scope=TEST_SCOPE)
 
         mock_adapter_cls.assert_not_called()
 
@@ -1711,7 +1716,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-webhook")
+            await mixin._auto_persist_receipt(fake_result, "g-webhook", scope=TEST_SCOPE)
 
         mock_notifier.notify_receipt_generated.assert_called_once()
 
@@ -1739,7 +1744,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-webhookerr")
+            await mixin._auto_persist_receipt(fake_result, "g-webhookerr", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_debate_id_from_result(self, mixin, mock_receipt):
@@ -1768,7 +1773,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-debateid")
+            await mixin._auto_persist_receipt(fake_result, "g-debateid", scope=TEST_SCOPE)
 
         assert stored_kwargs.get("debate_id") == "debate-custom"
 
@@ -1777,7 +1782,7 @@ class TestAutoPersistReceipt:
         """Uses workspace_id from run data for KM ingestion."""
         fake_result = FakeResult()
         runs = get_gauntlet_runs()
-        runs["g-ws"] = {"workspace_id": "ws-001"}
+        runs["g-ws"] = {"org_id": TEST_ORG, "workspace_id": "ws-001"}
         mock_store = MagicMock()
 
         mock_ingest_result = MagicMock()
@@ -1807,7 +1812,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-ws")
+            await mixin._auto_persist_receipt(fake_result, "g-ws", scope=TEST_SCOPE)
 
         call_kwargs = mock_adapter.ingest_receipt.call_args
         assert call_kwargs.kwargs.get("workspace_id") == "ws-001"
@@ -1817,7 +1822,7 @@ class TestAutoPersistReceipt:
         """Falls back to tenant_id when workspace_id is absent."""
         fake_result = FakeResult()
         runs = get_gauntlet_runs()
-        runs["g-tenant"] = {"tenant_id": "tenant-002"}
+        runs["g-tenant"] = {"org_id": TEST_ORG, "tenant_id": "tenant-002"}
         mock_store = MagicMock()
 
         mock_ingest_result = MagicMock()
@@ -1847,7 +1852,7 @@ class TestAutoPersistReceipt:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-tenant")
+            await mixin._auto_persist_receipt(fake_result, "g-tenant", scope=TEST_SCOPE)
 
         call_kwargs = mock_adapter.ingest_receipt.call_args
         assert call_kwargs.kwargs.get("workspace_id") == "tenant-002"
@@ -2395,7 +2400,7 @@ class TestAutoPersistEdgeCases:
             patch.dict("os.environ", {"ARAGORA_AUTO_SIGN_RECEIPTS": "yes"}),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-autosign-yes")
+            await mixin._auto_persist_receipt(fake_result, "g-autosign-yes", scope=TEST_SCOPE)
 
         mock_store.update_signature.assert_called_once()
 
@@ -2418,7 +2423,7 @@ class TestAutoPersistEdgeCases:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-norun")
+            await mixin._auto_persist_receipt(fake_result, "g-norun", scope=TEST_SCOPE)
 
         MockDR.from_mode_result.assert_called_once_with(fake_result, input_hash=None)
 
@@ -2441,7 +2446,7 @@ class TestAutoPersistEdgeCases:
         ):
             MockDR.from_mode_result.return_value = mock_receipt
             # Should not raise
-            await mixin._auto_persist_receipt(fake_result, "g-keyerr")
+            await mixin._auto_persist_receipt(fake_result, "g-keyerr", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_type_error_handled(self, mixin, mock_receipt):
@@ -2461,7 +2466,7 @@ class TestAutoPersistEdgeCases:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-typeerr")
+            await mixin._auto_persist_receipt(fake_result, "g-typeerr", scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_result_without_debate_id(self, mixin, mock_receipt):
@@ -2490,6 +2495,6 @@ class TestAutoPersistEdgeCases:
             ),
         ):
             MockDR.from_mode_result.return_value = mock_receipt
-            await mixin._auto_persist_receipt(fake_result, "g-nodebateid")
+            await mixin._auto_persist_receipt(fake_result, "g-nodebateid", scope=TEST_SCOPE)
 
         assert stored_kwargs.get("debate_id") is None

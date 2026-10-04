@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.validation.schema import GAUNTLET_RUN_SCHEMA, validate_against_schema
+from aragora.tenancy.record_scope import OrgScope
 
 from ..base import HandlerResult, error_response, json_response
 from ..openapi_decorator import api_endpoint
@@ -64,8 +65,8 @@ class GauntletRunnerMixin:
         },
     )
     @require_permission("gauntlet:run")
-    async def _start_gauntlet(self, handler: Any) -> HandlerResult:
-        """Start a new gauntlet stress-test."""
+    async def _start_gauntlet(self, handler: Any, *, scope: OrgScope) -> HandlerResult:
+        """Start a new gauntlet stress-test owned by the caller's org."""
         # Check quota before proceeding
         from aragora.billing.jwt_auth import extract_user_from_request
 
@@ -156,6 +157,8 @@ class GauntletRunnerMixin:
             "persona": persona,
             "profile": profile,
             "created_at": datetime.now().isoformat(),
+            "org_id": scope.org_id,
+            "created_by": scope.user_id,
             "result": None,
         }
 
@@ -183,6 +186,7 @@ class GauntletRunnerMixin:
                 profile=profile,
                 agents=agents,
                 config_json=config_json,
+                org_id=scope.org_id,
             )
             logger.debug("Persisted inflight gauntlet run: %s", gauntlet_id)
         except (OSError, RuntimeError, ValueError) as e:
@@ -202,6 +206,8 @@ class GauntletRunnerMixin:
                         persona=persona,
                         agents=agents,
                         profile=profile,
+                        user_id=scope.user_id,
+                        org_id=scope.org_id,
                     ),
                     name=f"enqueue-gauntlet-{gauntlet_id}",
                 )
@@ -210,7 +216,13 @@ class GauntletRunnerMixin:
                 logger.warning("Durable queue unavailable, falling back: %s", ie)
                 create_tracked_task(
                     self._run_gauntlet_async(
-                        gauntlet_id, input_content, input_type, persona, agents, profile
+                        gauntlet_id,
+                        input_content,
+                        input_type,
+                        persona,
+                        agents,
+                        profile,
+                        scope=scope,
                     ),
                     name=f"gauntlet-{gauntlet_id}",
                 )
@@ -218,7 +230,7 @@ class GauntletRunnerMixin:
             # Fire-and-forget - simpler but doesn't survive restarts
             create_tracked_task(
                 self._run_gauntlet_async(
-                    gauntlet_id, input_content, input_type, persona, agents, profile
+                    gauntlet_id, input_content, input_type, persona, agents, profile, scope=scope
                 ),
                 name=f"gauntlet-{gauntlet_id}",
             )
@@ -243,8 +255,10 @@ class GauntletRunnerMixin:
         persona: str | None,
         agents: list[str],
         profile: str,
+        *,
+        scope: OrgScope,
     ) -> None:
-        """Run gauntlet asynchronously."""
+        """Run gauntlet asynchronously; the result and receipt belong to ``scope``'s org."""
         gauntlet_runs = get_gauntlet_runs()
         broadcast_fn = get_gauntlet_broadcast_fn()
 
@@ -407,7 +421,7 @@ class GauntletRunnerMixin:
             # Persist to storage
             try:
                 storage = _get_storage_proxy()
-                storage.save(result)
+                storage.save(result, org_id=scope.org_id)
                 logger.info("Gauntlet %s persisted to storage", gauntlet_id)
 
                 # Clean up inflight record after successful completion
@@ -416,7 +430,7 @@ class GauntletRunnerMixin:
                 logger.warning("Failed to persist gauntlet %s: %s", gauntlet_id, storage_err)
 
             # Auto-persist decision receipt
-            await self._auto_persist_receipt(result, gauntlet_id)  # type: ignore[attr-defined]
+            await self._auto_persist_receipt(result, gauntlet_id, scope=scope)  # type: ignore[attr-defined]
 
             # Clean up in-memory storage after persisting (keep result_obj for receipt generation)
             # In-memory entry can be removed after a timeout in production

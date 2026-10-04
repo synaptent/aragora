@@ -21,6 +21,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
+from aragora.tenancy.record_scope import OrgScope, record_visible
+
 if TYPE_CHECKING:
     from aragora.gauntlet.storage import GauntletStorage
 
@@ -190,6 +192,7 @@ def recover_stale_gauntlet_runs(max_age_seconds: int = 7200) -> int:
                 # Also add to in-memory dict for immediate access
                 _gauntlet_runs[run.gauntlet_id] = {
                     "gauntlet_id": run.gauntlet_id,
+                    "org_id": run.org_id,
                     "status": "interrupted",
                     "input_type": run.input_type,
                     "input_summary": run.input_summary,
@@ -227,6 +230,14 @@ def get_gauntlet_runs() -> OrderedDict[str, dict[str, Any]]:
     Returns the OrderedDict for direct access by handler methods.
     """
     return _gauntlet_runs
+
+
+def get_owned_run(gauntlet_id: str, scope: OrgScope) -> dict[str, Any] | None:
+    """The in-memory run when the caller's org started it, else None."""
+    run = _gauntlet_runs.get(gauntlet_id)
+    if run is not None and record_visible(run.get("org_id"), scope):
+        return run
+    return None
 
 
 def get_quota_lock() -> threading.Lock:

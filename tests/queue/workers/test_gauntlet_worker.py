@@ -411,6 +411,41 @@ class TestCleanupCompletedTasks:
 class TestRecoverInterruptedGauntlets:
     """Tests for recover_interrupted_gauntlets function."""
 
+    @pytest.fixture(autouse=True)
+    def gauntlet_storage(self, temp_db):
+        """Recovery reads a throwaway inflight table, never the developer's database."""
+        from aragora.gauntlet.storage import GauntletStorage
+
+        storage = GauntletStorage(db_path=str(temp_db.with_name("gauntlet_results.db")))
+        with patch("aragora.gauntlet.storage.GauntletStorage", return_value=storage):
+            yield storage
+
+    @pytest.mark.asyncio
+    async def test_reenqueues_an_interrupted_run_for_the_org_that_started_it(
+        self, store, gauntlet_storage
+    ):
+        gauntlet_storage.save_inflight(
+            gauntlet_id="gauntlet-20260101000000-abcdef",
+            status="running",
+            input_type="spec",
+            input_summary="probe",
+            input_hash="hash",
+            persona=None,
+            profile="default",
+            agents=["demo"],
+            org_id="org-a",
+            config_json='{"input_content": "probe"}',
+        )
+        gauntlet_storage._backend.execute_write(
+            "UPDATE gauntlet_inflight SET created_at = ?", ("2026-01-01T00:00:00",)
+        )
+
+        assert await recover_interrupted_gauntlets() == 1
+
+        job = await store.get("gauntlet-20260101000000-abcdef")
+        assert job is not None
+        assert job.payload["org_id"] == "org-a"
+
     @pytest.mark.asyncio
     async def test_recovers_stale_jobs(self, store):
         """Should recover stale jobs from queue."""
