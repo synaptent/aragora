@@ -13,6 +13,7 @@ import asyncio
 import io
 import itertools
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -69,7 +70,7 @@ class _DeferredThread:
 @pytest.fixture(autouse=True)
 def _deferred_upload_work(monkeypatch):
     _DeferredThread.started = []
-    fake_threading = SimpleNamespace(Thread=_DeferredThread, Lock=__import__("threading").Lock)
+    fake_threading = SimpleNamespace(Thread=_DeferredThread, Lock=threading.Lock)
     monkeypatch.setattr(folder_upload, "threading", fake_threading)
     monkeypatch.delenv(ENV, raising=False)
     FolderUploadHandler._jobs.clear()
@@ -78,9 +79,22 @@ def _deferred_upload_work(monkeypatch):
 
 
 def _run_background_work() -> None:
+    """Run each deferred job on its own joined thread, as production does, re-raising failures."""
     while _DeferredThread.started:
-        work = _DeferredThread.started.pop(0)
-        work.target(*work.args, **work.kwargs)
+        work, failures = _DeferredThread.started.pop(0), []
+
+        def _job(work=work) -> None:
+            try:
+                work.target(*work.args, **work.kwargs)
+            except BaseException as exc:  # noqa: BLE001 - re-raised on the test thread below
+                failures.append(exc)
+
+        thread = threading.Thread(target=_job, daemon=True)
+        thread.start()
+        thread.join(timeout=60)
+        assert not thread.is_alive(), "background upload job did not finish"
+        if failures:
+            raise failures[0]
 
 
 def _bearer(user_id: str, org_id: str | None) -> str:
@@ -238,6 +252,27 @@ class TestInsideTheRoot:
             assert doc.org_id == ORG_A
             assert doc.created_by == USER_A
         assert store.list_for_org(ORG_B) == []
+
+    def test_background_job_leaves_the_main_thread_event_loop_open(
+        self, configured, folders, auth_a, a_folder
+    ):
+        status, body = _post(folders, auth_a, ROUTES[1], {"path": str(a_folder)})
+        assert status == 200, body
+        policy = asyncio.get_event_loop_policy()
+        try:
+            previous = policy.get_event_loop()
+        except RuntimeError:
+            previous = None
+        main_loop = asyncio.new_event_loop()
+        policy.set_event_loop(main_loop)
+        try:
+            _run_background_work()
+            assert policy.get_event_loop() is main_loop
+            assert main_loop.run_until_complete(asyncio.sleep(0, "open")) == "open"
+        finally:
+            policy.set_event_loop(previous)
+            main_loop.close()
+        assert FolderUploadHandler._jobs[body["folder_id"]].status.value == "completed"
 
     def test_any_configured_directory_is_accepted(
         self, monkeypatch, folders, auth_a, a_folder, tmp_path
