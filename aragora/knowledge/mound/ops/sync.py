@@ -732,10 +732,6 @@ class SyncOperationsMixin(_SyncMixinBase):
         if consensus is not None:
             results["consensus"] = await self.sync_from_consensus(consensus)
 
-        facts = self._facts
-        if facts is not None:
-            results["facts"] = await self.sync_from_facts(facts)
-
         evidence = self._evidence
         if evidence is not None:
             results["evidence"] = await self.sync_from_evidence(evidence)
@@ -743,6 +739,11 @@ class SyncOperationsMixin(_SyncMixinBase):
         critique = self._critique
         if critique is not None:
             results["critique"] = await self.sync_from_critique(critique)
+
+        # Last: an unscoped fact store raises, and must not cost the other sources their sync.
+        facts = self._facts
+        if facts is not None:
+            results["facts"] = await self.sync_from_facts(facts)
 
         logger.info(
             "Sync complete: %d sources, %d total nodes synced",

@@ -116,9 +116,6 @@ def test_uuid_workspace_id_round_trips_verbatim(store) -> None:
     assert ScopedFactStore(store, BETA).list_facts(FactFilters(workspace_id=workspace)) == []
 
 
-# In-process readers and writers without a trusted organization raise; none returns empty.
-
-
 def test_query_engine_without_org_raises(store) -> None:
     ScopedFactStore(store, ACME).add_fact("Acme acquires Northwind", "default")
     engine = SimpleQueryEngine(fact_store=store, embedding_service=InMemoryEmbeddingService())
@@ -145,22 +142,27 @@ def test_fact_extractor_and_audit_adapter_without_org_raise(store) -> None:
     from aragora.knowledge.fact_extractor import FactExtractor
 
     extractor = FactExtractor(fact_store=store)
+    text = "The contract with Contoso renews on 2027-01-01 for 41000 EUR."
     with pytest.raises(OrgScopeRequiredError):
-        asyncio.run(
-            extractor.extract_facts(
-                "The contract with Contoso renews on 2027-01-01 for 41000 EUR.",
-                "chunk-1",
-                "doc-1",
-                workspace_id="default",
-            )
-        )
+        asyncio.run(extractor.extract_facts(text, "chunk-1", "doc-1", workspace_id="default"))
     adapter = AuditKnowledgeAdapter()
     asyncio.run(adapter.initialize())
     adapter._fact_store = store
+    chunk = {"id": "c1", "content": "Northwind", "document_id": "d"}
     with pytest.raises(OrgScopeRequiredError):
-        asyncio.run(
-            adapter.enrich_chunks([{"id": "c1", "content": "Northwind", "document_id": "d"}])
-        )
+        asyncio.run(adapter.enrich_chunks([chunk]))
+
+
+def test_auditor_keeps_its_findings_and_records_the_closed_fact_store() -> None:
+    from aragora.audit.document_auditor import DocumentAuditor
+
+    auditor, closed = DocumentAuditor(), AsyncMock(side_effect=OrgScopeRequiredError("no org"))
+    auditor._knowledge_adapter = MagicMock(store_session_findings=closed)
+    auditor._load_document_chunks = AsyncMock(return_value=[])
+    auditor._execute_standard_pipeline = AsyncMock(return_value=["finding"])
+    session = asyncio.run(auditor.create_session(document_ids=["d"]))
+    asyncio.run(auditor._execute_audit(session))
+    assert session.findings == ["finding"] and "Knowledge storage error" in session.errors[0]
 
 
 def test_pipeline_reads_without_org_raise(store) -> None:
@@ -186,6 +188,12 @@ def test_mound_fact_sync_raises_and_writes_no_node(store) -> None:
         asyncio.run(SyncOperationsMixin.sync_facts_incremental(mound, workspace_id="default"))
     with pytest.raises(OrgScopeRequiredError):
         asyncio.run(SyncOperationsMixin.sync_from_facts(mound, store))
+    mound._continuum = mound._consensus = mound._critique = None
+    mound.sync_from_evidence = AsyncMock()
+    mound.sync_from_facts = lambda facts: SyncOperationsMixin.sync_from_facts(mound, facts)
+    with pytest.raises(OrgScopeRequiredError):
+        asyncio.run(SyncOperationsMixin.sync_all(mound))
+    mound.sync_from_evidence.assert_awaited_once()
     mound._batch_store.assert_not_called()
 
 
@@ -193,15 +201,8 @@ def test_mound_fact_sync_raises_and_writes_no_node(store) -> None:
 def test_cli_fact_commands_fail_closed_with_a_clear_message(command, capsys) -> None:
     from aragora.cli import knowledge as cli
 
-    args = Namespace(
-        action="list",
-        workspace="default",
-        limit=10,
-        min_confidence=0.0,
-        status=None,
-        fact_id=None,
-        json=True,
-    )
+    args = Namespace(action="list", workspace="default", limit=10, min_confidence=0.0, json=True)
+    args.status = args.fact_id = None
     code = getattr(cli, f"cmd_{command}")(args)
     captured = capsys.readouterr()
     assert code != 0

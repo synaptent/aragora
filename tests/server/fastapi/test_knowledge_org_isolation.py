@@ -87,8 +87,6 @@ def _v2(world) -> TestClient:
 
 
 class _Request:
-    """The request object v1 handlers receive; like the server's, it carries the user store."""
-
     def __init__(self, world, bearer: str, body: dict | None = None) -> None:
         self.user_store = world.users
         raw = json.dumps(body or {}).encode()
