@@ -41,7 +41,13 @@ from aragora.pipeline.decision_plan.core import (
     ImplementationProfile,
     PlanStatus,
 )
-from aragora.pipeline.plan_ownership import ensure_ownership_columns, migrate_plan_store_schema
+from aragora.pipeline.plan_ownership import (
+    OWNERSHIP_COLUMNS,
+    OWNERSHIP_CREATED,
+    UNASSIGNED_CLAUSE,
+    ensure_ownership_columns,
+    migrate_plan_store_schema,
+)
 from aragora.pipeline.risk_register import RiskLevel, RiskRegister
 from aragora.pipeline.verification_plan import VerificationPlan
 from aragora.implement.types import ImplementPlan
@@ -97,6 +103,20 @@ def _load_json_value(raw: str | None) -> Any:
         return json.loads(raw)
     except (TypeError, ValueError, json.JSONDecodeError):
         return None
+
+
+def _ownership_values(org_id: Any, created_by: Any) -> tuple[str | None, str | None, str | None]:
+    """Ownership column values for a record created for ``org_id`` (all None without one)."""
+    if not isinstance(org_id, str) or not org_id.strip():
+        return None, None, None
+    creator = created_by if isinstance(created_by, str) and created_by.strip() else None
+    return org_id, creator, OWNERSHIP_CREATED
+
+
+def _require_org(org_id: Any) -> str:
+    if not isinstance(org_id, str) or not org_id.strip():
+        raise ValueError("org-scoped plan store access requires a non-empty org_id")
+    return org_id
 
 
 def _extract_refresh_scope(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -164,7 +184,9 @@ class PlanStore:
     connection to support concurrent access from handler threads.
 
     Plans, execution records and runs carry ``org_id``/``created_by``/
-    ``ownership_source`` (see ``aragora.pipeline.plan_ownership``).
+    ``ownership_source`` (see ``aragora.pipeline.plan_ownership``). The
+    ``*_for_org`` methods require an org and only ever match rows owned by it;
+    the unscoped methods are for internal callers that already hold an id.
     ``org_membership_resolver`` maps a user id to its org ids for the one-time
     ownership backfill (default: the user store).
     """
@@ -392,8 +414,9 @@ class PlanStore:
                     approved_by, rejection_reason, budget_json,
                     approval_record_json, implementation_profile_json,
                     risk_register_json, verification_plan_json, implement_plan_json,
-                    metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    metadata_json, created_at, updated_at,
+                    org_id, created_by, ownership_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     plan.id,
@@ -415,6 +438,7 @@ class PlanStore:
                     metadata_json,
                     plan.created_at.isoformat(),
                     now,
+                    *_ownership_values(plan.org_id, plan.created_by),
                 ),
             )
             conn.commit()
@@ -468,12 +492,17 @@ class PlanStore:
             else None
         )
 
+        # Ownership is written only while the plan has none: an owned or
+        # ``unknown`` plan is never moved to another org by a save.
         conn = self._connect()
         try:
             cursor = conn.execute(
-                """
+                f"""
                 UPDATE plans
-                SET debate_id = ?,
+                SET org_id = CASE WHEN {UNASSIGNED_CLAUSE} THEN ? ELSE org_id END,
+                    created_by = CASE WHEN {UNASSIGNED_CLAUSE} THEN ? ELSE created_by END,
+                    ownership_source = CASE WHEN {UNASSIGNED_CLAUSE} THEN ? ELSE ownership_source END,
+                    debate_id = ?,
                     task = ?,
                     status = ?,
                     approval_mode = ?,
@@ -490,8 +519,9 @@ class PlanStore:
                     metadata_json = ?,
                     updated_at = ?
                 WHERE id = ?
-                """,
+                """,  # noqa: S608 -- only the constant ownership clause is interpolated
                 (
+                    *_ownership_values(plan.org_id, plan.created_by),
                     plan.debate_id,
                     plan.task,
                     plan.status.value,
@@ -535,12 +565,18 @@ class PlanStore:
 
     def get(self, plan_id: str) -> DecisionPlan | None:
         """Retrieve a plan by ID."""
+        return self._get_plan(plan_id, org_id=None)
+
+    def get_for_org(self, plan_id: str, org_id: str) -> DecisionPlan | None:
+        """Retrieve a plan by ID only when ``org_id`` owns it."""
+        return self._get_plan(plan_id, org_id=_require_org(org_id))
+
+    def _get_plan(self, plan_id: str, *, org_id: str | None) -> DecisionPlan | None:
+        where, params = self._key_filter("id", plan_id, org_id)
         conn = self._connect()
         try:
-            row = conn.execute("SELECT * FROM plans WHERE id = ?", (plan_id,)).fetchone()
-            if row is None:
-                return None
-            return self._row_to_plan(row)
+            row = conn.execute(f"SELECT * FROM plans {where}", params).fetchone()  # noqa: S608 -- internal query construction
+            return self._row_to_plan(row) if row is not None else None
         finally:
             conn.close()
 
@@ -553,27 +589,35 @@ class PlanStore:
         offset: int = 0,
     ) -> list[DecisionPlan]:
         """List plans with optional filters."""
-        clauses: list[str] = []
-        params: list[Any] = []
+        return self._list_plans(None, debate_id, status, limit, offset)
 
-        if debate_id is not None:
-            clauses.append("debate_id = ?")
-            params.append(debate_id)
-        if status is not None:
-            status_val = status.value if isinstance(status, PlanStatus) else status
-            clauses.append("status = ?")
-            params.append(status_val)
+    def list_for_org(
+        self,
+        org_id: str,
+        *,
+        debate_id: str | None = None,
+        status: PlanStatus | str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> builtins.list[DecisionPlan]:
+        """List the plans owned by ``org_id``."""
+        return self._list_plans(_require_org(org_id), debate_id, status, limit, offset)
 
-        where = ""
-        if clauses:
-            where = "WHERE " + " AND ".join(clauses)
-
+    def _list_plans(
+        self,
+        org_id: str | None,
+        debate_id: str | None,
+        status: PlanStatus | str | None,
+        limit: int,
+        offset: int,
+    ) -> builtins.list[DecisionPlan]:
+        where, params = self._filters(
+            org_id=org_id, debate_id=debate_id, status=self._status_value(status)
+        )
         query = f"SELECT * FROM plans {where} ORDER BY created_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
-        params.extend([limit, offset])
-
         conn = self._connect()
         try:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(query, [*params, limit, offset]).fetchall()
             return [self._row_to_plan(row) for row in rows]
         finally:
             conn.close()
@@ -585,21 +629,24 @@ class PlanStore:
         status: PlanStatus | str | None = None,
     ) -> int:
         """Count plans matching the given filters."""
-        clauses: list[str] = []
-        params: list[Any] = []
+        return self._count_plans(None, debate_id, status)
 
-        if debate_id is not None:
-            clauses.append("debate_id = ?")
-            params.append(debate_id)
-        if status is not None:
-            status_val = status.value if isinstance(status, PlanStatus) else status
-            clauses.append("status = ?")
-            params.append(status_val)
+    def count_for_org(
+        self,
+        org_id: str,
+        *,
+        debate_id: str | None = None,
+        status: PlanStatus | str | None = None,
+    ) -> int:
+        """Count the plans owned by ``org_id`` matching the given filters."""
+        return self._count_plans(_require_org(org_id), debate_id, status)
 
-        where = ""
-        if clauses:
-            where = "WHERE " + " AND ".join(clauses)
-
+    def _count_plans(
+        self, org_id: str | None, debate_id: str | None, status: PlanStatus | str | None
+    ) -> int:
+        where, params = self._filters(
+            org_id=org_id, debate_id=debate_id, status=self._status_value(status)
+        )
         conn = self._connect()
         try:
             row = conn.execute(f"SELECT COUNT(*) FROM plans {where}", params).fetchone()  # noqa: S608 -- internal query construction
@@ -616,67 +663,27 @@ class PlanStore:
         rejection_reason: str | None = None,
     ) -> bool:
         """Update a plan's status. Returns True if the plan was found and updated."""
-        now = datetime.now(timezone.utc).isoformat()
-        fields = ["status = ?", "updated_at = ?"]
-        params: list[Any] = [status.value, now]
+        return self._update_status(
+            plan_id, status, approved_by=approved_by, rejection_reason=rejection_reason
+        )
 
-        if approved_by is not None:
-            fields.append("approved_by = ?")
-            params.append(approved_by)
-
-        if rejection_reason is not None:
-            fields.append("rejection_reason = ?")
-            params.append(rejection_reason)
-
-        if status == PlanStatus.APPROVED:
-            fields.append("approved_at = ?")
-            params.append(now)
-            # Store approval record
-            approval_record = ApprovalRecord(
-                approved=True,
-                approver_id=approved_by or "unknown",
-                reason="",
-            )
-            fields.append("approval_record_json = ?")
-            params.append(json.dumps(approval_record.to_dict()))
-
-        if status == PlanStatus.REJECTED:
-            approval_record = ApprovalRecord(
-                approved=False,
-                approver_id=approved_by or "unknown",
-                reason=rejection_reason or "",
-            )
-            fields.append("approval_record_json = ?")
-            params.append(json.dumps(approval_record.to_dict()))
-
-        params.append(plan_id)
-
-        conn = self._connect()
-        try:
-            cursor = conn.execute(
-                f"UPDATE plans SET {', '.join(fields)} WHERE id = ?",  # noqa: S608 -- column list from internal state
-                params,
-            )
-            conn.commit()
-            updated = cursor.rowcount > 0
-            if updated:
-                logger.info("Updated plan %s to status %s", plan_id, status.value)
-                if status in (PlanStatus.APPROVED, PlanStatus.REJECTED, PlanStatus.COMPLETED):
-                    try:
-                        from aragora.pipeline.receipt_gate import sync_plan_receipt_state
-
-                        plan = self.get(plan_id)
-                        if plan is not None:
-                            sync_plan_receipt_state(plan, on_status=status)
-                    except Exception as exc:  # noqa: BLE001 - do not mask status update
-                        logger.warning(
-                            "Failed to synchronize decision receipt for plan %s: %s",
-                            plan_id,
-                            exc,
-                        )
-            return updated
-        finally:
-            conn.close()
+    def update_status_for_org(
+        self,
+        plan_id: str,
+        org_id: str,
+        status: PlanStatus,
+        *,
+        approved_by: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> bool:
+        """``update_status`` for a plan owned by ``org_id``; False for any other plan."""
+        return self._update_status(
+            plan_id,
+            status,
+            org_id=_require_org(org_id),
+            approved_by=approved_by,
+            rejection_reason=rejection_reason,
+        )
 
     def update_status_if_current(
         self,
@@ -691,13 +698,53 @@ class PlanStore:
 
         Returns True if the row was claimed/updated, False otherwise.
         """
-        expected_values = [status.value for status in expected_statuses]
-        if not expected_values:
+        return self._update_status(
+            plan_id,
+            new_status,
+            expected_statuses=expected_statuses,
+            approved_by=approved_by,
+            rejection_reason=rejection_reason,
+        )
+
+    def update_status_if_current_for_org(
+        self,
+        plan_id: str,
+        org_id: str,
+        *,
+        expected_statuses: Sequence[PlanStatus],
+        new_status: PlanStatus,
+        approved_by: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> bool:
+        """``update_status_if_current`` for a plan owned by ``org_id``; False otherwise."""
+        return self._update_status(
+            plan_id,
+            new_status,
+            org_id=_require_org(org_id),
+            expected_statuses=expected_statuses,
+            approved_by=approved_by,
+            rejection_reason=rejection_reason,
+        )
+
+    def _update_status(
+        self,
+        plan_id: str,
+        new_status: PlanStatus,
+        *,
+        org_id: str | None = None,
+        expected_statuses: Sequence[PlanStatus] | None = None,
+        approved_by: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> bool:
+        expected_values = (
+            None if expected_statuses is None else [status.value for status in expected_statuses]
+        )
+        if expected_values is not None and not expected_values:
             return False
 
         now = datetime.now(timezone.utc).isoformat()
         fields = ["status = ?", "updated_at = ?"]
-        params: list[Any] = [new_status.value, now]
+        params: builtins.list[Any] = [new_status.value, now]
 
         if approved_by is not None:
             fields.append("approved_by = ?")
@@ -727,38 +774,66 @@ class PlanStore:
             fields.append("approval_record_json = ?")
             params.append(json.dumps(approval_record.to_dict()))
 
-        placeholders = ", ".join("?" for _ in expected_values)
-        query = f"UPDATE plans SET {', '.join(fields)} WHERE id = ? AND status IN ({placeholders})"  # noqa: S608 -- parameterized query
-        query_params = [*params, plan_id, *expected_values]
+        where, where_params = self._key_filter("id", plan_id, org_id)
+        if expected_values is not None:
+            where += f" AND status IN ({', '.join('?' for _ in expected_values)})"
+            where_params.extend(expected_values)
 
         conn = self._connect()
         try:
-            cursor = conn.execute(query, query_params)
+            cursor = conn.execute(
+                f"UPDATE plans SET {', '.join(fields)} {where}",  # noqa: S608 -- column list from internal state
+                [*params, *where_params],
+            )
             conn.commit()
             updated = cursor.rowcount > 0
-            if updated:
-                logger.info(
-                    "Atomically updated plan %s to status %s (expected: %s)",
-                    plan_id,
-                    new_status.value,
-                    ",".join(expected_values),
-                )
-                if new_status in (PlanStatus.APPROVED, PlanStatus.REJECTED, PlanStatus.COMPLETED):
-                    try:
-                        from aragora.pipeline.receipt_gate import sync_plan_receipt_state
-
-                        plan = self.get(plan_id)
-                        if plan is not None:
-                            sync_plan_receipt_state(plan, on_status=new_status)
-                    except Exception as exc:  # noqa: BLE001 - do not mask status update
-                        logger.warning(
-                            "Failed to synchronize decision receipt for plan %s: %s",
-                            plan_id,
-                            exc,
-                        )
-            return updated
         finally:
             conn.close()
+
+        if not updated:
+            return False
+        if expected_values is None:
+            logger.info("Updated plan %s to status %s", plan_id, new_status.value)
+        else:
+            logger.info(
+                "Atomically updated plan %s to status %s (expected: %s)",
+                plan_id,
+                new_status.value,
+                ",".join(expected_values),
+            )
+        if new_status in (PlanStatus.APPROVED, PlanStatus.REJECTED, PlanStatus.COMPLETED):
+            try:
+                from aragora.pipeline.receipt_gate import sync_plan_receipt_state
+
+                plan = self.get(plan_id)
+                if plan is not None:
+                    sync_plan_receipt_state(plan, on_status=new_status)
+            except Exception as exc:  # noqa: BLE001 - do not mask status update
+                logger.warning(
+                    "Failed to synchronize decision receipt for plan %s: %s",
+                    plan_id,
+                    exc,
+                )
+        return True
+
+    @staticmethod
+    def _filters(**columns: Any) -> tuple[str, builtins.list[Any]]:
+        """``WHERE col = ? AND ...`` over the ``columns`` whose value is not None."""
+        present = {name: value for name, value in columns.items() if value is not None}
+        if not present:
+            return "", []
+        return "WHERE " + " AND ".join(f"{name} = ?" for name in present), list(present.values())
+
+    @staticmethod
+    def _key_filter(column: str, value: str, org_id: str | None) -> tuple[str, builtins.list[Any]]:
+        """``WHERE <column> = ?``, plus ``AND org_id = ?`` when scoped to an org."""
+        if org_id is None:
+            return f"WHERE {column} = ?", [value]
+        return f"WHERE {column} = ? AND org_id = ?", [value, org_id]
+
+    @staticmethod
+    def _status_value(status: PlanStatus | str | None) -> str | None:
+        return status.value if isinstance(status, PlanStatus) else status
 
     # -------------------------------------------------------------------------
     # Execution records
@@ -774,6 +849,8 @@ class PlanStore:
         metadata: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
         execution_id: str | None = None,
+        org_id: str | None = None,
+        created_by: str | None = None,
     ) -> str:
         """Create a persistent execution record and return the execution ID."""
         record_id = execution_id or f"exec-{uuid.uuid4().hex[:12]}"
@@ -786,8 +863,9 @@ class PlanStore:
                 """
                 INSERT INTO plan_executions (
                     execution_id, plan_id, debate_id, correlation_id, status,
-                    error_json, metadata_json, started_at, completed_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    error_json, metadata_json, started_at, completed_at, updated_at,
+                    org_id, created_by, ownership_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record_id,
@@ -800,6 +878,7 @@ class PlanStore:
                     now,
                     now if status in {"succeeded", "failed", "canceled"} else None,
                     now,
+                    *_ownership_values(org_id, created_by),
                 ),
             )
             conn.commit()
@@ -853,15 +932,18 @@ class PlanStore:
 
     def get_execution_record(self, execution_id: str) -> dict[str, Any] | None:
         """Fetch a single execution record by ID."""
+        return self._get_execution_record(execution_id, None)
+
+    def get_execution_record_for_org(self, execution_id: str, org_id: str) -> dict[str, Any] | None:
+        """Fetch an execution record by ID only when ``org_id`` owns it."""
+        return self._get_execution_record(execution_id, _require_org(org_id))
+
+    def _get_execution_record(self, execution_id: str, org_id: str | None) -> dict[str, Any] | None:
+        where, params = self._key_filter("execution_id", execution_id, org_id)
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT * FROM plan_executions WHERE execution_id = ?",
-                (execution_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            return self._row_to_execution_record(row)
+            row = conn.execute(f"SELECT * FROM plan_executions {where}", params).fetchone()  # noqa: S608 -- internal query construction
+            return self._row_to_execution_record(row) if row is not None else None
         finally:
             conn.close()
 
@@ -875,29 +957,32 @@ class PlanStore:
         offset: int = 0,
     ) -> builtins.list[dict[str, Any]]:
         """List execution records filtered by plan/debate/status."""
-        clauses: list[str] = []
-        params: list[Any] = []
+        where, params = self._filters(plan_id=plan_id, debate_id=debate_id, status=status)
+        return self._list_execution_records(where, params, limit, offset)
 
-        if plan_id is not None:
-            clauses.append("plan_id = ?")
-            params.append(plan_id)
-        if debate_id is not None:
-            clauses.append("debate_id = ?")
-            params.append(debate_id)
-        if status is not None:
-            clauses.append("status = ?")
-            params.append(status)
+    def list_execution_records_for_org(
+        self,
+        org_id: str,
+        *,
+        plan_id: str | None = None,
+        debate_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> builtins.list[dict[str, Any]]:
+        """List the execution records owned by ``org_id``."""
+        where, params = self._filters(
+            org_id=_require_org(org_id), plan_id=plan_id, debate_id=debate_id, status=status
+        )
+        return self._list_execution_records(where, params, limit, offset)
 
-        where = ""
-        if clauses:
-            where = "WHERE " + " AND ".join(clauses)
-
+    def _list_execution_records(
+        self, where: str, params: builtins.list[Any], limit: int, offset: int
+    ) -> builtins.list[dict[str, Any]]:
         query = f"SELECT * FROM plan_executions {where} ORDER BY started_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
-        params.extend([limit, offset])
-
         conn = self._connect()
         try:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(query, [*params, limit, offset]).fetchall()
             return [self._row_to_execution_record(row) for row in rows]
         finally:
             conn.close()
@@ -972,7 +1057,13 @@ class PlanStore:
     # Backbone run ledger
     # -------------------------------------------------------------------------
 
-    def create_run(self, run: RunLedger) -> None:
+    def create_run(
+        self,
+        run: RunLedger,
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> None:
         """Insert a new persisted backbone run ledger."""
         conn = self._connect()
         try:
@@ -982,8 +1073,9 @@ class PlanStore:
                     run_id, entrypoint, status, intake_bundle_json, spec_bundle_json,
                     goal_refs_json, deliberation_bundle_json, plan_id, debate_id,
                     execution_id, receipt_id, receipt_envelope_json, feedback_record_json,
-                    attestation_json, taint_flags_json, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    attestation_json, taint_flags_json, metadata_json, created_at, updated_at,
+                    org_id, created_by, ownership_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.run_id,
@@ -1006,6 +1098,7 @@ class PlanStore:
                     json.dumps(run.metadata),
                     run.created_at,
                     run.updated_at,
+                    *_ownership_values(org_id, created_by),
                 ),
             )
             for event in run.stage_events:
@@ -1031,12 +1124,17 @@ class PlanStore:
 
     def get_run(self, run_id: str) -> RunLedger | None:
         """Fetch one backbone run ledger by ID."""
+        return self._get_run(run_id, None)
+
+    def get_run_for_org(self, run_id: str, org_id: str) -> RunLedger | None:
+        """Fetch a backbone run ledger by ID only when ``org_id`` owns it."""
+        return self._get_run(run_id, _require_org(org_id))
+
+    def _get_run(self, run_id: str, org_id: str | None) -> RunLedger | None:
+        where, params = self._key_filter("run_id", run_id, org_id)
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT * FROM backbone_runs WHERE run_id = ?",
-                (run_id,),
-            ).fetchone()
+            row = conn.execute(f"SELECT * FROM backbone_runs {where}", params).fetchone()  # noqa: S608 -- internal query construction
             if row is None:
                 return None
             event_rows = conn.execute(
@@ -1062,32 +1160,39 @@ class PlanStore:
         offset: int = 0,
     ) -> builtins.list[RunLedger]:
         """List backbone run ledgers with optional filters."""
-        clauses: builtins.list[str] = []
-        params: builtins.list[Any] = []
+        where, params = self._filters(
+            status=status, plan_id=plan_id, debate_id=debate_id, execution_id=execution_id
+        )
+        return self._list_runs(where, params, limit, offset)
 
-        if status is not None:
-            clauses.append("status = ?")
-            params.append(status)
-        if plan_id is not None:
-            clauses.append("plan_id = ?")
-            params.append(plan_id)
-        if debate_id is not None:
-            clauses.append("debate_id = ?")
-            params.append(debate_id)
-        if execution_id is not None:
-            clauses.append("execution_id = ?")
-            params.append(execution_id)
+    def list_runs_for_org(
+        self,
+        org_id: str,
+        *,
+        status: str | None = None,
+        plan_id: str | None = None,
+        debate_id: str | None = None,
+        execution_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> builtins.list[RunLedger]:
+        """List the backbone run ledgers owned by ``org_id``."""
+        where, params = self._filters(
+            org_id=_require_org(org_id),
+            status=status,
+            plan_id=plan_id,
+            debate_id=debate_id,
+            execution_id=execution_id,
+        )
+        return self._list_runs(where, params, limit, offset)
 
-        where = ""
-        if clauses:
-            where = "WHERE " + " AND ".join(clauses)
-
+    def _list_runs(
+        self, where: str, params: builtins.list[Any], limit: int, offset: int
+    ) -> builtins.list[RunLedger]:
         query = f"SELECT * FROM backbone_runs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
-        params.extend([limit, offset])
-
         conn = self._connect()
         try:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(query, [*params, limit, offset]).fetchall()
             results: builtins.list[RunLedger] = []
             for row in rows:
                 event_rows = conn.execute(
@@ -1478,6 +1583,7 @@ class PlanStore:
             metadata=metadata,
             implementation_profile=implementation_profile,
             created_at=created_at,
+            **{column: row[column] for column in OWNERSHIP_COLUMNS if column in row_keys},
         )
 
         return plan
@@ -1512,6 +1618,7 @@ class PlanStore:
             "started_at": row["started_at"],
             "completed_at": row["completed_at"],
             "updated_at": row["updated_at"],
+            **{column: row[column] for column in OWNERSHIP_COLUMNS if column in row.keys()},
         }
 
     def _save_run(self, run: RunLedger) -> bool:
