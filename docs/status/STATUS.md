@@ -2119,7 +2119,7 @@ else:
 
 **Phase 9: Event-Driven Cross-Pollination** (NEW)
 - `aragora/events/cross_subscribers.py` - CrossSubscriberManager for event-driven subsystem communication
-- `aragora/events/arena_bridge.py` - ArenaEventBridge connecting Arena events to cross-subscribers
+- `aragora/debate/arena_bridge.py` - ArenaEventBridge connecting Arena events to cross-subscribers
 - `aragora/reasoning/evidence_bridge.py` - EvidenceProvenanceBridge for claim-evidence linking
 - `aragora/rlm/debate_integration.py` - DebateTrajectoryCollector for RLM training from debates
 - `aragora/server/handlers/cross_pollination.py` - Observability endpoints for cross-pollination status

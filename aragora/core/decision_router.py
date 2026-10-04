@@ -20,6 +20,13 @@ from .decision_models import (
     DecisionResult,
     ResponseChannel,
 )
+from .decision_route_hooks import (
+    DecisionAuditSink,
+    DecisionRouteNotRegisteredError,
+    get_decision_audit_sink,
+    get_decision_integrity_builder,
+    get_tts_bridge_factory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,91 +115,20 @@ def _import_metrics():
     _metrics_imported = True
 
 
-# Lazy import for audit logging
-_audit_imported = False
-_audit_log_decision_started = None
-_audit_log_decision_completed = None
+_warned_missing_audit_sink = False
 
 
-def _import_audit():
-    """Lazy import audit utilities."""
-    global _audit_imported, _audit_log_decision_started, _audit_log_decision_completed
-    if _audit_imported:
-        return
+def _resolve_audit_sink() -> DecisionAuditSink | None:
+    """Return the registered audit sink, or None; routing proceeds without an audit trail."""
+    global _warned_missing_audit_sink
     try:
-        from aragora.audit.unified import (
-            get_unified_audit_logger,
-            UnifiedAuditEvent,
-            UnifiedAuditCategory,
-            AuditOutcome,
-            AuditSeverity,
-        )
-
-        _logger = get_unified_audit_logger()
-
-        def log_decision_started(
-            request_id: str,
-            decision_type: str,
-            source: str,
-            user_id: str | None = None,
-            workspace_id: str | None = None,
-            content_preview: str | None = None,
-        ) -> None:
-            """Log decision request started."""
-            _logger.log(
-                UnifiedAuditEvent(
-                    category=UnifiedAuditCategory.DEBATE_STARTED,
-                    action=f"Decision {decision_type} started",
-                    actor_id=user_id,
-                    resource_type="decision",
-                    resource_id=request_id,
-                    workspace_id=workspace_id,
-                    details={
-                        "decision_type": decision_type,
-                        "source": source,
-                        "content_preview": (content_preview or "")[:200],
-                    },
-                )
-            )
-
-        def log_decision_completed(
-            request_id: str,
-            decision_type: str,
-            success: bool,
-            consensus_reached: bool,
-            confidence: float,
-            duration_seconds: float,
-            user_id: str | None = None,
-            workspace_id: str | None = None,
-            error: str | None = None,
-        ) -> None:
-            """Log decision request completed."""
-            _logger.log(
-                UnifiedAuditEvent(
-                    category=UnifiedAuditCategory.DEBATE_COMPLETED,
-                    action=f"Decision {decision_type} completed",
-                    outcome=AuditOutcome.SUCCESS if success else AuditOutcome.FAILURE,
-                    severity=AuditSeverity.INFO if success else AuditSeverity.WARNING,
-                    actor_id=user_id,
-                    resource_type="decision",
-                    resource_id=request_id,
-                    workspace_id=workspace_id,
-                    details={
-                        "decision_type": decision_type,
-                        "consensus_reached": consensus_reached,
-                        "confidence": confidence,
-                        "duration_seconds": duration_seconds,
-                        "error": error,
-                    },
-                )
-            )
-
-        global _audit_log_decision_started, _audit_log_decision_completed
-        _audit_log_decision_started = log_decision_started
-        _audit_log_decision_completed = log_decision_completed
-    except ImportError:
-        pass
-    _audit_imported = True
+        return get_decision_audit_sink()
+    except DecisionRouteNotRegisteredError as e:
+        # route() resolves the sink on every call; one warning per process is enough.
+        if not _warned_missing_audit_sink:
+            _warned_missing_audit_sink = True
+            logger.warning("Routing decisions without an audit trail: %s", e)
+        return None
 
 
 # =============================================================================
@@ -274,7 +210,7 @@ class DecisionRouter:
         _import_tracing()
         _import_cache()
         _import_metrics()
-        _import_audit()
+        audit_sink = _resolve_audit_sink()
 
         logger.info(
             "Routing decision request %s (type=%s, source=%s)",
@@ -341,9 +277,9 @@ class DecisionRouter:
             )
 
         # Log audit trail: decision started
-        if _audit_log_decision_started:
+        if audit_sink is not None:
             try:
-                _audit_log_decision_started(
+                audit_sink.log_decision_started(
                     request_id=request.request_id,
                     decision_type=request.decision_type.value,
                     source=request.source.value,
@@ -467,9 +403,9 @@ class DecisionRouter:
                 )
 
             # Log audit trail: decision completed (success)
-            if _audit_log_decision_completed:
+            if audit_sink is not None:
                 try:
-                    _audit_log_decision_completed(
+                    audit_sink.log_decision_completed(
                         request_id=request.request_id,
                         decision_type=request.decision_type.value,
                         success=result.success,
@@ -535,9 +471,9 @@ class DecisionRouter:
                 )
 
             # Log audit trail: decision completed (error)
-            if _audit_log_decision_completed:
+            if audit_sink is not None:
                 try:
-                    _audit_log_decision_completed(
+                    audit_sink.log_decision_completed(
                         request_id=request.request_id,
                         decision_type=request.decision_type.value,
                         success=False,
@@ -744,11 +680,12 @@ class DecisionRouter:
             notify_origin = bool(cfg_raw.get("notify_origin", False))
 
         try:
-            from aragora.pipeline.decision_integrity_utils import (
-                build_decision_integrity_payload,
-            )
-        except (ImportError, AttributeError) as exc:
-            logger.debug("Decision integrity utilities unavailable: %s", exc)
+            build_decision_integrity_payload = get_decision_integrity_builder()
+        except DecisionRouteNotRegisteredError as exc:
+            if cfg_raw:
+                logger.warning("Decision integrity was requested but cannot be built: %s", exc)
+            else:
+                logger.debug("Decision integrity utilities unavailable: %s", exc)
             return None
 
         return await build_decision_integrity_payload(
@@ -1316,12 +1253,10 @@ class DecisionRouter:
             return None
 
         try:
-            from aragora.connectors.chat.tts_bridge import get_tts_bridge
-
-            self._tts_bridge = get_tts_bridge()
+            self._tts_bridge = get_tts_bridge_factory()()
             logger.info("TTS bridge initialized for voice responses")
             return self._tts_bridge
-        except ImportError as e:
+        except (DecisionRouteNotRegisteredError, ImportError) as e:
             logger.warning("TTS bridge not available: %s", e)
             return None
         except (RuntimeError, OSError, AttributeError) as e:
@@ -1463,6 +1398,7 @@ def reset_decision_router() -> None:
 
 
 __all__ = [
+    "DecisionRouteNotRegisteredError",
     "DecisionRouter",
     "get_decision_router",
     "reset_decision_router",

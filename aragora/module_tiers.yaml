@@ -25,8 +25,8 @@ thresholds:
 
 summary:
   core: 21
-  integrated: 93
-  experimental: 27
+  integrated: 94
+  experimental: 26
   deprecated: 3
   total: 144
 
@@ -148,7 +148,7 @@ modules:
     test_file_count: 169
     override_reason: "persistence layer"
 
-  # --- integrated (93) ---
+  # --- integrated (94) ---
   - name: analysis
     tier: integrated
     py_files: 29
@@ -535,6 +535,11 @@ modules:
     py_files: 44
     importer_count: 46
     test_file_count: 58
+  - name: shared
+    tier: integrated
+    py_files: 6
+    importer_count: 4
+    test_file_count: 5
   - name: skills
     tier: integrated
     py_files: 21
@@ -616,7 +621,7 @@ modules:
     importer_count: 16
     test_file_count: 11
 
-  # --- experimental (27) ---
+  # --- experimental (26) ---
   - name: advocates
     tier: experimental
     py_files: 2
@@ -697,11 +702,6 @@ modules:
     py_files: 2
     importer_count: 2
     test_file_count: 2
-  - name: shared
-    tier: experimental
-    py_files: 5
-    importer_count: 2
-    test_file_count: 4
   - name: sync
     tier: experimental
     py_files: 4

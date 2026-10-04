@@ -5,10 +5,10 @@ Provides lightweight tracing with correlation IDs, spans, and structured
 attributes for observability. Compatible with OpenTelemetry when available.
 
 Usage:
-    from aragora.debate.tracing import Tracer, get_tracer
+    from aragora.observability.debate_tracing import Tracer, get_tracer
 
     tracer = get_tracer()
-    with tracer.span("debate.execute", debate_id=debate_id) as span:
+    with tracer.debate_context(debate_id), tracer.span("debate.execute") as span:
         span.set_attribute("agents", len(agents))
         result = await run_debate()
         span.set_attribute("success", True)
@@ -22,27 +22,35 @@ import logging
 import threading
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from contextlib import AbstractContextManager
 from collections.abc import Callable, Generator
 
-# Use structured logging if available
-try:
-    from aragora.logging_config import get_logger as get_structured_logger
-    from aragora.logging_config import set_context
+if TYPE_CHECKING:
+    from aragora.logging_config import StructuredLogger
 
-    _structured_logger = get_structured_logger(__name__)
+# Use structured logging if available
+_structured_logger: StructuredLogger | None = None
+set_context: Callable[..., None] | None = None
+_log_scope: Callable[..., AbstractContextManager[Any]] | None = None
+try:
+    from aragora import logging_config as _logging_config
 except ImportError:
-    _structured_logger = None
-    set_context = None
+    pass
+else:
+    _structured_logger = _logging_config.get_logger(__name__)
+    set_context = _logging_config.set_context
+    _log_scope = _logging_config.LogContext
 
 logger = logging.getLogger(__name__)
 
 # Context variable for current span propagation
-_current_span: contextvars.ContextVar[Span] = contextvars.ContextVar("current_span", default=None)
+_current_span: contextvars.ContextVar[Span | None] = contextvars.ContextVar(
+    "current_span", default=None
+)
 
 # Context variable for debate correlation ID
 _debate_context: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
@@ -206,6 +214,26 @@ class Tracer:
         """Get the current trace ID if available."""
         span = self.get_current_span()
         return span.trace_id if span else None
+
+    @contextmanager
+    def debate_context(self, debate_id: str, **extra: Any) -> Generator[dict[str, Any], None, None]:
+        """Bind the debate correlation context for a ``with`` block.
+
+        Unlike :func:`set_debate_context`, the previous debate context and log
+        context fields are restored on exit, including when the block raises.
+        """
+        ctx = {"debate_id": debate_id, **extra}
+        token = _debate_context.set(ctx)
+        try:
+            log_scope = (
+                _log_scope(debate_id=debate_id, **extra)
+                if _log_scope is not None
+                else nullcontext()
+            )
+            with log_scope:
+                yield ctx
+        finally:
+            _debate_context.reset(token)
 
     @contextmanager
     def span(
