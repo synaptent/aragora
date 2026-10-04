@@ -219,7 +219,9 @@ def test_summary_uses_individual_step_outcomes(tmp_path: Path, service: str, out
 )
 def test_monitor_schedule_and_failure_policy_are_unchanged(filename: str, job: str) -> None:
     workflow = _workflow(filename)
-    assert workflow["on"]["schedule"] == [{"cron": "*/30 * * * *"}]
+    # The 30-minute schedules are parked until a production canary exists (see the
+    # comment above the triggers in each workflow); a restored schedule keeps its cadence.
+    assert workflow["on"].get("schedule") in (None, [{"cron": "*/30 * * * *"}])
     assert "workflow_dispatch" in workflow["on"]
     assert workflow["jobs"][job]["timeout-minutes"] == "5"
     assert "continue-on-error" not in workflow["jobs"][job]
