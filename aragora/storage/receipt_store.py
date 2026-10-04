@@ -28,6 +28,7 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -1036,54 +1037,22 @@ class ReceiptStore:
         Returns:
             List of StoredReceipt objects
         """
-        db_results: builtins.list[StoredReceipt] = []
-        if self._backend is not None:
-            conditions = []
-            params: list[Any] = []
-
-            if verdict:
-                conditions.append("verdict = ?")
-                params.append(verdict)
-            if risk_level:
-                conditions.append("risk_level = ?")
-                params.append(risk_level)
-            if debate_id:
-                conditions.append("debate_id = ?")
-                params.append(debate_id)
-            if date_from:
-                conditions.append("created_at >= ?")
-                params.append(date_from)
-            if date_to:
-                conditions.append("created_at <= ?")
-                params.append(date_to)
-            if signed_only:
-                conditions.append("signature IS NOT NULL")
-
-            where_clause = " AND ".join(conditions) if conditions else "1=1"
-
-            # Validate sort field
-            valid_sort_fields = {"created_at", "confidence", "risk_score", "signed_at"}
-            if sort_by not in valid_sort_fields:
-                sort_by = "created_at"
-            order_clause = "DESC" if order.lower() == "desc" else "ASC"
-
-            params.extend([limit, offset])
-
-            rows = self._backend.fetch_all(
-                f"""
-                SELECT receipt_id, gauntlet_id, debate_id, created_at, expires_at,
-                       verdict, confidence, risk_level, risk_score, checksum,
-                       signature, signature_algorithm, signature_key_id, signed_at,
-                       audit_trail_id, data_json
-                FROM receipts
-                WHERE {where_clause}
-                ORDER BY {sort_by} {order_clause}
-                LIMIT ? OFFSET ?
-                """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
-                tuple(params),
-            )
-
-            db_results = [self._row_to_stored_receipt(row) for row in rows]
+        if sort_by not in {"created_at", "confidence", "risk_score", "signed_at"}:
+            sort_by = "created_at"
+        db_results = self._list_rows(
+            self._filter_conditions(
+                verdict=verdict,
+                risk_level=risk_level,
+                debate_id=debate_id,
+                date_from=date_from,
+                date_to=date_to,
+                signed_only=signed_only,
+            ),
+            sort_by=sort_by,
+            order=order,
+            limit=limit,
+            offset=offset,
+        )
 
         return self._merge_file_receipts(
             db_results,
@@ -1117,27 +1086,14 @@ class ReceiptStore:
         db_ids: set[str] = set()
 
         if self._backend is not None:
-            conditions = []
-            params: list[Any] = []
-
-            if verdict:
-                conditions.append("verdict = ?")
-                params.append(verdict)
-            if risk_level:
-                conditions.append("risk_level = ?")
-                params.append(risk_level)
-            if debate_id:
-                conditions.append("debate_id = ?")
-                params.append(debate_id)
-            if date_from:
-                conditions.append("created_at >= ?")
-                params.append(date_from)
-            if date_to:
-                conditions.append("created_at <= ?")
-                params.append(date_to)
-            if signed_only:
-                conditions.append("signature IS NOT NULL")
-
+            conditions, params = self._filter_conditions(
+                verdict=verdict,
+                risk_level=risk_level,
+                debate_id=debate_id,
+                date_from=date_from,
+                date_to=date_to,
+                signed_only=signed_only,
+            )
             where_clause = " AND ".join(conditions) if conditions else "1=1"
 
             row = self._backend.fetch_one(
@@ -1172,6 +1128,134 @@ class ReceiptStore:
         return db_count + file_extra
 
     # =========================================================================
+    # Org-scoped reads: database rows owned by one org, never file receipts
+    # =========================================================================
+
+    def list_for_org(
+        self,
+        org_id: str,
+        limit: int = 20,
+        offset: int = 0,
+        verdict: str | None = None,
+        risk_level: str | None = None,
+        date_from: float | None = None,
+        date_to: float | None = None,
+        signed_only: bool = False,
+        sort_by: str = "created_at",
+        order: str = "desc",
+        debate_id: str | None = None,
+    ) -> builtins.list[StoredReceipt]:
+        """List the receipts owned by ``org_id`` (same filters as :meth:`list`)."""
+        if sort_by not in {"created_at", "confidence", "risk_score", "signed_at"}:
+            sort_by = "created_at"
+        return self._list_rows(
+            self._filter_conditions(
+                verdict=verdict,
+                risk_level=risk_level,
+                debate_id=debate_id,
+                date_from=date_from,
+                date_to=date_to,
+                signed_only=signed_only,
+                org_id=_require_org(org_id),
+            ),
+            sort_by=sort_by,
+            order=order,
+            limit=limit,
+            offset=offset,
+        )
+
+    def count_for_org(
+        self,
+        org_id: str,
+        verdict: str | None = None,
+        risk_level: str | None = None,
+        date_from: float | None = None,
+        date_to: float | None = None,
+        signed_only: bool = False,
+        debate_id: str | None = None,
+    ) -> int:
+        """Count the receipts owned by ``org_id`` matching the filters."""
+        conditions, params = self._filter_conditions(
+            verdict=verdict,
+            risk_level=risk_level,
+            debate_id=debate_id,
+            date_from=date_from,
+            date_to=date_to,
+            signed_only=signed_only,
+            org_id=_require_org(org_id),
+        )
+        if self._backend is None:
+            return 0
+        row = self._backend.fetch_one(
+            f"SELECT COUNT(*) FROM receipts WHERE {' AND '.join(conditions)}",  # nosec B608  # noqa: S608
+            tuple(params),
+        )
+        return row[0] if row else 0
+
+    @staticmethod
+    def _filter_conditions(
+        *,
+        verdict: str | None = None,
+        risk_level: str | None = None,
+        debate_id: str | None = None,
+        date_from: float | None = None,
+        date_to: float | None = None,
+        signed_only: bool = False,
+        org_id: str | None = None,
+    ) -> tuple[builtins.list[str], builtins.list[Any]]:
+        """SQL conditions and parameters for the list/count filters."""
+        conditions: builtins.list[str] = []
+        params: builtins.list[Any] = []
+        if org_id is not None:
+            conditions.append("org_id = ?")
+            params.append(org_id)
+        if verdict:
+            conditions.append("verdict = ?")
+            params.append(verdict)
+        if risk_level:
+            conditions.append("risk_level = ?")
+            params.append(risk_level)
+        if debate_id:
+            conditions.append("debate_id = ?")
+            params.append(debate_id)
+        if date_from:
+            conditions.append("created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("created_at <= ?")
+            params.append(date_to)
+        if signed_only:
+            conditions.append("signature IS NOT NULL")
+        return conditions, params
+
+    def _list_rows(
+        self,
+        filters: tuple[builtins.list[str], builtins.list[Any]],
+        *,
+        sort_by: str,
+        order: str,
+        limit: int,
+        offset: int,
+    ) -> builtins.list[StoredReceipt]:
+        """Fetch one page of database receipts; ``sort_by`` must already be validated."""
+        if self._backend is None:
+            return []
+        conditions, params = filters
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        order_clause = "DESC" if order.lower() == "desc" else "ASC"
+        rows = self._backend.fetch_all(
+            f"""
+            SELECT {_RECEIPT_COLUMNS}
+            FROM receipts
+            WHERE {where_clause}
+            ORDER BY {sort_by} {order_clause}
+            LIMIT ? OFFSET ?
+            """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+            (*params, limit, offset),
+        )
+        return [self._row_to_stored_receipt(row) for row in rows]
+
+    # =========================================================================
     # Full-Text Search
     # =========================================================================
 
@@ -1199,63 +1283,7 @@ class ReceiptStore:
         Returns:
             List of StoredReceipt objects matching the query
         """
-        if self._backend is None:
-            return []
-
-        if not query or len(query) < 3:
-            return []
-
-        # Sanitize and limit
-        limit = min(limit, 100)
-        params: list[Any] = []
-        conditions = []
-
-        if self.backend_type == "postgresql":
-            # PostgreSQL: Use TSVECTOR for efficient full-text search on JSONB
-            search_condition = """
-                (to_tsvector('english', COALESCE(data_json->>'verdict_reasoning', '')) ||
-                 to_tsvector('english', COALESCE(data_json->>'task', '')) ||
-                 to_tsvector('english', COALESCE(data_json->>'description', '')) ||
-                 to_tsvector('english', COALESCE(data_json::text, '')))
-                @@ plainto_tsquery('english', ?)
-            """
-            conditions.append(search_condition)
-            params.append(query)
-        else:
-            # SQLite: Use LIKE for text search (case-insensitive)
-            search_pattern = f"%{query}%"
-            search_condition = """
-                (data_json LIKE ? OR verdict LIKE ?)
-            """
-            conditions.append(search_condition)
-            params.extend([search_pattern, search_pattern])
-
-        # Apply optional filters
-        if verdict:
-            conditions.append("verdict = ?")
-            params.append(verdict)
-        if risk_level:
-            conditions.append("risk_level = ?")
-            params.append(risk_level)
-
-        where_clause = " AND ".join(conditions)
-        params.extend([limit, offset])
-
-        rows = self._backend.fetch_all(
-            f"""
-            SELECT receipt_id, gauntlet_id, debate_id, created_at, expires_at,
-                   verdict, confidence, risk_level, risk_score, checksum,
-                   signature, signature_algorithm, signature_key_id, signed_at,
-                   audit_trail_id, data_json
-            FROM receipts
-            WHERE {where_clause}
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-            """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
-            tuple(params),
-        )
-
-        return [self._row_to_stored_receipt(row) for row in rows]
+        return self._search_rows(query, limit, offset, verdict, risk_level, org_id=None)
 
     def search_count(
         self,
@@ -1274,42 +1302,107 @@ class ReceiptStore:
         Returns:
             Total count of matching receipts
         """
-        if self._backend is None:
-            return 0
+        return self._search_total(query, verdict, risk_level, org_id=None)
 
-        if not query or len(query) < 3:
-            return 0
+    def search_for_org(
+        self,
+        org_id: str,
+        query: str,
+        limit: int = 50,
+        offset: int = 0,
+        verdict: str | None = None,
+        risk_level: str | None = None,
+    ) -> builtins.list[StoredReceipt]:
+        """Full-text search over the receipts owned by ``org_id``."""
+        return self._search_rows(
+            query, limit, offset, verdict, risk_level, org_id=_require_org(org_id)
+        )
 
-        params: list[Any] = []
-        conditions = []
+    def search_count_for_org(
+        self,
+        org_id: str,
+        query: str,
+        verdict: str | None = None,
+        risk_level: str | None = None,
+    ) -> int:
+        """Count the receipts owned by ``org_id`` matching a search query."""
+        return self._search_total(query, verdict, risk_level, org_id=_require_org(org_id))
+
+    def _search_filters(
+        self,
+        query: str,
+        verdict: str | None,
+        risk_level: str | None,
+        org_id: str | None,
+    ) -> tuple[str, builtins.list[Any]] | None:
+        """WHERE clause and parameters for a search, or None when it cannot match."""
+        if self._backend is None or not query or len(query) < 3:
+            return None
+
+        conditions: builtins.list[str] = []
+        params: builtins.list[Any] = []
 
         if self.backend_type == "postgresql":
-            search_condition = """
+            # PostgreSQL: Use TSVECTOR for efficient full-text search on JSONB
+            conditions.append(
+                """
                 (to_tsvector('english', COALESCE(data_json->>'verdict_reasoning', '')) ||
                  to_tsvector('english', COALESCE(data_json->>'task', '')) ||
                  to_tsvector('english', COALESCE(data_json->>'description', '')) ||
                  to_tsvector('english', COALESCE(data_json::text, '')))
                 @@ plainto_tsquery('english', ?)
-            """
-            conditions.append(search_condition)
+                """
+            )
             params.append(query)
         else:
+            # SQLite: Use LIKE for text search (case-insensitive)
             search_pattern = f"%{query}%"
-            search_condition = """
-                (data_json LIKE ? OR verdict LIKE ?)
-            """
-            conditions.append(search_condition)
+            conditions.append("(data_json LIKE ? OR verdict LIKE ?)")
             params.extend([search_pattern, search_pattern])
 
-        if verdict:
-            conditions.append("verdict = ?")
-            params.append(verdict)
-        if risk_level:
-            conditions.append("risk_level = ?")
-            params.append(risk_level)
+        filters, filter_params = self._filter_conditions(
+            verdict=verdict, risk_level=risk_level, org_id=org_id
+        )
+        return " AND ".join(conditions + filters), params + filter_params
 
-        where_clause = " AND ".join(conditions)
+    def _search_rows(
+        self,
+        query: str,
+        limit: int,
+        offset: int,
+        verdict: str | None,
+        risk_level: str | None,
+        *,
+        org_id: str | None,
+    ) -> builtins.list[StoredReceipt]:
+        search = self._search_filters(query, verdict, risk_level, org_id)
+        if search is None or self._backend is None:
+            return []
+        where_clause, params = search
+        rows = self._backend.fetch_all(
+            f"""
+            SELECT {_RECEIPT_COLUMNS}
+            FROM receipts
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+            (*params, min(limit, 100), offset),
+        )
+        return [self._row_to_stored_receipt(row) for row in rows]
 
+    def _search_total(
+        self,
+        query: str,
+        verdict: str | None,
+        risk_level: str | None,
+        *,
+        org_id: str | None,
+    ) -> int:
+        search = self._search_filters(query, verdict, risk_level, org_id)
+        if search is None or self._backend is None:
+            return 0
+        where_clause, params = search
         row = self._backend.fetch_one(
             f"SELECT COUNT(*) FROM receipts WHERE {where_clause}",  # nosec B608  # noqa: S608
             tuple(params),
@@ -1361,17 +1454,20 @@ class ReceiptStore:
         logger.info("Updated signature for receipt: %s", receipt_id)
         return True
 
-    def verify_signature(self, receipt_id: str) -> SignatureVerificationResult:
+    def verify_signature(
+        self, receipt_id: str, *, org_id: str | None = None
+    ) -> SignatureVerificationResult:
         """
         Verify the cryptographic signature of a receipt.
 
         Args:
             receipt_id: Receipt ID to verify
+            org_id: When given, a receipt owned by any other org is not found
 
         Returns:
             SignatureVerificationResult with validation status
         """
-        receipt = self.get(receipt_id)
+        receipt = self.get(receipt_id) if org_id is None else self.get_for_org(receipt_id, org_id)
 
         if not receipt:
             return SignatureVerificationResult(
@@ -1443,13 +1539,14 @@ class ReceiptStore:
             )
 
     def verify_batch(
-        self, receipt_ids: builtins.list[str]
+        self, receipt_ids: builtins.list[str], *, org_id: str | None = None
     ) -> tuple[builtins.list[SignatureVerificationResult], dict[str, int]]:
         """
         Verify signatures for multiple receipts.
 
         Args:
             receipt_ids: List of receipt IDs to verify
+            org_id: When given, receipts owned by any other org are not found
 
         Returns:
             Tuple of (results list, summary dict)
@@ -1458,7 +1555,7 @@ class ReceiptStore:
         summary = {"total": len(receipt_ids), "valid": 0, "invalid": 0, "not_signed": 0}
 
         for receipt_id in receipt_ids:
-            result = self.verify_signature(receipt_id)
+            result = self.verify_signature(receipt_id, org_id=org_id)
             results.append(result)
 
             if result.is_valid:
@@ -1474,17 +1571,18 @@ class ReceiptStore:
     # Integrity Verification
     # =========================================================================
 
-    def verify_integrity(self, receipt_id: str) -> dict[str, Any]:
+    def verify_integrity(self, receipt_id: str, *, org_id: str | None = None) -> dict[str, Any]:
         """
         Verify the integrity checksum of a receipt.
 
         Args:
             receipt_id: Receipt ID to verify
+            org_id: When given, a receipt owned by any other org is not found
 
         Returns:
             Dict with checksum verification result
         """
-        receipt = self.get(receipt_id)
+        receipt = self.get(receipt_id) if org_id is None else self.get_for_org(receipt_id, org_id)
 
         if not receipt:
             return {
@@ -1597,19 +1695,28 @@ class ReceiptStore:
         """Get receipt statistics."""
         if self._backend is None:
             return {}
+        return self._stats(self.count)
 
-        total = self.count()
-        signed = self.count(signed_only=True)
+    def stats_for_org(self, org_id: str) -> dict[str, Any]:
+        """Receipt statistics over the receipts owned by ``org_id``."""
+        org_id = _require_org(org_id)
+        if self._backend is None:
+            return {}
+        return self._stats(lambda **filters: self.count_for_org(org_id, **filters))
+
+    def _stats(self, count: Callable[..., int]) -> dict[str, Any]:
+        total = count()
+        signed = count(signed_only=True)
 
         # Verdict breakdown
         verdict_counts = {}
         for verdict in ["APPROVED", "REJECTED", "NEEDS_REVIEW", "INCONCLUSIVE"]:
-            verdict_counts[verdict.lower()] = self.count(verdict=verdict)
+            verdict_counts[verdict.lower()] = count(verdict=verdict)
 
         # Risk level breakdown
         risk_counts = {}
         for risk in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
-            risk_counts[risk.lower()] = self.count(risk_level=risk)
+            risk_counts[risk.lower()] = count(risk_level=risk)
 
         return {
             "total": total,
@@ -1641,38 +1748,58 @@ class ReceiptStore:
         Returns:
             Tuple of (list of receipts, total count)
         """
+        return self._by_user(user_id, limit, offset, org_id=None)
+
+    def get_by_user_for_org(
+        self,
+        org_id: str,
+        user_id: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[builtins.list[StoredReceipt], int]:
+        """DSAR lookup limited to the receipts owned by ``org_id``."""
+        return self._by_user(user_id, limit, offset, org_id=_require_org(org_id))
+
+    def _by_user(
+        self,
+        user_id: str,
+        limit: int,
+        offset: int,
+        *,
+        org_id: str | None,
+    ) -> tuple[builtins.list[StoredReceipt], int]:
         if self._backend is None:
             return [], 0
 
         user_pattern = f'%"{user_id}"%'
-        query = """
-            SELECT receipt_id, gauntlet_id, debate_id, created_at, expires_at,
-                   verdict, confidence, risk_level, risk_score, checksum,
-                   signature, signature_algorithm, signature_key_id, signed_at,
-                   audit_trail_id, data_json
-            FROM receipts
-            WHERE json_extract(data_json, '$.user_id') = ?
+        where_clause = """
+            (created_by = ?
+               OR json_extract(data_json, '$.user_id') = ?
                OR json_extract(data_json, '$.requestor_id') = ?
                OR json_extract(data_json, '$.created_by') = ?
-               OR data_json LIKE ?
+               OR data_json LIKE ?)
+        """
+        where_params: builtins.list[Any] = [user_id, user_id, user_id, user_id, user_pattern]
+        if org_id is not None:
+            where_clause += " AND org_id = ?"
+            where_params.append(org_id)
+
+        rows = self._backend.fetch_all(
+            f"""
+            SELECT {_RECEIPT_COLUMNS}
+            FROM receipts
+            WHERE {where_clause}
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
-        """
-        count_query = """
-            SELECT COUNT(*)
-            FROM receipts
-            WHERE json_extract(data_json, '$.user_id') = ?
-               OR json_extract(data_json, '$.requestor_id') = ?
-               OR json_extract(data_json, '$.created_by') = ?
-               OR data_json LIKE ?
-        """
-        params = (user_id, user_id, user_id, user_pattern, limit, offset)
-        count_params = (user_id, user_id, user_id, user_pattern)
-
-        rows = self._backend.fetch_all(query, params)
+            """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+            (*where_params, limit, offset),
+        )
         receipts = [self._row_to_stored_receipt(row) for row in rows]
 
-        count_row = self._backend.fetch_one(count_query, count_params)
+        count_row = self._backend.fetch_one(
+            f"SELECT COUNT(*) FROM receipts WHERE {where_clause}",  # nosec B608  # noqa: S608
+            tuple(where_params),
+        )
         total = count_row[0] if count_row else 0
 
         return receipts, total
@@ -1684,22 +1811,32 @@ class ReceiptStore:
         Returns:
             Dictionary with retention status information
         """
+        return self._retention_status(org_id=None)
+
+    def retention_status_for_org(self, org_id: str) -> dict[str, Any]:
+        """Retention status over the receipts owned by ``org_id``."""
+        return self._retention_status(org_id=_require_org(org_id))
+
+    def _retention_status(self, *, org_id: str | None) -> dict[str, Any]:
         if self._backend is None:
             return {}
 
         now = time.time()
+        org_clause, org_params = ("org_id = ?", (org_id,)) if org_id is not None else ("1=1", ())
 
         # Get oldest and newest timestamps
         timestamp_row = self._backend.fetch_one(
-            "SELECT MIN(created_at), MAX(created_at) FROM receipts"
+            f"SELECT MIN(created_at), MAX(created_at) FROM receipts WHERE {org_clause}",  # nosec B608  # noqa: S608
+            org_params,
         )
         oldest_at = timestamp_row[0] if timestamp_row and timestamp_row[0] else None
         newest_at = timestamp_row[1] if timestamp_row and timestamp_row[1] else None
 
         # Get already expired count
         expired_row = self._backend.fetch_one(
-            "SELECT COUNT(*) FROM receipts WHERE expires_at IS NOT NULL AND expires_at < ?",
-            (now,),
+            "SELECT COUNT(*) FROM receipts WHERE expires_at IS NOT NULL AND expires_at < ?"  # nosec B608  # noqa: S608
+            f" AND {org_clause}",
+            (now, *org_params),
         )
         already_expired = expired_row[0] if expired_row else 0
 
@@ -1734,7 +1871,7 @@ class ReceiptStore:
                     else None
                 ),
             },
-            "total_receipts": self.count(),
+            "total_receipts": self.count() if org_id is None else self.count_for_org(org_id),
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
