@@ -391,6 +391,72 @@ class TestFailClosed:
         token = await enforcer.enforce(_forced_request(approval_id="ext-1"))
         assert token.result == EnforcementResult.PENDING_APPROVAL
 
+    async def test_context_factory_with_wrong_signature_fails_closed(self):
+        def task_only_context(task_id: str) -> dict[str, str]:
+            return {"task_id": task_id}
+
+        workflow = ExternalWorkflow()
+        adapter = ae.ExternalApprovalWorkflowAdapter(
+            approved_status=ExternalStatus.GRANTED,
+            context_factory=task_only_context,
+            priority=ExternalPriority.URGENT,
+            unknown_category=ExternalCategory.OTHER,
+        )
+        enforcer = UnifiedApprovalEnforcer(
+            approval_workflow=workflow, approval_workflow_adapter=adapter
+        )
+
+        routed = await enforcer.enforce(_forced_request())
+
+        assert routed.result == EnforcementResult.PENDING_APPROVAL
+        assert routed.approval_request_id is None
+        assert workflow.submitted == []
+
+    async def test_workflow_methods_with_wrong_signatures_fail_closed(self):
+        class WrongSignatureWorkflow:
+            async def request_approval(self, context: ExternalContext) -> ExternalRecord:
+                return ExternalRecord("ext-1", ExternalStatus.PENDING)
+
+            async def wait_for_decision(self, request_id: str) -> ExternalStatus:
+                return ExternalStatus.GRANTED
+
+            async def get_request(self) -> ExternalRecord:
+                return ExternalRecord("tok-1", ExternalStatus.GRANTED)
+
+        enforcer = UnifiedApprovalEnforcer(
+            approval_workflow=WrongSignatureWorkflow(),
+            approval_workflow_adapter=_external_adapter(),
+        )
+
+        routed = await enforcer.enforce(_forced_request())
+        assert routed.result == EnforcementResult.PENDING_APPROVAL
+        assert routed.approval_request_id is None
+        assert await enforcer.wait_for_approval("ext-1") is False
+        token = await enforcer.enforce(_forced_request(approval_id="tok-1"))
+        assert token.result == EnforcementResult.PENDING_APPROVAL
+
+    async def test_adapter_methods_with_wrong_signatures_fail_closed(self):
+        class WrongArityAdapter:
+            async def request_approval(self, workflow: Any) -> ae.ApprovalRoute:
+                return ae.ApprovalRoute(approval_request_id="x", category="x", priority="x")
+
+            async def wait_for_approval(self, workflow: Any) -> bool:
+                return True
+
+            async def is_approval_valid(self, workflow: Any) -> bool:
+                return True
+
+        enforcer = UnifiedApprovalEnforcer(
+            approval_workflow=ExternalWorkflow(), approval_workflow_adapter=WrongArityAdapter()
+        )
+
+        routed = await enforcer.enforce(_forced_request())
+        assert routed.result == EnforcementResult.PENDING_APPROVAL
+        assert routed.approval_request_id is None
+        assert await enforcer.wait_for_approval("ext-1") is False
+        token = await enforcer.enforce(_forced_request(approval_id="ext-1"))
+        assert token.result == EnforcementResult.PENDING_APPROVAL
+
 
 def test_approval_enforcer_does_not_import_computer_use():
     source = Path(ae.__file__).read_text(encoding="utf-8")

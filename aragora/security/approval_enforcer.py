@@ -495,7 +495,7 @@ class UnifiedApprovalEnforcer:
         try:
             wait = _callable_member(adapter, "wait_for_approval", "adapter")
             approved = await wait(self._approval_workflow, approval_request_id, timeout)
-        except (ImportError, ApprovalCapabilityUnavailable) as e:
+        except (ImportError, TypeError, ApprovalCapabilityUnavailable) as e:
             logger.warning("Approval wait unavailable: %s", e)
             return False
         return approved is True
@@ -692,7 +692,9 @@ class UnifiedApprovalEnforcer:
         except ImportError:
             logger.warning("Computer-use approval module not available")
             return decision
-        except ApprovalCapabilityUnavailable as e:
+        except (TypeError, ApprovalCapabilityUnavailable) as e:
+            # TypeError here means an adapter or workflow callable has the wrong
+            # signature; leave the decision pending instead of failing open or crashing.
             logger.warning("Approval workflow adapter not available: %s", e)
             return decision
 
@@ -721,7 +723,7 @@ class UnifiedApprovalEnforcer:
         try:
             check = _callable_member(adapter, "is_approval_valid", "adapter")
             valid = await check(self._approval_workflow, approval_id)
-        except (ImportError, AttributeError, ApprovalCapabilityUnavailable):
+        except (ImportError, AttributeError, TypeError, ApprovalCapabilityUnavailable):
             return False
         return valid is True
 
