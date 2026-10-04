@@ -458,10 +458,18 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
     }
 
 
+def job_org_id(job_status: dict[str, Any]) -> str | None:
+    """The org recorded in a job's metadata (``get_job_status`` dict), or None."""
+    metadata = job_status.get("metadata")
+    org_id = metadata.get("org_id") if isinstance(metadata, dict) else None
+    return org_id if isinstance(org_id, str) and org_id else None
+
+
 def get_all_jobs(
     workspace_id: str | None = None,
     status: str | None = None,
     limit: int = 100,
+    org_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get all knowledge processing jobs with optional filtering.
 
@@ -469,11 +477,15 @@ def get_all_jobs(
         workspace_id: Filter by workspace
         status: Filter by status (pending, processing, completed, failed)
         limit: Maximum jobs to return
+        org_id: Only jobs whose metadata names this org (never unknown-owner jobs)
 
     Returns:
         List of job status dicts
     """
     jobs = list(_jobs.values())
+
+    if org_id is not None:
+        jobs = [j for j in jobs if job_org_id({"metadata": j.metadata}) == org_id]
 
     if workspace_id:
         jobs = [j for j in jobs if j.workspace_id == workspace_id]
@@ -484,7 +496,7 @@ def get_all_jobs(
     # Sort by created_at descending
     jobs.sort(key=lambda j: j.created_at, reverse=True)
 
-    return [get_job_status(j.job_id) for j in jobs[:limit] if get_job_status(j.job_id)]
+    return [found for j in jobs[:limit] if (found := get_job_status(j.job_id))]
 
 
 async def shutdown_pipeline() -> None:

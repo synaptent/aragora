@@ -587,3 +587,104 @@ class TestGetBatchProcessor:
 
         # Cleanup
         module._batch_processor = None
+
+
+class TestBatchProcessorOwnership:
+    """Org ownership on jobs, and running jobs without the worker tasks."""
+
+    @pytest.mark.asyncio
+    async def test_submit_records_org_and_document_id(self):
+        processor = BatchProcessor()
+
+        job_id = await processor.submit(
+            b"text", "a.txt", uploaded_by="user-a", org_id="org-a", document_id="doc-a"
+        )
+
+        status = await processor.get_status(job_id)
+        assert status["org_id"] == "org-a"
+        assert status["uploaded_by"] == "user-a"
+        assert status["document_id"] == "doc-a"
+
+    @pytest.mark.asyncio
+    async def test_submit_while_stopped_does_not_fill_the_queue(self):
+        processor = BatchProcessor(max_queue_size=1)
+
+        await processor.submit(b"one", "1.txt")
+        await asyncio.wait_for(processor.submit(b"two", "2.txt"), timeout=1)
+
+        assert processor._queue.qsize() == 0
+        assert processor.get_stats()["queued_jobs"] == 2
+
+    @pytest.mark.asyncio
+    async def test_start_queues_jobs_submitted_while_stopped(self):
+        processor = BatchProcessor(max_workers=1)
+        job_id = await processor.submit(b"# Title\n\nSome text.", "notes.md", org_id="org-a")
+
+        await processor.start()
+        try:
+            job = await processor.wait_for_job(job_id, timeout=10)
+        finally:
+            await processor.stop(wait=False)
+
+        assert job is not None
+        assert job.status == JobStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_process_queued_runs_jobs_and_keeps_the_document_id(self):
+        processor = BatchProcessor()
+        job_id = await processor.submit(
+            b"# Title\n\nSome text.", "notes.md", org_id="org-a", document_id="doc-a"
+        )
+        cancelled_id = await processor.submit(b"skip me", "skip.txt", org_id="org-a")
+        await processor.cancel(cancelled_id)
+
+        await processor.process_queued([job_id, cancelled_id, "missing"])
+
+        job = await processor.get_result(job_id)
+        assert job.status == JobStatus.COMPLETED
+        assert job.document.id == "doc-a"
+        assert (await processor.get_result(cancelled_id)).status == JobStatus.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_process_queued_records_a_failure_on_the_job(self):
+        processor = BatchProcessor()
+        job_id = await processor.submit(b"x", "x.txt", org_id="org-a")
+
+        with patch.object(processor, "_process_job", side_effect=RuntimeError("boom")):
+            await processor.process_queued([job_id])
+
+        job = await processor.get_result(job_id)
+        assert job.status == JobStatus.FAILED
+        assert processor.get_stats()["total_failed"] == 1
+        assert processor.get_stats()["active_workers"] == 0
+
+    @pytest.mark.asyncio
+    async def test_remove_only_forgets_finished_jobs(self):
+        processor = BatchProcessor()
+        queued_id = await processor.submit(b"q", "q.txt")
+        done_id = await processor.submit(b"d", "d.txt")
+        processor._jobs[done_id].status = JobStatus.COMPLETED
+
+        assert await processor.remove(queued_id) is False
+        assert await processor.remove(done_id) is True
+        assert await processor.get_result(done_id) is None
+        assert await processor.remove("missing") is False
+
+    @pytest.mark.asyncio
+    async def test_stats_per_org_count_only_that_orgs_jobs(self):
+        processor = BatchProcessor()
+        await processor.submit(b"a1", "a1.txt", org_id="org-a")
+        await processor.submit(b"a2", "a2.txt", org_id="org-a")
+        b_id = await processor.submit(b"b", "b.txt", org_id="org-b")
+        await processor.submit(b"legacy", "legacy.txt")
+        processor._jobs[b_id].status = JobStatus.FAILED
+
+        stats_a = processor.get_stats(org_id="org-a")
+        stats_b = processor.get_stats(org_id="org-b")
+
+        assert stats_a["queued_jobs"] == 2
+        assert stats_a["total_failed"] == 0
+        assert "active_workers" not in stats_a
+        assert stats_b["queued_jobs"] == 0
+        assert stats_b["total_failed"] == 1
+        assert processor.get_stats(org_id="org-c")["queued_jobs"] == 0
