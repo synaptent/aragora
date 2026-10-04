@@ -49,6 +49,7 @@ from aragora.config import (
 )
 
 logger = logging.getLogger(__name__)
+from aragora.server.validation import SAFE_ID_PATTERN_WITH_DOTS
 from aragora.server.versioning.compat import strip_version_prefix
 
 from ..base import (
@@ -322,7 +323,9 @@ class AgentsHandler(  # type: ignore[misc]
 
         match_id = _single_segment(path, "/api/matches/")
         if match_id is not None and match_id != _MATCHES_STATS_SEGMENT:
-            is_valid, err = validate_path_segment(match_id, "match_id", SAFE_SLUG_PATTERN)
+            # Generated match IDs embed agent names, which may carry dotted
+            # model versions ("general-gemini-3.1-pro-preview-vs-claude-<hex>").
+            is_valid, err = validate_path_segment(match_id, "match_id", SAFE_ID_PATTERN_WITH_DOTS)
             if not is_valid:
                 return error_response(err or "Invalid match_id", 400)
             return self._get_match(match_id)

@@ -256,6 +256,29 @@ class TestMatchDetailDispatch:
         assert status == 200
         assert body == json.loads(json.dumps(elo.get_match("debate-abc")))
 
+    @pytest.mark.parametrize("prefix", ["/api/matches/", "/api/v1/matches/"])
+    def test_serves_match_id_generated_from_dotted_agent_names(
+        self, elo: EloSystem, prefix: str
+    ) -> None:
+        elo.record_match(
+            participants=["gemini-3.1-pro-preview", "claude"],
+            scores={"gemini-3.1-pro-preview": 1.0, "claude": 0.0},
+            domain="general",
+        )
+        [match_id] = [
+            m["debate_id"]
+            for m in elo.get_recent_matches(limit=10)
+            if m["debate_id"] != "debate-abc"
+        ]
+        assert match_id.startswith("general-gemini-3.1-pro-preview-vs-claude-")
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
+        )
+        handled, status, body = _dispatch(instance, index, prefix + match_id)
+        assert handled is True
+        assert status == 200
+        assert body == json.loads(json.dumps(elo.get_match(match_id)))
+
     def test_unknown_match_is_404(self, elo: EloSystem) -> None:
         instance, index = _make_dispatch_instance(
             {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
@@ -272,11 +295,12 @@ class TestMatchDetailDispatch:
         assert handled is True
         assert status == 503
 
-    def test_invalid_match_id_is_400(self, elo: EloSystem) -> None:
+    @pytest.mark.parametrize("match_id", ["bad!id", ".leading-dot"])
+    def test_invalid_match_id_is_400(self, elo: EloSystem, match_id: str) -> None:
         instance, index = _make_dispatch_instance(
             {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
         )
-        handled, status, _ = _dispatch(instance, index, "/api/v1/matches/bad.id")
+        handled, status, _ = _dispatch(instance, index, "/api/v1/matches/" + match_id)
         assert handled is True
         assert status == 400
 
