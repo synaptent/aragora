@@ -8,6 +8,10 @@ Endpoints:
 - GET /api/documents/folders - List uploaded folder sets
 - GET /api/documents/folders/{folder_id} - Get folder details
 - DELETE /api/documents/folders/{folder_id} - Delete an uploaded folder set
+
+Every route needs a caller with an org. Folder uploads belong to the org of the
+user who started them and their documents are stored under that org; another
+org's folder answers like a missing one.
 """
 
 from __future__ import annotations
@@ -28,13 +32,18 @@ from ..base import (
     error_response,
     handle_errors,
     json_response,
-    require_user_auth,
     safe_error_message,
 )
 from ..utils.file_validation import validate_file_upload, MAX_FILE_SIZE
 from ..utils.rate_limit import rate_limit
 from aragora.rbac.decorators import require_permission
 from aragora.server.validation.query_params import safe_query_int
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +123,7 @@ class FolderUploadJob:
     created_at: datetime
     updated_at: datetime
     user_id: str | None = None
+    org_id: str | None = None  # Owning org; None means unknown owner
 
     # Scan results
     total_files_found: int = 0
@@ -142,6 +152,7 @@ class FolderUploadJob:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "user_id": self.user_id,
+            "org_id": self.org_id,
             "scan": {
                 "total_files_found": self.total_files_found,
                 "included_count": self.included_count,
@@ -201,19 +212,28 @@ class FolderUploadHandler(BaseHandler):
     def handle(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route GET folder requests."""
         if path == "/api/v1/documents/folders":
-            return self._list_folders(query_params)
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+            return self._list_folders(query_params, scope)
 
         # GET /api/documents/folder/upload/{folder_id}/status
         if path.startswith("/api/v1/documents/folder/upload/") and path.endswith("/status"):
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
             folder_id = path.split("/")[-2]
-            return self._get_upload_status(folder_id)
+            return self._get_upload_status(folder_id, scope)
 
         # GET /api/v1/documents/folders/{folder_id}
         if path.startswith("/api/v1/documents/folders/"):
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
             folder_id, err = self.extract_path_param(path, 5, "folder_id")
             if err:
                 return err
-            return self._get_folder(folder_id)
+            return self._get_folder(folder_id, scope)
 
         return None
 
@@ -222,28 +242,32 @@ class FolderUploadHandler(BaseHandler):
     @rate_limit(requests_per_minute=10)
     async def handle_post(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route POST folder requests."""
+        if path not in ("/api/v1/documents/folder/scan", "/api/v1/documents/folder/upload"):
+            return None
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         if path == "/api/v1/documents/folder/scan":
             return await self._scan_folder(handler)
-
-        if path == "/api/v1/documents/folder/upload":
-            return self._start_upload(handler)
-
-        return None
+        return self._start_upload(handler, scope)
 
     @handle_errors("folder upload deletion")
     @require_permission("upload:delete")
     def handle_delete(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route DELETE folder requests."""
         if path.startswith("/api/v1/documents/folders/"):
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
             folder_id, err = self.extract_path_param(path, 5, "folder_id")
             if err:
                 return err
-            return self._delete_folder(folder_id, handler=handler)
+            return self._delete_folder(folder_id, scope, handler=handler)
         return None
 
-    @require_user_auth
     @handle_errors("folder scan")
-    async def _scan_folder(self, handler, user=None) -> HandlerResult:
+    async def _scan_folder(self, handler) -> HandlerResult:
         """Scan a folder and return what would be uploaded.
 
         Request body:
@@ -311,9 +335,8 @@ class FolderUploadHandler(BaseHandler):
             logger.error("Folder scan error: %s", e)
             return error_response(safe_error_message(e, "Scan"), 500)
 
-    @require_user_auth
     @handle_errors("folder upload")
-    def _start_upload(self, handler, user=None) -> HandlerResult:
+    def _start_upload(self, handler, scope: OrgScope) -> HandlerResult:
         """Start an async folder upload.
 
         Request body:
@@ -345,7 +368,7 @@ class FolderUploadHandler(BaseHandler):
 
         # Validate path exists, is a directory, and is in allowed directories
         is_valid, error_msg, path = _validate_upload_path(folder_path)
-        if not is_valid:
+        if not is_valid or path is None:
             error_lower = str(error_msg).lower()
             if "does not exist" in error_lower:
                 status_code = 404
@@ -365,7 +388,8 @@ class FolderUploadHandler(BaseHandler):
             status=FolderUploadStatus.PENDING,
             created_at=now,
             updated_at=now,
-            user_id=user.user_id if user else None,
+            user_id=scope.user_id,
+            org_id=scope.org_id,
             config=body.get("config", {}),
         )
 
@@ -375,7 +399,7 @@ class FolderUploadHandler(BaseHandler):
         # Start async upload in background
         thread = threading.Thread(
             target=self._run_upload_job,
-            args=(folder_id, path, body.get("config", {})),
+            args=(folder_id, path, body.get("config", {}), scope),
             daemon=True,
         )
         thread.start()
@@ -388,8 +412,10 @@ class FolderUploadHandler(BaseHandler):
             }
         )
 
-    def _run_upload_job(self, folder_id: str, path: Path, config_data: dict) -> None:
-        """Run folder upload job in background thread."""
+    def _run_upload_job(
+        self, folder_id: str, path: Path, config_data: dict, scope: OrgScope
+    ) -> None:
+        """Run folder upload job in background thread, storing documents under the scope's org."""
         try:
             self._update_job_status(folder_id, FolderUploadStatus.SCANNING)
 
@@ -470,7 +496,9 @@ class FolderUploadHandler(BaseHandler):
                             f"File too large: {len(content)} bytes exceeds {MAX_FILE_SIZE} byte limit"
                         )
 
-                    doc = parse_document(content, file_path.name)
+                    doc = parse_document(
+                        content, file_path.name, org_id=scope.org_id, created_by=scope.user_id
+                    )
                     doc_id = store.add(doc)
 
                     with FolderUploadHandler._jobs_lock:
@@ -524,20 +552,29 @@ class FolderUploadHandler(BaseHandler):
         """Get document store instance."""
         return self.ctx.get("document_store")
 
-    def _get_upload_status(self, folder_id: str) -> HandlerResult:
-        """Get status of a folder upload job."""
+    def _visible_job(self, folder_id: str, scope: OrgScope) -> FolderUploadJob | None:
         with FolderUploadHandler._jobs_lock:
             job = FolderUploadHandler._jobs.get(folder_id)
+        if job is None or not record_visible(job.org_id, scope):
+            return None
+        return job
 
+    def _get_upload_status(self, folder_id: str, scope: OrgScope) -> HandlerResult:
+        """Get status of a folder upload job."""
+        job = self._visible_job(folder_id, scope)
         if not job:
-            return error_response(f"Folder upload not found: {folder_id}", 404)
+            return record_not_found("Folder")
 
         return json_response(job.to_dict())
 
-    def _list_folders(self, query_params: dict) -> HandlerResult:
-        """List all folder upload jobs."""
+    def _list_folders(self, query_params: dict, scope: OrgScope) -> HandlerResult:
+        """List the caller org's folder upload jobs."""
         with FolderUploadHandler._jobs_lock:
-            jobs = list(FolderUploadHandler._jobs.values())
+            jobs = [
+                job
+                for job in FolderUploadHandler._jobs.values()
+                if record_visible(job.org_id, scope)
+            ]
 
         # Sort by created_at descending
         jobs.sort(key=lambda j: j.created_at, reverse=True)
@@ -553,29 +590,26 @@ class FolderUploadHandler(BaseHandler):
             }
         )
 
-    def _get_folder(self, folder_id: str) -> HandlerResult:
+    def _get_folder(self, folder_id: str, scope: OrgScope) -> HandlerResult:
         """Get details of a specific folder upload."""
-        with FolderUploadHandler._jobs_lock:
-            job = FolderUploadHandler._jobs.get(folder_id)
-
+        job = self._visible_job(folder_id, scope)
         if not job:
-            return error_response(f"Folder not found: {folder_id}", 404)
+            return record_not_found("Folder")
 
         return json_response(job.to_dict())
 
-    @require_user_auth
     @handle_errors("folder delete")
     @require_permission("folders:delete")
-    def _delete_folder(self, folder_id: str, handler=None, user=None) -> HandlerResult:
+    def _delete_folder(self, folder_id: str, scope: OrgScope, handler=None) -> HandlerResult:
         """Delete a folder upload and optionally its documents."""
         with FolderUploadHandler._jobs_lock:
             job = FolderUploadHandler._jobs.get(folder_id)
 
-            if not job:
-                return error_response(f"Folder not found: {folder_id}", 404)
+            if not job or not record_visible(job.org_id, scope):
+                return record_not_found("Folder")
 
-            # Check ownership
-            if user and job.user_id and job.user_id != user.user_id:
+            # Within the org, only the user who started the upload may delete it
+            if job.user_id and job.user_id != scope.user_id:
                 return error_response("Not authorized to delete this folder", 403)
 
             # Remove job
