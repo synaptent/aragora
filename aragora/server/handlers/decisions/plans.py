@@ -1,12 +1,17 @@
 """Decision Plan API handler.
 
-Endpoints:
+Endpoints (each also served without the ``/v1`` segment):
 - POST /api/v1/plans                - Create plan from debate result
 - GET  /api/v1/plans                - List plans with pagination
 - GET  /api/v1/plans/{id}           - Get plan details
-- POST /api/v1/plans/{id}/approve   - Approve a plan
+- GET  /api/v1/plans/{id}/memo      - Decision memo (markdown) for a plan
+- POST /api/v1/plans/{id}/approve   - Approve a plan (PUT is accepted too)
 - POST /api/v1/plans/{id}/reject    - Reject a plan with reason
 - POST /api/v1/plans/{id}/execute   - Execute an approved plan
+
+Every route acts for the caller's organization (``aragora.tenancy.record_scope``):
+anonymous callers get 401, users without an org 403, and a plan owned by another
+org (or by nobody) gets the same 404 as a missing plan.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from aragora.pipeline.backbone_errors import (
 )
 from aragora.pipeline.backbone_runtime import BackboneRuntime
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.server.handlers.base import (
     BaseHandler,
     HandlerResult,
@@ -30,8 +36,13 @@ from aragora.server.handlers.base import (
     json_response,
     handle_errors,
 )
-from aragora.server.handlers.utils.routing import RouteDispatcher
 from aragora.server.validation.query_params import safe_query_int
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +102,7 @@ _ROUTES = [
 ]
 _PLAN_PREFIX = "/api/v1/plans/"
 _PLAN_PREFIX_UNVERSIONED = "/api/plans/"
+_PLAN_ACTIONS = frozenset({"approve", "reject", "execute", "memo"})
 
 
 def _get_plan_store():
@@ -107,26 +119,39 @@ def _sanitize_plan_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _parse_plan_path(path: str) -> tuple[str | None, str | None] | None:
+    """Split a plans path into ``(plan_id, action)``.
+
+    ``(None, None)`` is the collection root; None means the path is not a
+    plans route this handler knows.
+    """
+    if path in _ROUTES:
+        return None, None
+    for prefix in (_PLAN_PREFIX, _PLAN_PREFIX_UNVERSIONED):
+        if path.startswith(prefix):
+            parts = path[len(prefix) :].split("/")
+            if len(parts) == 1 and parts[0]:
+                return parts[0], None
+            if len(parts) == 2 and parts[0] and parts[1] in _PLAN_ACTIONS:
+                return parts[0], parts[1]
+            return None
+    return None
+
+
+def _unknown_route() -> HandlerResult:
+    return error_response("Unknown plans route", 404)
+
+
 class PlansHandler(BaseHandler):
     """Handler for decision plan CRUD and approval workflows."""
 
+    # Only the collection path is declared (it was PlanManagementHandler's sole
+    # ROUTES entry). Other plan paths dispatch through can_handle(); declaring
+    # them here makes the OpenAPI generator emit stub operations for each one.
+    ROUTES = ["/api/v1/plans"]
+
     def __init__(self, ctx: dict[str, Any]) -> None:
         super().__init__(ctx)
-        self._get_dispatcher = RouteDispatcher()
-        self._get_dispatcher.add_route("/api/v1/plans", self._list_plans)
-        self._get_dispatcher.add_route("/api/plans", self._list_plans)
-        self._get_dispatcher.add_route("/api/v1/plans/{plan_id}", self._get_plan)
-        self._get_dispatcher.add_route("/api/plans/{plan_id}", self._get_plan)
-
-        self._post_dispatcher = RouteDispatcher()
-        self._post_dispatcher.add_route("/api/v1/plans", self._create_plan)
-        self._post_dispatcher.add_route("/api/plans", self._create_plan)
-        self._post_dispatcher.add_route("/api/v1/plans/{plan_id}/approve", self._approve_plan)
-        self._post_dispatcher.add_route("/api/plans/{plan_id}/approve", self._approve_plan)
-        self._post_dispatcher.add_route("/api/v1/plans/{plan_id}/reject", self._reject_plan)
-        self._post_dispatcher.add_route("/api/plans/{plan_id}/reject", self._reject_plan)
-        self._post_dispatcher.add_route("/api/v1/plans/{plan_id}/execute", self._execute_plan)
-        self._post_dispatcher.add_route("/api/plans/{plan_id}/execute", self._execute_plan)
 
     def can_handle(self, path: str) -> bool:
         """Check if this handler serves the given path."""
@@ -137,38 +162,83 @@ class PlansHandler(BaseHandler):
         return False
 
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
-        """Handle GET requests (public read-only)."""
+        """Handle GET requests."""
+        scope, err = require_org_scope(handler)
+        if scope is None:
+            return err
         self.set_request_context(handler, query_params)
-        result = self._get_dispatcher.dispatch(path, query_params)
-        if result is not None:
-            return result
-        # Try path param routes not matched by dispatcher segment count
-        return self._try_get_by_id(path, query_params)
+        parsed = _parse_plan_path(path)
+        if parsed is None:
+            return _unknown_route()
+        plan_id, action = parsed
+        if plan_id is None:
+            return self._list_plans(query_params, scope)
+        if action is None:
+            return self._get_plan({"plan_id": plan_id}, scope)
+        if action == "memo":
+            return self._get_plan_memo({"plan_id": plan_id}, scope)
+        return _unknown_route()
 
     @handle_errors("plans creation")
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Handle POST requests."""
-        user, err = self.require_auth_or_error(handler)
-        if err:
+        scope, err = require_org_scope(handler)
+        if scope is None:
             return err
         _, perm_err = self.require_permission_or_error(handler, "plans:write")
         if perm_err:
             return perm_err
 
         self.set_request_context(handler, query_params)
-        result = self._post_dispatcher.dispatch(path, query_params)
-        if result is not None:
-            return result
-        return None
+        parsed = _parse_plan_path(path)
+        if parsed is None:
+            return _unknown_route()
+        plan_id, action = parsed
+        if plan_id is None:
+            return self._create_plan(scope)
+        params = {"plan_id": plan_id}
+        if action == "approve":
+            return self._approve_plan(params, scope)
+        if action == "reject":
+            return self._reject_plan(params, scope)
+        if action == "execute":
+            return self._execute_plan(params, scope)
+        return _unknown_route()
+
+    @handle_errors("plans approval")
+    def handle_put(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Handle PUT requests (``PUT /{id}/approve`` is an alias of the POST)."""
+        scope, err = require_org_scope(handler)
+        if scope is None:
+            return err
+        _, perm_err = self.require_permission_or_error(handler, "plans:write")
+        if perm_err:
+            return perm_err
+
+        self.set_request_context(handler, query_params)
+        parsed = _parse_plan_path(path)
+        if parsed is not None and parsed[0] is not None and parsed[1] == "approve":
+            return self._approve_plan({"plan_id": parsed[0]}, scope)
+        return _unknown_route()
+
+    @staticmethod
+    def _visible_plan(store: Any, plan_id: str, scope: OrgScope) -> DecisionPlan | None:
+        """The plan when the caller's org owns it; None for missing/other-org/unknown."""
+        plan = store.get(plan_id)
+        if plan is None or not record_visible(getattr(plan, "org_id", None), scope):
+            return None
+        return plan
 
     # -------------------------------------------------------------------------
     # GET /api/v1/plans
     # -------------------------------------------------------------------------
 
-    def _list_plans(self, query_params: dict[str, Any]) -> HandlerResult:
-        """List plans with optional filters and pagination."""
+    def _list_plans(self, query_params: dict[str, Any], scope: OrgScope) -> HandlerResult:
+        """List the caller org's plans with optional filters and pagination."""
         from aragora.pipeline.decision_plan.core import PlanStatus
 
         store = _get_plan_store()
@@ -189,8 +259,10 @@ class PlansHandler(BaseHandler):
                     400,
                 )
 
-        plans = store.list(debate_id=debate_id, status=status, limit=limit, offset=offset)
-        total = store.count(debate_id=debate_id, status=status)
+        plans = store.list_for_org(
+            scope.org_id, debate_id=debate_id, status=status, limit=limit, offset=offset
+        )
+        total = store.count_for_org(scope.org_id, debate_id=debate_id, status=status)
 
         return json_response(
             {
@@ -205,32 +277,41 @@ class PlansHandler(BaseHandler):
     # GET /api/v1/plans/{plan_id}
     # -------------------------------------------------------------------------
 
-    def _get_plan(self, params: dict[str, str], query_params: dict[str, Any]) -> HandlerResult:
+    def _get_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
         """Get a single plan by ID."""
-        plan_id = params["plan_id"]
-        store = _get_plan_store()
-        plan = store.get(plan_id)
-
+        plan = self._visible_plan(_get_plan_store(), params["plan_id"], scope)
         if plan is None:
-            return error_response(f"Plan not found: {plan_id}", 404)
+            return record_not_found("Plan")
 
         return json_response(self._plan_detail(plan))
 
-    def _try_get_by_id(self, path: str, query_params: dict[str, Any]) -> HandlerResult | None:
-        """Fallback GET handler for /api/v1/plans/{id} paths."""
-        for prefix in (_PLAN_PREFIX, _PLAN_PREFIX_UNVERSIONED):
-            if path.startswith(prefix):
-                remainder = path[len(prefix) :]
-                if "/" not in remainder and remainder:
-                    return self._get_plan({"plan_id": remainder}, query_params)
-        return None
+    # -------------------------------------------------------------------------
+    # GET /api/v1/plans/{plan_id}/memo
+    # -------------------------------------------------------------------------
+
+    def _get_plan_memo(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
+        """Get the DecisionMemo markdown for a plan."""
+        from aragora.server.handlers.pipeline.plans import build_simple_plan_memo
+
+        plan_id = params["plan_id"]
+        plan = self._visible_plan(_get_plan_store(), plan_id, scope)
+        if plan is None:
+            return record_not_found("Plan")
+
+        return json_response(
+            {
+                "plan_id": plan_id,
+                "memo": build_simple_plan_memo(plan, plan_id),
+                "format": "markdown",
+            }
+        )
 
     # -------------------------------------------------------------------------
     # POST /api/v1/plans
     # -------------------------------------------------------------------------
 
-    def _create_plan(self, query_params: dict[str, Any]) -> HandlerResult:
-        """Create a new decision plan."""
+    def _create_plan(self, scope: OrgScope) -> HandlerResult:
+        """Create a new decision plan owned by the caller's org."""
         from aragora.pipeline.decision_plan.core import ApprovalMode, DecisionPlan, PlanStatus
         from aragora.server.decision_integrity_utils import (
             ensure_decision_plan_backbone_run,
@@ -279,6 +360,8 @@ class PlansHandler(BaseHandler):
             else PlanStatus.APPROVED,
             metadata=metadata,
         )
+        plan.org_id = scope.org_id
+        plan.created_by = scope.user_id
 
         # Budget
         budget_limit = body.get("estimated_budget") or body.get("budget_limit_usd")
@@ -299,6 +382,8 @@ class PlansHandler(BaseHandler):
             auth_context=user,
             source_surface="plans_api",
             source_id=str(debate_id),
+            org_id=scope.org_id,
+            created_by=scope.user_id,
         )
         store.create(plan)
         sync_decision_plan_backbone_receipt(plan, append_event=False)
@@ -314,7 +399,7 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans/{plan_id}/approve
     # -------------------------------------------------------------------------
 
-    def _approve_plan(self, params: dict[str, str], query_params: dict[str, Any]) -> HandlerResult:
+    def _approve_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
         """Approve a decision plan. Requires plans:approve permission."""
         from aragora.pipeline.decision_plan.core import PlanStatus
 
@@ -324,10 +409,10 @@ class PlansHandler(BaseHandler):
 
         plan_id = params["plan_id"]
         store = _get_plan_store()
-        plan = store.get(plan_id)
+        plan = self._visible_plan(store, plan_id, scope)
 
         if plan is None:
-            return error_response(f"Plan not found: {plan_id}", 404)
+            return record_not_found("Plan")
 
         if plan.status not in (PlanStatus.AWAITING_APPROVAL, PlanStatus.CREATED):
             return error_response(
@@ -343,7 +428,10 @@ class PlansHandler(BaseHandler):
         conditions = body.get("conditions", [])
 
         plan.approve(approver_id, reason=str(reason), conditions=conditions)
-        store.update_status(plan_id, PlanStatus.APPROVED, approved_by=approver_id)
+        if not store.update_status_for_org(
+            plan_id, scope.org_id, PlanStatus.APPROVED, approved_by=approver_id
+        ):
+            return record_not_found("Plan")
         plan = store.get(plan_id) or plan
         runtime.sync_plan_receipt_to_run(plan, append_event=True)
 
@@ -368,6 +456,8 @@ class PlansHandler(BaseHandler):
                     auth_context=user,
                     execution_mode=body.get("execution_mode"),
                     safety_mode=SafetyMode.INTERACTIVE,
+                    org_id=scope.org_id,
+                    created_by=scope.user_id,
                 )
                 schedule_coroutine(
                     execute_queued_plan(
@@ -389,6 +479,9 @@ class PlansHandler(BaseHandler):
             except BackbonePersistenceError as exc:
                 logger.warning("Auto-execution blocked for plan %s: %s", plan_id, exc)
                 execution_error = FAIL_CLOSED_BACKBONE_MESSAGE
+            except ExecutionNotAuthorizedError as exc:
+                logger.warning("Auto-execution refused for plan %s: %s", plan_id, exc.code)
+                execution_error = "Execution is not authorized for this organization"
             except (ImportError, RuntimeError, AttributeError, ValueError, TypeError) as exc:
                 logger.warning("Auto-execution scheduling failed for plan %s: %s", plan_id, exc)
                 execution_error = str(exc)
@@ -417,7 +510,7 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans/{plan_id}/reject
     # -------------------------------------------------------------------------
 
-    def _reject_plan(self, params: dict[str, str], query_params: dict[str, Any]) -> HandlerResult:
+    def _reject_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
         """Reject a decision plan with reason."""
         from aragora.pipeline.decision_plan.core import PlanStatus
 
@@ -427,10 +520,10 @@ class PlansHandler(BaseHandler):
 
         plan_id = params["plan_id"]
         store = _get_plan_store()
-        plan = store.get(plan_id)
+        plan = self._visible_plan(store, plan_id, scope)
 
         if plan is None:
-            return error_response(f"Plan not found: {plan_id}", 404)
+            return record_not_found("Plan")
 
         if plan.status not in (PlanStatus.AWAITING_APPROVAL, PlanStatus.CREATED):
             return error_response(
@@ -447,12 +540,14 @@ class PlansHandler(BaseHandler):
         runtime = BackboneRuntime(store)
 
         plan.reject(rejecter_id, reason=str(reason))
-        store.update_status(
+        if not store.update_status_for_org(
             plan_id,
+            scope.org_id,
             PlanStatus.REJECTED,
             approved_by=rejecter_id,
             rejection_reason=str(reason),
-        )
+        ):
+            return record_not_found("Plan")
         plan = store.get(plan_id) or plan
         runtime.sync_plan_receipt_to_run(plan, append_event=True)
 
@@ -473,7 +568,7 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans/{plan_id}/execute
     # -------------------------------------------------------------------------
 
-    def _execute_plan(self, params: dict[str, str], query_params: dict[str, Any]) -> HandlerResult:
+    def _execute_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
         """Execute an approved decision plan. Requires plans:approve permission.
 
         The plan must be in APPROVED status. Execution is scheduled as a
@@ -487,10 +582,10 @@ class PlansHandler(BaseHandler):
 
         plan_id = params["plan_id"]
         store = _get_plan_store()
-        plan = store.get(plan_id)
+        plan = self._visible_plan(store, plan_id, scope)
 
         if plan is None:
-            return error_response(f"Plan not found: {plan_id}", 404)
+            return record_not_found("Plan")
 
         if plan.status == PlanStatus.EXECUTING:
             return error_response(f"Plan {plan_id} is already executing", 409)
@@ -521,6 +616,8 @@ class PlansHandler(BaseHandler):
                 auth_context=user,
                 execution_mode=execution_mode,
                 safety_mode=SafetyMode.INTERACTIVE,
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
             schedule_coroutine(
                 execute_queued_plan(
@@ -535,6 +632,9 @@ class PlansHandler(BaseHandler):
         except BackbonePersistenceError as exc:
             logger.warning("Interactive execution blocked for plan %s: %s", plan_id, exc)
             return error_response(FAIL_CLOSED_BACKBONE_MESSAGE, 503)
+        except ExecutionNotAuthorizedError as exc:
+            logger.warning("Execution refused for plan %s: %s", plan_id, exc.code)
+            return record_not_found("Plan")
         except (ImportError, RuntimeError, AttributeError, ValueError, TypeError) as exc:
             logger.error("Failed to schedule execution for plan %s: %s", plan_id, exc)
             return error_response(f"Failed to schedule execution: {exc}", 500)

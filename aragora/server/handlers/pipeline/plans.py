@@ -1,11 +1,11 @@
 """
-Decision Pipeline Plan Management API.
+Decision Pipeline Plan Management API (superseded).
 
-Provides:
-- GET /api/v1/plans (list plans)
-- GET /api/v1/plans/:id (plan detail)
-- PUT /api/v1/plans/:id/approve (approval checkpoint)
-- GET /api/v1/plans/:id/memo (DecisionMemo markdown)
+The ``/api/v1/plans`` routes (list, detail, ``PUT /:id/approve``, ``GET /:id/memo``)
+are served by ``aragora.server.handlers.decisions.plans.PlansHandler`` from the
+org-scoped PlanStore. This handler's in-memory store has no owner information,
+so it claims no routes (``can_handle`` is always False) and is kept importable
+for existing callers only.
 """
 
 from __future__ import annotations
@@ -42,17 +42,52 @@ def get_plan_store() -> dict[str, Any]:
     return _plan_store
 
 
-class PlanManagementHandler(BaseHandler):
-    """Handler for decision plan management endpoints."""
+def build_simple_plan_memo(plan: Any, plan_id: str) -> str:
+    """Build a simple markdown memo from plan data."""
+    task = ""
+    status = ""
+    debate_id = ""
 
-    ROUTES = ["/api/v1/plans"]
+    if hasattr(plan, "task"):
+        task = plan.task
+    elif isinstance(plan, dict):
+        task = plan.get("task", "")
+
+    if hasattr(plan, "status"):
+        status = plan.status.value if hasattr(plan.status, "value") else str(plan.status)
+    elif isinstance(plan, dict):
+        status = plan.get("status", "")
+
+    if hasattr(plan, "debate_id"):
+        debate_id = plan.debate_id
+    elif isinstance(plan, dict):
+        debate_id = plan.get("debate_id", "")
+
+    return f"""# Decision Memo: {plan_id}
+
+**Status:** {status}
+**Debate ID:** {debate_id}
+
+## Task
+
+{task}
+
+---
+
+*Generated from plan data.*
+"""
+
+
+class PlanManagementHandler(BaseHandler):
+    """Superseded plan management handler; serves no routes (see module docstring)."""
 
     def __init__(self, ctx: dict[str, Any] | None = None):
         self.ctx = ctx or {}
 
     def can_handle(self, path: str) -> bool:
-        cleaned = strip_version_prefix(path)
-        return cleaned.startswith("/api/plans")
+        # The in-memory store cannot tell which org owns a plan, so every plans
+        # route must reach PlansHandler instead.
+        return False
 
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route GET requests."""
@@ -260,38 +295,7 @@ class PlanManagementHandler(BaseHandler):
 
     def _build_simple_memo(self, plan: Any, plan_id: str) -> str:
         """Build a simple markdown memo from plan data."""
-        task = ""
-        status = ""
-        debate_id = ""
-
-        if hasattr(plan, "task"):
-            task = plan.task
-        elif isinstance(plan, dict):
-            task = plan.get("task", "")
-
-        if hasattr(plan, "status"):
-            status = plan.status.value if hasattr(plan.status, "value") else str(plan.status)
-        elif isinstance(plan, dict):
-            status = plan.get("status", "")
-
-        if hasattr(plan, "debate_id"):
-            debate_id = plan.debate_id
-        elif isinstance(plan, dict):
-            debate_id = plan.get("debate_id", "")
-
-        return f"""# Decision Memo: {plan_id}
-
-**Status:** {status}
-**Debate ID:** {debate_id}
-
-## Task
-
-{task}
-
----
-
-*Generated from plan data.*
-"""
+        return build_simple_plan_memo(plan, plan_id)
 
     def _plan_summary(self, plan: Any) -> dict[str, Any]:
         """Extract summary fields from a plan for list view."""

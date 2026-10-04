@@ -27,7 +27,13 @@ from aragora.pipeline.decision_plan.core import (
     PlanStatus,
 )
 from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.server.handlers.plans import PlansHandler
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+TEST_ORG = "test-org-001"
+NOT_FOUND_BODY = {"error": "Plan not found", "code": "not_found"}
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +87,8 @@ def _make_plan(**overrides: Any) -> DecisionPlan:
         "task": "Decide on rate-limiter design",
         "status": PlanStatus.AWAITING_APPROVAL,
         "approval_mode": ApprovalMode.RISK_BASED,
+        "org_id": TEST_ORG,
+        "created_by": "test-user-001",
     }
     defaults.update(overrides)
     return DecisionPlan(**defaults)
@@ -101,11 +109,11 @@ def _close_scheduled_coroutine(coro, *, name: str | None = None):
 def mock_store():
     """Create a mock plan store."""
     store = MagicMock()
-    store.list.return_value = []
-    store.count.return_value = 0
+    store.list_for_org.return_value = []
+    store.count_for_org.return_value = 0
     store.get.return_value = None
     store.create.return_value = None
-    store.update_status.return_value = None
+    store.update_status_for_org.return_value = True
     return store
 
 
@@ -194,8 +202,8 @@ class TestListPlans:
     """Tests for listing plans (GET /api/v1/plans)."""
 
     def test_list_plans_empty(self, handler, mock_store, http_get):
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 0
+        mock_store.list_for_org.return_value = []
+        mock_store.count_for_org.return_value = 0
 
         result = handler.handle("/api/v1/plans", {}, http_get)
         body = _body(result)
@@ -208,8 +216,8 @@ class TestListPlans:
 
     def test_list_plans_with_results(self, handler, mock_store, http_get):
         plan = _make_plan(id="dp-001", task="Test plan")
-        mock_store.list.return_value = [plan]
-        mock_store.count.return_value = 1
+        mock_store.list_for_org.return_value = [plan]
+        mock_store.count_for_org.return_value = 1
 
         result = handler.handle("/api/v1/plans", {}, http_get)
         body = _body(result)
@@ -220,8 +228,8 @@ class TestListPlans:
         assert body["total"] == 1
 
     def test_list_plans_with_pagination(self, handler, mock_store, http_get):
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 100
+        mock_store.list_for_org.return_value = []
+        mock_store.count_for_org.return_value = 100
 
         result = handler.handle("/api/v1/plans", {"limit": "10", "offset": "20"}, http_get)
         body = _body(result)
@@ -231,24 +239,24 @@ class TestListPlans:
         assert body["offset"] == 20
 
     def test_list_plans_with_debate_id_filter(self, handler, mock_store, http_get):
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 0
+        mock_store.list_for_org.return_value = []
+        mock_store.count_for_org.return_value = 0
 
         handler.handle("/api/v1/plans", {"debate_id": "dbt-xyz"}, http_get)
 
-        mock_store.list.assert_called_once()
-        call_kwargs = mock_store.list.call_args
+        mock_store.list_for_org.assert_called_once()
+        call_kwargs = mock_store.list_for_org.call_args
         assert call_kwargs[1]["debate_id"] == "dbt-xyz"
 
     def test_list_plans_with_status_filter(self, handler, mock_store, http_get):
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 0
+        mock_store.list_for_org.return_value = []
+        mock_store.count_for_org.return_value = 0
 
         result = handler.handle("/api/v1/plans", {"status": "approved"}, http_get)
 
         assert _status(result) == 200
         # Verify the store received the PlanStatus enum value
-        call_kwargs = mock_store.list.call_args[1]
+        call_kwargs = mock_store.list_for_org.call_args[1]
         assert call_kwargs["status"] == PlanStatus.APPROVED
 
     def test_list_plans_invalid_status(self, handler, mock_store, http_get):
@@ -258,8 +266,8 @@ class TestListPlans:
         assert "Invalid status" in _body(result)["error"]
 
     def test_list_plans_unversioned_path(self, handler, mock_store, http_get):
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 0
+        mock_store.list_for_org.return_value = []
+        mock_store.count_for_org.return_value = 0
 
         result = handler.handle("/api/plans", {}, http_get)
         body = _body(result)
@@ -270,8 +278,8 @@ class TestListPlans:
     def test_list_plans_summary_truncates_task(self, handler, mock_store, http_get):
         long_task = "A" * 300
         plan = _make_plan(task=long_task)
-        mock_store.list.return_value = [plan]
-        mock_store.count.return_value = 1
+        mock_store.list_for_org.return_value = [plan]
+        mock_store.count_for_org.return_value = 1
 
         result = handler.handle("/api/v1/plans", {}, http_get)
         body = _body(result)
@@ -280,12 +288,12 @@ class TestListPlans:
         assert len(body["plans"][0]["task"]) == 200
 
     def test_list_plans_default_limit_and_offset(self, handler, mock_store, http_get):
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 0
+        mock_store.list_for_org.return_value = []
+        mock_store.count_for_org.return_value = 0
 
         handler.handle("/api/v1/plans", {}, http_get)
 
-        call_kwargs = mock_store.list.call_args[1]
+        call_kwargs = mock_store.list_for_org.call_args[1]
         assert call_kwargs["limit"] == 50
         assert call_kwargs["offset"] == 0
 
@@ -352,8 +360,7 @@ class TestGetPlan:
         assert _status(result) == 200
         assert body["estimated_duration"] == "2 hours"
 
-    def test_get_plan_via_fallback_try_get_by_id(self, handler, mock_store, http_get):
-        """Exercises _try_get_by_id fallback path for plan ID lookup."""
+    def test_get_plan_looks_up_by_path_id(self, handler, mock_store, http_get):
         plan = _make_plan(id="dp-fallback")
         mock_store.get.return_value = plan
 
@@ -362,6 +369,18 @@ class TestGetPlan:
 
         assert _status(result) == 200
         assert body["id"] == "dp-fallback"
+        mock_store.get.assert_called_once_with("dp-fallback")
+
+    def test_get_plan_memo(self, handler, mock_store, http_get):
+        mock_store.get.return_value = _make_plan(id="dp-memo")
+
+        result = handler.handle("/api/v1/plans/dp-memo/memo", {}, http_get)
+        body = _body(result)
+
+        assert _status(result) == 200
+        assert body["plan_id"] == "dp-memo"
+        assert body["format"] == "markdown"
+        assert isinstance(body["memo"], str) and body["memo"]
 
     def test_get_plan_detail_uses_to_dict(self, handler, mock_store, http_get):
         """Verify detail response includes full to_dict output."""
@@ -402,6 +421,25 @@ class TestCreatePlan:
         assert body["task"] == "Design rate limiter"
         assert body["run_id"] == "run-plan-1"
         mock_store.create.assert_called_once()
+
+    def test_create_plan_stamps_caller_ownership(self, handler, mock_store, http_post_factory):
+        http_handler = http_post_factory(body={"debate_id": "dbt-001", "task": "Own it"})
+
+        with (
+            patch("aragora.server.handlers.plans._fire_plan_notification"),
+            patch(
+                "aragora.server.decision_integrity_utils.ensure_decision_plan_backbone_run",
+                return_value="run-plan-1",
+            ) as mock_ensure,
+        ):
+            result = handler.handle_post("/api/v1/plans", {}, http_handler)
+
+        assert _status(result) == 201
+        stored_plan = mock_store.create.call_args.args[0]
+        assert stored_plan.org_id == TEST_ORG
+        assert stored_plan.created_by == "test-user-001"
+        assert mock_ensure.call_args.kwargs["org_id"] == TEST_ORG
+        assert mock_ensure.call_args.kwargs["created_by"] == "test-user-001"
 
     def test_create_plan_scrubs_reserved_backbone_metadata(
         self, handler, mock_store, http_post_factory
@@ -665,7 +703,7 @@ class TestApprovePlan:
         assert _status(result) == 200
         assert body["status"] == "approved"
         assert body["plan_id"] == "dp-app"
-        mock_store.update_status.assert_called_once()
+        mock_store.update_status_for_org.assert_called_once()
 
     def test_approve_plan_not_found(self, handler, mock_store, http_post_factory):
         mock_store.get.return_value = None
@@ -733,6 +771,8 @@ class TestApprovePlan:
             auth_context=ANY,
             execution_mode=None,
             safety_mode=ExecutionMode.INTERACTIVE,
+            org_id=TEST_ORG,
+            created_by="test-user-001",
         )
 
     def test_approve_plan_auto_execute_failure_still_approves(
@@ -837,7 +877,7 @@ class TestRejectPlan:
         assert body["status"] == "rejected"
         assert body["reason"] == "Too risky"
         assert body["plan_id"] == "dp-rej"
-        mock_store.update_status.assert_called_once()
+        mock_store.update_status_for_org.assert_called_once()
 
     def test_reject_plan_not_found(self, handler, mock_store, http_post_factory):
         mock_store.get.return_value = None
@@ -915,9 +955,10 @@ class TestRejectPlan:
         with patch("aragora.server.handlers.plans._fire_plan_notification"):
             handler.handle_post("/api/v1/plans/dp-upd/reject", {}, http_handler)
 
-        call_args = mock_store.update_status.call_args
+        call_args = mock_store.update_status_for_org.call_args
         assert call_args[0][0] == "dp-upd"
-        assert call_args[0][1] == PlanStatus.REJECTED
+        assert call_args[0][1] == TEST_ORG
+        assert call_args[0][2] == PlanStatus.REJECTED
         assert call_args[1]["rejection_reason"] == "Bad idea"
 
 
@@ -1074,6 +1115,8 @@ class TestExecutePlan:
             auth_context=ANY,
             execution_mode="dry_run",
             safety_mode=ExecutionMode.INTERACTIVE,
+            org_id=TEST_ORG,
+            created_by="test-user-001",
         )
 
     def test_execute_plan_unversioned(self, handler, mock_store, http_post_factory):
@@ -1135,21 +1178,21 @@ class TestExecutePlan:
 class TestEdgeCases:
     """Tests for edge cases and misc behavior."""
 
-    def test_handle_returns_none_for_unrecognized_get_path(self, handler, http_get):
-        """handle() returns None for paths outside the plans prefix."""
+    def test_handle_returns_404_for_unrecognized_get_path(self, handler, http_get):
         result = handler.handle("/api/v1/other", {}, http_get)
-        assert result is None
+        assert _status(result) == 404
+        assert _body(result)["error"] == "Unknown plans route"
 
-    def test_handle_post_returns_none_for_unrecognized_post_path(self, handler, http_post_factory):
-        """handle_post() returns None for paths it doesn't recognize."""
+    def test_handle_post_returns_404_for_unrecognized_post_path(self, handler, http_post_factory):
         http_handler = http_post_factory(body={})
         result = handler.handle_post("/api/v1/other", {}, http_handler)
-        assert result is None
+        assert _status(result) == 404
+        assert _body(result)["error"] == "Unknown plans route"
 
     def test_multiple_plans_listed(self, handler, mock_store, http_get):
         plans = [_make_plan(id=f"dp-{i}", task=f"Plan {i}") for i in range(5)]
-        mock_store.list.return_value = plans
-        mock_store.count.return_value = 5
+        mock_store.list_for_org.return_value = plans
+        mock_store.count_for_org.return_value = 5
 
         result = handler.handle("/api/v1/plans", {}, http_get)
         body = _body(result)
@@ -1167,8 +1210,8 @@ class TestEdgeCases:
             status=PlanStatus.APPROVED,
             approval_mode=ApprovalMode.ALWAYS,
         )
-        mock_store.list.return_value = [plan]
-        mock_store.count.return_value = 1
+        mock_store.list_for_org.return_value = [plan]
+        mock_store.count_for_org.return_value = 1
 
         result = handler.handle("/api/v1/plans", {}, http_get)
         body = _body(result)
@@ -1184,15 +1227,11 @@ class TestEdgeCases:
         assert "created_at" in summary
 
     def test_get_plan_trailing_slash_handled(self, handler, mock_store, http_get):
-        """Paths like /api/v1/plans/ without an ID -- _try_get_by_id skips empty remainder."""
-        mock_store.list.return_value = []
-        mock_store.count.return_value = 0
-
         result = handler.handle("/api/v1/plans/", {}, http_get)
-        # The _try_get_by_id checks remainder is not empty, so it should
-        # NOT match. Result may be None (no match) since "/" != exact _ROUTES.
-        if result is not None:
-            assert _status(result) in (200, 404)
+
+        assert _status(result) == 404
+        assert _body(result)["error"] == "Unknown plans route"
+        mock_store.get.assert_not_called()
 
     def test_approve_plan_stores_approver_id_from_user(
         self, handler, mock_store, http_post_factory
@@ -1224,3 +1263,8 @@ class TestEdgeCases:
         body = _body(result)
         assert _status(result) == 200
         assert body["rejected_by"] == "test-user-001"
+
+
+# ---------------------------------------------------------------------------
+# Org isolation
+# ---------------------------------------------------------------------------
