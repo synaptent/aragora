@@ -241,8 +241,11 @@ def elo(tmp_path: Path) -> EloSystem:
     return system
 
 
+MatchDispatch = tuple[Any, RouteIndex]
+
+
 @pytest.fixture
-def match_dispatch(elo: EloSystem) -> tuple[Any, RouteIndex]:
+def match_dispatch(elo: EloSystem) -> MatchDispatch:
     ctx = {"elo_system": elo}
     return _make_dispatch_instance(
         {
@@ -259,13 +262,16 @@ def get_match_spy(elo: EloSystem, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     return spy
 
 
-def _record_generated(elo: EloSystem, participants: list[str], **labels: str) -> str:
+def _record_generated(
+    elo: EloSystem, participants: list[str], *, task: str | None = None, domain: str | None = None
+) -> str:
     """Record a match without a debate_id so the real generator builds its ID."""
     before = {m["debate_id"] for m in elo.get_recent_matches(limit=100)}
     elo.record_match(
         participants=participants,
         scores={name: float(i == 0) for i, name in enumerate(participants)},
-        **labels,
+        task=task,
+        domain=domain,
     )
     [match_id] = {m["debate_id"] for m in elo.get_recent_matches(limit=100)} - before
     return match_id
@@ -347,7 +353,7 @@ class TestMatchDetailDispatch:
         ],
     )
     def test_serves_free_text_generated_match_id_exactly(
-        self, elo: EloSystem, match_dispatch, prefix: str, task: str
+        self, elo: EloSystem, match_dispatch: MatchDispatch, prefix: str, task: str
     ) -> None:
         match_id = _record_generated(elo, ["claude", "codex"], task=task)
         assert match_id.startswith(f"{task}-claude-vs-codex-")
@@ -357,7 +363,9 @@ class TestMatchDetailDispatch:
         assert body == json.loads(json.dumps(elo.get_match(match_id)))
         assert body["debate_id"] == match_id
 
-    def test_serves_157_character_generated_match_id(self, elo: EloSystem, match_dispatch) -> None:
+    def test_serves_157_character_generated_match_id(
+        self, elo: EloSystem, match_dispatch: MatchDispatch
+    ) -> None:
         participants = [f"agent-{n}-" + "x" * 24 for n in range(4)]
         match_id = _record_generated(elo, participants, domain="general")
         assert len(match_id) == 157
@@ -380,7 +388,7 @@ class TestMatchDetailDispatch:
         ],
     )
     def test_lookup_is_one_exact_key_with_no_pattern_or_path_meaning(
-        self, match_dispatch, get_match_spy: MagicMock, raw_segment: str, key: str
+        self, match_dispatch: MatchDispatch, get_match_spy: MagicMock, raw_segment: str, key: str
     ) -> None:
         handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/" + raw_segment)
         assert (handled, status) == (True, 404)
@@ -391,7 +399,7 @@ class TestMatchDetailDispatch:
         ["%zz", "debate-abc%", "debate-abc%2", "%FF", "%C3", "%ED%A0%80", "%00", "debate-abc%00"],
     )
     def test_undecodable_or_nul_match_id_is_400_without_lookup(
-        self, match_dispatch, get_match_spy: MagicMock, raw_segment: str
+        self, match_dispatch: MatchDispatch, get_match_spy: MagicMock, raw_segment: str
     ) -> None:
         handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/" + raw_segment)
         assert (handled, status) == (True, 400)
@@ -406,7 +414,7 @@ class TestMatchDetailDispatch:
         ],
     )
     def test_raw_extra_segments_stay_unclaimed(
-        self, match_dispatch, get_match_spy: MagicMock, target: str
+        self, match_dispatch: MatchDispatch, get_match_spy: MagicMock, target: str
     ) -> None:
         handled, _, _ = _get_target(*match_dispatch, target)
         assert handled is False
@@ -422,7 +430,7 @@ class TestMatchDetailDispatch:
     )
     def test_denials_return_before_any_lookup(
         self,
-        match_dispatch,
+        match_dispatch: MatchDispatch,
         get_match_spy: MagicMock,
         monkeypatch: pytest.MonkeyPatch,
         denial: str,
