@@ -969,8 +969,18 @@ class DebateController:
                     should_autoselect = False
 
             if should_autoselect:
+                from aragora.server.agent_selection import NoEligibleAgentTeamError
+
                 try:
                     agents_str = self.auto_select_fn(request.question, request.auto_select_config)
+                except NoEligibleAgentTeamError as e:
+                    logger.warning("[debate] Auto-select found no eligible team: %s", e)
+                    return DebateResponse(
+                        success=False,
+                        error=str(e),
+                        status_code=400,
+                        use_playground=True,
+                    )
                 except (ValueError, TypeError, RuntimeError, OSError) as e:
                     # ValueError/TypeError: invalid auto-select config or response
                     # RuntimeError: auto-select execution failure
