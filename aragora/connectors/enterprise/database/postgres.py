@@ -263,6 +263,7 @@ class PostgreSQLConnector(EnterpriseConnector):
         Uses timestamp columns for incremental sync when available.
         """
         pool = await self._get_pool()
+        import asyncpg
 
         # Get tables to sync
         tables = self.tables or await self._discover_tables()
@@ -358,7 +359,15 @@ class PostgreSQLConnector(EnterpriseConnector):
                         # Update cursor
                         state.cursor = f"{table}:{pk_value}"
 
-            except (ValueError, RuntimeError, OSError, TypeError, KeyError) as e:
+            except (
+                ValueError,
+                RuntimeError,
+                OSError,
+                TypeError,
+                KeyError,
+                asyncpg.PostgresError,
+                asyncpg.InterfaceError,
+            ) as e:
                 logger.warning("Failed to sync table %s (%s): %s", table, type(e).__name__, e)
                 state.errors.append(f"{table}: sync failed")
                 continue

@@ -247,6 +247,36 @@ def test_parked_file_pending_operator_grammar(fake, capsys, tmp_path):
     assert not any("pending_ref" in m for m in doc2["metrics"])
 
 
+HISTORY_LEDGER = "\n".join(
+    [
+        "## Awaiting operator settlement",
+        f"- [metric 8] settled 2026-09-23 merge {'1' * 40} — first-hour packet — PR #118 head "
+        + "2" * 40,
+        f"- [metric 8] merged 2026-09-22T07:51:02Z merge {'3' * 40} — PR #141 head " + "4" * 40,
+        "- [metric 8] receipts re-publish packet — PR #200 head n/a",
+        f"- [metric 10] settled 2026-09-27 merge {'5' * 40} — batch 4 — PR #138 head " + "6" * 40,
+        f"- [metric 10] merged externally 2026-09-14 merge {'7' * 40} — PR #13 head " + "8" * 40,
+        "- [metric 7] cutover packet — issue #9391 head n/a",
+        f"- [metric 7] settled 2026-09-12 merge {'9' * 40} — deploy pack — PR #9882 head "
+        + "a" * 40,
+        "",
+        "## Parked",
+        "(none yet)",
+        "",
+    ]
+)
+
+
+def test_read_parked_skips_settled_and_merged_ledger_lines(fake, capsys, tmp_path):
+    parked = tmp_path / "parked.md"
+    parked.write_text(HISTORY_LEDGER)
+    pending, text = sb.read_parked(parked)
+    assert pending == {8: "#200", 7: "#9391"} and text == "(none yet)"
+    _, r = rows(capsys, "--parked-file", str(parked))
+    assert r[8]["status"] == "pending-operator" and r[8]["pending_ref"] == "#200"
+    assert r[10]["status"] == "fail" and "pending_ref" not in r[10]
+
+
 def test_markdown_tables_and_parked_block(fake, capsys, tmp_path):
     parked = tmp_path / "parked.md"
     parked.write_text(LEDGER.replace("(none yet)", "- park A: next action `cmd`\n\n## Other\nx"))
@@ -379,8 +409,11 @@ def test_row6_status_ok_iff_count_reaches_quorum_runs(fake, capsys, root):
     for n, status in ((1, "ok"), (3, "ok"), (4, "fail")):
         _, r = rows(capsys, "--quorum-runs", str(n))
         assert (r[6]["status"], r[6]["ratio"]) == (status, round(3 / n, 3))
+    # Without the override the Atlas decides N; these records predate #10016 and carry no
+    # receipt-first label, so there is no denominator and the row stays undecided.
     _, r = rows(capsys)
-    assert r[6]["status"] == "fail" and "ratio" not in r[6] and r[6]["quorum_runs"] is None
+    assert r[6]["status"] == "unavailable" and "ratio" not in r[6] and r[6]["quorum_runs"] is None
+    assert r[6]["summary_rounds"] == 0 and "no receipt-first rounds since #10016" in r[6]["reason"]
     _, r = rows(capsys, "--quorum-runs", "0")
     assert r[6]["status"] == "fail" and "ratio" not in r[6]
 
@@ -416,7 +449,7 @@ def test_row6_network_failure_and_ledger_line_never_pending_operator(fake, capsy
     markers(fake, root)
     parked = tmp_path / "parked.md"
     parked.write_text(LEDGER.replace("## Parked", "- [metric 6] x #80 head n/a\n\n## Parked"))
-    _, r = rows(capsys, "--parked-file", str(parked))
+    _, r = rows(capsys, "--parked-file", str(parked), "--quorum-runs", "4")
     assert r[6]["status"] == "fail" and "pending_ref" not in r[6]
     fake.on("gh api repos/synaptent/aragora/issues/2/comments", rc=7, err="Failed to connect")
     _, r = rows(capsys, "--parked-file", str(parked), "--quorum-runs", "1")
@@ -433,6 +466,110 @@ def test_row6_unavailable_without_atlas_even_when_count_is_live(fake, capsys, ro
     assert r[6]["now"] == "3 aragora-advisory-summary comments; upper bound ?"
     _, r = rows(capsys, "--offline", "--cache", "/nonexistent/c.json")
     assert r[6]["reason"].startswith("no Atlas JSONL") and r[6]["reason"].endswith("; offline")
+
+
+AFTER, BEFORE = "2026-09-20T00:00:00Z", "2026-09-01T00:00:00Z"
+A, B, C, D, E = ("a" * 40, "b" * 40, "c" * 40, "d" * 40, "e" * 40)
+
+
+def rec(pr: int, head: str, posted_at: str, labels=("receipt-first",)) -> dict:
+    labelled = {"number": pr, "labels": list(labels)}
+    return {"pr": labelled, "head_sha": head, "posted_at": posted_at, "verdict": "pass"}
+
+
+# Counted rounds: (1, A), (1, B) and (4, E). (2, C) predates #10016; (3, D) is unlabelled.
+SUMMARY_ATLAS = [
+    rec(1, A, AFTER),
+    rec(1, B, AFTER),
+    rec(1, B, AFTER),
+    rec(2, C, BEFORE),
+    rec(3, D, AFTER, labels=()),
+    rec(4, E, AFTER),
+]
+
+
+def summary_markers(fake: FakeCmds, root: Path, pages: dict[int, list]) -> None:
+    write_atlas(root, SUMMARY_ATLAS)
+    fake.on("gh pr list", "--label receipt-first", out=json.dumps([{"number": n} for n in pages]))
+    for n, page in pages.items():
+        fake.on(f"gh api repos/synaptent/aragora/issues/{n}/comments", out=json.dumps([page]))
+
+
+def test_row6_derives_denominator_from_atlas_rounds_since_10016(fake, capsys, root):
+    # A full head, a short head, and E's head on the wrong PR (which must not count).
+    pages = {1: [{"body": MARK % A}, {"body": MARK % B[:7]}], 2: [{"body": MARK % E}], 4: []}
+    summary_markers(fake, root, pages)
+    _, r = rows(capsys)
+    assert r[6]["summary_rounds"] == 3 and r[6]["rounds_with_summary"] == 2
+    assert r[6]["marker_comments"] == 3 and r[6]["quorum_runs"] is None
+    assert r[6]["ratio"] == 0.667 and r[6]["status"] == "fail" and "reason" not in r[6]
+    assert r[6]["denominator"] == "atlas rounds since #10016"
+    assert r[6]["atlas_newest_posted_at"] == AFTER
+    _, md, _ = run(capsys, "--markdown")
+    row6 = next(line for line in md.splitlines() if line.startswith("| 6 |"))
+    assert "(informational 2/3 rounds since #10016 summarised)" in row6 and row6.endswith(
+        "| fail |"
+    )
+    pages[4] = [{"body": MARK % E}]
+    summary_markers(fake, root, pages)
+    _, r = rows(capsys)
+    assert (r[6]["rounds_with_summary"], r[6]["ratio"], r[6]["status"]) == (3, 1.0, "ok")
+
+
+def test_row6_quorum_runs_overrides_the_derived_denominator(fake, capsys, root):
+    summary_markers(fake, root, {1: [{"body": MARK % A}], 4: []})
+    _, r = rows(capsys, "--quorum-runs", "1")
+    assert r[6]["denominator"] == "--quorum-runs" and r[6]["summary_rounds"] == 3
+    assert (r[6]["ratio"], r[6]["status"]) == (1.0, "ok")
+    _, md, _ = run(capsys, "--markdown", "--quorum-runs", "1")
+    assert "(informational 1/1)" in next(x for x in md.splitlines() if x.startswith("| 6 |"))
+
+
+def test_row6_offline_keeps_cached_rounds_with_summary(fake, capsys, tmp_path, root):
+    summary_markers(fake, root, {1: [{"body": MARK % A}], 4: []})
+    rows(capsys)
+    assert json.loads((tmp_path / "c.json").read_text())["metrics"]["6"]["rounds_with_summary"] == 1
+    fake.calls.clear()
+    _, r = rows(capsys, "--offline")
+    assert r[6]["status"] == "unavailable" and r[6]["rounds_with_summary"] == 1
+    assert r[6]["ratio"] == 0.333 and fake.matching("gh ") == []
+
+
+def test_row6_reads_the_newest_atlas_release_once_per_tag(fake, capsys, root, monkeypatch):
+    listed = [
+        {"tagName": "atlas-v1", "publishedAt": "2026-09-04T04:04:32Z"},
+        {"tagName": "atlas-2026-09-25", "publishedAt": "2026-09-25T07:58:02Z"},
+        {"tagName": "atlas-2026-09-21", "publishedAt": "2026-09-21T05:42:45Z"},
+    ]
+    fake.on("gh release list", out=json.dumps(listed))
+    fake.on("gh release view atlas-v1", out=json.dumps({"assets": [{"name": "atlas-v1.jsonl"}]}))
+    fake.on("gh pr list", "--label receipt-first", out=json.dumps([{"number": 1}]))
+    fake.on("gh api repos/synaptent/aragora/issues/1/comments", out=json.dumps([[]]))
+    downloads: list[str] = []
+
+    def run_cmd(argv, **kwargs):
+        if argv[:3] == ["gh", "release", "download"]:
+            downloads.append(argv[3])
+            data = "".join(json.dumps(x) + "\n" for x in SUMMARY_ATLAS)
+            (Path(kwargs["cwd"]) / "atlas-v1.jsonl").write_text(data)
+            (Path(kwargs["cwd"]) / "atlas-v1.sample.jsonl").write_text("{}\n")
+        return fake(argv, **kwargs)
+
+    monkeypatch.setattr(sb, "run_cmd", run_cmd)
+    _, r = rows(capsys)
+    source = sb.ATLAS_DIR / "atlas-2026-09-25" / "atlas-v1.jsonl"
+    assert downloads == ["atlas-2026-09-25"] and r[6]["source"] == str(source)
+    assert r[6]["summary_rounds"] == 3 and r[6]["records"] == len(SUMMARY_ATLAS)
+    rows(capsys)
+    assert downloads == ["atlas-2026-09-25"]
+    _, r = rows(capsys, "--offline")
+    assert r[6]["source"] == str(source) and r[6]["summary_rounds"] == 3
+    # A local v1 build in the repo must not shadow the downloaded release, online or offline.
+    write_atlas(root, [rec(9, "f" * 40, BEFORE)])
+    for argv in ((), ("--offline",)):
+        _, r = rows(capsys, *argv)
+        assert r[6]["source"] == str(source) and r[6]["summary_rounds"] == 3
+    assert downloads == ["atlas-2026-09-25"]
 
 
 def test_markdown_row6_baseline_cell_unchanged_and_informational_ratio(fake, capsys, root):
@@ -457,12 +594,13 @@ def test_row8_first_hour_threshold_uses_target_commit_date(fake, capsys):
     fake.on(f"gh release view {tag}", out=json.dumps({"assets": assets, "targetCommitish": sha}))
     fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", out="2026-10-01T10:00:00Z\n")
     run_row = {"databaseId": 7, "createdAt": "2026-10-01T11:00:00Z", "url": url}
+    run_row["event"] = "workflow_dispatch"
     fake.on("gh run list", out=json.dumps([run_row]))
     fake.on("gh api repos/synaptent/aragora/actions/runs/7/jobs", out="1\n")
     _, r = rows(capsys)
     assert r[8]["first_hour_since"] == "2026-10-01T10:00:00Z" and r[8]["first_hour_run_ok"] is True
     assert r[8]["first_hour_run_url"] == url and r[8]["status"] == "ok" and r[8]["now"] == 3
-    assert fake.matching("gh run list", "--json databaseId,createdAt,url")
+    assert fake.matching("gh run list", "--json databaseId,createdAt,url,event")
     _, md, _ = run(capsys, "--markdown")
     assert f"| 3 ({url}) |" in md
     fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", rc=1, err="HTTP 404")
@@ -567,3 +705,65 @@ def test_check_guardrails_mypy_fails_closed(fake, capsys):
     fake.on("measure_import_graph.py", out="", rc=1, err="boom")
     assert sb.main(GUARD) == 1
     assert "guardrail measurement failed" in capsys.readouterr().err
+
+
+def test_row8_pull_request_runs_do_not_hide_a_green_first_hour_run(fake, capsys):
+    """receipt-first-hour is skipped on pull_request runs; three newer PR runs
+    must not push the green dispatch run out of the rows checked."""
+    tag, sha, url = "receipts-2026-10-01", "e" * 40, "https://github.com/synaptent/aragora/runs/9"
+    fake.on(
+        "gh release list", out=json.dumps([{"tagName": tag, "publishedAt": "2026-10-01T12:00:00Z"}])
+    )
+    assets = [{"name": f"pr{i}.odr.json"} for i in range(3)]
+    fake.on(f"gh release view {tag}", out=json.dumps({"assets": assets, "targetCommitish": sha}))
+    fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", out="2026-10-01T10:00:00Z\n")
+    pr_runs = [
+        {
+            "databaseId": 20 + i,
+            "createdAt": f"2026-10-02T0{i}:00:00Z",
+            "url": "u",
+            "event": "pull_request",
+        }
+        for i in range(3)
+    ]
+    dispatch = {
+        "databaseId": 9,
+        "createdAt": "2026-10-01T11:00:00Z",
+        "url": url,
+        "event": "workflow_dispatch",
+    }
+    fake.on("gh run list", out=json.dumps([*pr_runs, dispatch]))
+    for i in range(3):
+        fake.on(f"gh api repos/synaptent/aragora/actions/runs/{20 + i}/jobs", out="0\n")
+    fake.on("gh api repos/synaptent/aragora/actions/runs/9/jobs", out="1\n")
+    _, r = rows(capsys)
+    assert r[8]["first_hour_run_url"] == url and r[8]["status"] == "ok"
+    assert fake.matching("gh api repos/synaptent/aragora/actions/runs/20/jobs") == []
+
+
+def test_row8_event_filter_runs_before_the_run_list_limit(fake, capsys):
+    """gh applies --limit before any client-side filter, so 30 newer pull_request runs
+    must not push the only green dispatch run out of the listed window."""
+    tag, sha, url = "receipts-2026-10-01", "f" * 40, "https://github.com/synaptent/aragora/runs/5"
+    fake.on(
+        "gh release list", out=json.dumps([{"tagName": tag, "publishedAt": "2026-10-01T12:00:00Z"}])
+    )
+    assets = [{"name": f"pr{i}.odr.json"} for i in range(3)]
+    fake.on(f"gh release view {tag}", out=json.dumps({"assets": assets, "targetCommitish": sha}))
+    fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", out="2026-10-01T10:00:00Z\n")
+    pr_runs = [
+        {"databaseId": 100 + i, "createdAt": f"2026-10-03T{i % 24:02d}:00:00Z", "url": "u"}
+        | {"event": "pull_request"}
+        for i in range(30)
+    ]
+    dispatch = {"databaseId": 5, "createdAt": "2026-10-01T11:00:00Z", "url": url}
+    dispatch["event"] = "workflow_dispatch"
+    fake.on("gh run list", out=json.dumps(pr_runs))
+    fake.on("gh run list", "--event workflow_dispatch", out=json.dumps([dispatch]))
+    fake.on("gh run list", "--event schedule", out="[]")
+    fake.on("gh api repos/synaptent/aragora/actions/runs/5/jobs", out="1\n")
+    _, r = rows(capsys)
+    assert r[8]["first_hour_run_ok"] is True and r[8]["first_hour_run_url"] == url
+    assert r[8]["status"] == "ok"
+    listed = fake.matching("gh run list")
+    assert listed and all("--event" in call for call in listed)

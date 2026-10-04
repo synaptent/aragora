@@ -27,6 +27,8 @@ API_PROBE = "https://api.aragora.ai/readyz"
 CANARY_PROBE = "https://api-canary.aragora.ai/readyz"
 CODE_SEARCH_QUERY = "synaptent/aragora@ -repo:synaptent/aragora"
 MARKER = "<!-- aragora-advisory-summary head="
+# #10016 (non-counting advisory summaries) merged here; earlier rounds could not carry a summary.
+ADVISORY_SUMMARY_SINCE = "2026-09-07T19:55:33Z"
 PR_LIST = (
     f"gh pr list -R {REPO} --label receipt-first --state all --limit 500 --json number".split()
 )
@@ -35,6 +37,7 @@ MANIFEST = "docs/atlas/manifest.json"
 PIN_RE = re.compile(r"synaptent/aragora@([0-9a-f]{7,40})")
 STATUS_LINE_RE = re.compile(r"^\*\*Status:\*\* (\w+) (v[0-9.]+)")
 LEDGER_RE = re.compile(r"^- \[metric (\d+)\] .*#(\d+) head ([0-9a-f]{40}|n/a)\s*$")
+LEDGER_HISTORY_RE = re.compile(r"^- \[metric \d+\] (?:settled|merged) ")
 METRIC_ROW_RE = re.compile(r"^\| *(10|[1-9]) *\|")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
@@ -58,7 +61,9 @@ MEASUREMENTS = {
     4: "curl https://pypi.org/pypi/aragora-verify/json; ^version in aragora-verify/pyproject.toml",
     5: "docs/atlas/manifest.json .dataset.record_count; gh release view atlas-v1; gh pr view 9951",
     6: "gh: comments starting with <!-- aragora-advisory-summary head= over receipt-first PRs; "
-    "Atlas JSONL: changes_requested, posted_to_thread, distinct (pr.number, head_sha) rounds",
+    "Atlas JSONL (newest atlas-* release): changes_requested, posted_to_thread, distinct "
+    "(pr.number, head_sha) rounds; denominator = those rounds on receipt-first PRs posted since "
+    f"#10016 ({ADVISORY_SUMMARY_SINCE}) unless --quorum-runs overrides it",
     7: f"curl -s -o /dev/null -w %{{http_code}} --max-time 15 {API_PROBE} (one probe per run)",
     8: "receipts-* releases → *.odr.json assets; receipt-first-hour job (metrics-drift.yml) run "
     "since the newest release's target commit (committer date; fallback publishedAt)",
@@ -199,9 +204,14 @@ def metric_4(ctx: Any) -> Row:
 
 
 def metric_5(ctx: Any) -> Row:
-    tags = [x["tagName"] for x in releases()]
+    rel = releases()
+    tags = [x["tagName"] for x in rel]
     assets = release_assets("atlas-v1") if "atlas-v1" in tags else []
     ctx.atlas_v1_assets = assets
+    # The weekly job republishes the dataset as atlas-YYYY-MM-DD; atlas-v1 is frozen at v1.
+    atlas = [x for x in rel if x["tagName"].startswith("atlas-")]
+    newest = max(atlas, key=lambda x: x.get("publishedAt") or "", default=None)
+    ctx.atlas_latest_tag = newest["tagName"] if newest else None
     pr = json_cmd(["gh", "pr", "view", "9951", "-R", REPO, "--json", "state"])
     local, count, source = read_text(ctx.root / MANIFEST), None, None
     for source in ("worktree", "origin/main", "rf/pr9951-inspect"):
@@ -225,69 +235,139 @@ def atlas_pr_number(rec: dict[str, Any]) -> Any:
     return pr.get("number") if isinstance(pr, dict) else pr
 
 
-def marker_comments() -> int:
-    """Advisory-summary marker comments over every receipt-first PR (REST, one call per PR)."""
+def marker_comments() -> tuple[int, set[tuple[int, str]]]:
+    """Advisory-summary marker comments over every receipt-first PR (REST, one call per PR).
 
-    def count(number: int) -> int:
+    Returns the comment count and the ``(pr number, head)`` pairs the markers name.
+    """
+
+    def heads(number: int) -> list[tuple[int, str]]:
         url = f"repos/{REPO}/issues/{number}/comments?per_page=100"
         pages = json_cmd(["gh", "api", url, "--paginate", "--slurp"], timeout=120)
-        return sum(str(c.get("body", "")).startswith(MARKER) for page in pages for c in page)
+        bodies = [str(c.get("body", "")) for page in pages for c in page]
+        marks = [
+            b[len(MARKER) :].split("-->", 1)[0].split() for b in bodies if b.startswith(MARKER)
+        ]
+        return [(number, m[0] if m else "") for m in marks]
 
     with ThreadPoolExecutor(max_workers=4) as pool:
-        return sum(pool.map(count, [pr["number"] for pr in json_cmd(PR_LIST)]))
+        found = [
+            h for hs in pool.map(heads, [pr["number"] for pr in json_cmd(PR_LIST)]) for h in hs
+        ]
+    return len(found), set(found)
+
+
+def atlas_jsonl(ctx: Any) -> Path | None:
+    """The newest atlas-* release's JSONL (downloaded once per tag), else the in-repo copy.
+
+    A downloaded release always beats ``docs/atlas/atlas-v1.jsonl``: that file, when present,
+    is a local v1 build, and metric 6's denominator must come from the newest release.
+    """
+    tag = getattr(ctx, "atlas_latest_tag", None)
+    if not ctx.offline and tag and not list((ATLAS_DIR / tag).glob("*.jsonl")):
+        (ATLAS_DIR / tag).mkdir(parents=True, exist_ok=True)
+        argv = ["gh", "release", "download", tag, "-R", REPO, "-p", "*.jsonl"]
+        run_cmd(argv, timeout=180, cwd=ATLAS_DIR / tag)
+    full = lambda d: [p for p in sorted(d.glob("*.jsonl")) if not p.name.endswith(".sample.jsonl")]
+    # Offline the tag is unknown: take the most recently downloaded release, then the flat cache.
+    dirs = sorted(
+        (d for d in ATLAS_DIR.glob("atlas-*") if d.is_dir() and full(d)), key=os.path.getmtime
+    )
+    cached = [*(full(ATLAS_DIR / tag) if tag else []), *(full(dirs[-1]) if dirs else [])]
+    candidates = [*cached, ctx.root / "docs/atlas/atlas-v1.jsonl", *full(ATLAS_DIR)]
+    return next((p for p in candidates if p.is_file()), None)
 
 
 def atlas_upper_bound(ctx: Any) -> Row:
-    if not ctx.offline and ctx.atlas_v1_assets and not list(ATLAS_DIR.glob("*.jsonl")):
-        ATLAS_DIR.mkdir(parents=True, exist_ok=True)
-        run_cmd(f"gh release download atlas-v1 -R {REPO} -p *.jsonl".split(), cwd=ATLAS_DIR)
-    candidates = [ctx.root / "docs/atlas/atlas-v1.jsonl", *sorted(ATLAS_DIR.glob("*.jsonl"))]
-    jsonl = next((p for p in candidates if p.is_file()), None)
+    ctx.summary_rounds = set()
+    jsonl = atlas_jsonl(ctx)
     if jsonl is None:
-        return {"reason": "no Atlas JSONL (docs/atlas/atlas-v1.jsonl or atlas-v1 asset)"}
+        return {"reason": "no Atlas JSONL (docs/atlas/atlas-v1.jsonl or atlas-* asset)"}
     recs = [json.loads(line) for line in jsonl.read_text().splitlines() if line.strip()]
     cr = sum(x.get("verdict") == "changes_requested" for x in recs)
     posted = sum(bool(x.get("posted_to_thread")) for x in recs)
     rounds = len({(atlas_pr_number(x), x.get("head_sha")) for x in recs})
+    # Rounds that could carry a summary: receipt-first PRs, reviews posted since #10016.
+    # Timestamps are schema-pinned to YYYY-MM-DDTHH:MM:SSZ, so they compare as strings.
+    ctx.summary_rounds = {
+        (atlas_pr_number(x), str(x.get("head_sha") or ""))
+        for x in recs
+        if "receipt-first" in atlas_pr_labels(x)
+        and str(x.get("posted_at") or "") >= ADVISORY_SUMMARY_SINCE
+    }
     r: Row = {"changes_requested": cr, "posted": posted, "rounds": rounds, "records": len(recs)}
+    r.update(summary_rounds=len(ctx.summary_rounds))
+    r["atlas_newest_posted_at"] = max((str(x.get("posted_at") or "") for x in recs), default="")
     return r | {"upper_bound": f"{cr} / {posted} / {rounds}", "source": str(jsonl)}
 
 
-def metric_6(ctx: Any) -> Row:
-    """Post-M2 rule: the live marker count decides ok/fail against --quorum-runs.
+def atlas_pr_labels(rec: dict[str, Any]) -> list[str]:
+    pr = rec.get("pr")
+    return list(pr.get("labels") or []) if isinstance(pr, dict) else []
 
-    The Atlas figures are the row's upper bound, and the metric definition leaves the row
-    ``unavailable`` (never decided) when that bound is missing, exactly as for an offline or
-    failed count: a decided status always carries both numbers.
+
+def summarised(rounds: set[tuple[Any, str]], heads: set[tuple[int, str]]) -> int:
+    """Rounds whose head has a marker on the same PR; a marker may name a short head."""
+    same = lambda a, b: bool(a and b) and (a.startswith(b) or b.startswith(a))
+    return sum(any(pr == n and same(sha, h) for n, h in heads) for pr, sha in rounds)
+
+
+def metric_6(ctx: Any) -> Row:
+    """Post-M2 rule: live advisory summaries decide ok/fail against a denominator.
+
+    The denominator is derived from the Atlas: the distinct ``(pr.number, head_sha)`` rounds on
+    receipt-first PRs posted since #10016, counted in the same unit as the numerator (those
+    rounds whose head has a summary marker). ``--quorum-runs N`` overrides it and restores the
+    older rule, ``marker_comments / N``. The Atlas figures are the row's upper bound, and the
+    metric definition leaves the row ``unavailable`` (never decided) when that bound is
+    missing, exactly as for an offline or failed count: a decided status always carries both
+    numbers.
     """
     n: Any = ctx.quorum_runs
     r: Row = {"quorum_runs": n, "marker_comments": None}
+    r["denominator"] = "--quorum-runs" if n is not None else "atlas rounds since #10016"
     r["note"] = (
         "now = PR comments starting with <!-- aragora-advisory-summary head= over receipt-first "
         "PRs; changes_requested / posted / rounds from the Atlas JSONL is an upper bound; "
-        "ratio = marker_comments / --quorum-runs is informational"
+        "ratio = rounds_with_summary / summary_rounds, or marker_comments / --quorum-runs when "
+        "given, is informational"
     )
     r.update(atlas_upper_bound(ctx))
-    live = False
+    live, heads = False, None
     if ctx.offline or not ctx.network_ok:
         why = "offline" if ctx.offline else "pypi.org pre-probe failed"
         r["reason"] = "; ".join(filter(None, (r.get("reason"), why)))
     else:
         try:
-            r["marker_comments"], live = marker_comments(), True
+            (r["marker_comments"], heads), live = marker_comments(), True
         except (RuntimeError, ValueError, KeyError, TypeError) as exc:
             r["reason"] = f"{type(exc).__name__}: {exc}"
+    rounds: Any = r.get("summary_rounds")
+    if heads is not None and is_number(rounds):
+        r["rounds_with_summary"] = summarised(ctx.summary_rounds, heads)
     old = ctx.cached.get("6") or {}
     if not live and old.get("marker_comments") is not None:
         r.update(marker_comments=old["marker_comments"], cached_at=old.get("cached_at"))
-    count, bound = r["marker_comments"], r.get("upper_bound")
-    if is_number(count) and is_number(n) and n > 0:
-        r["ratio"] = round(count / n, 3)
+        if old.get("rounds_with_summary") is not None:
+            r["rounds_with_summary"] = old["rounds_with_summary"]
+    covered: Any
+    count, bound, covered = r["marker_comments"], r.get("upper_bound"), r.get("rounds_with_summary")
+    if n is not None:
+        if is_number(count) and is_number(n) and n > 0:
+            r["ratio"] = round(count / n, 3)
+    elif is_number(covered) and is_number(rounds) and rounds > 0:
+        r["ratio"] = round(covered / rounds, 3)
     shown = "?" if count is None else count
     r["now"] = f"{shown} aragora-advisory-summary comments; upper bound {bound or '?'}"
     if not live or bound is None:
         return r | {"status": "unavailable"}
-    return r | {"status": "ok" if "ratio" in r and count >= n else "fail"}
+    if n is not None:
+        return r | {"status": "ok" if "ratio" in r and count >= n else "fail"}
+    if not rounds:
+        newest = r.get("atlas_newest_posted_at") or "?"
+        r["reason"] = f"no receipt-first rounds since #10016 in the Atlas JSONL (newest {newest})"
+        return r | {"status": "unavailable"}
+    return r | {"status": "ok" if covered >= rounds else "fail"}
 
 
 def metric_7(ctx: Any) -> Row:
@@ -312,9 +392,16 @@ def metric_8(ctx: Any) -> Row:
         tag, target = newest["tagName"], str(views[newest["tagName"]].get("targetCommitish") or "")
         since = commit_date(target if HEX40.match(target) else tag, newest.get("publishedAt") or "")
     argv = f"gh run list -R {REPO} --workflow metrics-drift.yml --status success".split()
-    argv += ["--limit", "10", "--json", "databaseId,createdAt,url"]
-    c = run_cmd(argv) if total >= 3 else None
-    runs = [x for x in json.loads(c.out or "[]") if x.get("createdAt", "") >= since] if c else []
+    argv += ["--limit", "30", "--json", "databaseId,createdAt,url,event"]
+    # receipt-first-hour only runs on the weekly schedule and manual dispatch, and pull-request
+    # runs skip it. gh applies --limit before any client-side filter, so the event filter must be
+    # part of each query or newer pull-request runs crowd the green run out of the window.
+    found: dict[Any, Row] = {}
+    for event in ("schedule", "workflow_dispatch") if total >= 3 else ():
+        for x in json.loads(run_cmd(argv + ["--event", event]).out or "[]"):
+            if x.get("createdAt", "") >= since and x.get("event") == event:
+                found.setdefault(x.get("databaseId"), x)
+    runs = sorted(found.values(), key=lambda x: x.get("createdAt", ""), reverse=True)
     jq = '[.jobs[]|select(.name=="receipt-first-hour" and .conclusion=="success")]|length'
     for run in runs[:3]:
         url = f"repos/{REPO}/actions/runs/{run['databaseId']}/jobs"
@@ -411,14 +498,19 @@ def guardrail_rows(values: Row, main: Row) -> list[Row]:
 
 
 def read_parked(path: Path | None) -> tuple[dict[int, str], str]:
-    """Return {metric: '#N'} from the settlement ledger and the verbatim ``## Parked`` block."""
+    """Return {metric: '#N'} from the settlement ledger and the verbatim ``## Parked`` block.
+
+    The first unsettled line per metric wins; a line whose free text starts with ``settled `` or
+    ``merged `` stays in the ledger as history and never yields a pending ref.
+    """
     pending: dict[int, str] = {}
     parked, section = [], None
     for line in read_text(path).splitlines() if path else []:
         if line.startswith("## "):
             section = line[3:].strip()
         elif section == "Awaiting operator settlement" and (m := LEDGER_RE.match(line)):
-            pending.setdefault(int(m.group(1)), f"#{m.group(2)}")
+            if not LEDGER_HISTORY_RE.match(line):
+                pending.setdefault(int(m.group(1)), f"#{m.group(2)}")
         elif section == "Parked":
             parked.append(line)
     return pending, "\n".join(parked).strip("\n")
@@ -475,7 +567,8 @@ def build_rows(ctx: Any, cache: Row, pending: dict[int, str]) -> tuple[list[Row]
             if mid in NETWORK_ROWS:
                 new_cache[str(mid)] = measured[mid] | {"cached_at": stamp}
             elif mid == 6 and row.get("marker_comments") is not None and not row.get("cached_at"):
-                keep = {k: row.get(k) for k in ("marker_comments", "now", "upper_bound")}
+                fields = ("marker_comments", "rounds_with_summary", "now", "upper_bound")
+                keep = {k: row.get(k) for k in fields}
                 new_cache["6"] = keep | {"cached_at": stamp}
         else:
             row.update(old or {"now": None}, status="unavailable", reason=failed[mid])
@@ -503,8 +596,11 @@ def render_markdown(doc: Row, parked_given: bool) -> str:
         cached = r["status"] == "unavailable" and r.get("cached_at")
         parts = (r["status"], r.get("pending_ref"), cached and f"(cached {cached})")
         unit = {1: " d", 2: " d", 7: f" (canary {r.get('canary_code')})"}.get(r["id"], "")
-        if r["id"] == 6 and "ratio" in r:
+        if r["id"] == 6 and "ratio" in r and r.get("quorum_runs") is not None:
             unit = f" (informational {r['marker_comments']}/{r['quorum_runs']})"
+        elif r["id"] == 6 and "ratio" in r:
+            covered, total = r["rounds_with_summary"], r["summary_rounds"]
+            unit = f" (informational {covered}/{total} rounds since #10016 summarised)"
         elif r["id"] == 8 and r.get("first_hour_run_url"):
             unit = f" ({r['first_hour_run_url']})"
         now = "null" if r.get("now") is None else f"{r['now']}{unit}"
@@ -529,7 +625,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--epic", type=int, help="tracking epic issue number (required by --post)")
     p.add_argument("--parked-file", type=Path, help="ledger: sole source of pending-operator rows")
     p.add_argument("--ref", help="40-hex ref for row 10 (default: HEAD)")
-    p.add_argument("--quorum-runs", type=int, help="row 6 denominator (informational)")
+    p.add_argument(
+        "--quorum-runs",
+        type=int,
+        help="row 6 denominator override (default: Atlas rounds on receipt-first PRs since #10016)",
+    )
     p.add_argument("--run-vectors", action="store_true", help=f"run pytest {VECTORS} for row 3")
     p.add_argument("--check-guardrails", action="store_true", help="exit 1 on guardrail regression")
     args = p.parse_args(argv)
@@ -552,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError):
         cache = {}
     args.network_ok, args.atlas_v1_assets, args.generated_at = True, None, utc_stamp()
+    args.atlas_latest_tag = None
     # Guardrails (worktree and origin/main) run alongside the rows to keep --offline under 10 s;
     # the origin/main measurement is local (archive of the local ref) and only fetches online.
     with ThreadPoolExecutor(max_workers=2) as pool:

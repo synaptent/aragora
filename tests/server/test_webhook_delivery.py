@@ -25,7 +25,7 @@ def _reset_tracing_and_delivery():
     """Reset tracing context and delivery manager to prevent cross-test pollution."""
     # Reset tracing ContextVars
     try:
-        from aragora.server.middleware.tracing import _trace_id, _span_id
+        from aragora.observability.middleware.tracing import _trace_id, _span_id
 
         token_trace = _trace_id.set(None)
         token_span = _span_id.set(None)
@@ -39,7 +39,7 @@ def _reset_tracing_and_delivery():
 
     # Restore tracing context
     if token_trace is not None:
-        from aragora.server.middleware.tracing import _trace_id, _span_id
+        from aragora.observability.middleware.tracing import _trace_id, _span_id
 
         _trace_id.reset(token_trace)
         _span_id.reset(token_span)
@@ -619,7 +619,7 @@ class TestTracePropagation:
     @pytest.mark.asyncio
     async def test_trace_headers_included_with_context(self):
         """Should include trace headers when trace context is set."""
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         captured_headers = {}
 
@@ -661,7 +661,7 @@ class TestTracePropagation:
     @pytest.mark.asyncio
     async def test_no_trace_headers_without_context(self):
         """Should not include trace headers when no context is set."""
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         captured_headers = {}
 
@@ -690,7 +690,7 @@ class TestTracePropagation:
     @pytest.mark.asyncio
     async def test_trace_id_stored_in_metadata(self):
         """Should store trace ID in delivery metadata."""
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         async def mock_sender(url, payload, headers):
             return 200, {"ok": True}
@@ -720,7 +720,7 @@ class TestTracePropagation:
     @pytest.mark.asyncio
     async def test_traceparent_format(self):
         """Should generate valid W3C traceparent header."""
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         captured_headers = {}
 

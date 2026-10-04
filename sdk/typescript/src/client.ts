@@ -105,7 +105,6 @@ import type {
   RelationshipGraph,
   RelationshipSummary,
   Replay,
-  ReplayFormat,
   RiskHeatmap,
   RoleRotationAnalytics,
   SastFinding,
@@ -5295,17 +5294,6 @@ export class AragoraClient {
   }
 
   /**
-   * Export a replay in a specific format.
-   */
-  async exportReplay(replayId: string, format: ReplayFormat): Promise<{ content: string; filename: string }> {
-    return this.request<{ content: string; filename: string }>(
-      'GET',
-      `/api/v1/replays/${encodeURIComponent(replayId)}/export`,
-      { params: { format } }
-    );
-  }
-
-  /**
    * Delete a replay.
    */
   async deleteReplay(replayId: string): Promise<{ deleted: boolean }> {
@@ -5509,13 +5497,6 @@ export class AragoraClient {
    */
   async getTenant(tenantId: string): Promise<import('./types').Tenant> {
     return this.request<import('./types').Tenant>('GET', `/api/v1/tenants/${encodeURIComponent(tenantId)}`);
-  }
-
-  /**
-   * Create a new tenant.
-   */
-  async createTenant(body: import('./types').CreateTenantRequest): Promise<import('./types').Tenant> {
-    return this.request<import('./types').Tenant>('POST', '/api/v1/tenants', { body });
   }
 
   /**

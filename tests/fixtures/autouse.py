@@ -1780,3 +1780,22 @@ def _global_mock_pollution_guard():
 
     # Teardown: same repairs
     _repair_global_mock_pollution(sys)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_merge_halt_markers(monkeypatch):
+    """Keep tests off the real main-red halt marker (#9216).
+
+    The merge guard reads ``.aragora/merge_executor.halt`` in the primary
+    checkout, which is armed whenever main is red. Without this, every test that
+    drives a merge path would fail during a main-red incident, which is when
+    agents run them most. Tests that need an armed halt patch these themselves.
+    """
+    from pathlib import Path
+
+    import aragora.swarm.merge_halt as merge_halt
+
+    absent = Path("/nonexistent-aragora-test-merge-halt")
+    monkeypatch.setattr(merge_halt, "DEFAULT_HALT_FILE", absent / "merge_executor.halt")
+    monkeypatch.setattr(merge_halt, "DEFAULT_WAIVER_FILE", absent / "merge_executor.waiver")
+    monkeypatch.setattr(merge_halt, "SHARED_ROOT_ERROR", None)
