@@ -12,6 +12,7 @@ via get_state_manager().
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from typing import Any, TypeVar, overload
@@ -155,6 +156,9 @@ def update_debate_status(debate_id: str, status: str, **kwargs) -> None:
             status=status,
             current_round=kwargs.get("current_round"),
         )
+        # A debate can complete after the watchdog flagged it; its error is stale then.
+        if status == "completed" and "error" not in kwargs:
+            state.metadata.pop("error", None)
         # Store additional kwargs in metadata
         if kwargs:
             for key, value in kwargs.items():
@@ -169,7 +173,7 @@ def update_debate_status(debate_id: str, status: str, **kwargs) -> None:
                 else:
                     state.metadata[key] = value
         # Record completion time for TTL cleanup
-        if status in ("completed", "error"):
+        if status in ("completed", "error", "timeout"):
             state.metadata["completed_at"] = time.time()
 
 
@@ -186,7 +190,7 @@ def cleanup_stale_debates() -> None:
     stale_ids = []
 
     for debate_id, state in debates.items():
-        if state.status in ("completed", "error"):
+        if state.status in ("completed", "error", "timeout"):
             completed_at = state.metadata.get("completed_at", state.start_time)
             if now - completed_at > _DEBATE_TTL_SECONDS:
                 stale_ids.append(debate_id)
@@ -221,6 +225,24 @@ STUCK_DEBATE_TIMEOUT_SECONDS = 600
 # Shorter timeout for debates stuck in "starting" state (should transition to running quickly)
 STUCK_STARTING_TIMEOUT_SECONDS = 60
 
+# Grace beyond a running debate's recorded deadline. It must outlast the
+# controller's own backstop and run_async margins, plus arena setup time,
+# because the watchdog measures from registration rather than from arena start.
+STUCK_DEBATE_DEADLINE_MARGIN_SECONDS = 120.0
+
+
+def _running_debate_limit(metadata: dict[str, Any]) -> float:
+    """Seconds a running debate may last before the watchdog flags it."""
+    deadline = metadata.get("deadline_seconds")
+    if (
+        isinstance(deadline, bool)
+        or not isinstance(deadline, (int, float))
+        or not math.isfinite(deadline)
+        or deadline <= 0
+    ):
+        return float(STUCK_DEBATE_TIMEOUT_SECONDS)
+    return max(float(STUCK_DEBATE_TIMEOUT_SECONDS), deadline + STUCK_DEBATE_DEADLINE_MARGIN_SECONDS)
+
 
 async def watchdog_stuck_debates(check_interval: float = 60.0) -> None:
     """Background coroutine to cleanup stuck debates.
@@ -254,16 +276,16 @@ async def watchdog_stuck_debates(check_interval: float = 60.0) -> None:
                     timeout = (
                         STUCK_STARTING_TIMEOUT_SECONDS
                         if state.status in ("starting", "initializing")
-                        else STUCK_DEBATE_TIMEOUT_SECONDS
+                        else _running_debate_limit(state.metadata)
                     )
                     if elapsed > timeout:
-                        stuck_debates.append((debate_id, elapsed))
+                        stuck_debates.append((debate_id, elapsed, timeout))
 
             # Process stuck debates
-            for debate_id, elapsed in stuck_debates:
+            for debate_id, elapsed, timeout in stuck_debates:
                 logger.warning(
                     f"[watchdog] Cancelling stuck debate {debate_id} "
-                    f"(running for {elapsed:.0f}s, timeout: {STUCK_DEBATE_TIMEOUT_SECONDS}s)"
+                    f"(running for {elapsed:.0f}s, timeout: {timeout:.0f}s)"
                 )
 
                 # Update status
