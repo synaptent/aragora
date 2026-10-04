@@ -68,6 +68,9 @@ class JobStatus(Enum):
     CANCELLED = "cancelled"
 
 
+_FINISHED_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
+
+
 class JobPriority(Enum):
     """Job priority levels."""
 
@@ -89,6 +92,8 @@ class DocumentJob:
     workspace_id: str = ""
     uploaded_by: str = ""
     tags: list[str] = field(default_factory=list)
+    org_id: str | None = None  # Owning org; None means unknown owner
+    document_id: str | None = None  # Id to give the processed document
 
     # Configuration
     priority: JobPriority = JobPriority.NORMAL
@@ -123,6 +128,7 @@ class DocumentJob:
             "filename": self.filename,
             "workspace_id": self.workspace_id,
             "uploaded_by": self.uploaded_by,
+            "org_id": self.org_id,
             "tags": self.tags,
             "priority": self.priority.name,
             "chunking_strategy": self.chunking_strategy,
@@ -131,7 +137,7 @@ class DocumentJob:
             "status": self.status.value,
             "progress": self.progress,
             "error_message": self.error_message,
-            "document_id": self.document.id if self.document else None,
+            "document_id": self.document.id if self.document else self.document_id,
             "chunk_count": len(self.chunks),
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
@@ -214,6 +220,16 @@ class BatchProcessor:
             task = asyncio.create_task(self._worker(i))
             self._worker_tasks.append(task)
 
+        # Jobs submitted while stopped were not queued.
+        for job in list(self._jobs.values()):
+            if job.status == JobStatus.QUEUED:
+                await self._queue.put((-job.priority.value, job.created_at.timestamp(), job.id))
+
+    @property
+    def is_running(self) -> bool:
+        """Whether worker tasks are draining the queue."""
+        return self._running
+
     async def stop(self, wait: bool = True) -> None:
         """
         Stop the batch processor.
@@ -254,9 +270,14 @@ class BatchProcessor:
         on_progress: Callable[[float, str], None] | None = None,
         on_complete: Callable[[DocumentJob], None] | None = None,
         on_error: Callable[[DocumentJob, Exception], None] | None = None,
+        org_id: str | None = None,
+        document_id: str | None = None,
     ) -> str:
         """
         Submit a document for processing.
+
+        While the workers are stopped the job stays queued until
+        :meth:`process_queued` runs it.
 
         Args:
             content: Raw file content
@@ -272,6 +293,8 @@ class BatchProcessor:
             on_progress: Progress callback
             on_complete: Completion callback
             on_error: Error callback
+            org_id: Org that owns the job and its document
+            document_id: Id for the processed document (default: generated)
 
         Returns:
             Job ID
@@ -282,6 +305,8 @@ class BatchProcessor:
             workspace_id=workspace_id,
             uploaded_by=uploaded_by,
             tags=tags or [],
+            org_id=org_id,
+            document_id=document_id,
             priority=priority,
             chunking_strategy=chunking_strategy,
             chunk_size=chunk_size or self.default_chunk_size,
@@ -294,9 +319,12 @@ class BatchProcessor:
 
         self._jobs[job.id] = job
 
-        # Add to priority queue (lower number = higher priority)
-        priority_value = -priority.value  # Negate so higher priority comes first
-        await self._queue.put((priority_value, job.created_at.timestamp(), job.id))
+        # Nothing drains the queue while the workers are stopped, so a full
+        # queue would block every later submit.
+        if self._running:
+            # Lower number = higher priority; negate so higher priority comes first
+            priority_value = -priority.value
+            await self._queue.put((priority_value, job.created_at.timestamp(), job.id))
 
         logger.debug("Job %s submitted: %s", job.id, filename)
         return job.id
@@ -354,6 +382,24 @@ class BatchProcessor:
             return True
 
         return False
+
+    async def remove(self, job_id: str) -> bool:
+        """Forget a completed, failed or cancelled job and its results."""
+        job = self._jobs.get(job_id)
+        if job is None or job.status not in _FINISHED_STATUSES:
+            return False
+        del self._jobs[job_id]
+        return True
+
+    async def process_queued(self, job_ids: list[str]) -> None:
+        """Process the given still-queued jobs one by one in the caller's event loop.
+
+        For hosts that do not keep the worker tasks running.
+        """
+        for job_id in job_ids:
+            job = self._jobs.get(job_id)
+            if job is not None and job.status == JobStatus.QUEUED:
+                await self._run_job(job, worker_id=-1)
 
     async def wait_for_job(self, job_id: str, timeout: float | None = None) -> DocumentJob | None:
         """
@@ -423,8 +469,14 @@ class BatchProcessor:
             jobs=jobs,
         )
 
-    def get_stats(self) -> dict[str, Any]:
-        """Get processor statistics."""
+    def get_stats(self, org_id: str | None = None) -> dict[str, Any]:
+        """Get processor statistics.
+
+        With ``org_id`` the job counts and totals cover only that org's jobs
+        still held by the processor.
+        """
+        if org_id is not None:
+            return self._org_stats(org_id)
         queued = sum(1 for j in self._jobs.values() if j.status == JobStatus.QUEUED)
         processing = sum(1 for j in self._jobs.values() if j.status == JobStatus.PROCESSING)
 
@@ -440,6 +492,20 @@ class BatchProcessor:
             "total_tokens": self._stats["total_tokens"],
         }
 
+    def _org_stats(self, org_id: str) -> dict[str, Any]:
+        jobs = [j for j in list(self._jobs.values()) if j.org_id == org_id]
+        completed = [j for j in jobs if j.status == JobStatus.COMPLETED]
+        return {
+            "running": self._running,
+            "max_workers": self.max_workers,
+            "queued_jobs": sum(1 for j in jobs if j.status == JobStatus.QUEUED),
+            "processing_jobs": sum(1 for j in jobs if j.status == JobStatus.PROCESSING),
+            "total_processed": len(completed),
+            "total_failed": sum(1 for j in jobs if j.status == JobStatus.FAILED),
+            "total_chunks": sum(len(j.chunks) for j in completed),
+            "total_tokens": sum(j.document.total_tokens for j in completed if j.document),
+        }
+
     async def _worker(self, worker_id: int) -> None:
         """Worker coroutine that processes jobs from queue."""
         logger.debug("Worker %s started", worker_id)
@@ -453,37 +519,14 @@ class BatchProcessor:
                     continue
 
                 job = self._jobs.get(job_id)
-                if not job or job.status == JobStatus.CANCELLED:
+                # Also skips jobs already run by process_queued or queued twice.
+                if not job or job.status != JobStatus.QUEUED:
                     self._queue.task_done()
                     continue
 
-                self._active_workers += 1
-
                 try:
-                    await self._process_job(job)
-                except (ValueError, RuntimeError, OSError, TypeError) as e:
-                    logger.exception("Worker %s error processing %s", worker_id, job_id)
-                    job.status = JobStatus.FAILED
-                    job.error_message = str(e)
-                    self._stats["total_failed"] += 1
-
-                    if job.on_error:
-                        try:
-                            job.on_error(job, e)
-                        except (TypeError, ValueError, AttributeError) as callback_err:
-                            logger.debug(
-                                "Job %s error callback raised expected error: %s",
-                                job_id,
-                                callback_err,
-                            )
-                        except (RuntimeError, OSError) as callback_err:
-                            logger.warning(
-                                "Job %s error callback raised unexpected error: %s",
-                                job_id,
-                                callback_err,
-                            )
+                    await self._run_job(job, worker_id)
                 finally:
-                    self._active_workers -= 1
                     self._queue.task_done()
 
             except asyncio.CancelledError:
@@ -492,6 +535,35 @@ class BatchProcessor:
                 logger.exception("Worker %s unexpected error: %s", worker_id, e)
 
         logger.debug("Worker %s stopped", worker_id)
+
+    async def _run_job(self, job: DocumentJob, worker_id: int) -> None:
+        """Process one job, recording a failure on the job instead of raising."""
+        self._active_workers += 1
+        try:
+            await self._process_job(job)
+        except (ValueError, RuntimeError, OSError, TypeError) as e:
+            logger.exception("Worker %s error processing %s", worker_id, job.id)
+            job.status = JobStatus.FAILED
+            job.error_message = str(e)
+            self._stats["total_failed"] += 1
+
+            if job.on_error:
+                try:
+                    job.on_error(job, e)
+                except (TypeError, ValueError, AttributeError) as callback_err:
+                    logger.debug(
+                        "Job %s error callback raised expected error: %s",
+                        job.id,
+                        callback_err,
+                    )
+                except (RuntimeError, OSError) as callback_err:
+                    logger.warning(
+                        "Job %s error callback raised unexpected error: %s",
+                        job.id,
+                        callback_err,
+                    )
+        finally:
+            self._active_workers -= 1
 
     async def _process_job(self, job: DocumentJob) -> None:
         """Process a single document job."""
@@ -511,6 +583,8 @@ class BatchProcessor:
                 uploaded_by=job.uploaded_by,
                 tags=job.tags,
             )
+            if job.document_id:
+                document.id = job.document_id
         except (ValueError, RuntimeError, OSError, TypeError) as e:
             raise DocumentParseError(
                 document_id=None,
