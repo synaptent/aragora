@@ -1,8 +1,8 @@
 """Wire the core decision router to the packages that implement its hooks.
 
-``aragora.core.decision_router`` reaches pipeline, chat connector and audit
-behaviour only through ``aragora.core.decision_route_hooks``. Importing this
-module loads the packages that register themselves in their own init;
+``aragora.core.decision_router`` reaches workflow, gauntlet, pipeline, chat
+connector and audit behaviour only through ``aragora.core.decision_route_hooks``.
+Importing this module loads the packages that register themselves in their own init;
 :func:`register_decision_routes` re-applies those registrations and adds the
 server-owned unified audit sink. Processes that route decisions (the unified HTTP
 server, the FastAPI app lifespan, the control-plane deliberation worker) call it
@@ -24,7 +24,9 @@ from aragora.core.decision_route_hooks import (
     register_decision_integrity_builder,
     register_tts_bridge_factory,
 )
+from aragora.gauntlet.decision_route import register_decision_route as register_gauntlet_route
 from aragora.pipeline.decision_integrity_utils import build_decision_integrity_payload
+from aragora.workflow.decision_route import register_decision_route as register_workflow_route
 
 
 class UnifiedAuditDecisionSink:
@@ -92,6 +94,8 @@ class UnifiedAuditDecisionSink:
 
 def register_decision_routes() -> None:
     """Register every decision-router hook; safe to call more than once."""
+    register_workflow_route()
+    register_gauntlet_route()
     register_decision_integrity_builder(build_decision_integrity_payload)
     register_tts_bridge_factory(get_tts_bridge)
     register_decision_audit_sink(UnifiedAuditDecisionSink())

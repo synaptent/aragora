@@ -1,10 +1,11 @@
 """Characterization of the decision router registration hooks.
 
-``aragora.core`` (domain layer) must not import the pipeline, connectors, audit or
-server packages. The pipeline and chat connector packages register their
-decision-router behaviour from their own package init, the server registers the
-audit sink through ``aragora.server.decision_routes``, and the router looks each
-hook up at call time.
+``aragora.core`` (domain layer) must not import the workflow, gauntlet, pipeline,
+connectors, audit or server packages. The pipeline and chat connector packages
+register their decision-router behaviour from their own package init, the server
+registers the audit sink through ``aragora.server.decision_routes``, and the router
+looks each hook up at call time. The workflow and gauntlet route targets are covered
+by ``test_decision_route_targets.py``.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from aragora.core.decision import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CORE_DIR = REPO_ROOT / "aragora" / "core"
-FORBIDDEN_PACKAGES = ("audit", "connectors", "pipeline", "server")
+FORBIDDEN_PACKAGES = ("audit", "connectors", "gauntlet", "pipeline", "server", "workflow")
 _FORBIDDEN_RE = "|".join(FORBIDDEN_PACKAGES)
 
 
