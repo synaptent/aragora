@@ -26,6 +26,7 @@ import pytest
 
 from aragora.billing.auth.context import UserAuthContext
 from aragora.gauntlet.storage import GauntletStorage
+from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.gauntlet import GauntletHandler, get_gauntlet_runs
 from aragora.storage.receipt_store import ReceiptStore
 from aragora.tenancy.record_scope import OrgScope
@@ -230,12 +231,62 @@ ALL_SCOPED_ROUTES = (
 
 
 class TestForeignRunIsIndistinguishableFromMissing:
+    @pytest.mark.parametrize(("method", "path", "body"), PER_RUN_ROUTES, ids=RUN_ROUTE_IDS)
+    @pytest.mark.parametrize("foreign", [GID_A, GID_LIVE_A])
+    @pytest.mark.asyncio
+    async def test_other_org_gets_the_missing_run_404(
+        self, gauntlet, act_as, method, path, body, foreign
+    ):
+        act_as(USER_B)
+        other = await _call(gauntlet, method, path.format(id=foreign), body=body)
+        missing = await _call(gauntlet, method, path.format(id=GID_MISSING), body=body)
+
+        assert other.status_code == missing.status_code == 404
+        assert other.body == missing.body
+        assert _json(other) == RUN_NOT_FOUND
+
+    @pytest.mark.parametrize(("method", "path", "body"), PER_RUN_ROUTES, ids=RUN_ROUTE_IDS)
+    @pytest.mark.asyncio
+    async def test_unowned_run_is_invisible_to_every_org(
+        self, gauntlet, act_as, method, path, body
+    ):
+        for user in (USER_A, USER_B):
+            act_as(user)
+            result = await _call(gauntlet, method, path.format(id=GID_NULL), body=body)
+            assert result.status_code == 404
+            assert _json(result) == RUN_NOT_FOUND
+
     @pytest.mark.asyncio
     async def test_compare_with_a_foreign_run_is_404(self, gauntlet, act_as):
         act_as(USER_A)
         result = await _call(gauntlet, "GET", f"/api/v1/gauntlet/{GID_A}/compare/{GID_B}")
         assert result.status_code == 404
         assert _json(result) == RUN_NOT_FOUND
+
+    @pytest.mark.parametrize("foreign", [GID_A, GID_LIVE_A, GID_NULL])
+    @pytest.mark.asyncio
+    async def test_foreign_export_is_refused_before_the_permission_check(
+        self, gauntlet, act_as, monkeypatch, foreign
+    ):
+        # The export permission decorator raises (500) for callers without the grant,
+        # so a foreign run has to be answered with 404 before it runs.
+        export = AsyncMock(side_effect=AssertionError("export permission check reached"))
+        monkeypatch.setattr(gauntlet, "_export_report", export)
+        act_as(USER_B)
+
+        result = await _call(gauntlet, "GET", f"/api/v1/gauntlet/{foreign}/export")
+
+        assert result.status_code == 404
+        assert _json(result) == RUN_NOT_FOUND
+        export.assert_not_called()
+
+    @pytest.mark.parametrize("receipt_id", ["rcpt-gb", "rcpt-gnull", "rcpt-missing"])
+    @pytest.mark.asyncio
+    async def test_anchor_status_of_a_foreign_receipt_is_404(self, gauntlet, act_as, receipt_id):
+        act_as(USER_A)
+        result = await _call(gauntlet, "GET", f"/api/v1/receipts/{receipt_id}/anchor-status")
+        assert result.status_code == 404
+        assert _json(result) == RECEIPT_NOT_FOUND
 
 
 class TestForeignDeleteHasNoSideEffect:
@@ -337,6 +388,49 @@ class TestOwnerKeepsAccess:
         act_as(USER_A)
         result = await _call(gauntlet, method, path.format(id=own), body=body)
         assert result.status_code == 200, result.body[:300]
+
+    @pytest.mark.asyncio
+    async def test_owner_verifies_the_receipt_of_their_run(self, gauntlet, act_as):
+        act_as(USER_A)
+        receipt = _json(await _call(gauntlet, "GET", f"/api/v1/gauntlet/{GID_A}/receipt"))
+        signed = {
+            "receipt": receipt,
+            "signature": receipt["signature"],
+            "signature_metadata": {
+                "algorithm": receipt["signature_algorithm"],
+                "key_id": receipt["signature_key_id"],
+                "timestamp": receipt["signed_at"],
+            },
+        }
+        result = await _call(
+            gauntlet, "POST", f"/api/v1/gauntlet/{GID_A}/receipt/verify", body=signed
+        )
+        assert result.status_code == 200
+        assert _json(result)["id_match"] is True
+
+    @pytest.mark.asyncio
+    async def test_owner_reads_the_anchor_status_of_their_receipt(self, gauntlet, act_as):
+        act_as(USER_A)
+        result = await _call(gauntlet, "GET", "/api/v1/receipts/rcpt-ga/anchor-status")
+        assert result.status_code == 200
+        assert _json(result)["receipt_id"] == "rcpt-ga"
+
+    @pytest.mark.no_auto_auth
+    @pytest.mark.parametrize("role", ["owner", "admin"])
+    @pytest.mark.asyncio
+    async def test_export_permission_check_admits_org_owners_and_admins(
+        self, gauntlet, act_as, role
+    ):
+        act_as(USER_A)
+        request = _request("GET", None, None)
+        request._auth_context = AuthorizationContext(
+            user_id="user-a", org_id=ORG_A, roles={role}, permissions=set()
+        )
+
+        result = await gauntlet.handle(f"/api/v1/gauntlet/{GID_A}/export", {}, request)
+
+        assert result.status_code == 200, result.body[:300]
+        assert _json(result)["gauntlet_id"] == GID_A
 
     @pytest.mark.asyncio
     async def test_owner_deletes_their_result(self, gauntlet, gauntlet_storage, act_as):

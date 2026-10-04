@@ -191,9 +191,12 @@ class TestParameterizedRouteMatching:
         """GET /api/gauntlet/{id}/export should match parameterized route."""
         handler = make_mock_handler(method="GET", path="/api/v1/gauntlet/gauntlet-test123/export")
 
-        with patch.object(
-            gauntlet_handler, "_export_report", new_callable=AsyncMock
-        ) as mock_export:
+        with (
+            patch.object(
+                gauntlet_handler, "_owns_gauntlet_run", new_callable=AsyncMock, return_value=True
+            ),
+            patch.object(gauntlet_handler, "_export_report", new_callable=AsyncMock) as mock_export,
+        ):
             mock_export.return_value = MagicMock(status_code=200, body=b"{}", headers={})
 
             result = await gauntlet_handler.handle(
