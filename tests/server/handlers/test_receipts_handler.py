@@ -30,6 +30,9 @@ from aragora.server.handlers.utils.receipt_delivery_history import (
 )
 import builtins
 
+# The org the autouse auth fixture signs every request in as.
+TEST_ORG = "test-org-001"
+
 
 # ===========================================================================
 # Test Fixtures and Mocks
@@ -56,6 +59,7 @@ class MockStoredReceipt:
     signed_at: float | None = None
     audit_trail_id: str | None = "audit-001"
     data: dict[str, Any] = field(default_factory=dict)
+    org_id: str | None = TEST_ORG
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -119,7 +123,13 @@ class MockReceiptStore:
         self.receipts: dict[str, MockStoredReceipt] = {}
         self._next_id = 0
 
-    def save(self, receipt_dict: dict, signed_receipt: dict | None = None) -> str:
+    def save(
+        self,
+        receipt_dict: dict,
+        signed_receipt: dict | None = None,
+        *,
+        org_id: str | None = TEST_ORG,
+    ) -> str:
         receipt_id = receipt_dict.get("receipt_id", f"receipt-{self._next_id}")
         self._next_id += 1
         self.receipts[receipt_id] = MockStoredReceipt(
@@ -130,8 +140,48 @@ class MockReceiptStore:
             risk_level=receipt_dict.get("risk_level", "MEDIUM"),
             risk_score=receipt_dict.get("risk_score", 0.35),
             data=receipt_dict,
+            org_id=org_id,
         )
         return receipt_id
+
+    # Org-scoped reads: the unscoped answer narrowed to receipts ``org_id`` owns.
+    def _owned(self, receipt: Any, org_id: str | None) -> Any:
+        if receipt is None or (org_id is not None and receipt.org_id != org_id):
+            return None
+        return receipt
+
+    def get_for_org(self, receipt_id: str, org_id: str) -> MockStoredReceipt | None:
+        return self._owned(self.get(receipt_id), org_id)
+
+    def get_by_gauntlet_for_org(self, gauntlet_id: str, org_id: str):
+        return self._owned(self.get_by_gauntlet(gauntlet_id), org_id)
+
+    def _org_view(self, org_id: str) -> "MockReceiptStore":
+        view = MockReceiptStore()
+        view.receipts = {k: r for k, r in self.receipts.items() if r.org_id == org_id}
+        return view
+
+    def list_for_org(self, org_id: str, **kwargs) -> builtins.list[MockStoredReceipt]:
+        return self._org_view(org_id).list(**kwargs)
+
+    def count_for_org(self, org_id: str, **kwargs) -> int:
+        return self._org_view(org_id).count(**kwargs)
+
+    def stats_for_org(self, org_id: str) -> dict[str, Any]:
+        return self._org_view(org_id).get_stats()
+
+    def retention_status_for_org(self, org_id: str) -> dict[str, Any]:
+        return self._org_view(org_id).get_retention_status()
+
+    def get_by_user_for_org(self, org_id: str, user_id: str, limit: int = 100, offset: int = 0):
+        return self._org_view(org_id).get_by_user(user_id, limit=limit, offset=offset)
+
+    def update_signature(self, receipt_id, signature, algorithm, key_id) -> bool:
+        receipt = self.receipts[receipt_id]
+        receipt.signature = signature
+        receipt.signature_algorithm = algorithm
+        receipt.signature_key_id = key_id
+        return True
 
     def get(self, receipt_id: str) -> MockStoredReceipt | None:
         return self.receipts.get(receipt_id)
@@ -186,8 +236,8 @@ class MockReceiptStore:
             results = [r for r in results if r.signature is not None]
         return len(results)
 
-    def verify_integrity(self, receipt_id: str) -> dict[str, Any]:
-        if receipt_id not in self.receipts:
+    def verify_integrity(self, receipt_id: str, *, org_id: str | None = None) -> dict[str, Any]:
+        if self._owned(self.receipts.get(receipt_id), org_id) is None:
             return {
                 "receipt_id": receipt_id,
                 "integrity_valid": False,
@@ -195,8 +245,10 @@ class MockReceiptStore:
             }
         return {"receipt_id": receipt_id, "integrity_valid": True, "stored_checksum": "sha256:abc"}
 
-    def verify_signature(self, receipt_id: str) -> MockSignatureVerificationResult:
-        if receipt_id not in self.receipts:
+    def verify_signature(
+        self, receipt_id: str, *, org_id: str | None = None
+    ) -> MockSignatureVerificationResult:
+        if self._owned(self.receipts.get(receipt_id), org_id) is None:
             return MockSignatureVerificationResult(
                 receipt_id=receipt_id, is_valid=False, error="Receipt not found"
             )
@@ -213,12 +265,12 @@ class MockReceiptStore:
         )
 
     def verify_batch(
-        self, receipt_ids: builtins.list[str]
+        self, receipt_ids: builtins.list[str], *, org_id: str | None = None
     ) -> tuple[builtins.list[MockSignatureVerificationResult], dict[str, int]]:
         results = []
         summary = {"total": len(receipt_ids), "valid": 0, "invalid": 0, "not_signed": 0}
         for rid in receipt_ids:
-            result = self.verify_signature(rid)
+            result = self.verify_signature(rid, org_id=org_id)
             results.append(result)
             if result.is_valid:
                 summary["valid"] += 1
@@ -361,7 +413,8 @@ class TestReceiptsHandlerRouting:
     def test_cannot_handle_other_paths(self, receipts_handler):
         """Test can_handle returns False for other paths."""
         assert receipts_handler.can_handle("/api/v2/gauntlet", "GET") is False
-        assert receipts_handler.can_handle("/api/v1/receipts", "GET") is False
+        assert receipts_handler.can_handle("/api/v1/receipts/recent-anchors", "GET") is False
+        assert receipts_handler.can_handle("/api/v1/receipts/r1/anchor-status", "GET") is False
 
     def test_cannot_handle_delete(self, receipts_handler):
         """Test can_handle returns False for DELETE method."""
@@ -1057,8 +1110,10 @@ class TestReceiptsHandlerSearch:
         mock_receipt_store.save({"receipt_id": "r1", "gauntlet_id": "g1", "verdict": "APPROVED"})
 
         # Add search method to mock store
-        mock_receipt_store.search = MagicMock(return_value=[mock_receipt_store.receipts["r1"]])
-        mock_receipt_store.search_count = MagicMock(return_value=1)
+        mock_receipt_store.search_for_org = MagicMock(
+            return_value=[mock_receipt_store.receipts["r1"]]
+        )
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=1)
 
         result = await receipts_handler.handle(
             "GET", "/api/v2/receipts/search", query_params={"q": "approved"}
@@ -1072,8 +1127,8 @@ class TestReceiptsHandlerSearch:
     @pytest.mark.asyncio
     async def test_search_with_filters(self, receipts_handler, mock_receipt_store):
         """Test search with verdict and risk_level filters."""
-        mock_receipt_store.search = MagicMock(return_value=[])
-        mock_receipt_store.search_count = MagicMock(return_value=0)
+        mock_receipt_store.search_for_org = MagicMock(return_value=[])
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=0)
 
         result = await receipts_handler.handle(
             "GET",
@@ -1093,8 +1148,8 @@ class TestReceiptsHandlerSearch:
     @pytest.mark.asyncio
     async def test_search_limit_capped(self, receipts_handler, mock_receipt_store):
         """Test search limit is capped at 100."""
-        mock_receipt_store.search = MagicMock(return_value=[])
-        mock_receipt_store.search_count = MagicMock(return_value=0)
+        mock_receipt_store.search_for_org = MagicMock(return_value=[])
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=0)
 
         result = await receipts_handler.handle(
             "GET",
@@ -1519,7 +1574,7 @@ class TestReceiptsHandlerBatchSign:
         mock_receipt_store.save({"receipt_id": "r1", "gauntlet_id": "g1"})
 
         # Patch to simulate ImportError
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": None}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": None}):
             result = await receipts_handler.handle(
                 "POST", "/api/v2/receipts/sign-batch", body={"receipt_ids": ["r1"]}
             )
@@ -1532,17 +1587,16 @@ class TestReceiptsHandlerBatchSign:
         mock_receipt_store.save({"receipt_id": "r1", "gauntlet_id": "g1"})
         mock_receipt_store.save({"receipt_id": "r2", "gauntlet_id": "g2"})
 
-        # Add methods needed for signing
-        mock_receipt_store.get_signature = MagicMock(return_value=None)
-        mock_receipt_store.store_signature = MagicMock()
-
         # Mock the signing module
         mock_signer = MagicMock()
-        mock_signer.sign.return_value = "signature=="
+        mock_signer.sign.return_value = MagicMock(
+            signature="signature==",
+            signature_metadata=MagicMock(algorithm="HMAC-SHA256", key_id="key-1"),
+        )
         mock_backend = MagicMock()
 
         with patch.multiple(
-            "aragora.gauntlet.signing",
+            "aragora.storage.receipt_signing",
             create=True,
             HMACSigner=MagicMock(from_env=MagicMock(return_value=mock_backend)),
             RSASigner=MagicMock(),
@@ -1561,19 +1615,19 @@ class TestReceiptsHandlerBatchSign:
         assert "results" in data
         assert "summary" in data
         assert data["summary"]["total"] == 2
+        assert mock_receipt_store.receipts["r1"].signature == "signature=="
 
     @pytest.mark.asyncio
     async def test_sign_batch_already_signed(self, receipts_handler, mock_receipt_store):
         """Test batch sign skips already signed receipts."""
         mock_receipt_store.save({"receipt_id": "r1", "gauntlet_id": "g1"})
-        mock_receipt_store.get_signature = MagicMock(return_value="existing-sig")
-        mock_receipt_store.store_signature = MagicMock()
+        mock_receipt_store.receipts["r1"].signature = "existing-sig"
 
         mock_signer = MagicMock()
         mock_backend = MagicMock()
 
         with patch.multiple(
-            "aragora.gauntlet.signing",
+            "aragora.storage.receipt_signing",
             create=True,
             HMACSigner=MagicMock(from_env=MagicMock(return_value=mock_backend)),
             RSASigner=MagicMock(),

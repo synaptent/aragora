@@ -111,6 +111,27 @@ class TestDecisionReceiptGeneration:
 class TestReceiptsHandler:
     """Test the receipts HTTP handler."""
 
+    ORG = "org-integration"
+
+    @pytest.fixture(autouse=True)
+    def org_member(self, monkeypatch):
+        """Every request comes from an authenticated member of ``ORG``."""
+        from aragora.billing.auth.context import UserAuthContext
+
+        user = UserAuthContext(
+            authenticated=True,
+            user_id="user-integration",
+            email="member@example.com",
+            org_id=self.ORG,
+            role="admin",
+            token_type="access",
+        )
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
+        return user
+
     @pytest.fixture
     def receipts_handler(self):
         """Create a ReceiptsHandler instance."""
@@ -126,6 +147,7 @@ class TestReceiptsHandler:
         # Note: Don't use spec=DecisionReceipt as it blocks adding to_full_dict
         mock_receipt = MagicMock()
         mock_receipt.receipt_id = "rcpt_001"
+        mock_receipt.org_id = self.ORG
         mock_receipt.verdict = "APPROVED"
         receipt_dict = {
             "receipt_id": "rcpt_001",
@@ -140,10 +162,10 @@ class TestReceiptsHandler:
 
         store = MagicMock()
         # Mock the methods the handler actually calls
-        store.list = MagicMock(return_value=[mock_receipt])
-        store.count = MagicMock(return_value=1)
-        store.get = MagicMock(return_value=mock_receipt)
-        store.get_by_gauntlet = MagicMock(return_value=None)
+        store.list_for_org = MagicMock(return_value=[mock_receipt])
+        store.count_for_org = MagicMock(return_value=1)
+        store.get_for_org = MagicMock(return_value=mock_receipt)
+        store.get_by_gauntlet_for_org = MagicMock(return_value=None)
         store.verify = MagicMock(return_value={"valid": True, "checksum_match": True})
         store.verify_signature = MagicMock(
             return_value=MagicMock(

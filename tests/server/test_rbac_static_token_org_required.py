@@ -70,7 +70,6 @@ PUBLIC_REQUESTS = [
     ("GET", "/api/v2/receipts/share/tok-1"),
     ("GET", "/api/v2/receipts/signing-key"),
     ("POST", "/api/v2/receipts/verify"),
-    ("GET", "/api/v2/receipts/rcpt-1/export"),
     ("GET", "/api/v1/gauntlet/personas"),
     ("GET", "/api/v1/pipeline/plans"),
 ]
@@ -262,6 +261,14 @@ class TestUnchangedBehavior:
         status, _, reached = _dispatch(method, path, f"Bearer {STATIC_TOKEN}")
 
         assert (status, reached) == (REACHED, [path])
+
+    def test_receipt_export_leaves_the_static_token_to_the_receipts_handler(self):
+        # The RBAC route rule for receipt export admits the request; the
+        # receipts handler then answers a static-token caller 403 org_required.
+        path = "/api/v2/receipts/rcpt-1/export"
+
+        assert _dispatch("GET", path, f"Bearer {STATIC_TOKEN}")[::2] == (REACHED, [path])
+        assert _dispatch("GET", path)[::2] == (401, [])
 
     @pytest.mark.parametrize(
         "authorization", [None, f"Bearer {STATIC_TOKEN}"], ids=["anonymous", "static-token"]

@@ -83,6 +83,10 @@ with patch("aragora.rbac.decorators.require_permission", _passthrough_decorator)
 # Instead, we'll work with the handler directly and mock the stores.
 from aragora.server.handlers.receipts import ReceiptsHandler, create_receipts_handler
 from aragora.server.handlers.utils.responses import HandlerResult
+from aragora.tenancy.record_scope import OrgScope
+
+TEST_ORG = "test-org-001"
+SCOPE = OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
 
 
 # ===========================================================================
@@ -97,6 +101,8 @@ class MockReceipt:
     id: str = "receipt-001"
     gauntlet_id: str = "gauntlet-001"
     debate_id: str = "debate-001"
+    org_id: str | None = TEST_ORG
+    signature: str | None = None
     data: dict = field(
         default_factory=lambda: {
             "decision_id": "d-001",
@@ -162,14 +168,56 @@ class MockReceiptStore:
     def search_count(self, **kwargs) -> int:
         return len(self._receipts)
 
-    def verify_integrity(self, receipt_id: str) -> dict[str, Any]:
-        if receipt_id not in self._receipts:
+    def _visible(self, receipt_id: str, org_id: str | None) -> bool:
+        receipt = self._receipts.get(receipt_id)
+        return receipt is not None and (org_id is None or receipt.org_id == org_id)
+
+    def get_for_org(self, receipt_id: str, org_id: str) -> MockReceipt | None:
+        return self.get(receipt_id) if self._visible(receipt_id, org_id) else None
+
+    def get_by_gauntlet_for_org(self, gauntlet_id: str, org_id: str) -> MockReceipt | None:
+        receipt = self.get_by_gauntlet(gauntlet_id)
+        return receipt if receipt is not None and receipt.org_id == org_id else None
+
+    def list_for_org(self, org_id: str, **kwargs) -> list[MockReceipt]:
+        return [r for r in self.list(**kwargs) if r.org_id == org_id]
+
+    def count_for_org(self, org_id: str, **kwargs) -> int:
+        debate_id = kwargs.get("debate_id")
+        return sum(
+            1
+            for r in self._receipts.values()
+            if r.org_id == org_id and (not debate_id or r.debate_id == debate_id)
+        )
+
+    def search_for_org(self, org_id: str, **kwargs) -> list[MockReceipt]:
+        return [r for r in self.search(**kwargs) if r.org_id == org_id]
+
+    def search_count_for_org(self, org_id: str, **kwargs) -> int:
+        return len(self.search_for_org(org_id, **kwargs))
+
+    def stats_for_org(self, org_id: str) -> dict[str, Any]:
+        return self.get_stats()
+
+    def retention_status_for_org(self, org_id: str) -> dict[str, Any]:
+        return self.get_retention_status()
+
+    def get_by_user_for_org(self, org_id: str, user_id: str, limit: int = 100, offset: int = 0):
+        receipts = [r for r in self._receipts.values() if r.org_id == org_id]
+        return receipts, len(receipts)
+
+    def update_signature(self, receipt_id, signature, algorithm, key_id) -> bool:
+        self._receipts[receipt_id].signature = signature
+        return True
+
+    def verify_integrity(self, receipt_id: str, *, org_id: str | None = None) -> dict[str, Any]:
+        if not self._visible(receipt_id, org_id):
             return {"integrity_valid": False, "error": "Receipt not found"}
         return {"integrity_valid": True, "receipt_id": receipt_id}
 
-    def verify_signature(self, receipt_id: str):
+    def verify_signature(self, receipt_id: str, *, org_id: str | None = None):
         result = MagicMock()
-        if receipt_id not in self._receipts:
+        if not self._visible(receipt_id, org_id):
             result.error = "Receipt not found"
         else:
             result.error = None
@@ -179,13 +227,13 @@ class MockReceiptStore:
         }
         return result
 
-    def verify_batch(self, receipt_ids: list[str]):
+    def verify_batch(self, receipt_ids: list[str], *, org_id: str | None = None):
         results = []
         valid = 0
         invalid = 0
         for rid in receipt_ids:
             r = MagicMock()
-            if rid in self._receipts:
+            if self._visible(rid, org_id):
                 r.to_dict.return_value = {"receipt_id": rid, "valid": True}
                 valid += 1
             else:
@@ -208,12 +256,6 @@ class MockReceiptStore:
     def get_by_user(self, user_id: str, limit: int = 100, offset: int = 0):
         receipts = list(self._receipts.values())
         return receipts, len(receipts)
-
-    def get_signature(self, receipt_id: str):
-        return None  # Not signed by default
-
-    def store_signature(self, receipt_id: str, signature: Any, algorithm: str):
-        pass
 
 
 class MockShareStore:
@@ -318,7 +360,7 @@ class TestListReceipts:
 
     @pytest.mark.asyncio
     async def test_list_receipts_success(self, handler):
-        result = await handler._list_receipts({})
+        result = await handler._list_receipts({}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert "receipts" in data
@@ -327,7 +369,7 @@ class TestListReceipts:
 
     @pytest.mark.asyncio
     async def test_list_receipts_with_pagination(self, handler):
-        result = await handler._list_receipts({"limit": "10", "offset": "5"})
+        result = await handler._list_receipts({"limit": "10", "offset": "5"}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["pagination"]["limit"] == 10
@@ -342,7 +384,8 @@ class TestListReceipts:
                 "signed_only": "true",
                 "sort_by": "confidence",
                 "order": "asc",
-            }
+            },
+            scope=SCOPE,
         )
         assert result.status_code == 200
         data = _parse_body(result)
@@ -356,7 +399,8 @@ class TestListReceipts:
             {
                 "date_from": "2025-01-01T00:00:00Z",
                 "date_to": "2025-12-31T23:59:59Z",
-            }
+            },
+            scope=SCOPE,
         )
         assert result.status_code == 200
         data = _parse_body(result)
@@ -366,7 +410,7 @@ class TestListReceipts:
 
     @pytest.mark.asyncio
     async def test_list_receipts_with_debate_id_filter(self, handler):
-        result = await handler._list_receipts({"debate_id": "debate-001"})
+        result = await handler._list_receipts({"debate_id": "debate-001"}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["filters"]["debate_id"] == "debate-001"
@@ -375,7 +419,7 @@ class TestListReceipts:
 
     @pytest.mark.asyncio
     async def test_list_receipts_with_nonexistent_debate_id(self, handler):
-        result = await handler._list_receipts({"debate_id": "debate-nonexistent"})
+        result = await handler._list_receipts({"debate_id": "debate-nonexistent"}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["filters"]["debate_id"] == "debate-nonexistent"
@@ -386,7 +430,7 @@ class TestListReceipts:
     @pytest.mark.asyncio
     async def test_list_receipts_no_filter_returns_all(self, handler):
         """No debate_id filter returns all receipts (backwards compatible)."""
-        result = await handler._list_receipts({})
+        result = await handler._list_receipts({}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["filters"]["debate_id"] is None
@@ -404,7 +448,7 @@ class TestSearchReceipts:
 
     @pytest.mark.asyncio
     async def test_search_receipts_success(self, handler):
-        result = await handler._search_receipts({"q": "deployment"})
+        result = await handler._search_receipts({"q": "deployment"}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert "receipts" in data
@@ -412,14 +456,14 @@ class TestSearchReceipts:
 
     @pytest.mark.asyncio
     async def test_search_receipts_missing_query(self, handler):
-        result = await handler._search_receipts({})
+        result = await handler._search_receipts({}, scope=SCOPE)
         assert result.status_code == 400
         data = _parse_body(result)
         assert "required" in data["error"].lower()
 
     @pytest.mark.asyncio
     async def test_search_receipts_short_query(self, handler):
-        result = await handler._search_receipts({"q": "ab"})
+        result = await handler._search_receipts({"q": "ab"}, scope=SCOPE)
         assert result.status_code == 400
         data = _parse_body(result)
         assert "3 characters" in data["error"]
@@ -431,7 +475,8 @@ class TestSearchReceipts:
                 "q": "deploy",
                 "verdict": "APPROVED",
                 "risk_level": "HIGH",
-            }
+            },
+            scope=SCOPE,
         )
         assert result.status_code == 200
         data = _parse_body(result)
@@ -449,21 +494,21 @@ class TestGetReceipt:
 
     @pytest.mark.asyncio
     async def test_get_receipt_by_id(self, handler):
-        result = await handler._get_receipt("receipt-001")
+        result = await handler._get_receipt("receipt-001", scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["id"] == "receipt-001"
 
     @pytest.mark.asyncio
     async def test_get_receipt_by_gauntlet_id(self, handler):
-        result = await handler._get_receipt("gauntlet-002")
+        result = await handler._get_receipt("gauntlet-002", scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["gauntlet_id"] == "gauntlet-002"
 
     @pytest.mark.asyncio
     async def test_get_receipt_not_found(self, handler):
-        result = await handler._get_receipt("nonexistent")
+        result = await handler._get_receipt("nonexistent", scope=SCOPE)
         assert result.status_code == 404
 
 
@@ -477,14 +522,14 @@ class TestVerifyIntegrity:
 
     @pytest.mark.asyncio
     async def test_verify_integrity_valid(self, handler):
-        result = await handler._verify_integrity("receipt-001")
+        result = await handler._verify_integrity("receipt-001", scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["integrity_valid"] is True
 
     @pytest.mark.asyncio
     async def test_verify_integrity_not_found(self, handler):
-        result = await handler._verify_integrity("nonexistent")
+        result = await handler._verify_integrity("nonexistent", scope=SCOPE)
         assert result.status_code == 404
 
 
@@ -498,14 +543,14 @@ class TestVerifySignature:
 
     @pytest.mark.asyncio
     async def test_verify_signature_valid(self, handler):
-        result = await handler._verify_signature("receipt-001")
+        result = await handler._verify_signature("receipt-001", scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["signature_valid"] is True
 
     @pytest.mark.asyncio
     async def test_verify_signature_not_found(self, handler):
-        result = await handler._verify_signature("nonexistent")
+        result = await handler._verify_signature("nonexistent", scope=SCOPE)
         assert result.status_code == 404
 
 
@@ -519,7 +564,9 @@ class TestBatchVerify:
 
     @pytest.mark.asyncio
     async def test_batch_verify_success(self, handler):
-        result = await handler._verify_batch({"receipt_ids": ["receipt-001", "receipt-002"]})
+        result = await handler._verify_batch(
+            {"receipt_ids": ["receipt-001", "receipt-002"]}, scope=SCOPE
+        )
         assert result.status_code == 200
         data = _parse_body(result)
         assert len(data["results"]) == 2
@@ -528,20 +575,20 @@ class TestBatchVerify:
 
     @pytest.mark.asyncio
     async def test_batch_verify_empty_list(self, handler):
-        result = await handler._verify_batch({"receipt_ids": []})
+        result = await handler._verify_batch({"receipt_ids": []}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
     async def test_batch_verify_exceeds_limit(self, handler):
         ids = [f"r-{i}" for i in range(101)]
-        result = await handler._verify_batch({"receipt_ids": ids})
+        result = await handler._verify_batch({"receipt_ids": ids}, scope=SCOPE)
         assert result.status_code == 400
         data = _parse_body(result)
         assert "100" in data["error"]
 
     @pytest.mark.asyncio
     async def test_batch_verify_missing_receipt_ids(self, handler):
-        result = await handler._verify_batch({})
+        result = await handler._verify_batch({}, scope=SCOPE)
         assert result.status_code == 400
 
 
@@ -555,7 +602,7 @@ class TestGetStats:
 
     @pytest.mark.asyncio
     async def test_get_stats_success(self, handler):
-        result = await handler._get_stats()
+        result = await handler._get_stats(scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert "stats" in data
@@ -585,7 +632,7 @@ class TestAsyncSafety:
         handler = ReceiptsHandler({})
         handler._store = BlockingReceiptStore(_make_receipts(3))
 
-        list_task = asyncio.create_task(handler._list_receipts({}))
+        list_task = asyncio.create_task(handler._list_receipts({}, scope=SCOPE))
         heartbeat_task = asyncio.create_task(asyncio.sleep(0.02, result=True))
 
         assert await asyncio.wait_for(heartbeat_task, timeout=0.05) is True
@@ -603,7 +650,7 @@ class TestAsyncSafety:
         handler = ReceiptsHandler({})
         handler._store = BlockingReceiptStore(_make_receipts(3))
 
-        stats_task = asyncio.create_task(handler._get_stats())
+        stats_task = asyncio.create_task(handler._get_stats(scope=SCOPE))
         heartbeat_task = asyncio.create_task(asyncio.sleep(0.02, result=True))
 
         assert await asyncio.wait_for(heartbeat_task, timeout=0.05) is True
@@ -622,7 +669,7 @@ class TestExportReceipt:
 
     @pytest.mark.asyncio
     async def test_export_receipt_not_found(self, handler):
-        result = await handler._export_receipt("nonexistent", {"format": "json"})
+        result = await handler._export_receipt("nonexistent", {"format": "json"}, scope=SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
@@ -633,7 +680,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "json"})
+            result = await handler._export_receipt("receipt-001", {"format": "json"}, scope=SCOPE)
             assert result.status_code == 200
             assert result.content_type.startswith("application/json")
 
@@ -645,7 +692,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "html"})
+            result = await handler._export_receipt("receipt-001", {"format": "html"}, scope=SCOPE)
             assert result.status_code == 200
             assert result.content_type.startswith("text/html")
 
@@ -657,7 +704,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "md"})
+            result = await handler._export_receipt("receipt-001", {"format": "md"}, scope=SCOPE)
             assert result.status_code == 200
             assert result.content_type.startswith("text/markdown")
 
@@ -669,7 +716,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "csv"})
+            result = await handler._export_receipt("receipt-001", {"format": "csv"}, scope=SCOPE)
             assert result.status_code == 200
             assert result.content_type.startswith("text/csv")
             assert "Content-Disposition" in result.headers
@@ -684,7 +731,7 @@ class TestExportReceipt:
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
             result = await handler._export_receipt(
-                "receipt-001", {"format": "md", "download": "true"}
+                "receipt-001", {"format": "md", "download": "true"}, scope=SCOPE
             )
             assert result.status_code == 200
             assert "Content-Disposition" in result.headers
@@ -698,7 +745,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "pdf"})
+            result = await handler._export_receipt("receipt-001", {"format": "pdf"}, scope=SCOPE)
             assert result.status_code == 200
             assert result.content_type == "application/pdf"
 
@@ -712,7 +759,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "pdf"})
+            result = await handler._export_receipt("receipt-001", {"format": "pdf"}, scope=SCOPE)
             # Handler gracefully degrades to HTML with print instructions
             assert result.status_code == 200
             assert result.content_type == "text/html"
@@ -740,7 +787,9 @@ class TestExportReceipt:
                     ),
                 },
             ):
-                result = await handler._export_receipt("receipt-001", {"format": "sarif"})
+                result = await handler._export_receipt(
+                    "receipt-001", {"format": "sarif"}, scope=SCOPE
+                )
                 assert result.status_code == 200
                 assert result.content_type == "application/json"
 
@@ -751,7 +800,7 @@ class TestExportReceipt:
         with patch(
             "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "xml"})
+            result = await handler._export_receipt("receipt-001", {"format": "xml"}, scope=SCOPE)
             assert result.status_code == 400
             data = _parse_body(result)
             assert "unsupported" in data["error"].lower()
@@ -762,7 +811,7 @@ class TestExportReceipt:
             "aragora.export.decision_receipt.DecisionReceipt.from_dict",
             side_effect=OSError("Serialization error"),
         ):
-            result = await handler._export_receipt("receipt-001", {"format": "json"})
+            result = await handler._export_receipt("receipt-001", {"format": "json"}, scope=SCOPE)
             assert result.status_code == 500
 
 
@@ -776,30 +825,34 @@ class TestBatchSign:
 
     @pytest.mark.asyncio
     async def test_batch_sign_empty_list(self, handler):
-        result = await handler._sign_batch({"receipt_ids": []})
+        result = await handler._sign_batch({"receipt_ids": []}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
     async def test_batch_sign_exceeds_limit(self, handler):
         ids = [f"r-{i}" for i in range(101)]
-        result = await handler._sign_batch({"receipt_ids": ids})
+        result = await handler._sign_batch({"receipt_ids": ids}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
     async def test_batch_sign_missing_signing_module(self, handler):
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": None}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": None}):
             result = await handler._sign_batch(
                 {
                     "receipt_ids": ["receipt-001"],
                     "algorithm": "hmac-sha256",
-                }
+                },
+                scope=SCOPE,
             )
             assert result.status_code == 501
 
     @pytest.mark.asyncio
     async def test_batch_sign_success(self, handler):
         mock_signer = MagicMock()
-        mock_signer.sign.return_value = b"signature_bytes"
+        mock_signer.sign.return_value = MagicMock(
+            signature="c2lnbmF0dXJl",
+            signature_metadata=MagicMock(algorithm="HMAC-SHA256", key_id="key-1"),
+        )
 
         mock_backend = MagicMock()
         mock_hmac_cls = MagicMock()
@@ -813,16 +866,18 @@ class TestBatchSign:
         signing_mod.ReceiptSigner = mock_signer_cls
         signing_mod.SigningBackend = MagicMock()
 
-        with patch.dict("sys.modules", {"aragora.gauntlet.signing": signing_mod}):
+        with patch.dict("sys.modules", {"aragora.storage.receipt_signing": signing_mod}):
             result = await handler._sign_batch(
                 {
                     "receipt_ids": ["receipt-001"],
                     "algorithm": "hmac-sha256",
-                }
+                },
+                scope=SCOPE,
             )
             assert result.status_code == 200
             data = _parse_body(result)
             assert data["summary"]["signed"] == 1
+            assert handler._store.get("receipt-001").signature == "c2lnbmF0dXJl"
 
 
 # ===========================================================================
@@ -835,13 +890,13 @@ class TestBatchExport:
 
     @pytest.mark.asyncio
     async def test_batch_export_empty_list(self, handler):
-        result = await handler._batch_export({"receipt_ids": []})
+        result = await handler._batch_export({"receipt_ids": []}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
     async def test_batch_export_exceeds_limit(self, handler):
         ids = [f"r-{i}" for i in range(101)]
-        result = await handler._batch_export({"receipt_ids": ids})
+        result = await handler._batch_export({"receipt_ids": ids}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
@@ -850,7 +905,8 @@ class TestBatchExport:
             {
                 "receipt_ids": ["receipt-001"],
                 "format": "xml",
-            }
+            },
+            scope=SCOPE,
         )
         assert result.status_code == 400
 
@@ -866,7 +922,8 @@ class TestBatchExport:
                 {
                     "receipt_ids": ["receipt-001", "receipt-002"],
                     "format": "json",
-                }
+                },
+                scope=SCOPE,
             )
             assert result.status_code == 200
             assert result.content_type == "application/zip"
@@ -895,7 +952,8 @@ class TestBatchExport:
                 {
                     "receipt_ids": ["receipt-001", "nonexistent"],
                     "format": "json",
-                }
+                },
+                scope=SCOPE,
             )
             assert result.status_code == 200
 
@@ -919,7 +977,7 @@ class TestShareReceipt:
             "aragora.integrations.receipt_webhooks.ReceiptWebhookNotifier",
             side_effect=ImportError("not available"),
         ):
-            result = await handler._share_receipt("receipt-001", {})
+            result = await handler._share_receipt("receipt-001", {}, scope=SCOPE)
             assert result.status_code == 200
             data = _parse_body(result)
             assert data["success"] is True
@@ -930,7 +988,7 @@ class TestShareReceipt:
 
     @pytest.mark.asyncio
     async def test_share_receipt_not_found(self, handler):
-        result = await handler._share_receipt("nonexistent", {})
+        result = await handler._share_receipt("nonexistent", {}, scope=SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
@@ -945,6 +1003,7 @@ class TestShareReceipt:
                     "expires_in_hours": "48",
                     "max_accesses": 5,
                 },
+                scope=SCOPE,
             )
             assert result.status_code == 200
             data = _parse_body(result)
@@ -1018,7 +1077,7 @@ class TestDSARAndRetention:
 
     @pytest.mark.asyncio
     async def test_dsar_success(self, handler):
-        result = await handler._get_dsar("user-abc", {})
+        result = await handler._get_dsar("user-abc", {}, scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["dsar_request"]["user_id"] == "user-abc"
@@ -1027,12 +1086,12 @@ class TestDSARAndRetention:
 
     @pytest.mark.asyncio
     async def test_dsar_short_user_id(self, handler):
-        result = await handler._get_dsar("ab", {})
+        result = await handler._get_dsar("ab", {}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
     async def test_retention_status(self, handler):
-        result = await handler._get_retention_status()
+        result = await handler._get_retention_status(scope=SCOPE)
         assert result.status_code == 200
         data = _parse_body(result)
         assert data["retention_policy"] == "7_years"
@@ -1048,12 +1107,14 @@ class TestSendToChannel:
 
     @pytest.mark.asyncio
     async def test_send_missing_channel_type(self, handler):
-        result = await handler._send_to_channel("receipt-001", {"channel_id": "C123"})
+        result = await handler._send_to_channel("receipt-001", {"channel_id": "C123"}, scope=SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
     async def test_send_missing_channel_id(self, handler):
-        result = await handler._send_to_channel("receipt-001", {"channel_type": "slack"})
+        result = await handler._send_to_channel(
+            "receipt-001", {"channel_type": "slack"}, scope=SCOPE
+        )
         assert result.status_code == 400
 
     @pytest.mark.asyncio
@@ -1064,6 +1125,7 @@ class TestSendToChannel:
                 "channel_type": "slack",
                 "channel_id": "C123",
             },
+            scope=SCOPE,
         )
         assert result.status_code == 404
 
@@ -1082,6 +1144,7 @@ class TestSendToChannel:
                         "channel_type": "fax",
                         "channel_id": "123",
                     },
+                    scope=SCOPE,
                 )
                 assert result.status_code == 400
 
@@ -1096,7 +1159,7 @@ class TestGetFormatted:
 
     @pytest.mark.asyncio
     async def test_get_formatted_not_found(self, handler):
-        result = await handler._get_formatted("nonexistent", "slack", {})
+        result = await handler._get_formatted("nonexistent", "slack", {}, scope=SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
@@ -1108,7 +1171,7 @@ class TestGetFormatted:
             with patch(
                 "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
             ):
-                result = await handler._get_formatted("receipt-001", "slack", {})
+                result = await handler._get_formatted("receipt-001", "slack", {}, scope=SCOPE)
                 assert result.status_code == 200
                 data = _parse_body(result)
                 assert data["receipt_id"] == "receipt-001"
@@ -1124,7 +1187,7 @@ class TestGetFormatted:
             with patch(
                 "aragora.export.decision_receipt.DecisionReceipt.from_dict", return_value=mock_dr
             ):
-                result = await handler._get_formatted("receipt-001", "fax", {})
+                result = await handler._get_formatted("receipt-001", "fax", {}, scope=SCOPE)
                 assert result.status_code == 400
 
 

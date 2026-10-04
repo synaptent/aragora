@@ -661,6 +661,7 @@ class RouteIndex:
             "_receipts_handler": [
                 "/api/v2/receipts",
                 "/api/v2/receipts/",
+                "/api/v1/receipts",
             ],
             "_backup_handler": [
                 "/api/v2/backups",
@@ -761,7 +762,6 @@ class RouteIndex:
             ],
             "_audit_trail_handler": [
                 "/api/v1/audit-trails",
-                "/api/v1/receipts",
             ],
             "_playbook_handler": [
                 "/api/playbooks",

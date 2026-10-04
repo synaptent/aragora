@@ -502,14 +502,12 @@ DEFAULT_ROUTE_PERMISSIONS = [
         r"^/\.well-known/aragora-odr-signing-key$", "GET", "", allow_unauthenticated=True
     ),
     RoutePermission(r"^/api/v2/receipts/signing-key$", "GET", "", allow_unauthenticated=True),
-    # Public ODR receipt surface (architecture §2.10): the ODR export document
-    # and the stateless verifier are the two routes an external auditor needs
-    # without credentials. The export handler still requires receipts:read for
-    # every non-ODR format. The export pattern's parameter segment excludes the
-    # sibling route segments the handler dispatches first -- "dsar" reaches the
-    # GDPR subject-access branch, which stays authenticated -- and is kept
-    # byte-identical to AUTH_EXEMPT_GET_PATTERNS in aragora/server/auth_checks.py
-    # so neither gate admits a path the other denies.
+    # Receipt ODR surface (architecture §2.10). The stateless verifier is
+    # public. The export rule only lets the request past this gate: receipts
+    # are org-owned, so the server's auth gate and the receipts handler deny
+    # every export format to a caller without an org. The export pattern's
+    # parameter segment excludes the sibling route segments the handler
+    # dispatches first -- "dsar" reaches the GDPR subject-access branch.
     RoutePermission(
         r"^/api/v2/receipts/(?!(?:dsar|share|search|stats|verify)/)[^/]+/export$",
         "GET",
