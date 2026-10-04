@@ -313,6 +313,7 @@ class CreateOperationsMixin:
             return error_response("Invalid request", 400)
 
         request.org_id = scope.org_id
+        request.created_by = scope.user_id or None
 
         # Get debate controller and start debate
         try:

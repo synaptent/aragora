@@ -966,6 +966,7 @@ async def create_debate(
             raise HTTPException(status_code=400, detail="Invalid debate request")
 
         debate_request.org_id = scope.org_id
+        debate_request.created_by = scope.user_id or None
 
         try:
             controller = _get_debate_controller(request, storage)

@@ -135,6 +135,7 @@ class DebateConfig:
     comparison_config: dict | None = None  # Candidate lineups for best-result selection
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
     org_id: str | None = None  # Owning org, from the authenticated creator
+    created_by: str | None = None  # Authenticated creator's user id
 
     @property
     def model_comparison(self) -> dict | None:

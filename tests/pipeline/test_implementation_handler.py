@@ -499,10 +499,14 @@ class TestReceiptPersistence:
 
         handler_obj = MockHandler()
         handler_obj._storage = _build_mock_storage(_make_debate_dict())
+        handler_obj._storage.get_org_id.return_value = "org-owner"
         handler_obj._body = {}
 
         handler_obj._create_decision_integrity(MagicMock(), "test-debate-001")
-        mock_persist_receipt.assert_called_once_with(package.receipt, "test-debate-001")
+        # The receipt belongs to the org that owns the debate.
+        mock_persist_receipt.assert_called_once_with(
+            package.receipt, "test-debate-001", "org-owner"
+        )
 
     @patch(f"{_IMPL_MOD}.run_async")
     @patch(f"{_IMPL_MOD}.build_decision_integrity_package", new_callable=AsyncMock)

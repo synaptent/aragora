@@ -205,6 +205,7 @@ class BatchOperationsMixin:
 
         for item in items:
             item.org_id = scope.org_id
+            item.created_by = scope.user_id or None
 
         if user_ctx and user_ctx.is_authenticated and user_ctx.org_id:
             if user_store and hasattr(user_store, "get_organization_by_id"):
@@ -338,6 +339,7 @@ class BatchOperationsMixin:
                 rounds=item.rounds,
                 consensus=item.consensus,
                 org_id=item.org_id,
+                created_by=item.created_by,
             )
 
             response = controller.start_debate(request)
