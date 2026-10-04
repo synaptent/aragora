@@ -22,6 +22,7 @@ from aragora.server.debate_controller import DebateController, DebateRequest
 from aragora.server.debate_factory import DebateConfig
 from aragora.server.debate_queue import BatchItem
 from aragora.storage.debate_storage import DebateStorage
+from aragora.tenancy.record_scope import OrgScope
 
 ORG_A = "org-a"
 ORG_B = "org-b"
@@ -85,6 +86,23 @@ def _user(org_id: str | None = ORG_A, user_id: str = "user-a") -> SimpleNamespac
         is_authenticated=True,
         authenticated=True,
     )
+
+
+def _scope(org_id: str = ORG_A) -> OrgScope:
+    return OrgScope(org_id=org_id, user_id="user-a", role="member")
+
+
+@pytest.fixture
+def caller(monkeypatch):
+    """Set the user that request authentication resolves to."""
+
+    def _set(user: Any) -> None:
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
+
+    return _set
 
 
 def _http_handler() -> MagicMock:
@@ -307,7 +325,7 @@ class TestCreateHandlersOwnership:
         handler._get_debate_controller = MagicMock(return_value=controller)
         return controller
 
-    def test_create_direct_uses_authenticated_org_not_client_metadata(self):
+    def test_create_direct_uses_scope_org_not_client_metadata(self):
         body = {
             "question": "Should we adopt event sourcing?",
             "org_id": "org-evil",
@@ -317,35 +335,30 @@ class TestCreateHandlersOwnership:
         handler = _http_handler()
         controller = self._capture_controller(handler)
 
-        result = h._create_debate_direct(handler, body)
+        result = h._create_debate_direct(handler, body, _scope(ORG_A))
 
         assert result.status_code == 200
         request = controller.start_debate.call_args.args[0]
         assert request.org_id == ORG_A
 
-    def test_create_direct_anonymous_caller_has_no_org(self):
+    @pytest.mark.parametrize(("user", "status"), [(None, 401), (_user(None), 403)])
+    @pytest.mark.parametrize("route", ["_create_debate", "_debate_this"])
+    def test_caller_without_org_is_refused_before_the_controller(self, caller, route, user, status):
         body = {"question": "Should we adopt CQRS?", "metadata": {"organization_id": ORG_B}}
-        h = _make_create_handler(body, None)
+        h = _make_create_handler(body, user)
         handler = _http_handler()
         controller = self._capture_controller(handler)
+        caller(user)
 
-        h._create_debate_direct(handler, body)
+        result = getattr(h, route)(handler)
 
-        assert controller.start_debate.call_args.args[0].org_id is None
-
-    def test_create_direct_user_without_org_has_no_org(self):
-        body = {"question": "Should we adopt gRPC?"}
-        h = _make_create_handler(body, _user(None))
-        handler = _http_handler()
-        controller = self._capture_controller(handler)
-
-        h._create_debate_direct(handler, body)
-
-        assert controller.start_debate.call_args.args[0].org_id is None
+        assert result.status_code == status
+        controller.start_debate.assert_not_called()
 
     @patch("aragora.server.handlers.debates.create.importlib.import_module")
-    def test_create_debate_route_persists_caller_org(self, _mock_import, storage):
+    def test_create_debate_route_persists_caller_org(self, _mock_import, storage, caller):
         body = {"question": "Should we split the monolith?", "agents": ["agent1", "agent2"]}
+        caller(_user(ORG_A))
         h = _make_create_handler(body, _user(ORG_A))
         handler = _http_handler()
         handler._get_debate_controller = MagicMock(return_value=_real_controller(storage))
@@ -357,8 +370,9 @@ class TestCreateHandlersOwnership:
         debate_id = _body(result)["debate_id"]
         assert _row(storage, debate_id) == (ORG_A, 0)
 
-    def test_debate_this_persists_caller_org(self, storage):
+    def test_debate_this_persists_caller_org(self, storage, caller):
         body = {"question": "Should we rewrite the billing service?"}
+        caller(_user(ORG_A))
         h = _make_create_handler(body, _user(ORG_A))
         handler = _http_handler()
         handler._get_debate_controller = MagicMock(return_value=_real_controller(storage))
@@ -467,13 +481,13 @@ class TestBatchOwnership:
 
 
 class TestVisibilityAfterCreate:
-    def _create(self, storage: DebateStorage, org_id: str | None) -> str:
+    def _create(self, storage: DebateStorage, org_id: str) -> str:
         body = {"question": f"Visibility check for {org_id}?", "agents": "agent1,agent2"}
-        h = _make_create_handler(body, _user(org_id) if org_id else None)
+        h = _make_create_handler(body, _user(org_id))
         handler = _http_handler()
         handler._get_debate_controller = MagicMock(return_value=_real_controller(storage))
         with patch("aragora.server.debate_controller.update_debate_status"):
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _scope(org_id))
         return _body(result)["debate_id"]
 
     def _public_get(self, storage: DebateStorage, debate_id: str):

@@ -21,6 +21,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.billing.auth.context import UserAuthContext
+from aragora.tenancy.record_scope import OrgScope
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -61,6 +64,19 @@ def bypass_rate_limiters(monkeypatch):
         reset_rate_limiters()
     except ImportError:
         pass
+
+
+_ORG_SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
+
+
+@pytest.fixture(autouse=True)
+def org_user(monkeypatch):
+    """Debate creation requires an authenticated user with an org."""
+    user = UserAuthContext(authenticated=True, user_id="test-user-001", org_id="test-org-001")
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +452,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.return_value = MagicMock()
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         assert _status(result) == 200
         body_data = _body(result)
@@ -453,7 +469,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.side_effect = ValueError("question required")
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         assert _status(result) == 400
         assert "invalid" in _body(result).get("error", "").lower()
@@ -472,7 +488,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.return_value = MagicMock()
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         assert _status(result) == 500
         mock_emit.assert_not_called()
@@ -490,7 +506,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.return_value = MagicMock()
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         assert _status(result) == 500
         mock_emit.assert_not_called()
@@ -508,7 +524,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.return_value = MagicMock()
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         assert _status(result) == 500
         mock_emit.assert_not_called()
@@ -531,7 +547,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.return_value = MagicMock()
-            h._create_debate_direct(handler, body)
+            h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         mock_emit.assert_called_once_with("debate", "created", {"debate_id": "debate-789"})
 
@@ -554,7 +570,7 @@ class TestCreateDebateDirect:
 
         with patch("aragora.server.debate_controller.DebateRequest") as MockReq:
             MockReq.from_dict.return_value = MagicMock()
-            result = h._create_debate_direct(handler, body)
+            result = h._create_debate_direct(handler, body, _ORG_SCOPE)
 
         assert _status(result) == 202
 

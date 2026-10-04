@@ -25,6 +25,7 @@ from aragora.server.validation.schema import (
 
 from aragora.events.handler_events import emit_handler_event, CREATED
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import OrgScope, require_org_scope
 
 from ..base import (
     HandlerResult,
@@ -71,16 +72,6 @@ def _normalize_debate_body(body: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def _caller_org_id(user: Any) -> str | None:
-    """Org of an authenticated caller, or None for anonymous / org-less callers."""
-    if user is None or not getattr(user, "is_authenticated", False):
-        return None
-    org_id = getattr(user, "org_id", None)
-    if isinstance(org_id, str) and org_id.strip():
-        return org_id
-    return None
-
-
 def _get_validate_against_schema():
     handler_module = sys.modules.get("aragora.server.handlers.debates.handler")
     if handler_module is not None:
@@ -115,7 +106,9 @@ class _DebatesHandlerProtocol(Protocol):
         """Check if debate content contains spam patterns."""
         ...
 
-    def _create_debate_direct(self, handler: Any, body: dict[str, Any]) -> HandlerResult:
+    def _create_debate_direct(
+        self, handler: Any, body: dict[str, Any], scope: OrgScope
+    ) -> HandlerResult:
         """Create debate directly without decision router."""
         ...
 
@@ -168,6 +161,10 @@ class CreateOperationsMixin:
         Returns 402 Payment Required if monthly debate quota exceeded.
         """
         logger.info("[_create_debate] Called via DebatesHandler")
+
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
 
         # Rate limit expensive debate creation
         try:
@@ -238,7 +235,7 @@ class CreateOperationsMixin:
         # DecisionRouter can still be used for:
         # - Chat connector decisions (Slack/Telegram) that need sync responses
         # - Internal orchestration where blocking is acceptable
-        return self._create_debate_direct(handler, body)
+        return self._create_debate_direct(handler, body, scope)
 
     async def _route_through_decision_router(
         self: _DebatesHandlerProtocol, handler: Any, body: dict[str, Any], headers: dict[str, Any]
@@ -303,9 +300,9 @@ class CreateOperationsMixin:
         return json_response(response_data, status=status_code)
 
     def _create_debate_direct(
-        self: _DebatesHandlerProtocol, handler: Any, body: dict[str, Any]
+        self: _DebatesHandlerProtocol, handler: Any, body: dict[str, Any], scope: OrgScope
     ) -> HandlerResult:
-        """Direct debate creation via controller (fallback path)."""
+        """Direct debate creation via controller; ``scope`` is the caller's verified org."""
         # Parse and validate request using DebateRequest
         try:
             from aragora.server.debate_controller import DebateRequest
@@ -315,7 +312,7 @@ class CreateOperationsMixin:
             logger.warning("Handler error: %s", e)
             return error_response("Invalid request", 400)
 
-        request.org_id = _caller_org_id(self.get_current_user(handler))
+        request.org_id = scope.org_id
 
         # Get debate controller and start debate
         try:
@@ -474,6 +471,10 @@ class CreateOperationsMixin:
             context: Optional context string
             source: Source surface identifier (default: "debate_this")
         """
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         body = self.read_json_body(handler)
         if body is None:
             return error_response("Invalid or missing JSON body", 400)
@@ -499,7 +500,7 @@ class CreateOperationsMixin:
             debate_body["context"] = context
 
         # Delegate to existing creation logic
-        result = self._create_debate_direct(handler, debate_body)
+        result = self._create_debate_direct(handler, debate_body, scope)
 
         # Add spectate_url to successful responses
         if result and result.status_code == 200 and result.body:

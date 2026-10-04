@@ -410,7 +410,13 @@ class TestDebateThisEndToEnd:
             authenticated=True,
         )
 
-    def test_auto_selected_debate_runs_and_is_owned_by_the_jwt_org(self, credentials, tmp_path):
+    def test_auto_selected_debate_runs_and_is_owned_by_the_jwt_org(
+        self, credentials, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: self._user(),
+        )
         credentials.update({"OPENAI_API_KEY": "configured", "XAI_API_KEY": "configured"})
         storage = DebateStorage(str(tmp_path / "debates.db"))
         controller = DebateController(

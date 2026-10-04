@@ -39,7 +39,7 @@ class _FakeHandler:
     def _check_spam_content(self, body):
         return None
 
-    def _create_debate_direct(self, handler, body):
+    def _create_debate_direct(self, handler, body, scope):
         from aragora.server.handlers.base import json_response
 
         debate_id = f"adhoc_{body.get('question', 'test')[:8]}"
@@ -140,7 +140,7 @@ class TestDebateThisEndpoint:
         """Short questions (<= 200 chars) get quick format (4 rounds)."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -158,7 +158,7 @@ class TestDebateThisEndpoint:
         """Long questions (> 200 chars) get thorough format (9 rounds)."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -177,7 +177,7 @@ class TestDebateThisEndpoint:
         """auto_select is always set to True."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -195,7 +195,7 @@ class TestDebateThisEndpoint:
         """Optional context is forwarded to debate creation."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -213,7 +213,7 @@ class TestDebateThisEndpoint:
         """Source is captured in metadata."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -231,7 +231,7 @@ class TestDebateThisEndpoint:
         """Default source is 'debate_this' when not specified."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
@@ -249,7 +249,7 @@ class TestDebateThisEndpoint:
         """Explicit rounds in body overrides auto-detection."""
         called_body = {}
 
-        def capture_direct(handler, body):
+        def capture_direct(handler, body, scope):
             called_body.update(body)
             from aragora.server.handlers.base import json_response
 
