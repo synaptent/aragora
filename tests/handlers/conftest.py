@@ -235,6 +235,37 @@ def mock_auth_for_handler_tests(request, monkeypatch):
     yield mock_auth_ctx
 
 
+@pytest.fixture
+def org_scoped_request_user(request, monkeypatch):
+    """Authenticate org-scoped handler requests as test-user-001 of test-org-001.
+
+    Handlers that scope records with ``aragora.tenancy.record_scope.require_org_scope``
+    identify the caller through ``aragora.billing.jwt_auth.extract_user_from_request``,
+    which ``mock_auth_for_handler_tests`` does not patch. Opt in per module with
+    ``pytestmark = pytest.mark.usefixtures("org_scoped_request_user")``; tests marked
+    ``no_auto_auth`` stay anonymous.
+    """
+    if "no_auto_auth" in [m.name for m in request.node.iter_markers()]:
+        yield None
+        return
+
+    from aragora.billing.auth.context import UserAuthContext
+
+    user = UserAuthContext(
+        authenticated=True,
+        user_id="test-user-001",
+        email="test@example.com",
+        org_id="test-org-001",
+        role="admin",
+        token_type="access",
+    )
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    yield user
+
+
 class AgentStatus(Enum):
     """Mock agent status enum."""
 
