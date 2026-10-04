@@ -2,8 +2,9 @@
 
 Server-run debates go through ``run_async``, whose own timeout defaults to
 30 s. These tests check that the controller passes the debate's configured
-deadline (plus a small cleanup margin) instead, that the deadline still
-cancels and cleans up an overrunning debate, and that missing or invalid
+deadline (plus small cleanup margins) instead, that the arena's own deadline
+stops an overrunning debate and is recorded as a timeout, that the controller
+backstop still fires when the arena has no limit, and that missing or invalid
 deadline configuration falls back to a finite value.
 
 Time is virtual: the event loops below jump their clock forward whenever
@@ -22,12 +23,14 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+import aragora.agents.api_agents.common as api_common
 import aragora.server.debate_controller as dc
-from aragora.debate.protocol import DebateProtocol
+from aragora.debate.orchestrator import Arena
+from aragora.protocols.debate import DebateProtocol
 from aragora.server.debate_controller import DebateController
 from aragora.server.debate_factory import DebateConfig
 from aragora.server.state import get_state_manager
@@ -132,6 +135,9 @@ def execution_path(request, monkeypatch):
             loop.close()
     else:
         monkeypatch.setattr(async_utils, "_pool_event_loop_provider", None)
+        # nest_asyncio.apply() elsewhere in the worker swaps in an asyncio.run
+        # that never closes its loop.
+        monkeypatch.setattr(asyncio, "run", asyncio.runners.run)
         policy = _VirtualTimePolicy()
         original_policy = asyncio.get_event_loop_policy()
         asyncio.set_event_loop_policy(policy)
@@ -141,13 +147,19 @@ def execution_path(request, monkeypatch):
             asyncio.set_event_loop_policy(original_policy)
 
 
+@pytest.fixture(autouse=True)
+def _no_shared_connector_close(monkeypatch):
+    monkeypatch.setattr(api_common, "close_shared_connector", AsyncMock())
+
+
 @dataclass
 class _FakeArena:
-    """Arena stand-in whose ``run`` takes ``work_seconds`` of loop time."""
+    """Arena stand-in running the real ``Arena.run`` over ``work_seconds`` of loop time."""
 
     timeout_seconds: Any
     work_seconds: float
     protocol: Any = field(init=False)
+    env: Any = field(init=False)
     loop: asyncio.AbstractEventLoop | None = None
     started_at: float | None = None
     finished_at: float | None = None
@@ -155,9 +167,13 @@ class _FakeArena:
     cleaned_up: bool = False
 
     def __post_init__(self) -> None:
-        self.protocol = SimpleNamespace(timeout_seconds=self.timeout_seconds)
+        self.protocol = SimpleNamespace(timeout_seconds=self.timeout_seconds, consensus="majority")
+        self.env = SimpleNamespace(task="Should our company adopt a four-day work week?")
 
-    async def run(self) -> Any:
+    run = Arena.run
+    _cleanup_debate_persistence = AsyncMock()
+
+    async def _run_inner(self, correlation_id: str = "") -> Any:
         self.loop = asyncio.get_running_loop()
         self.started_at = self.loop.time()
         try:
@@ -268,7 +284,7 @@ class TestDeadlineExceeded:
     def test_timeout_fires_at_configured_deadline_not_at_30s(self, execution_path):
         arena = _FakeArena(timeout_seconds=45, work_seconds=10_000)
 
-        with pytest.raises(TimeoutError):
+        with pytest.raises((TimeoutError, asyncio.TimeoutError)):
             _controller(arena)._execute_debate_candidate(
                 _config("deadline-exceeded"), "deadline-exceeded", {}
             )
@@ -300,23 +316,66 @@ class TestDeadlineExceeded:
         assert arena.cleaned_up is True
 
         state = get_state_manager().get_debate(debate_id)
-        assert state.status == "error"
+        assert state.status == "timeout"
         assert state.status not in ("starting", "initializing", "running")
-        assert state.metadata["error"] == "Operation timed out"
+        assert state.metadata["error"] == "Debate stopped at its 45s deadline"
         assert "completed_at" in state.metadata
 
         storage.save_dict.assert_not_called()
-        end_events = [
-            call.args[0]
-            for call in emitter.emit.call_args_list
-            if call.args[0].type == StreamEventType.DEBATE_END
-        ]
+        end_events = _debate_end_events(emitter)
         assert len(end_events) == 1
         assert end_events[0].data["debate_id"] == debate_id
-        assert end_events[0].data["error"] == "Operation timed out"
+        assert end_events[0].data["error"] == "Debate stopped at its 45s deadline"
 
         assert execution_path.leftover_tasks() == []
         assert not [t for t in threading.enumerate() if t.name == "run_async_worker"]
+
+
+def _debate_end_events(emitter: Mock) -> list[Any]:
+    return [
+        call.args[0]
+        for call in emitter.emit.call_args_list
+        if call.args[0].type == StreamEventType.DEBATE_END
+    ]
+
+
+class TestArenaDeadlineWinsRace:
+    def test_arena_timeout_result_at_deadline_is_recorded_as_timeout(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"deadline-race-{execution_path.name}")
+        arena = _FakeArena(timeout_seconds=1800, work_seconds=10_000)
+        storage = Mock()
+        emitter = Mock()
+        controller = _controller(arena, storage=storage, emitter=emitter)
+        controller._generate_debate_receipt = Mock()
+
+        controller._run_debate(_config(debate_id), debate_id)
+
+        assert execution_path.ran_on_this_path(arena)
+        assert arena.cancelled_after == pytest.approx(1800.0)
+        state = get_state_manager().get_debate(debate_id)
+        assert state.status == "timeout"
+        assert state.metadata["deadline_seconds"] == 1800.0
+        assert "result" not in state.metadata
+        storage.save_dict.assert_not_called()
+        controller._generate_debate_receipt.assert_not_called()
+        assert [event.data["status"] for event in _debate_end_events(emitter)] == ["timeout"]
+        assert execution_path.leftover_tasks() == []
+
+    def test_backstop_cancels_arena_without_its_own_limit(self, execution_path, monkeypatch):
+        monkeypatch.setattr(dc, "DEBATE_TIMEOUT_SECONDS", 45)
+        arena = _FakeArena(timeout_seconds=0, work_seconds=10_000)
+
+        with pytest.raises((TimeoutError, asyncio.TimeoutError)):
+            _controller(arena)._execute_debate_candidate(
+                _config("deadline-backstop"), "deadline-backstop", {}
+            )
+
+        assert execution_path.ran_on_this_path(arena)
+        assert arena.cancelled_after == pytest.approx(45.0 + dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS)
+        assert arena.cleaned_up is True
+        assert execution_path.leftover_tasks() == []
 
 
 class TestRunAsyncTimeoutArgument:
@@ -340,14 +399,16 @@ class TestRunAsyncTimeoutArgument:
             _config("deadline-arg"), "deadline-arg", {}
         )
 
-        assert run_async_calls == [600.0 + margin]
+        assert run_async_calls == [600.0 + 2 * margin]
 
     def test_default_protocol_deadline_is_passed(self, run_async_calls):
         arena = SimpleNamespace(protocol=DebateProtocol())
 
         _controller(arena)._execute_debate_candidate(_config("deadline-dflt"), "deadline-dflt", {})
 
-        expected = float(DebateProtocol().timeout_seconds) + dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+        expected = (
+            float(DebateProtocol().timeout_seconds) + 2 * dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+        )
         assert run_async_calls == [expected]
         assert math.isfinite(run_async_calls[0])
 
@@ -359,7 +420,7 @@ class TestRunAsyncTimeoutArgument:
 
         _controller(arena)._execute_debate_candidate(_config("deadline-none"), "deadline-none", {})
 
-        assert run_async_calls == [240.0 + dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS]
+        assert run_async_calls == [240.0 + 2 * dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS]
 
     def test_invalid_deadline_still_passes_a_finite_timeout(self, run_async_calls, monkeypatch):
         monkeypatch.setattr(dc, "DEBATE_TIMEOUT_SECONDS", 0)
@@ -368,7 +429,7 @@ class TestRunAsyncTimeoutArgument:
         _controller(arena)._execute_debate_candidate(_config("deadline-inv"), "deadline-inv", {})
 
         assert run_async_calls == [
-            dc._FALLBACK_DEBATE_DEADLINE_SECONDS + dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+            dc._FALLBACK_DEBATE_DEADLINE_SECONDS + 2 * dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS
         ]
         assert math.isfinite(run_async_calls[0])
 
