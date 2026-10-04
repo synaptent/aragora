@@ -242,9 +242,9 @@ def test_email_module_check_sees_the_callers_auth_context(
 
 # Owners of email state: only the built-in owner role holds email.*, so the second
 # user and the other organization's user are owners too, with their own identity.
-OWNER = {"caller": "owner"}
-SAME_ORG_USER = {"caller": "owner", "user": "jwt-owner-2"}
-OTHER_ORG_USER = {"caller": "owner", "user": "jwt-owner-x", "org": "org-2"}
+OWNER: dict[str, Any] = {"caller": "owner"}
+SAME_ORG_USER: dict[str, Any] = {"caller": "owner", "user": "jwt-owner-2"}
+OTHER_ORG_USER: dict[str, Any] = {"caller": "owner", "user": "jwt-owner-x", "org": "org-2"}
 MARK = "/api/v1/email/followups/mark"
 PENDING = "/api/v1/email/followups/pending"
 CHECK_REPLIES = "/api/v1/email/followups/check-replies"
@@ -394,7 +394,11 @@ def test_category_feedback_is_recorded_and_applied_for_its_owner_only(
     assert status == 200 and {c["id"] for c in _data(body)["categories"]} == {
         c.value for c in EmailCategory
     }
-    learn = {"email_id": "e-9", "predicted_category": "newsletters", "correct_category": "nope"}
+    learn: dict[str, Any] = {
+        "email_id": "e-9",
+        "predicted_category": "newsletters",
+        "correct_category": "nope",
+    }
     assert _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)[0] == 400
     learn |= {"correct_category": "projects", "email_metadata": {"sender": "Digest@Corp.example"}}
     status, body = _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)
