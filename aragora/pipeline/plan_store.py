@@ -41,9 +41,11 @@ from aragora.pipeline.decision_plan.core import (
     ImplementationProfile,
     PlanStatus,
 )
+from aragora.pipeline.plan_ownership import ensure_ownership_columns, migrate_plan_store_schema
 from aragora.pipeline.risk_register import RiskLevel, RiskRegister
 from aragora.pipeline.verification_plan import VerificationPlan
 from aragora.implement.types import ImplementPlan
+from aragora.tenancy.membership import MembershipLookupError, OrgMembershipResolver, user_org_ids
 
 logger = logging.getLogger(__name__)
 
@@ -160,10 +162,21 @@ class PlanStore:
 
     Thread-safe via SQLite WAL mode. Each method creates its own
     connection to support concurrent access from handler threads.
+
+    Plans, execution records and runs carry ``org_id``/``created_by``/
+    ``ownership_source`` (see ``aragora.pipeline.plan_ownership``).
+    ``org_membership_resolver`` maps a user id to its org ids for the one-time
+    ownership backfill (default: the user store).
     """
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        *,
+        org_membership_resolver: OrgMembershipResolver | None = None,
+    ) -> None:
         self._db_path = db_path or _get_db_path()
+        self._resolve_org_ids = org_membership_resolver or user_org_ids
         self._ensure_dir()
         self._ensure_table()
 
@@ -318,6 +331,15 @@ class PlanStore:
             if "implement_plan_json" not in columns:
                 conn.execute("ALTER TABLE plans ADD COLUMN implement_plan_json TEXT")
             conn.commit()
+            ensure_ownership_columns(conn)
+            try:
+                migrate_plan_store_schema(conn, self._resolve_org_ids)
+            except MembershipLookupError as exc:
+                conn.rollback()
+                logger.warning(
+                    "plans.db ownership backfill deferred until the user store is reachable: %s",
+                    exc,
+                )
         finally:
             conn.close()
 

@@ -1015,6 +1015,10 @@ class UnifiedServer:
         UnifiedHandler.youtube_connector = stores["youtube_connector"]
         UnifiedHandler.user_store = stores["user_store"]
         UnifiedHandler.usage_tracker = stores["usage_tracker"]
+        if stores["user_store"] is not None:
+            from aragora.tenancy.membership import register_user_store
+
+            register_user_store(stores["user_store"])
 
         # Initialize DecisionRouter for unified decision routing
         self._init_decision_router()
