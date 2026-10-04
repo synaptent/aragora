@@ -336,12 +336,14 @@ class GauntletResultsMixin:
             "404": {"description": "Gauntlet run not found"},
         },
     )
-    @require_permission("gauntlet:export")
+    @require_permission("gauntlet:export_data")
     async def _export_report(
         self,
         gauntlet_id: str,
         query_params: dict,
         handler: Any = None,
+        *,
+        scope: OrgScope,
     ) -> HandlerResult:
         """Export a comprehensive gauntlet report.
 
@@ -350,15 +352,12 @@ class GauntletResultsMixin:
         - include_heatmap: true/false (default true)
         - include_findings: true/false (default true)
         """
-        gauntlet_runs = get_gauntlet_runs()
-
         # Get result
-        run = None
         result = None
         _result_obj = None  # GauntletResult object for enhanced report (in-memory only)
 
-        if gauntlet_id in gauntlet_runs:
-            run = gauntlet_runs[gauntlet_id]
+        run = get_owned_run(gauntlet_id, scope)
+        if run is not None:
             if run["status"] != "completed":
                 return error_response("Gauntlet run not completed", 400)
             result = run["result"]
@@ -366,14 +365,14 @@ class GauntletResultsMixin:
         else:
             try:
                 storage = _get_storage_proxy()
-                stored = storage.get(gauntlet_id)
+                stored = storage.get(gauntlet_id, scope.org_id)
                 if stored:
                     result = stored
                 else:
-                    return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
+                    return record_not_found("Gauntlet run")
             except (OSError, RuntimeError, ValueError) as e:
                 logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
-                return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
+                return record_not_found("Gauntlet run")
 
         # Parse options
         format_type = get_string_param(query_params, "format", "json")

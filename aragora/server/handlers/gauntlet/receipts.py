@@ -21,11 +21,11 @@ from datetime import datetime
 from typing import Any
 
 from aragora.rbac.decorators import require_permission
-from aragora.tenancy.record_scope import OrgScope
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 from ..base import HandlerResult, error_response, get_int_param, get_string_param, json_response
 from ..openapi_decorator import api_endpoint
-from .storage import get_gauntlet_runs, get_owned_run
+from .storage import get_owned_run
 
 # Page size used to match anchor hashes against the caller org's receipts.
 _ANCHOR_OWNERSHIP_PAGE = 500
@@ -178,20 +178,19 @@ class GauntletReceiptsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    async def _get_receipt(self, gauntlet_id: str, query_params: dict) -> HandlerResult:
-        """Get decision receipt for gauntlet run."""
+    async def _get_receipt(
+        self, gauntlet_id: str, query_params: dict, *, scope: OrgScope
+    ) -> HandlerResult:
+        """Get decision receipt for one of the caller org's gauntlet runs."""
         from aragora.gauntlet.errors import gauntlet_error_response
         from aragora.gauntlet.receipt import DecisionReceipt
 
-        gauntlet_runs = get_gauntlet_runs()
-
-        run = None
         result = None
         result_obj = None
 
         # Check in-memory first
-        if gauntlet_id in gauntlet_runs:
-            run = gauntlet_runs[gauntlet_id]
+        run = get_owned_run(gauntlet_id, scope)
+        if run is not None:
             if run["status"] != "completed":
                 body, status = gauntlet_error_response(
                     "not_completed", {"gauntlet_id": gauntlet_id}
@@ -203,14 +202,11 @@ class GauntletReceiptsMixin:
             # Check persistent storage
             try:
                 storage = _get_storage_proxy()
-                stored = await _call_nonblocking(storage, "get", gauntlet_id)
+                stored = await _call_nonblocking(storage, "get", gauntlet_id, scope.org_id)
                 if stored:
                     result = stored
                 else:
-                    body, status = gauntlet_error_response(
-                        "gauntlet_not_found", {"gauntlet_id": gauntlet_id}
-                    )
-                    return json_response(body, status=status)
+                    return record_not_found("Gauntlet run")
             except (OSError, RuntimeError, ValueError) as e:
                 logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
                 body, status = gauntlet_error_response(
@@ -363,8 +359,10 @@ class GauntletReceiptsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    async def _verify_receipt(self, gauntlet_id: str, handler: Any) -> HandlerResult:
-        """Verify a signed decision receipt.
+    async def _verify_receipt(
+        self, gauntlet_id: str, handler: Any, *, scope: OrgScope
+    ) -> HandlerResult:
+        """Verify a signed decision receipt of one of the caller org's runs.
 
         Validates:
         1. Cryptographic signature authenticity
@@ -380,6 +378,9 @@ class GauntletReceiptsMixin:
         """
         from aragora.gauntlet.receipt import DecisionReceipt
         from aragora.gauntlet.signing import SignedReceipt, verify_receipt
+
+        if not await self._owns_gauntlet_run(gauntlet_id, scope):
+            return record_not_found("Gauntlet run")
 
         # Parse request body
         from typing import cast
@@ -520,6 +521,18 @@ class GauntletReceiptsMixin:
         else:
             # Return 200 with verification failure details (not a client error)
             return json_response(verification_result)
+
+    async def _owns_gauntlet_run(self, gauntlet_id: str, scope: OrgScope) -> bool:
+        """Whether the caller's org has the run in memory or a stored result for it."""
+        if get_owned_run(gauntlet_id, scope) is not None:
+            return True
+        try:
+            storage = _get_storage_proxy()
+            stored = await _call_nonblocking(storage, "get", gauntlet_id, scope.org_id)
+        except (OSError, RuntimeError, ValueError) as e:
+            logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
+            return False
+        return bool(stored)
 
     async def _auto_persist_receipt(
         self, result: Any, gauntlet_id: str, *, scope: OrgScope
@@ -698,8 +711,10 @@ class GauntletReceiptsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    def _get_receipt_anchor_status(self, receipt_id: str, query_params: dict) -> HandlerResult:
-        """Get blockchain anchor verification status for a receipt.
+    def _get_receipt_anchor_status(
+        self, receipt_id: str, query_params: dict, *, scope: OrgScope
+    ) -> HandlerResult:
+        """Get blockchain anchor verification status for one of the caller org's receipts.
 
         Looks up the receipt by ID, computes its hash, then checks
         whether it has been anchored (on-chain or locally).
@@ -708,10 +723,10 @@ class GauntletReceiptsMixin:
             from aragora.storage.receipt_store import get_receipt_store
 
             store = get_receipt_store()
-            receipt = store.get(receipt_id)
+            receipt = store.get_for_org(receipt_id, scope.org_id)
 
             if receipt is None:
-                return error_response("Receipt not found", 404)
+                return record_not_found("Receipt")
 
             # Use the receipt checksum as the anchor hash
             receipt_hash = receipt.checksum or ""
