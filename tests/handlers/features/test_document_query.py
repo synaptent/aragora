@@ -5,7 +5,8 @@ Tests the document query API endpoints including:
 - POST /api/v1/documents/summarize - Summarize documents
 - POST /api/v1/documents/compare - Compare multiple documents
 - POST /api/v1/documents/extract - Extract structured information
-- GET (all routes) - Returns 405 Method Not Allowed
+- GET /api/v1/documents/search - Keyword search over the caller org's documents
+- GET (other routes) - Returns 405 Method Not Allowed
 
 Also tests:
 - Input validation (missing fields, empty bodies, type checking)
@@ -18,6 +19,7 @@ Also tests:
 
 import json
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -118,7 +120,7 @@ class MockQueryEngine:
         }
 
     @classmethod
-    async def create(cls, config=None):
+    async def create(cls, config=None, searcher=None):
         return cls(config=config)
 
     async def query(self, question, workspace_id=None, document_ids=None, conversation_id=None):
@@ -139,34 +141,45 @@ class MockQueryEngine:
 # ---------------------------------------------------------------------------
 
 
+TEST_ORG = "test-org-001"
+
+
+class _SameOrgDocumentStore:
+    """Document store in which every requested id is a document of the caller's org."""
+
+    def get(self, doc_id: str) -> Any:
+        if "/" in doc_id or "\x00" in doc_id:
+            return None  # the real store refuses ids that are not safe file names
+        return SimpleNamespace(
+            id=doc_id, filename=f"{doc_id}.txt", text=f"text of {doc_id}", org_id=TEST_ORG
+        )
+
+    def list_for_org(self, org_id: str) -> list[dict[str, Any]]:
+        return [{"id": "doc1"}, {"id": "doc2"}] if org_id == TEST_ORG else []
+
+
 @pytest.fixture
 def handler():
-    """Create a DocumentQueryHandler with minimal context."""
-    return DocumentQueryHandler(ctx={})
+    """Create a DocumentQueryHandler whose store holds the caller org's documents."""
+    return DocumentQueryHandler(ctx={"document_store": _SameOrgDocumentStore()})
 
 
 @pytest.fixture(autouse=True)
 def _bypass_jwt_auth(monkeypatch):
-    """Patch extract_user_from_request so @require_user_auth always passes."""
+    """Authenticate every request as test-user-001 of test-org-001."""
+    from aragora.billing.auth.context import UserAuthContext
 
-    class _MockUserCtx:
-        is_authenticated = True
-        authenticated = True
-        user_id = "test-user-001"
-        email = "test@example.com"
-        error_reason = None
-
+    user = UserAuthContext(
+        authenticated=True,
+        user_id="test-user-001",
+        email="test@example.com",
+        org_id=TEST_ORG,
+        role="member",
+        token_type="access",
+    )
     monkeypatch.setattr(
         "aragora.billing.jwt_auth.extract_user_from_request",
-        lambda handler, user_store=None: _MockUserCtx(),
-    )
-
-    # Give DocumentQueryHandler a headers attr so require_user_auth finds self
-    monkeypatch.setattr(
-        DocumentQueryHandler,
-        "headers",
-        {"Authorization": "Bearer test"},
-        raising=False,
+        lambda handler, user_store=None: user,
     )
 
 
@@ -320,10 +333,32 @@ class TestHandleGet:
         result = handler.handle("/api/v1/documents/extract", {}, mock_http)
         assert _status(result) == 405
 
-    def test_get_search_returns_405(self, handler):
+    def test_get_search_returns_matching_org_documents(self, handler):
+        mock_http = _make_handler()
+        result = handler.handle("/api/v1/documents/search", {"q": ["doc2"]}, mock_http)
+        assert _status(result) == 200
+        body = _body(result)
+        assert [hit["document_id"] for hit in body["results"]] == ["doc2"]
+        assert body["total"] == 1
+        assert body["results"][0]["filename"] == "doc2.txt"
+
+    def test_get_search_accepts_query_param(self, handler):
+        mock_http = _make_handler()
+        result = handler.handle("/api/v1/documents/search", {"query": ["text"]}, mock_http)
+        assert _status(result) == 200
+        assert _body(result)["total"] == 2
+
+    def test_get_search_accepts_single_value_params(self, handler):
+        """The live server passes each query parameter as one string."""
+        mock_http = _make_handler()
+        result = handler.handle("/api/v1/documents/search", {"q": "doc2"}, mock_http)
+        assert _status(result) == 200
+        assert [hit["document_id"] for hit in _body(result)["results"]] == ["doc2"]
+
+    def test_get_search_requires_a_query(self, handler):
         mock_http = _make_handler()
         result = handler.handle("/api/v1/documents/search", {}, mock_http)
-        assert _status(result) == 405
+        assert _status(result) == 400
 
     def test_get_error_message_mentions_post(self, handler):
         mock_http = _make_handler()
@@ -1179,12 +1214,17 @@ class TestHandlePostRouting:
         result = handler.handle_post("/api/v1/documents/unknown", {}, mock_http)
         assert result is None
 
-    def test_post_search_route_returns_none(self, handler):
-        """The search route is in ROUTES but not handled in handle_post."""
-        mock_http = _make_handler({"question": "What?"})
+    def test_post_routes_to_search(self, handler):
+        mock_http = _make_handler({"query": "doc1", "limit": 5})
         result = handler.handle_post("/api/v1/documents/search", {}, mock_http)
-        # search is not in the handle_post routing, so returns None
-        assert result is None
+        assert _status(result) == 200
+        body = _body(result)
+        assert [hit["document_id"] for hit in body["results"]] == ["doc1"]
+        assert body["limit"] == 5
+
+    def test_post_unknown_route_returns_none(self, handler):
+        mock_http = _make_handler({"question": "What?"})
+        assert handler.handle_post("/api/v1/documents/unknown", {}, mock_http) is None
 
 
 # =============================================================================
@@ -1210,8 +1250,9 @@ class TestSecurity:
             engine_instance.query.return_value = MockQueryResult()
             MockEngine.create = AsyncMock(return_value=engine_instance)
             result = handler.handle_post("/api/v1/documents/query", {}, mock_http)
-        # Should pass to engine without crashing - engine handles validation
-        assert _status(result) == 200
+        # An id that is not a stored document of the caller's org is not found
+        assert _status(result) == 404
+        MockEngine.create.assert_not_called()
 
     def test_script_injection_in_question(self, handler):
         """Script injection in question should be passed through safely."""
@@ -1289,7 +1330,8 @@ class TestSecurity:
             engine_instance.query.return_value = MockQueryResult()
             MockEngine.create = AsyncMock(return_value=engine_instance)
             result = handler.handle_post("/api/v1/documents/query", {}, mock_http)
-        assert _status(result) == 200
+        assert _status(result) == 404
+        MockEngine.create.assert_not_called()
 
     def test_error_response_sanitized(self, handler):
         """Error responses should use safe_error_message, not expose internals."""

@@ -277,16 +277,20 @@ class DocumentQueryEngine:
     async def create(
         cls,
         config: QueryConfig | None = None,
+        searcher: Any | None = None,
     ) -> DocumentQueryEngine:
         """
         Create a query engine with default components.
 
         Args:
             config: Query configuration
+            searcher: Searcher to use instead of the default hybrid searcher
 
         Returns:
             Configured DocumentQueryEngine
         """
+        if searcher is not None:
+            return cls(config=config, searcher=searcher)
         try:
             from aragora.documents.indexing.hybrid_search import create_hybrid_searcher
 
@@ -644,6 +648,8 @@ ANSWER:"""
         context_messages: list[dict],
     ) -> tuple[str, str]:
         """Call an LLM to generate the answer."""
+        from aragora.agents.errors.exceptions import AgentError
+
         # Try primary model
         try:
             from aragora.agents import create_agent
@@ -663,7 +669,7 @@ ANSWER:"""
                     full_prompt = prompt
                 response = await agent.generate(full_prompt)
                 return response, self.config.model
-        except (ImportError, RuntimeError, OSError, ValueError) as e:
+        except (ImportError, RuntimeError, OSError, ValueError, AgentError) as e:
             logger.warning("Primary model failed: %s, trying fallback", e)
 
         # Try fallback model
@@ -675,7 +681,7 @@ ANSWER:"""
             if agent:
                 response = await agent.generate(prompt)
                 return response, self.config.fallback_model
-        except (ImportError, RuntimeError, OSError, ValueError) as e:
+        except (ImportError, RuntimeError, OSError, ValueError, AgentError) as e:
             logger.error("Fallback model also failed: %s", e)
 
         # Last resort: return error message

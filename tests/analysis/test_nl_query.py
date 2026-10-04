@@ -404,6 +404,20 @@ class TestDocumentQueryEngine:
             pytest.skip("DocumentQueryEngine.create() requires external dependencies")
 
     @pytest.mark.asyncio
+    async def test_call_llm_provider_errors_fall_through_to_the_last_resort(self, query_engine):
+        """A provider API error on both models yields the model-unavailable answer."""
+        from aragora.agents.errors.exceptions import AgentAPIError
+
+        agent = MagicMock()
+        agent.generate = AsyncMock(side_effect=AgentAPIError("provider said 400"))
+        with patch("aragora.agents.create_agent", return_value=agent):
+            answer, model = await query_engine._call_llm("prompt", [])
+
+        assert answer == "Unable to generate answer due to model unavailability."
+        assert model == "none"
+        assert agent.generate.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_query_basic(self, query_engine, mock_searcher):
         """Test basic query functionality."""
         # Mock the LLM call
