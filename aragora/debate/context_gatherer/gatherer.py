@@ -91,6 +91,7 @@ class ContextGatherer(SourceGatheringMixin, CompressionMixin, MemoryMixin):
         document_store: Any | None = None,
         evidence_store: Any | None = None,
         document_ids: list[str] | None = None,
+        document_org_id: str | None = None,
         enable_document_context: bool = True,
         enable_evidence_store_context: bool = True,
         max_document_context_items: int = 5,
@@ -120,6 +121,9 @@ class ContextGatherer(SourceGatheringMixin, CompressionMixin, MemoryMixin):
             document_store: Optional DocumentStore for uploaded document context.
             evidence_store: Optional EvidenceStore for stored evidence context.
             document_ids: Optional explicit document IDs to include.
+            document_org_id: Org whose documents may be used. Without it no
+                document context is gathered; documents of other orgs or of an
+                unknown owner are never used.
             enable_document_context: Whether to include DocumentStore context.
             enable_evidence_store_context: Whether to include EvidenceStore context.
             max_document_context_items: Max documents to include.
@@ -146,6 +150,7 @@ class ContextGatherer(SourceGatheringMixin, CompressionMixin, MemoryMixin):
         self._document_store = document_store
         self._evidence_store = evidence_store
         self._document_ids = document_ids
+        self._document_org_id = document_org_id
         self._enable_document_context = enable_document_context
         self._enable_evidence_store_context = enable_evidence_store_context
         self._max_document_context_items = max_document_context_items

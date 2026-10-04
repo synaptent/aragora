@@ -186,6 +186,7 @@ def store_post_tracker_config(
     *,
     document_store: Any = None,
     evidence_store: Any = None,
+    document_org_id: str | None = None,
 ) -> None:
     """Store additional config flags not tracked via CoreComponents or TrackerComponents.
 
@@ -194,6 +195,7 @@ def store_post_tracker_config(
         cfg: MergedConfig from merge_config_objects.
         document_store: Optional document store for context injection.
         evidence_store: Optional evidence store for context injection.
+        document_org_id: Org whose documents may be injected as context.
     """
     # RLM / Staking feature flags
     arena.enable_rlm = getattr(cfg, "enable_rlm", False)
@@ -212,6 +214,7 @@ def store_post_tracker_config(
     arena.revalidation_scheduler = cfg.revalidation_scheduler
     # Document/evidence stores for context injection
     arena.document_store = document_store
+    arena.document_org_id = document_org_id
     arena.evidence_store = evidence_store
     # Supermemory integration (external memory persistence)
     arena.enable_supermemory = cfg.enable_supermemory

@@ -703,7 +703,7 @@ class DebateFactory:
         if config.trending_topic:
             builder = builder.with_trending_topic(config.trending_topic)
         if self.document_store:
-            builder = builder.with_document_store(self.document_store)
+            builder = builder.with_document_store(self.document_store, org_id=config.org_id)
         if self.evidence_store:
             builder = builder.with_evidence_store(self.evidence_store)
 

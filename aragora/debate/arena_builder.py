@@ -194,6 +194,7 @@ class ArenaBuilder:
         self._dissent_retriever: DissentRetriever | None = None
         self._evidence_collector: EvidenceCollector | None = None
         self._document_store: Any | None = None
+        self._document_org_id: str | None = None
         self._evidence_store: Any | None = None
         self._trending_topic: TrendingTopic | None = None
         self._consensus_memory: Any = None
@@ -620,9 +621,14 @@ class ArenaBuilder:
         self._evidence_collector = collector
         return self
 
-    def with_document_store(self, store: Any) -> ArenaBuilder:
-        """Set DocumentStore for uploaded document context."""
+    def with_document_store(self, store: Any, org_id: str | None = None) -> ArenaBuilder:
+        """Set DocumentStore for uploaded document context.
+
+        Only documents owned by ``org_id`` are used; without it the debate
+        gets no document context.
+        """
         self._document_store = store
+        self._document_org_id = org_id
         return self
 
     def with_evidence_store(self, store: Any) -> ArenaBuilder:
@@ -1187,6 +1193,7 @@ class ArenaBuilder:
             "moment_detector": self._moment_detector,
             "tier_analytics_tracker": self._tier_analytics_tracker,
             "document_store": self._document_store,
+            "document_org_id": self._document_org_id,
             "evidence_store": self._evidence_store,
             "loop_id": self._loop_id,
             "strict_loop_scoping": self._strict_loop_scoping,

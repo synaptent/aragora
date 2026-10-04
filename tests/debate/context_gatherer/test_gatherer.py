@@ -336,6 +336,7 @@ class TestInit:
             document_store=ds,
             evidence_store=es,
             document_ids=["d1", "d2"],
+            document_org_id="org-1",
             enable_document_context=True,
             enable_evidence_store_context=True,
             max_document_context_items=10,
@@ -344,6 +345,7 @@ class TestInit:
         assert g._document_store is ds
         assert g._evidence_store is es
         assert g._document_ids == ["d1", "d2"]
+        assert g._document_org_id == "org-1"
         assert g._max_document_context_items == 10
         assert g._max_evidence_context_items == 8
 
