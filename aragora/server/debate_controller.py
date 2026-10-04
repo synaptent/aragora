@@ -86,9 +86,10 @@ _SUPPORTED_COMPARISON_SELECTION_STRATEGIES = {
     _DEFAULT_COMPARISON_SELECTION_STRATEGY,
 }
 _FALLBACK_DEBATE_DEADLINE_SECONDS = 900.0
-# run_async() applies its own timeout (30 s by default) around the debate
-# coroutine. It must outlast the debate deadline so the deadline, not
-# run_async, cancels the arena, with a little time for the arena to unwind.
+# Arena.run enforces a positive protocol deadline itself and returns a timeout
+# result. The controller's own limit is only a backstop one margin later (for
+# protocols with no arena limit), and run_async's limit (30 s by default) comes
+# one margin after that, so each layer can unwind before the outer one fires.
 _RUN_ASYNC_CLEANUP_MARGIN_SECONDS = 15.0
 
 if TYPE_CHECKING:
@@ -110,6 +111,10 @@ def _resolve_debate_deadline(protocol_timeout: Any) -> float:
         if math.isfinite(candidate) and candidate > 0:
             return float(candidate)
     return _FALLBACK_DEBATE_DEADLINE_SECONDS
+
+
+class _DebateDeadlineReached(TimeoutError):
+    """Arena.run stopped the debate at its deadline; its result is not a completed debate."""
 
 
 def _parse_budget_limit(value: Any) -> float | None:
@@ -1193,12 +1198,19 @@ class DebateController:
         self.factory.reset_circuit_breakers(arena)
 
         timeout = _resolve_debate_deadline(getattr(arena.protocol, "timeout_seconds", 0))
-        update_debate_status(debate_id, "running")
+        update_debate_status(debate_id, "running", deadline_seconds=timeout)
 
         async def run_with_timeout():
-            return await asyncio.wait_for(arena.run(), timeout=timeout)
+            return await asyncio.wait_for(
+                arena.run(), timeout=timeout + _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+            )
 
-        result = run_async(run_with_timeout(), timeout=timeout + _RUN_ASYNC_CLEANUP_MARGIN_SECONDS)
+        result = run_async(
+            run_with_timeout(), timeout=timeout + 2 * _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+        )
+        result_metadata = getattr(result, "metadata", None)
+        if isinstance(result_metadata, dict) and result_metadata.get("deadline_exceeded"):
+            raise _DebateDeadlineReached(f"Debate stopped at its {timeout:.0f}s deadline")
         duration_seconds = time.monotonic() - candidate_started
 
         quality_meta: dict[str, Any] | None = None
@@ -1537,6 +1549,23 @@ class DebateController:
                 config=selected_config,
                 result=result,
                 duration_seconds=time.time() - start_time,
+            )
+
+        except _DebateDeadlineReached as e:
+            logger.warning("[debate] %s: %s", debate_id, e)
+            update_debate_status(debate_id, "timeout", error=str(e))
+            self.emitter.emit(
+                StreamEvent(
+                    type=StreamEventType.DEBATE_END,
+                    data={
+                        "debate_id": debate_id,
+                        "status": "timeout",
+                        "duration": time.time() - start_time,
+                        "rounds": 0,
+                        "error": str(e),
+                    },
+                    loop_id=debate_id,
+                )
             )
 
         except ValueError as e:
