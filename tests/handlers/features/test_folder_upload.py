@@ -29,7 +29,6 @@ import pytest
 
 from aragora.server.handlers.base import HandlerResult
 from aragora.server.handlers.features.folder_upload import (
-    ALLOWED_UPLOAD_DIRS,
     FolderUploadHandler,
     FolderUploadJob,
     FolderUploadStatus,
@@ -209,13 +208,13 @@ def reset_rate_limiters():
         pass
 
 
+ALLOWED_DIRS_ENV = "ARAGORA_ALLOWED_UPLOAD_DIRS"
+
+
 @pytest.fixture(autouse=True)
-def clear_allowed_dirs(monkeypatch):
-    """Clear ALLOWED_UPLOAD_DIRS by default (tests can override)."""
-    monkeypatch.setattr(
-        "aragora.server.handlers.features.folder_upload.ALLOWED_UPLOAD_DIRS",
-        [],
-    )
+def allow_tmp_path_uploads(monkeypatch, tmp_path):
+    """Folder scan and upload may read the test's tmp_path (tests can override)."""
+    monkeypatch.setenv(ALLOWED_DIRS_ENV, str(tmp_path))
 
 
 # ===========================================================================
@@ -392,22 +391,20 @@ class TestValidateUploadPath:
     """Tests for the _validate_upload_path helper."""
 
     def test_valid_existing_directory(self, tmp_path):
-        is_valid, error_msg, path = _validate_upload_path(str(tmp_path))
-        assert is_valid is True
-        assert error_msg == ""
-        assert path is not None
+        path = _validate_upload_path(str(tmp_path))
+        assert path == tmp_path.resolve()
 
-    def test_nonexistent_path(self):
-        is_valid, error_msg, _ = _validate_upload_path("/nonexistent/path/abcdef12345")
-        assert is_valid is False
-        assert "does not exist" in error_msg
+    def test_nonexistent_path(self, tmp_path):
+        result = _validate_upload_path(str(tmp_path / "missing"))
+        assert _status(result) == 404
+        assert "does not exist" in _body(result)["error"]
 
     def test_file_not_directory(self, tmp_path):
         f = tmp_path / "file.txt"
         f.write_text("hello")
-        is_valid, error_msg, _ = _validate_upload_path(str(f))
-        assert is_valid is False
-        assert "not a directory" in error_msg
+        result = _validate_upload_path(str(f))
+        assert _status(result) == 400
+        assert "not a directory" in _body(result)["error"]
 
     def test_allowed_dirs_restricts_path(self, tmp_path, monkeypatch):
         allowed_dir = tmp_path / "allowed"
@@ -415,45 +412,38 @@ class TestValidateUploadPath:
         blocked_dir = tmp_path / "blocked"
         blocked_dir.mkdir()
 
-        monkeypatch.setattr(
-            "aragora.server.handlers.features.folder_upload.ALLOWED_UPLOAD_DIRS",
-            [allowed_dir.resolve()],
-        )
+        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed_dir))
 
-        is_valid, _, _ = _validate_upload_path(str(allowed_dir))
-        assert is_valid is True
+        assert _validate_upload_path(str(allowed_dir)) == allowed_dir.resolve()
 
-        is_valid, error_msg, _ = _validate_upload_path(str(blocked_dir))
-        assert is_valid is False
-        assert "denied" in error_msg.lower()
+        result = _validate_upload_path(str(blocked_dir))
+        assert _status(result) == 403
+        assert "denied" in _body(result)["error"].lower()
 
     def test_allowed_dirs_subdirectory(self, tmp_path, monkeypatch):
         allowed_dir = tmp_path / "allowed"
         sub_dir = allowed_dir / "sub"
         sub_dir.mkdir(parents=True)
 
-        monkeypatch.setattr(
-            "aragora.server.handlers.features.folder_upload.ALLOWED_UPLOAD_DIRS",
-            [allowed_dir.resolve()],
-        )
+        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed_dir))
 
-        is_valid, _, _ = _validate_upload_path(str(sub_dir))
-        assert is_valid is True
+        assert _validate_upload_path(str(sub_dir)) == sub_dir.resolve()
 
-    def test_empty_allowed_dirs_allows_all(self, tmp_path):
-        # clear_allowed_dirs fixture already sets []
-        is_valid, _, _ = _validate_upload_path(str(tmp_path))
-        assert is_valid is True
+    def test_no_allowed_dirs_refuses_every_path(self, tmp_path, monkeypatch):
+        monkeypatch.delenv(ALLOWED_DIRS_ENV)
+        result = _validate_upload_path(str(tmp_path))
+        assert _status(result) == 403
+        assert _body(result)["code"] == "upload_dirs_not_configured"
 
     def test_empty_string_path(self):
-        is_valid, error_msg, _ = _validate_upload_path("")
-        # Empty string resolves to CWD which exists and is a directory
-        assert isinstance(is_valid, bool)
+        # An empty path resolves to the working directory, outside tmp_path
+        result = _validate_upload_path("")
+        assert _status(result) == 403
 
-    def test_path_with_null_bytes(self):
+    def test_path_with_null_bytes(self, tmp_path):
         """Path with null bytes should fail."""
-        is_valid, error_msg, _ = _validate_upload_path("/tmp/\x00bad")
-        assert is_valid is False
+        result = _validate_upload_path(f"{tmp_path}/\x00bad")
+        assert _status(result) == 400
 
     def test_symlink_directory(self, tmp_path):
         real_dir = tmp_path / "real"
@@ -461,9 +451,7 @@ class TestValidateUploadPath:
         link = tmp_path / "link"
         link.symlink_to(real_dir)
 
-        is_valid, _, path = _validate_upload_path(str(link))
-        assert is_valid is True
-        assert path is not None
+        assert _validate_upload_path(str(link)) == real_dir.resolve()
 
     def test_multiple_allowed_dirs(self, tmp_path, monkeypatch):
         dir_a = tmp_path / "a"
@@ -473,14 +461,11 @@ class TestValidateUploadPath:
         dir_b.mkdir()
         dir_c.mkdir()
 
-        monkeypatch.setattr(
-            "aragora.server.handlers.features.folder_upload.ALLOWED_UPLOAD_DIRS",
-            [dir_a.resolve(), dir_b.resolve()],
-        )
+        monkeypatch.setenv(ALLOWED_DIRS_ENV, f"{dir_a},{dir_b}")
 
-        assert _validate_upload_path(str(dir_a))[0] is True
-        assert _validate_upload_path(str(dir_b))[0] is True
-        assert _validate_upload_path(str(dir_c))[0] is False
+        assert _validate_upload_path(str(dir_a)) == dir_a.resolve()
+        assert _validate_upload_path(str(dir_b)) == dir_b.resolve()
+        assert _status(_validate_upload_path(str(dir_c))) == 403
 
 
 # ===========================================================================
@@ -720,8 +705,8 @@ class TestScanFolder:
         assert "path" in body.get("error", "").lower()
 
     @pytest.mark.asyncio
-    async def test_scan_nonexistent_path(self, handler):
-        http = _make_http(body={"path": "/nonexistent/path/xyz123"})
+    async def test_scan_nonexistent_path(self, handler, tmp_path):
+        http = _make_http(body={"path": str(tmp_path / "missing")})
         result = await handler.handle_post("/api/v1/documents/folder/scan", {}, http)
         assert _status(result) == 404
 
@@ -739,10 +724,7 @@ class TestScanFolder:
         test_dir.mkdir()
         allowed = tmp_path / "allowed"
         allowed.mkdir()
-        monkeypatch.setattr(
-            "aragora.server.handlers.features.folder_upload.ALLOWED_UPLOAD_DIRS",
-            [allowed.resolve()],
-        )
+        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed))
         http = _make_http(body={"path": str(test_dir)})
         result = await handler.handle_post("/api/v1/documents/folder/scan", {}, http)
         assert _status(result) == 403
@@ -902,8 +884,8 @@ class TestStartUpload:
         assert _status(result) == 400
 
     @pytest.mark.asyncio
-    async def test_upload_nonexistent_path(self, handler):
-        http = _make_http(body={"path": "/nonexistent/xxx/yyy"})
+    async def test_upload_nonexistent_path(self, handler, tmp_path):
+        http = _make_http(body={"path": str(tmp_path / "missing" / "yyy")})
         result = await handler.handle_post("/api/v1/documents/folder/upload", {}, http)
         assert _status(result) == 404
 
@@ -921,13 +903,11 @@ class TestStartUpload:
         target.mkdir()
         allowed = tmp_path / "allowed"
         allowed.mkdir()
-        monkeypatch.setattr(
-            "aragora.server.handlers.features.folder_upload.ALLOWED_UPLOAD_DIRS",
-            [allowed.resolve()],
-        )
+        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed))
         http = _make_http(body={"path": str(target)})
         result = await handler.handle_post("/api/v1/documents/folder/upload", {}, http)
         assert _status(result) == 403
+        assert FolderUploadHandler._jobs == {}
 
     @pytest.mark.asyncio
     async def test_upload_success(self, handler, tmp_path, monkeypatch):

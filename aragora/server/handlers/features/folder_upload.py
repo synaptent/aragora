@@ -12,6 +12,10 @@ Endpoints:
 Every route needs a caller with an org. Folder uploads belong to the org of the
 user who started them and their documents are stored under that org; another
 org's folder answers like a missing one.
+
+Scan and upload read server directories, so they only accept folders inside the
+directories listed in ARAGORA_ALLOWED_UPLOAD_DIRS and are refused while none is
+configured.
 """
 
 from __future__ import annotations
@@ -47,59 +51,69 @@ from aragora.tenancy.record_scope import (
 
 logger = logging.getLogger(__name__)
 
-# Allowed base directories for folder uploads (security: prevent access to arbitrary paths)
-# Configure via comma-separated list of allowed directories
-_ALLOWED_UPLOAD_DIRS_RAW = os.environ.get("ARAGORA_ALLOWED_UPLOAD_DIRS", "")
-ALLOWED_UPLOAD_DIRS: list[Path] = []
-if _ALLOWED_UPLOAD_DIRS_RAW:
-    ALLOWED_UPLOAD_DIRS = [
-        Path(d.strip()).resolve() for d in _ALLOWED_UPLOAD_DIRS_RAW.split(",") if d.strip()
-    ]
+ALLOWED_UPLOAD_DIRS_ENV = "ARAGORA_ALLOWED_UPLOAD_DIRS"
 
 
-def _validate_upload_path(folder_path: str) -> tuple[bool, str, Path | None]:
-    """Validate that a folder path is allowed for upload.
+def get_allowed_upload_dirs() -> list[Path]:
+    """Directories folder scan and upload may read, from ``ARAGORA_ALLOWED_UPLOAD_DIRS``.
 
-    Args:
-        folder_path: The user-provided folder path
-
-    Returns:
-        Tuple of (is_valid, error_message, resolved_path)
+    The value is a comma-separated list of absolute directory paths and is read
+    on every call. Relative, missing and non-directory entries are skipped; an
+    empty result means folder scan and upload are refused.
     """
+    allowed: list[Path] = []
+    for entry in os.environ.get(ALLOWED_UPLOAD_DIRS_ENV, "").split(","):
+        entry = entry.strip()
+        if not entry or not os.path.isabs(entry):
+            continue
+        try:
+            resolved = Path(entry).resolve()
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if resolved.is_dir():
+            allowed.append(resolved)
+    return allowed
+
+
+def _upload_dirs_not_configured() -> HandlerResult:
+    return json_response(
+        {
+            "error": "Folder scan and upload are disabled: no upload directories are "
+            f"configured on this server ({ALLOWED_UPLOAD_DIRS_ENV})",
+            "code": "upload_dirs_not_configured",
+        },
+        status=403,
+    )
+
+
+def _validate_upload_path(folder_path: str) -> Path | HandlerResult:
+    """Resolve a requested folder, or return the error response refusing it.
+
+    Containment is checked on the fully resolved path (symlinks and ``..``
+    included) before the path is tested for existence, so a path outside every
+    allowed directory gets the same answer whether or not it exists.
+    """
+    allowed_dirs = get_allowed_upload_dirs()
+    if not allowed_dirs:
+        return _upload_dirs_not_configured()
+
     try:
-        raw_path = Path(folder_path)
-        path = raw_path.resolve()
-    except (ValueError, OSError) as e:
-        return False, f"Invalid path: {e}", None
+        path = Path(folder_path).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return error_response("Invalid path", 400)
 
-    exists = path.exists()
-    if not isinstance(exists, bool):
-        exists = raw_path.exists()
-    if not exists:
-        return False, f"Path does not exist: {folder_path}", None
+    if not any(path.is_relative_to(allowed_dir) for allowed_dir in allowed_dirs):
+        logger.warning("Folder path outside the allowed upload directories refused")
+        return json_response(
+            {"error": "Access denied: path not in allowed directories", "code": "path_not_allowed"},
+            status=403,
+        )
 
-    is_dir = path.is_dir()
-    if not isinstance(is_dir, bool):
-        is_dir = raw_path.is_dir()
-    if not is_dir:
-        return False, f"Path is not a directory: {folder_path}", None
-
-    # If allowed directories are configured, validate path is within one of them
-    if ALLOWED_UPLOAD_DIRS:
-        path_allowed = False
-        for allowed_dir in ALLOWED_UPLOAD_DIRS:
-            try:
-                path.relative_to(allowed_dir)
-                path_allowed = True
-                break
-            except ValueError:
-                continue
-
-        if not path_allowed:
-            logger.warning("Path traversal blocked: %s not in allowed dirs", folder_path)
-            return False, "Access denied: path not in allowed directories", None
-
-    return True, "", path
+    if not path.exists():
+        return error_response(f"Path does not exist: {folder_path}", 404)
+    if not path.is_dir():
+        return error_response(f"Path is not a directory: {folder_path}", 400)
+    return path
 
 
 class FolderUploadStatus(Enum):
@@ -247,6 +261,8 @@ class FolderUploadHandler(BaseHandler):
         scope, scope_err = require_org_scope(handler)
         if scope is None:
             return scope_err
+        if not get_allowed_upload_dirs():
+            return _upload_dirs_not_configured()
 
         if path == "/api/v1/documents/folder/scan":
             return await self._scan_folder(handler)
@@ -290,17 +306,9 @@ class FolderUploadHandler(BaseHandler):
         if not folder_path:
             return error_response("Missing required field: path", 400)
 
-        # Validate path exists, is a directory, and is in allowed directories
-        is_valid, error_msg, path = _validate_upload_path(folder_path)
-        if not is_valid:
-            error_lower = str(error_msg).lower()
-            if "does not exist" in error_lower:
-                status_code = 404
-            elif "denied" in error_lower:
-                status_code = 403
-            else:
-                status_code = 400
-            return error_response(error_msg, status_code)
+        path = _validate_upload_path(folder_path)
+        if isinstance(path, HandlerResult):
+            return path
 
         # Build config from request
         config_data = body.get("config", {})
@@ -366,17 +374,9 @@ class FolderUploadHandler(BaseHandler):
         if not folder_path:
             return error_response("Missing required field: path", 400)
 
-        # Validate path exists, is a directory, and is in allowed directories
-        is_valid, error_msg, path = _validate_upload_path(folder_path)
-        if not is_valid or path is None:
-            error_lower = str(error_msg).lower()
-            if "does not exist" in error_lower:
-                status_code = 404
-            elif "denied" in error_lower:
-                status_code = 403
-            else:
-                status_code = 400
-            return error_response(error_msg, status_code)
+        path = _validate_upload_path(folder_path)
+        if isinstance(path, HandlerResult):
+            return path
 
         # Create job
         folder_id = str(uuid.uuid4())
