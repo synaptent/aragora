@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 from collections.abc import Callable
 
-from aragora.server.metrics import (
+from aragora.observability.server_metrics import (
     track_vector_index_batch,
     track_vector_operation,
     track_vector_search_results,

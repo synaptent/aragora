@@ -11,6 +11,9 @@ This package contains email prioritization and management handlers split by doma
 - inbox: Inbox fetch and rank handlers
 - config: Configuration handlers
 - vip: VIP management handlers
+
+Additional modules (import directly, without expanding eager package exports):
+email_debate, email_services and email_triage.
 """
 
 from .handler import EmailHandler

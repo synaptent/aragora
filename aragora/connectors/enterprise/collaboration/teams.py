@@ -157,9 +157,15 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             exclude_system_messages: Skip system/event messages
             messages_per_channel: Maximum messages to sync per channel
             use_delta_sync: Use delta queries for incremental sync
-            tenant_id: Azure AD tenant ID
+            tenant_id: Azure AD tenant ID used to request tokens (falls back to the
+                TEAMS_TENANT_ID credential). Stored as ``azure_tenant_id`` and
+                appended to ``connector_id`` (``teams-enterprise-<tenant_id>``), so
+                each Azure tenant gets its own sync state file and circuit breaker.
+                It does not set the Aragora tenant (``self.tenant_id``), which still
+                suffixes the state file name and keys the Knowledge Mound workspace.
         """
-        super().__init__(connector_id="teams-enterprise", **kwargs)
+        connector_id = f"teams-enterprise-{tenant_id}" if tenant_id else "teams-enterprise"
+        super().__init__(connector_id=connector_id, **kwargs)
 
         self.team_ids = team_ids or []
         self.channel_ids = channel_ids or []
@@ -170,7 +176,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         self.exclude_system_messages = exclude_system_messages
         self.messages_per_channel = messages_per_channel
         self.use_delta_sync = use_delta_sync
-        self.tenant_id = tenant_id
+        self.azure_tenant_id = tenant_id
 
         self._access_token: str | None = None
         self._token_expiry: datetime | None = None
@@ -194,7 +200,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             return self._access_token
 
         # Get credentials
-        tenant_id = self.tenant_id or await self.credentials.get_credential("TEAMS_TENANT_ID")
+        tenant_id = self.azure_tenant_id or await self.credentials.get_credential("TEAMS_TENANT_ID")
         client_id = await self.credentials.get_credential("TEAMS_CLIENT_ID")
         client_secret = await self.credentials.get_credential("TEAMS_CLIENT_SECRET")
 
@@ -234,7 +240,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         use_beta: bool = False,
     ) -> dict[str, Any]:
         """Make a request to Microsoft Graph API."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         token = await self._get_access_token()
         headers = {
@@ -265,7 +271,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         max_items: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Paginate through Graph API results."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         items_yielded = 0
         next_link = None
@@ -677,7 +683,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
     ) -> list:
         """Search Teams messages using Microsoft Search API."""
         from aragora.connectors.base import Evidence
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         # Build search request
         search_request = {
@@ -742,7 +748,12 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             return []
 
     async def fetch(self, evidence_id: str) -> Any | None:
-        """Fetch a specific Teams message."""
+        """Fetch a specific Teams message.
+
+        Not implemented: the evidence ID does not carry the team and channel
+        IDs the Graph API needs, so this always returns None. None here does
+        not mean the message does not exist.
+        """
 
         # Parse evidence ID: teams-msg-{message_id}
         if not evidence_id.startswith("teams-msg-"):

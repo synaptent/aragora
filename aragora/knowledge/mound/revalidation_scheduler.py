@@ -270,6 +270,11 @@ class RevalidationScheduler:
                 logger.exception("Unexpected task submission error: %s", e)
 
         # Fallback: use knowledge mound's schedule_revalidation
+        if self._knowledge_mound is None:
+            logger.warning(
+                "Failed to schedule revalidation via mound: %s", "no knowledge mound configured"
+            )
+            return None
         try:
             task_ids = await self._knowledge_mound.schedule_revalidation(
                 node_ids=[node_id],
@@ -395,7 +400,7 @@ async def _revalidate_via_debate(
     try:
         # Import debate components
         from aragora.core_types import Environment
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
         from aragora.debate.orchestrator import Arena
         from aragora.agents.factory import create_default_agents
 

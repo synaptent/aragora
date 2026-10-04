@@ -1641,9 +1641,11 @@ except ImportError:
     _GlobalAgent = None
     _global_real_agent_init = None
 
-_GLOBAL_OAUTH_IMPL_MODULE_NAME = "aragora.server.handlers._oauth_impl"
+_GLOBAL_OAUTH_IMPL_MODULE_NAME = "aragora.server.handlers.oauth._oauth_impl"
+# Pre-move flat path; the handlers package finder aliases it to the same object.
+_GLOBAL_OAUTH_IMPL_LEGACY_NAME = "aragora.server.handlers._oauth_impl"
 try:
-    import aragora.server.handlers._oauth_impl as _global_real_oauth_impl_module
+    import aragora.server.handlers.oauth._oauth_impl as _global_real_oauth_impl_module
 except ImportError:
     _global_real_oauth_impl_module = None
 
@@ -1761,9 +1763,10 @@ def _repair_global_mock_pollution(sys_module) -> None:
     # sys.modules. Restore the canonical module object between tests so later
     # re-export identity assertions see the original module again.
     if _global_real_oauth_impl_module is not None:
-        current = sys_module.modules.get(_GLOBAL_OAUTH_IMPL_MODULE_NAME)
-        if current is None:
-            sys_module.modules[_GLOBAL_OAUTH_IMPL_MODULE_NAME] = _global_real_oauth_impl_module
+        for _impl_key in (_GLOBAL_OAUTH_IMPL_MODULE_NAME, _GLOBAL_OAUTH_IMPL_LEGACY_NAME):
+            current = sys_module.modules.get(_impl_key)
+            if current is None:
+                sys_module.modules[_impl_key] = _global_real_oauth_impl_module
 
 
 @pytest.fixture(autouse=True)
@@ -1777,3 +1780,22 @@ def _global_mock_pollution_guard():
 
     # Teardown: same repairs
     _repair_global_mock_pollution(sys)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_merge_halt_markers(monkeypatch):
+    """Keep tests off the real main-red halt marker (#9216).
+
+    The merge guard reads ``.aragora/merge_executor.halt`` in the primary
+    checkout, which is armed whenever main is red. Without this, every test that
+    drives a merge path would fail during a main-red incident, which is when
+    agents run them most. Tests that need an armed halt patch these themselves.
+    """
+    from pathlib import Path
+
+    import aragora.swarm.merge_halt as merge_halt
+
+    absent = Path("/nonexistent-aragora-test-merge-halt")
+    monkeypatch.setattr(merge_halt, "DEFAULT_HALT_FILE", absent / "merge_executor.halt")
+    monkeypatch.setattr(merge_halt, "DEFAULT_WAIVER_FILE", absent / "merge_executor.waiver")
+    monkeypatch.setattr(merge_halt, "SHARED_ROOT_ERROR", None)

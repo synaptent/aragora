@@ -47,10 +47,8 @@ from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
 from aragora.exceptions import REDIS_CONNECTION_ERRORS
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 from aragora.persistence.db_config import get_default_data_dir
 
 if TYPE_CHECKING:
@@ -1297,7 +1295,7 @@ async def _send_via_sendgrid(
 ) -> dict[str, Any] | None:
     """Send email via SendGrid API."""
     try:
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
     except ImportError:
         logger.warning("HTTPClientPool not available, cannot send via SendGrid")
         return None

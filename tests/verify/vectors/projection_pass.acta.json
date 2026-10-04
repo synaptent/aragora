@@ -1,0 +1,170 @@
+{
+  "payload": {
+    "type": "aragora:decision",
+    "issued_at": "2026-01-15T12:10:00+00:00",
+    "issuer_id": "ed25519-56475aa75463474c",
+    "chain_scope": "acta-02",
+    "previousReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "payload_digest": {
+      "hash": "sha256:c8cc55c5fa928c5618b26e9a3f87d478254bd256254ba548b29be1f7e537c0be",
+      "size": 3009,
+      "preview": "{\"attestation\":{\"disposition\":\"autonomous\"},\"claim\":{\"statement\":\"Merge synaptent/aragora PR 10110: bound the ingest worker retry budget\",\"verdict\":\"PASS\"},\"confidence\":{\"calibration\":{\"provenance_ref\":{\"receipt_id\":\"odr-vector-merge-quorum\",\"type\":\"aragor"
+    },
+    "odr": {
+      "odr_version": "0.2",
+      "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
+      "receipt_id": "odr-vector-merge-quorum",
+      "issued_at": "2026-01-15T12:00:00+00:00",
+      "subject": {
+        "identifier": "odr-vector-merge-quorum-gauntlet",
+        "digest": {
+          "status": "present",
+          "alg": "sha-256",
+          "value": "aab2a58ddf595689ada37bfc27c91cd0fbd05c7e7e1ea8c5670397c31966032e"
+        },
+        "summary": "Merge synaptent/aragora PR 10110: bound the ingest worker retry budget",
+        "repository": "synaptent/aragora",
+        "pr_number": 10110,
+        "head_sha": "7f9c2ba4e88f827d616045507605853ed73b8093",
+        "base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+      },
+      "claim": {
+        "verdict": "PASS",
+        "statement": "Merge synaptent/aragora PR 10110: bound the ingest worker retry budget"
+      },
+      "reasoning": {
+        "status": "present",
+        "summary": "Three model families reviewed the diff against the retry-budget contract; none found a blocking defect."
+      },
+      "quorum": {
+        "status": "present",
+        "method": "merge-quorum",
+        "reached": true,
+        "supporting_agents": [
+          "claude",
+          "codex",
+          "gemini"
+        ],
+        "participants": [
+          {
+            "agent": "claude",
+            "model_family": "claude",
+            "model_id": "claude-opus-5"
+          },
+          {
+            "agent": "codex",
+            "model_family": "openai",
+            "model_id": "gpt-4.1-codex"
+          },
+          {
+            "agent": "gemini",
+            "model_family": "gemini",
+            "model_id": "gemini-3.1-pro-preview"
+          }
+        ],
+        "independence": {
+          "disclosed": true,
+          "distinct_model_families": 3,
+          "model_families": [
+            "claude",
+            "gemini",
+            "openai"
+          ]
+        },
+        "dissent": {
+          "present": false,
+          "dissenting_agents": [],
+          "views": []
+        },
+        "verdicts": [
+          {
+            "issuer": "claude",
+            "role": "reviewer",
+            "verdict": "approve",
+            "model_family": "claude",
+            "model_id": "claude-opus-5",
+            "posted_at": "2026-01-15T12:00:00+00:00",
+            "grounded": true,
+            "counted": true,
+            "blocking": false
+          },
+          {
+            "issuer": "codex",
+            "role": "reviewer",
+            "verdict": "approve",
+            "model_family": "openai",
+            "model_id": "gpt-4.1-codex",
+            "posted_at": "2026-01-15T12:00:00+00:00",
+            "grounded": true,
+            "counted": true,
+            "blocking": false
+          },
+          {
+            "issuer": "gemini",
+            "role": "reviewer",
+            "verdict": "approve",
+            "model_family": "gemini",
+            "model_id": "gemini-3.1-pro-preview",
+            "posted_at": "2026-01-15T12:00:00+00:00",
+            "grounded": true,
+            "counted": true,
+            "blocking": false
+          }
+        ],
+        "rule": {
+          "required_signals": 2,
+          "requires_western_frontier": true,
+          "western_only_counted": false,
+          "counted_families": [
+            "claude",
+            "openai"
+          ]
+        }
+      },
+      "confidence": {
+        "status": "present",
+        "value": 0.86,
+        "scale": "unit_interval",
+        "calibration": {
+          "status": "present",
+          "provenance_ref": {
+            "type": "aragora.settlement_metadata",
+            "receipt_id": "odr-vector-merge-quorum"
+          }
+        }
+      },
+      "cruxes": {
+        "status": "absent",
+        "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+      },
+      "attestation": {
+        "disposition": "autonomous"
+      },
+      "routing": {
+        "status": "reserved"
+      },
+      "signatures": [
+        {
+          "alg": "Ed25519",
+          "key_id": "ed25519-56475aa75463474c",
+          "issuer": "aragora",
+          "role": "emitter",
+          "signed_at": "2026-01-15T12:05:00+00:00",
+          "signature": "r+nrQvTNNgeu4tjQT3uR5vbrw+fQPD6stAU4f0fWbtgDHXrbhz7WNl297m7VzO0LlyJ83S9L7BK2TPic2mOGDw=="
+        }
+      ],
+      "source": {
+        "system": "aragora",
+        "schema": "aragora.gauntlet.DecisionReceipt",
+        "schema_version": "1.0",
+        "receipt_id": "odr-vector-merge-quorum",
+        "artifact_hash": "bcb6e3c192f859c659b7789e087275056138e324fb72648e372d71ce7e3d9184"
+      }
+    }
+  },
+  "signature": {
+    "alg": "EdDSA",
+    "kid": "ed25519-56475aa75463474c",
+    "sig": "700ffc9099387d63c57b357103625831ee6623110ee3405dbea1090fac99e5e56d84888e8d258e80bca52c9fa8661cc6696c8cbd660d0d7663398055a8798f09"
+  }
+}

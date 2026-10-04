@@ -155,7 +155,7 @@ class TestSchemaConstants:
         """SCHEMA_NAME should be defined."""
         mock_pool.acquire = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock()
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         store = PostgresDebateStorage(mock_pool, use_resilient=False)
         assert store.SCHEMA_NAME == "debate_storage"
@@ -164,7 +164,7 @@ class TestSchemaConstants:
         """SCHEMA_VERSION should be a positive integer."""
         mock_pool.acquire = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock()
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         store = PostgresDebateStorage(mock_pool, use_resilient=False)
         assert store.SCHEMA_VERSION >= 1
@@ -174,7 +174,7 @@ class TestSchemaConstants:
         """INITIAL_SCHEMA should create debates table."""
         mock_pool.acquire = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock()
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         store = PostgresDebateStorage(mock_pool, use_resilient=False)
         assert "CREATE TABLE IF NOT EXISTS debates" in store.INITIAL_SCHEMA
@@ -183,7 +183,7 @@ class TestSchemaConstants:
         """INITIAL_SCHEMA should create required indexes."""
         mock_pool.acquire = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock()
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         store = PostgresDebateStorage(mock_pool, use_resilient=False)
         assert "idx_debates_slug" in store.INITIAL_SCHEMA

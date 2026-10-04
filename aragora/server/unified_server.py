@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from aragora.memory.consensus import ConsensusMemory, DissentRetriever
     from aragora.persistence.supabase import SupabaseClient
     from aragora.ranking.elo import EloSystem
-    from aragora.server.documents import DocumentStore
+    from aragora.documents.parsing import DocumentStore
     from aragora.server.stream.canvas_stream import CanvasStreamServer
     from aragora.storage import UserStore
 import logging
@@ -538,7 +538,7 @@ class UnifiedHandler(  # type: ignore[misc]
 
     def _serve_live_spectate_stream(self, query: dict[str, Any]) -> bool:
         """Write a live SSE response for the public spectate stream endpoint."""
-        from aragora.server.handlers.spectate_ws import (
+        from aragora.server.handlers.streaming.spectate_ws import (
             _can_view_live_debates,
             _get_optional_user_from_request,
             iter_live_spectate_sse_frames,
@@ -814,6 +814,86 @@ class UnifiedHandler(  # type: ignore[misc]
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress default logging."""
         pass
+
+
+async def _validate_parallel_init_prerequisites() -> dict[str, Any] | None:
+    """Run the sequential path's pre-init validation ahead of ``parallel_init``.
+
+    ``run_startup_sequence`` validates configuration (Phase 1) and production
+    requirements (Phase 2) before initializing any component, while
+    ``parallel_init`` does neither. This applies the same checks with the same
+    graceful/strict semantics so both init paths reject the same misconfigured
+    boots. Together with ``run_startup_sequence`` this is the boot-time
+    validation site; ``startup.validation_runner.run_startup_validation`` is
+    not called during boot.
+
+    Backend connectivity is left to ``parallel_init``'s own connectivity gate.
+    The storage-backend check, migrations and schema validation stay
+    sequential-only: production deploys running sqlite without
+    ``ARAGORA_ALLOW_SQLITE_FALLBACK`` boot on the parallel path, and migrations
+    mutate databases rather than validate prerequisites.
+
+    Returns:
+        The degraded startup status when a production requirement is missing
+        under graceful degradation, otherwise ``None``.
+
+    Raises:
+        RuntimeError: Under ``ARAGORA_STRICT_STARTUP`` when configuration or
+            production requirements fail validation.
+    """
+    from aragora.server.degraded_mode import DegradedErrorCode, set_degraded
+    from aragora.server.startup import (
+        _validate_config,
+        check_production_requirements,
+        init_billing_edge_adapters,
+        init_security_edge_adapters,
+    )
+    from aragora.server.startup.security import _get_degraded_status
+
+    strict_startup = os.environ.get("ARAGORA_STRICT_STARTUP", "").lower() in ("1", "true", "yes")
+    graceful_degradation = not strict_startup
+
+    await _validate_config(graceful_degradation)
+
+    missing_requirements = check_production_requirements()
+    if missing_requirements:
+        for req in missing_requirements:
+            logger.error("Missing production requirement: %s", req)
+
+        error_msg = f"Production requirements not met: {', '.join(missing_requirements)}"
+        if not graceful_degradation:
+            raise RuntimeError(error_msg)
+
+        error_code = DegradedErrorCode.CONFIG_ERROR
+        if any("ENCRYPTION_KEY" in r for r in missing_requirements):
+            error_code = DegradedErrorCode.ENCRYPTION_KEY_MISSING
+        elif any("REDIS" in r for r in missing_requirements):
+            error_code = DegradedErrorCode.REDIS_UNAVAILABLE
+        elif any("DATABASE" in r for r in missing_requirements):
+            error_code = DegradedErrorCode.DATABASE_UNAVAILABLE
+
+        set_degraded(
+            reason=error_msg,
+            error_code=error_code,
+            details={"missing_requirements": missing_requirements},
+        )
+        status = _get_degraded_status()
+        status["security_edge_adapters"] = init_security_edge_adapters(strict=False)
+        status["billing_edge_adapters"] = init_billing_edge_adapters(strict=False)
+        return status
+
+    try:
+        from aragora.server.handlers.oauth.config import validate_oauth_config
+
+        oauth_missing = validate_oauth_config()
+        if oauth_missing:
+            logger.warning(
+                "[STARTUP] OAuth configuration incomplete: %s. OAuth login may fail.", oauth_missing
+            )
+    except ImportError:
+        logger.debug("OAuth config module not available - skipping OAuth validation")
+
+    return None
 
 
 class UnifiedServer:
@@ -1216,10 +1296,14 @@ class UnifiedServer:
             from aragora.server.startup import parallel_init
 
             logger.info("[startup] Using parallel initialization")
-            startup_status = await parallel_init(
-                nomic_dir=self.nomic_dir,
-                stream_emitter=self.stream_server.emitter,
-            )
+            degraded_status = await _validate_parallel_init_prerequisites()
+            if degraded_status is not None:
+                startup_status = degraded_status
+            else:
+                startup_status = await parallel_init(
+                    nomic_dir=self.nomic_dir,
+                    stream_emitter=self.stream_server.emitter,
+                )
 
             # Log parallel init timing
             if startup_status.get("_parallel_init_duration_ms"):

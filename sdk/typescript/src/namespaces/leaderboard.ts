@@ -104,9 +104,6 @@ interface LeaderboardClientInterface {
  * // Get global leaderboard
  * const { rankings } = await client.leaderboard.getRankings();
  *
- * // Get agent performance
- * const perf = await client.leaderboard.getAgentPerformance('claude');
- *
  * // Compare two agents
  * const comparison = await client.leaderboard.compareAgents('claude', 'gpt4');
  * ```
@@ -133,43 +130,11 @@ export class LeaderboardAPI {
   }
 
   /**
-   * Get rankings for a specific domain.
-   */
-  async getDomainRankings(
-    domain: string,
-    options?: { limit?: number }
-  ): Promise<DomainLeaderboard> {
-    return this.client.request('GET', `/api/leaderboard/domain/${domain}`, { params: options });
-  }
-
-  /**
-   * Get detailed performance metrics for an agent.
-   */
-  async getAgentPerformance(
-    agentName: string,
-    options?: { period?: '7d' | '30d' | '90d' | 'all' }
-  ): Promise<AgentPerformance> {
-    return this.client.request('GET', `/api/leaderboard/agent/${agentName}`, { params: options });
-  }
-
-  /**
    * Compare two agents head-to-head.
    */
   async compareAgents(agentA: string, agentB: string): Promise<HeadToHead> {
     return this.client.request('GET', '/api/leaderboard/compare', {
       params: { agent_a: agentA, agent_b: agentB },
-    });
-  }
-
-  /**
-   * Get ELO history for an agent.
-   */
-  async getEloHistory(
-    agentName: string,
-    options?: { period?: '7d' | '30d' | '90d' | 'all' }
-  ): Promise<{ history: Array<{ date: string; elo: number; debate_id?: string }> }> {
-    return this.client.request('GET', `/api/leaderboard/agent/${agentName}/elo-history`, {
-      params: options,
     });
   }
 

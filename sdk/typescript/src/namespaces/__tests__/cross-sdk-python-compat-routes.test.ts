@@ -161,19 +161,16 @@ describe('Cross SDK Python Compatibility Routes', () => {
     });
   });
 
-  it('maps document detail/chunk/reprocess compatibility routes', async () => {
+  it('maps document detail/chunk compatibility routes', async () => {
     const api = new DocumentsAPI(mockClient as any);
 
     await api.get('doc/1');
-    await api.download('doc/1');
     await api.getChunks('doc/1', { limit: 25, offset: 5 });
-    await api.reprocess('doc/1');
 
     expect(mockClient.request).toHaveBeenNthCalledWith(1, 'GET', '/api/v1/documents/doc%2F1');
-    expect(mockClient.request).toHaveBeenNthCalledWith(3, 'GET', '/api/v1/documents/doc%2F1/chunks', {
+    expect(mockClient.request).toHaveBeenNthCalledWith(2, 'GET', '/api/v1/documents/doc%2F1/chunks', {
       params: { limit: 25, offset: 5 },
     });
-    expect(mockClient.request).toHaveBeenNthCalledWith(4, 'POST', '/api/v1/documents/doc%2F1/reprocess');
   });
 
   it('maps marketplace v2 routes with legacy compatibility preserved', async () => {

@@ -35,14 +35,18 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 
-_handler_spec = importlib.util.find_spec("aragora.server.handlers.computer_use_handler")
+_handler_spec = importlib.util.find_spec(
+    "aragora.server.handlers.integrations.computer_use_handler"
+)
 if _handler_spec and _handler_spec.origin:
     _handler_path = Path(_handler_spec.origin)
 else:
     repo_root = _find_repo_root(Path(__file__).resolve())
     if repo_root is None:
         repo_root = Path(tempfile.gettempdir())
-    _handler_path = repo_root / "aragora" / "server" / "handlers" / "computer_use_handler.py"
+    _handler_path = (
+        repo_root / "aragora" / "server" / "handlers" / "integrations" / "computer_use_handler.py"
+    )
 _spec = importlib.util.spec_from_file_location("computer_use_handler", str(_handler_path))
 if _spec and _spec.loader:
     _module = importlib.util.module_from_spec(_spec)

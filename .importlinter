@@ -12,15 +12,25 @@
 #   domain          debate, agents, memory, knowledge, ranking, reasoning,
 #                   evidence, evaluation, explainability, learning, ml
 #   infrastructure  storage, resilience, events, observability, security,
-#                   queue, db, caching, billing, backup, migrations
-#   foundation      config, core_types, exceptions, errors, utils, protocols,
-#                   types
+#                   queue, db, caching, billing, backup, migrations, cache,
+#                   deletion_coordinator, fabric, maintenance, monitoring,
+#                   performance, resilience_config, resilience_patterns,
+#                   runtime, sandbox, streaming, telemetry, transcription,
+#                   auth, logging_config, notifications, persistence, privacy,
+#                   rbac, tenancy
+#   foundation      api_errors, config, core_types, exceptions, errors, utils,
+#                   protocols, types, __version__, _lazy_imports,
+#                   core_protocols, docs_only, http_client, models,
+#                   serialization, task_brief, topic_handler, topic_spec,
+#                   topics, type_protocols, shared
 #
 # Siblings within a layer are colon-separated (":"), i.e. non-independent: they
 # may import one another freely; only the cross-layer direction is enforced.
 #
 # This is an *adoption* contract: main currently has many upward imports and
-# 176 mutual cycles, so the contract cannot pass clean at adoption. Enforcement
+# 139 mutual cycles (measured 2026-10-04 with TYPE_CHECKING imports excluded;
+# ratchet in scripts/baselines/import_cycles_baseline.json), so the contract
+# cannot pass clean at adoption. Enforcement
 # is shrink-only via scripts/ci/check_import_contracts.py, which freezes the
 # current violation set into scripts/baselines/import_contracts_baseline.json
 # and fails only on NEW violations (fail-on-new). Bottom layers
@@ -30,20 +40,23 @@
 # module_tiers cross-check (VAL-P0-006)
 # ----------------------------------------------------------------------------
 # Every layer assignment above was cross-checked against aragora/module_tiers.yaml
-# on 2026-06-12. Outcome: 0 discrepancies. All 48 layered names resolve to a real
-# top-level module in the local source tree; the 44 that are directory packages
-# all appear in module_tiers.yaml with a consistent tier, and the 4 foundation
-# primitives that are single-file modules (api_errors, core_types, exceptions,
-# errors) are real importable modules that module_tiers.yaml does not track because it
-# enumerates package directories only (not a discrepancy). The remaining ~94
-# module_tiers packages are intentionally left unlayered here: architecture.md
-# section 2 lists representative members per layer (trailing "..."), and the full
-# layering is completed in P4a. Because the discrepancy count is zero, no operator
-# Decision line is required. See the PR body for the full cross-check table.
+# (first on 2026-06-12, last on 2026-10-04). Outcome: 0 discrepancies. All 84
+# layered names resolve to a real top-level module in the local source tree; the
+# 64 that are directory packages all appear in module_tiers.yaml (20 core, 38
+# integrated, 6 experimental, none deprecated), and the 20 that are single-file
+# modules (for example api_errors, core_types, exceptions, errors, cache,
+# http_client, logging_config) are real importable modules that module_tiers.yaml
+# does not track because it enumerates package directories only (not a
+# discrepancy). The other 80 module_tiers packages are not layered yet;
+# tranches add names only by appending them to the existing layer lines.
+# Because the discrepancy count is zero, no operator Decision line is required.
 # ============================================================================
 
 [importlinter]
 root_package = aragora
+# Imports guarded by `if TYPE_CHECKING:` create no layer edge; runtime imports at
+# any scope still do. import-linter accepts only the spellings True/true here.
+exclude_type_checking_imports = True
 
 [importlinter:contract:aragora-layers]
 name = Aragora layers: interface > application > domain > infrastructure > foundation
@@ -61,5 +74,5 @@ layers =
     server : cli : mcp : gateway : bots : channels : integrations : connectors
     workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate
     debate : agents : memory : knowledge : ranking : reasoning : evidence : evaluation : explainability : learning : ml
-    storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations
-    api_errors : config : core_types : exceptions : errors : utils : protocols : types
+    storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations : cache : deletion_coordinator : fabric : maintenance : monitoring : performance : resilience_config : resilience_patterns : runtime : sandbox : streaming : telemetry : transcription : auth : logging_config : notifications : persistence : privacy : rbac : tenancy
+    api_errors : config : core_types : exceptions : errors : utils : protocols : types : __version__ : _lazy_imports : core_protocols : docs_only : http_client : models : serialization : task_brief : topic_handler : topic_spec : topics : type_protocols : shared
