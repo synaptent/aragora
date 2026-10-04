@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import configparser
 import importlib.util
+import json
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _CONFIG = REPO_ROOT / ".importlinter"
 _CHECKER_PATH = REPO_ROOT / "scripts" / "ci" / "check_import_contracts.py"
+_CYCLES_BASELINE = REPO_ROOT / "scripts" / "baselines" / "import_cycles_baseline.json"
 
 _LAYERS = ("interface", "application", "domain", "infrastructure", "foundation")
 
@@ -116,6 +119,18 @@ _TRANCHES: dict[str, dict[str, tuple[str, ...]]] = {
             "topics",
             "type_protocols",
         ),
+    },
+    "T2": {
+        "infrastructure": (
+            "auth",
+            "logging_config",
+            "notifications",
+            "persistence",
+            "privacy",
+            "rbac",
+            "tenancy",
+        ),
+        "foundation": ("shared",),
     },
 }
 
@@ -252,3 +267,14 @@ def test_ignore_imports_holds_exactly_the_sanctioned_seams():
         if line.strip() and not line.strip().startswith("#")
     }
     assert entries == _SEAMS, entries
+
+
+def test_header_cycle_count_does_not_exceed_the_cycle_ratchet():
+    # The header quotes a measured mutual-cycle count. It may lag a later shrink,
+    # but a count above the shrink-only ratchet value is stale by construction.
+    header = _CONFIG.read_text(encoding="utf-8").split("[importlinter]", 1)[0]
+    prose = re.sub(r"\n#\s*", " ", header)
+    counts = [int(n) for n in re.findall(r"(\d+) mutual cycles", prose)]
+    assert counts, "the header no longer states the measured mutual-cycle count"
+    ratchet = json.loads(_CYCLES_BASELINE.read_text(encoding="utf-8"))["value"]
+    assert all(count <= ratchet for count in counts), (counts, ratchet)
