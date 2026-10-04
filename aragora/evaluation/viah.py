@@ -15,7 +15,7 @@ The metric:
     ) / agent_hours
 
 Inputs are read from any ledger satisfying the structural
-:class:`ViahLedger` protocol, such as :class:`aragora.swarm.shift_ledger.
+:class:`ViahLedger` protocol, such as :class:`aragora.evaluation.shift_ledger.
 ShiftLedger`. Signals that depend on AGT-05 wiring (crux correctness,
 prediction resolutions, failed claims) are accepted as optional sidecar
 counts so this module can land before AGT-05 settlement is live; counts
@@ -62,8 +62,8 @@ _EntryT_co = TypeVar("_EntryT_co", bound=ViahLedgerEntry, covariant=True)
 class ViahLedger(Protocol[_EntryT_co]):
     """Ledger surface VIAH reads from and appends snapshots to.
 
-    :class:`aragora.swarm.shift_ledger.ShiftLedger` satisfies this protocol
-    structurally; evaluation code must not import it (layer contract).
+    :class:`aragora.evaluation.shift_ledger.ShiftLedger` satisfies this protocol
+    structurally; VIAH depends only on the protocol.
     """
 
     @property
@@ -505,7 +505,7 @@ def persist_viah_snapshot(
     """Persist a ViahReport to the ledger as a ``viah_snapshot`` entry.
 
     Returns whatever ``ledger.append`` returns (a ``LedgerEntry`` for a
-    :class:`aragora.swarm.shift_ledger.ShiftLedger`).
+    :class:`aragora.evaluation.shift_ledger.ShiftLedger`).
 
     Gated behind ``ARAGORA_VIAH_TREND_ENABLED`` — the same flag that guards
     :func:`rolling_viah_trend`.  Raises ``RuntimeError`` when the flag is
@@ -546,7 +546,7 @@ def read_viah_snapshots(
 
     Args:
         ledger: The :class:`ViahLedger` to read (for example a
-            :class:`~aragora.swarm.shift_ledger.ShiftLedger`).
+            :class:`~aragora.evaluation.shift_ledger.ShiftLedger`).
         max_count: If given, return at most this many most-recent snapshots.
     """
     entries = ledger.read_by_type(VIAH_SNAPSHOT_ENTRY_TYPE)
