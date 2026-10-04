@@ -680,6 +680,18 @@ class TestDefaultRoutePermissions:
             ("/api/v1/decisions/plans/plan-123/execute", "POST", "decisions.update"),
             ("/api/decisions/plans", "GET", "decisions.read"),
             ("/api/decisions/plans", "POST", "decisions.create"),
+            ("/api/v1/plans", "GET", "plans.read"),
+            ("/api/plans", "GET", "plans.read"),
+            ("/api/v1/plans", "POST", "plans.create"),
+            ("/api/v1/plans/plan-123", "GET", "plans.read"),
+            ("/api/v1/plans/plan-123/memo", "GET", "plans.read"),
+            ("/api/v1/plans/plan-123/approve", "POST", "plans.approve"),
+            ("/api/v1/plans/plan-123/approve", "PUT", "plans.approve"),
+            ("/api/plans/plan-123/reject", "POST", "plans.deny"),
+            ("/api/v1/plans/plan-123/execute", "POST", "plans.approve"),
+            ("/api/runs", "GET", "orchestration.read"),
+            ("/api/v1/runs", "GET", "orchestration.read"),
+            ("/api/runs/run-123", "GET", "orchestration.read"),
             ("/api/v1/settlements", "GET", "settlements:read"),
             ("/api/v1/settlements/history", "GET", "settlements:read"),
             ("/api/v1/settlements/summary", "GET", "settlements:read"),
@@ -700,6 +712,43 @@ class TestDefaultRoutePermissions:
             mock_get.return_value = MagicMock()
             middleware = RBACMiddleware(validate_permissions=False)
             assert middleware.get_required_permission(path, method) == expected_permission
+
+    @pytest.mark.parametrize(
+        "path,method",
+        [
+            ("/api/v1/plans", "GET"),
+            ("/api/plans", "GET"),
+            ("/api/v1/plans/plan-123", "GET"),
+            ("/api/v1/plans/plan-123/approve", "POST"),
+            ("/api/runs", "GET"),
+            ("/api/runs/run-123", "GET"),
+        ],
+    )
+    def test_plan_and_run_routes_require_authentication(self, path: str, method: str):
+        """Plans and runs are org-owned records: anonymous requests are refused."""
+        with patch("aragora.rbac.middleware.get_permission_checker") as mock_get:
+            mock_get.return_value = MagicMock()
+            middleware = RBACMiddleware(validate_permissions=False)
+            allowed, reason, _ = middleware.check_request(path, method, None)
+        assert allowed is False
+        assert reason == "Authentication required"
+
+    def test_plan_and_run_routes_allow_org_owners(self):
+        """Owners keep access to plans and runs (records are then scoped by org)."""
+        middleware = RBACMiddleware(validate_permissions=False)
+        owner = AuthorizationContext(user_id="owner-1", org_id="org-1", roles={"owner"})
+
+        for path, method in (
+            ("/api/v1/plans", "GET"),
+            ("/api/v1/plans", "POST"),
+            ("/api/v1/plans/plan-123/memo", "GET"),
+            ("/api/v1/plans/plan-123/approve", "PUT"),
+            ("/api/v1/plans/plan-123/execute", "POST"),
+            ("/api/runs", "GET"),
+            ("/api/runs/run-123", "GET"),
+        ):
+            allowed, reason, _ = middleware.check_request(path, method, owner)
+            assert allowed is True, f"{method} {path}: {reason}"
 
     def test_settlement_routes_resolve_for_standard_roles(self):
         """Settlement routes should allow read access to members and write access to admins."""

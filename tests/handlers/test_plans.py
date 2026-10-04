@@ -1268,3 +1268,101 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 # Org isolation
 # ---------------------------------------------------------------------------
+
+
+class TestOrgIsolation:
+    """Plans owned by another org (or by nobody) are indistinguishable from missing ones."""
+
+    @pytest.fixture(params=["other-org-999", None], ids=["other_org", "unowned"])
+    def foreign_plan(self, request, mock_store):
+        plan = _make_plan(id="dp-foreign", status=PlanStatus.APPROVED, org_id=request.param)
+        mock_store.get.return_value = plan
+        return plan
+
+    @pytest.mark.parametrize("path", ["/api/v1/plans/dp-foreign", "/api/v1/plans/dp-foreign/memo"])
+    def test_get_foreign_plan_matches_missing(
+        self, handler, mock_store, http_get, foreign_plan, path
+    ):
+        foreign = handler.handle(path, {}, http_get)
+        mock_store.get.return_value = None
+        missing = handler.handle(path.replace("dp-foreign", "dp-missing"), {}, http_get)
+
+        assert _status(foreign) == _status(missing) == 404
+        assert _body(foreign) == _body(missing) == NOT_FOUND_BODY
+
+    @pytest.mark.parametrize("action", ["approve", "reject", "execute"])
+    def test_mutating_foreign_plan_matches_missing(
+        self, handler, mock_store, http_post_factory, foreign_plan, action
+    ):
+        foreign_plan.status = (
+            PlanStatus.AWAITING_APPROVAL if action != "execute" else PlanStatus.APPROVED
+        )
+        with (
+            patch("aragora.server.handlers.plans._fire_plan_notification"),
+            patch("aragora.pipeline.canonical_execution.queue_plan_execution") as mock_queue,
+        ):
+            result = handler.handle_post(
+                f"/api/v1/plans/dp-foreign/{action}", {}, http_post_factory(body={"reason": "x"})
+            )
+
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
+        mock_store.update_status_for_org.assert_not_called()
+        mock_queue.assert_not_called()
+
+    def test_list_passes_caller_org(self, handler, mock_store, http_get):
+        handler.handle("/api/v1/plans", {"debate_id": "dbt-1", "status": "approved"}, http_get)
+
+        mock_store.list_for_org.assert_called_once_with(
+            TEST_ORG, debate_id="dbt-1", status=PlanStatus.APPROVED, limit=50, offset=0
+        )
+        mock_store.count_for_org.assert_called_once_with(
+            TEST_ORG, debate_id="dbt-1", status=PlanStatus.APPROVED
+        )
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_list_is_401(self, handler, mock_store, http_get):
+        result = handler.handle("/api/v1/plans", {}, http_get)
+
+        assert _status(result) == 401
+        assert _body(result)["code"] == "auth_required"
+        mock_store.list_for_org.assert_not_called()
+
+    def test_update_race_returns_not_found(self, handler, mock_store, http_post_factory):
+        mock_store.get.return_value = _make_plan(id="dp-race")
+        mock_store.update_status_for_org.return_value = False
+
+        result = handler.handle_post(
+            "/api/v1/plans/dp-race/approve", {}, http_post_factory(body={})
+        )
+
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
+
+    def test_execute_not_authorized_maps_to_not_found(self, handler, mock_store, http_post_factory):
+        mock_store.get.return_value = _make_plan(id="dp-noauth", status=PlanStatus.APPROVED)
+
+        with patch(
+            "aragora.pipeline.canonical_execution.queue_plan_execution",
+            side_effect=ExecutionNotAuthorizedError("org_mismatch", "nope"),
+        ):
+            result = handler.handle_post(
+                "/api/v1/plans/dp-noauth/execute", {}, http_post_factory(body={})
+            )
+
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
+
+    def test_put_approve_for_owner(self, handler, mock_store, http_post_factory):
+        mock_store.get.return_value = _make_plan(id="dp-put")
+        http_handler = http_post_factory(body={"reason": "ok"})
+        http_handler.command = "PUT"
+
+        with patch("aragora.server.handlers.plans._fire_plan_notification"):
+            result = handler.handle_put("/api/v1/plans/dp-put/approve", {}, http_handler)
+
+        assert _status(result) == 200
+        assert _body(result)["status"] == "approved"
+        mock_store.update_status_for_org.assert_called_once_with(
+            "dp-put", TEST_ORG, PlanStatus.APPROVED, approved_by="test-user-001"
+        )
