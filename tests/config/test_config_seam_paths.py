@@ -127,7 +127,8 @@ def test_config_has_no_runtime_import_of_persistence_or_tenancy() -> None:
             id(inner)
             for node in ast.walk(tree)
             if isinstance(node, ast.If) and ast.unparse(node.test).endswith("TYPE_CHECKING")
-            for inner in ast.walk(node)
+            for stmt in node.body
+            for inner in ast.walk(stmt)
         }
         for node in ast.walk(tree):
             if id(node) in type_checking:
