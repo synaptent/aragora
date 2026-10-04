@@ -158,7 +158,7 @@ class TestFollowUpHandlers:
         assert "thread_id" in result.get("error", "")
 
     @pytest.mark.asyncio
-    async def test_get_pending_followups(self, mock_tracker):
+    async def test_get_pending_followups(self, mock_tracker, admin_auth):
         """Should return pending follow-ups."""
         mock_item = MagicMock()
         mock_item.id = "fu_123"
@@ -176,7 +176,7 @@ class TestFollowUpHandlers:
 
         mock_tracker.get_pending_followups = AsyncMock(return_value=[mock_item])
 
-        result = parse_result(await handle_get_pending_followups(user_id="user_1"))
+        result = parse_result(await handle_get_pending_followups(auth_context=admin_auth))
 
         assert result["success"] is True
         assert len(result["data"]["followups"]) == 1
@@ -222,12 +222,12 @@ class TestFollowUpHandlers:
         assert result["_status_code"] == 404
 
     @pytest.mark.asyncio
-    async def test_check_replies(self, mock_tracker):
+    async def test_check_replies(self, mock_tracker, admin_auth):
         """Should check for replies."""
         mock_tracker.get_pending_followups = AsyncMock(return_value=[])
         mock_tracker.check_for_replies = AsyncMock(return_value=[])
 
-        result = parse_result(await handle_check_replies(user_id="user_1"))
+        result = parse_result(await handle_check_replies(auth_context=admin_auth))
 
         assert result["success"] is True
         assert result["data"]["replied"] == []
@@ -251,9 +251,8 @@ class TestSnoozeHandlers:
         mock_suggestion = MagicMock()
         mock_suggestion.snooze_until = datetime.now() + timedelta(hours=2)
         mock_suggestion.label = "In 2 hours"
-        mock_suggestion.reason = "Quick reminder"
+        mock_suggestion.reason.value = "work_hours"
         mock_suggestion.confidence = 0.8
-        mock_suggestion.source = "quick"
 
         mock_recommendation = MagicMock()
         mock_recommendation.suggestions = [mock_suggestion]
@@ -328,7 +327,7 @@ class TestSnoozeHandlers:
             auth_context=admin_auth,
         )
 
-        result = parse_result(await handle_get_snoozed_emails(user_id="user_1"))
+        result = parse_result(await handle_get_snoozed_emails(auth_context=admin_auth))
 
         assert result["success"] is True
         assert "snoozed" in result["data"]

@@ -39,6 +39,9 @@ from aragora.server.handlers.email_services import (
     _snoozed_emails,
     _snoozed_emails_lock,
 )
+from aragora.server.handlers.email.email_services import _followup_owners
+from aragora.services.followup_tracker import FollowUpPriority
+from aragora.services.snooze_recommender import SnoozeReason
 
 
 # ===========================================================================
@@ -84,9 +87,10 @@ class MockFollowUpItem:
     expected_by: datetime | None = None
     status: MockFollowUpStatus = MockFollowUpStatus.AWAITING
     days_waiting: int = 2
-    urgency_score: float = 0.5
+    priority: FollowUpPriority = FollowUpPriority.NORMAL
     reminder_count: int = 0
     resolved_at: datetime | None = None
+    updated_at: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
         if self.expected_by is None:
@@ -106,9 +110,8 @@ class MockSnoozeSuggestion:
 
     snooze_until: datetime
     label: str = "Tomorrow morning"
-    reason: str = "work_hours"
+    reason: SnoozeReason = SnoozeReason.WORK_HOURS
     confidence: float = 0.85
-    source: str = "schedule"
 
 
 @dataclass
@@ -165,8 +168,9 @@ class MockFollowUpTracker:
         user_id: str = "default",
         include_resolved: bool = False,
         sort_by: str = "urgency",
+        only_ids: set[str] | None = None,
     ) -> list[MockFollowUpItem]:
-        items = list(self._followups.values())
+        items = [i for i in self._followups.values() if only_ids is None or i.id in only_ids]
         if not include_resolved:
             items = [
                 i
@@ -187,7 +191,9 @@ class MockFollowUpTracker:
             item.resolved_at = datetime.now()
         return item
 
-    async def check_for_replies(self, thread_ids: list[str]) -> list[MockFollowUpItem]:
+    async def check_for_replies(
+        self, thread_ids: list[str], only_ids: set[str] | None = None
+    ) -> list[MockFollowUpItem]:
         # Return empty list - no replies detected
         return []
 
@@ -227,7 +233,9 @@ class MockEmailCategorizer:
         email_id: str,
         predicted_category: str,
         correct_category: str,
-        user_id: str = "default",
+        user_id: str,
+        org_id: str | None,
+        sender: str = "",
     ) -> None:
         pass
 
@@ -263,6 +271,7 @@ class MockAuthContext:
     """Mock authorization context for testing."""
 
     user_id: str = "test_user"
+    org_id: str = "test_org"
     tenant_id: str = "test_tenant"
     roles: list[str] = field(default_factory=lambda: ["admin"])
     permissions: list[str] = field(
@@ -310,7 +319,7 @@ def mock_followup_tracker():
     import asyncio
 
     _loop = asyncio.new_event_loop()
-    _loop.run_until_complete(
+    item = _loop.run_until_complete(
         tracker.mark_awaiting_reply(
             email_id="email_001",
             thread_id="thread_001",
@@ -320,7 +329,9 @@ def mock_followup_tracker():
             expected_by=datetime.now() + timedelta(days=1),
         )
     )
-    return tracker
+    owner = (MockAuthContext.user_id, MockAuthContext.org_id)
+    with patch.dict(_followup_owners, {item.id: owner}, clear=True):
+        yield tracker
 
 
 @pytest.fixture

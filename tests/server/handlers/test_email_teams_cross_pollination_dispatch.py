@@ -8,21 +8,31 @@ carries a real HS256 access token, so handlers see the ``UserAuthContext`` that
 
 from __future__ import annotations
 
+import asyncio
 import io
 import itertools
 import json
 import threading
+from collections import namedtuple
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aragora.billing.jwt_auth import create_access_token
+from aragora.rbac import AuthorizationContext, get_role_permissions
+from aragora.rbac.checker import get_permission_checker
+from aragora.rbac.defaults.helpers import create_custom_role
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.bots.teams.handler import TeamsHandler
 from aragora.server.handlers.email import email_services as email_module
 from aragora.server.handlers.email.email_services import EmailServicesHandler
 from aragora.server.handlers.evolution.cross_pollination import CrossPollinationStatsHandler
+from aragora.server.unified_server import UnifiedHandler
+from aragora.services.email_categorizer import EmailCategory
+from aragora.services.followup_tracker import FollowUpTracker
 
 pytestmark = pytest.mark.no_auto_auth
 
@@ -67,6 +77,9 @@ def _dispatch(
     body: dict[str, Any] | None = None,
     *,
     caller: str,
+    user: str | None = None,
+    org: str = "org-1",
+    query: dict[str, str] | None = None,
 ) -> tuple[int, Any]:
     instance: Any = registry_cls()
     raw = json.dumps(body).encode("utf-8") if body is not None else b""
@@ -74,7 +87,7 @@ def _dispatch(
     instance.headers = {"Content-Length": str(len(raw)), "Content-Type": "application/json"}
     if caller != "anon":
         token = create_access_token(
-            user_id=f"jwt-{caller}", email=f"{caller}@example.com", org_id="org-1", role=caller
+            user_id=user or f"jwt-{caller}", email=f"{caller}@example.com", org_id=org, role=caller
         )
         instance.headers["Authorization"] = f"Bearer {token}"
     instance.rfile = io.BytesIO(raw)
@@ -98,7 +111,7 @@ def _dispatch(
         # Keep token validation off whatever revocation database the host points at.
         patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False),
     ):
-        handled = instance._try_modular_handler(path, {})
+        handled = instance._try_modular_handler(path, {k: [v] for k, v in (query or {}).items()})
     assert handled is True, f"{method} {path} was not handled"
     status = instance.send_response.call_args[0][0]
     return status, json.loads(instance.wfile.getvalue() or b"{}")
@@ -225,6 +238,305 @@ def test_email_module_check_sees_the_callers_auth_context(
     else:
         assert status == (401 if caller == "anon" else 403), (route_id, payload)
         assert seen == [], (route_id, payload)
+
+
+# Owners of email state: only the built-in owner role holds email.*, so the second
+# user and the other organization's user are owners too, with their own identity.
+OWNER = {"caller": "owner"}
+SAME_ORG_USER = {"caller": "owner", "user": "jwt-owner-2"}
+OTHER_ORG_USER = {"caller": "owner", "user": "jwt-owner-x", "org": "org-2"}
+MARK = "/api/v1/email/followups/mark"
+PENDING = "/api/v1/email/followups/pending"
+CHECK_REPLIES = "/api/v1/email/followups/check-replies"
+SNOOZE = "/api/v1/email/probe-email/snooze"
+SNOOZED = "/api/v1/email/snoozed"
+PROCESS_DUE = "/api/v1/email/snooze/process-due"
+LEARN = "/api/v1/email/categories/learn"
+
+
+_Mail = namedtuple("_Mail", "id subject body sender")  # hashable, as categorize_email needs
+
+
+def _data(payload: Any) -> Any:
+    return payload.get("data", payload)
+
+
+def _utc_z(**delta: float) -> str:
+    return (datetime.now(timezone.utc) + timedelta(**delta)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class _StubMailbox:
+    """Gmail stand-in: t-1 has a reply from bob; sent-1 (thread t-sent) has none."""
+
+    def __init__(self) -> None:
+        now = datetime.now()
+        self.sent = {
+            "sent-1": SimpleNamespace(
+                thread_id="t-sent",
+                to_addresses=["carol@example.com"],
+                subject="Quote",
+                date=now - timedelta(days=3),
+            )
+        }
+        self.threads = {
+            "t-sent": [
+                SimpleNamespace(date=now - timedelta(days=3), from_address="me@example.com")
+            ],
+            "t-1": [
+                SimpleNamespace(date=now - timedelta(days=5), from_address="me@example.com"),
+                SimpleNamespace(
+                    date=now - timedelta(hours=1), from_address="Bob <bob@example.com>"
+                ),
+            ],
+        }
+
+    async def list_messages(self, **_kwargs: Any) -> tuple[list[str], None]:
+        return list(self.sent), None
+
+    async def get_message(self, msg_id: str) -> Any:
+        return self.sent[msg_id]
+
+    async def get_thread(self, thread_id: str) -> Any:
+        return SimpleNamespace(messages=self.threads.get(thread_id, []))
+
+
+@pytest.fixture
+def services(monkeypatch) -> FollowUpTracker:
+    """Real email services with fresh state; the tracker reads the stub mailbox."""
+    tracker = FollowUpTracker(gmail_connector=_StubMailbox())  # type: ignore[arg-type]
+    for name, value in (
+        ("_followup_tracker", tracker),
+        ("_snooze_recommender", None),
+        ("_email_categorizer", None),
+        ("_snoozed_emails", {}),
+        ("_followup_owners", {}),
+    ):
+        monkeypatch.setattr(email_module, name, value, raising=False)
+    return tracker
+
+
+def test_follow_up_routes_work_for_their_owner(registry_cls, services) -> None:
+    mark = {"email_id": "e-1", "thread_id": "t-1", "recipient": "bob@example.com"}
+    status, body = _dispatch(
+        registry_cls,
+        "POST",
+        MARK,
+        mark | {"sent_at": _utc_z(days=-5), "expected_reply_days": 1},
+        **OWNER,
+    )
+    assert status == 200, body
+    followup = _data(body)
+    assert (followup["status"], followup["days_waiting"]) == ("awaiting", 5)
+    status, body = _dispatch(registry_cls, "GET", PENDING, **OWNER)
+    assert status == 200 and _data(body)["overdue_count"] == 1, body
+    [item] = _data(body)["followups"]
+    assert (item["followup_id"], item["status"], item["urgency_score"]) == (
+        followup["followup_id"],
+        "overdue",
+        0.9,
+    )
+    status, body = _dispatch(
+        registry_cls, "POST", "/api/v1/email/followups/auto-detect", {"days_back": "7"}, **OWNER
+    )
+    assert status == 200, body
+    [detected] = _data(body)["detected"]
+    assert detected["email_id"] == "sent-1"
+    status, body = _dispatch(registry_cls, "POST", CHECK_REPLIES, {}, **OWNER)
+    assert status == 200, body
+    [reply] = _data(body)["replied"]
+    assert reply["followup_id"] == followup["followup_id"] and reply["replied_at"]
+    assert _data(body)["still_pending"] == 1
+    resolve = f"/api/v1/email/followups/{detected['followup_id']}/resolve"
+    before = services._followups[detected["followup_id"]].status
+    assert _dispatch(registry_cls, "POST", resolve, {"status": "bogus"}, **OWNER)[0] == 400
+    assert services._followups[detected["followup_id"]].status is before
+    status, body = _dispatch(registry_cls, "POST", resolve, {"status": "no_longer_needed"}, **OWNER)
+    assert status == 200 and _data(body)["status"] == "cancelled" and _data(body)["resolved_at"], (
+        body
+    )
+    assert services._followups[detected["followup_id"]].status.value == "cancelled"
+    assert _data(_dispatch(registry_cls, "GET", PENDING, **OWNER)[1])["followups"] == []
+
+
+def test_snooze_routes_work_for_their_owner(registry_cls, services) -> None:
+    query = {"priority": "0.9", "max_suggestions": "2"}
+    status, body = _dispatch(registry_cls, "GET", SNOOZE_SUGGESTIONS, query=query, **OWNER)
+    assert status == 200, body
+    suggestions = _data(body)["suggestions"]
+    assert 1 <= len(suggestions) <= 2 and all(s["source"] == s["reason"] for s in suggestions)
+    for bad in (
+        {"priority": "high"},
+        {"priority": "7"},
+        {"max_suggestions": "two"},
+        {"max_suggestions": "0"},
+    ):
+        assert _dispatch(registry_cls, "GET", SNOOZE_SUGGESTIONS, query=bad, **OWNER)[0] == 400, bad
+    assert (
+        _dispatch(registry_cls, "POST", SNOOZE, {"snooze_until": _utc_z(minutes=-5)}, **OWNER)[0]
+        == 200
+    )
+    status, body = _dispatch(registry_cls, "GET", SNOOZED, **OWNER)
+    assert status == 200 and (_data(body)["total"], _data(body)["due_now"]) == (1, 1), body
+    status, body = _dispatch(registry_cls, "POST", PROCESS_DUE, {}, **OWNER)
+    assert (status, _data(body)["processed"]) == (200, ["probe-email"]), body
+    assert (
+        _dispatch(registry_cls, "POST", SNOOZE, {"snooze_until": _utc_z(days=30)}, **OWNER)[0]
+        == 200
+    )
+    assert _dispatch(registry_cls, "DELETE", SNOOZE, **OWNER)[0] == 200
+    assert email_module._snoozed_emails == {}
+
+
+def test_category_feedback_is_recorded_and_applied_for_its_owner_only(
+    registry_cls, services
+) -> None:
+    status, body = _dispatch(registry_cls, "GET", "/api/v1/email/categories", **OWNER)
+    assert status == 200 and {c["id"] for c in _data(body)["categories"]} == {
+        c.value for c in EmailCategory
+    }
+    learn = {"email_id": "e-9", "predicted_category": "newsletters", "correct_category": "nope"}
+    assert _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)[0] == 400
+    learn |= {"correct_category": "projects", "email_metadata": {"sender": "Digest@Corp.example"}}
+    status, body = _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)
+    assert status == 200 and _data(body)["feedback_recorded"] is True, body
+    categorizer = email_module.get_email_categorizer()
+    mail = _Mail("e-10", "Weekly newsletter", "unsubscribe", "digest@corp.example")
+
+    def category(email: Any = mail, **owner: str) -> EmailCategory:
+        return asyncio.run(categorizer.categorize_email(email, **owner)).category
+
+    assert category(user_id="jwt-owner", org_id="org-1") is EmailCategory.PROJECTS
+    assert category(_Mail("e-9", "", "", ""), user_id="jwt-owner", org_id="org-1") is (
+        EmailCategory.PROJECTS
+    )
+    others = {
+        category(user_id="jwt-owner-2", org_id="org-1"),
+        category(user_id="jwt-owner", org_id="org-2"),
+    }
+    assert others == {category()} and category() is not EmailCategory.PROJECTS
+    assert categorizer.config.custom_sender_categories == {}
+
+
+@pytest.mark.parametrize(
+    "intruder", [SAME_ORG_USER, OTHER_ORG_USER], ids=["same-org-user", "other-org"]
+)
+def test_other_users_cannot_read_or_change_the_owners_email_state(
+    registry_cls, services, intruder
+) -> None:
+    assert (
+        _dispatch(
+            registry_cls,
+            "POST",
+            SNOOZE,
+            {"snooze_until": _utc_z(days=30), "label": "mine"},
+            **OWNER,
+        )[0]
+        == 200
+    )
+    entry = dict(email_module._snoozed_emails["probe-email"])
+    assert _dispatch(registry_cls, "DELETE", SNOOZE, **intruder)[0] == 404
+    assert (
+        _dispatch(
+            registry_cls,
+            "POST",
+            SNOOZE,
+            {"snooze_until": _utc_z(days=9), "label": "theirs"},
+            **intruder,
+        )[0]
+        == 404
+    )
+    assert _data(_dispatch(registry_cls, "GET", SNOOZED, **intruder)[1])["total"] == 0
+    assert email_module._snoozed_emails == {"probe-email": entry}
+    email_module._snoozed_emails["probe-email"]["snooze_until"] = datetime.now() - timedelta(
+        minutes=1
+    )
+    assert _data(_dispatch(registry_cls, "POST", PROCESS_DUE, {}, **intruder)[1])["processed"] == []
+    assert "probe-email" in email_module._snoozed_emails
+
+    mark = {
+        "email_id": "e-1",
+        "thread_id": "t-1",
+        "recipient": "bob@example.com",
+        "sent_at": _utc_z(days=-5),
+    }
+    mine = _data(_dispatch(registry_cls, "POST", MARK, mark, **OWNER)[1])["followup_id"]
+    theirs = _data(
+        _dispatch(registry_cls, "POST", MARK, mark | {"email_id": "e-2"}, **intruder)[1]
+    )["followup_id"]
+    pending = _data(_dispatch(registry_cls, "GET", PENDING, **intruder)[1])["followups"]
+    assert [f["followup_id"] for f in pending] == [theirs]
+    replied = _data(_dispatch(registry_cls, "POST", CHECK_REPLIES, {}, **intruder)[1])["replied"]
+    assert [r["followup_id"] for r in replied] == [theirs]
+    resolve = f"/api/v1/email/followups/{mine}/resolve"
+    assert (
+        _dispatch(registry_cls, "POST", resolve, {"status": "manually_resolved"}, **intruder)[0]
+        == 404
+    )
+    assert services._followups[mine].status.value == "awaiting"
+
+
+CUSTOM_ROLES = {
+    ("email-ru", "org-1"): {"email.read", "email.update"},
+    ("email-ru", "org-2"): {"email.read", "email.update"},
+    ("email-rd", "org-1"): {"email.read", "email.delete"},
+}
+
+
+@pytest.fixture
+def custom_roles(monkeypatch):
+    # Fixtures swap the global checker per test; rebuild the middleware on the current one.
+    monkeypatch.setattr(UnifiedHandler, "_rbac", None)
+    checker = get_permission_checker()
+    assert UnifiedHandler._get_rbac()._checker is checker
+    for (name, org), permissions in CUSTOM_ROLES.items():
+        role = create_custom_role(name, name, "test role", permissions, org)
+        checker._custom_roles[role.id] = {"permissions": set(role.permissions)}
+    checker.clear_cache()
+    yield
+    for name, org in CUSTOM_ROLES:
+        checker._custom_roles.pop(f"{org}:{name}", None)
+    checker.clear_cache()
+
+
+UPDATE_ROUTES = {
+    "cancelSnooze": ("DELETE", SNOOZE, None, 404),
+    "checkReplies": ("POST", CHECK_REPLIES, {}, 200),
+    "categoryFeedback": (
+        "POST",
+        LEARN,
+        {"email_id": "e1", "predicted_category": "newsletters", "correct_category": "projects"},
+        200,
+    ),
+}
+
+
+# email-rd is not defined in org-2, so that caller holds no permission at all.
+@pytest.mark.parametrize(
+    ("role", "org", "allowed"),
+    [
+        ("email-ru", "org-1", True),
+        ("email-ru", "org-2", True),
+        ("email-rd", "org-1", False),
+        ("email-rd", "org-2", False),
+    ],
+)
+@pytest.mark.parametrize("route_id", sorted(UPDATE_ROUTES))
+def test_update_routes_need_email_update_in_middleware_handler_and_module(
+    registry_cls, services, custom_roles, route_id: str, role: str, org: str, allowed: bool
+) -> None:
+    method, path, body, ok_status = UPDATE_ROUTES[route_id]
+    user = f"jwt-{role}-{org}"
+    context = AuthorizationContext(
+        user_id=user,
+        org_id=org,
+        roles={role},
+        permissions=get_role_permissions(role, include_inherited=True),
+    )
+    passed, _reason, key = UnifiedHandler._get_rbac().check_request(path, method, context)
+    status, payload = _dispatch(registry_cls, method, path, body, caller=role, user=user, org=org)
+    assert (key, passed, status) == ("email.update", allowed, ok_status if allowed else 403), (
+        payload
+    )
 
 
 @pytest.mark.parametrize("caller", ("owner", "member", "anon"))

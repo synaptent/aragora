@@ -635,7 +635,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # ── Email services ──
     RoutePermission(r"^/api/(v1/)?email/followups/mark$", "POST", "email.create"),
     RoutePermission(r"^/api/(v1/)?email/followups/pending$", "GET", "email.read"),
-    RoutePermission(r"^/api/(v1/)?email/followups/check-replies$", "POST", "email.read"),
+    RoutePermission(r"^/api/(v1/)?email/followups/check-replies$", "POST", "email.update"),
     RoutePermission(r"^/api/(v1/)?email/followups/auto-detect$", "POST", "email.create"),
     RoutePermission(r"^/api/(v1/)?email/followups/([^/]+)/resolve$", "POST", "email.update", 2),
     RoutePermission(r"^/api/(v1/)?email/([^/]+)/snooze-suggestions$", "GET", "email.read", 2),
@@ -644,7 +644,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(v1/)?email/snoozed$", "GET", "email.read"),
     RoutePermission(r"^/api/(v1/)?email/snooze/process-due$", "POST", "email.update"),
     RoutePermission(r"^/api/(v1/)?email/categories$", "GET", "email.read"),
-    RoutePermission(r"^/api/(v1/)?email/categories/learn$", "POST", "email.create"),
+    RoutePermission(r"^/api/(v1/)?email/categories/learn$", "POST", "email.update"),
     # ── SCIM 2.0 provisioning ──
     RoutePermission(r"^/scim/v2/Users$", "GET", "users.read"),
     RoutePermission(r"^/scim/v2/Users$", "POST", "users.invite"),
