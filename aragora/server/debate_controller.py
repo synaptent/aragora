@@ -509,6 +509,9 @@ class DebateRequest:
     enable_interventions: bool | None = None  # Enable intervention queue
     comparison_config: dict | None = None  # Candidate lineups for best-result selection
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
+    # Owning org. Callers set it from the authenticated user; from_dict never
+    # reads it from the request body so clients cannot pick the owner.
+    org_id: str | None = None
 
     def __post_init__(self):
         if self.auto_select_config is None:
@@ -1093,6 +1096,7 @@ class DebateController:
             enable_interventions=request.enable_interventions,
             comparison_config=request.comparison_config,
             quality_pipeline=request.quality_pipeline,
+            org_id=request.org_id,
         )
 
         # Admission control: reject if at capacity
@@ -1489,7 +1493,7 @@ class DebateController:
                         "messages": messages_data,
                         "model_comparison": comparison_meta,
                     }
-                    self.storage.save_dict(debate_data)
+                    self.storage.save_dict(debate_data, org_id=config.org_id)
                     logger.info("[debate] Persisted debate %s to storage", debate_id)
             except (OSError, ValueError, TypeError, AttributeError) as e:
                 # OSError: database/file access errors

@@ -351,7 +351,7 @@ def _extract_rounds(record: Any) -> list[dict[str, Any]]:
     if isinstance(rounds, list):
         normalized_rounds: list[dict[str, Any]] = []
         for index, round_data in enumerate(rounds, start=1):
-            round_dict = (
+            round_dict: dict[str, Any] = (
                 dict(round_data) if isinstance(round_data, dict) else _coerce_dict(round_data)
             )
             if not round_dict:
@@ -962,6 +962,11 @@ async def create_debate(
         except (ImportError, ValueError) as e:
             logger.warning("Invalid debate request: %s", e)
             raise HTTPException(status_code=400, detail="Invalid debate request")
+
+        caller_org = getattr(auth, "org_id", None)
+        debate_request.org_id = (
+            caller_org if isinstance(caller_org, str) and caller_org.strip() else None
+        )
 
         try:
             controller = _get_debate_controller(request, storage)
