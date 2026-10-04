@@ -7,10 +7,8 @@ Covers all routes and behavior:
 - GET  /api/v1/audit-trails/:trail_id          - Get specific audit trail
 - GET  /api/v1/audit-trails/:trail_id/export   - Export (json, csv, md)
 - POST /api/v1/audit-trails/:trail_id/verify   - Verify integrity checksum
-- GET  /api/v1/receipts                        - List receipts
-- GET  /api/v1/receipts/:receipt_id            - Get specific receipt
-- POST /api/v1/receipts/:receipt_id/verify     - Verify receipt integrity
-- Class methods: store_trail, store_receipt
+- /api/v1/receipts is not routed here (see the decisions receipts handler)
+- Class method: store_trail
 - Fallback from store to in-memory
 - Fallback from in-memory to gauntlet handler
 - Error handling (not found, internal errors)
@@ -109,47 +107,6 @@ SAMPLE_TRAIL_2 = {
 }
 
 
-def _make_receipt(
-    receipt_id: str = "receipt-abc123",
-    gauntlet_id: str = "abc123",
-    verdict: str = "APPROVED",
-    confidence: float = 0.91,
-    risk_level: str = "LOW",
-) -> dict[str, Any]:
-    """Create a sample receipt dict with a valid checksum."""
-    content = json.dumps(
-        {
-            "receipt_id": receipt_id,
-            "gauntlet_id": gauntlet_id,
-            "verdict": verdict,
-            "confidence": confidence,
-        },
-        sort_keys=True,
-    )
-    checksum = hashlib.sha256(content.encode()).hexdigest()[:16]
-    return {
-        "receipt_id": receipt_id,
-        "gauntlet_id": gauntlet_id,
-        "timestamp": "2026-01-15T10:00:00Z",
-        "verdict": verdict,
-        "confidence": confidence,
-        "risk_level": risk_level,
-        "findings": [{"id": "f1", "severity": "low"}],
-        "checksum": checksum,
-    }
-
-
-SAMPLE_RECEIPT = _make_receipt()
-
-SAMPLE_RECEIPT_2 = _make_receipt(
-    receipt_id="receipt-def456",
-    gauntlet_id="def456",
-    verdict="REJECTED",
-    confidence=0.78,
-    risk_level="HIGH",
-)
-
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -185,7 +142,6 @@ def handler(mock_store):
         h._store = mock_store
     # Ensure class-level dicts are clean between tests
     AuditTrailHandler._trails = {}
-    AuditTrailHandler._receipts = {}
     return h
 
 
@@ -224,18 +180,6 @@ class TestCanHandle:
     def test_audit_trails_verify_post(self, handler):
         assert handler.can_handle("/api/v1/audit-trails/trail-abc123/verify", "POST")
 
-    def test_receipts_get(self, handler):
-        assert handler.can_handle("/api/v1/receipts", "GET")
-
-    def test_receipts_post(self, handler):
-        assert handler.can_handle("/api/v1/receipts", "POST")
-
-    def test_receipts_subpath_get(self, handler):
-        assert handler.can_handle("/api/v1/receipts/receipt-abc123", "GET")
-
-    def test_receipts_verify_post(self, handler):
-        assert handler.can_handle("/api/v1/receipts/receipt-abc123/verify", "POST")
-
     def test_cannot_handle_wrong_path(self, handler):
         assert not handler.can_handle("/api/v1/other", "GET")
 
@@ -245,8 +189,11 @@ class TestCanHandle:
     def test_cannot_handle_delete_audit_trails(self, handler):
         assert not handler.can_handle("/api/v1/audit-trails", "DELETE")
 
-    def test_cannot_handle_put_receipts(self, handler):
-        assert not handler.can_handle("/api/v1/receipts", "PUT")
+    def test_does_not_handle_receipt_routes(self, handler):
+        """Decision receipts are served by the org-scoped receipts handler."""
+        for path in ("/api/v1/receipts", "/api/v1/receipts/r-1", "/api/v1/receipts/r-1/verify"):
+            for method in ("GET", "POST"):
+                assert not handler.can_handle(path, method)
 
 
 # ===========================================================================
@@ -726,264 +673,12 @@ class TestVerifyAuditTrail:
 
 
 # ===========================================================================
-# GET /api/v1/receipts - List Receipts
-# ===========================================================================
-
-
-class TestListReceipts:
-    """Tests for listing decision receipts."""
-
-    @pytest.mark.asyncio
-    async def test_list_empty(self, handler, http_get, mock_store):
-        """Returns empty list when no receipts exist."""
-        result = await handler.handle("/api/v1/receipts", {}, http_get)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipts"] == []
-        assert body["total"] == 0
-        assert body["limit"] == 20
-        assert body["offset"] == 0
-
-    @pytest.mark.asyncio
-    async def test_list_with_store_results(self, handler, http_get, mock_store):
-        """Returns receipts from store."""
-        summaries = [
-            {"receipt_id": "r1", "verdict": "APPROVED"},
-            {"receipt_id": "r2", "verdict": "REJECTED"},
-        ]
-        mock_store.list_receipts.return_value = summaries
-        mock_store.count_receipts.return_value = 2
-
-        result = await handler.handle("/api/v1/receipts", {}, http_get)
-        assert _status(result) == 200
-        body = _body(result)
-        assert len(body["receipts"]) == 2
-        assert body["total"] == 2
-
-    @pytest.mark.asyncio
-    async def test_list_with_pagination(self, handler, http_get, mock_store):
-        """Respects limit and offset."""
-        mock_store.list_receipts.return_value = []
-        mock_store.count_receipts.return_value = 100
-
-        result = await handler.handle("/api/v1/receipts", {"limit": "5", "offset": "10"}, http_get)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["limit"] == 5
-        assert body["offset"] == 10
-        mock_store.list_receipts.assert_called_with(
-            limit=5, offset=10, verdict=None, risk_level=None
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_with_verdict_filter(self, handler, http_get, mock_store):
-        """Filters by verdict."""
-        mock_store.list_receipts.return_value = []
-        mock_store.count_receipts.return_value = 0
-
-        result = await handler.handle("/api/v1/receipts", {"verdict": "REJECTED"}, http_get)
-        assert _status(result) == 200
-        mock_store.list_receipts.assert_called_with(
-            limit=20, offset=0, verdict="REJECTED", risk_level=None
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_with_risk_level_filter(self, handler, http_get, mock_store):
-        """Filters by risk_level."""
-        mock_store.list_receipts.return_value = []
-        mock_store.count_receipts.return_value = 0
-
-        result = await handler.handle("/api/v1/receipts", {"risk_level": "HIGH"}, http_get)
-        assert _status(result) == 200
-        mock_store.list_receipts.assert_called_with(
-            limit=20, offset=0, verdict=None, risk_level="HIGH"
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_with_combined_filters(self, handler, http_get, mock_store):
-        """Filters by both verdict and risk_level."""
-        mock_store.list_receipts.return_value = []
-        mock_store.count_receipts.return_value = 0
-
-        result = await handler.handle(
-            "/api/v1/receipts",
-            {"verdict": "APPROVED", "risk_level": "LOW"},
-            http_get,
-        )
-        assert _status(result) == 200
-        mock_store.count_receipts.assert_called_with(verdict="APPROVED", risk_level="LOW")
-
-    @pytest.mark.asyncio
-    async def test_list_fallback_to_in_memory(self, handler, http_get, mock_store):
-        """Falls back to in-memory receipts when store returns empty."""
-        from aragora.server.handlers.audit_trail import AuditTrailHandler
-
-        AuditTrailHandler._receipts = {
-            "r1": {
-                "receipt_id": "r1",
-                "gauntlet_id": "g1",
-                "timestamp": "2026-01-15",
-                "verdict": "APPROVED",
-                "confidence": 0.9,
-                "risk_level": "LOW",
-                "findings": [],
-                "checksum": "abc",
-            },
-        }
-
-        result = await handler.handle("/api/v1/receipts", {}, http_get)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["total"] == 1
-        assert body["receipts"][0]["receipt_id"] == "r1"
-        assert body["receipts"][0]["findings_count"] == 0
-
-        AuditTrailHandler._receipts = {}
-
-
-# ===========================================================================
-# GET /api/v1/receipts/:receipt_id - Get Specific Receipt
-# ===========================================================================
-
-
-class TestGetReceipt:
-    """Tests for getting a specific receipt."""
-
-    @pytest.mark.asyncio
-    async def test_get_receipt_from_store(self, handler, http_get, mock_store):
-        """Returns receipt from database store."""
-        mock_store.get_receipt.return_value = SAMPLE_RECEIPT
-
-        result = await handler.handle("/api/v1/receipts/receipt-abc123", {}, http_get)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipt_id"] == "receipt-abc123"
-        assert body["verdict"] == "APPROVED"
-
-    @pytest.mark.asyncio
-    async def test_get_receipt_from_in_memory(self, handler, http_get, mock_store):
-        """Falls back to in-memory cache."""
-        from aragora.server.handlers.audit_trail import AuditTrailHandler
-
-        AuditTrailHandler._receipts = {"receipt-abc123": SAMPLE_RECEIPT}
-
-        result = await handler.handle("/api/v1/receipts/receipt-abc123", {}, http_get)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipt_id"] == "receipt-abc123"
-
-        AuditTrailHandler._receipts = {}
-
-    @pytest.mark.asyncio
-    async def test_get_receipt_not_found(self, handler, http_get, mock_store):
-        """Returns 404 when receipt does not exist."""
-        result = await handler.handle("/api/v1/receipts/nonexistent", {}, http_get)
-        assert _status(result) == 404
-        body = _body(result)
-        assert "not found" in body.get("error", "").lower()
-
-    @pytest.mark.asyncio
-    async def test_get_receipt_from_gauntlet_handler(self, handler, http_get, mock_store):
-        """Falls back to gauntlet handler results."""
-        mock_gauntlet = MagicMock()
-        mock_gauntlet._results = {"abc123": MagicMock()}
-        handler.ctx["gauntlet_handler"] = mock_gauntlet
-
-        mock_receipt_obj = MagicMock()
-        mock_receipt_obj.to_dict.return_value = SAMPLE_RECEIPT
-
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.export.decision_receipt": MagicMock(
-                    generate_decision_receipt=MagicMock(return_value=mock_receipt_obj)
-                )
-            },
-        ):
-            result = await handler.handle("/api/v1/receipts/receipt-abc123", {}, http_get)
-
-        # Should succeed or return 404 depending on import path resolution
-        assert _status(result) in (200, 404)
-
-
-# ===========================================================================
-# POST /api/v1/receipts/:receipt_id/verify - Verify Receipt Integrity
-# ===========================================================================
-
-
-class TestVerifyReceipt:
-    """Tests for receipt integrity verification."""
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_not_found(self, handler, http_post, mock_store):
-        """Returns 404 when receipt to verify does not exist."""
-        result = await handler.handle("/api/v1/receipts/nonexistent/verify", {}, http_post)
-        assert _status(result) == 404
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_valid(self, handler, http_post, mock_store):
-        """Verifies a receipt with matching checksum."""
-        mock_store.get_receipt.return_value = SAMPLE_RECEIPT
-
-        result = await handler.handle("/api/v1/receipts/receipt-abc123/verify", {}, http_post)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipt_id"] == "receipt-abc123"
-        assert body["valid"] is True
-        assert body["match"] is True
-        assert body["stored_checksum"] == SAMPLE_RECEIPT["checksum"]
-        assert body["computed_checksum"] == SAMPLE_RECEIPT["checksum"]
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_invalid_checksum(self, handler, http_post, mock_store):
-        """Reports invalid when checksums do not match."""
-        bad_receipt = dict(SAMPLE_RECEIPT)
-        bad_receipt["checksum"] = "wrong_checksum"
-        mock_store.get_receipt.return_value = bad_receipt
-
-        result = await handler.handle("/api/v1/receipts/receipt-abc123/verify", {}, http_post)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["valid"] is False
-        assert body["match"] is False
-        assert body["stored_checksum"] == "wrong_checksum"
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_from_in_memory(self, handler, http_post, mock_store):
-        """Verifies receipt from in-memory cache."""
-        from aragora.server.handlers.audit_trail import AuditTrailHandler
-
-        AuditTrailHandler._receipts = {"receipt-abc123": SAMPLE_RECEIPT}
-
-        result = await handler.handle("/api/v1/receipts/receipt-abc123/verify", {}, http_post)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipt_id"] == "receipt-abc123"
-        assert body["valid"] is True
-
-        AuditTrailHandler._receipts = {}
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_no_stored_checksum(self, handler, http_post, mock_store):
-        """Handles receipt with no stored checksum."""
-        receipt = dict(SAMPLE_RECEIPT)
-        del receipt["checksum"]
-        mock_store.get_receipt.return_value = receipt
-
-        result = await handler.handle("/api/v1/receipts/receipt-abc123/verify", {}, http_post)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["valid"] is False
-        assert body["stored_checksum"] == ""
-
-
-# ===========================================================================
 # Gauntlet Fallback Tests
 # ===========================================================================
 
 
 class TestGauntletFallback:
-    """Tests for _load_trail_from_gauntlet and _load_receipt_from_gauntlet."""
+    """Tests for _load_trail_from_gauntlet."""
 
     @pytest.mark.asyncio
     async def test_load_trail_strips_trail_prefix(self, handler, mock_store):
@@ -1026,30 +721,6 @@ class TestGauntletFallback:
         result = await handler._load_trail_from_gauntlet("trail-abc123")
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_load_receipt_strips_receipt_prefix(self, handler, mock_store):
-        """Strips 'receipt-' prefix from receipt_id to get gauntlet_id."""
-        mock_store.get_receipt_by_gauntlet.return_value = SAMPLE_RECEIPT
-
-        result = await handler._load_receipt_from_gauntlet("receipt-abc123")
-        assert result == SAMPLE_RECEIPT
-        mock_store.get_receipt_by_gauntlet.assert_called_with("abc123")
-
-    @pytest.mark.asyncio
-    async def test_load_receipt_no_prefix(self, handler, mock_store):
-        """Uses raw id as gauntlet_id when no prefix."""
-        mock_store.get_receipt_by_gauntlet.return_value = None
-
-        result = await handler._load_receipt_from_gauntlet("raw_id")
-        assert result is None
-        mock_store.get_receipt_by_gauntlet.assert_called_with("raw_id")
-
-    @pytest.mark.asyncio
-    async def test_load_receipt_no_gauntlet_handler(self, handler, mock_store):
-        """Returns None when no gauntlet_handler in context."""
-        result = await handler._load_receipt_from_gauntlet("receipt-abc123")
-        assert result is None
-
 
 # ===========================================================================
 # Class Method Tests
@@ -1057,7 +728,7 @@ class TestGauntletFallback:
 
 
 class TestClassMethods:
-    """Tests for store_trail and store_receipt class methods."""
+    """Tests for the store_trail class method."""
 
     def test_store_trail(self):
         """store_trail adds trail to class-level dict."""
@@ -1068,16 +739,6 @@ class TestClassMethods:
         assert "trail-new" in AuditTrailHandler._trails
         assert AuditTrailHandler._trails["trail-new"]["trail_id"] == "trail-new"
         AuditTrailHandler._trails = {}
-
-    def test_store_receipt(self):
-        """store_receipt adds receipt to class-level dict."""
-        from aragora.server.handlers.audit_trail import AuditTrailHandler
-
-        AuditTrailHandler._receipts = {}
-        AuditTrailHandler.store_receipt("receipt-new", {"receipt_id": "receipt-new"})
-        assert "receipt-new" in AuditTrailHandler._receipts
-        assert AuditTrailHandler._receipts["receipt-new"]["receipt_id"] == "receipt-new"
-        AuditTrailHandler._receipts = {}
 
     def test_store_trail_overwrites_existing(self):
         """store_trail overwrites existing trail with same ID."""
@@ -1132,13 +793,6 @@ class TestRoutingEdgeCases:
         assert _status(result) == 200
 
     @pytest.mark.asyncio
-    async def test_verify_receipt_path_routing(self, handler, http_post, mock_store):
-        """POST to /verify routes to verify handler, not get handler."""
-        result = await handler.handle("/api/v1/receipts/receipt-abc123/verify", {}, http_post)
-        # Should be 404 (not found) since there's no receipt, not a different error
-        assert _status(result) == 404
-
-    @pytest.mark.asyncio
     async def test_verify_trail_path_routing(self, handler, http_post, mock_store):
         """POST to /verify routes to verify handler, not get handler."""
         result = await handler.handle("/api/v1/audit-trails/trail-abc123/verify", {}, http_post)
@@ -1161,18 +815,6 @@ class TestRoutingEdgeCases:
         result = await handler.handle("/api/v1/audit-trails/my-special-trail", {}, http_get)
         assert _status(result) == 200
         mock_store.get_trail.assert_called_with("my-special-trail")
-
-    @pytest.mark.asyncio
-    async def test_receipt_id_extraction(self, handler, http_get, mock_store):
-        """Correctly extracts receipt_id from path segments."""
-        mock_store.get_receipt.return_value = {
-            "receipt_id": "my-receipt-id",
-            "verdict": "REJECTED",
-        }
-
-        result = await handler.handle("/api/v1/receipts/my-receipt-id", {}, http_get)
-        assert _status(result) == 200
-        mock_store.get_receipt.assert_called_with("my-receipt-id")
 
 
 # ===========================================================================
@@ -1237,7 +879,7 @@ class TestHandlerInit:
     def test_handler_has_routes(self, handler):
         """Handler has ROUTES list."""
         assert "/api/v1/audit-trails" in handler.ROUTES
-        assert "/api/v1/receipts" in handler.ROUTES
+        assert "/api/v1/receipts" not in handler.ROUTES
 
     def test_handler_extends_base_handler(self, handler):
         """Handler extends BaseHandler."""
