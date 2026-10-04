@@ -297,13 +297,19 @@ async def test_router_writes_audit_events_through_the_registered_sink(isolated_h
     assert completed["error"] is None
 
 
-async def test_router_routes_without_an_audit_sink(isolated_hooks):
+async def test_router_routes_without_an_audit_sink(isolated_hooks, monkeypatch, caplog):
+    from aragora.core import decision_router as router_module
+
+    monkeypatch.setattr(router_module, "_warned_missing_audit_sink", False)
     router, request = _quick_router("ok")
 
-    result = await router.route(request)
+    with caplog.at_level("WARNING", logger="aragora.core.decision_router"):
+        result = await router.route(request)
+        await router.route(request)
 
     assert result.success is True
     assert result.answer == "ok"
+    assert caplog.text.count("Routing decisions without an audit trail") == 1
 
 
 # ---------------------------------------------------------------------------

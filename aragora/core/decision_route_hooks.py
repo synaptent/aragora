@@ -9,6 +9,8 @@ the implementation up at call time.
 
 Every getter raises :class:`DecisionRouteNotRegisteredError` when nothing is
 registered. Each hook holds one implementation, so registering again replaces it.
+A hook holds the registered object itself, so patching the provider module's
+attribute does not reach the router; tests swap a hook through its register function.
 """
 
 from __future__ import annotations

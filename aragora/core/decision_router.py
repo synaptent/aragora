@@ -115,12 +115,19 @@ def _import_metrics():
     _metrics_imported = True
 
 
+_warned_missing_audit_sink = False
+
+
 def _resolve_audit_sink() -> DecisionAuditSink | None:
     """Return the registered audit sink, or None; routing proceeds without an audit trail."""
+    global _warned_missing_audit_sink
     try:
         return get_decision_audit_sink()
     except DecisionRouteNotRegisteredError as e:
-        logger.debug("Decision audit trail unavailable: %s", e)
+        # route() resolves the sink on every call; one warning per process is enough.
+        if not _warned_missing_audit_sink:
+            _warned_missing_audit_sink = True
+            logger.warning("Routing decisions without an audit trail: %s", e)
         return None
 
 
