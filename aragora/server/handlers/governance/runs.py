@@ -3,6 +3,10 @@
 Endpoints:
 - GET /api/runs          - List persisted backbone runs
 - GET /api/runs/{run_id} - Fetch one persisted backbone run
+
+Runs are scoped to the caller's org: only runs that org owns are listed, and
+any other run (another org's, an unknown owner's, or a missing one) is the same
+404. A store without org-scoped run reads exposes no runs.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from aragora.pipeline.backbone_contracts import RunLedger
 from aragora.server.handlers.base import BaseHandler, HandlerResult, error_response, json_response
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.versioning.compat import strip_version_prefix
+from aragora.tenancy.record_scope import record_not_found, require_org_scope
 
 _RUNS_READ_PERMISSION = "orchestration:read"
 
@@ -135,44 +140,36 @@ def _run_payload(run: RunLedger) -> dict[str, Any]:
     }
 
 
-def _get_backbone_run(store: Any, run_id: str) -> RunLedger | None:
-    """Read a single run, preferring the explicit backbone accessor when available."""
-    getter = getattr(store, "get_backbone_run", None)
+def _get_backbone_run(store: Any, run_id: str, org_id: str) -> RunLedger | None:
+    """Read a single run owned by ``org_id``."""
+    getter = getattr(store, "get_run_for_org", None)
     if callable(getter):
-        return cast(RunLedger | None, getter(run_id))
-
-    getter = getattr(store, "get_run", None)
-    if callable(getter):
-        return cast(RunLedger | None, getter(run_id))
-
+        return cast(RunLedger | None, getter(run_id, org_id))
     return None
 
 
 def _list_backbone_runs(
     store: Any,
     *,
+    org_id: str,
     status: str | None,
     limit: int,
     offset: int,
 ) -> list[RunLedger]:
-    """List runs, preferring the explicit backbone accessor when available."""
-    lister = getattr(store, "list_backbone_runs", None)
+    """List the runs owned by ``org_id``."""
+    lister = getattr(store, "list_runs_for_org", None)
     if callable(lister):
-        return cast(list[RunLedger], lister(status=status, limit=limit, offset=offset))
-
-    lister = getattr(store, "list_runs", None)
-    if callable(lister):
-        return cast(list[RunLedger], lister(status=status, limit=limit, offset=offset))
-
+        return cast(list[RunLedger], lister(org_id, status=status, limit=limit, offset=offset))
     return []
 
 
 def handle_runs_list(
     query_params: dict[str, Any] | None = None,
     *,
+    org_id: str,
     store: Any | None = None,
 ) -> HandlerResult:
-    """Handle GET /api/runs."""
+    """Handle GET /api/runs for the runs owned by ``org_id``."""
     params = query_params or {}
     run_store = store or _get_plan_store()
 
@@ -180,24 +177,25 @@ def handle_runs_list(
     limit = _coerce_int(params.get("limit", 50), default=50, min_value=1, max_value=100)
     offset = _coerce_int(params.get("offset", 0), default=0, min_value=0)
 
-    runs = _list_backbone_runs(run_store, status=status, limit=limit, offset=offset)
+    runs = _list_backbone_runs(run_store, org_id=org_id, status=status, limit=limit, offset=offset)
     return json_response({"runs": [_run_payload(run) for run in runs]})
 
 
 def handle_run_detail(
     run_id: str,
     *,
+    org_id: str,
     store: Any | None = None,
 ) -> HandlerResult:
-    """Handle GET /api/runs/{run_id}."""
+    """Handle GET /api/runs/{run_id}; runs not owned by ``org_id`` are not found."""
     normalized_run_id = str(run_id or "").strip()
     if not normalized_run_id:
         return error_response("run_id is required", 400)
 
     run_store = store or _get_plan_store()
-    run = _get_backbone_run(run_store, normalized_run_id)
+    run = _get_backbone_run(run_store, normalized_run_id, org_id)
     if run is None:
-        return error_response("Run not found", 404)
+        return record_not_found("Run")
 
     return json_response({"run": _run_payload(run)})
 
@@ -225,17 +223,21 @@ class RunsHandler(BaseHandler):
         if method != "GET":
             return None
 
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         normalized_path = strip_version_prefix(path)
         store = self.ctx.get("plan_store") or _get_plan_store()
 
         if normalized_path == "/api/runs":
-            return handle_runs_list(query_params, store=store)
+            return handle_runs_list(query_params, org_id=scope.org_id, store=store)
 
         if normalized_path.startswith("/api/runs/"):
             run_id = normalized_path.removeprefix("/api/runs/").strip("/")
             if not run_id or "/" in run_id:
-                return error_response("Run not found", 404)
-            return handle_run_detail(run_id, store=store)
+                return record_not_found("Run")
+            return handle_run_detail(run_id, org_id=scope.org_id, store=store)
 
         return None
 

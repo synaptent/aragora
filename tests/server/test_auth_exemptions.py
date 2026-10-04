@@ -94,6 +94,37 @@ class TestAuthExemptPaths:
         for endpoint in slack_webhook_endpoints:
             assert endpoint in exempt_paths, f"Slack webhook endpoint {endpoint} should be exempt"
 
+    def test_org_owned_plan_and_run_lists_require_auth(self, exempt_paths):
+        """Plans and backbone runs are org-owned records, never public."""
+        for endpoint in ("/api/plans", "/api/v1/plans", "/api/runs", "/api/v1/runs"):
+            assert endpoint not in exempt_paths, f"{endpoint} should NOT be exempt"
+
+
+class TestOrgOwnedRecordsNotExempt:
+    """Plan and run routes must reach the handlers' org scope for every method."""
+
+    @pytest.fixture
+    def handler(self):
+        from aragora.server.unified_server import UnifiedHandler
+
+        return UnifiedHandler.__new__(UnifiedHandler)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/plans",
+            "/api/v1/plans",
+            "/api/plans/plan-123",
+            "/api/v1/plans/plan-123",
+            "/api/v1/plans/plan-123/memo",
+            "/api/runs",
+            "/api/runs/run-123",
+        ],
+    )
+    def test_not_exempt_for_any_method(self, handler, path):
+        assert not handler._is_path_exempt(path)
+        assert not handler._is_path_exempt_for_get(path)
+
 
 class TestAuthExemptPrefixes:
     """Tests for AUTH_EXEMPT_PREFIXES configuration."""

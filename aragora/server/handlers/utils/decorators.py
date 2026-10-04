@@ -516,6 +516,8 @@ PERMISSION_MATRIX: dict[str, list[str]] = {
     "controlplane:violations.read": ["member", "admin", "owner"],
     "controlplane:violations.update": ["admin", "owner"],
     "controlplane:manage": ["owner"],
+    # Backbone run ledger reads (results are scoped to the caller's org)
+    "orchestration:read": ["admin", "owner"],
     # Training permissions
     "training:read": ["member", "admin", "owner"],
     "training:create": ["admin", "owner"],

@@ -322,6 +322,18 @@ DEFAULT_ROUTE_PERMISSIONS = [
         "decisions.read",
         1,
     ),
+    # Decision plans (records are scoped to the caller's org by the handler)
+    RoutePermission(r"^/api/(?:v1/)?plans$", "GET", "plans.read"),
+    RoutePermission(r"^/api/(?:v1/)?plans$", "POST", "plans.create"),
+    RoutePermission(r"^/api/(?:v1/)?plans/([^/]+)$", "GET", "plans.read", 1),
+    RoutePermission(r"^/api/(?:v1/)?plans/([^/]+)/memo$", "GET", "plans.read", 1),
+    RoutePermission(r"^/api/(?:v1/)?plans/([^/]+)/approve$", "POST", "plans.approve", 1),
+    RoutePermission(r"^/api/(?:v1/)?plans/([^/]+)/approve$", "PUT", "plans.approve", 1),
+    RoutePermission(r"^/api/(?:v1/)?plans/([^/]+)/reject$", "POST", "plans.deny", 1),
+    RoutePermission(r"^/api/(?:v1/)?plans/([^/]+)/execute$", "POST", "plans.approve", 1),
+    # Backbone run ledger (records are scoped to the caller's org by the handler)
+    RoutePermission(r"^/api/(?:v1/)?runs$", "GET", "orchestration.read"),
+    RoutePermission(r"^/api/(?:v1/)?runs/([^/]+)$", "GET", "orchestration.read", 1),
     RoutePermission(
         r"^/api/(?:v1/)?decisions/plans/([^/]+)/(approve|reject|execute)$",
         "POST",
