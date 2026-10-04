@@ -299,6 +299,19 @@ def reset_rate_limits():
     _batch_upload_limiter._buckets.clear()
 
 
+@pytest.fixture(autouse=True)
+def _no_knowledge_workers(monkeypatch):
+    """Queued knowledge jobs never run.
+
+    A real knowledge job left running on the module's non-daemon executor
+    keeps the interpreter from exiting after the tests finish.
+    """
+    import aragora.knowledge.integration as knowledge
+
+    monkeypatch.setattr(knowledge, "_jobs", {})
+    monkeypatch.setattr(knowledge, "_executor", MagicMock())
+
+
 # ===========================================================================
 # can_handle() tests
 # ===========================================================================
