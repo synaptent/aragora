@@ -38,6 +38,22 @@ if TYPE_CHECKING:
     from aragora.gauntlet import OrchestratorResult as GauntletResult  # Full orchestrator result
 
 
+def agent_display_names(agents: Any) -> list[str]:
+    """Readable names for the entries of ``agents_involved``.
+
+    Gauntlet receipts store plain agent names, but debate receipts store one
+    mapping per agent (``name``, ``model``, ``provider``, ``role``).
+    """
+    names: list[str] = []
+    for agent in agents or []:
+        if isinstance(agent, dict):
+            label = agent.get("name") or agent.get("agent") or agent.get("model")
+            names.append(str(label) if label else str(agent))
+        else:
+            names.append(str(agent))
+    return names
+
+
 @dataclass
 class ReceiptFinding:
     """Simplified finding for receipt export."""
@@ -708,7 +724,7 @@ class DecisionReceipt:
                 "",
                 "## Audit Trail",
                 "",
-                f"**Agents:** {', '.join(self.agents_involved)}",
+                f"**Agents:** {', '.join(agent_display_names(self.agents_involved))}",
                 f"**Rounds:** {self.rounds_completed}",
                 f"**Duration:** {self.duration_seconds:.1f}s",
                 "",
@@ -823,7 +839,7 @@ class DecisionReceipt:
 
     <div class="section">
         <h2>Audit Trail</h2>
-        <p><strong>Agents:</strong> {esc(", ".join(self.agents_involved))}</p>
+        <p><strong>Agents:</strong> {esc(", ".join(agent_display_names(self.agents_involved)))}</p>
         <p><strong>Duration:</strong> {self.duration_seconds:.1f}s</p>
         <p><strong>Rounds:</strong> {self.rounds_completed}</p>
     </div>

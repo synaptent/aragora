@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aragora.export.decision_receipt import agent_display_names
+
 from .formatter import ReceiptFormatter, register_formatter
 
 
@@ -78,7 +80,9 @@ class DiscordReceiptFormatter(ReceiptFormatter):
         )
 
         # Agents field
-        agents = getattr(receipt, "agents", None) or getattr(receipt, "agents_involved", [])
+        agents = agent_display_names(
+            getattr(receipt, "agents", None) or getattr(receipt, "agents_involved", [])
+        )
         if agents:
             agent_list = ", ".join(agents[:5])
             if len(agents) > 5:
