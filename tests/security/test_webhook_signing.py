@@ -38,7 +38,7 @@ def test_signature_output_is_byte_identical(payload: str, secret: str, expected:
 def test_legacy_handler_signature_warns_and_delegates() -> None:
     """The old server surface remains usable and points callers to the new home."""
     from aragora.security.webhook_signing import generate_signature as canonical
-    from aragora.server.handlers.webhooks import generate_signature as legacy
+    from aragora.server.handlers.webhook_management import generate_signature as legacy
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
@@ -70,7 +70,21 @@ def test_events_verifier_reuses_canonical_signer() -> None:
 def test_event_dispatchers_do_not_import_server_signer(module_name: str) -> None:
     """Infrastructure dispatchers must not reach up into the server layer."""
     module = __import__(module_name, fromlist=["__file__"])
-    source = Path(module.__file__).read_text(encoding="utf-8")
+    module_file = module.__file__
+    assert module_file is not None
+    source = Path(module_file).read_text(encoding="utf-8")
 
     assert "from aragora.server.handlers.webhooks import generate_signature" not in source
     assert "from aragora.security.webhook_signing import generate_signature" in source
+
+
+def test_retry_queue_does_not_import_server_signer() -> None:
+    """The webhook retry queue signs through the security layer, not the server layer."""
+    module = __import__("aragora.webhooks.retry_queue", fromlist=["__file__"])
+    module_file = module.__file__
+    assert module_file is not None
+    source = Path(module_file).read_text(encoding="utf-8")
+
+    assert "from aragora.server.handlers.webhook_management import" not in source
+    assert "from aragora.server.handlers.webhooks import" not in source
+    assert "from aragora.security.webhook_signing import" in source

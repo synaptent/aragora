@@ -257,48 +257,4 @@ DEVICES_ENDPOINTS = {
             },
         },
     },
-    # Apple Shortcuts endpoint
-    "/api/devices/apple/shortcuts": {
-        "post": {
-            "tags": ["Devices", "Apple"],
-            "summary": "Handle Apple Shortcuts request",
-            "description": """API endpoint for Apple Shortcuts integration.
-
-Allows Apple Shortcuts to:
-- Start debates
-- Get debate status
-- Submit votes
-- Get summaries""",
-            "operationId": "handleAppleShortcuts",
-            "requestBody": {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "required": ["action"],
-                            "properties": {
-                                "action": {
-                                    "type": "string",
-                                    "enum": ["start_debate", "get_status", "vote", "summarize"],
-                                },
-                                "params": {"type": "object"},
-                            },
-                        }
-                    }
-                },
-            },
-            "responses": {
-                "200": _ok_response(
-                    "Shortcuts response",
-                    {
-                        "success": {"type": "boolean"},
-                        "result": {"type": "object"},
-                    },
-                ),
-                "401": STANDARD_ERRORS["401"],
-            },
-            "security": [{"bearerAuth": []}],
-        },
-    },
 }

@@ -2,10 +2,12 @@
 """Cancel stale PR workflow runs to reduce CI queue pressure.
 
 Stale runs are queued/in-progress PR runs where:
-- the run branch has no open active PR (closed branch), or
+- the run branch has no open PR at all (closed branch), or
 - the run SHA is not the latest head SHA for that open PR branch.
 
-By default, draft PR branches are treated as inactive.
+Open PR heads count as active whether or not the PR is a draft, so a draft
+PR's current-head runs always survive. ``--keep-draft-runs`` additionally
+keeps superseded-head runs on draft PR branches.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Set as AbstractSet
 from typing import Any
 from urllib import error, parse, request
 
@@ -141,16 +144,15 @@ class GitHubClient:
             return False, message
 
 
-def compute_active_head_map(
-    open_pulls: list[dict[str, Any]],
-    *,
-    keep_draft_runs: bool,
-) -> dict[str, str]:
-    """Return branch -> head_sha for active PR heads."""
+def compute_active_head_map(open_pulls: list[dict[str, Any]]) -> dict[str, str]:
+    """Return branch -> head_sha for every open PR head, draft or not.
+
+    Draft heads must stay in this map: excluding them made scheduled GC
+    cancel every in-flight current-head run on parked draft branches as
+    ``no-active-pr-head``.
+    """
     active: dict[str, str] = {}
     for pr in open_pulls:
-        if bool(pr.get("draft")) and not keep_draft_runs:
-            continue
         head = pr.get("head", {})
         branch = str(head.get("ref", "")).strip()
         sha = str(head.get("sha", "")).strip()
@@ -159,13 +161,30 @@ def compute_active_head_map(
     return active
 
 
+def compute_draft_branches(open_pulls: list[dict[str, Any]]) -> set[str]:
+    """Return the head branch names of open draft PRs."""
+    branches: set[str] = set()
+    for pr in open_pulls:
+        if not bool(pr.get("draft")):
+            continue
+        branch = str(pr.get("head", {}).get("ref", "")).strip()
+        if branch:
+            branches.add(branch)
+    return branches
+
+
 def compute_stale_runs(
     runs: list[dict[str, Any]],
     *,
     active_heads: dict[str, str],
     cancel_events: set[str],
+    keep_stale_sha_branches: AbstractSet[str] = frozenset(),
 ) -> list[dict[str, Any]]:
-    """Determine which runs are stale and should be cancelled."""
+    """Determine which runs are stale and should be cancelled.
+
+    ``keep_stale_sha_branches`` exempts those branches (the draft PR heads
+    when ``--keep-draft-runs`` is set) from superseded-head cancellation.
+    """
     stale: list[dict[str, Any]] = []
     for run in runs:
         event_name = str(run.get("event", "")).strip()
@@ -196,6 +215,8 @@ def compute_stale_runs(
             )
             continue
         if active_sha != sha:
+            if branch in keep_stale_sha_branches:
+                continue
             stale.append(
                 {
                     "run_id": run_id,
@@ -224,7 +245,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--keep-draft-runs",
         action="store_true",
-        help="Treat draft PR branches as active and keep their runs",
+        help=(
+            "Also keep superseded-head runs on draft PR branches "
+            "(current-head runs of open PRs, draft or not, are always kept)"
+        ),
     )
     parser.add_argument(
         "--events",
@@ -255,12 +279,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         client = GitHubClient(repo=args.repo, token=token)
         open_pulls = client.list_open_pulls()
-        active_heads = compute_active_head_map(
-            open_pulls, keep_draft_runs=bool(args.keep_draft_runs)
+        active_heads = compute_active_head_map(open_pulls)
+        keep_stale_sha_branches: AbstractSet[str] = (
+            compute_draft_branches(open_pulls) if args.keep_draft_runs else frozenset()
         )
         runs = client.list_recent_workflow_runs(max_runs=args.max_runs)
         stale_runs = compute_stale_runs(
-            runs, active_heads=active_heads, cancel_events=cancel_events
+            runs,
+            active_heads=active_heads,
+            cancel_events=cancel_events,
+            keep_stale_sha_branches=keep_stale_sha_branches,
         )
 
         cancelled = 0

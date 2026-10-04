@@ -105,7 +105,6 @@ import type {
   RelationshipGraph,
   RelationshipSummary,
   Replay,
-  ReplayFormat,
   RiskHeatmap,
   RoleRotationAnalytics,
   SastFinding,
@@ -1275,59 +1274,68 @@ export class AragoraClient {
     const maxAttempts = this.config.retryEnabled ? this.config.maxRetries : 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeout = options.timeout ?? this.config.timeout;
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
       try {
-        const controller = new AbortController();
-        const timeout = options.timeout ?? this.config.timeout;
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let response: Response | undefined;
+        try {
+          response = await fetch(url.toString(), {
+            method,
+            headers,
+            body: options.body ? JSON.stringify(options.body) : undefined,
+            signal: controller.signal,
+          });
 
-        const response = await fetch(url.toString(), {
-          method,
-          headers,
-          body: options.body ? JSON.stringify(options.body) : undefined,
-          signal: controller.signal,
-        });
+          if (!response.ok) {
+            const statusText = response.statusText;
+            const body = await response.json().catch(error => {
+              if (controller.signal.aborted) throw error;
+              return { error: statusText };
+            });
+            throw AragoraError.fromResponse(response.status, body);
+          }
+        } catch (error) {
+          lastError = error as Error;
 
+          // Don't retry on client errors (4xx) or abort.
+          if (error instanceof AragoraError && error.statusCode && error.statusCode < 500) {
+            throw error;
+          }
+          if ((error as Error).name === 'AbortError') {
+            throw new TimeoutError(
+              response ? 'Response body timeout' : 'Request timeout', 'SERVICE_UNAVAILABLE'
+            );
+          }
+
+          if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
+            throw new ConnectionError('Connection failed', 'SERVICE_UNAVAILABLE');
+          }
+        }
+
+        if (response?.ok) {
+          // A successful response may represent an operation already performed.
+          // Consumption stays outside retry handling; only our deadline abort
+          // is translated. Unrelated body/decoding errors propagate unchanged.
+          try {
+            const text = await response.text();
+            if (options.responseType === 'text') return text as T;
+            if (!text) return {} as T;
+            return JSON.parse(text) as T;
+          } catch (error) {
+            if (controller.signal.aborted && (error as Error)?.name === 'AbortError') {
+              throw new TimeoutError('Response body timeout', 'SERVICE_UNAVAILABLE');
+            }
+            throw error;
+          }
+        }
+      } finally {
         clearTimeout(timeoutId);
+      }
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({ error: response.statusText }));
-          throw AragoraError.fromResponse(response.status, body);
-        }
-
-        const text = await response.text();
-
-        // Text responses keep their contract even when the body is empty:
-        // '' is a valid string result, never coerced to {}.
-        if (options.responseType === 'text') {
-          return text as T;
-        }
-
-        // Handle empty JSON responses
-        if (!text) {
-          return {} as T;
-        }
-
-        return JSON.parse(text) as T;
-      } catch (error) {
-        lastError = error as Error;
-
-        // Don't retry on client errors (4xx) or abort
-        if (error instanceof AragoraError && error.statusCode && error.statusCode < 500) {
-          throw error;
-        }
-        if ((error as Error).name === 'AbortError') {
-          throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
-        }
-
-        // Check for network/connection errors
-        if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
-          throw new ConnectionError('Connection failed', 'SERVICE_UNAVAILABLE');
-        }
-
-        // Retry on server errors and network failures
-        if (attempt < maxAttempts) {
-          await this.sleep(Math.pow(2, attempt - 1) * 1000);
-        }
+      // Attempt resources are released before retry backoff begins.
+      if (attempt < maxAttempts) {
+        await this.sleep(Math.pow(2, attempt - 1) * 1000);
       }
     }
 
@@ -5286,17 +5294,6 @@ export class AragoraClient {
   }
 
   /**
-   * Export a replay in a specific format.
-   */
-  async exportReplay(replayId: string, format: ReplayFormat): Promise<{ content: string; filename: string }> {
-    return this.request<{ content: string; filename: string }>(
-      'GET',
-      `/api/v1/replays/${encodeURIComponent(replayId)}/export`,
-      { params: { format } }
-    );
-  }
-
-  /**
    * Delete a replay.
    */
   async deleteReplay(replayId: string): Promise<{ deleted: boolean }> {
@@ -5500,13 +5497,6 @@ export class AragoraClient {
    */
   async getTenant(tenantId: string): Promise<import('./types').Tenant> {
     return this.request<import('./types').Tenant>('GET', `/api/v1/tenants/${encodeURIComponent(tenantId)}`);
-  }
-
-  /**
-   * Create a new tenant.
-   */
-  async createTenant(body: import('./types').CreateTenantRequest): Promise<import('./types').Tenant> {
-    return this.request<import('./types').Tenant>('POST', '/api/v1/tenants', { body });
   }
 
   /**

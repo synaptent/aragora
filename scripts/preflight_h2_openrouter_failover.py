@@ -122,9 +122,9 @@ H2_PANEL_SLOTS: tuple[H2PanelSlot, ...] = (
         (
             H2ProviderAttempt(
                 "openrouter",
-                "qwen/qwen3-max",
+                "qwen/qwen3.8-max",
                 "openrouter",
-                "qwen/qwen3-max",
+                "qwen/qwen3.8-max",
                 "OPENROUTER_API_KEY",
             ),
         ),

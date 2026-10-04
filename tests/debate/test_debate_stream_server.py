@@ -27,7 +27,7 @@ from aragora.server.stream.debate_stream_server import (
     WS_MESSAGE_BURST_SIZE,
     WS_TOKEN_REVALIDATION_INTERVAL,
 )
-from aragora.server.stream.events import StreamEventType, StreamEvent
+from aragora.events.types import StreamEventType, StreamEvent
 
 
 # ============================================================================

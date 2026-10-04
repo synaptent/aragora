@@ -295,7 +295,7 @@ class TestBuildDefaultInvoker:
 
         claude_agent = invoker._agents[FAMILY_CLAUDE]
         assert claude_agent is not None
-        assert claude_agent.enable_web_search is False
+        assert getattr(claude_agent, "enable_web_search") is False
         # Heterodox slots in unavailable set (no heterodox keys supplied)
         assert "grok_heterodox" in invoker._unavailable_slots
         assert "gemini_heterodox" in invoker._unavailable_slots
@@ -727,6 +727,7 @@ _VALID_MODELS_BY_PROVIDER: dict[str, frozenset[str]] = {
     ),
     "kimi": frozenset(
         {
+            "moonshotai/kimi-k3",
             "moonshotai/kimi-k2.7-code",
             # Legacy id kept as an accepted alias (same keep-legacy principle
             # as OPENROUTER_FALLBACK_MODELS in this PR); real_invoker still
@@ -740,6 +741,7 @@ _VALID_MODELS_BY_PROVIDER: dict[str, frozenset[str]] = {
     ),
     "qwen": frozenset(
         {
+            "qwen/qwen3.8-max",
             "qwen/qwen3-235b-a22b",
             "qwen/qwen3.7-max",
             "qwen/qwen3.5-plus-02-15",

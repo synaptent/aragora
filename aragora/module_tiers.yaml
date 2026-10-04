@@ -25,10 +25,10 @@ thresholds:
 
 summary:
   core: 21
-  integrated: 92
-  experimental: 29
+  integrated: 94
+  experimental: 26
   deprecated: 3
-  total: 145
+  total: 144
 
 modules:
   # --- core (21) ---
@@ -46,8 +46,8 @@ modules:
   - name: cli
     tier: core
     py_files: 124
-    importer_count: 9
-    test_file_count: 155
+    importer_count: 10
+    test_file_count: 158
     override_reason: "aragora CLI — primary developer surface"
   - name: config
     tier: core
@@ -64,7 +64,7 @@ modules:
     tier: core
     py_files: 19
     importer_count: 206
-    test_file_count: 196
+    test_file_count: 197
     override_reason: "root type hierarchy + Agent base class"
   - name: db
     tier: core
@@ -87,7 +87,7 @@ modules:
     tier: core
     py_files: 40
     importer_count: 68
-    test_file_count: 120
+    test_file_count: 122
   - name: knowledge
     tier: core
     py_files: 179
@@ -101,9 +101,9 @@ modules:
     override_reason: "ContinuumMemory + CritiqueStore — persistent state"
   - name: nomic
     tier: core
-    py_files: 165
+    py_files: 166
     importer_count: 89
-    test_file_count: 228
+    test_file_count: 230
   - name: observability
     tier: core
     py_files: 92
@@ -137,18 +137,18 @@ modules:
     test_file_count: 97
   - name: server
     tier: core
-    py_files: 1123
+    py_files: 1126
     importer_count: 150
-    test_file_count: 1897
+    test_file_count: 1902
     override_reason: "FastAPI server + 3K+ API operations"
   - name: storage
     tier: core
     py_files: 109
     importer_count: 235
-    test_file_count: 168
+    test_file_count: 169
     override_reason: "persistence layer"
 
-  # --- integrated (92) ---
+  # --- integrated (94) ---
   - name: analysis
     tier: integrated
     py_files: 29
@@ -413,8 +413,8 @@ modules:
   - name: models
     tier: integrated
     py_files: 3
-    importer_count: 8
-    test_file_count: 5
+    importer_count: 16
+    test_file_count: 6
   - name: modes
     tier: integrated
     py_files: 20
@@ -480,6 +480,11 @@ modules:
     py_files: 7
     importer_count: 10
     test_file_count: 8
+  - name: receipts
+    tier: integrated
+    py_files: 3
+    importer_count: 5
+    test_file_count: 5
   - name: replay
     tier: integrated
     py_files: 6
@@ -530,6 +535,11 @@ modules:
     py_files: 44
     importer_count: 46
     test_file_count: 58
+  - name: shared
+    tier: integrated
+    py_files: 6
+    importer_count: 4
+    test_file_count: 5
   - name: skills
     tier: integrated
     py_files: 21
@@ -611,7 +621,7 @@ modules:
     importer_count: 16
     test_file_count: 11
 
-  # --- experimental (29) ---
+  # --- experimental (26) ---
   - name: advocates
     tier: experimental
     py_files: 2
@@ -687,31 +697,16 @@ modules:
     py_files: 2
     importer_count: 0
     test_file_count: 3
-  - name: receipts
-    tier: experimental
-    py_files: 3
-    importer_count: 5
-    test_file_count: 4
   - name: reports
     tier: experimental
     py_files: 2
     importer_count: 2
     test_file_count: 2
-  - name: shared
-    tier: experimental
-    py_files: 5
-    importer_count: 2
-    test_file_count: 4
   - name: sync
     tier: experimental
     py_files: 4
     importer_count: 0
     test_file_count: 2
-  - name: tasks
-    tier: experimental
-    py_files: 2
-    importer_count: 1
-    test_file_count: 4
   - name: telemetry
     tier: experimental
     py_files: 3

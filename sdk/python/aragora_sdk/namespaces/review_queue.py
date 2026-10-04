@@ -74,6 +74,10 @@ class ReviewQueueAPI:
         """Fetch session stats: approvals today, median decision time, streak."""
         return self._client.request("GET", "/api/v1/review-queue/stats")
 
+    def triage_metrics(self) -> dict[str, Any]:
+        """Fetch rolling-window triage metrics (7-day and 30-day windows)."""
+        return self._client.request("GET", "/api/v1/review-queue/triage-metrics")
+
 
 class AsyncReviewQueueAPI:
     """
@@ -122,3 +126,7 @@ class AsyncReviewQueueAPI:
     async def stats(self) -> dict[str, Any]:
         """Fetch session stats: approvals today, median decision time, streak."""
         return await self._client.request("GET", "/api/v1/review-queue/stats")
+
+    async def triage_metrics(self) -> dict[str, Any]:
+        """Fetch rolling-window triage metrics (7-day and 30-day windows)."""
+        return await self._client.request("GET", "/api/v1/review-queue/triage-metrics")

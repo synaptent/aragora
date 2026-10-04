@@ -109,9 +109,9 @@ class ModelSpec:
         return (today if today is not None else utc_today()) < self.soak_until
 
 
-# Prices are USD per 1M tokens, captured from the live OpenRouter catalog on
-# 2026-07-16 (see catalog_snapshot.json for the raw capture). Direct-provider
-# ids verified against provider model lists where noted on the source PRs.
+# Prices are USD per 1M tokens, captured from the live OpenRouter catalog
+# (most recently refreshed 2026-08-16; see catalog_snapshot.json for the raw
+# capture). Direct-provider ids are verified against provider model lists.
 CATALOG: dict[str, ModelSpec] = {
     spec.canonical_id: spec
     for spec in (
@@ -219,6 +219,51 @@ CATALOG: dict[str, ModelSpec] = {
             output_per_mtok_long=5.00,
         ),
         ModelSpec(
+            canonical_id="sonar-reasoning-pro",
+            provider="perplexity",
+            direct_id="sonar-reasoning-pro",
+            openrouter_id="perplexity/sonar-reasoning-pro",
+            input_per_mtok=2.00,
+            output_per_mtok=8.00,
+            context_window=128_000,
+            max_output_tokens=128_000,
+            release_date=date(2025, 3, 7),
+        ),
+        ModelSpec(
+            canonical_id="command-a",
+            provider="cohere",
+            direct_id="command-a-03-2025",
+            openrouter_id="cohere/command-a",
+            input_per_mtok=2.50,
+            output_per_mtok=10.00,
+            context_window=256_000,
+            max_output_tokens=8_192,
+            release_date=date(2025, 3, 13),
+        ),
+        ModelSpec(
+            canonical_id="jamba-large-1.7",
+            provider="ai21",
+            direct_id="jamba-large",
+            openrouter_id="ai21/jamba-large-1.7",
+            input_per_mtok=2.00,
+            output_per_mtok=8.00,
+            context_window=256_000,
+            max_output_tokens=4_096,
+            release_date=date(2025, 8, 8),
+        ),
+        ModelSpec(
+            canonical_id="qwen3.8-max",
+            provider="alibaba",
+            direct_id="qwen3.8-max",
+            openrouter_id="qwen/qwen3.8-max",
+            input_per_mtok=2.00,
+            output_per_mtok=6.00,
+            context_window=1_000_000,
+            max_output_tokens=131_072,
+            release_date=date(2026, 8, 3),
+            soak_until=date(2026, 8, 17),
+        ),
+        ModelSpec(
             canonical_id="qwen3.7-max",
             provider="alibaba",
             direct_id="qwen3.7-max",
@@ -232,15 +277,28 @@ CATALOG: dict[str, ModelSpec] = {
             release_date=date(2026, 6, 1),
         ),
         ModelSpec(
+            canonical_id="kimi-k3",
+            provider="moonshot",
+            direct_id="kimi-k3",
+            openrouter_id="moonshotai/kimi-k3",
+            input_per_mtok=3.00,
+            output_per_mtok=15.00,
+            context_window=1_048_576,
+            # OpenRouter does not currently publish a completion-token cap;
+            # retain the existing conservative application cap.
+            max_output_tokens=32_768,
+            release_date=date(2026, 7, 16),
+            soak_until=date(2026, 7, 30),
+        ),
+        ModelSpec(
             canonical_id="kimi-k2.7-code",
             provider="moonshot",
             direct_id="kimi-k2.7-code",
             openrouter_id="moonshotai/kimi-k2.7-code",
-            # Prompt rate corrected 0.72 -> 0.75 per live catalog (#9073), then
-            # 0.75/3.50 -> 0.82/3.75 by a provider reprice caught by the
-            # 2026-07-24 snapshot refresh (incidental to the Opus 5 bump).
-            input_per_mtok=0.82,
-            output_per_mtok=3.75,
+            # Live OpenRouter reprice captured by the 2026-08-16 snapshot
+            # refresh; the reviewer/runtime pin itself remains unchanged.
+            input_per_mtok=0.71,
+            output_per_mtok=3.50,
             context_window=262_144,
             max_output_tokens=32_768,
             release_date=date(2026, 6, 15),

@@ -2,7 +2,7 @@
 Webhook Registration Storage.
 
 Provides durable storage for webhook registrations, replacing the in-memory
-dict in handlers/webhooks.py. Survives server restarts.
+dict in handlers/webhook_management.py. Survives server restarts.
 
 Backends:
 - SQLiteWebhookRegistry: Persisted, single-instance (default)
@@ -76,7 +76,7 @@ class SQLiteWebhookRegistry:
     SQLite-backed webhook registration store.
 
     Provides durable storage for webhook configurations with the same
-    interface as the in-memory WebhookStore in handlers/webhooks.py.
+    interface as the in-memory WebhookStore in handlers/webhook_management.py.
     """
 
     SCHEMA_VERSION = 1

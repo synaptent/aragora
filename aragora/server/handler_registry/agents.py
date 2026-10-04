@@ -32,22 +32,27 @@ AgentConfigHandler = _safe_import("aragora.server.handlers.agents.config", "Agen
 
 # External agents and gateway
 ExternalAgentsHandler = _safe_import(
-    "aragora.server.handlers.external_agents", "ExternalAgentsHandler"
+    "aragora.server.handlers.agents.external_agents", "ExternalAgentsHandler"
 )
 
 # Gateway agent handlers
 GatewayAgentsHandler = _safe_import(
-    "aragora.server.handlers.gateway_agents_handler", "GatewayAgentsHandler"
+    "aragora.server.handlers.gateway.gateway_agents_handler", "GatewayAgentsHandler"
 )
 
 # Selection handler (agent selection)
-SelectionHandler = _safe_import("aragora.server.handlers.selection", "SelectionHandler")
+SelectionHandler = _safe_import("aragora.server.handlers.agents.selection", "SelectionHandler")
 
 # Agent recommendations and feedback
 AgentRecommendationHandler = _safe_import(
     "aragora.server.handlers.agents.recommendations", "AgentRecommendationHandler"
 )
 FeedbackHandler = _safe_import("aragora.server.handlers.agents.feedback", "FeedbackHandler")
+
+# Match statistics (ELO aggregate stats)
+MatchesStatsHandler = _safe_import(
+    "aragora.server.handlers.agents.matches_stats", "MatchesStatsHandler"
+)
 
 # =============================================================================
 # Agent Handler Registry Entries
@@ -66,6 +71,8 @@ AGENT_HANDLER_REGISTRY: list[tuple[str, object]] = [
     # Agent recommendations and feedback
     ("_agent_recommendation_handler", AgentRecommendationHandler),
     ("_feedback_handler", FeedbackHandler),
+    # Match statistics
+    ("_matches_stats_handler", MatchesStatsHandler),
 ]
 
 __all__ = [
@@ -79,6 +86,7 @@ __all__ = [
     "ExternalAgentsHandler",
     "GatewayAgentsHandler",
     "SelectionHandler",
+    "MatchesStatsHandler",
     # Registry
     "AGENT_HANDLER_REGISTRY",
 ]

@@ -23,6 +23,7 @@ from aragora.missions import (
     WorkArtifact,
 )
 from aragora.missions.dispatch import BossLoopDispatch
+from aragora.missions.intake import IntakeBridgeDispatch, intake_bridge_enabled
 from aragora.missions.live_gate import LiveBossLoopGate
 from aragora.missions.runtime import MissionRuntimeConfig
 
@@ -88,6 +89,7 @@ def _cmd_seed(args: argparse.Namespace, goal_words: list[str]) -> int:
         "tracks": tracks,
         "paths": paths,
         "autonomy": args.autonomy,
+        "kind": "intake",
     }
     state = MissionState(
         mission_id=mission_id,
@@ -112,9 +114,16 @@ def _cmd_status(args: argparse.Namespace) -> int:
     state = MissionState.load(_state_path(args))
     done, total = state.progress()
     blocked = sum(1 for feature in state.features if feature.status == Status.BLOCKED)
+    parked = sum(1 for feature in state.features if feature.status == Status.PARKED)
+    terminal = sum(1 for feature in state.features if feature.status == Status.TERMINAL)
     in_progress = sum(1 for feature in state.features if feature.status == Status.IN_PROGRESS)
+    awaiting = sum(1 for feature in state.features if feature.status == Status.AWAITING_CLAIM)
     print(f"Mission {state.mission_id}: {state.goal}")
-    print(f"Progress: {done}/{total} completed, {blocked} blocked, {in_progress} in progress")
+    print(
+        f"Progress: {done}/{total} completed, {awaiting} awaiting claim, "
+        f"{blocked} blocked, {parked} parked, "
+        f"{terminal} terminal, {in_progress} in progress"
+    )
     for feature in state.features:
         print(f"  - {feature.id}: {feature.status} ({feature.milestone}) {feature.description}")
     return 0
@@ -176,12 +185,21 @@ def _dispatch_for(args: argparse.Namespace, *, state_path: Path | None = None):
         base = "origin/main"
         gate = LiveBossLoopGate(repo_root=_repo_root_for(args, state_path), base=base)
         receipt_dir = state_path.parent / "receipts" if state_path is not None else None
-        return BossLoopDispatch(
+        dispatch = BossLoopDispatch(
             gate,
             base=base,
             operator_tier=_operator_tier_for(args, state_path),
             receipt_dir=receipt_dir,
         )
+        if intake_bridge_enabled():
+            # Seeded intake features get decomposed into child features born in
+            # the claimable AWAITING_CLAIM state (#8758): auto-drain leaves them
+            # for the worker/lease machinery (select_for) with no retry burn and
+            # no BLOCKED children, and the merge gate is never invoked on a
+            # nonexistent ref. Kill-switch:
+            # ARAGORA_DISABLE_MISSION_INTAKE_BRIDGE=1 restores park-on-intake.
+            return IntakeBridgeDispatch(dispatch)
+        return dispatch
 
     def report_dispatch(feature: Feature) -> Handoff:
         return Handoff(

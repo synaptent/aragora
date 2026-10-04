@@ -774,7 +774,7 @@ domain/application/interface home packages + their tests) unless noted. LOC is a
 estimate of code touched (moved + edited + repointed + tests); a couple sit near the
 cap and carry a noted split point. **`events.dispatcher`/`async_dispatcher` ->
 `server` (webhook signing + tracing) is OUT OF SCOPE** here - that is Batch 1b-sweep
-+ Batch 2c (2c is Tier-3, `aragora/server/handlers/webhooks.py`).
++ Batch 2c (2c is Tier-3, `aragora/server/handlers/webhook_management.py`).
 
 ### Events (supersedes cancelled Batch 2a)
 

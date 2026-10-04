@@ -122,6 +122,31 @@ ROUTE_CONTRACT_OVERRIDES: dict[str, dict[str, dict[str, Any]]] = {
         "post": {
             "summary": "Execute inbox quick action",
             "description": "Execute an inbox command-center action against selected email IDs.",
+            "responses": {
+                "200": {
+                    "description": "OK",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["success", "action", "processed", "results"],
+                                "properties": {
+                                    "success": {"type": "boolean"},
+                                    "action": {"type": "string"},
+                                    "processed": {"type": "integer"},
+                                    "results": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "additionalProperties": True,
+                                        },
+                                    },
+                                },
+                            }
+                        }
+                    },
+                }
+            },
             "requestBody": _json_body(
                 "Inbox quick-action request.",
                 required_fields=["action", "emailIds"],

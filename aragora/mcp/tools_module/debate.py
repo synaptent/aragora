@@ -138,7 +138,7 @@ async def get_debate_tool(debate_id: str) -> dict[str, Any]:
 
     # Try to load from storage
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:
@@ -180,7 +180,7 @@ async def search_debates_tool(
     results: list[dict[str, Any]] = []
 
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if db and hasattr(db, "search"):
@@ -245,7 +245,7 @@ async def fork_debate_tool(
         return {"error": "debate_id is required"}
 
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:
@@ -318,7 +318,7 @@ async def get_forks_tool(
         return {"error": "debate_id is required"}
 
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:

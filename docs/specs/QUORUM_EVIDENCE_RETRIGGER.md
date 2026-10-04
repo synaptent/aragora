@@ -50,7 +50,7 @@ could not move the head-bound required check at all.
 
 The job instead performs the known-safe deterministic recovery — the
 exact manual fix used on #7727 and the A1 reconciler motion — at the
-source: `gh run rerun <latest head-bound pull_request run>`. The rerun
+source: `gh run rerun <newest surviving head-bound pull_request run>`. The rerun
 executes in the original `pull_request` context, so its check run binds
 to the PR head and the gate genuinely re-reads the evidence.
 
@@ -82,14 +82,71 @@ In-step (read-only `gh api` + `jq`):
    word-boundary matched, case-insensitive). Non-evidence-shaped
    comments exit 0 in seconds.
 2. The PR is open and non-draft (drafts defer the gate by design).
-3. The latest `pull_request`-event run of this workflow **for the
-   current head SHA** exists, is `completed`, and concluded
-   non-`success`. In-flight runs will already see the comment; green
-   gates need no recount; runs for superseded heads are left alone.
+3. Deterministic selection of the ONLY legitimate rerun target
+   (PR #9766). A rerun re-executes the run's ORIGINAL frozen event
+   payload, so re-running an evaluation created while the PR was
+   still a draft replays its draft short-circuit and can resurface a
+   stale SUCCESS over the truthful newest ready-state result; and
+   when the newest evaluation is busy, falling back to an older
+   completed run re-executes exactly such a stale evaluation
+   (observed on PR #9754: draft-era run 31772664823 attempt 2 masked
+   ready-state run 31772790229). The guard therefore:
+   - enumerates ALL head-bound `pull_request`-event evaluations of
+     this workflow for the current head SHA via full pagination and
+     reconciles the listing against the API's `total_count`; any
+     mismatch (incomplete discovery) logs a warning and no-ops;
+   - partitions away frozen draft payloads: runs created before the
+     PR's newest `ready_for_review` issue event are dropped (the
+     timeline is read through the job's read-only `issues: read`
+     scope); a PR with no `ready_for_review` transition keeps all
+     runs;
+   - orders the survivors by
+     `((run_started_at // created_at), run_id, run_attempt)` — a
+     still-queued run has null `run_started_at`, which must not sort
+     the newest evaluation below an older completed one — and
+     considers ONLY the newest survivor. No survivor: no-op. Newest
+     survivor in-flight or concluded `success`: no-op. The guard
+     NEVER falls back to an older run.
 
-Only then: `gh run rerun <run_id>`, tolerating rerun races
-(an "already running" rejection logs a warning and exits 0 — comment
-activity must never manufacture red noise).
+Only then: `gh run rerun <newest survivor>`. Concurrent evidence
+comments collapse to ONE rerun: every retrigger surface (this job and
+the standalone helper workflow `aragora-merge-quorum-retrigger.yml`,
+which runs the same shared selection helper) computes the same
+target, a fresh status read immediately before the rerun request
+makes burst losers see a non-completed run and no-op, and the rerun
+API rejecting an already-queued run covers the residual race (a
+rejected request logs a warning and exits 0 — comment activity must
+never manufacture red noise).
+
+### Single shared selection surface
+
+Guards 2–3 — gate-deferral, deterministic selection, burst dedup +
+rerun — live in ONE checked-in helper,
+`scripts/quorum_evidence_retrigger_select.sh`, run by BOTH retrigger
+surfaces from a BASE-repo default-branch checkout (the enforcing
+evaluation job's existing ref pin): comment events still never
+execute PR-author-controlled code, and the surfaces cannot drift
+apart. Only the by-design different comment-shape guards (Guard 1
+here; the heading-marker plus head-SHA-citation pre-filter in the
+standalone helper) remain in the workflow files.
+
+### Comment-shape filter boundary (intentional)
+
+Both retrigger surfaces fire only on evidence-shaped comments: this
+job requires the comment's first markdown heading to name a known
+reviewer family (Guard 1), and the standalone helper workflow
+(`aragora-merge-quorum-retrigger.yml`) requires a known
+reviewer-heading marker plus a 7+-hex head-SHA citation in the body.
+A Tier-4 human-settlement comment ("Tier-4 Human Settlement
+Authorization ...") is deliberately NOT evidence-shaped — it opens
+with no reviewer-family heading and carries no reviewer-heading
+marker — so posting it never auto-fires either surface, even though
+its operator author passes the author gates. This is a boundary, not
+a gap: the distinct post-settlement quorum execution required by
+Tier-4 chronology is produced by the sanctioned manual `gh run rerun`
+of the newest head-bound quorum run, which is the permanent
+post-settlement step in every Tier-4 settlement chronology (proven on
+PR #9770, 2026-08-16 UTC).
 
 ### Permissions
 
@@ -99,7 +156,10 @@ unchanged.
 
 **Deliberate deviation from the one-line B1 sketch** ("permissions
 unchanged"): the `evidence-retrigger` job carries job-scoped
-`permissions: { actions: write, pull-requests: read }`. A purely
+`permissions: { actions: write, contents: read, pull-requests: read,
+issues: read }` (`issues: read` exists solely for Guard 3's read-only
+`ready_for_review` timeline read; `contents: read` solely to check
+out the default-branch shared selection helper). A purely
 read-permission comment-triggered run cannot move the head-bound
 required check (see "Why re-run instead of evaluating inline"), so
 `actions: write` — the capability to re-run this workflow's own prior
@@ -141,11 +201,12 @@ grepped; it is never evaluated, and no other event field
 **Fork-PR permissions.** `issue_comment` workflows run **on the base
 repository**, from the default-branch workflow file, with the base
 repo's `GITHUB_TOKEN` — stated explicitly per the B1 caveat. The
-retrigger job checks out nothing and executes no PR-author-controlled
-code; the rerun it requests also checks out only the default branch
-(the evaluation job pins `ref: default_branch`) and is read-only. A
-fork commenter therefore gets no code execution with the token; worst
-case is triggering a read-only recount.
+retrigger job checks out only the BASE repo's default branch (the
+shared selection helper, `ref: default_branch`) and executes no
+PR-author-controlled code; the rerun it requests also checks out only
+the default branch (the evaluation job pins `ref: default_branch`)
+and is read-only. A fork commenter therefore gets no code execution
+with the token; worst case is triggering a read-only recount.
 
 **Cancellation abuse.** `cancel-in-progress: true` is scoped to the
 retrigger job's own per-PR group. The required evaluation runs keep
@@ -196,13 +257,36 @@ workflow with `yaml.safe_load` and pins:
   while the workflow-level group keeps `cancel-in-progress: false`;
 - the enforcing job is excluded from `issue_comment` events and gains
   no write permission; the retrigger job's write surface is exactly
-  `actions: write`;
+  `actions: write` (its `contents` scope stays read-only, present
+  solely for the helper checkout);
 - the comment body enters only via `env:`, never inline in `run:`;
-- the guard step references the known-reviewer-family heading match
-  and the head-bound stale-run conditions.
+- the guard step references the known-reviewer-family heading match;
+- both surfaces delegate Guards 2–3 to the single default-branch
+  shared helper with no inline selection copy left in either
+  workflow; the helper carries the stale-run conditions and the
+  coalesced ordering, and behavioral fixture tests execute it
+  against a fake `gh`.
 
 The suite FAILS against the pre-change workflow (RED) and PASSES with
 the change (GREEN); the RED proof is captured in the PR body.
+
+## Operational Notes
+
+- **Rehearsal is post-merge only.** A pre-merge rehearsal of either
+  retrigger surface via a branch-ref `workflow_dispatch` fails at the
+  helper invocation step: both surfaces deliberately check out
+  `scripts/quorum_evidence_retrigger_select.sh` from the BASE repo's
+  **default branch** (the fork-PR safety pin above), so until the PR
+  carrying the helper lands, the checked-out tree does not contain it.
+  This is a property of the pin, not a defect (observed on the PR #9772
+  rehearsal attempt, 2026-08-16). Pre-merge behavioral coverage comes
+  from the fixture-backed governance suite (`TestSelectionBehavior`
+  runs the real helper against a fake `gh`); live rehearsal happens
+  after merge.
+- **Helper checkouts are sparse.** Both retrigger checkouts exist
+  solely to fetch the helper, so they use a non-cone sparse checkout
+  of exactly that file. Per-comment retrigger runs materialize a
+  single script instead of the full tree.
 
 ## Operator Settlement Requested
 

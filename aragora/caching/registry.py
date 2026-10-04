@@ -31,7 +31,7 @@ Usage:
     )
 
     # Using the cached decorator
-    @cached(ttl_seconds=300, key_prefix="users")
+    @cached(ttl_seconds=300, maxsize=128)
     def get_user(user_id: str) -> dict:
         return expensive_lookup(user_id)
 
@@ -200,6 +200,11 @@ def get_cache(name: str) -> CacheBackend | None:
 
 def get_all_cache_stats() -> dict[str, CacheStats]:
     """Get statistics for all registered caches.
+
+    The values are ``aragora.caching.registry.CacheStats``, which is a different
+    class from the decorator-layer ``aragora.caching.CacheStats`` re-exported
+    beside this function, so ``isinstance`` checks against the package-level name
+    always fail. See the ``aragora.caching`` package docstring.
 
     Returns:
         Dictionary mapping cache names to their statistics

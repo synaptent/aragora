@@ -28,6 +28,20 @@ activating either module: Blockchain expansion remains parked behind CP-4,
 with Rekor serving receipt anchoring, and Marketplace remains P3/de-scoped
 until an external design partner supplies the activation evidence.
 
+## Revision 2026-08-26 — External research intake (X bookmarks + likes)
+
+Founder bookmark triage ([`docs/research/2026-08-26-x-bookmarks-triage.md`](research/2026-08-26-x-bookmarks-triage.md))
+established a standing intake pipeline for externally sourced ideas. These rows are capability
+backlog, **not** dispatch priority — the ODR tranche remains the execution spine. Dogfooding rule:
+intake candidates are ranked by an Aragora debate and every filed issue links the DecisionReceipt.
+
+| Item | Status | Notes |
+|------|--------|-------|
+| X bookmarks/likes live ingestion | In progress (this revision) | OAuth2 user-context (`bookmark.read` + `like.read`, owned reads ~$0.001) on the existing `aragora/ideacloud/ingestion/twitter_bookmarks.py` / `twitter_likes.py`; data-export `--file` mode already shipped and remains the zero-auth bridge. |
+| MetaPlanner `candidate_goals` | In progress (this revision) | First-class externally supplied candidate list for debate ranking with receipts; removes the 5-item `recent_issues` cap in `build_debate_topic`. |
+| Recurring X-intake digest | Planned | Clone of the codex-insights digest pattern: fetch since-cursor → ideacloud ingest/dedup → digest artifact + SHA-256 receipt; creates nothing (issue filing stays human-triggered). |
+| Grok Agent-Tools x_search enrichment | Investigation | xAI deprecated Live Search (the 410 fallback in `grok.py` already routes around it); investigate the Agent Tools API before implementing via `_build_extra_payload`. |
+
 ## Active Direction — Open Decision Receipt (ODR, June 2026)
 
 Epic: [#8223](https://github.com/synaptent/aragora/issues/8223). Sequencing: ODR-1→2→3 form the spine (a receipt a stranger can verify); 4/5/6 enrich the payload; 7 makes anchoring public. These supersede the P0/P1 ordering below as the current execution priority.

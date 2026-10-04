@@ -116,7 +116,11 @@ class ServerEventSubscriber:
         gauntlet_id = data.get("gauntlet_id", "")
         verdict = data.get("verdict", "unknown")
         confidence = data.get("confidence", 0.0)
-        total_findings = data.get("total_findings", 0)
+        # The emitter and frontend use findings_count; total_findings is the
+        # legacy name, read only when the canonical field is absent.
+        total_findings = data.get("findings_count")
+        if total_findings is None:
+            total_findings = data.get("total_findings", 0)
         critical_count = data.get("critical_count", 0)
 
         logger.debug("Gauntlet complete: %s verdict=%s", gauntlet_id, verdict)
@@ -151,7 +155,7 @@ class ServerEventSubscriber:
         This enables external systems to receive real-time notifications.
         """
         try:
-            from aragora.server.handlers.webhooks import get_webhook_store
+            from aragora.server.handlers.webhook_management import get_webhook_store
             from aragora.events.dispatcher import dispatch_webhook_with_retry
 
             # Get registered webhooks for this event type

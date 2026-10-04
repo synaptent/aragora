@@ -12,7 +12,9 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aragora.agents.failure_semantics import looks_like_agent_failure_response
 from aragora.nomic.types import Track
+from aragora.utils.error_sanitizer import sanitize_error
 
 if TYPE_CHECKING:
     from aragora.nomic.meta_planner import PrioritizedGoal
@@ -314,12 +316,79 @@ def build_goal(
     )
 
 
+def proposal_failure_provenance(
+    debate_result: Any,
+    expected_proposers: list[str] | None = None,
+) -> list[dict[str, str]]:
+    """Project structured proposal failures into a sanitized, stable order."""
+    failures = getattr(debate_result, "agent_failures", None)
+    if not isinstance(failures, dict):
+        return []
+
+    ordered_agents = list(dict.fromkeys(expected_proposers or []))
+    ordered_agents.extend(sorted(name for name in failures if name not in ordered_agents))
+    provenance: list[dict[str, str]] = []
+    for agent in ordered_agents:
+        records = failures.get(agent, [])
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict) or record.get("phase") != "proposal":
+                continue
+            provenance.append(
+                {
+                    "agent": str(agent),
+                    "phase": "proposal",
+                    "error_type": str(record.get("error_type") or "exception"),
+                    "message": sanitize_error(str(record.get("message") or "unknown error"), 160),
+                }
+            )
+    return provenance
+
+
+def _parse_goal_text(
+    text: str,
+    available_tracks: list[Track],
+) -> list["PrioritizedGoal"]:
+    """Parse one substantive response without invoking a heuristic fallback."""
+    goals: list["PrioritizedGoal"] = []
+    current_goal: dict[str, Any] = {}
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if re.match(r"^[\d]+[\.\)]\s+", line) or re.match(r"^[-*]\s+", line):
+            if current_goal.get("description"):
+                goals.append(build_goal(current_goal, len(goals), available_tracks))
+            current_goal = {
+                "description": re.sub(r"^[\d]+[\.\)]\s+|^[-*]\s+", "", line),
+                "track": None,
+                "rationale": "",
+                "impact": "medium",
+            }
+        elif current_goal:
+            for track in Track:
+                if track.value.lower() in line.lower():
+                    current_goal["track"] = track
+                    break
+            if "high" in line.lower() and "impact" in line.lower():
+                current_goal["impact"] = "high"
+            elif "low" in line.lower() and "impact" in line.lower():
+                current_goal["impact"] = "low"
+            if "because" in line.lower() or "rationale" in line.lower():
+                current_goal["rationale"] = line
+
+    if current_goal.get("description"):
+        goals.append(build_goal(current_goal, len(goals), available_tracks))
+    return goals
+
+
 def parse_goals_from_debate(
     debate_result: Any,
     available_tracks: list[Track],
     objective: str,
     max_goals: int,
     heuristic_fallback: Any,
+    expected_proposers: list[str] | None = None,
 ) -> list["PrioritizedGoal"]:
     """Parse prioritized goals from debate consensus.
 
@@ -333,72 +402,83 @@ def parse_goals_from_debate(
     Returns:
         List of PrioritizedGoal instances
     """
-    goals = []
+    proposals = getattr(debate_result, "proposals", None)
+    proposal_map = proposals if isinstance(proposals, dict) else {}
+    expected = list(dict.fromkeys(expected_proposers or []))
+    if not expected:
+        participants = getattr(debate_result, "participants", None)
+        if isinstance(participants, (list, tuple)):
+            expected = [str(name) for name in participants if str(name)]
+    if not expected:
+        expected = [str(name) for name in proposal_map]
 
-    # Get consensus text from debate result
+    substantive = [
+        name
+        for name in expected
+        if name in proposal_map and not looks_like_agent_failure_response(proposal_map[name])
+    ]
+    failures = proposal_failure_provenance(debate_result, expected)
+    degraded = bool(failures) or bool(expected and len(substantive) != len(expected))
+
     consensus_text = ""
-    if hasattr(debate_result, "consensus") and debate_result.consensus:
+    final_answer = getattr(debate_result, "final_answer", None)
+    if isinstance(final_answer, str) and final_answer.strip():
+        consensus_text = final_answer
+    elif hasattr(debate_result, "consensus") and debate_result.consensus:
         consensus_text = str(debate_result.consensus)
-    elif hasattr(debate_result, "final_response"):
+    elif getattr(debate_result, "final_response", None):
         consensus_text = str(debate_result.final_response)
     elif hasattr(debate_result, "responses") and debate_result.responses:
         consensus_text = str(debate_result.responses[-1])
 
-    if not consensus_text:
-        return heuristic_fallback(objective, available_tracks)
+    goals: list["PrioritizedGoal"] = []
+    decision_source = "debate_consensus"
+    if substantive and (degraded or not consensus_text):
+        decision_source = "surviving_proposals"
+        for agent in substantive:
+            text = str(proposal_map[agent]).strip()
+            parsed = _parse_goal_text(text, available_tracks)
+            if not parsed:
+                first_line = next(
+                    (line.strip("# ") for line in text.splitlines() if line.strip()), text
+                )
+                parsed = [
+                    build_goal(
+                        {"description": first_line, "rationale": f"Proposal from {agent}"},
+                        0,
+                        available_tracks,
+                    )
+                ]
+            goals.extend(parsed)
+    elif consensus_text and not degraded:
+        goals = _parse_goal_text(consensus_text, available_tracks)
 
-    # Parse numbered items from the consensus
-    lines = consensus_text.split("\n")
-    current_goal: dict[str, Any] = {}
-    goal_id = 0
-
-    for line in lines:
-        line = line.strip()
-
-        # Detect numbered items (1., 2., etc.) or bullet points
-        if re.match(r"^[\d]+[\.\)]\s+", line) or re.match(r"^[-*]\s+", line):
-            # Save previous goal if exists
-            if current_goal.get("description"):
-                goals.append(build_goal(current_goal, goal_id, available_tracks))
-                goal_id += 1
-
-            # Start new goal
-            current_goal = {
-                "description": re.sub(r"^[\d]+[\.\)]\s+|^[-*]\s+", "", line),
-                "track": None,
-                "rationale": "",
-                "impact": "medium",
-            }
-
-        elif current_goal:
-            # Parse track from line
-            for track in Track:
-                if track.value.lower() in line.lower():
-                    current_goal["track"] = track
-                    break
-
-            # Parse impact
-            if "high" in line.lower() and "impact" in line.lower():
-                current_goal["impact"] = "high"
-            elif "low" in line.lower() and "impact" in line.lower():
-                current_goal["impact"] = "low"
-
-            # Accumulate rationale
-            if "because" in line.lower() or "rationale" in line.lower():
-                current_goal["rationale"] = line
-
-    # Don't forget last goal
-    if current_goal.get("description"):
-        goals.append(build_goal(current_goal, goal_id, available_tracks))
-
-    # Limit to max goals
-    goals = goals[:max_goals]
-
-    # If no goals parsed, fall back to heuristics
     if not goals:
-        return heuristic_fallback(objective, available_tracks)
+        decision_source = "heuristic_fallback"
+        goals = heuristic_fallback(objective, available_tracks)
 
-    return goals
+    unique: list["PrioritizedGoal"] = []
+    seen: set[str] = set()
+    for goal in goals:
+        key = re.sub(r"[^a-z0-9]+", " ", goal.description.casefold()).strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        goal.id = f"goal_{len(unique)}"
+        goal.priority = len(unique) + 1
+        unique.append(goal)
+
+    metadata = {
+        "decision_source": decision_source,
+        "degraded": degraded,
+        "expected_proposers": expected,
+        "substantive_proposers": substantive,
+        "failure_provenance": failures,
+    }
+    for goal in unique[:max_goals]:
+        goal.metadata = dict(metadata)
+
+    return unique[:max_goals]
 
 
 def build_debate_topic(
@@ -439,6 +519,14 @@ CONSTRAINTS:
 {chr(10).join(f"- {c}" for c in constraints) if constraints else "- None specified"}
 
 """
+    candidate_goals = getattr(context, "candidate_goals", None)
+    if candidate_goals:
+        topic += f"""
+CANDIDATE GOALS (externally supplied — evaluate and rank ALL of these against the objective;
+reject candidates that do not survive scrutiny and say why):
+{chr(10).join(f"{i}. {goal}" for i, goal in enumerate(candidate_goals, 1))}
+"""
+
     if context.recent_issues:
         topic += f"""
 RECENT ISSUES:
@@ -558,11 +646,70 @@ IMPORTANT: Avoid repeating past failures listed above. Learn from history.
     return topic
 
 
+def build_repository_planning_topic(
+    objective: str,
+    repository_name: str,
+    repository_id: str,
+    commit_sha: str,
+    pack_reference: str,
+    roadmap_paths: list[str],
+    context_entry_files: list[str],
+    evaluation_criteria: list[tuple[str, str]],
+    context_markdown: str,
+    max_goals: int,
+) -> str:
+    """Build the repository-neutral, evidence-bearing planning prompt."""
+    criteria = "\n".join(
+        f"- {item_id}: {description}" for item_id, description in evaluation_criteria
+    )
+    roadmaps = "\n".join(f"- {path}" for path in roadmap_paths) or "- None configured"
+    entries = "\n".join(f"- {path}" for path in context_entry_files) or "- None configured"
+    criterion_example = ", ".join(f'"{item_id}": 0.0' for item_id, _ in evaluation_criteria)
+    return f"""Plan the next repository improvements using only the commit-addressed context below.
+
+REPOSITORY NAME: {repository_name}
+REPOSITORY ID: {repository_id}
+COMMIT: {commit_sha}
+CONTEXT PACK: {pack_reference}
+OBJECTIVE: {objective}
+
+ROADMAP FILES:
+{roadmaps}
+
+CONTEXT ENTRY FILES:
+{entries}
+
+EVALUATION CRITERIA (score every goal from 0.0 to 1.0):
+{criteria}
+
+Return one JSON object and no prose. It must have a `goals` array containing at most
+{max_goals} objects. Every goal must contain `description`, `rationale`,
+`estimated_impact` (high, medium, or low), `criterion_scores`, and
+`evidence_paths`. Evidence paths must be concrete repository-relative paths present
+in the context pack. Use this exact shape:
+{{
+  "goals": [
+    {{
+      "description": "actionable improvement",
+      "rationale": "why this advances the objective",
+      "estimated_impact": "high",
+      "criterion_scores": {{{criterion_example}}},
+      "evidence_paths": ["path/from/manifest"]
+    }}
+  ]
+}}
+
+COMMIT-ADDRESSED CONTEXT:
+{context_markdown}
+"""
+
+
 def gather_file_excerpts(
     signals: list[str],
     max_files: int = 3,
     max_chars_per_file: int = 1500,
     max_total_chars: int = 5000,
+    repo_root: Path = Path("."),
 ) -> dict[str, str]:
     """Extract file paths from signal strings and read excerpts.
 
@@ -579,12 +726,14 @@ def gather_file_excerpts(
         Dict mapping file path to truncated content.
     """
     # Extract file paths from signal strings
-    path_re = re.compile(r"(?:aragora|tests|scripts)/\S+\.py")
+    path_re = re.compile(
+        r"(?:^|:\s)([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.(?:py|ts|tsx|js|jsx|go|rs|java))"
+    )
     paths: list[str] = []
     for sig in signals:
         match = path_re.search(sig)
-        if match and match.group() not in paths:
-            paths.append(match.group())
+        if match and match.group(1) not in paths:
+            paths.append(match.group(1))
         if len(paths) >= max_files:
             break
 
@@ -592,7 +741,7 @@ def gather_file_excerpts(
     total = 0
     for path in paths:
         try:
-            content = Path(path).read_text(errors="replace")[:max_chars_per_file]
+            content = (repo_root / path).read_text(errors="replace")[:max_chars_per_file]
             if total + len(content) > max_total_chars:
                 content = content[: max_total_chars - total]
             if content:

@@ -5,12 +5,17 @@ Compares handler endpoints against SDK namespace methods to detect
 coverage drift. Intended for CI integration to fail when new handler
 routes lack corresponding SDK bindings.
 
+Budget enforcement compares measured debt against the explicit committed
+ceilings in the budget file; wall-clock dates and timezones never affect
+pass/fail. ``--today`` only shapes the non-enforcing advisory target.
+
 Usage:
     python scripts/check_sdk_parity.py             # Report only
     python scripts/check_sdk_parity.py --strict    # Exit 1 if gaps found
     python scripts/check_sdk_parity.py --strict --allow-missing  # transitional override
     python scripts/check_sdk_parity.py --strict --baseline scripts/baselines/check_sdk_parity.json
     python scripts/check_sdk_parity.py --json       # JSON output
+    python scripts/check_sdk_parity.py --tighten    # Lower committed ceilings to measured debt
 """
 
 from __future__ import annotations
@@ -20,8 +25,11 @@ import datetime as dt
 import importlib
 import inspect
 import json
+import os
 import re
 import sys
+import tempfile
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -158,8 +166,62 @@ def _collect_routes_from_handler_class(handler_cls: type[Any]) -> list[str]:
     return sorted(collected)
 
 
+# Modules the handler cascade still reaches transitively that emit a
+# module-level DeprecationWarning on first import: compatibility shims, plus
+# one handler module carrying a module-level notice for a single deprecated
+# function. Their remaining in-tree importers are migrated on separate
+# tracks, so this diagnostic script imports each module once under a locally
+# scoped filter instead. sys.modules caching guarantees the warning cannot
+# fire again during the cascade, and the filter list is restored on scope
+# exit, so no global warning state (and no package __init__) is ever touched.
+_LEGACY_WARNING_MODULES: tuple[str, ...] = (
+    "aragora.server.errors",
+    "aragora.debate.protocol",
+    "aragora.server.metrics",
+    "aragora.server.redis_config",
+    "aragora.server.storage",
+    "aragora.server.http_client_pool",
+    "aragora.server.handlers.webhooks",
+)
+
+
+def _preimport_legacy_warning_modules_quietly() -> None:
+    """Import the known modules, muting only their own DeprecationWarnings.
+
+    Capture-and-replay instead of an ignore filter: third-party imports deep
+    in these chains call ``warnings.simplefilter`` themselves, which would
+    front-run any filter installed here. ``record=True`` intercepts at the
+    ``showwarning`` level, which such filter mutations cannot bypass, and the
+    scope exit restores the pre-existing filter state so nothing leaks out.
+    """
+    for module_path in _LEGACY_WARNING_MODULES:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                importlib.import_module(module_path)
+            except (ImportError, AttributeError, ModuleNotFoundError):
+                # Same tolerance as the handler cascade below; a module that
+                # fails here fails identically there and is reported there.
+                continue
+        for captured in caught:
+            is_known_notice = issubclass(captured.category, DeprecationWarning) and str(
+                captured.message
+            ).startswith(_LEGACY_WARNING_MODULES)
+            if is_known_notice:
+                continue
+            # Replay everything else through the real (restored) filters so
+            # only the known notices above are actually silenced.
+            warnings.warn_explicit(
+                captured.message,
+                captured.category,
+                captured.filename,
+                captured.lineno,
+            )
+
+
 def extract_handler_routes_with_status() -> HandlerRouteExtractionResult:
     """Extract ROUTES from handler classes and report availability state."""
+    _preimport_legacy_warning_modules_quietly()
     try:
         from aragora.server.handlers._lazy_imports import ALL_HANDLER_NAMES, HANDLER_MODULES
     except (ImportError, ModuleNotFoundError) as exc:
@@ -636,11 +698,218 @@ def _expected_budget_max(
     start_date: dt.date,
     today: dt.date,
 ) -> int:
-    """Compute expected maximum debt after weekly reduction cadence."""
+    """Compute the advisory-only paydown target after a weekly reduction cadence."""
     if weekly_reduction <= 0 or today <= start_date:
         return initial
     weeks_elapsed = (today - start_date).days // 7
     return max(0, initial - (weeks_elapsed * weekly_reduction))
+
+
+BUDGET_SCHEMA = "check-sdk-parity-committed-budget-v1"
+COMMITTED_MISSING_KEY = "committed_max_missing_from_both_sdks"
+COMMITTED_STALE_KEY = "committed_max_stale_python_sdk_paths"
+ADVISORY_CADENCE_KEY = "advisory_cadence"
+_LEGACY_CADENCE_KEYS = (
+    "start_date",
+    "initial_missing_from_both_sdks",
+    "weekly_reduction_missing_from_both_sdks",
+    "initial_stale_python_sdk_paths",
+    "weekly_reduction_stale_python_sdk_paths",
+)
+
+
+@dataclass(frozen=True)
+class CommittedBudget:
+    max_missing_from_both: int
+    max_stale_python: int
+    advisory_cadence: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class BudgetLoadResult:
+    budget: CommittedBudget | None = None
+    error_kind: str | None = None  # "missing" | "malformed" | "legacy"
+    error_detail: str | None = None
+    raw: dict[str, Any] | None = None
+    raw_bytes: bytes | None = None
+
+
+def _as_committed_ceiling(value: Any, key: str) -> int:
+    # bool is an int subclass and must not slip through as a ceiling.
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{key} must be a nonnegative integer, got {value!r}")
+    return value
+
+
+def load_committed_budget(path: Path) -> BudgetLoadResult:
+    """Load and classify a committed-ceiling budget file.
+
+    Only explicit committed ceilings are enforceable; a file carrying just
+    the retired clock-derived cadence keys classifies as ``legacy``.
+    """
+    if not path.exists():
+        return BudgetLoadResult(error_kind="missing", error_detail=f"{path} does not exist")
+    try:
+        raw_bytes = path.read_bytes()
+        data = json.loads(raw_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return BudgetLoadResult(error_kind="malformed", error_detail=str(exc))
+    if not isinstance(data, dict):
+        return BudgetLoadResult(error_kind="malformed", error_detail="budget must be a JSON object")
+
+    if COMMITTED_MISSING_KEY not in data or COMMITTED_STALE_KEY not in data:
+        legacy_keys = [key for key in _LEGACY_CADENCE_KEYS if key in data]
+        detail = (
+            f"clock-derived cadence keys ({', '.join(legacy_keys)}) without committed ceilings"
+            if legacy_keys
+            else f"missing required keys {COMMITTED_MISSING_KEY} and {COMMITTED_STALE_KEY}"
+        )
+        kind = "legacy" if legacy_keys else "malformed"
+        return BudgetLoadResult(error_kind=kind, error_detail=detail, raw=data, raw_bytes=raw_bytes)
+
+    try:
+        max_missing = _as_committed_ceiling(data[COMMITTED_MISSING_KEY], COMMITTED_MISSING_KEY)
+        max_stale = _as_committed_ceiling(data[COMMITTED_STALE_KEY], COMMITTED_STALE_KEY)
+    except ValueError as exc:
+        return BudgetLoadResult(error_kind="malformed", error_detail=str(exc), raw=data)
+
+    advisory = data.get(ADVISORY_CADENCE_KEY)
+    if not isinstance(advisory, dict) or not advisory:
+        advisory = None
+    return BudgetLoadResult(
+        budget=CommittedBudget(
+            max_missing_from_both=max_missing,
+            max_stale_python=max_stale,
+            advisory_cadence=advisory,
+        ),
+        raw=data,
+        raw_bytes=raw_bytes,
+    )
+
+
+def _resolve_advisory_date(today_arg: dt.date | None) -> dt.date:
+    """Resolve the date used ONLY for the non-enforcing advisory target."""
+    return today_arg if today_arg is not None else dt.date.today()
+
+
+def _advisory_target(cadence: dict[str, Any], as_of: dt.date) -> dict[str, Any] | None:
+    """Compute the non-enforcing advisory paydown target, or None when unusable."""
+    try:
+        start_date = dt.date.fromisoformat(str(cadence["start_date"]).strip())
+        initial_missing = int(cadence["initial_missing_from_both_sdks"])
+        weekly_missing = int(cadence.get("weekly_reduction_missing_from_both_sdks", 0))
+        initial_stale = int(cadence["initial_stale_python_sdk_paths"])
+        weekly_stale = int(cadence.get("weekly_reduction_stale_python_sdk_paths", 0))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return {
+        "as_of": as_of.isoformat(),
+        "missing_from_both_sdks_max": _expected_budget_max(
+            initial=initial_missing,
+            weekly_reduction=weekly_missing,
+            start_date=start_date,
+            today=as_of,
+        ),
+        "stale_python_sdk_paths_max": _expected_budget_max(
+            initial=initial_stale,
+            weekly_reduction=weekly_stale,
+            start_date=start_date,
+            today=as_of,
+        ),
+    }
+
+
+def _canonical_budget_bytes(
+    max_missing: int, max_stale: int, advisory_cadence: dict[str, Any] | None
+) -> bytes:
+    payload: dict[str, Any] = {
+        "schema": BUDGET_SCHEMA,
+        COMMITTED_MISSING_KEY: max_missing,
+        COMMITTED_STALE_KEY: max_stale,
+    }
+    if advisory_cadence:
+        payload[ADVISORY_CADENCE_KEY] = advisory_cadence
+    return (json.dumps(payload, indent=2) + "\n").encode("utf-8")
+
+
+def _run_tighten(args: argparse.Namespace) -> int:
+    """Write measured debt as the committed ceilings (never raises a ceiling)."""
+    handler_result = extract_handler_routes_with_status()
+    if not handler_result.available:
+        print(f"FAIL: --tighten requires handler route extraction ({handler_result.error})")
+        return 2
+    report = build_parity_report(
+        handler_result.routes,
+        extract_sdk_paths_python(),
+        extract_sdk_paths_typescript(),
+        None if args.include_undocumented else extract_openapi_routes(),
+        handler_routes_available=handler_result.available,
+        handler_routes_error=handler_result.error,
+    )
+    measured_missing = int(report["summary"]["routes_missing_from_both_sdks"])
+    measured_stale = len(report["gaps"]["stale_python_sdk_paths"])
+
+    loaded = load_committed_budget(args.budget)
+    if loaded.error_kind == "malformed":
+        print(
+            f"FAIL: refusing to overwrite malformed budget file ({args.budget}): "
+            f"{loaded.error_detail}"
+        )
+        return 2
+
+    advisory_cadence: dict[str, Any] | None = None
+    if loaded.budget is not None:
+        ceilings = loaded.budget
+        over = []
+        if measured_missing > ceilings.max_missing_from_both:
+            over.append(
+                f"missing_from_both {measured_missing} > committed {ceilings.max_missing_from_both}"
+            )
+        if measured_stale > ceilings.max_stale_python:
+            over.append(f"stale_python {measured_stale} > committed {ceilings.max_stale_python}")
+        if over:
+            print("FAIL: --tighten refuses to raise committed ceilings: " + "; ".join(over))
+            return 1
+        advisory_cadence = ceilings.advisory_cadence
+    elif loaded.error_kind == "legacy" and loaded.raw is not None:
+        advisory_cadence = {
+            key: loaded.raw[key] for key in _LEGACY_CADENCE_KEYS if key in loaded.raw
+        }
+
+    target_bytes = _canonical_budget_bytes(measured_missing, measured_stale, advisory_cadence)
+    if loaded.raw_bytes == target_bytes:
+        print(
+            f"Budget already tight: missing_from_both<={measured_missing} "
+            f"| stale_python<={measured_stale} (no write)"
+        )
+        return 0
+
+    tmp_name: str | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=".check_sdk_parity_budget.", dir=str(args.budget.parent)
+        )
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(target_bytes)
+        os.chmod(tmp_name, 0o644)  # mkstemp defaults to 0600; keep the budget world-readable
+        os.replace(tmp_name, str(args.budget))
+        tmp_name = None
+    except OSError as exc:
+        print(f"FAIL: cannot write budget file ({args.budget}): {exc}")
+        return 2
+    finally:
+        if tmp_name is not None:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+
+    print(
+        "Tightened committed budget ceilings to measured debt: "
+        f"missing_from_both<={measured_missing} | stale_python<={measured_stale} "
+        f"-> {args.budget}"
+    )
+    return 0
 
 
 def main() -> int:
@@ -677,11 +946,26 @@ def main() -> int:
     )
     parser.add_argument(
         "--today",
-        type=str,
+        type=dt.date.fromisoformat,
         default=None,
-        help="Override current date (YYYY-MM-DD) for deterministic budget checks",
+        metavar="YYYY-MM-DD",
+        help=(
+            "Advisory-only date for the non-enforcing paydown target; "
+            "never affects exit status or enforced ceilings"
+        ),
+    )
+    parser.add_argument(
+        "--tighten",
+        action="store_true",
+        help=(
+            "Measure current debt and write it as the committed budget ceilings "
+            "(bootstraps missing/legacy files; never raises an existing ceiling)"
+        ),
     )
     args = parser.parse_args()
+
+    if args.tighten:
+        return _run_tighten(args)
 
     # Extract data
     handler_result = extract_handler_routes_with_status()
@@ -700,9 +984,7 @@ def main() -> int:
         handler_routes_error=handler_result.error,
     )
 
-    if args.json:
-        print(json.dumps(report, indent=2))
-    else:
+    if not args.json:
         print_report(report)
         if handler_result.error:
             print(f"\nHandler route detail: {handler_result.error}")
@@ -720,92 +1002,148 @@ def main() -> int:
         if len(new_missing) > 20:
             print(f"  ... and {len(new_missing) - 20} more")
 
-    budget_status: dict[str, int] | None = None
-    if handler_result.available and args.budget and args.budget.exists():
-        try:
-            budget_data = json.loads(args.budget.read_text(encoding="utf-8"))
-            start_date_str = str(budget_data.get("start_date", "")).strip()
-            if not start_date_str:
-                raise ValueError("budget.start_date is required")
-            start_date = dt.date.fromisoformat(start_date_str)
-            today = dt.date.fromisoformat(args.today) if args.today else dt.date.today()
+    # Committed ceilings are the only enforced budget; the clock never affects pass/fail.
+    loaded_budget = load_committed_budget(args.budget)
+    budget_block: dict[str, Any] = {"path": str(args.budget)}
+    budget_failure_rc: int | None = None
+    budget_failure_msg: str | None = None
+    budget_passing: bool | None = None
+    committed: CommittedBudget | None = None
 
-            initial_missing = int(
-                budget_data.get(
-                    "initial_missing_from_both_sdks",
-                    report["summary"]["routes_missing_from_both_sdks"],
+    if loaded_budget.error_kind is not None:
+        budget_block["error"] = loaded_budget.error_kind
+        budget_block["detail"] = loaded_budget.error_detail
+    if loaded_budget.error_kind == "missing":
+        if args.strict:
+            budget_failure_rc = 2
+            budget_failure_msg = (
+                f"FAIL: SDK parity budget file not found ({args.budget}); "
+                "strict mode requires explicit committed ceilings"
+            )
+    elif loaded_budget.error_kind == "legacy":
+        budget_failure_rc = 2
+        budget_failure_msg = (
+            f"FAIL: Legacy clock-derived SDK parity budget ({args.budget}): "
+            f"{loaded_budget.error_detail}; bootstrap committed ceilings with --tighten"
+        )
+    elif loaded_budget.error_kind == "malformed":
+        budget_failure_rc = 2
+        budget_failure_msg = (
+            f"FAIL: Invalid SDK parity budget file ({args.budget}): {loaded_budget.error_detail}"
+        )
+    else:
+        committed = loaded_budget.budget
+
+    if committed is not None:
+        budget_block["schema"] = BUDGET_SCHEMA
+        budget_block[COMMITTED_MISSING_KEY] = committed.max_missing_from_both
+        budget_block[COMMITTED_STALE_KEY] = committed.max_stale_python
+        if handler_result.available:
+            current_missing = int(report["summary"]["routes_missing_from_both_sdks"])
+            current_stale = len(report["gaps"]["stale_python_sdk_paths"])
+            budget_passing = (
+                current_missing <= committed.max_missing_from_both
+                and current_stale <= committed.max_stale_python
+            )
+            budget_block["current_missing_from_both_sdks"] = current_missing
+            budget_block["current_stale_python_sdk_paths"] = current_stale
+            budget_block["passing"] = budget_passing
+            advisory_target = None
+            if committed.advisory_cadence:
+                advisory_target = _advisory_target(
+                    committed.advisory_cadence, _resolve_advisory_date(args.today)
                 )
-            )
-            weekly_missing = int(budget_data.get("weekly_reduction_missing_from_both_sdks", 0))
-            expected_missing = _expected_budget_max(
-                initial=initial_missing,
-                weekly_reduction=weekly_missing,
-                start_date=start_date,
-                today=today,
-            )
-
-            stale_current = len(report["gaps"]["stale_python_sdk_paths"])
-            initial_stale = int(budget_data.get("initial_stale_python_sdk_paths", stale_current))
-            weekly_stale = int(budget_data.get("weekly_reduction_stale_python_sdk_paths", 0))
-            expected_stale = _expected_budget_max(
-                initial=initial_stale,
-                weekly_reduction=weekly_stale,
-                start_date=start_date,
-                today=today,
-            )
-
-            budget_status = {
-                "expected_missing_max": expected_missing,
-                "current_missing": report["summary"]["routes_missing_from_both_sdks"],
-                "expected_stale_python_max": expected_stale,
-                "current_stale_python": stale_current,
-            }
+            budget_block["advisory_target"] = advisory_target
             if not args.json:
                 print(
-                    "\nBudget status: "
-                    f"missing_from_both {budget_status['current_missing']}/{budget_status['expected_missing_max']} "
-                    f"| stale_python {budget_status['current_stale_python']}/{budget_status['expected_stale_python_max']}"
+                    "\nBudget status (committed ceilings): "
+                    f"missing_from_both {current_missing}/{committed.max_missing_from_both} "
+                    f"| stale_python {current_stale}/{committed.max_stale_python}"
                 )
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            print(f"\nFAIL: Invalid SDK parity budget file ({args.budget}): {exc}")
-            return 2
-    elif not args.json and args.budget and args.budget.exists():
-        print("\nBudget status: skipped because handler routes are unavailable in this environment")
+                if advisory_target is not None:
+                    print(
+                        "Advisory paydown target (non-enforcing, as of "
+                        f"{advisory_target['as_of']}): missing_from_both<="
+                        f"{advisory_target['missing_from_both_sdks_max']} | stale_python<="
+                        f"{advisory_target['stale_python_sdk_paths_max']}"
+                    )
+                if budget_passing and (
+                    current_missing < committed.max_missing_from_both
+                    or current_stale < committed.max_stale_python
+                ):
+                    # Ceilings never decay on their own, so unbanked slack after a
+                    # real paydown stays silently consumable until someone tightens.
+                    print(
+                        "Advisory: current debt is below the committed ceilings "
+                        f"(missing_from_both {current_missing}/"
+                        f"{committed.max_missing_from_both} "
+                        f"| stale_python {current_stale}/{committed.max_stale_python}); "
+                        "run --tighten to bank this progress as the new ceilings."
+                    )
+        else:
+            budget_block["skipped"] = "handler routes unavailable in this environment"
+            if not args.json:
+                print(
+                    "\nBudget status: skipped because handler routes are unavailable "
+                    "in this environment"
+                )
+
+    report["budget"] = budget_block
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+
+    # In --json mode stdout must stay exactly one parseable JSON document
+    # (sdk-parity.yml redirects it into an artifact), so every human
+    # diagnostic below is routed to stderr instead.
+    diagnostics = sys.stderr if args.json else sys.stdout
+
+    if budget_failure_rc is not None:
+        if budget_failure_msg:
+            print(f"\n{budget_failure_msg}", file=diagnostics)
+        return budget_failure_rc
 
     # Strict mode: fail if gaps exceed threshold
     if args.strict:
         if not handler_result.available:
             print(
-                "\nSKIP: Handler route extraction unavailable; strict parity enforcement skipped."
+                "\nSKIP: Handler route extraction unavailable; strict parity enforcement skipped.",
+                file=diagnostics,
             )
             return 0
         py_cov = report["summary"]["python_sdk_coverage_pct"]
         ts_cov = report["summary"]["typescript_sdk_coverage_pct"]
         if py_cov < args.threshold or ts_cov < args.threshold:
-            print(f"\nFAIL: Coverage below threshold ({args.threshold}%)")
+            print(f"\nFAIL: Coverage below threshold ({args.threshold}%)", file=diagnostics)
             return 1
         missing = report["summary"]["routes_missing_from_both_sdks"]
         if len(new_missing) > 0 and not args.allow_missing:
             print(
                 f"\nFAIL: {len(new_missing)} new routes lack SDK coverage "
-                f"(total missing: {missing})."
+                f"(total missing: {missing}).",
+                file=diagnostics,
             )
-            print("Run with --allow-missing only as a temporary migration override.")
+            print(
+                "Run with --allow-missing only as a temporary migration override.",
+                file=diagnostics,
+            )
             return 1
-        if budget_status:
-            if budget_status["current_missing"] > budget_status["expected_missing_max"]:
+        if committed is not None and budget_passing is False:
+            current = budget_block["current_missing_from_both_sdks"]
+            if current > committed.max_missing_from_both:
                 print(
-                    "\nFAIL: Missing-from-both debt exceeds budget "
-                    f"({budget_status['current_missing']} > {budget_status['expected_missing_max']})."
+                    "\nFAIL: Missing-from-both debt exceeds committed ceiling "
+                    f"({current} > {committed.max_missing_from_both}).",
+                    file=diagnostics,
                 )
                 return 1
-            if budget_status["current_stale_python"] > budget_status["expected_stale_python_max"]:
-                print(
-                    "\nFAIL: Stale Python SDK debt exceeds budget "
-                    f"({budget_status['current_stale_python']} > "
-                    f"{budget_status['expected_stale_python_max']})."
-                )
-                return 1
+            stale = budget_block["current_stale_python_sdk_paths"]
+            print(
+                "\nFAIL: Stale Python SDK debt exceeds committed ceiling "
+                f"({stale} > {committed.max_stale_python}).",
+                file=diagnostics,
+            )
+            return 1
 
     return 0
 
