@@ -11,13 +11,19 @@ Endpoints for enterprise document ingestion:
 - GET /api/v1/documents/processing/stats - Get processing statistics
 - GET /api/v1/knowledge/jobs - Get knowledge processing jobs
 - GET /api/v1/knowledge/jobs/{job_id} - Get knowledge job status
+
+Every route is scoped to the caller's org: jobs, documents and knowledge jobs
+of another org or of an unknown owner answer like missing ones, and lists and
+stats hold only the caller's org. A ``workspace_id`` never widens that scope.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import threading
 from typing import Any
 
 from ..base import (
@@ -29,8 +35,15 @@ from ..base import (
     handle_errors,
 )
 from aragora.rbac.decorators import require_permission
+from aragora.server.handlers.utils.params import get_string_param
 from aragora.server.handlers.utils.rate_limit import RateLimiter, get_client_ip
 from aragora.server.validation.query_params import safe_query_int
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 # Knowledge processing enabled by default
 KNOWLEDGE_PROCESSING_DEFAULT = (
@@ -87,58 +100,78 @@ class DocumentBatchHandler(BaseHandler):
     @require_permission("documents:read")
     async def handle(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route GET requests."""
-        if path == "/api/v1/documents/processing/stats":
-            return self._get_processing_stats()
-
-        # GET /api/knowledge/jobs - list all knowledge processing jobs
-        if path == "/api/v1/knowledge/jobs":
-            workspace_id = query_params.get("workspace_id", [None])[0]
-            status = query_params.get("status", [None])[0]
-            limit = safe_query_int(query_params, "limit", default=100, min_val=1, max_val=1000)
-            return self._list_knowledge_jobs(workspace_id, status, limit)
-
         parts = self._split_path(path)
+        is_knowledge_job = parts[:4] == ["api", "v1", "knowledge", "jobs"] and len(parts) == 5
+        is_batch_job = parts[:4] == ["api", "v1", "documents", "batch"] and (
+            len(parts) == 5 or (len(parts) == 6 and parts[5] == "results")
+        )
+        is_document_view = (
+            parts[:3] == ["api", "v1", "documents"]
+            and len(parts) == 5
+            and parts[4] in {"chunks", "context"}
+        )
+        if not (
+            path in ("/api/v1/documents/processing/stats", "/api/v1/knowledge/jobs")
+            or is_knowledge_job
+            or is_batch_job
+            or is_document_view
+        ):
+            return None
+
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
+        if path == "/api/v1/documents/processing/stats":
+            return self._get_processing_stats(scope)
+
+        # GET /api/knowledge/jobs - list the caller org's knowledge processing jobs
+        if path == "/api/v1/knowledge/jobs":
+            workspace_id = get_string_param(query_params, "workspace_id")
+            status = get_string_param(query_params, "status")
+            limit = safe_query_int(query_params, "limit", default=100, min_val=1, max_val=1000)
+            return self._list_knowledge_jobs(scope, workspace_id, status, limit)
 
         # GET /api/knowledge/jobs/{job_id} - get specific job status
-        if parts[:4] == ["api", "v1", "knowledge", "jobs"] and len(parts) == 5:
-            return self._get_knowledge_job_status(parts[4])
+        if is_knowledge_job:
+            return self._get_knowledge_job_status(parts[4], scope)
 
-        # GET /api/documents/batch/{job_id}
-        if parts[:4] == ["api", "v1", "documents", "batch"]:
-            if len(parts) == 5:  # /api/v1/documents/batch/{job_id}
-                return await self._get_job_status(parts[4])
-            if len(parts) == 6 and parts[5] == "results":
-                return await self._get_job_results(parts[4])
+        # GET /api/documents/batch/{job_id} and /results
+        if is_batch_job:
+            if len(parts) == 5:
+                return await self._get_job_status(parts[4], scope)
+            return await self._get_job_results(parts[4], scope)
 
+        doc_id = parts[3]
         # GET /api/documents/{doc_id}/chunks
-        if parts[:3] == ["api", "v1", "documents"] and len(parts) == 5 and parts[4] == "chunks":
-            doc_id = parts[3]
+        if parts[4] == "chunks":
             limit = safe_query_int(query_params, "limit", default=100, min_val=1, max_val=1000)
             offset = safe_query_int(query_params, "offset", default=0, min_val=0, max_val=1000000)
-            return self._get_document_chunks(doc_id, limit, offset)
+            return self._get_document_chunks(doc_id, scope, limit, offset)
 
         # GET /api/documents/{doc_id}/context
-        if parts[:3] == ["api", "v1", "documents"] and len(parts) == 5 and parts[4] == "context":
-            doc_id = parts[3]
-            max_tokens = safe_query_int(
-                query_params, "max_tokens", default=4096, min_val=1, max_val=128000
-            )
-            model = query_params.get("model", ["gpt-4"])[0]
-            return self._get_document_context(doc_id, max_tokens, model)
-
-        return None
+        max_tokens = safe_query_int(
+            query_params, "max_tokens", default=4096, min_val=1, max_val=128000
+        )
+        model = get_string_param(query_params, "model", "gpt-4") or "gpt-4"
+        return self._get_document_context(doc_id, scope, max_tokens, model)
 
     @handle_errors("document batch creation")
     @require_permission("documents:create")
     async def handle_post(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route POST requests."""
+        if path != "/api/v1/documents/batch":
+            return None
+
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
+
         client_ip = get_client_ip(handler)
         if not _batch_upload_limiter.is_allowed(client_ip):
             return error_response("Rate limit exceeded. Please try again later.", 429)
 
-        if path == "/api/v1/documents/batch":
-            return await self._upload_batch(handler)
-        return None
+        return await self._upload_batch(handler, scope)
 
     @handle_errors("document batch deletion")
     @require_permission("documents:delete")
@@ -146,10 +179,16 @@ class DocumentBatchHandler(BaseHandler):
         """Route DELETE requests."""
         parts = self._split_path(path)
         if parts[:4] == ["api", "v1", "documents", "batch"] and len(parts) == 5:
-            return await self._cancel_job(parts[4])
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+            return await self._cancel_job(parts[4], scope)
         return None
 
-    async def _upload_batch(self, handler) -> HandlerResult:
+    def _visible_job(self, job: Any, scope: OrgScope) -> bool:
+        return job is not None and record_visible(getattr(job, "org_id", None), scope)
+
+    async def _upload_batch(self, handler, scope: OrgScope) -> HandlerResult:
         """
         Upload multiple documents for batch processing.
 
@@ -232,20 +271,12 @@ class DocumentBatchHandler(BaseHandler):
             except json.JSONDecodeError:
                 tags = []
 
-            auth_context = None
-            try:
-                from aragora.server.handlers.utils.auth import get_auth_context
-
-                auth_context = await get_auth_context(handler, require_auth=True)
-            except (ImportError, AttributeError):
-                auth_context = None
-
             ingest_metadata = {
-                "user_id": getattr(auth_context, "user_id", None) if auth_context else None,
-                "owner_id": getattr(auth_context, "user_id", None) if auth_context else None,
-                "org_id": getattr(auth_context, "org_id", None) if auth_context else None,
+                "user_id": scope.user_id,
+                "owner_id": scope.user_id,
+                "org_id": scope.org_id,
                 "workspace_id": workspace_id,
-                "tenant_id": workspace_id or getattr(auth_context, "org_id", None),
+                "tenant_id": workspace_id or scope.org_id,
                 "source": "documents_batch_upload",
             }
 
@@ -279,11 +310,13 @@ class DocumentBatchHandler(BaseHandler):
 
                 total_size += file_size
 
-                # Submit to processor
                 job_id = await processor.submit(
                     content=content,
                     filename=filename,
                     workspace_id=workspace_id,
+                    uploaded_by=scope.user_id,
+                    org_id=scope.org_id,
+                    document_id=self._store_document(content, filename, scope),
                     priority=priority,
                     chunking_strategy=chunking_strategy,
                     chunk_size=chunk_size,
@@ -291,6 +324,16 @@ class DocumentBatchHandler(BaseHandler):
                     tags=tags,
                 )
                 job_ids.append(job_id)
+
+            if job_ids and not getattr(processor, "is_running", True):
+                # No worker loop on this host (each legacy request runs its own
+                # event loop), so run the batch on a thread of its own.
+                threading.Thread(
+                    target=asyncio.run,
+                    args=(processor.process_queued(list(job_ids)),),
+                    name=f"documents-{batch_id}",
+                    daemon=True,
+                ).start()
 
             # Estimate chunks
             from aragora.documents.chunking.token_counter import get_token_counter
@@ -370,25 +413,38 @@ class DocumentBatchHandler(BaseHandler):
             logger.exception("Batch upload failed")
             return error_response(safe_error_message(e, "Batch upload"), 500)
 
-    async def _get_job_status(self, job_id: str) -> HandlerResult:
+    def _store_document(self, content: bytes, filename: str, scope: OrgScope) -> str | None:
+        """Save a batch file in the document store under the caller's org; its id or None."""
+        store = self.ctx.get("document_store")
+        if store is None:
+            return None
+        try:
+            from aragora.documents.parsing import parse_document
+
+            doc = parse_document(content, filename, org_id=scope.org_id, created_by=scope.user_id)
+            return store.add(doc)
+        except (ImportError, ValueError, TypeError, OSError, RuntimeError) as e:
+            logger.warning("Batch file %s not saved to the document store: %s", filename, e)
+            return None
+
+    async def _get_job_status(self, job_id: str, scope: OrgScope) -> HandlerResult:
         """Get status of a batch processing job."""
         processor = self._get_batch_processor()
 
         status = await processor.get_status(job_id)
-
-        if not status:
-            return error_response(f"Job not found: {job_id}", 404)
+        if not status or not record_visible(status.get("org_id"), scope):
+            return record_not_found("Job")
 
         return json_response(status)
 
-    async def _get_job_results(self, job_id: str) -> HandlerResult:
+    async def _get_job_results(self, job_id: str, scope: OrgScope) -> HandlerResult:
         """Get results of a completed batch job."""
         processor = self._get_batch_processor()
 
         job = await processor.get_result(job_id)
 
-        if not job:
-            return error_response(f"Job not found: {job_id}", 404)
+        if not self._visible_job(job, scope):
+            return record_not_found("Job")
 
         if job.status.value not in ("completed", "failed"):
             return json_response(
@@ -431,20 +487,30 @@ class DocumentBatchHandler(BaseHandler):
 
         return json_response(result)
 
-    async def _cancel_job(self, job_id: str) -> HandlerResult:
-        """Cancel a queued batch job."""
+    async def _cancel_job(self, job_id: str, scope: OrgScope) -> HandlerResult:
+        """Cancel a queued batch job, or delete a finished one."""
         processor = self._get_batch_processor()
 
-        success = await processor.cancel(job_id)
+        if not self._visible_job(await processor.get_result(job_id), scope):
+            return record_not_found("Job")
 
-        if success:
+        if await processor.cancel(job_id):
             return json_response({"cancelled": True, "job_id": job_id})
-        else:
-            return error_response(
-                f"Cannot cancel job {job_id}: not found or already processing", 400
-            )
+        if await processor.remove(job_id):
+            return json_response({"deleted": True, "job_id": job_id})
+        return error_response(f"Cannot cancel job {job_id}: already processing", 400)
 
-    def _get_document_chunks(self, doc_id: str, limit: int = 100, offset: int = 0) -> HandlerResult:
+    def _visible_document(self, doc_id: str, scope: OrgScope) -> Any | None:
+        """The caller org's document ``doc_id`` from the document store, else None."""
+        store = self.ctx.get("document_store")
+        doc = store.get(doc_id) if store is not None else None
+        if doc is None or not record_visible(getattr(doc, "org_id", None), scope):
+            return None
+        return doc
+
+    def _get_document_chunks(
+        self, doc_id: str, scope: OrgScope, limit: int = 100, offset: int = 0
+    ) -> HandlerResult:
         """
         Get chunks for a processed document.
 
@@ -452,6 +518,9 @@ class DocumentBatchHandler(BaseHandler):
             limit: Max chunks to return (default 100)
             offset: Offset for pagination (default 0)
         """
+        if self._visible_document(doc_id, scope) is None:
+            return record_not_found("Document")
+
         # For now, return placeholder - will be populated from index
         # In production, this would query Weaviate or the chunk store
         return json_response(
@@ -466,7 +535,7 @@ class DocumentBatchHandler(BaseHandler):
         )
 
     def _get_document_context(
-        self, doc_id: str, max_tokens: int = 4096, model: str = "gpt-4"
+        self, doc_id: str, scope: OrgScope, max_tokens: int = 4096, model: str = "gpt-4"
     ) -> HandlerResult:
         """
         Get LLM-ready context from a document.
@@ -478,37 +547,35 @@ class DocumentBatchHandler(BaseHandler):
             model: Model for token counting (default gpt-4)
         """
         # For now, try to get from legacy document store
-        store = self.ctx.get("document_store")
-        if store:
-            doc = store.get(doc_id)
-            if doc:
-                from aragora.documents.chunking.token_counter import get_token_counter
+        doc = self._visible_document(doc_id, scope)
+        if doc is None:
+            return record_not_found("Document")
 
-                counter = get_token_counter()
-                text = doc.text
-                tokens = counter.count(text, model)
+        from aragora.documents.chunking.token_counter import get_token_counter
 
-                if tokens > max_tokens:
-                    text = counter.truncate_to_tokens(text, max_tokens, model)
-                    tokens = counter.count(text, model)
+        counter = get_token_counter()
+        text = doc.text
+        tokens = counter.count(text, model)
 
-                return json_response(
-                    {
-                        "document_id": doc_id,
-                        "context": text,
-                        "token_count": tokens,
-                        "max_tokens": max_tokens,
-                        "model": model,
-                        "truncated": tokens < counter.count(doc.text, model),
-                    }
-                )
+        if tokens > max_tokens:
+            text = counter.truncate_to_tokens(text, max_tokens, model)
+            tokens = counter.count(text, model)
 
-        return error_response(f"Document not found: {doc_id}", 404)
+        return json_response(
+            {
+                "document_id": doc_id,
+                "context": text,
+                "token_count": tokens,
+                "max_tokens": max_tokens,
+                "model": model,
+                "truncated": tokens < counter.count(doc.text, model),
+            }
+        )
 
-    def _get_processing_stats(self) -> HandlerResult:
-        """Get batch processing statistics."""
+    def _get_processing_stats(self, scope: OrgScope) -> HandlerResult:
+        """Get batch processing statistics for the caller's org."""
         processor = self._get_batch_processor()
-        stats = processor.get_stats()
+        stats = processor.get_stats(org_id=scope.org_id)
 
         return json_response(
             {
@@ -597,15 +664,18 @@ class DocumentBatchHandler(BaseHandler):
 
     def _list_knowledge_jobs(
         self,
+        scope: OrgScope,
         workspace_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
     ) -> HandlerResult:
-        """List all knowledge processing jobs with optional filtering."""
+        """List the caller org's knowledge processing jobs with optional filtering."""
         try:
             from aragora.knowledge.integration import get_all_jobs
 
-            jobs = get_all_jobs(workspace_id=workspace_id, status=status, limit=limit)
+            jobs = get_all_jobs(
+                workspace_id=workspace_id, status=status, limit=limit, org_id=scope.org_id
+            )
             return json_response(
                 {
                     "jobs": jobs,
@@ -626,14 +696,14 @@ class DocumentBatchHandler(BaseHandler):
             logger.exception("Error listing knowledge jobs: %s", e)
             return error_response(safe_error_message(e, "Failed to list jobs"), 500)
 
-    def _get_knowledge_job_status(self, job_id: str) -> HandlerResult:
-        """Get status of a specific knowledge processing job."""
+    def _get_knowledge_job_status(self, job_id: str, scope: OrgScope) -> HandlerResult:
+        """Get status of a specific knowledge processing job of the caller's org."""
         try:
-            from aragora.knowledge.integration import get_job_status
+            from aragora.knowledge.integration import get_job_status, job_org_id
 
             status = get_job_status(job_id)
-            if not status:
-                return error_response(f"Knowledge job not found: {job_id}", 404)
+            if not status or not record_visible(job_org_id(status), scope):
+                return record_not_found("Knowledge job")
             return json_response(status)
         except ImportError:
             return error_response("Knowledge pipeline not available", 503)

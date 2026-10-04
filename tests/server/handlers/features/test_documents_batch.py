@@ -50,6 +50,11 @@ from aragora.server.handlers.features.documents_batch import (
     MAX_FILE_SIZE_MB,
     MAX_TOTAL_BATCH_SIZE_MB,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+ORG = "test-org-001"
+SCOPE = OrgScope(org_id=ORG, user_id="test-user-001", role="member")
+OTHER_SCOPE = OrgScope(org_id="other-org", user_id="other-user", role="member")
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +73,7 @@ class MockJob:
     document: MagicMock = None
     chunks: list = field(default_factory=list)
     error_message: str = ""
+    org_id: str | None = ORG
 
     def __post_init__(self):
         if self.document is None:
@@ -92,6 +98,9 @@ class MockBatchProcessor:
         chunk_size=512,
         chunk_overlap=50,
         tags=None,
+        uploaded_by=None,
+        org_id=None,
+        document_id=None,
     ) -> str:
         job_id = f"job-{len(self.jobs)}"
         self.jobs[job_id] = {
@@ -99,8 +108,13 @@ class MockBatchProcessor:
             "filename": filename,
             "workspace_id": workspace_id,
             "status": "queued",
+            "org_id": org_id,
+            "uploaded_by": uploaded_by,
         }
         return job_id
+
+    def _org(self, job_id: str) -> str | None:
+        return self.jobs[job_id].get("org_id", ORG)
 
     async def get_status(self, job_id: str) -> dict | None:
         if job_id not in self.jobs:
@@ -109,12 +123,13 @@ class MockBatchProcessor:
             "job_id": job_id,
             "status": self.jobs[job_id]["status"],
             "progress": 0.5,
+            "org_id": self._org(job_id),
         }
 
     async def get_result(self, job_id: str):
         if job_id not in self.jobs:
             return None
-        return MockJob(id=job_id)
+        return MockJob(id=job_id, org_id=self._org(job_id))
 
     async def cancel(self, job_id: str) -> bool:
         if job_id not in self.jobs:
@@ -124,10 +139,14 @@ class MockBatchProcessor:
         self.cancelled.add(job_id)
         return True
 
-    def get_stats(self) -> dict:
+    async def remove(self, job_id: str) -> bool:
+        return False
+
+    def get_stats(self, org_id: str | None = None) -> dict:
+        jobs = [j for j in self.jobs.values() if org_id is None or j.get("org_id", ORG) == org_id]
         return {
-            "total_jobs": len(self.jobs),
-            "queued": len([j for j in self.jobs.values() if j["status"] == "queued"]),
+            "total_jobs": len(jobs),
+            "queued": len([j for j in jobs if j["status"] == "queued"]),
             "completed": 0,
             "failed": 0,
         }
@@ -342,7 +361,7 @@ class TestProcessingStats:
     def test_get_processing_stats(self, handler, mock_processor):
         """Test getting processing stats."""
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = handler._get_processing_stats()
+            result = handler._get_processing_stats(SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -354,7 +373,7 @@ class TestProcessingStats:
     def test_processing_stats_includes_limits(self, handler, mock_processor):
         """Test that processing stats include limits."""
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = handler._get_processing_stats()
+            result = handler._get_processing_stats(SCOPE)
 
         body = json.loads(result.body)
         assert body["limits"]["max_file_size_mb"] == MAX_FILE_SIZE_MB
@@ -375,7 +394,7 @@ class TestGetJobStatus:
         mock_processor.jobs["job-123"] = {"status": "processing"}
 
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._get_job_status("job-123")
+            result = await handler._get_job_status("job-123", SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -386,7 +405,7 @@ class TestGetJobStatus:
     async def test_get_job_status_not_found(self, handler, mock_processor):
         """Test getting status for non-existent job."""
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._get_job_status("nonexistent")
+            result = await handler._get_job_status("nonexistent", SCOPE)
 
         assert result is not None
         assert result.status_code == 404
@@ -408,7 +427,7 @@ class TestGetJobResults:
         mock_processor.jobs["job-123"] = {"status": "completed"}
 
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._get_job_results("job-123")
+            result = await handler._get_job_results("job-123", SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -420,7 +439,7 @@ class TestGetJobResults:
     async def test_get_job_results_not_found(self, handler, mock_processor):
         """Test getting results for non-existent job."""
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._get_job_results("nonexistent")
+            result = await handler._get_job_results("nonexistent", SCOPE)
 
         assert result is not None
         assert result.status_code == 404
@@ -435,7 +454,7 @@ class TestGetJobResults:
         mock_processor.get_result = AsyncMock(return_value=mock_job)
 
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._get_job_results("job-123")
+            result = await handler._get_job_results("job-123", SCOPE)
 
         assert result is not None
         assert result.status_code == 202
@@ -458,7 +477,7 @@ class TestCancelJob:
         mock_processor.jobs["job-123"] = {"status": "queued"}
 
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._cancel_job("job-123")
+            result = await handler._cancel_job("job-123", SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -467,13 +486,36 @@ class TestCancelJob:
         assert body["job_id"] == "job-123"
 
     @pytest.mark.asyncio
-    async def test_cancel_job_not_found_or_processing(self, handler, mock_processor):
-        """Test cancelling a non-existent or processing job."""
+    async def test_cancel_job_not_found(self, handler, mock_processor):
+        """Test cancelling a non-existent job."""
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._cancel_job("nonexistent")
+            result = await handler._cancel_job("nonexistent", SCOPE)
+
+        assert result is not None
+        assert result.status_code == 404
+        assert json.loads(result.body) == {"error": "Job not found", "code": "not_found"}
+
+    @pytest.mark.asyncio
+    async def test_cancel_job_processing(self, handler, mock_processor):
+        """Test cancelling a job that is already processing."""
+        mock_processor.jobs["job-123"] = {"status": "processing"}
+
+        with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
+            result = await handler._cancel_job("job-123", SCOPE)
 
         assert result is not None
         assert result.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_cancel_other_org_job_is_not_found(self, handler, mock_processor):
+        """Another org's job answers like a missing one and stays queued."""
+        mock_processor.jobs["job-123"] = {"status": "queued", "org_id": "other-org"}
+
+        with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
+            result = await handler._cancel_job("job-123", SCOPE)
+
+        assert result.status_code == 404
+        assert mock_processor.cancelled == set()
 
 
 # ---------------------------------------------------------------------------
@@ -484,9 +526,16 @@ class TestCancelJob:
 class TestDocumentChunks:
     """Tests for document chunks endpoint."""
 
-    def test_get_document_chunks(self, handler):
+    @pytest.fixture
+    def doc_store(self, handler):
+        store = MagicMock()
+        store.get.return_value = MagicMock(org_id=ORG)
+        handler.ctx = {"document_store": store}
+        return store
+
+    def test_get_document_chunks(self, handler, doc_store):
         """Test getting document chunks."""
-        result = handler._get_document_chunks("doc123", limit=50, offset=0)
+        result = handler._get_document_chunks("doc123", SCOPE, limit=50, offset=0)
 
         assert result is not None
         assert result.status_code == 200
@@ -496,15 +545,22 @@ class TestDocumentChunks:
         assert body["limit"] == 50
         assert body["offset"] == 0
 
-    def test_get_document_chunks_default_pagination(self, handler):
+    def test_get_document_chunks_default_pagination(self, handler, doc_store):
         """Test document chunks with default pagination."""
-        result = handler._get_document_chunks("doc123")
+        result = handler._get_document_chunks("doc123", SCOPE)
 
         assert result is not None
         assert result.status_code == 200
         body = json.loads(result.body)
         assert body["limit"] == 100
         assert body["offset"] == 0
+
+    def test_get_document_chunks_other_org_is_not_found(self, handler, doc_store):
+        """Another org's document answers like a missing one."""
+        result = handler._get_document_chunks("doc123", OTHER_SCOPE)
+
+        assert result.status_code == 404
+        assert json.loads(result.body) == {"error": "Document not found", "code": "not_found"}
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +575,7 @@ class TestDocumentContext:
         """Test getting context for non-existent document."""
         handler.ctx = {}  # No document store
 
-        result = handler._get_document_context("doc123")
+        result = handler._get_document_context("doc123", SCOPE)
 
         assert result is not None
         assert result.status_code == 404
@@ -528,6 +584,7 @@ class TestDocumentContext:
         """Test getting context with document store."""
         mock_doc = MagicMock()
         mock_doc.text = "This is a test document with some content."
+        mock_doc.org_id = ORG
 
         mock_store = MagicMock()
         mock_store.get.return_value = mock_doc
@@ -540,7 +597,7 @@ class TestDocumentContext:
             "aragora.documents.chunking.token_counter.get_token_counter",
             return_value=mock_counter,
         ):
-            result = handler._get_document_context("doc123", max_tokens=1000, model="gpt-4")
+            result = handler._get_document_context("doc123", SCOPE, max_tokens=1000, model="gpt-4")
 
         assert result is not None
         assert result.status_code == 200
@@ -566,7 +623,7 @@ class TestKnowledgeJobs:
             {"aragora.knowledge.integration": None},
         ):
             # Force re-import to trigger ImportError
-            result = handler._list_knowledge_jobs()
+            result = handler._list_knowledge_jobs(SCOPE)
 
         assert result is not None
         assert result.status_code == 503
@@ -586,27 +643,38 @@ class TestKnowledgeJobs:
             "sys.modules",
             {"aragora.knowledge.integration": mock_integration},
         ):
-            result = handler._list_knowledge_jobs(workspace_id="ws1", status="completed", limit=50)
+            result = handler._list_knowledge_jobs(
+                SCOPE, workspace_id="ws1", status="completed", limit=50
+            )
 
         assert result is not None
         assert result.status_code == 200
         body = json.loads(result.body)
         assert body["count"] == 2
         assert len(body["jobs"]) == 2
+        mock_integration.get_all_jobs.assert_called_once_with(
+            workspace_id="ws1", status="completed", limit=50, org_id=ORG
+        )
 
     def test_get_knowledge_job_status_success(self, handler):
         """Test getting specific knowledge job status."""
-        mock_status = {"id": "kp_123", "status": "completed", "progress": 1.0}
+        mock_status = {
+            "id": "kp_123",
+            "status": "completed",
+            "progress": 1.0,
+            "metadata": {"org_id": ORG},
+        }
 
         # Create a mock module
         mock_integration = MagicMock()
         mock_integration.get_job_status = MagicMock(return_value=mock_status)
+        mock_integration.job_org_id = MagicMock(return_value=ORG)
 
         with patch.dict(
             "sys.modules",
             {"aragora.knowledge.integration": mock_integration},
         ):
-            result = handler._get_knowledge_job_status("kp_123")
+            result = handler._get_knowledge_job_status("kp_123", SCOPE)
 
         assert result is not None
         assert result.status_code == 200
@@ -623,7 +691,7 @@ class TestKnowledgeJobs:
             "sys.modules",
             {"aragora.knowledge.integration": mock_integration},
         ):
-            result = handler._get_knowledge_job_status("nonexistent")
+            result = handler._get_knowledge_job_status("nonexistent", SCOPE)
 
         assert result is not None
         assert result.status_code == 404
@@ -642,7 +710,7 @@ class TestBatchUpload:
         """Test batch upload rejects non-multipart content type."""
         mock_handler = make_mock_handler(content_type="application/json")
 
-        result = await handler._upload_batch(mock_handler)
+        result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 400
@@ -654,7 +722,7 @@ class TestBatchUpload:
         """Test batch upload requires multipart boundary."""
         mock_handler = make_mock_handler(content_type="multipart/form-data")
 
-        result = await handler._upload_batch(mock_handler)
+        result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 400
@@ -668,7 +736,7 @@ class TestBatchUpload:
         mock_handler = make_mock_handler(content_type=content_type, body=body)
 
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._upload_batch(mock_handler)
+            result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 400
@@ -698,7 +766,7 @@ class TestBatchUpload:
                 {"aragora.knowledge.integration": None},
             ),
         ):
-            result = await handler._upload_batch(mock_handler)
+            result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 202
@@ -707,6 +775,9 @@ class TestBatchUpload:
         assert len(body_json["job_ids"]) == 2
         assert "batch_id" in body_json
         assert body_json["total_files"] == 2
+        for job_id in body_json["job_ids"]:
+            assert mock_processor.jobs[job_id]["org_id"] == ORG
+            assert mock_processor.jobs[job_id]["uploaded_by"] == "test-user-001"
 
     @pytest.mark.asyncio
     async def test_batch_upload_with_chunking_options(self, handler, mock_processor):
@@ -735,7 +806,7 @@ class TestBatchUpload:
                 {"aragora.knowledge.integration": None},
             ),
         ):
-            result = await handler._upload_batch(mock_handler)
+            result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 202
@@ -755,7 +826,7 @@ class TestBatchUpload:
             content_length=content_length,
         )
 
-        result = await handler._upload_batch(mock_handler)
+        result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 413
@@ -768,7 +839,7 @@ class TestBatchUpload:
         mock_handler = make_mock_handler(content_type=content_type, body=body)
 
         with patch.object(handler, "_get_batch_processor", return_value=mock_processor):
-            result = await handler._upload_batch(mock_handler)
+            result = await handler._upload_batch(mock_handler, SCOPE)
 
         assert result is not None
         assert result.status_code == 400
