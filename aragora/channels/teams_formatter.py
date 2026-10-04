@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
+from aragora.export.decision_receipt import agent_display_names
 from aragora.utils.public_urls import public_receipt_url
 
 from .formatter import ReceiptFormatter, register_formatter
@@ -184,7 +185,9 @@ class TeamsReceiptFormatter(ReceiptFormatter):
                     )
 
         # Agents
-        agents = getattr(r, "agents", None) or getattr(r, "agents_involved", [])
+        agents = agent_display_names(
+            getattr(r, "agents", None) or getattr(r, "agents_involved", [])
+        )
         if agents:
             body.append(
                 {

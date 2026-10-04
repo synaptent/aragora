@@ -809,3 +809,61 @@ class TestTeamsReceiptFormatter:
         result = fmt.format(receipt)
         assert result["type"] == "AdaptiveCard"
         assert len(result["body"]) > 0
+
+
+# =============================================================================
+# Debate receipts store one mapping per agent
+# =============================================================================
+
+
+DEBATE_AGENTS = [
+    {"provider": "openai-api", "model": "gpt-5.5", "name": "gpt55", "role": "proposer"},
+    {"provider": "openai-api", "model": "claude-haiku-4-5", "name": "haiku", "role": "critic"},
+]
+
+
+def _debate_receipt():
+    from aragora.export.decision_receipt import DecisionReceipt
+
+    return DecisionReceipt(
+        receipt_id="r-debate",
+        gauntlet_id="debate-1",
+        verdict="PASS",
+        confidence=0.8,
+        input_summary="Ship it?",
+        agents_involved=DEBATE_AGENTS,
+    )
+
+
+class TestDebateAgentEntries:
+    def test_agent_display_names(self):
+        from aragora.export.decision_receipt import agent_display_names
+
+        assert agent_display_names(DEBATE_AGENTS) == ["gpt55", "haiku"]
+        assert agent_display_names(["claude", {"model": "m"}, {"x": 1}]) == [
+            "claude",
+            "m",
+            "{'x': 1}",
+        ]
+        assert agent_display_names(None) == []
+
+    def test_markdown_and_html_name_the_agents(self):
+        receipt = _debate_receipt()
+        assert "**Agents:** gpt55, haiku" in receipt.to_markdown()
+        assert "gpt55, haiku" in receipt.to_html()
+
+    @pytest.mark.parametrize("channel", ["slack", "teams", "discord"])
+    def test_channel_formatters_name_the_agents(self, channel):
+        import json
+
+        from aragora.channels.formatter import format_receipt_for_channel
+
+        formatted = format_receipt_for_channel(_debate_receipt(), channel, {})
+        assert "gpt55, haiku" in json.dumps(formatted)
+
+    def test_plain_text_email_names_the_agents(self):
+        from aragora.channels.email_formatter import EmailReceiptFormatter
+
+        receipt = _make_receipt(agents=DEBATE_AGENTS)
+        text = EmailReceiptFormatter().format(receipt, {})["plain_text"]
+        assert "Agents: gpt55, haiku" in text

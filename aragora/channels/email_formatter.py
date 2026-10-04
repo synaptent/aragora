@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aragora.export.decision_receipt import agent_display_names
+
 from .formatter import ReceiptFormatter, register_formatter
 
 
@@ -166,7 +168,9 @@ class EmailReceiptFormatter(ReceiptFormatter):
 """)
 
         # Metadata
-        agents = getattr(receipt, "agents", None) or getattr(receipt, "agents_involved", [])
+        agents = agent_display_names(
+            getattr(receipt, "agents", None) or getattr(receipt, "agents_involved", [])
+        )
         agents_str = ", ".join(agents[:5]) if agents else "N/A"
         if agents and len(agents) > 5:
             agents_str += f" (+{len(agents) - 5} more)"
@@ -403,10 +407,11 @@ class EmailReceiptFormatter(ReceiptFormatter):
         lines.append("METADATA")
         lines.append("-" * 50)
 
-        if receipt.agents:
-            agents_str = ", ".join(receipt.agents[:5])
-            if len(receipt.agents) > 5:
-                agents_str += f" (+{len(receipt.agents) - 5} more)"
+        agents = agent_display_names(receipt.agents)
+        if agents:
+            agents_str = ", ".join(agents[:5])
+            if len(agents) > 5:
+                agents_str += f" (+{len(agents) - 5} more)"
             lines.append(f"Agents: {agents_str}")
 
         lines.append(f"Rounds: {receipt.rounds or 'N/A'}")
