@@ -78,6 +78,13 @@ def handler():
     return h
 
 
+@pytest.fixture
+def upload_root(monkeypatch, tmp_path):
+    """Configure tmp_path as the only directory folder scan/upload may read."""
+    monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(tmp_path))
+    return tmp_path
+
+
 class TestFolderUploadStatus:
     """Tests for FolderUploadStatus enum."""
 
@@ -195,45 +202,42 @@ class TestFolderScan:
             assert result.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_scan_path_not_exists(self, handler):
-        """Test scan with non-existent path."""
+    async def test_scan_path_not_exists(self, handler, upload_root):
+        """Test scan with non-existent path inside the upload root."""
         mock_handler = MagicMock()
 
-        with (
-            patch.object(
-                handler,
-                "read_json_body_validated",
-                return_value=({"path": "/nonexistent/path"}, None),
-            ),
-            patch("aragora.server.handlers.features.folder_upload.Path") as MockPath,
+        with patch.object(
+            handler,
+            "read_json_body_validated",
+            return_value=({"path": str(upload_root / "missing")}, None),
         ):
-            mock_path = MagicMock()
-            mock_path.exists.return_value = False
-            MockPath.return_value = mock_path
-
             result = await handler._scan_folder(mock_handler)
             assert result.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_scan_path_not_directory(self, handler):
+    async def test_scan_path_not_directory(self, handler, upload_root):
         """Test scan with non-directory path."""
         mock_handler = MagicMock()
+        (upload_root / "file.txt").write_text("not a folder")
 
-        with (
-            patch.object(
-                handler,
-                "read_json_body_validated",
-                return_value=({"path": "/test/file.txt"}, None),
-            ),
-            patch("aragora.server.handlers.features.folder_upload.Path") as MockPath,
+        with patch.object(
+            handler,
+            "read_json_body_validated",
+            return_value=({"path": str(upload_root / "file.txt")}, None),
         ):
-            mock_path = MagicMock()
-            mock_path.exists.return_value = True
-            mock_path.is_dir.return_value = False
-            MockPath.return_value = mock_path
-
             result = await handler._scan_folder(mock_handler)
             assert result.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_scan_refused_without_upload_root(self, handler, tmp_path, monkeypatch):
+        """Without configured upload directories the scan is refused."""
+        monkeypatch.delenv("ARAGORA_ALLOWED_UPLOAD_DIRS", raising=False)
+
+        with patch.object(
+            handler, "read_json_body_validated", return_value=({"path": str(tmp_path)}, None)
+        ):
+            result = await handler._scan_folder(MagicMock())
+            assert result.status_code == 403
 
 
 class TestFolderUploadStart:
@@ -249,24 +253,29 @@ class TestFolderUploadStart:
             result = handler._start_upload(mock_handler, SCOPE)
             assert result.status_code == 400
 
-    def test_start_upload_path_not_exists(self, handler):
-        """Test start upload with non-existent path."""
+    def test_start_upload_path_not_exists(self, handler, upload_root):
+        """Test start upload with non-existent path inside the upload root."""
         mock_handler = MagicMock()
 
-        with (
-            patch.object(
-                handler,
-                "read_json_body_validated",
-                return_value=({"path": "/nonexistent"}, None),
-            ),
-            patch("aragora.server.handlers.features.folder_upload.Path") as MockPath,
+        with patch.object(
+            handler,
+            "read_json_body_validated",
+            return_value=({"path": str(upload_root / "missing")}, None),
         ):
-            mock_path = MagicMock()
-            mock_path.exists.return_value = False
-            MockPath.return_value = mock_path
-
             result = handler._start_upload(mock_handler, SCOPE)
             assert result.status_code == 404
+            assert FolderUploadHandler._jobs == {}
+
+    def test_start_upload_outside_root_is_refused(self, handler, upload_root, tmp_path_factory):
+        """A path outside the upload root is refused without creating a job."""
+        outside = tmp_path_factory.mktemp("outside")
+
+        with patch.object(
+            handler, "read_json_body_validated", return_value=({"path": str(outside)}, None)
+        ):
+            result = handler._start_upload(MagicMock(), SCOPE)
+            assert result.status_code == 403
+            assert FolderUploadHandler._jobs == {}
 
 
 class TestGetFolderUploadStatus:

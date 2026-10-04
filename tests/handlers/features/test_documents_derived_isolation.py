@@ -90,7 +90,7 @@ def _deferred_background_work(monkeypatch, tmp_path):
     monkeypatch.setattr(folder_upload, "threading", fake_threading)
     monkeypatch.setattr(knowledge, "_jobs", {})
     monkeypatch.setattr(knowledge, "_executor", SimpleNamespace(submit=lambda fn: None))
-    monkeypatch.setattr(folder_upload, "ALLOWED_UPLOAD_DIRS", [tmp_path])
+    monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(tmp_path))
     FolderUploadHandler._jobs.clear()
     yield
     FolderUploadHandler._jobs.clear()

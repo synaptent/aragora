@@ -1350,6 +1350,25 @@ See [BOT_INTEGRATIONS.md](../integrations/BOT_INTEGRATIONS.md) for detailed setu
   environment cannot switch either on.
 - Use `python3 -m aragora.cli.main secrets health --json` to verify source status without printing secret values.
 
+### Folder Upload Directories
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `ARAGORA_ALLOWED_UPLOAD_DIRS` | Required for folder upload | Comma-separated absolute directory paths that `POST /api/v1/documents/folder/scan` and `POST /api/v1/documents/folder/upload` may read. Read on every request; relative, missing and non-directory entries are ignored. | - (folder scan and upload refused) |
+
+- **Folder scan and upload require this variable.** While it is unset, empty or names no existing
+  absolute directory, both routes answer 403 `upload_dirs_not_configured` (after the usual 401
+  `auth_required` / 403 `org_required` checks) without reading the requested path or creating a job.
+- **Breaking change for local setups:** before this, an unset value let any caller with
+  `upload:create` import any directory the server could read. Set it to the directories you upload
+  from, for example `ARAGORA_ALLOWED_UPLOAD_DIRS=$HOME/aragora-uploads`.
+- The requested folder must resolve (following symlinks and `..`) to a path inside one of the
+  directories. Any other path gets 403 `path_not_allowed` with the same body whether or not it
+  exists. Paths inside a directory behave as before (404 when missing, 400 when not a directory).
+- Keep these directories outside `ARAGORA_DATA_DIR`: the document store there holds every
+  organization's documents, and a folder inside a configured directory is imported into the
+  caller's organization.
+
 ### ODR Receipt Signing
 
 | Variable | Required | Description | Default |
