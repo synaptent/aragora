@@ -50,6 +50,7 @@ class ConcreteGatherer(SourceGatheringMixin):
         self._document_store = None
         self._evidence_store = None
         self._document_ids = None
+        self._document_org_id = "org-1"
         self._max_document_context_items = 5
         self._max_evidence_context_items = 5
         self._auth_context = None
@@ -644,9 +645,23 @@ class TestGatherDocumentStoreContext:
         result = await g.gather_document_store_context("topic")
         assert result is None
 
-    async def test_empty_list_all_returns_none(self):
+    async def test_no_debate_org_returns_none(self):
         doc_store = MagicMock()
-        doc_store.list_all.return_value = []
+        g = make_gatherer(
+            _enable_document_context=True,
+            _document_store=doc_store,
+            _document_ids=["doc-123"],
+            _document_org_id=None,
+        )
+        result = await g.gather_document_store_context("topic")
+        assert result is None
+        doc_store.get.assert_not_called()
+        doc_store.list_for_org.assert_not_called()
+        doc_store.list_all.assert_not_called()
+
+    async def test_empty_org_listing_returns_none(self):
+        doc_store = MagicMock()
+        doc_store.list_for_org.return_value = []
         g = make_gatherer(_enable_document_context=True, _document_store=doc_store)
         result = await g.gather_document_store_context("topic")
         assert result is None
@@ -654,7 +669,7 @@ class TestGatherDocumentStoreContext:
     async def test_no_matching_docs_returns_none(self):
         doc_store = MagicMock()
         item = {"id": "d1", "filename": "report.pdf", "preview": "quarterly numbers"}
-        doc_store.list_all.return_value = [item]
+        doc_store.list_for_org.return_value = [item]
         doc_store.get.return_value = None  # document not found
 
         g = make_gatherer(_enable_document_context=True, _document_store=doc_store)
@@ -666,11 +681,12 @@ class TestGatherDocumentStoreContext:
 
         item1 = {"id": "d1", "filename": "ai safety.pdf", "preview": "AI safety guidelines"}
         item2 = {"id": "d2", "filename": "finance.pdf", "preview": "quarterly numbers"}
-        doc_store.list_all.return_value = [item1, item2]
+        doc_store.list_for_org.return_value = [item1, item2]
 
         doc_obj = MagicMock()
         doc_obj.filename = "ai safety.pdf"
         doc_obj.text = "This is the document content about AI safety."
+        doc_obj.org_id = "org-1"
         doc_store.get.return_value = doc_obj
 
         g = make_gatherer(_enable_document_context=True, _document_store=doc_store)
@@ -679,6 +695,8 @@ class TestGatherDocumentStoreContext:
         assert result is not None
         assert "DOCUMENT CONTEXT" in result
         assert "ai safety.pdf" in result
+        doc_store.list_for_org.assert_called_once_with("org-1")
+        doc_store.list_all.assert_not_called()
 
     async def test_success_with_explicit_document_ids(self):
         doc_store = MagicMock()
@@ -686,6 +704,7 @@ class TestGatherDocumentStoreContext:
         doc_obj = MagicMock()
         doc_obj.filename = "spec.pdf"
         doc_obj.text = "Technical specification document."
+        doc_obj.org_id = "org-1"
         doc_store.get.return_value = doc_obj
 
         g = make_gatherer(
@@ -700,9 +719,28 @@ class TestGatherDocumentStoreContext:
         assert "spec.pdf" in result
         doc_store.get.assert_called_with("doc-123")
 
+    async def test_explicit_document_ids_of_another_org_are_dropped(self):
+        doc_store = MagicMock()
+        own = MagicMock(filename="own.pdf", text="own text", org_id="org-1")
+        foreign = MagicMock(filename="foreign.pdf", text="foreign text", org_id="org-2")
+        unowned = MagicMock(filename="unowned.pdf", text="unowned text", org_id=None)
+        doc_store.get.side_effect = {"own": own, "foreign": foreign, "unowned": unowned}.get
+
+        g = make_gatherer(
+            _enable_document_context=True,
+            _document_store=doc_store,
+            _document_ids=["foreign", "unowned", "own"],
+        )
+        result = await g.gather_document_store_context("topic")
+
+        assert result is not None
+        assert "own.pdf" in result
+        assert "foreign" not in result
+        assert "unowned" not in result
+
     async def test_attribute_error_returns_none(self):
         doc_store = MagicMock()
-        doc_store.list_all.side_effect = AttributeError("broken")
+        doc_store.list_for_org.side_effect = AttributeError("broken")
 
         g = make_gatherer(_enable_document_context=True, _document_store=doc_store)
         result = await g.gather_document_store_context("topic")
@@ -710,7 +748,7 @@ class TestGatherDocumentStoreContext:
 
     async def test_runtime_error_returns_none(self):
         doc_store = MagicMock()
-        doc_store.list_all.side_effect = RuntimeError("db down")
+        doc_store.list_for_org.side_effect = RuntimeError("db down")
 
         g = make_gatherer(_enable_document_context=True, _document_store=doc_store)
         result = await g.gather_document_store_context("topic")
@@ -720,7 +758,7 @@ class TestGatherDocumentStoreContext:
         """Only max_document_context_items documents are fetched."""
         doc_store = MagicMock()
         items = [{"id": f"d{i}", "filename": f"doc{i}.pdf", "preview": "topic"} for i in range(10)]
-        doc_store.list_all.return_value = items
+        doc_store.list_for_org.return_value = items
 
         doc_obj = MagicMock()
         doc_obj.filename = "docX.pdf"

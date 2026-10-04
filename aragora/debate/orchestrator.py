@@ -310,6 +310,7 @@ class Arena(ArenaDelegatesMixin):
     revalidation_check_interval_seconds: int
     revalidation_scheduler: Any
     document_store: Any
+    document_org_id: str | None
     evidence_store: Any
     enable_supermemory: bool
     supermemory_adapter: Any
@@ -448,6 +449,7 @@ class Arena(ArenaDelegatesMixin):
         evidence_collector: Any = None,
         document_store: Any | None = None,
         evidence_store: Any | None = None,
+        document_org_id: str | None = None,
         skill_registry: Any = None,
         enable_skills: bool = False,
         propulsion_engine: Any = None,
@@ -805,7 +807,11 @@ class Arena(ArenaDelegatesMixin):
 
         # Store additional config flags
         _init_store_post_tracker_config(
-            self, cfg, document_store=document_store, evidence_store=evidence_store
+            self,
+            cfg,
+            document_store=document_store,
+            evidence_store=evidence_store,
+            document_org_id=document_org_id,
         )
 
         # Debate strategy, post-debate workflow, hierarchy, RLM limiter

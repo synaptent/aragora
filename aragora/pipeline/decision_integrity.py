@@ -112,6 +112,7 @@ async def capture_context_snapshot(
     max_tokens: int = 2000,
     auth_context: Any = None,
     context_envelope: dict[str, Any] | None = None,
+    document_org_id: str | None = None,
 ) -> ContextSnapshot:
     """Capture a snapshot of all available memory/knowledge context.
 
@@ -126,6 +127,8 @@ async def capture_context_snapshot(
         knowledge_mound: Optional KnowledgeMound instance.
         max_entries: Max entries to retrieve from each source.
         max_tokens: Max tokens for cross-debate context.
+        document_org_id: Org whose documents are listed; defaults to the
+            ``auth_context`` org. Without an org no documents are listed.
     """
     start = time.monotonic()
     snapshot = ContextSnapshot()
@@ -262,10 +265,11 @@ async def capture_context_snapshot(
         except (TypeError, KeyError, ValueError, OSError, ConnectionError, RuntimeError) as exc:
             logger.debug("Knowledge Mound query failed: %s", exc)
 
-    # 4. Document store (uploaded documents)
-    if document_store is not None:
+    # 4. Document store (uploaded documents of the debate's org only)
+    doc_org = document_org_id or getattr(auth_context, "org_id", None)
+    if document_store is not None and isinstance(doc_org, str) and doc_org:
         try:
-            items = document_store.list_all()
+            items = document_store.list_for_org(doc_org)
             if isinstance(items, list):
                 snapshot.document_items = items[:max_entries]
         except (AttributeError, TypeError, OSError, ConnectionError, RuntimeError) as exc:
@@ -394,6 +398,7 @@ async def build_decision_integrity_package(
     evidence_store: Any = None,
     auth_context: Any = None,
     context_envelope: dict[str, Any] | None = None,
+    document_org_id: str | None = None,
 ) -> DecisionIntegrityPackage:
     """Build a Decision Integrity package from a debate payload.
 
@@ -409,6 +414,8 @@ async def build_decision_integrity_package(
         knowledge_mound: Optional KnowledgeMound for context snapshot.
         document_store: Optional DocumentStore for context snapshot.
         evidence_store: Optional EvidenceStore for context snapshot.
+        document_org_id: Org whose documents the snapshot may list (see
+            :func:`capture_context_snapshot`).
     """
     debate_result = _coerce_debate_result(debate)
     receipt = None
@@ -440,6 +447,7 @@ async def build_decision_integrity_package(
             debate_id=debate_result.debate_id,
             auth_context=auth_context,
             context_envelope=context_envelope,
+            document_org_id=document_org_id,
         )
 
     return DecisionIntegrityPackage(

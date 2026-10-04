@@ -467,6 +467,7 @@ async def build_decision_integrity_payload(
             evidence_store=evidence_store,
             auth_context=auth_context,
             context_envelope=context_envelope,
+            document_org_id=getattr(arena, "document_org_id", None),
         )
     except (ValueError, TypeError, KeyError, RuntimeError, OSError) as exc:
         logger.debug("Decision integrity build failed: %s", exc)

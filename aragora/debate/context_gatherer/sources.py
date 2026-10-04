@@ -52,6 +52,7 @@ class SourceGatheringMixin:
     _document_store: Any | None
     _evidence_store: Any | None
     _document_ids: list[str] | None
+    _document_org_id: str | None
     _enable_document_context: bool
     _enable_evidence_store_context: bool
     _max_document_context_items: int
@@ -371,8 +372,11 @@ class SourceGatheringMixin:
         return None
 
     async def gather_document_store_context(self, task: str) -> str | None:
-        """Gather context from uploaded documents (DocumentStore)."""
+        """Gather context from the debate org's uploaded documents (DocumentStore)."""
         if not self._enable_document_context or not self._document_store:
+            return None
+        org_id = getattr(self, "_document_org_id", None)
+        if not isinstance(org_id, str) or not org_id:
             return None
 
         try:
@@ -380,10 +384,10 @@ class SourceGatheringMixin:
             if self._document_ids:
                 for doc_id in self._document_ids[: self._max_document_context_items]:
                     doc = self._document_store.get(doc_id)
-                    if doc:
+                    if doc and getattr(doc, "org_id", None) == org_id:
                         docs.append(doc)
             else:
-                items = self._document_store.list_all() or []
+                items = self._document_store.list_for_org(org_id) or []
                 if not items:
                     return None
 
@@ -399,7 +403,7 @@ class SourceGatheringMixin:
                 selected = items[: self._max_document_context_items]
                 for item in selected:
                     doc = self._document_store.get(item.get("id", ""))
-                    if doc:
+                    if doc and getattr(doc, "org_id", None) == org_id:
                         docs.append(doc)
 
             if not docs:
@@ -626,7 +630,7 @@ class SourceGatheringMixin:
             insights = []
 
             for item in result.items:
-                source = getattr(item, "source", None)
+                source: Any = getattr(item, "source", None)
                 source_name = (
                     source.value
                     if hasattr(source, "value")

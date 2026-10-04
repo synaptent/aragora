@@ -272,11 +272,18 @@ def init_phases(arena: Arena) -> None:
         document_store=getattr(arena, "document_store", None),
         evidence_store=getattr(arena, "evidence_store", None),
         document_ids=getattr(arena.env, "documents", None),
+        document_org_id=getattr(arena, "document_org_id", None)
+        or getattr(getattr(arena, "auth_context", None), "org_id", None),
         auth_context=getattr(arena, "auth_context", None),
     )
 
     # Auto-initialize PopulationManager for genome evolution when auto_evolve is enabled
-    if arena.auto_evolve and arena.population_manager is None and GENESIS_AVAILABLE:
+    if (
+        arena.auto_evolve
+        and arena.population_manager is None
+        and GENESIS_AVAILABLE
+        and _PopulationManager is not None
+    ):
         try:
             arena.population_manager = _PopulationManager()
             logger.info("population_manager auto-initialized for genome evolution")
