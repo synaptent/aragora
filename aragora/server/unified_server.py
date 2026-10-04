@@ -1133,6 +1133,13 @@ class UnifiedServer:
         - Response delivery across channels
         """
         try:
+            from aragora.server.decision_routes import register_decision_routes
+
+            register_decision_routes()
+        except ImportError as e:
+            logger.warning("Decision router hooks not registered: %s", e)
+
+        try:
             from aragora.core.decision import get_decision_router
 
             UnifiedHandler.decision_router = get_decision_router(
