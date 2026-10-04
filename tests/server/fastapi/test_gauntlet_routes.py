@@ -9,18 +9,26 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from aragora.server.fastapi import create_app
+from aragora.server.handlers.gauntlet import storage as gauntlet_handler_storage
+from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+
+ORG_ID = "org-1"
 
 
 @pytest.fixture
 def app():
-    """Create a test FastAPI app."""
-    return create_app()
+    """Create a test FastAPI app whose callers belong to ``ORG_ID``."""
+    app = create_app()
+    app.dependency_overrides[require_org_scope_fastapi] = lambda: OrgScope(
+        org_id=ORG_ID, user_id="user-1", role="member"
+    )
+    return app
 
 
 @pytest.fixture
@@ -140,10 +148,12 @@ class TestGetGauntletStatus:
         data = response.json()
         assert data["gauntlet_id"] == "gauntlet-test"
         assert data["status"] == "completed"
+        mock_gauntlet_storage.get.assert_called_once_with("gauntlet-test", org_id=ORG_ID)
 
     def test_get_status_from_inflight(self, client, mock_gauntlet_storage):
         """Get status checks inflight table for running tasks."""
         inflight_obj = MagicMock()
+        inflight_obj.org_id = ORG_ID
         inflight_obj.to_dict.return_value = {
             "gauntlet_id": "gauntlet-running",
             "status": "running",
@@ -267,13 +277,9 @@ class TestGetGauntletFindings:
 
     def test_get_findings_empty_for_pending_run(self, client, mock_gauntlet_storage):
         """Get findings returns empty for pending/running gauntlet."""
-        from unittest.mock import patch
-
-        # Patch get_gauntlet_runs in the handlers.gauntlet.storage module
-        # which is imported dynamically inside the route handler
-        with patch(
-            "aragora.server.handlers.gauntlet.storage.get_gauntlet_runs",
-            return_value={"gauntlet-pending": {"status": "pending", "result": None}},
+        with patch.dict(
+            gauntlet_handler_storage._gauntlet_runs,
+            {"gauntlet-pending": {"status": "pending", "result": None, "org_id": ORG_ID}},
         ):
             # Make storage also not find it (so in-memory check kicks in)
             mock_gauntlet_storage.get.return_value = None
