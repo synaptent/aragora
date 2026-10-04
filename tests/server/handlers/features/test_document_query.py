@@ -36,12 +36,27 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aragora.server.handlers.features.document_query import DocumentQueryHandler
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="member")
 
 
 @pytest.fixture
 def handler():
     """Create handler instance."""
     return DocumentQueryHandler({})
+
+
+@pytest.fixture
+def owned_handler():
+    """Handler whose document store holds the caller org's doc1."""
+    store = MagicMock()
+    store.get.side_effect = lambda doc_id: (
+        MagicMock(id=doc_id, org_id=SCOPE.org_id, text="t", filename="f.md")
+        if doc_id == "doc1"
+        else None
+    )
+    return DocumentQueryHandler({"document_store": store})
 
 
 class TestDocumentQueryHandler:
@@ -93,12 +108,8 @@ class TestDocumentQuery:
 
         with (
             patch.object(handler, "read_json_body", return_value=None),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._query_documents(mock_handler)
+            result = handler._query_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
     def test_query_missing_question(self, handler):
@@ -107,12 +118,8 @@ class TestDocumentQuery:
 
         with (
             patch.object(handler, "read_json_body", return_value={"document_ids": []}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._query_documents(mock_handler)
+            result = handler._query_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
     def test_query_empty_question(self, handler):
@@ -121,12 +128,8 @@ class TestDocumentQuery:
 
         with (
             patch.object(handler, "read_json_body", return_value={"question": "  "}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._query_documents(mock_handler)
+            result = handler._query_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
 
@@ -139,12 +142,8 @@ class TestDocumentSummarize:
 
         with (
             patch.object(handler, "read_json_body", return_value=None),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._summarize_documents(mock_handler)
+            result = handler._summarize_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
     def test_summarize_missing_document_ids(self, handler):
@@ -153,12 +152,8 @@ class TestDocumentSummarize:
 
         with (
             patch.object(handler, "read_json_body", return_value={"focus": "financial"}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._summarize_documents(mock_handler)
+            result = handler._summarize_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
     def test_summarize_empty_document_ids(self, handler):
@@ -167,12 +162,8 @@ class TestDocumentSummarize:
 
         with (
             patch.object(handler, "read_json_body", return_value={"document_ids": []}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._summarize_documents(mock_handler)
+            result = handler._summarize_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
 
@@ -185,27 +176,25 @@ class TestDocumentCompare:
 
         with (
             patch.object(handler, "read_json_body", return_value=None),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._compare_documents(mock_handler)
+            result = handler._compare_documents(mock_handler, SCOPE)
             assert result.status_code == 400
 
-    def test_compare_requires_two_documents(self, handler):
+    def test_compare_requires_two_documents(self, owned_handler):
         """Test compare requires at least 2 documents."""
         mock_handler = MagicMock()
 
         with (
-            patch.object(handler, "read_json_body", return_value={"document_ids": ["doc1"]}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
+            patch.object(owned_handler, "read_json_body", return_value={"document_ids": ["doc1"]}),
         ):
-            result = handler._compare_documents(mock_handler)
+            result = owned_handler._compare_documents(mock_handler, SCOPE)
             assert result.status_code == 400
+
+    def test_compare_checks_ownership_before_count(self, handler):
+        """A single unknown id answers 404, not the count error."""
+        with patch.object(handler, "read_json_body", return_value={"document_ids": ["doc1"]}):
+            result = handler._compare_documents(MagicMock(), SCOPE)
+        assert result.status_code == 404
 
 
 class TestDocumentExtract:
@@ -217,12 +206,8 @@ class TestDocumentExtract:
 
         with (
             patch.object(handler, "read_json_body", return_value=None),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._extract_information(mock_handler)
+            result = handler._extract_information(mock_handler, SCOPE)
             assert result.status_code == 400
 
     def test_extract_missing_document_ids(self, handler):
@@ -231,44 +216,32 @@ class TestDocumentExtract:
 
         with (
             patch.object(handler, "read_json_body", return_value={"fields": {"parties": "Who?"}}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._extract_information(mock_handler)
+            result = handler._extract_information(mock_handler, SCOPE)
             assert result.status_code == 400
 
-    def test_extract_missing_fields(self, handler):
+    def test_extract_missing_fields(self, owned_handler):
         """Test extract requires fields."""
         mock_handler = MagicMock()
 
         with (
-            patch.object(handler, "read_json_body", return_value={"document_ids": ["doc1"]}),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
+            patch.object(owned_handler, "read_json_body", return_value={"document_ids": ["doc1"]}),
         ):
-            result = handler._extract_information(mock_handler)
+            result = owned_handler._extract_information(mock_handler, SCOPE)
             assert result.status_code == 400
 
-    def test_extract_empty_fields(self, handler):
+    def test_extract_empty_fields(self, owned_handler):
         """Test extract rejects empty fields."""
         mock_handler = MagicMock()
 
         with (
             patch.object(
-                handler,
+                owned_handler,
                 "read_json_body",
                 return_value={"document_ids": ["doc1"], "fields": {}},
             ),
-            patch(
-                "aragora.server.handlers.features.document_query.require_user_auth",
-                lambda f: f,
-            ),
         ):
-            result = handler._extract_information(mock_handler)
+            result = owned_handler._extract_information(mock_handler, SCOPE)
             assert result.status_code == 400
 
 
