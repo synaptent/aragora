@@ -189,7 +189,10 @@
         "id": { "type": "string" },
         "source": { "type": "string" },
         "status": { "enum": ["healthy", "degraded", "unavailable", "ambiguous"] },
-        "authority": { "$ref": "#/$defs/authority" },
+        "authority": {
+          "description": "An observation reports lower-layer evidence, so it never declares derived guidance.",
+          "enum": ["live_authority", "durable_state", "commit_evidence"]
+        },
         "observed_at": { "$ref": "#/$defs/timestamp" },
         "evidence_refs": {
           "type": "array",
@@ -208,7 +211,10 @@
       "properties": {
         "id": { "type": "string" },
         "statement": { "type": "string" },
-        "authority": { "$ref": "#/$defs/authority" },
+        "authority": {
+          "description": "A fact is evidence-backed, so it never declares derived guidance.",
+          "enum": ["live_authority", "durable_state", "commit_evidence"]
+        },
         "evidence_refs": {
           "type": "array",
           "minItems": 1,

@@ -51,6 +51,7 @@ AUTHORITY_PRECEDENCE = (
     "commit_evidence",
     "derived_recommendation",
 )
+GROUNDED_AUTHORITIES = AUTHORITY_PRECEDENCE[:-1]
 EVIDENCE_COLLECTIONS = (*DERIVED_COLLECTIONS, "source_observations", "facts")
 
 
@@ -150,7 +151,9 @@ def test_fact_authority_cannot_exceed_cited_evidence(
     fact["authority"] = fact_authority
     fact["evidence_refs"][0]["authority"] = evidence_authority
 
-    if AUTHORITY_PRECEDENCE.index(fact_authority) < AUTHORITY_PRECEDENCE.index(evidence_authority):
+    if fact_authority not in GROUNDED_AUTHORITIES or (
+        AUTHORITY_PRECEDENCE.index(fact_authority) < AUTHORITY_PRECEDENCE.index(evidence_authority)
+    ):
         with pytest.raises(jsonschema.ValidationError):
             validator.validate(document)
     else:
@@ -170,11 +173,26 @@ def test_source_observation_authority_cannot_exceed_cited_evidence(
     exceeds = AUTHORITY_PRECEDENCE.index(observation_authority) < AUTHORITY_PRECEDENCE.index(
         evidence_authority
     )
-    if exceeds:
+    if exceeds or observation_authority not in GROUNDED_AUTHORITIES:
         with pytest.raises(jsonschema.ValidationError):
             validator.validate(document)
     else:
         validator.validate(document)
+
+
+@pytest.mark.parametrize("collection", ("facts", "source_observations"))
+def test_evidence_backed_records_cannot_ground_themselves_in_derived_guidance(
+    bare_validator: Any, collection: str
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    record = document[collection][0]
+    record["authority"] = "derived_recommendation"
+    for handle in record["evidence_refs"]:
+        handle["authority"] = "derived_recommendation"
+
+    error = jsonschema.exceptions.best_match(bare_validator.iter_errors(document))
+    assert error is not None
+    assert list(error.absolute_path) == [collection, 0, "authority"]
 
 
 @pytest.mark.parametrize(
