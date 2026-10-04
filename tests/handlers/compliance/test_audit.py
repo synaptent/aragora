@@ -192,10 +192,8 @@ from aragora.server.handlers.compliance.audit import AuditTrailHandler
 @pytest.fixture(autouse=True)
 def _reset_audit_trail_class_storage():
     AuditTrailHandler._trails = {}
-    AuditTrailHandler._receipts = {}
     yield
     AuditTrailHandler._trails = {}
-    AuditTrailHandler._receipts = {}
 
 
 class TestAuditTrailHandlerCanHandle:
@@ -210,17 +208,17 @@ class TestAuditTrailHandlerCanHandle:
     def test_can_handle_audit_trails_subpath(self, audit_trail_handler):
         assert audit_trail_handler.can_handle("/api/v1/audit-trails/trail-123", "GET") is True
 
-    def test_can_handle_receipts_get(self, audit_trail_handler):
-        assert audit_trail_handler.can_handle("/api/v1/receipts", "GET") is True
-
-    def test_can_handle_receipts_subpath(self, audit_trail_handler):
-        assert audit_trail_handler.can_handle("/api/v1/receipts/receipt-abc", "GET") is True
-
     def test_cannot_handle_unknown_path(self, audit_trail_handler):
         assert audit_trail_handler.can_handle("/api/v1/unknown", "GET") is False
 
     def test_cannot_handle_delete_method(self, audit_trail_handler):
         assert audit_trail_handler.can_handle("/api/v1/audit-trails", "DELETE") is False
+
+    def test_does_not_handle_receipt_routes(self, audit_trail_handler):
+        """Decision receipts are served by the org-scoped receipts handler."""
+        for path in ("/api/v1/receipts", "/api/v1/receipts/r-1", "/api/v1/receipts/r-1/verify"):
+            for method in ("GET", "POST"):
+                assert not audit_trail_handler.can_handle(path, method)
 
 
 class TestAuditTrailHandlerListTrails:
@@ -390,73 +388,6 @@ class TestAuditTrailHandlerVerify:
         assert _status(result) == 404
 
 
-class TestAuditTrailHandlerReceipts:
-    """Tests for receipt listing and retrieval."""
-
-    @pytest.mark.asyncio
-    async def test_list_receipts_empty(self, audit_trail_handler):
-        result = await audit_trail_handler.handle("GET", "/api/v1/receipts")
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipts"] == []
-        assert body["total"] == 0
-
-    @pytest.mark.asyncio
-    async def test_list_receipts_with_data(self, audit_trail_handler):
-        receipt_summary = {"receipt_id": "r1", "verdict": "pass"}
-        audit_trail_handler._store.list_receipts.return_value = [receipt_summary]
-        audit_trail_handler._store.count_receipts.return_value = 1
-
-        result = await audit_trail_handler.handle("GET", "/api/v1/receipts")
-        assert _status(result) == 200
-        body = _body(result)
-        assert len(body["receipts"]) == 1
-
-    @pytest.mark.asyncio
-    async def test_get_receipt_from_store(self, audit_trail_handler):
-        receipt = {"receipt_id": "r-abc", "verdict": "pass"}
-        audit_trail_handler._store.get_receipt.return_value = receipt
-
-        result = await audit_trail_handler.handle("/api/v1/receipts/r-abc", {})
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipt_id"] == "r-abc"
-
-    @pytest.mark.asyncio
-    async def test_get_receipt_not_found(self, audit_trail_handler):
-        audit_trail_handler._store.get_receipt.return_value = None
-        audit_trail_handler._store.get_receipt_by_gauntlet.return_value = None
-
-        result = await audit_trail_handler.handle("/api/v1/receipts/nonexistent", {})
-        assert _status(result) == 404
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_not_found(self, audit_trail_handler):
-        audit_trail_handler._store.get_receipt.return_value = None
-        audit_trail_handler._store.get_receipt_by_gauntlet.return_value = None
-
-        result = await audit_trail_handler.handle("/api/v1/receipts/r-bad/verify", {})
-        assert _status(result) == 404
-
-    @pytest.mark.asyncio
-    async def test_verify_receipt_found(self, audit_trail_handler):
-        receipt = {
-            "receipt_id": "r-chk",
-            "gauntlet_id": "g1",
-            "verdict": "pass",
-            "confidence": 0.95,
-            "checksum": "abc123",
-        }
-        audit_trail_handler._store.get_receipt.return_value = receipt
-
-        result = await audit_trail_handler.handle("/api/v1/receipts/r-chk/verify", {})
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["receipt_id"] == "r-chk"
-        assert "valid" in body
-        assert "computed_checksum" in body
-
-
 class TestAuditTrailHandlerRouting:
     """Tests for route dispatch edge cases."""
 
@@ -482,17 +413,6 @@ class TestAuditTrailHandlerRouting:
             assert AuditTrailHandler._trails["t1"]["trail_id"] == "t1"
         finally:
             AuditTrailHandler._trails = old
-
-    @pytest.mark.asyncio
-    async def test_store_receipt_classmethod(self):
-        """Test the store_receipt classmethod."""
-        old = AuditTrailHandler._receipts.copy()
-        try:
-            AuditTrailHandler.store_receipt("r1", {"receipt_id": "r1"})
-            assert "r1" in AuditTrailHandler._receipts
-            assert AuditTrailHandler._receipts["r1"]["receipt_id"] == "r1"
-        finally:
-            AuditTrailHandler._receipts = old
 
 
 # ===========================================================================
