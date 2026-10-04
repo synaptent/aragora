@@ -123,6 +123,8 @@ class TestDecisionResultStore:
         assert result["request_id"] == "req-123"
         assert result["status"] == "completed"
         assert result["result"]["answer"] == "42"
+        assert result["org_id"] is None
+        assert result["created_by"] is None
 
     def test_get_nonexistent(self, store):
         """Should return None for nonexistent entries."""
@@ -262,6 +264,139 @@ class TestDecisionResultStore:
         assert "cache_size" in metrics
         assert "max_entries" in metrics
         assert "ttl_seconds" in metrics
+
+
+class TestDecisionResultOwnership:
+    """Tests for org ownership of decision results."""
+
+    @pytest.fixture
+    def temp_db(self, tmp_path):
+        return tmp_path / "ownership.db"
+
+    @pytest.fixture
+    def store(self, temp_db):
+        return DecisionResultStore(db_path=temp_db, ttl_seconds=3600)
+
+    def test_entry_round_trips_owner(self):
+        entry = DecisionResultEntry(
+            request_id="req-1", status="completed", result={}, org_id="org-a", created_by="u1"
+        )
+        data = entry.to_dict()
+        assert data["org_id"] == "org-a"
+        assert data["created_by"] == "u1"
+        restored = DecisionResultEntry.from_dict(data)
+        assert (restored.org_id, restored.created_by) == ("org-a", "u1")
+
+    def test_save_persists_owner(self, store, temp_db):
+        store.save("req-1", {"status": "completed"}, org_id="org-a", created_by="u1")
+
+        assert store.get("req-1")["org_id"] == "org-a"
+        fresh = DecisionResultStore(db_path=temp_db).get("req-1")
+        assert fresh["org_id"] == "org-a"
+        assert fresh["created_by"] == "u1"
+
+    def test_save_falls_back_to_owner_in_data(self, store):
+        store.save("req-1", {"status": "completed", "org_id": "org-a", "created_by": "u1"})
+
+        result = store.get_for_org("req-1", "org-a")
+        assert result is not None
+        assert result["created_by"] == "u1"
+
+    def test_get_for_org(self, store, temp_db):
+        store.save("req-a", {"status": "completed"}, org_id="org-a", created_by="u1")
+        store.save("req-null", {"status": "completed"})
+
+        assert store.get_for_org("req-a", "org-a")["request_id"] == "req-a"
+        assert store.get_for_org("req-a", "org-b") is None
+        assert store.get_for_org("req-null", "org-a") is None
+        assert store.get_for_org("missing", "org-a") is None
+        fresh = DecisionResultStore(db_path=temp_db)
+        assert fresh.get_for_org("req-a", "org-b") is None
+        assert fresh.get_for_org("req-a", "org-a") is not None
+
+    def test_list_and_count_filter_by_org(self, store):
+        store.save("req-a1", {"status": "completed"}, org_id="org-a")
+        store.save("req-a2", {"status": "pending"}, org_id="org-a")
+        store.save("req-b1", {"status": "completed"}, org_id="org-b")
+        store.save("req-null", {"status": "completed"})
+
+        listed = store.list_recent_for_org("org-a")
+        assert {d["request_id"] for d in listed} == {"req-a1", "req-a2"}
+        assert store.count_for_org("org-a") == 2
+        assert [d["request_id"] for d in store.list_recent_for_org("org-b")] == ["req-b1"]
+        assert store.count_for_org("org-b") == 1
+        assert len(store.list_recent_for_org("org-a", limit=1)) == 1
+        assert store.list_recent_for_org("org-none") == []
+        assert store.count_for_org("org-none") == 0
+        assert store.count() == 4
+
+    def test_later_save_does_not_change_owner(self, store, temp_db):
+        store.save("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
+        store.save("req-1", {"status": "completed"}, org_id="org-b", created_by="u2")
+
+        cached = store.get("req-1")
+        assert cached["status"] == "completed"
+        assert (cached["org_id"], cached["created_by"]) == ("org-a", "u1")
+        fresh = DecisionResultStore(db_path=temp_db).get("req-1")
+        assert fresh["status"] == "completed"
+        assert (fresh["org_id"], fresh["created_by"]) == ("org-a", "u1")
+        assert store.count_for_org("org-b") == 0
+
+    def test_save_from_uncached_instance_keeps_stored_owner(self, store, temp_db):
+        store.save("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
+        other = DecisionResultStore(db_path=temp_db, ttl_seconds=3600)
+        other.save("req-1", {"status": "completed"}, org_id="org-b", created_by="u2")
+
+        assert other.get_for_org("req-1", "org-b") is None
+        owned = other.get_for_org("req-1", "org-a")
+        assert owned is not None
+        assert (owned["status"], owned["created_by"]) == ("completed", "u1")
+
+    def test_later_save_claims_ownerless_result(self, store, temp_db):
+        store.save("req-1", {"status": "pending"})
+        store.save("req-1", {"status": "completed"}, org_id="org-a", created_by="u1")
+
+        fresh = DecisionResultStore(db_path=temp_db).get("req-1")
+        assert (fresh["org_id"], fresh["created_by"]) == ("org-a", "u1")
+
+    def test_migrates_table_without_owner_columns(self, temp_db):
+        import sqlite3
+
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            """
+            CREATE TABLE decision_results (
+                request_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                result_json TEXT,
+                created_at REAL NOT NULL,
+                completed_at TEXT,
+                error TEXT,
+                expires_at REAL NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO decision_results VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("req-legacy", "completed", "{}", time.time(), None, None, time.time() + 3600),
+        )
+        conn.commit()
+        conn.close()
+
+        store = DecisionResultStore(db_path=temp_db, ttl_seconds=3600)
+        store.save("req-new", {"status": "completed"}, org_id="org-a", created_by="u1")
+
+        columns = {
+            row[1]
+            for row in sqlite3.connect(temp_db).execute("PRAGMA table_info(decision_results)")
+        }
+        assert {"org_id", "created_by"} <= columns
+        fresh = DecisionResultStore(db_path=temp_db)
+        assert fresh.get_for_org("req-new", "org-a")["created_by"] == "u1"
+        legacy = fresh.get("req-legacy")
+        assert legacy["org_id"] is None
+        assert fresh.get_for_org("req-legacy", "org-a") is None
+        assert fresh.count_for_org("org-a") == 1
 
 
 class TestGlobalStore:

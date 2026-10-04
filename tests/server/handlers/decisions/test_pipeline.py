@@ -18,6 +18,9 @@ from aragora.server.handlers.decisions.pipeline import (
     DECISION_UPDATE_PERMISSION,
     DecisionPipelineHandler,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
 
 
 def _make_http_handler(body: dict) -> MagicMock:
@@ -120,7 +123,7 @@ def test_create_plan_rejects_invalid_approval_mode() -> None:
             "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result"
         ) as mock_build,
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 400
     assert "Invalid approval_mode" in _parse_body(result)["error"]
@@ -150,7 +153,7 @@ def test_create_plan_rejects_invalid_max_auto_risk() -> None:
             "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result"
         ) as mock_build,
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 400
     assert "Invalid max_auto_risk" in _parse_body(result)["error"]
@@ -180,7 +183,7 @@ def test_create_plan_rejects_invalid_budget_limit_usd() -> None:
             "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result"
         ) as mock_build,
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 400
     assert "budget_limit_usd" in _parse_body(result)["error"]
@@ -210,7 +213,7 @@ def test_create_plan_rejects_non_object_metadata() -> None:
             "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result"
         ) as mock_build,
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 400
     assert "metadata must be an object" in _parse_body(result)["error"]
@@ -236,6 +239,7 @@ def test_execute_plan_accepts_execution_overrides() -> None:
 
     mock_plan = MagicMock()
     mock_plan.id = "plan-1"
+    mock_plan.org_id = "test-org-001"
     mock_plan.to_dict.return_value = {"id": "plan-1"}
 
     mock_outcome = MagicMock()
@@ -263,7 +267,7 @@ def test_execute_plan_accepts_execution_overrides() -> None:
         ) as mock_execute,
         patch("aragora.utils.async_utils.get_event_loop_safe", return_value=mock_loop),
     ):
-        result = handler._handle_execute_plan("plan-1", request, user)
+        result = handler._handle_execute_plan("plan-1", request, user, SCOPE)
 
     assert result.status_code == 200
     payload = _parse_body(result)
@@ -274,6 +278,8 @@ def test_execute_plan_accepts_execution_overrides() -> None:
     assert kwargs["execution_mode"] == "hybrid"
     assert kwargs["safety_mode"] == ExecutionMode.INTERACTIVE
     assert kwargs["executor"] is mock_executor
+    assert kwargs["auth_context"].user_id == "test-user-001"
+    assert kwargs["auth_context"].org_id == "test-org-001"
 
 
 def test_execute_plan_rejects_invalid_execution_mode() -> None:
@@ -283,9 +289,10 @@ def test_execute_plan_rejects_invalid_execution_mode() -> None:
     user = SimpleNamespace(user_id="user-1")
     mock_plan = MagicMock()
     mock_plan.id = "plan-1"
+    mock_plan.org_id = "test-org-001"
 
     with patch("aragora.pipeline.executor.get_plan", return_value=mock_plan):
-        result = handler._handle_execute_plan("plan-1", request, user)
+        result = handler._handle_execute_plan("plan-1", request, user, SCOPE)
 
     assert result.status_code == 400
     assert "Invalid execution_mode" in _parse_body(result)["error"]
@@ -297,17 +304,20 @@ def test_execute_plan_rejects_invalid_parallel_settings() -> None:
     user = SimpleNamespace(user_id="user-1")
     mock_plan = MagicMock()
     mock_plan.id = "plan-1"
+    mock_plan.org_id = "test-org-001"
 
     with patch("aragora.pipeline.executor.get_plan", return_value=mock_plan):
         result_parallel = handler._handle_execute_plan(
             "plan-1",
             _make_http_handler({"parallel_execution": "yes"}),
             user,
+            SCOPE,
         )
         result_max_parallel = handler._handle_execute_plan(
             "plan-1",
             _make_http_handler({"max_parallel": 0}),
             user,
+            SCOPE,
         )
 
     assert result_parallel.status_code == 400
@@ -324,6 +334,7 @@ def test_execute_plan_normalizes_execution_mode_alias() -> None:
 
     mock_plan = MagicMock()
     mock_plan.id = "plan-1"
+    mock_plan.org_id = "test-org-001"
     mock_plan.to_dict.return_value = {"id": "plan-1"}
 
     mock_outcome = MagicMock()
@@ -349,7 +360,7 @@ def test_execute_plan_normalizes_execution_mode_alias() -> None:
         ) as mock_execute,
         patch("aragora.utils.async_utils.get_event_loop_safe", return_value=mock_loop),
     ):
-        result = handler._handle_execute_plan("plan-1", request, user)
+        result = handler._handle_execute_plan("plan-1", request, user, SCOPE)
 
     assert result.status_code == 200
     kwargs = mock_execute.call_args.kwargs
@@ -364,6 +375,7 @@ def test_execute_plan_backbone_failure_returns_503() -> None:
 
     mock_plan = MagicMock()
     mock_plan.id = "plan-1"
+    mock_plan.org_id = "test-org-001"
 
     mock_loop = MagicMock()
     mock_loop.run_until_complete.side_effect = BackbonePersistenceError("run ledger unavailable")
@@ -373,7 +385,7 @@ def test_execute_plan_backbone_failure_returns_503() -> None:
         patch("aragora.pipeline.executor.PlanExecutor"),
         patch("aragora.utils.async_utils.get_event_loop_safe", return_value=mock_loop),
     ):
-        result = handler._handle_execute_plan("plan-1", request, user)
+        result = handler._handle_execute_plan("plan-1", request, user, SCOPE)
 
     assert result.status_code == 503
     assert _parse_body(result)["error"] == FAIL_CLOSED_BACKBONE_MESSAGE
@@ -427,7 +439,7 @@ def test_create_plan_seeds_backbone_run_and_scrubs_reserved_metadata() -> None:
             return_value=True,
         ) as mock_sync,
     ):
-        result = handler._handle_create_plan(request, user)
+        result = handler._handle_create_plan(request, user, SCOPE)
 
     assert result.status_code == 201
     payload = _parse_body(result)
@@ -444,7 +456,11 @@ def test_create_plan_seeds_backbone_run_and_scrubs_reserved_metadata() -> None:
         auth_context=user,
         source_surface="decision_pipeline",
         source_id="deb-123",
+        org_id="test-org-001",
+        created_by="test-user-001",
     )
+    assert mock_plan.org_id == "test-org-001"
+    assert mock_plan.created_by == "test-user-001"
     mock_sync.assert_called_once_with(mock_plan, append_event=False)
 
 
@@ -480,7 +496,7 @@ def test_create_plan_normalizes_profile_execution_mode_alias() -> None:
         ) as mock_build,
         patch("aragora.pipeline.executor.store_plan"),
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 201
     kwargs = mock_build.call_args.kwargs
@@ -509,7 +525,7 @@ def test_create_plan_rejects_invalid_channel_targets_shape() -> None:
             "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result"
         ) as mock_build,
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 400
     assert "channel_targets" in _parse_body(result)["error"]
@@ -538,7 +554,7 @@ def test_create_plan_rejects_invalid_thread_id_by_platform_shape() -> None:
             "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result"
         ) as mock_build,
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 400
     assert "thread_id_by_platform" in _parse_body(result)["error"]
@@ -579,7 +595,7 @@ def test_create_plan_normalizes_channel_targets_and_thread_map() -> None:
         ) as mock_build,
         patch("aragora.pipeline.executor.store_plan"),
     ):
-        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"))
+        result = handler._handle_create_plan(request, SimpleNamespace(user_id="user-1"), SCOPE)
 
     assert result.status_code == 201
     profile = mock_build.call_args.kwargs["implementation_profile"]
@@ -593,14 +609,16 @@ def test_approve_plan_records_actor_reason_and_timestamp() -> None:
     handler = DecisionPipelineHandler({})
     request = _make_http_handler({"reason": "review complete", "conditions": ["qa-pass"]})
     user = SimpleNamespace(user_id="approver-123")
-    plan = DecisionPlan(id="plan-approve-1", debate_id="deb-1", task="Ship it")
+    plan = DecisionPlan(
+        id="plan-approve-1", debate_id="deb-1", task="Ship it", org_id="test-org-001"
+    )
     plan.status = PlanStatus.AWAITING_APPROVAL
 
     with (
         patch("aragora.pipeline.executor.get_plan", return_value=plan),
         patch("aragora.pipeline.executor.store_plan") as mock_store,
     ):
-        result = handler._handle_approve_plan(plan.id, request, user)
+        result = handler._handle_approve_plan(plan.id, request, user, SCOPE)
 
     assert result.status_code == 200
     payload = _parse_body(result)
@@ -616,14 +634,16 @@ def test_reject_plan_records_actor_reason_and_timestamp() -> None:
     handler = DecisionPipelineHandler({})
     request = _make_http_handler({"reason": "risk unresolved"})
     user = SimpleNamespace(user_id="reviewer-9")
-    plan = DecisionPlan(id="plan-reject-1", debate_id="deb-2", task="Deploy change")
+    plan = DecisionPlan(
+        id="plan-reject-1", debate_id="deb-2", task="Deploy change", org_id="test-org-001"
+    )
     plan.status = PlanStatus.CREATED
 
     with (
         patch("aragora.pipeline.executor.get_plan", return_value=plan),
         patch("aragora.pipeline.executor.store_plan") as mock_store,
     ):
-        result = handler._handle_reject_plan(plan.id, request, user)
+        result = handler._handle_reject_plan(plan.id, request, user, SCOPE)
 
     assert result.status_code == 200
     payload = _parse_body(result)
@@ -640,11 +660,13 @@ def test_approve_plan_rejects_illegal_state_transition() -> None:
     handler = DecisionPipelineHandler({})
     request = _make_http_handler({})
     user = SimpleNamespace(user_id="approver-123")
-    plan = DecisionPlan(id="plan-approve-illegal", debate_id="deb-3", task="Task")
+    plan = DecisionPlan(
+        id="plan-approve-illegal", debate_id="deb-3", task="Task", org_id="test-org-001"
+    )
     plan.status = PlanStatus.APPROVED
 
     with patch("aragora.pipeline.executor.get_plan", return_value=plan):
-        result = handler._handle_approve_plan(plan.id, request, user)
+        result = handler._handle_approve_plan(plan.id, request, user, SCOPE)
 
     assert result.status_code == 409
     assert "cannot be approved in status" in _parse_body(result)["error"]
@@ -655,11 +677,13 @@ def test_reject_plan_rejects_illegal_state_transition() -> None:
     handler = DecisionPipelineHandler({})
     request = _make_http_handler({"reason": "late rejection"})
     user = SimpleNamespace(user_id="reviewer-9")
-    plan = DecisionPlan(id="plan-reject-illegal", debate_id="deb-4", task="Task")
+    plan = DecisionPlan(
+        id="plan-reject-illegal", debate_id="deb-4", task="Task", org_id="test-org-001"
+    )
     plan.status = PlanStatus.REJECTED
 
     with patch("aragora.pipeline.executor.get_plan", return_value=plan):
-        result = handler._handle_reject_plan(plan.id, request, user)
+        result = handler._handle_reject_plan(plan.id, request, user, SCOPE)
 
     assert result.status_code == 409
     assert "cannot be rejected in status" in _parse_body(result)["error"]

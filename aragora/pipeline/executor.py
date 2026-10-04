@@ -164,15 +164,24 @@ def get_plan(plan_id: str) -> DecisionPlan | None:
 def list_plans(
     status: PlanStatus | None = None,
     limit: int = 50,
+    org_id: str | None = None,
 ) -> list[DecisionPlan]:
-    """List plans, delegating to PlanStore when available."""
+    """List plans, delegating to PlanStore when available.
+
+    With ``org_id`` only that org's plans are listed (plans without a known
+    owner never are).
+    """
     store = _get_backing_store()
     if store is not None:
         try:
+            if org_id is not None:
+                return store.list_for_org(org_id, status=status, limit=limit)
             return store.list(status=status, limit=limit)
         except Exception:  # noqa: BLE001 - fall through to in-memory
             logger.warning("Persistent list_plans failed, falling back to in-memory")
     plans = list(_plan_store_fallback.values())
+    if org_id is not None:
+        plans = [p for p in plans if org_id and getattr(p, "org_id", None) == org_id]
     if status is not None:
         plans = [p for p in plans if p.status == status]
     plans.sort(key=lambda p: p.created_at, reverse=True)
