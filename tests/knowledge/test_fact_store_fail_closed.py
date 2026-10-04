@@ -158,8 +158,8 @@ def test_auditor_keeps_its_findings_and_records_the_closed_fact_store() -> None:
 
     auditor, closed = DocumentAuditor(), AsyncMock(side_effect=OrgScopeRequiredError("no org"))
     auditor._knowledge_adapter = MagicMock(store_session_findings=closed)
-    auditor._load_document_chunks = AsyncMock(return_value=[])
-    auditor._execute_standard_pipeline = AsyncMock(return_value=["finding"])
+    auditor._load_document_chunks = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    auditor._execute_standard_pipeline = AsyncMock(return_value=["finding"])  # type: ignore[method-assign]
     session = asyncio.run(auditor.create_session(document_ids=["d"]))
     asyncio.run(auditor._execute_audit(session))
     assert session.findings == ["finding"] and "Knowledge storage error" in session.errors[0]
