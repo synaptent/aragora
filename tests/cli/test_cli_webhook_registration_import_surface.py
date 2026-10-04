@@ -108,3 +108,21 @@ def test_review_queue_fast_path_skips_webhook_registration_imports() -> None:
 
     assert proc.returncode == 0, proc.stderr
     assert "merge-packet" in proc.stdout
+
+
+def test_registration_leaf_is_a_tier4_authority_dependency_in_both_classifiers() -> None:
+    """aragora/cli/main.py is an authority-closure member and imports this leaf
+    statically, so the leaf joins the closure. The fail-closed closure build
+    rejects any member classifying below Tier 4 and enforces per-member parity
+    between the canonical classifier and the merge-train mirror, so the exact
+    file path must be a dependency-prefix entry in both."""
+    from aragora.cli.commands import review_queue
+    from scripts import tier4_merge_train
+
+    path = "aragora/server/webhook_store_registration.py"
+    assert path in review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert path in tier4_merge_train.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert tier4_merge_train.matches_serialized_path(path) == path
+    tier, name, _reason = review_queue._classify_model_review_tier([path])
+    assert tier == 4
+    assert name == "tier_4_preapproval_required"
