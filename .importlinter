@@ -44,6 +44,9 @@
 
 [importlinter]
 root_package = aragora
+# Imports guarded by `if TYPE_CHECKING:` create no layer edge; runtime imports at
+# any scope still do. import-linter accepts only the spellings True/true here.
+exclude_type_checking_imports = True
 
 [importlinter:contract:aragora-layers]
 name = Aragora layers: interface > application > domain > infrastructure > foundation
