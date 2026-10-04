@@ -1134,7 +1134,9 @@ class UnifiedServer:
         """
         try:
             from aragora.core.decision import get_decision_router
+            from aragora.server.decision_routes import register_decision_routes
 
+            register_decision_routes()
             UnifiedHandler.decision_router = get_decision_router(
                 document_store=getattr(UnifiedHandler, "document_store", None),
                 evidence_store=getattr(UnifiedHandler, "evidence_store", None),

@@ -26,7 +26,9 @@ async def run_worker(
     from aragora.control_plane import ControlPlaneCoordinator
     from aragora.core.decision import DecisionRequest, get_decision_router
     from aragora.control_plane.deliberation import run_deliberation, record_deliberation_error
+    from aragora.server.decision_routes import register_decision_routes
 
+    register_decision_routes()
     coordinator = await ControlPlaneCoordinator.create()
 
     await coordinator.register_agent(
