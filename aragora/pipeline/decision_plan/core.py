@@ -493,6 +493,12 @@ class DecisionPlan:
     metadata: dict[str, Any] = field(default_factory=dict)
     implementation_profile: ImplementationProfile | None = None
 
+    # Ownership: the org and user that created the plan. ``ownership_source``
+    # is set by PlanStore ("created", "backfilled" or "unknown"), not callers.
+    org_id: str | None = None
+    created_by: str | None = None
+    ownership_source: str | None = None
+
     def __post_init__(self) -> None:
         if self.debate_result and not self.debate_id:
             self.debate_id = self.debate_result.debate_id
