@@ -268,6 +268,7 @@ class TestSyncConsensus:
 # =============================================================================
 
 
+@pytest.mark.xfail(strict=True, reason="fact sync closed until mound is org-scoped")
 class TestSyncFacts:
     """Tests for sync facts endpoint."""
 

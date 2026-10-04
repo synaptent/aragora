@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 from aragora.server.handlers.knowledge_base.handler import KnowledgeHandler
 from aragora.server.handlers.base import error_response
 
@@ -27,6 +28,8 @@ from aragora.server.handlers.base import error_response
 
 class MockAuthUser:
     """Mock authenticated user with full knowledge permissions."""
+
+    org_id = "test-org-001"
 
     def __init__(self, user_id: str = "test-user", permissions=None, roles=None):
         self.user_id = user_id
@@ -73,6 +76,7 @@ def handler():
     """Create a KnowledgeHandler with minimal server context."""
     ctx = {"storage": None, "elo_system": None, "nomic_dir": None}
     h = KnowledgeHandler(ctx)
+    h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
     return h
 
 

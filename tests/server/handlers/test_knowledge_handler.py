@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 from aragora.server.handlers.knowledge_base.handler import KnowledgeHandler
 
 
@@ -21,6 +22,7 @@ def knowledge_handler():
     """Create a knowledge handler with mocked dependencies."""
     ctx = {"storage": None, "elo_system": None, "nomic_dir": None}
     handler = KnowledgeHandler(ctx)
+    handler._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
     return handler
 
 
@@ -56,6 +58,8 @@ def create_request_body(data: dict) -> MagicMock:
 
 class MockAuthUser:
     """Mock authenticated user with permissions for knowledge handler tests."""
+
+    org_id = "test-org-001"
 
     def __init__(self, user_id: str = "test-user"):
         self.user_id = user_id
@@ -1176,6 +1180,7 @@ class TestKnowledgeHandlerRBACBoundaries:
 
         class AdminNoExplicitPerms:
             user_id = "admin-user"
+            org_id = "test-org-001"
             permissions = set()  # No explicit permissions
             roles = {"admin"}
 

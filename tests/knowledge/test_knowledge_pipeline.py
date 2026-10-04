@@ -17,6 +17,7 @@ from aragora.knowledge import (
     FactStore,
     InMemoryEmbeddingService,
     InMemoryFactStore,
+    ScopedFactStore,
     KnowledgePipeline,
     PipelineConfig,
     QueryOptions,
@@ -146,7 +147,9 @@ class TestKnowledgePipelineIntegration:
             extract_facts=True,
             min_fact_confidence=0.5,
         )
-        return KnowledgePipeline(config)
+        return KnowledgePipeline(
+            config, fact_store=ScopedFactStore(InMemoryFactStore(), "org-test")
+        )
 
     @pytest.mark.asyncio
     async def test_full_pipeline_single_document(
@@ -236,7 +239,7 @@ class TestKnowledgePipelineIntegration:
     @pytest.mark.asyncio
     async def test_query_with_debate(self, sample_contract_text: str, mock_agents: list[MockAgent]):
         """Test query with multi-agent debate enabled."""
-        fact_store = InMemoryFactStore()
+        fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
         embedding_service = InMemoryEmbeddingService()
 
         # Add sample chunk
@@ -280,7 +283,7 @@ class TestFactExtractorIntegration:
     def extractor(self) -> FactExtractor:
         """Create a fact extractor with mock agent."""
         agent = MockAgent("extractor-agent")
-        store = InMemoryFactStore()
+        store = ScopedFactStore(InMemoryFactStore(), "org-test")
 
         return create_fact_extractor(
             agents=[agent],
@@ -367,7 +370,7 @@ class TestSimpleQueryEngine:
     @pytest.fixture
     def engine(self) -> SimpleQueryEngine:
         """Create a simple query engine."""
-        return SimpleQueryEngine()
+        return SimpleQueryEngine(ScopedFactStore(InMemoryFactStore(), "org-test"))
 
     @pytest.mark.asyncio
     async def test_search_and_facts(self, engine: SimpleQueryEngine):
@@ -399,7 +402,7 @@ class TestEndToEndWorkflow:
     async def test_document_to_verified_facts(self):
         """Test complete workflow from document to verified facts."""
         # Setup
-        fact_store = InMemoryFactStore()
+        fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
         embedding_service = InMemoryEmbeddingService()
         agents = [MockAgent("agent-1"), MockAgent("agent-2")]
 
