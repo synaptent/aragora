@@ -22,10 +22,12 @@ VALIDATED_ARGV = (  # claude_argv of the validated restricted-reviewer bootstrap
 NEVER = {"--bare", "--model", "--settings", "--add-dir", "--worktree", "bypassPermissions"}
 NEVER |= {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"}
 INIT = {"tools": ["Glob", "Grep", "Read"], "mcp_servers": [], "model": "claude-opus-5"}
+INIT["permissionMode"] = "default"
 DEFAULT_KWARGS = {"input", "capture_output", "text", "timeout", "check"}
 CONTEXT_ENVS = ("ARAGORA_CLAUDE_REVIEW_CHECKOUT", "ARAGORA_CLAUDE_REVIEW_EXPECTED_HEAD")
 CHANGES = "Verdict: CHANGES-REQUESTED\n- [P2] Gap."
 HOOK = {"type": "system", "subtype": "hook_started", "hook_event": "SessionStart"}
+WALL = "Not logged in · Please run /login"
 
 
 def _git(repo, *args):
@@ -39,7 +41,8 @@ def _ev(kind, **fields):
 
 def _stream(cwd, uses=("Glob", "Read"), extra=(), result="Verdict: PASS", error=False, **init):
     # Event shapes trimmed from a captured Claude Code 2.1.288 --safe-mode --restricted run.
-    head = [] if init.pop("absent", False) else [_ev("system/init", **{**INIT, "cwd": cwd, **init})]
+    fields = {key: value for key, value in {**INIT, "cwd": cwd, **init}.items() if value is not ...}
+    head = [] if init.get("absent") else [_ev("system/init", **fields)]
     tail = [] if result is None else [_ev("result/success", is_error=error, result=result)]
     body = [_ev("system/thinking_tokens", estimated_tokens=50)]
     for name in uses:
@@ -48,13 +51,23 @@ def _stream(cwd, uses=("Glob", "Read"), extra=(), result="Verdict: PASS", error=
     return "\n".join(json.dumps(event) for event in [*head, *body, *extra, *tail]) + "\n"
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_context(monkeypatch):
+    for name in CONTEXT_ENVS:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def checkout(tmp_path, monkeypatch):
     repo = tmp_path / "wt"
-    (repo / "__pycache__").mkdir(parents=True)
+    for folder in ("__pycache__", ".claude"):
+        (repo / folder).mkdir(parents=True)
     (repo / ".gitignore").write_text("__pycache__/\n")
+    # Base-committed hooks are trusted (--safe-mode suppresses them); only PR changes refuse.
+    (repo / ".claude" / "settings.json").write_text('{"hooks": {"SessionStart": []}}')
     for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "c0"]):
         _git(repo, *args)
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
     for name in (qe._CLAUDE_TIMEOUT_ENV, qe._CLI_PROBE_TIMEOUT_ENV, "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(name, raising=False)
@@ -73,6 +86,8 @@ def _install(monkeypatch, *outputs, mutate=None):
         calls.append((list(argv), kwargs))
         if mutate and len(calls) == 2:
             mutate()
+        if isinstance(outputs[len(calls) - 1], BaseException):
+            raise outputs[len(calls) - 1]
         rc, out, err = outputs[len(calls) - 1]
         return subprocess.CompletedProcess(argv, rc, stdout=out, stderr=err)
 
@@ -88,6 +103,14 @@ def _probe_then(monkeypatch, real, review, **kwargs):
 def _failed_closed(result, needle="provenance unavailable"):
     assert (result.ok, result.text, result.grounded) == (False, "", False)
     assert result.allow_transport_fallback is False and needle in result.error
+    assert len(result.error) <= len("provenance unavailable: ") + qe._MAX_CLI_ERROR_CHARS
+
+
+def _pr_commit(repo, monkeypatch, path):
+    (repo / path).write_text("{}")
+    for args in (["add", "-A"], ["commit", "-q", "-m", "pr"]):
+        _git(repo, *args)
+    monkeypatch.setenv(CONTEXT_ENVS[1], _git(repo, "rev-parse", "HEAD").stdout.strip())
 
 
 def test_default_mode_argv_and_kwargs_unchanged(monkeypatch):
@@ -109,6 +132,7 @@ def test_restricted_review_pins_argv_cwd_env_and_composes(monkeypatch, checkout,
     result = qe._run_claude_cli("review prompt")
     assert (result.ok, result.text, result.grounded) == (True, text, True)
     assert head[:12] in result.harness and dict(os.environ) == env_before
+    assert result.harness.endswith("model claude-opus-5") and "probe" not in result.harness
     expected = [(qe._CLI_PROBE_PROMPT, 90.0), ("review prompt", 600.0)]
     assert [(kwargs["input"], kwargs["timeout"]) for _, kwargs in calls] == expected
     for argv, kwargs in calls:
@@ -133,8 +157,13 @@ def test_restricted_review_pins_argv_cwd_env_and_composes(monkeypatch, checkout,
         lambda repo, mp: mp.delenv(CONTEXT_ENVS[1]),
         lambda repo, mp: mp.setenv(CONTEXT_ENVS[1], "ABC123"),
         lambda repo, mp: mp.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-required"),
+        lambda repo, mp: _pr_commit(repo, mp, ".claude/settings.json"),
+        lambda repo, mp: _git(repo, "update-ref", "-d", "refs/remotes/origin/main"),
+        lambda repo, mp: mp.delenv("ANTHROPIC_MODEL"),
+        lambda repo, mp: mp.setenv("ANTHROPIC_MODEL", " "),
     ],
-    ids=["missing", "subdir", "head", "tracked", "untracked", "half", "hex", "vp-required"],
+    ids=["missing", "subdir", "head", "tracked", "untracked", "half", "hex", "vp-required"]
+    + ["pr-changes-claude-config", "no-origin-main", "no-model", "blank-model"],
 )
 def test_precheck_fails_closed_before_any_claude_call(monkeypatch, checkout, breaker):
     breaker(checkout[0], monkeypatch)
@@ -151,8 +180,13 @@ def test_precheck_fails_closed_before_any_claude_call(monkeypatch, checkout, bre
         (1, {"tools": ["EndConversation"]}),
         (1, {"mcp_servers": [{"name": "srv", "status": "connected"}]}),
         (1, {"model": "claude-fable-5"}),
+        (1, {"permissionMode": "bypassPermissions"}),
+        (1, {"permissionMode": ...}),
+        (1, {"tools": ["Read", "x" * 5000]}),
         (1, {"extra": [HOOK]}),
         (2, {"uses": ["Read", "Bash"]}),
+        (2, {"uses": ()}),
+        (2, {"uses": ["EndConversation"]}),
         (2, {"extra": [HOOK]}),
         (2, {"result": None}),
         (2, {"error": True}),
@@ -168,10 +202,39 @@ def test_stream_attestation_fails_closed_at_probe_or_review(monkeypatch, checkou
     assert len(calls) == stage
 
 
-def test_restricted_probe_credential_wall_is_classified(monkeypatch, checkout):
-    calls = _install(monkeypatch, (1, "", "Not logged in · Please run /login"))
-    _failed_closed(qe._run_claude_cli("p"), "credential_unhealthy(claude)")
+@pytest.mark.parametrize(
+    ("err", "needle"), [(WALL, "credential_unhealthy(claude)"), ("boom", "probe exit 1")]
+)
+def test_restricted_probe_failure_stays_fatal(monkeypatch, checkout, err, needle):
+    calls = _install(monkeypatch, (1, "", err))
+    _failed_closed(qe._run_claude_cli("p"), needle)
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("env", "probe", "note"),
+    [
+        (None, subprocess.TimeoutExpired("claude", 90), "(probe timed out after 90s)"),
+        ("0", None, "(probe skipped)"),
+        ("-1", None, "(probe skipped)"),
+    ],
+)
+def test_probe_timeout_or_skip_runs_attested_review(monkeypatch, checkout, env, probe, note):
+    if env:
+        monkeypatch.setenv(qe._CLI_PROBE_TIMEOUT_ENV, env)
+    calls = _install(monkeypatch, *([probe] if probe else []), (0, _stream(checkout[1]), ""))
+    result = qe._run_claude_cli("p")
+    assert (result.ok, result.grounded, len(calls)) == (True, True, 2 if probe else 1)
+    assert note in result.harness and (calls[-1][1]["input"], calls[-1][1]["timeout"]) == ("p", 600)
+
+
+@pytest.mark.parametrize("bad", [{"extra": [HOOK]}, {"uses": ()}, {}])
+def test_probe_timeout_keeps_review_attestation_and_postcheck(monkeypatch, checkout, bad):
+    repo, real, _ = checkout
+    dirty = None if bad else (lambda: (repo / "d").write_text("x"))  # {}: post-check must fail
+    timeout = subprocess.TimeoutExpired("claude", 90)
+    _install(monkeypatch, timeout, (0, _stream(real, **bad), ""), mutate=dirty)
+    _failed_closed(qe._run_claude_cli("p"), "provenance" if bad else "reviewer context mutated")
 
 
 @pytest.mark.parametrize(
@@ -192,13 +255,36 @@ def test_postcheck_drift_discards_text_without_fallback(monkeypatch, checkout, m
     _failed_closed(qe.default_reviewer_runner("claude", "p"), "reviewer context mutated")
 
 
-def test_collect_evidence_aborts_on_expected_head_mismatch(monkeypatch):
-    monkeypatch.setenv(CONTEXT_ENVS[1], "b" * 40)
-    with pytest.raises(ValueError, match="expected head"):
+def test_expected_head_is_lowercased_and_malformed_head_is_named(monkeypatch, checkout):
+    repo, real, _ = checkout
+    _pr_commit(repo, monkeypatch, "README.md")  # PR changes outside .claude are reviewed
+    monkeypatch.setenv(CONTEXT_ENVS[1], os.environ[CONTEXT_ENVS[1]].upper())
+    _probe_then(monkeypatch, real, {})
+    assert qe._run_claude_cli("p").grounded
+    monkeypatch.setenv(CONTEXT_ENVS[1], "g" * 40)
+    _failed_closed(qe._run_claude_cli("p"), f"--claude-review-expected-head / {CONTEXT_ENVS[1]}")
+
+
+@pytest.mark.parametrize(
+    ("families", "pinned", "match"),
+    [
+        (("claude",), "b" * 40, "is not the expected head"),
+        (("Claude", "openai"), "g" * 40, "--claude-review-expected-head"),
+        (("claude",), "A" * 40, "tier read"),
+        (("openai",), "b" * 40, "tier read"),
+    ],
+)
+def test_collect_evidence_head_guard_is_claude_scoped(monkeypatch, families, pinned, match):
+    monkeypatch.setenv(CONTEXT_ENVS[1], pinned)
+
+    def tier_read(*_args):
+        raise RuntimeError("tier read")
+
+    with pytest.raises((ValueError, RuntimeError), match=match):
         qe.collect_evidence(
-            **{"repo": "o/r", "pr": 7, "families": ("claude",), "author": "x", "apply": False},
+            **{"repo": "o/r", "pr": 7, "families": families, "author": "x", "apply": False},
             context_fetcher=lambda *_: {"head_sha": "a" * 40},
-            tier_fetcher=lambda *_: pytest.fail("no tier read"),
+            tier_fetcher=tier_read,
             reviewer_runner=lambda *_: pytest.fail("no reviewer may run"),
         )
 
