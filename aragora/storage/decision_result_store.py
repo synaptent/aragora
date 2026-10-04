@@ -6,6 +6,9 @@ Provides persistent storage for decision routing results with:
 - LRU eviction when max entries reached
 - In-memory cache for fast reads
 - SQLite persistence for durability
+- Ownership: each result records the org and user that created it; the
+  ``*_for_org`` reads only return that org's results (results without an org
+  are never returned by them)
 
 Replaces the in-memory _decision_results dict for production use.
 
@@ -68,6 +71,8 @@ class DecisionResultEntry:
     completed_at: str | None = None
     error: str | None = None
     ttl_seconds: int = DEFAULT_TTL_SECONDS
+    org_id: str | None = None
+    created_by: str | None = None
 
     @property
     def expires_at(self) -> float:
@@ -88,6 +93,8 @@ class DecisionResultEntry:
             "created_at": self.created_at,
             "completed_at": self.completed_at,
             "error": self.error,
+            "org_id": self.org_id,
+            "created_by": self.created_by,
         }
 
     @classmethod
@@ -103,6 +110,8 @@ class DecisionResultEntry:
             completed_at=data.get("completed_at"),
             error=data.get("error"),
             ttl_seconds=ttl_seconds,
+            org_id=data.get("org_id"),
+            created_by=data.get("created_by"),
         )
 
 
@@ -247,14 +256,18 @@ class DecisionResultStore:
                     created_at REAL NOT NULL,
                     completed_at TEXT,
                     error TEXT,
-                    expires_at REAL NOT NULL
+                    expires_at REAL NOT NULL,
+                    org_id TEXT,
+                    created_by TEXT
                 )
             """)
+            self._ensure_ownership_columns()
             # Create indexes
             indexes = [
                 "CREATE INDEX IF NOT EXISTS idx_decision_results_expires ON decision_results(expires_at)",
                 "CREATE INDEX IF NOT EXISTS idx_decision_results_status ON decision_results(status)",
                 "CREATE INDEX IF NOT EXISTS idx_decision_results_created ON decision_results(created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_decision_results_org ON decision_results(org_id, created_at DESC)",
             ]
             for idx_sql in indexes:
                 try:
@@ -273,7 +286,9 @@ class DecisionResultStore:
                 created_at REAL NOT NULL,
                 completed_at TEXT,
                 error TEXT,
-                expires_at REAL NOT NULL
+                expires_at REAL NOT NULL,
+                org_id TEXT,
+                created_by TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_decision_results_expires
@@ -287,13 +302,58 @@ class DecisionResultStore:
         """)
         conn.commit()
 
-    def save(self, request_id: str, data: dict[str, Any]) -> None:
+    def _ensure_ownership_columns(self) -> None:
+        """Add the ``org_id``/``created_by`` columns to an older table."""
+        if self._backend is None:
+            return
+        if self.backend_type == "postgresql":
+            for column in ("org_id", "created_by"):
+                self._backend.execute_write(
+                    f"ALTER TABLE decision_results ADD COLUMN IF NOT EXISTS {column} TEXT"
+                )
+            return
+        from aragora.storage.schema import safe_add_column
+
+        with self._backend.connection() as conn:
+            for column in ("org_id", "created_by"):
+                safe_add_column(conn, "decision_results", column, "TEXT")
+
+    # Ownership is fixed by the first save that carries it; later saves of the
+    # same request (status updates) never move a result to another org.
+    _UPSERT_SQL = """
+        INSERT INTO decision_results
+        (request_id, status, result_json, created_at, completed_at, error, expires_at,
+         org_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (request_id) DO UPDATE SET
+            status = excluded.status,
+            result_json = excluded.result_json,
+            completed_at = excluded.completed_at,
+            error = excluded.error,
+            expires_at = excluded.expires_at,
+            org_id = COALESCE(decision_results.org_id, excluded.org_id),
+            created_by = CASE
+                WHEN decision_results.org_id IS NULL THEN excluded.created_by
+                ELSE decision_results.created_by
+            END
+    """
+
+    def save(
+        self,
+        request_id: str,
+        data: dict[str, Any],
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> None:
         """
         Save a decision result.
 
         Args:
             request_id: Unique request identifier
             data: Result data including status, result, completed_at, error
+            org_id: Org that owns the result (defaults to ``data["org_id"]``)
+            created_by: User that created the result (defaults to ``data["created_by"]``)
         """
         now = time.time()
         expires_at = now + self._ttl_seconds
@@ -306,6 +366,8 @@ class DecisionResultStore:
             completed_at=data.get("completed_at"),
             error=data.get("error"),
             ttl_seconds=self._ttl_seconds,
+            org_id=org_id or data.get("org_id"),
+            created_by=created_by or data.get("created_by"),
         )
 
         params = (
@@ -316,46 +378,24 @@ class DecisionResultStore:
             entry.completed_at,
             entry.error,
             expires_at,
+            entry.org_id,
+            entry.created_by,
         )
 
         # Save to database
+        owner_query = "SELECT org_id, created_by FROM decision_results WHERE request_id = ?"
         if self._backend is not None:
-            # Use ON CONFLICT for PostgreSQL compatibility
-            if self.backend_type == "postgresql":
-                self._backend.execute_write(
-                    """
-                    INSERT INTO decision_results
-                    (request_id, status, result_json, created_at, completed_at, error, expires_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (request_id) DO UPDATE SET
-                        status = EXCLUDED.status,
-                        result_json = EXCLUDED.result_json,
-                        completed_at = EXCLUDED.completed_at,
-                        error = EXCLUDED.error,
-                        expires_at = EXCLUDED.expires_at
-                    """,
-                    params,
-                )
-            else:
-                self._backend.execute_write(
-                    """
-                    INSERT OR REPLACE INTO decision_results
-                    (request_id, status, result_json, created_at, completed_at, error, expires_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    params,
-                )
+            self._backend.execute_write(self._UPSERT_SQL, params)
+            owner = self._backend.fetch_one(owner_query, (request_id,))
         else:
             conn = self._get_connection()
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO decision_results
-                (request_id, status, result_json, created_at, completed_at, error, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                params,
-            )
+            conn.execute(self._UPSERT_SQL, params)
             conn.commit()
+            owner = conn.execute(owner_query, (request_id,)).fetchone()
+
+        # The upsert may have kept an earlier owner; cache what was stored.
+        if owner is not None:
+            entry.org_id, entry.created_by = owner[0], owner[1]
 
         # Update cache
         with self._cache_lock:
@@ -398,7 +438,8 @@ class DecisionResultStore:
 
         # Fall back to database
         query = """
-            SELECT request_id, status, result_json, created_at, completed_at, error, expires_at
+            SELECT request_id, status, result_json, created_at, completed_at, error, expires_at,
+                   org_id, created_by
             FROM decision_results
             WHERE request_id = ? AND expires_at > ?
         """
@@ -420,6 +461,8 @@ class DecisionResultStore:
                 completed_at=row[4],
                 error=row[5],
                 ttl_seconds=self._ttl_seconds,
+                org_id=row[7],
+                created_by=row[8],
             )
 
             # Add to cache
@@ -434,6 +477,13 @@ class DecisionResultStore:
             return entry.to_dict()
 
         return None
+
+    def get_for_org(self, request_id: str, org_id: str) -> dict[str, Any] | None:
+        """Get a result only when ``org_id`` owns it; None for missing or other-org."""
+        result = self.get(request_id)
+        if result is None or not org_id or result.get("org_id") != org_id:
+            return None
+        return result
 
     def get_status(self, request_id: str) -> dict[str, Any]:
         """
@@ -491,6 +541,48 @@ class DecisionResultStore:
             }
             for row in rows
         ]
+
+    def list_recent_for_org(self, org_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """List the most recent non-expired results owned by ``org_id``."""
+        if not org_id:
+            return []
+        query = """
+            SELECT request_id, status, completed_at
+            FROM decision_results
+            WHERE org_id = ? AND expires_at > ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """
+        params = (org_id, time.time(), limit)
+
+        if self._backend is not None:
+            rows = self._backend.fetch_all(query, params)
+        else:
+            conn = self._get_connection()
+            rows = conn.execute(query, params).fetchall()
+
+        return [
+            {
+                "request_id": row[0],
+                "status": row[1],
+                "completed_at": row[2],
+            }
+            for row in rows
+        ]
+
+    def count_for_org(self, org_id: str) -> int:
+        """Count non-expired results owned by ``org_id``."""
+        if not org_id:
+            return 0
+        query = "SELECT COUNT(*) FROM decision_results WHERE org_id = ? AND expires_at > ?"
+        params = (org_id, time.time())
+
+        if self._backend is not None:
+            result = self._backend.fetch_one(query, params)
+            return result[0] if result else 0
+
+        conn = self._get_connection()
+        return conn.execute(query, params).fetchone()[0]
 
     def count(self) -> int:
         """Get total count of non-expired entries."""

@@ -21,6 +21,7 @@ import pytest
 
 from aragora.pipeline.execution_mode import ExecutionMode
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -32,6 +33,9 @@ def _body(result) -> dict:
     if isinstance(result, dict):
         return result
     return json.loads(result.body)
+
+
+_NOT_FOUND = {"error": "Plan not found", "code": "not_found"}
 
 
 def _status(result) -> int:
@@ -86,6 +90,8 @@ class _MockPlan:
     highest_risk_level: Any = None
     debate_result: Any = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    org_id: str | None = "test-org-001"
+    created_by: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -343,7 +349,7 @@ class TestListPlans:
         assert _status(result) == 200
         mock_list.assert_called_once()
         call_kwargs = mock_list.call_args
-        assert call_kwargs[1]["limit"] == 10 or call_kwargs.kwargs.get("limit") == 10
+        mock_list.assert_called_once_with(status=None, limit=10, org_id="test-org-001")
 
     @patch("aragora.pipeline.executor.list_plans")
     @patch("aragora.pipeline.decision_plan.PlanStatus")
@@ -416,7 +422,7 @@ class TestGetPlan:
         mock_get.return_value = None
         result = handler.handle("/api/v1/decisions/plans/dp-notexist", {}, mock_http_handler)
         assert _status(result) == 404
-        assert "not found" in _body(result).get("error", "").lower()
+        assert _body(result) == _NOT_FOUND
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +449,7 @@ class TestGetOutcome:
         mock_get.return_value = None
         result = handler.handle("/api/v1/decisions/plans/dp-001/outcome", {}, mock_http_handler)
         assert _status(result) == 404
+        assert _body(result) == _NOT_FOUND
 
     @patch("aragora.pipeline.executor.get_outcome")
     @patch("aragora.pipeline.executor.get_plan")
@@ -676,6 +683,7 @@ class TestApprovePlan:
         h = _make_http_handler({})
         result = handler.handle_post("/api/v1/decisions/plans/dp-404/approve", {}, h)
         assert _status(result) == 404
+        assert _body(result) == _NOT_FOUND
 
     @patch("aragora.pipeline.executor.get_plan")
     def test_approve_wrong_status(self, mock_get, handler):
@@ -745,6 +753,7 @@ class TestRejectPlan:
         h = _make_http_handler({})
         result = handler.handle_post("/api/v1/decisions/plans/dp-404/reject", {}, h)
         assert _status(result) == 404
+        assert _body(result) == _NOT_FOUND
 
     @patch("aragora.pipeline.executor.get_plan")
     def test_reject_wrong_status(self, mock_get, handler):
@@ -828,6 +837,7 @@ class TestExecutePlan:
         h = _make_http_handler({})
         result = handler.handle_post("/api/v1/decisions/plans/dp-404/execute", {}, h)
         assert _status(result) == 404
+        assert _body(result) == _NOT_FOUND
 
     @patch("aragora.pipeline.executor.get_plan")
     def test_execute_plan_invalid_json_body(self, mock_get, handler):
@@ -1011,6 +1021,144 @@ class TestPostRouting:
             result = handler.handle_post("/api/v1/decisions/plans", {}, h)
         # Should reach _handle_create_plan -> debate not found -> 404
         assert _status(result) == 404
+
+
+# ---------------------------------------------------------------------------
+# Org isolation
+# ---------------------------------------------------------------------------
+
+
+def _request(handler, method: str, path: str):
+    h = _make_http_handler({})
+    if method == "GET":
+        return handler.handle(path, {}, h)
+    return handler.handle_post(path, {}, h)
+
+
+_PLAN_ROUTES = [
+    ("GET", "/api/v1/decisions/plans/{id}"),
+    ("GET", "/api/v1/decisions/plans/{id}/outcome"),
+    ("POST", "/api/v1/decisions/plans/{id}/approve"),
+    ("POST", "/api/v1/decisions/plans/{id}/reject"),
+    ("POST", "/api/v1/decisions/plans/{id}/execute"),
+]
+
+
+class TestOrgIsolation:
+    """Plans are visible only to their owning org; everything else is a 404."""
+
+    @pytest.mark.parametrize("method,route", _PLAN_ROUTES)
+    @pytest.mark.parametrize("owner", ["other-org", None])
+    def test_foreign_or_unowned_plan_is_indistinguishable_from_missing(
+        self, handler, method, route, owner
+    ):
+        foreign = _MockPlan(id="dp-foreign", status=_PlanStatus.APPROVED, org_id=owner)
+        plans = {"dp-foreign": foreign}
+        with (
+            patch("aragora.pipeline.executor.get_plan", side_effect=plans.get),
+            patch("aragora.pipeline.executor.get_outcome", return_value=_MockOutcome()),
+            patch("aragora.pipeline.executor.store_plan") as mock_store,
+            patch(
+                "aragora.server.handlers.decisions.pipeline.execute_decision_plan_with_backbone"
+            ) as mock_execute,
+            patch("aragora.pipeline.decision_plan.PlanStatus", _PlanStatus),
+        ):
+            foreign_result = _request(handler, method, route.format(id="dp-foreign"))
+            missing_result = _request(handler, method, route.format(id="dp-missing"))
+
+        assert _status(foreign_result) == _status(missing_result) == 404
+        assert _body(foreign_result) == _body(missing_result) == _NOT_FOUND
+        mock_store.assert_not_called()
+        mock_execute.assert_not_called()
+        assert foreign.status == _PlanStatus.APPROVED
+        assert foreign.approval_record is None
+
+    @patch("aragora.pipeline.executor.list_plans", return_value=[])
+    def test_list_is_scoped_to_caller_org(self, mock_list, handler, mock_http_handler):
+        result = handler.handle("/api/v1/decisions/plans", {}, mock_http_handler)
+        assert _status(result) == 200
+        mock_list.assert_called_once_with(status=None, limit=50, org_id="test-org-001")
+
+    @pytest.mark.parametrize("method,route", [("GET", "/api/v1/decisions/plans"), *_PLAN_ROUTES])
+    def test_anonymous_request_is_401(self, handler, method, route):
+        from aragora.billing.auth.context import UserAuthContext
+
+        with (
+            patch(
+                "aragora.billing.jwt_auth.extract_user_from_request",
+                return_value=UserAuthContext(authenticated=False),
+            ),
+            patch("aragora.pipeline.executor.get_plan") as mock_get,
+            patch("aragora.pipeline.executor.list_plans") as mock_list,
+        ):
+            result = _request(handler, method, route.format(id="dp-abc123"))
+
+        assert _status(result) == 401
+        assert _body(result)["code"] == "auth_required"
+        mock_get.assert_not_called()
+        mock_list.assert_not_called()
+
+    def test_user_without_org_is_403(self, handler):
+        from aragora.billing.auth.context import UserAuthContext
+
+        orgless = UserAuthContext(authenticated=True, user_id="test-user-001", org_id=None)
+        with (
+            patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=orgless),
+            patch("aragora.pipeline.executor.list_plans") as mock_list,
+        ):
+            result = _request(handler, "GET", "/api/v1/decisions/plans")
+
+        assert _status(result) == 403
+        assert _body(result)["code"] == "org_required"
+        mock_list.assert_not_called()
+
+    @patch("aragora.pipeline.executor.get_plan")
+    def test_execution_not_authorized_maps_to_not_found(self, mock_get, handler):
+        from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
+
+        mock_get.return_value = _MockPlan(status=_PlanStatus.APPROVED)
+        mock_loop = MagicMock()
+        mock_loop.run_until_complete.side_effect = ExecutionNotAuthorizedError(
+            "org_mismatch", "plan belongs to another org"
+        )
+        with (
+            patch("aragora.pipeline.executor.PlanExecutor"),
+            patch(
+                "aragora.server.handlers.decisions.pipeline.execute_decision_plan_with_backbone",
+                return_value="coro",
+            ) as mock_execute,
+            patch("aragora.utils.async_utils.get_event_loop_safe", return_value=mock_loop),
+        ):
+            result = _request(handler, "POST", "/api/v1/decisions/plans/dp-abc123/execute")
+
+        assert _status(result) == 404
+        assert _body(result) == _NOT_FOUND
+        auth_context = mock_execute.call_args.kwargs["auth_context"]
+        assert auth_context.user_id == "test-user-001"
+        assert auth_context.org_id == "test-org-001"
+
+    @patch("aragora.pipeline.executor.store_plan")
+    @patch("aragora.pipeline.decision_plan.DecisionPlanFactory")
+    @patch(
+        "aragora.server.handlers.decisions.pipeline._load_debate_result",
+        return_value=MagicMock(),
+    )
+    def test_create_stamps_org_and_creator(self, _mock_load, mock_factory, mock_store, handler):
+        plan = _MockPlan(id="dp-new", org_id=None)
+        mock_factory.from_debate_result.return_value = plan
+        h = _make_http_handler({"debate_id": "debate-001", "org_id": "other-org"})
+        with patch(
+            "aragora.server.handlers.decisions.pipeline.ensure_decision_plan_backbone_run",
+            return_value="run-1",
+        ) as mock_seed:
+            result = handler.handle_post("/api/v1/decisions/plans", {}, h)
+
+        assert _status(result) == 201
+        assert plan.org_id == "test-org-001"
+        assert plan.created_by == "test-user-001"
+        assert mock_seed.call_args.kwargs["org_id"] == "test-org-001"
+        assert mock_seed.call_args.kwargs["created_by"] == "test-user-001"
+        mock_store.assert_called_once_with(plan)
 
 
 # ---------------------------------------------------------------------------

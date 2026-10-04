@@ -2,7 +2,9 @@
 
 Endpoints for the gold path: debate -> plan -> approve -> execute -> verify -> learn.
 
-All endpoints require authentication.
+All endpoints require an authenticated member of an organization and only see
+that organization's plans: another org's (or an unknown owner's) plan gets the
+same 404 as a missing one.
 Read operations require `decisions:read`.
 Write operations require `decisions:create` or `decisions:update`.
 
@@ -31,6 +33,7 @@ from aragora.pipeline.backbone_errors import (
 )
 from aragora.pipeline.decision_plan.factory import normalize_execution_mode
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.resilience import get_circuit_breaker
 from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
@@ -46,9 +49,16 @@ from ..base import (
 )
 from ..secure import SecureHandler
 from ..utils.rate_limit import RateLimiter
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 if TYPE_CHECKING:
     from aragora.protocols import HTTPRequestHandler
+    from aragora.pipeline.decision_plan import DecisionPlan
     from aragora.pipeline.executor import ExecutionMode
 
 logger = logging.getLogger(__name__)
@@ -234,6 +244,16 @@ class DecisionPipelineHandler(SecureHandler):
             return error_response("Decision pipeline temporarily unavailable", 503)
         return None
 
+    @staticmethod
+    def _visible_plan(plan_id: str, scope: OrgScope) -> DecisionPlan | None:
+        """The plan when the caller's org owns it; None for missing/other-org/unknown."""
+        from aragora.pipeline.executor import get_plan
+
+        plan = get_plan(plan_id)
+        if plan is None or not record_visible(getattr(plan, "org_id", None), scope):
+            return None
+        return plan
+
     # -----------------------------------------------------------------
     # GET handlers
     # -----------------------------------------------------------------
@@ -248,10 +268,9 @@ class DecisionPipelineHandler(SecureHandler):
         if cb_err:
             return cb_err
 
-        # Check auth
-        user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
 
         # Check read permission
         _, perm_err = self.require_permission_or_error(handler, DECISION_READ_PERMISSION)
@@ -260,25 +279,23 @@ class DecisionPipelineHandler(SecureHandler):
 
         # Route based on path
         if path == "/api/v1/decisions/plans":
-            return self._handle_list_plans(query_params, handler)
+            return self._handle_list_plans(query_params, scope)
 
         plan_id = self._extract_plan_id(path)
         if not plan_id:
             return error_response("Invalid plan path", 400)
 
         if path.endswith("/outcome"):
-            return self._handle_get_outcome(plan_id, handler)
+            return self._handle_get_outcome(plan_id, scope)
 
         # Default: get plan details
         if path == f"/api/v1/decisions/plans/{plan_id}":
-            return self._handle_get_plan(plan_id, handler)
+            return self._handle_get_plan(plan_id, scope)
 
         return None
 
-    def _handle_list_plans(
-        self, query_params: dict[str, Any], handler: HTTPRequestHandler
-    ) -> HandlerResult:
-        """List decision plans with optional status filter."""
+    def _handle_list_plans(self, query_params: dict[str, Any], scope: OrgScope) -> HandlerResult:
+        """List the caller org's decision plans with optional status filter."""
         from aragora.pipeline.decision_plan import PlanStatus
         from aragora.pipeline.executor import list_plans
 
@@ -298,7 +315,7 @@ class DecisionPipelineHandler(SecureHandler):
             except ValueError:
                 pass
 
-        plans = list_plans(status=status_filter, limit=limit)
+        plans = list_plans(status=status_filter, limit=limit, org_id=scope.org_id)
 
         return json_response(
             {
@@ -308,13 +325,13 @@ class DecisionPipelineHandler(SecureHandler):
             }
         )
 
-    def _handle_get_plan(self, plan_id: str, handler: HTTPRequestHandler) -> HandlerResult:
+    def _handle_get_plan(self, plan_id: str, scope: OrgScope) -> HandlerResult:
         """Get details of a specific decision plan."""
-        from aragora.pipeline.executor import get_outcome, get_plan
+        from aragora.pipeline.executor import get_outcome
 
-        plan = get_plan(plan_id)
+        plan = self._visible_plan(plan_id, scope)
         if not plan:
-            return error_response("Plan not found", 404)
+            return record_not_found("Plan")
 
         result: dict[str, Any] = {
             "success": True,
@@ -328,13 +345,13 @@ class DecisionPipelineHandler(SecureHandler):
 
         return json_response(result)
 
-    def _handle_get_outcome(self, plan_id: str, handler: HTTPRequestHandler) -> HandlerResult:
+    def _handle_get_outcome(self, plan_id: str, scope: OrgScope) -> HandlerResult:
         """Get the execution outcome for a completed plan."""
-        from aragora.pipeline.executor import get_outcome, get_plan
+        from aragora.pipeline.executor import get_outcome
 
-        plan = get_plan(plan_id)
+        plan = self._visible_plan(plan_id, scope)
         if not plan:
-            return error_response("Plan not found", 404)
+            return record_not_found("Plan")
 
         outcome = get_outcome(plan_id)
         if not outcome:
@@ -361,7 +378,9 @@ class DecisionPipelineHandler(SecureHandler):
         if cb_err:
             return cb_err
 
-        # Check auth
+        scope, scope_err = require_org_scope(handler)
+        if scope is None:
+            return scope_err
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
@@ -371,7 +390,7 @@ class DecisionPipelineHandler(SecureHandler):
             _, perm_err = self.require_permission_or_error(handler, DECISION_CREATE_PERMISSION)
             if perm_err:
                 return perm_err
-            return self._handle_create_plan(handler, user)
+            return self._handle_create_plan(handler, user, scope)
 
         plan_id = self._extract_plan_id(path)
         if not plan_id:
@@ -381,22 +400,24 @@ class DecisionPipelineHandler(SecureHandler):
             _, perm_err = self.require_permission_or_error(handler, DECISION_UPDATE_PERMISSION)
             if perm_err:
                 return perm_err
-            return self._handle_approve_plan(plan_id, handler, user)
+            return self._handle_approve_plan(plan_id, handler, user, scope)
         if path.endswith("/reject"):
             _, perm_err = self.require_permission_or_error(handler, DECISION_UPDATE_PERMISSION)
             if perm_err:
                 return perm_err
-            return self._handle_reject_plan(plan_id, handler, user)
+            return self._handle_reject_plan(plan_id, handler, user, scope)
         if path.endswith("/execute"):
             _, perm_err = self.require_permission_or_error(handler, DECISION_UPDATE_PERMISSION)
             if perm_err:
                 return perm_err
-            return self._handle_execute_plan(plan_id, handler, user)
+            return self._handle_execute_plan(plan_id, handler, user, scope)
 
         return None
 
-    def _handle_create_plan(self, handler: HTTPRequestHandler, user: Any) -> HandlerResult:
-        """Create a DecisionPlan from a completed debate."""
+    def _handle_create_plan(
+        self, handler: HTTPRequestHandler, user: Any, scope: OrgScope
+    ) -> HandlerResult:
+        """Create a DecisionPlan, owned by the caller's org, from a completed debate."""
         body = self.read_json_body(handler)
         if body is None:
             return error_response("Invalid JSON body", 400)
@@ -477,12 +498,16 @@ class DecisionPipelineHandler(SecureHandler):
             metadata=metadata,
             implementation_profile=implementation_profile,
         )
+        plan.org_id = scope.org_id
+        plan.created_by = scope.user_id
 
         run_id = ensure_decision_plan_backbone_run(
             plan,
             auth_context=user,
             source_surface="decision_pipeline",
             source_id=str(debate_id),
+            org_id=scope.org_id,
+            created_by=scope.user_id,
         )
 
         # Store it
@@ -563,15 +588,15 @@ class DecisionPipelineHandler(SecureHandler):
         )
 
     def _handle_approve_plan(
-        self, plan_id: str, handler: HTTPRequestHandler, user: Any
+        self, plan_id: str, handler: HTTPRequestHandler, user: Any, scope: OrgScope
     ) -> HandlerResult:
         """Approve a decision plan for execution."""
         from aragora.pipeline.decision_plan import PlanStatus
-        from aragora.pipeline.executor import get_plan, store_plan
+        from aragora.pipeline.executor import store_plan
 
-        plan = get_plan(plan_id)
+        plan = self._visible_plan(plan_id, scope)
         if not plan:
-            return error_response("Plan not found", 404)
+            return record_not_found("Plan")
 
         if plan.status not in (PlanStatus.CREATED, PlanStatus.AWAITING_APPROVAL):
             return error_response(
@@ -608,15 +633,15 @@ class DecisionPipelineHandler(SecureHandler):
         )
 
     def _handle_reject_plan(
-        self, plan_id: str, handler: HTTPRequestHandler, user: Any
+        self, plan_id: str, handler: HTTPRequestHandler, user: Any, scope: OrgScope
     ) -> HandlerResult:
         """Reject a decision plan."""
         from aragora.pipeline.decision_plan import PlanStatus
-        from aragora.pipeline.executor import get_plan, store_plan
+        from aragora.pipeline.executor import store_plan
 
-        plan = get_plan(plan_id)
+        plan = self._visible_plan(plan_id, scope)
         if not plan:
-            return error_response("Plan not found", 404)
+            return record_not_found("Plan")
 
         if plan.status not in (PlanStatus.CREATED, PlanStatus.AWAITING_APPROVAL):
             return error_response(
@@ -648,7 +673,7 @@ class DecisionPipelineHandler(SecureHandler):
         )
 
     def _handle_execute_plan(
-        self, plan_id: str, handler: HTTPRequestHandler, user: Any
+        self, plan_id: str, handler: HTTPRequestHandler, user: Any, scope: OrgScope
     ) -> HandlerResult:
         """Execute an approved decision plan."""
         from aragora.utils.async_utils import get_event_loop_safe
@@ -656,9 +681,9 @@ class DecisionPipelineHandler(SecureHandler):
         from aragora.pipeline.executor import PlanExecutor, get_plan
         from aragora.rbac.models import AuthorizationContext
 
-        plan = get_plan(plan_id)
+        plan = self._visible_plan(plan_id, scope)
         if not plan:
-            return error_response("Plan not found", 404)
+            return record_not_found("Plan")
 
         body = self.read_json_body(handler)
         if body is None:
@@ -705,9 +730,9 @@ class DecisionPipelineHandler(SecureHandler):
         permissions.add("decisions:execute")
 
         auth_context = AuthorizationContext(
-            user_id=getattr(user, "user_id", None) or "unknown",
+            user_id=scope.user_id,
             user_email=getattr(user, "email", None),
-            org_id=getattr(user, "org_id", None),
+            org_id=scope.org_id,
             roles=role_values or {"member"},
             permissions=permissions,
         )
@@ -727,6 +752,9 @@ class DecisionPipelineHandler(SecureHandler):
                     safety_mode=SafetyMode.INTERACTIVE,
                 )
             )
+        except ExecutionNotAuthorizedError as e:
+            logger.warning("Execution of plan %s refused: %s", plan_id, e.code)
+            return record_not_found("Plan")
         except PermissionError as e:
             logger.warning("Handler error: %s", e)
             return error_response("Permission denied", 403)
