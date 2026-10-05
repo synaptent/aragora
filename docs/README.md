@@ -2,9 +2,18 @@
 
 Welcome to Aragora's documentation. The `docs/` directory is the canonical
 source. The published site in `docs-site/` is synced from these files via
-`docs-site/scripts/sync-docs.js`. This page is the canonical documentation
-landing page; [docs/INDEX.md](INDEX.md) is a flat reference list of the same
-docs.
+`docs-site/scripts/sync-docs.js`.
+
+This page is the single documentation index. It links every page kept at the
+top of `docs/` ([Top-Level Pages](#top-level-pages)) and every curated
+subdirectory ([Documentation Map](#documentation-map)). Two sub-indexes cover
+narrower needs, and every page they link is also linked from this page:
+
+- [Start Here](./START_HERE.md): choose a package (`aragora-debate`, the
+  Python or TypeScript SDK, or the full platform) and follow its short
+  quickstart.
+- [Documentation Index](./INDEX.md): a short flat list of the most-used pages.
+  The docs site publishes it as its documentation index page.
 
 **Aragora is an auditable execution control plane for AI-assisted decisions: multi-model review in, a verifiable Decision Receipt out.**
 It uses multi-model review, receipts, provenance, and truthful gates so
@@ -21,17 +30,37 @@ wire it into CI — comes first below; everything else follows.
 | Understand the receipt model (native record vs. the portable ODR) | [Receipt Lineage Reconciliation](./specs/RECEIPT_LINEAGE_RECONCILIATION.md) |
 | Verify a receipt independently, no Aragora install required (`aragora-verify` exit codes: `0 verified / 1 failed / 2 usage / 3 signatures-present-unchecked`) | [Independent Verifier Guide](./specs/INDEPENDENT_VERIFIER_GUIDE.md) |
 | Add multi-model CI review + receipts to your pull requests | [GitHub Action Setup](./guides/GITHUB_ACTION_SETUP.md) |
+| Choose a package and install path (`aragora-debate`, SDKs, or the full platform) | [Start Here](./START_HERE.md) |
+| See ten real-world decisions Aragora is built for | [Use Cases](./guides/USE_CASES.md) |
 | Review or audit the project quickly | [Cold Reviewer Guide](./guides/COLD_REVIEWER_GUIDE.md) |
 | Understand the supported API contract | [Supported API Surface](./api/SUPPORTED_SURFACE.md) |
 | See 20 runnable code examples | [API Cookbook](./guides/API_COOKBOOK.md) |
 | Build a Python integration | [SDK Guide](./SDK_GUIDE.md) |
 | Build a TypeScript integration | [TypeScript SDK](./guides/SDK_TYPESCRIPT.md) |
 | Use the REST API | [API Reference](./api/API_REFERENCE.md) |
+| Use the command line | [CLI Reference](./CLI_REFERENCE.md) |
 | Stream events via WebSocket | [WebSocket Events](./streaming/WEBSOCKET_EVENTS.md) |
 | Deploy to production | [Deployment Guide](./DEPLOYMENT.md) |
 | Set up Slack/Telegram/WhatsApp | [Chat Connector Guide](./guides/CHAT_CONNECTOR_GUIDE.md) |
 | Troubleshoot an issue | [Troubleshooting](./guides/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](./architecture/ARCHITECTURE.md) |
+
+## Getting Started
+
+| Document | Description |
+|----------|-------------|
+| [quickstart](./quickstart.md) | Canonical quickstart: your first debate in under a minute. The older [Getting Started](./guides/GETTING_STARTED.md), [Docker Quickstart](./guides/QUICKSTART_DOCKER.md) and [Developer Quickstart](./guides/DEVELOPER_QUICKSTART.md) pages redirect here |
+| [START_HERE](./START_HERE.md) | Sub-index: choose a package and follow its path |
+| [ZERO_CONFIG](./getting-started/ZERO_CONFIG.md) | What works after `pip install` with no keys or services |
+| [INSTALL_MATRIX](./reference/INSTALL_MATRIX.md) | Which install command to run for each distribution and audience |
+| [aragora-debate](../aragora-debate/README.md) | Standalone debate engine package (zero dependencies, works offline) |
+| [Quickstart examples](../examples/quickstart/) | Runnable scripts: simple debate, signed receipt, evidence quality |
+| [python-quickstart](./guides/python-quickstart.md) | Python SDK quickstart against a running server |
+| [typescript-quickstart](./guides/typescript-quickstart.md) | TypeScript SDK quickstart |
+| [SELF_HOSTED_QUICKSTART](./guides/SELF_HOSTED_QUICKSTART.md) | Self-host the full platform |
+| [LOCAL_DEVELOPMENT](./guides/LOCAL_DEVELOPMENT.md) | Local development: virtual environment, API keys, server, tests and linting |
+| [LOCAL_DEVELOPMENT (backend + frontend)](./getting-started/LOCAL_DEVELOPMENT.md) | Run the backend and frontend together on your machine |
+| [FIRST_CONTRIBUTION](./guides/FIRST_CONTRIBUTION.md) | Suggested first issues and opening your first PR |
 
 ## Core Concepts
 
@@ -62,6 +91,7 @@ wire it into CI — comes first below; everything else follows.
 | [ARAGORA_IDEA_TO_EXECUTION_STRATEGY](./plans/ARAGORA_IDEA_TO_EXECUTION_STRATEGY.md) | Current strategy narrative for the unified idea-to-execution product |
 | [EXECUTION_NEXT_6_WEEKS](./status/EXECUTION_NEXT_6_WEEKS_2026-03-05.md) | Active short-horizon plan |
 | [DOCUMENTATION_HYGIENE_AND_GAP_REGISTER](./status/DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md) | Running roadmap, drift, and feature-gap register |
+| [ROADMAP](../ROADMAP.md) | Project roadmap |
 
 ### Memory Tiers
 
@@ -75,6 +105,15 @@ wire it into CI — comes first below; everything else follows.
 See [MEMORY_STRATEGY](./knowledge/MEMORY_STRATEGY.md) for details.
 
 ## Using Aragora
+
+### Receipts & Verification
+
+| Document | Description |
+|----------|-------------|
+| [OPEN_DECISION_RECEIPT](./specs/OPEN_DECISION_RECEIPT.md) | Open Decision Receipt (ODR) content profile |
+| [RECEIPT_LINEAGE_RECONCILIATION](./specs/RECEIPT_LINEAGE_RECONCILIATION.md) | Native receipt record vs. the portable ODR |
+| [INDEPENDENT_VERIFIER_GUIDE](./specs/INDEPENDENT_VERIFIER_GUIDE.md) | Verify a receipt with `aragora-verify`, no Aragora install required |
+| [RECEIPT_CONTRACT](./RECEIPT_CONTRACT.md) | Receipt contract for new integrations |
 
 ### Debates & Gauntlet
 
@@ -136,6 +175,7 @@ See [MEMORY_STRATEGY](./knowledge/MEMORY_STRATEGY.md) for details.
 | [API_EXAMPLES](./api/API_EXAMPLES.md) | API usage examples |
 | [API_COOKBOOK](./guides/API_COOKBOOK.md) | 20 common patterns with runnable code |
 | [API_VERSIONING](./api/API_VERSIONING.md) | API version policy |
+| [WEBHOOKS](./api/WEBHOOKS.md) | Webhook API |
 | [BREAKING_CHANGES](./BREAKING_CHANGES.md) | Breaking changes and migration |
 | [MIGRATION_V1_TO_V2](./status/MIGRATION_V1_TO_V2.md) | API v1 to v2 migration guide |
 | [WEBSOCKET_EVENTS](./streaming/WEBSOCKET_EVENTS.md) | WebSocket event reference |
@@ -179,10 +219,12 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | Document | Description |
 |----------|-------------|
 | [DEPLOYMENT](./DEPLOYMENT.md) | Deployment guide |
+| [PRODUCTION_DEPLOYMENT](./deployment/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
 | [OPERATIONS](./operations/OPERATIONS.md) | Operations runbook |
 | [SELF_HOSTING](./operations/SELF_HOSTING.md) | Run Aragora on your own infrastructure |
 | [GA_CHECKLIST](./GA_CHECKLIST.md) | Self-hosted GA readiness checklist |
 | [RUNBOOK](./deployment/RUNBOOK.md) | Incident response procedures |
+| [INCIDENT_RESPONSE](./deployment/INCIDENT_RESPONSE.md) | Incident response playbooks |
 | [PRODUCTION_READINESS](./deployment/PRODUCTION_READINESS.md) | Production readiness checklist |
 | [OBSERVABILITY](./observability/OBSERVABILITY.md) | Monitoring and telemetry |
 | [SCALING](./deployment/SCALING.md) | Scaling guide |
@@ -199,6 +241,8 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | [SECRETS_MANAGEMENT](./enterprise/SECRETS_MANAGEMENT.md) | Managing API keys and secrets |
 | [SSO_SETUP](./enterprise/SSO_SETUP.md) | SSO configuration |
 | [AUTH_GUIDE](./enterprise/AUTH_GUIDE.md) | Authentication (OIDC, SAML, MFA) |
+| [RBAC_MATRIX](./enterprise/RBAC_MATRIX.md) | RBAC permission matrix |
+| [ENTERPRISE_FEATURES (enterprise)](./enterprise/ENTERPRISE_FEATURES.md) | SSO, RBAC, multi-tenancy and compliance capabilities |
 | [GOVERNANCE](./enterprise/GOVERNANCE.md) | Decision governance |
 | [COMPLIANCE](./enterprise/COMPLIANCE.md) | SOC 2, GDPR support |
 | [COMPLIANCE_PRESETS](./enterprise/COMPLIANCE_PRESETS.md) | Built-in audit presets |
@@ -218,6 +262,11 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | Document | Description |
 |----------|-------------|
 | [CONTRIBUTING](../CONTRIBUTING.md) | Contribution guide |
+| [CLAUDE.md](../CLAUDE.md) | Codebase map and conventions for coding agents |
+| [CONDUCTOR_WORKFLOW](./guides/CONDUCTOR_WORKFLOW.md) | Aragora Conductor workflow for agent-driven development |
+| [WORKER_PROMPT_PACK](./guides/WORKER_PROMPT_PACK.md) | Prompt pack for Aragora worker agents |
+| [DEV_SWARM_COORDINATION](./architecture/DEV_SWARM_COORDINATION.md) | Dev swarm coordination: leases, receipts and integration |
+| [Conductor control plane spec](./plans/2026-03-07-conductor-control-plane.md) | Conductor control plane implementation spec |
 | [FRONTEND_DEVELOPMENT](./debate/FRONTEND_DEVELOPMENT.md) | Frontend contribution guide |
 | [FRONTEND_ROUTES](./guides/FRONTEND_ROUTES.md) | Frontend route and feature map |
 | [HANDLER_DEVELOPMENT](./debate/HANDLER_DEVELOPMENT.md) | Writing new server handlers |
@@ -227,6 +276,7 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | [BREAKING_CHANGES](./reference/BREAKING_CHANGES.md) | Breaking changes by version |
 | [DEPRECATION_POLICY](./reference/DEPRECATION_POLICY.md) | Deprecation and migration policy |
 | [ERROR_CODES](./reference/ERROR_CODES.md) | Error code reference |
+| [Reference Index](./reference/INDEX.md) | Index of the `reference/` directory |
 
 ## Features
 
@@ -250,6 +300,7 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | [CROSS_POLLINATION](./integrations/CROSS_POLLINATION.md) | Cross-debate knowledge transfer |
 | [FORMAL_VERIFICATION](./workflow/FORMAL_VERIFICATION.md) | Z3/Lean verification |
 | [TRICKSTER](./debate/TRICKSTER.md) | Hollow consensus detection |
+| [TRUST_PORTABILITY](./architecture/TRUST_PORTABILITY.md) | ERC-8004 agent identity and portable reputation across organizations |
 | [ADR/README](./ADR/README.md) | Architecture Decision Records |
 
 ## Troubleshooting
@@ -279,6 +330,26 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | [HONEST_ASSESSMENT](./strategy/HONEST_ASSESSMENT.md) | What works, what does not, and why it matters |
 | [COMPARISON_MATRIX](./strategy/COMPARISON_MATRIX.md) | Aragora compared with agent frameworks |
 | [PRICING](./strategy/PRICING.md) | Open-source core and commercial tiers |
+| [ROADMAP_30_60_90](./strategy/ROADMAP_30_60_90.md) | 30/60/90-day roadmap written in February 2026 |
+
+---
+
+## Documentation Map
+
+The curated subdirectories of `docs/`. Each directory link opens the
+directory; the entry pages are good places to start. Other subdirectories
+(`api/`, `debate/`, `enterprise/`, `specs/` and more) are indexed by topic in
+the sections above.
+
+| Directory | What it holds | Start with |
+|-----------|---------------|------------|
+| [getting-started/](./getting-started/) | First-run and install guides | [ZERO_CONFIG](./getting-started/ZERO_CONFIG.md), [LOCAL_DEVELOPMENT](./getting-started/LOCAL_DEVELOPMENT.md) |
+| [guides/](./guides/) | Task-oriented how-to guides | [USE_CASES](./guides/USE_CASES.md), [API_COOKBOOK](./guides/API_COOKBOOK.md), [TROUBLESHOOTING](./guides/TROUBLESHOOTING.md) |
+| [reference/](./reference/) | Configuration, environment, error codes and the generated CLI flag catalog | [Reference Index](./reference/INDEX.md) |
+| [architecture/](./architecture/) | System design and structural contracts | [ARCHITECTURE](./architecture/ARCHITECTURE.md), [IMPORT_LAYERS](./architecture/IMPORT_LAYERS.md), [TRUST_PORTABILITY](./architecture/TRUST_PORTABILITY.md) |
+| [operations/](./operations/) | Operating, self-hosting and production runbooks | [OPERATIONS](./operations/OPERATIONS.md), [SELF_HOSTING](./operations/SELF_HOSTING.md), [PRODUCTION_RUNBOOK](./operations/PRODUCTION_RUNBOOK.md) |
+| [governance/](./governance/) | Merge gates, operator delegation and repository governance | [TIERED_MERGE_GATE_ENABLEMENT](./governance/TIERED_MERGE_GATE_ENABLEMENT.md), [QUORUM_EVIDENCE_RUNBOOK](./governance/QUORUM_EVIDENCE_RUNBOOK.md), [OPERATOR_DELEGATION_POLICY](./governance/OPERATOR_DELEGATION_POLICY.md), [LOOP_CONTROL_PLANE](./governance/LOOP_CONTROL_PLANE.md) |
+| [strategy/](./strategy/) | Positioning, pricing and roadmaps | [STRATEGY_INDEX](./strategy/STRATEGY_INDEX.md), [ROADMAP_30_60_90](./strategy/ROADMAP_30_60_90.md) |
 
 ---
 
@@ -308,7 +379,7 @@ other pages live in the subdirectories above.
 | [FEATURE_DISCOVERY](./FEATURE_DISCOVERY.md) | Compatibility entry point for the feature inventory |
 | [FEATURE_GAP_LIST](./FEATURE_GAP_LIST.md) | Planned, partial, and hardening work |
 | [GA_CHECKLIST](./GA_CHECKLIST.md) | Self-hosted GA readiness checklist |
-| [INDEX](./INDEX.md) | Flat documentation index |
+| [INDEX](./INDEX.md) | Sub-index: short flat list of the most-used pages (the docs site's documentation index) |
 | [LANDING_PAGE](./LANDING_PAGE.md) | Landing page copy |
 | [METRICS](./METRICS.md) | Canonical generated metrics |
 | [NEXT_STEPS](./NEXT_STEPS.md) | Compatibility pointer to the canonical next steps |
@@ -318,7 +389,7 @@ other pages live in the subdirectories above.
 | [SDK_COMPARISON](./SDK_COMPARISON.md) | Python and TypeScript SDK comparison |
 | [SDK_GUIDE](./SDK_GUIDE.md) | Python SDK guide |
 | [SDK_QUICKSTART_PYTHON](./SDK_QUICKSTART_PYTHON.md) | Python SDK quickstart |
-| [START_HERE](./START_HERE.md) | Start here: pick a path by goal |
+| [START_HERE](./START_HERE.md) | Sub-index: choose a package and follow its path |
 | [STATUS](./STATUS.md) | Project status |
 | [THESIS](./THESIS.md) | The Aragora thesis |
 | [WHY_ARAGORA](./WHY_ARAGORA.md) | Why Aragora |
