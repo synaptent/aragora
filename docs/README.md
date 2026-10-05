@@ -38,6 +38,7 @@ wire it into CI — comes first below; everything else follows.
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE](./architecture/ARCHITECTURE.md) | System architecture overview |
+| [IMPORT_LAYERS](./architecture/IMPORT_LAYERS.md) | Import layer contract: membership, TYPE_CHECKING policy, tranche procedure, Partition A handover |
 | [FEATURE_DISCOVERY](./status/FEATURE_DISCOVERY.md) | Current feature inventory and file map |
 | [FEATURE_GAP_LIST](./FEATURE_GAP_LIST.md) | Planned, partial, and hardening work |
 | [MODES_GUIDE](./guides/MODES_GUIDE.md) | Debate modes (standard, gauntlet, genesis) |
