@@ -205,7 +205,7 @@ Key requirements that adversarial debate addresses:
 - **Art. 15 (Robustness)**: Resilience to errors and adversarial manipulation →
   Heterogeneous model consensus, hollow consensus detection
 
-See [EU_AI_ACT_COMPLIANCE.md](EU_AI_ACT_COMPLIANCE.md) for the full mapping.
+See [EU_AI_ACT_COMPLIANCE.md](../EU_AI_ACT_COMPLIANCE.md) for the full mapping.
 
 ---
 
