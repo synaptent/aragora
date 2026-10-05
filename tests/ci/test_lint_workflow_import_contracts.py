@@ -21,7 +21,10 @@ _BOUNDARY_STEP = "Enforce Boundary 2 module-edge policy"
 _CONTRACT_STEP = "Import layer contract (fail on new violations)"
 _CONTRACT_RUN = f"{_PYTHON_BIN} scripts/ci/check_import_contracts.py"
 _POLICY_STEP = "Import layer TYPE_CHECKING policy tests"
-_POLICY_RUN = f"{_PYTHON_BIN} -m pytest tests/ci/test_importlinter_tc_policy.py -q -rs"
+# --noconftest: tests/conftest.py imports most of aragora, which on the hosted runner pulls the
+# system boto3/pyOpenSSL into conflict with the user-site cryptography; the policy tests need
+# only built-in fixtures.
+_POLICY_RUN = f"{_PYTHON_BIN} -m pytest --noconftest tests/ci/test_importlinter_tc_policy.py -q -rs"
 
 _IMPORT_LINTER_VERSION = "2.15"
 _GRIMP_VERSION = "3.17"

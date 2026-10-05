@@ -155,7 +155,7 @@ jobs:
         run: '"${{ steps.lint_python.outputs.python_bin }}" scripts/ci/check_import_contracts.py'
 
       - name: Import layer TYPE_CHECKING policy tests
-        run: '"${{ steps.lint_python.outputs.python_bin }}" -m pytest tests/ci/test_importlinter_tc_policy.py -q -rs'
+        run: '"${{ steps.lint_python.outputs.python_bin }}" -m pytest --noconftest tests/ci/test_importlinter_tc_policy.py -q -rs'
 
       - name: Enforce self-hosted checkout integrity policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_workflow_checkout_integrity_policy.py
