@@ -9,7 +9,7 @@
 
 The proof loop reached its first end-to-end closure across three durable receipts:
 
-- **May 12** — first closure observation. H1-01 rev-4 promotion readiness rendered `promotion_ready`; first settlement receipt landed; `observe-outcomes` dry-run clean. Receipt: [PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md](PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md). Captured in [#7124](https://github.com/synaptent/aragora/pull/7124).
+- **May 12** — first closure observation. H1-01 rev-4 promotion readiness rendered `promotion_ready`; first settlement receipt landed; `observe-outcomes` dry-run clean. Receipt: `PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md` (archived dated snapshot). Captured in [#7124](https://github.com/synaptent/aragora/pull/7124).
 - **May 13** — first `observe-outcomes --write` verified on the **negative case**. 10 settlement receipts written; 10/10 PASS independently verified by Claude Sonnet 4.5, Codex GPT-5.5, and Droid-Gemini latest. Receipt: [OBSERVE_OUTCOMES_FIRST_WRITE_VERIFIED_2026-05-13.md](OBSERVE_OUTCOMES_FIRST_WRITE_VERIFIED_2026-05-13.md). Captured in [#7131](https://github.com/synaptent/aragora/pull/7131).
 - **May 14** — `observe-outcomes` batch #2 verified the **positive case**. 18 receipts written, with `outcome_human_override_redo=true` correctly fired on PR [#7146](https://github.com/synaptent/aragora/pull/7146) triggered by a literal `Supersedes #7146` reference in PR [#7153](https://github.com/synaptent/aragora/pull/7153). Receipt: [OBSERVE_OUTCOMES_BATCH_2_2026-05-14.md](OBSERVE_OUTCOMES_BATCH_2_2026-05-14.md). The loop now has verified detection on both the noise-free and the real-positive case.
 

@@ -680,7 +680,7 @@ registry:
       - docs/architecture/GATEWAY_ARCHITECTURE.md
       - docs/architecture/CODEBASE_ANALYSIS.md
       - docs/architecture/ANALYSIS.md
-      - docs/architecture/ground-up-assessment-2026-01-29.md
+      - docs/archive/architecture/ground-up-assessment-2026-01-29.md
     symbols: []
     deadline: null
     owner: null
