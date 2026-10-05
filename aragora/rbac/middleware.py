@@ -702,6 +702,8 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(v1/)?knowledge$", "POST", "knowledge.write"),
     RoutePermission(r"^/api/(v1/)?knowledge/search$", "GET", "knowledge.read"),
     RoutePermission(r"^/api/(v1/)?knowledge/search$", "POST", "knowledge.read"),
+    # Knowledge processing jobs are served by the document batch handler.
+    RoutePermission(r"^/api/(?:v1/)?knowledge/jobs(?:/[^/]+)?$", "GET", "documents.read"),
     RoutePermission(r"^/api/(v1/)?knowledge/([^/]+)$", "GET", "knowledge.read", 2),
     RoutePermission(r"^/api/(v1/)?knowledge/([^/]+)$", "PUT", "knowledge.write", 2),
     RoutePermission(r"^/api/(v1/)?knowledge/([^/]+)$", "PATCH", "knowledge.write", 2),
@@ -769,6 +771,25 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/tournaments", "GET", "tournaments.read"),
     RoutePermission(r"^/api/tournaments", "POST", "tournaments.create"),
     # ── Documents ──
+    # Each key is the one the document, batch, query or folder handler enforces.
+    # Folder reads sit before the single-segment document read, and all of
+    # these before the unversioned prefix rules below.
+    RoutePermission(r"^/api/(?:v1/)?documents$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?documents/formats$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?documents/folders(?:/[^/]+)?$", "GET", "upload.create"),
+    RoutePermission(r"^/api/(?:v1/)?documents/folder/upload/[^/]+/status$", "GET", "upload.create"),
+    RoutePermission(r"^/api/(?:v1/)?documents/processing/stats$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?documents/batch/[^/]+(?:/results)?$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?documents/[^/]+/(?:chunks|context)$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?documents/[^/]+$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?documents/(?:upload|batch)$", "POST", "documents.create"),
+    RoutePermission(
+        r"^/api/(?:v1/)?documents/(?:query|summarize|compare|extract)$", "POST", "documents.read"
+    ),
+    RoutePermission(r"^/api/(?:v1/)?documents/folder/(?:scan|upload)$", "POST", "upload.create"),
+    RoutePermission(r"^/api/(?:v1/)?documents/folders/[^/]+$", "DELETE", "documents.delete"),
+    RoutePermission(r"^/api/(?:v1/)?documents/batch/[^/]+$", "DELETE", "documents.delete"),
+    RoutePermission(r"^/api/(?:v1/)?documents/[^/]+$", "DELETE", "documents.delete"),
     RoutePermission(r"^/api/documents", "GET", "documents.read"),
     RoutePermission(r"^/api/documents", "POST", "documents.write"),
     RoutePermission(r"^/api/documents", "DELETE", "documents.delete"),
