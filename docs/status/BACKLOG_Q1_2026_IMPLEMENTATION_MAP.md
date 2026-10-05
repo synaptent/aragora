@@ -142,7 +142,7 @@ Related:
 
 | ID | Owner | Primary Files/Areas | Definition of Done (Gate) |
 |---|---|---|---|
-| HOST-09 | DevOps/SRE + Backend (Core) | `deploy/observability/`, `aragora/observability/`, `docs/OPERATIONS.md` | Metrics/logging bundle works out-of-the-box; dashboards load |
+| HOST-09 | DevOps/SRE + Backend (Core) | `deploy/observability/`, `aragora/observability/`, `docs/operations/OPERATIONS.md` | Metrics/logging bundle works out-of-the-box; dashboards load |
 | HOST-10 | DevOps/SRE | `deploy/observability/`, `deploy/grafana/` (if present) | Sample Grafana dashboards are versioned and documented |
 
 ### QA Track
