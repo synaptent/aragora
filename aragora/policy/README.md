@@ -169,7 +169,7 @@ result = engine.check_action(
     agent="claude",
     tool="code_writer",
     capability="write_file",
-    context={"file_path": "aragora/core.py"},
+    context={"file_path": "aragora/debate/orchestrator.py"},
 )
 
 if result.requires_human_approval:
