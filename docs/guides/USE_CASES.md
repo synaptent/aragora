@@ -178,4 +178,4 @@ git diff main | aragora review --demo
 aragora gauntlet spec.md --profile quick
 ```
 
-See [examples/quickstart/](../examples/quickstart/) for runnable code, or [WHY_ARAGORA.md](WHY_ARAGORA.md) for the technical thesis behind the platform.
+See [examples/quickstart/](../../examples/quickstart/) for runnable code, or [WHY_ARAGORA.md](../WHY_ARAGORA.md) for the technical thesis behind the platform.

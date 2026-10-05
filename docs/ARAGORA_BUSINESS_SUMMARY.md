@@ -10,7 +10,7 @@
 | **Category claim** (Decision Integrity Platform) | [WHY_ARAGORA.md](WHY_ARAGORA.md) |
 | **Current commercial positioning** (what's sellable now, current gate, what not to claim yet) | [COMMERCIAL_OVERVIEW.md](COMMERCIAL_OVERVIEW.md) |
 | **Canonical metrics** (modules, tests, API operations, adapters, agent types) | [CANONICAL_GOALS.md — Canonical Metrics](CANONICAL_GOALS.md#canonical-metrics) |
-| **Feature inventory** (platform capabilities, scale) | [FEATURE_DISCOVERY.md](FEATURE_DISCOVERY.md) |
+| **Feature inventory** (platform capabilities, scale) | [status/FEATURE_DISCOVERY.md](status/FEATURE_DISCOVERY.md) |
 | **Use cases and verticals** (software, healthcare, financial, legal, government, compliance) | [verticals/](verticals/) directory |
 | **Enterprise capabilities** (SSO, MFA, SCIM, RBAC, multi-tenancy, compliance frameworks) | [enterprise/ENTERPRISE_FEATURES.md](enterprise/ENTERPRISE_FEATURES.md) |
 | **GTM strategy and phased adoption** | [strategy/MARKET_TIMING_AND_EXPANSION.md](strategy/MARKET_TIMING_AND_EXPANSION.md) |

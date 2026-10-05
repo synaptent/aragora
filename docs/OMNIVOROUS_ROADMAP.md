@@ -8,9 +8,9 @@
 | What you were looking for | Canonical home |
 |---|---|
 | **Mission / vision** (ingest broadly, vet deeply, deliver anywhere) | [CANONICAL_GOALS.md — Mission Statement + Stage Evolution Model](CANONICAL_GOALS.md#mission-statement) |
-| **Current capability inventory** (input channels, output channels, debate engine features) | [FEATURE_DISCOVERY.md](FEATURE_DISCOVERY.md) |
+| **Current capability inventory** (input channels, output channels, debate engine features) | [status/FEATURE_DISCOVERY.md](status/FEATURE_DISCOVERY.md) |
 | **Phase-by-phase roadmap** (Foundation → Enterprise → Knowledge Systems → Omnivorous Infrastructure → Autonomous Operations → Federation) | [plans/ARAGORA_EVOLUTION_ROADMAP.md](plans/ARAGORA_EVOLUTION_ROADMAP.md) |
-| **Channel integration specifics** (Telegram, WhatsApp, voice, document ingestion) | [FEATURE_DISCOVERY.md](FEATURE_DISCOVERY.md) + module-level READMEs under `aragora/connectors/` and `aragora/server/handlers/social/` |
+| **Channel integration specifics** (Telegram, WhatsApp, voice, document ingestion) | [status/FEATURE_DISCOVERY.md](status/FEATURE_DISCOVERY.md) + module-level READMEs under `aragora/connectors/` and `aragora/server/handlers/social/` |
 | **Environment configuration examples** | [reference/ENVIRONMENT.md](reference/ENVIRONMENT.md) |
 | **Metrics and Prometheus exports** | [observability](observability/) module docs |
 | **February 2026 snapshot** (if you specifically need the historical document) | [archive/2026-02-25-OMNIVOROUS_ROADMAP.md](archive/2026-02-25-OMNIVOROUS_ROADMAP.md) |
