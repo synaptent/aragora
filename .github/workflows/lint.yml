@@ -130,6 +130,8 @@ jobs:
         run: |
           "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user ruff==0.14.14
           "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user -e .
+          "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user "import-linter==2.15" "grimp==3.17"
+          "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user "pytest==9.1.1"
 
       - name: Enforce branch mutation policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_branch_mutation_policy.py
@@ -148,6 +150,12 @@ jobs:
 
       - name: Enforce Boundary 2 module-edge policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/ci/check_boundary_edges.py
+
+      - name: Import layer contract (fail on new violations)
+        run: '"${{ steps.lint_python.outputs.python_bin }}" scripts/ci/check_import_contracts.py'
+
+      - name: Import layer TYPE_CHECKING policy tests
+        run: '"${{ steps.lint_python.outputs.python_bin }}" -m pytest tests/ci/test_importlinter_tc_policy.py -q -rs'
 
       - name: Enforce self-hosted checkout integrity policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_workflow_checkout_integrity_policy.py
