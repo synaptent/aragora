@@ -1364,7 +1364,7 @@ See [BOT_INTEGRATIONS.md](../integrations/BOT_INTEGRATIONS.md) for detailed setu
 - A root is valid only if it resolves to an existing directory that does not equal, contain or lie
   inside another org's root (both orgs' roots are then rejected) or a protected path: the data dir,
   the server nomic dir, the document store, and the directory of every file named by
-  `folder_import_roots.SECRET_FILE_ENV_VARS` (ODR and inbox signing keys, API key store, X OAuth
+  `aragora.documents.folder.import_roots.SECRET_FILE_ENV_VARS` (ODR and inbox signing keys, API key store, X OAuth
   token, TLS/SSL cert and key, GitHub App, ERC-8004, Snowflake and Google credentials, AWS web
   identity token). Rejected roots are logged as errors.
 - The requested folder must resolve (following symlinks and `..`) inside one of the caller org's

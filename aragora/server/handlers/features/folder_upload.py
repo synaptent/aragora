@@ -15,7 +15,7 @@ org's folder answers like a missing one.
 
 Scan and upload read server directories, so they only accept folders inside an
 import root configured for the caller's org in ARAGORA_ORG_IMPORT_ROOTS (see
-folder_import_roots) and are refused while the org has none.
+aragora.documents.folder.import_roots) and are refused while the org has none.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from .folder_import_roots import inside_roots, org_import_roots, protected_paths
+from aragora.documents.folder.import_roots import inside_roots, org_import_roots, protected_paths
 from ..base import (
     BaseHandler,
     HandlerResult,

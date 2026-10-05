@@ -34,7 +34,7 @@ from aragora.server.handlers.features.folder_upload import (
     FolderUploadStatus,
 )
 from aragora.server.handlers.features import folder_upload
-from aragora.server.handlers.features.folder_import_roots import org_import_roots
+from aragora.documents.folder.import_roots import org_import_roots
 from aragora.tenancy.record_scope import OrgScope
 
 SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")

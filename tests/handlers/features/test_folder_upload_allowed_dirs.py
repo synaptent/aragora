@@ -22,7 +22,8 @@ from typing import Any
 import pytest
 
 from aragora.documents.parsing import DocumentStore, parse_document
-from aragora.server.handlers.features import folder_import_roots, folder_upload
+from aragora.documents.folder import import_roots
+from aragora.server.handlers.features import folder_upload
 from aragora.server.handlers.features.folder_upload import FolderUploadHandler
 
 pytestmark = pytest.mark.no_auto_auth
@@ -73,7 +74,7 @@ def _deferred_upload_work(monkeypatch, tmp_path):
     _DeferredThread.started = []
     fake_threading = SimpleNamespace(Thread=_DeferredThread, Lock=threading.Lock)
     monkeypatch.setattr(folder_upload, "threading", fake_threading)
-    for name in (ENV, "ARAGORA_ALLOWED_UPLOAD_DIRS", *folder_import_roots.SECRET_FILE_ENV_VARS):
+    for name in (ENV, "ARAGORA_ALLOWED_UPLOAD_DIRS", *import_roots.SECRET_FILE_ENV_VARS):
         monkeypatch.delenv(name, raising=False)
     (tmp_path / "app-data").mkdir()
     monkeypatch.setenv("ARAGORA_DATA_DIR", str(tmp_path / "app-data"))
@@ -226,7 +227,7 @@ class TestNotConfigured:
         self, monkeypatch, caplog, folders, auth_a, upload_root, a_folder, route
     ):
         monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(upload_root))
-        with caplog.at_level(logging.WARNING, logger=folder_import_roots.__name__):
+        with caplog.at_level(logging.WARNING, logger=import_roots.__name__):
             status, body = _post(folders, auth_a, route, {"path": str(a_folder)})
         assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
         assert "ARAGORA_ALLOWED_UPLOAD_DIRS" in caplog.text
@@ -417,7 +418,7 @@ class TestInvalidRoots:
     ):
         (tmp_path / root).mkdir(parents=True, exist_ok=True)
         _configure(monkeypatch, {ORG_A: [tmp_path / root]})
-        with caplog.at_level(logging.ERROR, logger=folder_import_roots.__name__):
+        with caplog.at_level(logging.ERROR, logger=import_roots.__name__):
             status, body = _post(folders, auth_a, ROUTES[0], {"path": str(tmp_path / root)})
         assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
         assert "protected server path" in caplog.text
@@ -430,20 +431,20 @@ class TestInvalidRoots:
         a, b = tmp_path / "shared" / a_dir, tmp_path / "shared" / b_dir
         (tmp_path / "shared" / "x" / "in").mkdir(parents=True)
         _configure(monkeypatch, {ORG_A: [a], ORG_B: [b]})
-        with caplog.at_level(logging.ERROR, logger=folder_import_roots.__name__):
+        with caplog.at_level(logging.ERROR, logger=import_roots.__name__):
             for auth, path in ((auth_a, a), (auth_b, b)):
                 status, body = _post(folders, auth, ROUTES[0], {"path": str(path)})
                 assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
         assert "another org" in caplog.text
 
-    @pytest.mark.parametrize("name", folder_import_roots.SECRET_FILE_ENV_VARS)
+    @pytest.mark.parametrize("name", import_roots.SECRET_FILE_ENV_VARS)
     def test_every_key_file_setting_protects_its_directory(self, monkeypatch, tmp_path, name):
         key = tmp_path / "creds" / "secret.key"
         key.parent.mkdir()
         key.write_text("x")
         _configure(monkeypatch, {ORG_A: [key.parent]})
-        roots = folder_import_roots.org_import_roots
-        protected = folder_import_roots.protected_paths
+        roots = import_roots.org_import_roots
+        protected = import_roots.protected_paths
         assert roots(ORG_A, protected()) == [key.parent.resolve()]
         monkeypatch.setenv(name, str(key))
         assert roots(ORG_A, protected()) == []
