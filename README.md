@@ -13,7 +13,7 @@ standalone verifier ([`pip install -U 'aragora-verify>=0.2.0'`](https://pypi.org
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 > **New here?** The [Quickstart](docs/quickstart.md) gets you a working debate in
-> under a minute. Auditors should start with the [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md).
+> under a minute. Auditors should start with the [Cold Reviewer Guide](docs/guides/COLD_REVIEWER_GUIDE.md).
 
 | I want to… | Command |
 |------------|---------|
@@ -95,7 +95,7 @@ pip install ./aragora-verify
 > you supply, so a relabeled signer fails as tampering. 0.1.0 lacks that
 > binding — upgrade if you have it.
 
-See the [full Action setup guide](docs/GITHUB_ACTION_SETUP.md#emitting-a-verifiable-decision-receipt)
+See the [full Action setup guide](docs/guides/GITHUB_ACTION_SETUP.md#emitting-a-verifiable-decision-receipt)
 for the receipt-specific inputs/outputs, secret-dependent limits (receipts are
 unsigned; reviewer defaults need reachable provider keys), and a committed
 example receipt you can verify right now without running any CI.
@@ -214,14 +214,14 @@ anchoring are in-flight. See the [proof ladder](#proof-ladder).
 ## Find your path
 
 - **Developer** — [Quickstart](docs/quickstart.md) → `aragora review-pr` → [CLI Reference](docs/CLI_REFERENCE.md) · [SDK Guide](docs/SDK_GUIDE.md)
-- **Auditor / reviewer** — [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md) → [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) → `aragora-verify`
+- **Auditor / reviewer** — [Cold Reviewer Guide](docs/guides/COLD_REVIEWER_GUIDE.md) → [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) → `aragora-verify`
 - **Founder / operator** — the wedge above → [proof ladder](#proof-ladder) → [Full Vision](#full-vision)
 - **Compliance buyer** — [Enterprise features](docs/enterprise/ENTERPRISE_FEATURES.md) → EU AI Act / SOC 2 status in [honest current state](#honest-current-state)
 - **Agent / tool builder** — the [ODR](docs/specs/OPEN_DECISION_RECEIPT.md) as the external contract → MCP tools → [API Reference](docs/api/API_REFERENCE.md)
 
 ## Documentation
 
-- [Quickstart](docs/quickstart.md) · [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md) · [CLI Reference](docs/CLI_REFERENCE.md)
+- [Quickstart](docs/quickstart.md) · [Cold Reviewer Guide](docs/guides/COLD_REVIEWER_GUIDE.md) · [CLI Reference](docs/CLI_REFERENCE.md)
 - [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) · [SDK Guide](docs/SDK_GUIDE.md) · [API Reference](docs/api/API_REFERENCE.md)
 - [Feature status](docs/STATUS.md) · [Enterprise features](docs/enterprise/ENTERPRISE_FEATURES.md) · [Architecture deep-dive](docs/EXTENDED_README.md)
 - [Documentation index](docs/README.md) · [Import layers](docs/architecture/IMPORT_LAYERS.md)

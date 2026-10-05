@@ -20,8 +20,8 @@ wire it into CI — comes first below; everything else follows.
 | **Run your first debate in under a minute** | [Quickstart](./quickstart.md) |
 | Understand the receipt model (native record vs. the portable ODR) | [Receipt Lineage Reconciliation](./specs/RECEIPT_LINEAGE_RECONCILIATION.md) |
 | Verify a receipt independently, no Aragora install required (`aragora-verify` exit codes: `0 verified / 1 failed / 2 usage / 3 signatures-present-unchecked`) | [Independent Verifier Guide](./specs/INDEPENDENT_VERIFIER_GUIDE.md) |
-| Add multi-model CI review + receipts to your pull requests | [GitHub Action Setup](./GITHUB_ACTION_SETUP.md) |
-| Review or audit the project quickly | [Cold Reviewer Guide](./COLD_REVIEWER_GUIDE.md) |
+| Add multi-model CI review + receipts to your pull requests | [GitHub Action Setup](./guides/GITHUB_ACTION_SETUP.md) |
+| Review or audit the project quickly | [Cold Reviewer Guide](./guides/COLD_REVIEWER_GUIDE.md) |
 | Understand the supported API contract | [Supported API Surface](./api/SUPPORTED_SURFACE.md) |
 | See 20 runnable code examples | [API Cookbook](./guides/API_COOKBOOK.md) |
 | Build a Python integration | [SDK Guide](./SDK_GUIDE.md) |
@@ -142,6 +142,7 @@ See [MEMORY_STRATEGY](./knowledge/MEMORY_STRATEGY.md) for details.
 | [SDK_TYPESCRIPT](./guides/SDK_TYPESCRIPT.md) | TypeScript SDK guide |
 | [SDK_CONSOLIDATION](./guides/SDK_CONSOLIDATION.md) | TypeScript SDK migration (v2 to v3) |
 | [SDK_GUIDE](./SDK_GUIDE.md) | Python SDK guide |
+| [SDK_QUICKSTART](./guides/SDK_QUICKSTART.md) | Install to first debate in under 2 minutes, no server or API keys |
 | [PYTHON_SDK_MIGRATION](./guides/PYTHON_SDK_MIGRATION.md) | Canonical Python SDK migration (`aragora-client` -> `aragora-sdk`) |
 | [LIBRARY_USAGE](./reference/LIBRARY_USAGE.md) | Using Aragora as a library |
 
@@ -178,7 +179,9 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | Document | Description |
 |----------|-------------|
 | [DEPLOYMENT](./DEPLOYMENT.md) | Deployment guide |
-| [OPERATIONS](./OPERATIONS.md) | Operations runbook |
+| [OPERATIONS](./operations/OPERATIONS.md) | Operations runbook |
+| [SELF_HOSTING](./operations/SELF_HOSTING.md) | Run Aragora on your own infrastructure |
+| [GA_CHECKLIST](./GA_CHECKLIST.md) | Self-hosted GA readiness checklist |
 | [RUNBOOK](./deployment/RUNBOOK.md) | Incident response procedures |
 | [PRODUCTION_READINESS](./deployment/PRODUCTION_READINESS.md) | Production readiness checklist |
 | [OBSERVABILITY](./observability/OBSERVABILITY.md) | Monitoring and telemetry |
@@ -205,6 +208,7 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 
 | Document | Description |
 |----------|-------------|
+| [ZERO_CONFIG](./getting-started/ZERO_CONFIG.md) | What works after `pip install` with no keys or services |
 | [ENVIRONMENT](./reference/ENVIRONMENT.md) | Environment variables reference |
 | [DATABASE](./reference/DATABASE.md) | Database architecture |
 | [CLI_REFERENCE](./CLI_REFERENCE.md) | CLI command reference ([generated flag catalog](./reference/CLI_REFERENCE.md)) |
@@ -219,6 +223,7 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | [HANDLER_DEVELOPMENT](./debate/HANDLER_DEVELOPMENT.md) | Writing new server handlers |
 | [TESTING](./testing/TESTING.md) | Test suite documentation |
 | [CODING_ASSISTANCE](./architecture/CODING_ASSISTANCE.md) | Code review and generation |
+| [STRANGER_TEST](./guides/STRANGER_TEST.md) | Copy-paste kit for cold-eyes feedback from a new developer |
 | [BREAKING_CHANGES](./reference/BREAKING_CHANGES.md) | Breaking changes by version |
 | [DEPRECATION_POLICY](./reference/DEPRECATION_POLICY.md) | Deprecation and migration policy |
 | [ERROR_CODES](./reference/ERROR_CODES.md) | Error code reference |
@@ -261,6 +266,63 @@ See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
 | Document | Description |
 |----------|-------------|
 | [case-studies/README](./case-studies/README.md) | Real-world applications and audits |
+
+---
+
+## Strategy & Positioning
+
+| Document | Description |
+|----------|-------------|
+| [STRATEGY_INDEX](./strategy/STRATEGY_INDEX.md) | Where the consolidated strategy and outreach documents live |
+| [WHY_ADVERSARIAL_DEBATE](./strategy/WHY_ADVERSARIAL_DEBATE.md) | Why one model's opinion is not enough for consequential decisions |
+| [FOCUS](./strategy/FOCUS.md) | Focus strategy: depth over breadth |
+| [HONEST_ASSESSMENT](./strategy/HONEST_ASSESSMENT.md) | What works, what does not, and why it matters |
+| [COMPARISON_MATRIX](./strategy/COMPARISON_MATRIX.md) | Aragora compared with agent frameworks |
+| [PRICING](./strategy/PRICING.md) | Open-source core and commercial tiers |
+
+---
+
+## Top-Level Pages
+
+Every Markdown page kept at the top of `docs/` is listed here. Most keep that
+path because tools, tests, protected files or published links depend on it;
+other pages live in the subdirectories above.
+
+| Page | Description |
+|------|-------------|
+| [AGENT_ASSIGNMENTS](./AGENT_ASSIGNMENTS.md) | Agent task assignments by track |
+| [AGENT_FLYWHEEL_ARAGORA_NATIVE](./AGENT_FLYWHEEL_ARAGORA_NATIVE.md) | Agent Flywheel concepts mapped to Aragora primitives |
+| [AGENT_OPERATING_CONTRACT](./AGENT_OPERATING_CONTRACT.md) | Operating contract for autonomous agents in this repository |
+| [API_ENDPOINTS](./API_ENDPOINTS.md) | Generated HTTP endpoint list (`scripts/generate_api_docs.py`) |
+| [BREAKING_CHANGES](./BREAKING_CHANGES.md) | Planned breaking changes for v3.0 |
+| [CANONICAL_GOALS](./CANONICAL_GOALS.md) | Canonical goals and foundational thesis |
+| [CAPABILITY_MATRIX](./CAPABILITY_MATRIX.md) | Generated capability matrix |
+| [CI_LANES](./CI_LANES.md) | Two-lane CI system |
+| [CLI_REFERENCE](./CLI_REFERENCE.md) | CLI command reference |
+| [COMMERCIAL_OVERVIEW](./COMMERCIAL_OVERVIEW.md) | Commercial positioning and readiness |
+| [COORDINATION](./COORDINATION.md) | Multi-agent coordination for this repository |
+| [DEPLOYMENT](./DEPLOYMENT.md) | Deployment guide |
+| [ENTERPRISE_FEATURES](./ENTERPRISE_FEATURES.md) | Enterprise features reference |
+| [EU_AI_ACT_COMPLIANCE](./EU_AI_ACT_COMPLIANCE.md) | EU AI Act compliance with Aragora |
+| [EXTENDED_README](./EXTENDED_README.md) | Extended technical reference |
+| [FEATURE_DISCOVERY](./FEATURE_DISCOVERY.md) | Compatibility entry point for the feature inventory |
+| [FEATURE_GAP_LIST](./FEATURE_GAP_LIST.md) | Planned, partial, and hardening work |
+| [GA_CHECKLIST](./GA_CHECKLIST.md) | Self-hosted GA readiness checklist |
+| [INDEX](./INDEX.md) | Flat documentation index |
+| [LANDING_PAGE](./LANDING_PAGE.md) | Landing page copy |
+| [METRICS](./METRICS.md) | Canonical generated metrics |
+| [NEXT_STEPS](./NEXT_STEPS.md) | Compatibility pointer to the canonical next steps |
+| [PACKAGING](./PACKAGING.md) | Packaging strategy |
+| [RECEIPT_CONTRACT](./RECEIPT_CONTRACT.md) | Receipt contract for new integrations |
+| [REVIEW_AUTHORITY_PRINCIPLES](./REVIEW_AUTHORITY_PRINCIPLES.md) | Principles behind review authority |
+| [SDK_COMPARISON](./SDK_COMPARISON.md) | Python and TypeScript SDK comparison |
+| [SDK_GUIDE](./SDK_GUIDE.md) | Python SDK guide |
+| [SDK_QUICKSTART_PYTHON](./SDK_QUICKSTART_PYTHON.md) | Python SDK quickstart |
+| [START_HERE](./START_HERE.md) | Start here: pick a path by goal |
+| [STATUS](./STATUS.md) | Project status |
+| [THESIS](./THESIS.md) | The Aragora thesis |
+| [WHY_ARAGORA](./WHY_ARAGORA.md) | Why Aragora |
+| [quickstart](./quickstart.md) | Run your first debate |
 
 ---
 

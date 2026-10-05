@@ -125,7 +125,7 @@ Local development uses `http://localhost:3000` with `NEXT_PUBLIC_API_URL` and `N
 - `/api-explorer` - Interactive API explorer for live endpoint testing.
   - Related docs: [API_REFERENCE](../api/API_REFERENCE.md), [API_ENDPOINTS](../api/API_ENDPOINTS.md)
 - `/admin` - Admin console for system health, rate limits, and diagnostics.
-  - Related docs: [OPERATIONS](../OPERATIONS.md), [RUNBOOK](../deployment/RUNBOOK.md)
+  - Related docs: [OPERATIONS](../operations/OPERATIONS.md), [RUNBOOK](../deployment/RUNBOOK.md)
 
 ## Informational
 
