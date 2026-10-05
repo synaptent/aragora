@@ -116,7 +116,7 @@ Related:
 |---|---|---|---|
 | HOST-06 | Security + DevOps/SRE | `SECURITY.md`, `deploy/`, `docs/security/` | Secure-by-default compose: no unsafe defaults; clear hardening checklist |
 | HOST-07 | DevOps/SRE + Docs | `deploy/`, `docs/deployment/` | TLS setup guide tested on a clean machine |
-| HOST-08 | Docs | `docs/CONFIGURATION.md`, `.env.production.example` | Env var docs are complete and match runtime config parsing |
+| HOST-08 | Docs | `docs/reference/CONFIGURATION.md`, `.env.production.example` | Env var docs are complete and match runtime config parsing |
 
 ---
 
