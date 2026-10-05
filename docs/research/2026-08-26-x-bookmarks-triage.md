@@ -17,7 +17,7 @@ This brief is also the seed corpus for the standing **X intake pipeline** (bookm
 - Pass 2 (2026-08-29 refresh): 24 further bookmarks captured from X's new History page (everything added since pass 1, tweet dates Aug 24–28), plus the first page of Likes. X throttled timeline pagination hard on both feeds — deeper history was unreachable by browser. **This is the operational argument for the pipeline this brief seeds**: full-history backfill comes from the X data export (already parseable by `aragora ideacloud load --source twitter-bookmarks/-likes`), and incremental sync from the OAuth API mode.
 - Likes signal-to-noise is much lower than bookmarks (social/casual engagement dominates); likes triage should always run through the ideacloud quality/dedup gate rather than manual review.
 - Known limits: X shows tweet dates, not bookmark dates; long posts truncated; media-only posts not evaluated.
-- Judged against: `docs/THESIS.md`, `docs/CANONICAL_GOALS.md`, `docs/FOCUS.md`, `docs/status/NEXT_STEPS_CANONICAL.md`, `docs/FEATURE_GAP_LIST.md` (ODR tranche + dormant table), and recent git history.
+- Judged against: `docs/THESIS.md`, `docs/CANONICAL_GOALS.md`, `docs/strategy/FOCUS.md`, `docs/status/NEXT_STEPS_CANONICAL.md`, `docs/FEATURE_GAP_LIST.md` (ODR tranche + dormant table), and recent git history.
 
 ## Candidates
 
@@ -37,7 +37,7 @@ Aug 25 ([x.com/simile_ai/status/2092299277154291843](https://x.com/simile_ai/sta
 
 Jul 31 ([x.com/ycombinator/status/2083243960684908768](https://x.com/ycombinator/status/2083243960684908768)). Multi-agent harness used across accounting, legal, events, engineering, in Slack and on the web. Closest public artifact to Aragora's "Chief of Staff / Organization Substrate" stages.
 
-**Verdict: ADOPT.** Deep-dive brief: [2026-08-26-yc-qm-brief.md](2026-08-26-yc-qm-brief.md). Destination: `docs/COMPARISON_MATRIX.md` row; differentiation question is whether QM has any decision-integrity/receipt story.
+**Verdict: ADOPT.** Deep-dive brief: [2026-08-26-yc-qm-brief.md](2026-08-26-yc-qm-brief.md). Destination: `docs/strategy/COMPARISON_MATRIX.md` row; differentiation question is whether QM has any decision-integrity/receipt story.
 
 ### 4. Prime Intellect — Prime Agent + verifiers v1
 
@@ -159,6 +159,6 @@ collaboration-vs-independence failure mode. Artifacts:
 
 - [Roadmap Intake Register](../status/ROADMAP_INTAKE_REGISTER.md) — register rows for every adopted item (the durability gate)
 - [FEATURE_GAP_LIST.md](../FEATURE_GAP_LIST.md) — X-intake pipeline capability rows
-- [COMPARISON_MATRIX.md](../COMPARISON_MATRIX.md) — QM/buzz positioning
+- [COMPARISON_MATRIX.md](../strategy/COMPARISON_MATRIX.md) — QM/buzz positioning
 - Deep-dive briefs: [Anthropic multiagent patterns](2026-08-26-anthropic-multiagent-patterns-brief.md) · [Simile confidence model](2026-08-26-simile-confidence-model-brief.md) · [YC QM](2026-08-26-yc-qm-brief.md)
 - Ranking receipt: recorded under `.aragora/receipts/` and linked from the filed issues (see register row)
