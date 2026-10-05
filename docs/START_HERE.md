@@ -1,6 +1,6 @@
 # Start Here
 
-**New to Aragora? Pick the path that matches your goal and follow the 5-line quickstart.** This page is a sub-index of the [documentation index](README.md), which links every other guide, reference and runbook.
+**New to Aragora? Pick the path that matches your goal and follow the 5-line quickstart.** This page is a sub-index of the [documentation index](README.md), which links every top-level page and every curated docs directory.
 
 ---
 
