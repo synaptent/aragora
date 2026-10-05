@@ -195,11 +195,12 @@ class DocumentHandler(BaseHandler):
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._delete_document(doc_id, scope)
+            # Positional, so the permission decorator finds the request's auth context.
+            return self._delete_document(doc_id, scope, handler)
         return None
 
     @require_permission("documents:delete")
-    def _delete_document(self, doc_id: str, scope: OrgScope) -> HandlerResult:
+    def _delete_document(self, doc_id: str, scope: OrgScope, handler: Any = None) -> HandlerResult:
         """Delete a document by ID if it belongs to the caller's org."""
         store = self.get_document_store()
         if not store:

@@ -269,7 +269,7 @@ class FolderUploadHandler(BaseHandler):
         return self._start_upload(handler, scope)
 
     @handle_errors("folder upload deletion")
-    @require_permission("upload:delete")
+    @require_permission("documents:delete")
     def handle_delete(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route DELETE folder requests."""
         if path.startswith("/api/v1/documents/folders/"):
@@ -279,7 +279,8 @@ class FolderUploadHandler(BaseHandler):
             folder_id, err = self.extract_path_param(path, 5, "folder_id")
             if err:
                 return err
-            return self._delete_folder(folder_id, scope, handler=handler)
+            # Positional, so the permission decorator finds the request's auth context.
+            return self._delete_folder(folder_id, scope, handler)
         return None
 
     @handle_errors("folder scan")
@@ -599,7 +600,7 @@ class FolderUploadHandler(BaseHandler):
         return json_response(job.to_dict())
 
     @handle_errors("folder delete")
-    @require_permission("folders:delete")
+    @require_permission("documents:delete")
     def _delete_folder(self, folder_id: str, scope: OrgScope, handler=None) -> HandlerResult:
         """Delete a folder upload and optionally its documents."""
         with FolderUploadHandler._jobs_lock:
