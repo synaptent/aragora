@@ -42,7 +42,7 @@ under `docs/research/receipts/` are historical and were not rewritten.
 | Archived file | Why archived |
 |---|---|
 | [`architecture/ground-up-assessment-2026-01-29.md`](architecture/ground-up-assessment-2026-01-29.md) | Self-declared January 2026 snapshot; CHR-X-025 in [../architecture/charters.yaml](../architecture/charters.yaml) lists it among superseded architecture docs to stamp or archive (current model: [../architecture/INTENDED_ARCHITECTURE.md](../architecture/INTENDED_ARCHITECTURE.md)). The charter entry now names the archived path. |
-| [`benchmarks/corpus_honesty_audit_2026-04-17.md`](benchmarks/corpus_honesty_audit_2026-04-17.md) | 2026-04-17 audit of corpus rev-2; its outcome lives in `docs/benchmarks/corpus.json` (whose rev-3 changelog entry keeps the historical path) and the code comments that cite it now name the archived path. |
+| [`benchmarks/corpus_honesty_audit_2026-04-17.md`](benchmarks/corpus_honesty_audit_2026-04-17.md) | 2026-04-17 audit of corpus rev-2; its outcome lives in `docs/benchmarks/corpus.json`; the corpus rev-3 changelog entry and the code comments that cite the audit now name the archived path. |
 | [`briefs/round-2026-04-30e-heterogeneous-dialog.md`](briefs/round-2026-04-30e-heterogeneous-dialog.md) | Completed round brief (2026-04-30); no inbound references. |
 | [`methodology/H2_PARTIAL_MULTI_SEEDED_2026-05-04.md`](methodology/H2_PARTIAL_MULTI_SEEDED_2026-05-04.md) | Round 31b H2 judge-contract note (2026-05-04); no inbound references. |
 | [`methodology/H2_TRANSCRIPT_PROVENANCE_2026-05-05.md`](methodology/H2_TRANSCRIPT_PROVENANCE_2026-05-05.md) | Round 31b H2 transcript-provenance note (2026-05-05); no inbound references. |

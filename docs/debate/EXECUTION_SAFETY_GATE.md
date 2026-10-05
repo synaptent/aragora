@@ -114,7 +114,7 @@ histogram_quantile(
 Run mixed-ensemble threshold sweeps with:
 
 ```bash
-python scripts/tune_execution_gate.py --output docs/status/generated/EXECUTION_GATE_TUNING_<YYYY-MM-DD>.md
+python scripts/tune_execution_gate.py --output docs/status/generated/execution_gate_tuning/EXECUTION_GATE_TUNING_<YYYY-MM-DD>.md
 ```
 
 This produces a dated calibration report with:

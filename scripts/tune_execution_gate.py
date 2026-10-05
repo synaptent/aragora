@@ -5,7 +5,7 @@ This script helps tune deny thresholds for high-impact auto-execution policy.
 
 Usage:
     python scripts/tune_execution_gate.py
-    python scripts/tune_execution_gate.py --output docs/status/generated/EXECUTION_GATE_TUNING_<YYYY-MM-DD>.md
+    python scripts/tune_execution_gate.py --output docs/status/generated/execution_gate_tuning/EXECUTION_GATE_TUNING_<YYYY-MM-DD>.md
 """
 
 from __future__ import annotations
