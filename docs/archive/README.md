@@ -30,6 +30,37 @@ names so the root-relocation provenance stays explicit.
 | `aragora_logo.png` | Docusaurus-owned SVG logo asset | Unreferenced legacy root PNG; tracked-file scans found no product or documentation consumer. It retains its basename under the recorded non-Markdown exception above. |
 | `favicon.png` | Docusaurus-owned favicon asset | Unreferenced legacy root PNG; tracked-file scans found no product or documentation consumer. It retains its basename under the recorded non-Markdown exception above. |
 
+## Dated documents archived under their original sub-directory
+
+Documents whose file name already carries a `YYYY-MM-DD` date are archived under
+`docs/archive/<original-subdirectory>/` with their basename unchanged, so the former path
+`docs/<subdir>/<name>` maps to `docs/archive/<subdir>/<name>` without a rename. Live docs that
+mentioned them now name the file without linking it (policy below); backticked mentions in frozen
+`docs/plans/` documents, generated records under `docs/status/generated/` and research receipts
+under `docs/research/receipts/` are historical and were not rewritten.
+
+| Archived file | Why archived |
+|---|---|
+| [`architecture/ground-up-assessment-2026-01-29.md`](architecture/ground-up-assessment-2026-01-29.md) | Self-declared January 2026 snapshot; CHR-X-025 in [../architecture/charters.yaml](../architecture/charters.yaml) lists it among superseded architecture docs to stamp or archive (current model: [../architecture/INTENDED_ARCHITECTURE.md](../architecture/INTENDED_ARCHITECTURE.md)). The charter entry now names the archived path. |
+| [`benchmarks/corpus_honesty_audit_2026-04-17.md`](benchmarks/corpus_honesty_audit_2026-04-17.md) | 2026-04-17 audit of corpus rev-2; its outcome lives in `docs/benchmarks/corpus.json` (whose rev-3 changelog entry keeps the historical path) and the code comments that cite it now name the archived path. |
+| [`briefs/round-2026-04-30e-heterogeneous-dialog.md`](briefs/round-2026-04-30e-heterogeneous-dialog.md) | Completed round brief (2026-04-30); no inbound references. |
+| [`methodology/H2_PARTIAL_MULTI_SEEDED_2026-05-04.md`](methodology/H2_PARTIAL_MULTI_SEEDED_2026-05-04.md) | Round 31b H2 judge-contract note (2026-05-04); no inbound references. |
+| [`methodology/H2_TRANSCRIPT_PROVENANCE_2026-05-05.md`](methodology/H2_TRANSCRIPT_PROVENANCE_2026-05-05.md) | Round 31b H2 transcript-provenance note (2026-05-05); no inbound references. |
+| [`research/2026-08-26-x-bookmarks-triage.md`](research/2026-08-26-x-bookmarks-triage.md) | Non-canonical 2026-08-26 research triage; register rows in [../status/ROADMAP_INTAKE_REGISTER.md](../status/ROADMAP_INTAKE_REGISTER.md) carry its outcomes. Its relative links were re-based so the snapshot still resolves. |
+| [`research/2026-08-26-anthropic-multiagent-patterns-brief.md`](research/2026-08-26-anthropic-multiagent-patterns-brief.md) | Non-canonical deep-dive brief from the same triage. |
+| [`research/2026-08-26-simile-confidence-model-brief.md`](research/2026-08-26-simile-confidence-model-brief.md) | Non-canonical deep-dive brief from the same triage. |
+| [`research/2026-08-26-yc-qm-brief.md`](research/2026-08-26-yc-qm-brief.md) | Non-canonical deep-dive brief from the same triage; the summary row lives in [../strategy/COMPARISON_MATRIX.md](../strategy/COMPARISON_MATRIX.md). |
+| [`reviews/swarm_prs_2026-04-17.md`](reviews/swarm_prs_2026-04-17.md) | 2026-04-17 cross-family review of five swarm PRs; cited only from a frozen `docs/plans/` design. |
+| [`runbooks/2026-07-08-outbox-triage-ledger.md`](runbooks/2026-07-08-outbox-triage-ledger.md) | Read-only outbox classification snapshot (2026-07-08); no inbound references. |
+| [`specs/2026-07-01-adjudicator-wiring-tier4-packet.md`](specs/2026-07-01-adjudicator-wiring-tier4-packet.md) | Self-declared archival, prepare-only Tier-4 packet; it was never published to the docs site. |
+| [`status/B0_ZERO_HEADLINE_DIAGNOSTIC_2026-05-19.md`](status/B0_ZERO_HEADLINE_DIAGNOSTIC_2026-05-19.md) | 2026-05-19 diagnostic; its Move 4 explainer stays live at [../benchmarks/B0_PROXY_METRIC_INTERPRETATION.md](../benchmarks/B0_PROXY_METRIC_INTERPRETATION.md). |
+| [`status/EXECUTION_GATE_STAGED_ROLLOUT_2026-03-05.md`](status/EXECUTION_GATE_STAGED_ROLLOUT_2026-03-05.md) | 2026-03-05 rollout plan; no inbound references. |
+| [`status/EXECUTION_GATE_TUNING_2026-03-05.md`](status/EXECUTION_GATE_TUNING_2026-03-05.md) | Generated 2026-03-05 tuning report; the workflow lives in [../debate/EXECUTION_SAFETY_GATE.md](../debate/EXECUTION_SAFETY_GATE.md). |
+| [`status/EXTERNAL_PROOF_2026-06-18.md`](status/EXTERNAL_PROOF_2026-06-18.md) | 2026-06-18 external proof run record; no inbound references. |
+| [`status/PROJECT_ASSESSMENT_2026-05-19_30D.md`](status/PROJECT_ASSESSMENT_2026-05-19_30D.md) | 30-day assessment for 2026-04-19 to 2026-05-19. |
+| [`status/PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md`](status/PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md) | 2026-05-12 proof-loop closure receipt; the timeline entry in [../status/STATUS.md](../status/STATUS.md) still describes it. |
+| [`status/SDK_CROSS_PARITY_DEBT_PLAN_2026-02-25.md`](status/SDK_CROSS_PARITY_DEBT_PLAN_2026-02-25.md) | 2026-02-25 plan snapshot; the live baseline is `scripts/baselines/cross_sdk_parity.json`, referenced from [../status/PARITY_BACKLOG.md](../status/PARITY_BACKLOG.md). |
+
 ## Policy
 
 - **Do not link to archived docs as current-state references.** They are snapshots, not live source of truth.

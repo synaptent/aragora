@@ -12,7 +12,7 @@ vetting the product sells. The receipt path printed at the end is meant to be
 linked from every issue filed for an adopted candidate.
 
 Usage:
-    python scripts/rank_research_candidates.py docs/research/2026-08-26-x-bookmarks-triage.md \
+    python scripts/rank_research_candidates.py docs/archive/research/2026-08-26-x-bookmarks-triage.md \
         --objective "Rank these externally sourced candidates by expected impact" \
         [--quick] [--max-goals 10] [--output-dir .aragora/research_intake]
 
