@@ -187,6 +187,8 @@ pytest tests/ -x -q --timeout=10  # Run a quick subset
 
 **Next:** [Developer quickstart](guides/DEVELOPER_QUICKSTART.md) | [CLAUDE.md](../CLAUDE.md) (architecture overview)
 
+**Set up and open a PR:** [Local development setup](guides/LOCAL_DEVELOPMENT.md) (virtual environment, API keys, server, tests and linting) | [First contribution guide](guides/FIRST_CONTRIBUTION.md) (suggested first issues and making your first PR)
+
 ---
 
 ## Comparison of packages

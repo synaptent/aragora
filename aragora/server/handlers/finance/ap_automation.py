@@ -30,8 +30,9 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -45,6 +46,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.validation.query_params import parse_date_range_params, parse_iso_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +101,7 @@ def get_ap_automation():
 async def handle_add_invoice(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Add a payable invoice.
@@ -114,8 +117,7 @@ async def handle_add_invoice(
         payment_terms: str (optional, default "Net 30"),
         early_pay_discount: float (optional, e.g. 0.02 for 2%),
         discount_deadline: str (optional, ISO format),
-        priority: str (optional - critical, high, normal, low, hold),
-        preferred_payment_method: str (optional - ach, wire, check, credit_card)
+        priority: str (optional - critical, high, normal, low, hold)
     }
     """
     # Validate required fields
@@ -146,17 +148,29 @@ async def handle_add_invoice(
     # Parse and validate dates
     invoice_date = None
     due_date = None
-    discount_deadline = None
+    # The service derives the discount deadline from invoice_date + discount_days.
+    discount: dict[str, int] = {}
 
     try:
         if data.get("invoice_date"):
-            invoice_date = datetime.fromisoformat(data["invoice_date"])
+            invoice_date = parse_iso_datetime(data["invoice_date"])
         if data.get("due_date"):
-            due_date = datetime.fromisoformat(data["due_date"])
+            due_date = parse_iso_datetime(data["due_date"])
         if data.get("discount_deadline"):
-            discount_deadline = datetime.fromisoformat(data["discount_deadline"])
+            deadline = parse_iso_datetime(data["discount_deadline"])
+            discount["discount_days"] = (deadline - (invoice_date or datetime.now())).days
     except ValueError:
         return error_response("Dates must be in ISO format", status=400)
+    # The AP service adds up to 60 days of payment terms to invoice_date.
+    if invoice_date and invoice_date > datetime.max - timedelta(days=60):
+        return error_response("invoice_date is out of range", status=400)
+
+    from aragora.services.ap_automation import PaymentPriority
+
+    try:
+        priority = PaymentPriority(data.get("priority") or "normal")
+    except ValueError:
+        return error_response("Invalid payment priority", status=400)
 
     # Check circuit breaker before processing
     if not _ap_circuit_breaker.can_proceed():
@@ -179,9 +193,8 @@ async def handle_add_invoice(
                 total_amount=amount_decimal,
                 payment_terms=data.get("payment_terms", "Net 30"),
                 early_pay_discount=data.get("early_pay_discount", 0),
-                discount_deadline=discount_deadline,
-                priority=data.get("priority"),
-                preferred_payment_method=data.get("preferred_payment_method"),
+                priority=priority,
+                **discount,
             )
 
         return success_response(
@@ -199,14 +212,28 @@ async def handle_add_invoice(
         return error_response("Invoice creation failed", status=500)
 
 
+def _filter_payment_status(invoices: list[Any], status: str | None) -> list[Any]:
+    """Filter outstanding invoices, which have no stored status field."""
+    if status == "paid":
+        return []
+    if status == "partial":
+        return [inv for inv in invoices if inv.amount_paid > 0]
+    if status == "unpaid":
+        return [inv for inv in invoices if inv.amount_paid == 0]
+    return invoices
+
+
 @rate_limit(requests_per_minute=120)
 @require_permission("ap:read")
 async def handle_list_invoices(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     List payable invoices with filters.
+
+    Date filters must be scalar ISO strings; repeated/list values return 400.
 
     GET /api/v1/accounting/ap/invoices
     Query params: {
@@ -220,19 +247,19 @@ async def handle_list_invoices(
     }
     """
     # Parse and validate filters
+    from aragora.services.ap_automation import PaymentPriority
+
     vendor_id = data.get("vendor_id")
     status = data.get("status")
-    priority = data.get("priority")
-    start_date = None
-    end_date = None
-
+    if status and status not in ("unpaid", "partial", "paid"):
+        return error_response("Invalid invoice status", status=400)
     try:
-        if data.get("start_date"):
-            start_date = datetime.fromisoformat(data["start_date"])
-        if data.get("end_date"):
-            end_date = datetime.fromisoformat(data["end_date"])
+        priority = PaymentPriority(data["priority"]) if data.get("priority") else None
     except ValueError:
-        return error_response("Dates must be in ISO format", status=400)
+        return error_response("Invalid payment priority", status=400)
+    start_date, end_date, date_error = parse_date_range_params(data)
+    if date_error:
+        return error_response(date_error, status=400)
 
     try:
         limit = int(data.get("limit", 100))
@@ -258,11 +285,20 @@ async def handle_list_invoices(
         async with _ap_circuit_breaker.protected_call():
             invoices = await ap.list_invoices(
                 vendor_id=vendor_id,
-                status=status,
                 priority=priority,
-                start_date=start_date,
-                end_date=end_date,
             )
+
+        # The service lists outstanding invoices only; payment status and dates
+        # are HTTP filters and must be applied before pagination.
+        invoices = _filter_payment_status(invoices, status)
+        if start_date:
+            invoices = [
+                inv for inv in invoices if inv.invoice_date.timestamp() >= start_date.timestamp()
+            ]
+        if end_date:
+            invoices = [
+                inv for inv in invoices if inv.invoice_date.timestamp() <= end_date.timestamp()
+            ]
 
         # Apply pagination
         paginated = invoices[offset : offset + limit]
@@ -290,6 +326,7 @@ async def handle_get_invoice(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get a payable invoice by ID.
@@ -333,6 +370,7 @@ async def handle_record_payment(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Record a payment for a payable invoice.
@@ -340,9 +378,7 @@ async def handle_record_payment(
     POST /api/v1/accounting/ap/invoices/{invoice_id}/payment
     Body: {
         amount: float (required),
-        payment_date: str (optional, ISO format),
-        payment_method: str (optional),
-        reference: str (optional)
+        payment_date: str (optional, ISO format)
     }
     """
     # Validate invoice_id
@@ -389,8 +425,6 @@ async def handle_record_payment(
                 invoice_id=invoice_id,
                 amount=amount_decimal,
                 payment_date=payment_date,
-                payment_method=data.get("payment_method"),
-                reference=data.get("reference"),
             )
 
         return success_response(
@@ -418,6 +452,7 @@ async def handle_record_payment(
 async def handle_optimize_payments(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Optimize payment timing for outstanding invoices.
@@ -425,8 +460,7 @@ async def handle_optimize_payments(
     POST /api/v1/accounting/ap/optimize
     Body: {
         invoice_ids: list[str] (optional, defaults to all unpaid),
-        available_cash: float (optional),
-        prioritize_discounts: bool (optional, default true)
+        available_cash: float (optional)
     }
     """
     # Validate available_cash if provided
@@ -441,7 +475,6 @@ async def handle_optimize_payments(
             return error_response("available_cash must be a valid number", status=400)
 
     invoice_ids = data.get("invoice_ids")
-    prioritize_discounts = data.get("prioritize_discounts", True)
 
     # Check circuit breaker before processing
     if not _ap_circuit_breaker.can_proceed():
@@ -463,8 +496,8 @@ async def handle_optimize_payments(
                     if inv:
                         invoices.append(inv)
             else:
-                # Get all unpaid invoices
-                invoices = await ap.list_invoices(status="unpaid")
+                # The service lists only invoices with an outstanding balance.
+                invoices = await ap.list_invoices()
 
             if not invoices:
                 return success_response(
@@ -477,7 +510,6 @@ async def handle_optimize_payments(
             schedule = await ap.optimize_payment_timing(
                 invoices=invoices,
                 available_cash=cash_decimal,
-                prioritize_discounts=prioritize_discounts,
             )
 
         return success_response(
@@ -501,6 +533,7 @@ async def handle_optimize_payments(
 async def handle_batch_payments(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Create a batch payment for multiple invoices.
@@ -527,6 +560,13 @@ async def handle_batch_payments(
         except ValueError:
             return error_response("payment_date must be in ISO format", status=400)
 
+    from aragora.services.ap_automation import PaymentMethod
+
+    try:
+        payment_method = PaymentMethod(data.get("payment_method") or "ach")
+    except ValueError:
+        return error_response("Invalid payment_method", status=400)
+
     # Check circuit breaker before processing
     if not _ap_circuit_breaker.can_proceed():
         remaining = _ap_circuit_breaker.cooldown_remaining()
@@ -551,7 +591,7 @@ async def handle_batch_payments(
             batch = await ap.batch_payments(
                 invoices=invoices,
                 payment_date=payment_date,
-                payment_method=data.get("payment_method"),
+                payment_method=payment_method,
             )
 
         return success_response(
@@ -579,6 +619,7 @@ async def handle_batch_payments(
 async def handle_get_forecast(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get cash flow forecast.
@@ -632,6 +673,7 @@ async def handle_get_forecast(
 async def handle_get_discounts(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get early payment discount opportunities.
@@ -667,6 +709,15 @@ async def handle_get_discounts(
         return error_response("Failed to retrieve discounts", status=500)
 
 
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -694,43 +745,52 @@ class APAutomationHandler(BaseHandler):
         "/api/v1/accounting/ap/batch",
         "/api/v1/accounting/ap/forecast",
         "/api/v1/accounting/ap/discounts",
-        "/api/v1/accounting/connect",
-        "/api/v1/accounting/customers",
-        "/api/v1/accounting/disconnect",
-        "/api/v1/accounting/expenses",
-        "/api/v1/accounting/expenses/categorize",
-        "/api/v1/accounting/expenses/export",
-        "/api/v1/accounting/expenses/pending",
-        "/api/v1/accounting/expenses/stats",
-        "/api/v1/accounting/expenses/sync",
-        "/api/v1/accounting/expenses/upload",
-        "/api/v1/accounting/invoices",
-        "/api/v1/accounting/invoices/overdue",
-        "/api/v1/accounting/invoices/pending",
-        "/api/v1/accounting/invoices/stats",
-        "/api/v1/accounting/invoices/status",
-        "/api/v1/accounting/invoices/upload",
-        "/api/v1/accounting/payments/scheduled",
-        "/api/v1/accounting/purchase-orders",
-        "/api/v1/accounting/reports",
-        "/api/v1/accounting/status",
-        "/api/v1/accounting/transactions",
-        "/api/v1/accounting/gusto/employees",
-        "/api/v1/accounting/gusto/payrolls",
-        "/api/v1/accounting/gusto/status",
-        "/api/v1/gusto/connect",
-        "/api/v1/gusto/disconnect",
-        "/api/v1/gusto/employees",
-        "/api/v1/gusto/payrolls",
-        "/api/v1/gusto/status",
-        "/api/v1/ap/batch-payments",
-        "/api/v1/ap/cash-flow",
-        "/api/v1/ap/discount-opportunities",
-        "/api/v1/ap/invoices",
-        "/api/v1/ap/optimize",
     ]
 
     DYNAMIC_ROUTES: dict[str, Any] = {
         "GET /api/v1/accounting/ap/invoices/{invoice_id}": handle_get_invoice,
         "POST /api/v1/accounting/ap/invoices/{invoice_id}/payment": handle_record_payment,
     }
+    # The OpenAPI generator reads per-route verbs from _ROUTE_MAP, not DYNAMIC_ROUTES.
+    _ROUTE_MAP = {**_ROUTE_MAP, **DYNAMIC_ROUTES}
+
+    def can_handle(self, path: str) -> bool:
+        """Claim only AP routes, including single-segment dynamic IDs."""
+        return path in self.ROUTES or any(
+            re.fullmatch(re.sub(r"\{[^}]+\}", "[^/]+", route.split(" ", 1)[1]), path)
+            for route in self.DYNAMIC_ROUTES
+        )
+
+    async def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        """Dispatch modular GET requests through the permission-checked functions."""
+        if path == "/api/v1/accounting/ap/invoices":
+            return await handle_list_invoices(query_params, handler=handler)
+        if path == "/api/v1/accounting/ap/forecast":
+            return await handle_get_forecast(query_params, handler=handler)
+        if path == "/api/v1/accounting/ap/discounts":
+            return await handle_get_discounts(query_params, handler=handler)
+        match = re.fullmatch(r"/api/v1/accounting/ap/invoices/([^/]+)", path)
+        if match:
+            return await handle_get_invoice(query_params, invoice_id=match[1], handler=handler)
+        return error_response("Route not found", status=404)
+
+    async def handle_post(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult:
+        """Read the HTTP body and dispatch AP mutations."""
+        data = self.read_json_body(handler)
+        if data is None:
+            approve = path.endswith(("/optimize", "/batch"))
+            return await _reject_invalid_body(
+                "finance:approve" if approve else "finance:write", handler
+            )
+        if path == "/api/v1/accounting/ap/invoices":
+            return await handle_add_invoice(data, handler=handler)
+        if path == "/api/v1/accounting/ap/optimize":
+            return await handle_optimize_payments(data, handler=handler)
+        if path == "/api/v1/accounting/ap/batch":
+            return await handle_batch_payments(data, handler=handler)
+        match = re.fullmatch(r"/api/v1/accounting/ap/invoices/([^/]+)/payment", path)
+        if match:
+            return await handle_record_payment(data, invoice_id=match[1], handler=handler)
+        return error_response("Route not found", status=404)

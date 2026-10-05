@@ -86,7 +86,7 @@ def main() -> int:
 
     require_contains(
         "docs/README.md",
-        "auditable execution control plane for consequential",
+        "auditable execution control plane for AI-assisted decisions",
     )
     require_contains("docs/README.md", "Cold Reviewer Guide")
     require_contains("docs/README.md", "Supported API Surface")
@@ -109,7 +109,7 @@ def main() -> int:
 
     require_contains(
         "docs-site/docusaurus.config.js",
-        "Auditable execution control plane for consequential AI-assisted work",
+        "Auditable execution control plane for AI-assisted decisions",
     )
     require_contains("docs-site/docusaurus.config.js", "github.com/synaptent/aragora")
     require_not_contains("docs-site/docusaurus.config.js", "github.com/aragora/aragora")
@@ -117,6 +117,10 @@ def main() -> int:
     require_not_contains("docs-site/docusaurus.config.js", "Aragora v2.4")
 
     require_contains("docs-site/src/pages/index.md", "Cold Reviewer Guide")
+    require_contains(
+        "docs-site/src/pages/index.md",
+        "auditable execution control plane for AI-assisted decisions",
+    )
     require_contains("docs-site/src/pages/index.md", "Supported API Surface")
     require_contains("docs-site/src/pages/index.md", "Current Boundary")
 

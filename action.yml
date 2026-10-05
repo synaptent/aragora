@@ -323,11 +323,15 @@ runs:
         RECEIPT_OK=false
         if [ -s ./aragora-artifacts/outcome.json ]; then
           # An empty path is equivalent to unset: the receipt is emitted unsigned.
+          # The collection above never posts evidence, so the receipt decides on
+          # the reviewer verdicts themselves (--decision-basis reviews); the basis
+          # is recorded in the signed receipt.
           ARAGORA_ODR_SIGNING_KEY_FILE="$ODR_KEY_FILE" \
           "$RECEIPT_PY" "$GITHUB_ACTION_PATH/scripts/emit_pr_receipt.py" \
             --outcome ./aragora-artifacts/outcome.json \
             --out ./aragora-artifacts/decision-receipt.odr.json \
             --verify \
+            --decision-basis reviews \
             --github-output "$GITHUB_OUTPUT" >> "$LOG" 2>&1
           if [ "$?" -eq 0 ]; then
             RECEIPT_OK=true

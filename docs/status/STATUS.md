@@ -181,7 +181,7 @@ The short version on April 21, 2026:
 - **Agent types**: 43
 - **API operations**: 3,100+ across 2,600+ paths
 - **RBAC permissions**: 420+
-- **Version**: v2.11.0
+- **Version**: v2.11.1
 
 ---
 
@@ -386,7 +386,7 @@ Major sprint on production-grade multi-agent coordination, security hardening (e
 ### Infrastructure
 - **Documentation site**: Triggered GitHub Pages deployment for `docs.aragora.ai` (Docusaurus v3.7.0, 13K+ pages)
 - **SDK parity**: 10/10 contract parity tests passing
-- **aragora-debate package**: v0.2.0 built and validated via twine check
+- **aragora-debate package**: v0.2.0 built and validated via twine check (historical, current: 0.2.3)
 
 ### Overall Health Score: 9.7/10 (up from 9.6/10)
 
@@ -585,7 +585,7 @@ Independent verification found substantial launch-ready infrastructure, but Arag
 
 ## Current Release
 
-Current released version is **v2.11.0** (released 2026-09-25).
+Current released version is **v2.11.1** (released 2026-09-28).
 
 ### v2.5.0 - Type Safety & SDK Expansion (January 2026)
 
@@ -2119,7 +2119,7 @@ else:
 
 **Phase 9: Event-Driven Cross-Pollination** (NEW)
 - `aragora/events/cross_subscribers.py` - CrossSubscriberManager for event-driven subsystem communication
-- `aragora/events/arena_bridge.py` - ArenaEventBridge connecting Arena events to cross-subscribers
+- `aragora/debate/arena_bridge.py` - ArenaEventBridge connecting Arena events to cross-subscribers
 - `aragora/reasoning/evidence_bridge.py` - EvidenceProvenanceBridge for claim-evidence linking
 - `aragora/rlm/debate_integration.py` - DebateTrajectoryCollector for RLM training from debates
 - `aragora/server/handlers/cross_pollination.py` - Observability endpoints for cross-pollination status

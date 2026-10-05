@@ -25,7 +25,7 @@ from aragora.reasoning.crux_detector import (
 )
 
 if TYPE_CHECKING:
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.reasoning.belief import BeliefNetwork
 
 # ---------------------------------------------------------------------------

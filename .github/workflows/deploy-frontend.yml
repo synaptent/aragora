@@ -308,7 +308,7 @@ jobs:
       # image definition. NEXT_PUBLIC_* is deliberately left at the Dockerfile's
       # defaults -- see the note on the build-args-free step below.
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.frontend

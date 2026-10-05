@@ -25,6 +25,7 @@ from pathlib import Path
 from aragora.config.trusted_authors import resolve_trusted_authors
 from aragora.swarm.auto_merge_green import _reduce_rollup_states
 from aragora.swarm.github_app_auth import gh_subprocess_run
+from aragora.swarm.merge_halt import evaluate_merge_halt
 from aragora.swarm.merge_quorum_io import (
     fetch_evidence_comments,
     fetch_pr_context,
@@ -439,6 +440,10 @@ def _merge_pr(
     """Squash-merge a PR pinned to its authorized full head SHA."""
     if not isinstance(head_sha, str) or not _is_full_head_sha(head_sha):
         return False, "missing or malformed full head SHA"
+    # #9216: this daemon-driven admin merge must obey the main-red halt.
+    halt = evaluate_merge_halt(pr_number, head_sha)
+    if not halt.allowed:
+        return False, halt.reason
     args = [
         "pr",
         "merge",
