@@ -79,10 +79,9 @@ def handler():
 
 
 @pytest.fixture
-def upload_root(monkeypatch, tmp_path):
+def upload_root(tmp_path):
     """Configure tmp_path as the only directory folder scan/upload may read."""
-    monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(tmp_path))
-    return tmp_path
+    return tmp_path.resolve()
 
 
 class TestFolderUploadStatus:
@@ -198,7 +197,7 @@ class TestFolderScan:
         with (
             patch.object(handler, "read_json_body_validated", return_value=({}, None)),
         ):
-            result = await handler._scan_folder(mock_handler)
+            result = await handler._scan_folder(mock_handler, [])
             assert result.status_code == 400
 
     @pytest.mark.asyncio
@@ -211,7 +210,7 @@ class TestFolderScan:
             "read_json_body_validated",
             return_value=({"path": str(upload_root / "missing")}, None),
         ):
-            result = await handler._scan_folder(mock_handler)
+            result = await handler._scan_folder(mock_handler, [upload_root])
             assert result.status_code == 404
 
     @pytest.mark.asyncio
@@ -225,7 +224,7 @@ class TestFolderScan:
             "read_json_body_validated",
             return_value=({"path": str(upload_root / "file.txt")}, None),
         ):
-            result = await handler._scan_folder(mock_handler)
+            result = await handler._scan_folder(mock_handler, [upload_root])
             assert result.status_code == 400
 
     @pytest.mark.asyncio
@@ -236,7 +235,7 @@ class TestFolderScan:
         with patch.object(
             handler, "read_json_body_validated", return_value=({"path": str(tmp_path)}, None)
         ):
-            result = await handler._scan_folder(MagicMock())
+            result = await handler._scan_folder(MagicMock(), [])
             assert result.status_code == 403
 
 
@@ -250,7 +249,7 @@ class TestFolderUploadStart:
         with (
             patch.object(handler, "read_json_body_validated", return_value=({}, None)),
         ):
-            result = handler._start_upload(mock_handler, SCOPE)
+            result = handler._start_upload(mock_handler, SCOPE, [])
             assert result.status_code == 400
 
     def test_start_upload_path_not_exists(self, handler, upload_root):
@@ -262,7 +261,7 @@ class TestFolderUploadStart:
             "read_json_body_validated",
             return_value=({"path": str(upload_root / "missing")}, None),
         ):
-            result = handler._start_upload(mock_handler, SCOPE)
+            result = handler._start_upload(mock_handler, SCOPE, [upload_root])
             assert result.status_code == 404
             assert FolderUploadHandler._jobs == {}
 
@@ -273,7 +272,7 @@ class TestFolderUploadStart:
         with patch.object(
             handler, "read_json_body_validated", return_value=({"path": str(outside)}, None)
         ):
-            result = handler._start_upload(MagicMock(), SCOPE)
+            result = handler._start_upload(MagicMock(), SCOPE, [upload_root])
             assert result.status_code == 403
             assert FolderUploadHandler._jobs == {}
 

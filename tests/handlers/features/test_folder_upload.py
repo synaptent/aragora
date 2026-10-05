@@ -32,8 +32,9 @@ from aragora.server.handlers.features.folder_upload import (
     FolderUploadHandler,
     FolderUploadJob,
     FolderUploadStatus,
-    _validate_upload_path,
 )
+from aragora.server.handlers.features import folder_upload
+from aragora.documents.folder.import_roots import org_import_roots
 from aragora.tenancy.record_scope import OrgScope
 
 SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
@@ -208,13 +209,20 @@ def reset_rate_limiters():
         pass
 
 
-ALLOWED_DIRS_ENV = "ARAGORA_ALLOWED_UPLOAD_DIRS"
+def _allow(monkeypatch, *roots: Path) -> None:
+    """Make ``roots`` the import roots of test-org-001."""
+    roots_json = json.dumps({"test-org-001": [str(root) for root in roots]})
+    monkeypatch.setenv("ARAGORA_ORG_IMPORT_ROOTS", roots_json)
+
+
+def _validate_upload_path(path: str):
+    return folder_upload._validate_upload_path(path, org_import_roots("test-org-001", []))
 
 
 @pytest.fixture(autouse=True)
 def allow_tmp_path_uploads(monkeypatch, tmp_path):
     """Folder scan and upload may read the test's tmp_path (tests can override)."""
-    monkeypatch.setenv(ALLOWED_DIRS_ENV, str(tmp_path))
+    _allow(monkeypatch, tmp_path)
 
 
 # ===========================================================================
@@ -412,7 +420,7 @@ class TestValidateUploadPath:
         blocked_dir = tmp_path / "blocked"
         blocked_dir.mkdir()
 
-        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed_dir))
+        _allow(monkeypatch, allowed_dir)
 
         assert _validate_upload_path(str(allowed_dir)) == allowed_dir.resolve()
 
@@ -425,15 +433,15 @@ class TestValidateUploadPath:
         sub_dir = allowed_dir / "sub"
         sub_dir.mkdir(parents=True)
 
-        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed_dir))
+        _allow(monkeypatch, allowed_dir)
 
         assert _validate_upload_path(str(sub_dir)) == sub_dir.resolve()
 
     def test_no_allowed_dirs_refuses_every_path(self, tmp_path, monkeypatch):
-        monkeypatch.delenv(ALLOWED_DIRS_ENV)
+        monkeypatch.delenv("ARAGORA_ORG_IMPORT_ROOTS")
         result = _validate_upload_path(str(tmp_path))
         assert _status(result) == 403
-        assert _body(result)["code"] == "upload_dirs_not_configured"
+        assert _body(result)["code"] == "path_not_allowed"
 
     def test_empty_string_path(self):
         # An empty path resolves to the working directory, outside tmp_path
@@ -443,7 +451,7 @@ class TestValidateUploadPath:
     def test_path_with_null_bytes(self, tmp_path):
         """Path with null bytes should fail."""
         result = _validate_upload_path(f"{tmp_path}/\x00bad")
-        assert _status(result) == 400
+        assert _status(result) == 403
 
     def test_symlink_directory(self, tmp_path):
         real_dir = tmp_path / "real"
@@ -461,7 +469,7 @@ class TestValidateUploadPath:
         dir_b.mkdir()
         dir_c.mkdir()
 
-        monkeypatch.setenv(ALLOWED_DIRS_ENV, f"{dir_a},{dir_b}")
+        _allow(monkeypatch, dir_a, dir_b)
 
         assert _validate_upload_path(str(dir_a)) == dir_a.resolve()
         assert _validate_upload_path(str(dir_b)) == dir_b.resolve()
@@ -724,7 +732,7 @@ class TestScanFolder:
         test_dir.mkdir()
         allowed = tmp_path / "allowed"
         allowed.mkdir()
-        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed))
+        _allow(monkeypatch, allowed)
         http = _make_http(body={"path": str(test_dir)})
         result = await handler.handle_post("/api/v1/documents/folder/scan", {}, http)
         assert _status(result) == 403
@@ -903,7 +911,7 @@ class TestStartUpload:
         target.mkdir()
         allowed = tmp_path / "allowed"
         allowed.mkdir()
-        monkeypatch.setenv(ALLOWED_DIRS_ENV, str(allowed))
+        _allow(monkeypatch, allowed)
         http = _make_http(body={"path": str(target)})
         result = await handler.handle_post("/api/v1/documents/folder/upload", {}, http)
         assert _status(result) == 403

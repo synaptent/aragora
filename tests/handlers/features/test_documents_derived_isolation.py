@@ -90,7 +90,8 @@ def _deferred_background_work(monkeypatch, tmp_path):
     monkeypatch.setattr(folder_upload, "threading", fake_threading)
     monkeypatch.setattr(knowledge, "_jobs", {})
     monkeypatch.setattr(knowledge, "_executor", SimpleNamespace(submit=lambda fn: None))
-    monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(tmp_path))
+    roots = json.dumps({ORG_A: [str(tmp_path / "a-folder")]})
+    monkeypatch.setenv("ARAGORA_ORG_IMPORT_ROOTS", roots)
     FolderUploadHandler._jobs.clear()
     yield
     FolderUploadHandler._jobs.clear()
