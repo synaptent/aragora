@@ -13,23 +13,24 @@ Every route needs a caller with an org. Folder uploads belong to the org of the
 user who started them and their documents are stored under that org; another
 org's folder answers like a missing one.
 
-Scan and upload read server directories, so they only accept folders inside the
-directories listed in ARAGORA_ALLOWED_UPLOAD_DIRS and are refused while none is
-configured.
+Scan and upload read server directories, so they only accept folders inside an
+import root configured for the caller's org in ARAGORA_ORG_IMPORT_ROOTS (see
+folder_import_roots) and are refused while the org has none.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import threading
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
+from .folder_import_roots import inside_roots, org_import_roots, protected_paths
 from ..base import (
     BaseHandler,
     HandlerResult,
@@ -51,69 +52,46 @@ from aragora.tenancy.record_scope import (
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_UPLOAD_DIRS_ENV = "ARAGORA_ALLOWED_UPLOAD_DIRS"
 
-
-def get_allowed_upload_dirs() -> list[Path]:
-    """Directories folder scan and upload may read, from ``ARAGORA_ALLOWED_UPLOAD_DIRS``.
-
-    The value is a comma-separated list of absolute directory paths and is read
-    on every call. Relative, missing and non-directory entries are skipped; an
-    empty result means folder scan and upload are refused.
-    """
-    allowed: list[Path] = []
-    for entry in os.environ.get(ALLOWED_UPLOAD_DIRS_ENV, "").split(","):
-        entry = entry.strip()
-        if not entry or not os.path.isabs(entry):
-            continue
-        try:
-            resolved = Path(entry).resolve()
-        except (OSError, RuntimeError, ValueError):
-            continue
-        if resolved.is_dir():
-            allowed.append(resolved)
-    return allowed
-
-
-def _upload_dirs_not_configured() -> HandlerResult:
+def _import_roots_not_configured() -> HandlerResult:
     return json_response(
         {
-            "error": "Folder scan and upload are disabled: no upload directories are "
-            f"configured on this server ({ALLOWED_UPLOAD_DIRS_ENV})",
-            "code": "upload_dirs_not_configured",
+            "error": "Folder scan and upload are disabled: no import root is configured "
+            "for your organization (ARAGORA_ORG_IMPORT_ROOTS)",
+            "code": "import_roots_not_configured",
         },
         status=403,
     )
 
 
-def _validate_upload_path(folder_path: str) -> Path | HandlerResult:
+def _validate_upload_path(folder_path: str, roots: Sequence[Path]) -> Path | HandlerResult:
     """Resolve a requested folder, or return the error response refusing it.
 
     Containment is checked on the fully resolved path (symlinks and ``..``
     included) before the path is tested for existence, so a path outside every
     allowed directory gets the same answer whether or not it exists.
     """
-    allowed_dirs = get_allowed_upload_dirs()
-    if not allowed_dirs:
-        return _upload_dirs_not_configured()
-
-    try:
-        path = Path(folder_path).resolve()
-    except (OSError, RuntimeError, ValueError):
-        return error_response("Invalid path", 400)
-
-    if not any(path.is_relative_to(allowed_dir) for allowed_dir in allowed_dirs):
-        logger.warning("Folder path outside the allowed upload directories refused")
+    if not inside_roots(folder_path, roots):
+        logger.warning("Folder path outside the caller's import roots refused")
         return json_response(
             {"error": "Access denied: path not in allowed directories", "code": "path_not_allowed"},
             status=403,
         )
 
+    path = Path(folder_path).resolve()
     if not path.exists():
         return error_response(f"Path does not exist: {folder_path}", 404)
     if not path.is_dir():
         return error_response(f"Path is not a directory: {folder_path}", 400)
     return path
+
+
+def _drop_entries_outside(result, folder: Path) -> None:
+    """Remove every scan entry whose resolved path leaves ``folder``, so it is never read."""
+    own, link = [folder.resolve()], "Symlink points outside root: "
+    result.included_files = [f for f in result.included_files if inside_roots(f.absolute_path, own)]
+    result.excluded_files = [f for f in result.excluded_files if inside_roots(folder / f.path, own)]
+    result.warnings = [w for w in result.warnings if not w.startswith(link)]
 
 
 class FolderUploadStatus(Enum):
@@ -261,12 +239,14 @@ class FolderUploadHandler(BaseHandler):
         scope, scope_err = require_org_scope(handler)
         if scope is None:
             return scope_err
-        if not get_allowed_upload_dirs():
-            return _upload_dirs_not_configured()
+        store_dir = getattr(self.get_document_store(), "storage_dir", None)
+        roots = org_import_roots(scope.org_id, protected_paths(self.get_nomic_dir(), store_dir))
+        if not roots:
+            return _import_roots_not_configured()
 
         if path == "/api/v1/documents/folder/scan":
-            return await self._scan_folder(handler)
-        return self._start_upload(handler, scope)
+            return await self._scan_folder(handler, roots)
+        return self._start_upload(handler, scope, roots)
 
     @handle_errors("folder upload deletion")
     @require_permission("documents:delete")
@@ -284,7 +264,7 @@ class FolderUploadHandler(BaseHandler):
         return None
 
     @handle_errors("folder scan")
-    async def _scan_folder(self, handler) -> HandlerResult:
+    async def _scan_folder(self, handler, roots: Sequence[Path]) -> HandlerResult:
         """Scan a folder and return what would be uploaded.
 
         Request body:
@@ -307,7 +287,7 @@ class FolderUploadHandler(BaseHandler):
         if not folder_path:
             return error_response("Missing required field: path", 400)
 
-        path = _validate_upload_path(folder_path)
+        path = _validate_upload_path(folder_path, roots)
         if isinstance(path, HandlerResult):
             return path
 
@@ -332,6 +312,7 @@ class FolderUploadHandler(BaseHandler):
 
             # Run scan
             result = await scanner.scan(path)
+            _drop_entries_outside(result, path)
 
             return json_response(result.to_dict())
 
@@ -345,7 +326,7 @@ class FolderUploadHandler(BaseHandler):
             return error_response(safe_error_message(e, "Scan"), 500)
 
     @handle_errors("folder upload")
-    def _start_upload(self, handler, scope: OrgScope) -> HandlerResult:
+    def _start_upload(self, handler, scope: OrgScope, roots: Sequence[Path]) -> HandlerResult:
         """Start an async folder upload.
 
         Request body:
@@ -375,7 +356,7 @@ class FolderUploadHandler(BaseHandler):
         if not folder_path:
             return error_response("Missing required field: path", 400)
 
-        path = _validate_upload_path(folder_path)
+        path = _validate_upload_path(folder_path, roots)
         if isinstance(path, HandlerResult):
             return path
 
@@ -442,6 +423,7 @@ class FolderUploadHandler(BaseHandler):
                 scan_result = loop.run_until_complete(scanner.scan(path))
             finally:
                 loop.close()
+            _drop_entries_outside(scan_result, path)
 
             # Update job with scan results
             with FolderUploadHandler._jobs_lock:
@@ -477,6 +459,8 @@ class FolderUploadHandler(BaseHandler):
             for file_info in scan_result.included_files:
                 try:
                     file_path = Path(file_info.absolute_path)
+                    if not inside_roots(file_path, [Path(path).resolve()]):
+                        continue  # replaced by a link leaving the folder after the scan
 
                     # Validate file before reading (check filename security and size)
                     # Note: size is from scan, actual read will verify

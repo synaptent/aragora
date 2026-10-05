@@ -6,6 +6,7 @@ anonymous callers get 401 and static-token-only callers 403 ``org_required``.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -102,7 +103,8 @@ def records(server, tmp_path, monkeypatch) -> SimpleNamespace:
         monkeypatch.setitem(handler_for(server, path).ctx, "document_store", store)
     monkeypatch.setattr(knowledge, "_jobs", {})
     monkeypatch.setattr(knowledge, "_executor", SimpleNamespace(submit=lambda fn: None))
-    monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(tmp_path))
+    (tmp_path / "imports").mkdir()
+    monkeypatch.setenv("ARAGORA_ORG_IMPORT_ROOTS", json.dumps({ORG_A: [str(tmp_path / "imports")]}))
 
     now = datetime.now(timezone.utc)
     FolderUploadHandler._jobs.clear()

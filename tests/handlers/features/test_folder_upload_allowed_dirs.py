@@ -1,4 +1,4 @@
-"""Folder scan and upload are confined to ARAGORA_ALLOWED_UPLOAD_DIRS (VAL-DOC-018).
+"""Folder scan and upload are confined to the caller org's ARAGORA_ORG_IMPORT_ROOTS (VAL-DOC-018).
 
 The folder handler runs against a real ``DocumentStore`` on disk and real JWTs.
 Without configured upload directories both routes refuse before reading the
@@ -13,6 +13,7 @@ import asyncio
 import io
 import itertools
 import json
+import logging
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,19 +21,19 @@ from typing import Any
 
 import pytest
 
-from aragora.documents.parsing import DocumentStore
-from aragora.server.handlers.features import folder_upload
+from aragora.documents.parsing import DocumentStore, parse_document
+from aragora.server.handlers.features import folder_import_roots, folder_upload
 from aragora.server.handlers.features.folder_upload import FolderUploadHandler
 
 pytestmark = pytest.mark.no_auto_auth
 
-ENV = "ARAGORA_ALLOWED_UPLOAD_DIRS"
+ENV = "ARAGORA_ORG_IMPORT_ROOTS"
 ORG_A = "org-a-upload-root"
 ORG_B = "org-b-upload-root"
 USER_A = "user-a-upload-root"
 USER_B = "user-b-upload-root"
 ROUTES = ["/api/v1/documents/folder/scan", "/api/v1/documents/folder/upload"]
-NOT_CONFIGURED_CODE = "upload_dirs_not_configured"
+NOT_CONFIGURED_CODE = "import_roots_not_configured"
 
 _client_ips = (f"10.41.{n // 250}.{n % 250 + 1}" for n in itertools.count())
 
@@ -68,11 +69,14 @@ class _DeferredThread:
 
 
 @pytest.fixture(autouse=True)
-def _deferred_upload_work(monkeypatch):
+def _deferred_upload_work(monkeypatch, tmp_path):
     _DeferredThread.started = []
     fake_threading = SimpleNamespace(Thread=_DeferredThread, Lock=threading.Lock)
     monkeypatch.setattr(folder_upload, "threading", fake_threading)
-    monkeypatch.delenv(ENV, raising=False)
+    for name in (ENV, "ARAGORA_ALLOWED_UPLOAD_DIRS", *folder_import_roots.SECRET_FILE_ENV_VARS):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "app-data").mkdir()
+    monkeypatch.setenv("ARAGORA_DATA_DIR", str(tmp_path / "app-data"))
     FolderUploadHandler._jobs.clear()
     yield
     FolderUploadHandler._jobs.clear()
@@ -132,8 +136,9 @@ def store(tmp_path: Path) -> DocumentStore:
 
 
 @pytest.fixture
-def folders(store) -> FolderUploadHandler:
-    return FolderUploadHandler(server_context={"document_store": store})
+def folders(store, tmp_path: Path) -> FolderUploadHandler:
+    ctx = {"document_store": store, "nomic_dir": tmp_path / "nomic"}
+    return FolderUploadHandler(server_context=ctx)
 
 
 @pytest.fixture
@@ -144,12 +149,22 @@ def upload_root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def b_root(tmp_path: Path) -> Path:
+    (tmp_path / "b-uploads").mkdir()
+    return (tmp_path / "b-uploads").resolve()
+
+
+@pytest.fixture
 def a_folder(upload_root: Path) -> Path:
     folder = upload_root / "a-folder"
     folder.mkdir()
     (folder / "notes.md").write_text("upload root notes")
     (folder / "plan.txt").write_text("upload root plan")
     return folder
+
+
+def _configure(monkeypatch, mapping: dict[str, list[Path]]) -> None:
+    monkeypatch.setenv(ENV, json.dumps({org: [str(p) for p in ps] for org, ps in mapping.items()}))
 
 
 def _post(folders: FolderUploadHandler, auth: str | None, route: str, payload: dict[str, Any]):
@@ -167,18 +182,29 @@ def _doc_ids(store: DocumentStore) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
+NOT_CONFIGURED = {
+    "unset": None,
+    "empty": "",
+    "empty_object": "{}",
+    "invalid_json": "{not json",
+    "not_an_object": lambda a, b: json.dumps([str(a)]),
+    "string_not_list": lambda a, b: json.dumps({ORG_A: str(a)}),
+    "relative_root": lambda a, b: json.dumps({ORG_A: ["uploads"]}),
+    "missing_root": lambda a, b: json.dumps({ORG_A: [str(a / "missing")]}),
+    "other_org_only": lambda a, b: json.dumps({ORG_B: [str(b)]}),
+}
+
+
 class TestNotConfigured:
     @pytest.mark.parametrize("route", ROUTES)
-    @pytest.mark.parametrize(
-        "value", [None, "", " , ", "/nonexistent/aragora-upload-root-xyz", "relative/uploads"]
-    )
+    @pytest.mark.parametrize("case", sorted(NOT_CONFIGURED))
     def test_refused_with_clear_error_and_no_side_effect(
-        self, monkeypatch, folders, store, auth_a, a_folder, route, value, tmp_path
+        self, monkeypatch, folders, store, auth_a, b_root, a_folder, route, case, tmp_path
     ):
+        value = NOT_CONFIGURED[case]
         if value is not None:
-            monkeypatch.setenv(ENV, value)
+            monkeypatch.setenv(ENV, value(a_folder.parent, b_root) if callable(value) else value)
         monkeypatch.chdir(tmp_path)
-        (tmp_path / "relative" / "uploads").mkdir(parents=True)
 
         def _must_not_run(*_args, **_kwargs):
             raise AssertionError("the request path must not be inspected")
@@ -190,10 +216,21 @@ class TestNotConfigured:
 
         assert status == 403
         assert body["code"] == NOT_CONFIGURED_CODE
-        assert "ARAGORA_ALLOWED_UPLOAD_DIRS" in body["error"]
+        assert ENV in body["error"]
         assert FolderUploadHandler._jobs == {}
         assert _DeferredThread.started == []
         assert _doc_ids(store) == before
+
+    @pytest.mark.parametrize("route", ROUTES)
+    def test_legacy_upload_dirs_alone_authorize_nothing(
+        self, monkeypatch, caplog, folders, auth_a, upload_root, a_folder, route
+    ):
+        monkeypatch.setenv("ARAGORA_ALLOWED_UPLOAD_DIRS", str(upload_root))
+        with caplog.at_level(logging.WARNING, logger=folder_import_roots.__name__):
+            status, body = _post(folders, auth_a, route, {"path": str(a_folder)})
+        assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
+        assert "ARAGORA_ALLOWED_UPLOAD_DIRS" in caplog.text
+        assert FolderUploadHandler._jobs == {}
 
     @pytest.mark.parametrize("route", ROUTES)
     def test_refused_even_without_a_path(self, folders, auth_a, route):
@@ -222,17 +259,18 @@ class TestNotConfigured:
 
 
 @pytest.fixture
-def configured(monkeypatch, upload_root: Path) -> Path:
-    monkeypatch.setenv(ENV, str(upload_root))
+def configured(monkeypatch, upload_root: Path, b_root: Path) -> Path:
+    _configure(monkeypatch, {ORG_A: [upload_root], ORG_B: [b_root]})
     return upload_root
 
 
 class TestInsideTheRoot:
-    def test_scan_lists_the_folder(self, configured, folders, auth_a, a_folder):
+    def test_scan_lists_the_folder(self, configured, folders, auth_a, auth_b, b_root, a_folder):
         status, body = _post(folders, auth_a, ROUTES[0], {"path": str(a_folder)})
         assert status == 200, body
         assert body["statistics"]["included_count"] == 2
         assert sorted(f["path"] for f in body["included_files"]) == ["notes.md", "plan.txt"]
+        assert _post(folders, auth_b, ROUTES[0], {"path": str(b_root)})[0] == 200
         assert FolderUploadHandler._jobs == {}
 
     def test_upload_stores_documents_under_the_callers_org(
@@ -274,14 +312,31 @@ class TestInsideTheRoot:
             main_loop.close()
         assert FolderUploadHandler._jobs[body["folder_id"]].status.value == "completed"
 
-    def test_any_configured_directory_is_accepted(
-        self, monkeypatch, folders, auth_a, a_folder, tmp_path
-    ):
-        other = tmp_path / "other-root"
-        other.mkdir()
-        monkeypatch.setenv(ENV, f"{other}, {a_folder.parent}")
+    def test_an_org_may_have_several_roots(self, monkeypatch, folders, auth_a, b_root, a_folder):
+        _configure(monkeypatch, {ORG_A: [b_root, a_folder.parent]})
         status, _ = _post(folders, auth_a, ROUTES[0], {"path": str(a_folder)})
         assert status == 200
+
+    @pytest.mark.parametrize("follow", [False, True])
+    def test_entries_resolving_outside_the_folder_are_skipped(
+        self, configured, folders, store, auth_a, b_root, a_folder, tmp_path, follow
+    ):
+        (tmp_path / "secret.md").write_text("outside secret")
+        (a_folder / "linked.md").symlink_to(tmp_path / "secret.md")
+        (a_folder / "linked-dir").symlink_to(b_root, target_is_directory=True)
+        payload = {"path": str(a_folder), "config": {"followSymlinks": follow}}
+
+        status, scan = _post(folders, auth_a, ROUTES[0], payload)
+        assert status == 200, scan
+        assert "linked" not in json.dumps(scan)
+        assert sorted(f["path"] for f in scan["included_files"]) == ["notes.md", "plan.txt"]
+
+        status, body = _post(folders, auth_a, ROUTES[1], payload)
+        assert status == 200, body
+        _run_background_work()
+        docs = [store.get(d) for d in FolderUploadHandler._jobs[body["folder_id"]].document_ids]
+        assert sorted(doc.filename for doc in docs) == ["notes.md", "plan.txt"]
+        assert not any("outside secret" in doc.text for doc in docs)
 
     @pytest.mark.parametrize("route", ROUTES)
     def test_missing_path_inside_the_root_is_404(self, configured, folders, auth_a, route):
@@ -298,32 +353,38 @@ class TestInsideTheRoot:
 
 class TestOutsideTheRoot:
     @pytest.fixture
-    def outside_paths(self, tmp_path: Path, configured: Path, store) -> dict[str, Path]:
+    def outside_paths(self, tmp_path: Path, configured: Path, b_root, store) -> dict[str, Any]:
         outside = tmp_path / "outside"
         outside.mkdir()
         (outside / "secret.md").write_text("outside the upload root")
+        (b_root / "b-folder").mkdir()
         escape = configured / "escape-link"
         escape.symlink_to(outside, target_is_directory=True)
         return {
-            "existing": outside,
-            "missing": tmp_path / "outside-missing" / "deeper",
-            "document_store": store.storage_dir,
-            "symlink_escape": escape,
-            "dotdot_escape": configured / ".." / "outside",
-            "filesystem_root": Path("/"),
+            "existing": ("a", outside),
+            "missing": ("a", tmp_path / "outside-missing" / "deeper"),
+            "data_dir": ("a", tmp_path / "app-data"),
+            "document_store": ("a", store.storage_dir),
+            "b_root": ("a", b_root),
+            "b_folder": ("a", b_root / "b-folder"),
+            "b_missing": ("a", b_root / "missing"),
+            "symlink_escape": ("a", escape),
+            "dotdot_escape": ("a", configured / ".." / "outside"),
+            "filesystem_root": ("a", Path("/")),
+            "a_root_for_b": ("b", configured),
+            "a_missing_for_b": ("b", configured / "missing"),
         }
 
     @pytest.mark.parametrize("route", ROUTES)
     def test_every_outside_path_gets_the_same_refusal(
         self, folders, store, auth_a, auth_b, outside_paths, route
     ):
-        from aragora.documents.parsing import parse_document
-
         store.add(parse_document(b"stored by B", "b.md", org_id=ORG_B, created_by=USER_B))
         before = _doc_ids(store)
+        auth = {"a": auth_a, "b": auth_b}
         answers = {}
-        for name, path in outside_paths.items():
-            answers[name] = _post(folders, auth_a, route, {"path": str(path)})
+        for name, (caller, path) in outside_paths.items():
+            answers[name] = _post(folders, auth[caller], route, {"path": str(path)})
 
         statuses = {name: status for name, (status, _) in answers.items()}
         assert set(statuses.values()) == {403}, statuses
@@ -338,27 +399,51 @@ class TestOutsideTheRoot:
         assert store.list_for_org(ORG_A) == []
 
 
-# ---------------------------------------------------------------------------
-# The accessor reads the environment on every call
-# ---------------------------------------------------------------------------
+class TestInvalidRoots:
+    @pytest.fixture(autouse=True)
+    def _key_file(self, monkeypatch, tmp_path):
+        key = tmp_path / "secrets" / "keys" / "odr-signing-key.pem"
+        key.parent.mkdir(parents=True)
+        key.write_text("not a real key")
+        monkeypatch.setenv("ARAGORA_ODR_SIGNING_KEY_FILE", str(key))
 
+    @pytest.mark.parametrize(
+        "root",
+        ["app-data", "app-data/imports", "", "data/documents", "data/documents/imports", "data"]
+        + ["nomic", "nomic/imports", "secrets/keys", "secrets/keys/imports", "secrets"],
+    )
+    def test_root_overlapping_a_protected_path_grants_nothing(
+        self, monkeypatch, caplog, folders, auth_a, tmp_path, root
+    ):
+        (tmp_path / root).mkdir(parents=True, exist_ok=True)
+        _configure(monkeypatch, {ORG_A: [tmp_path / root]})
+        with caplog.at_level(logging.ERROR, logger=folder_import_roots.__name__):
+            status, body = _post(folders, auth_a, ROUTES[0], {"path": str(tmp_path / root)})
+        assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
+        assert "protected server path" in caplog.text
+        assert FolderUploadHandler._jobs == {}
 
-class TestAccessor:
-    def test_unset_and_empty_yield_nothing(self, monkeypatch):
-        assert folder_upload.get_allowed_upload_dirs() == []
-        monkeypatch.setenv(ENV, "")
-        assert folder_upload.get_allowed_upload_dirs() == []
+    @pytest.mark.parametrize("a_dir, b_dir", [("x", "x"), ("x", "x/in"), ("x/in", "x")])
+    def test_overlapping_roots_of_two_orgs_grant_nothing_to_either(
+        self, monkeypatch, caplog, folders, auth_a, auth_b, tmp_path, a_dir, b_dir
+    ):
+        a, b = tmp_path / "shared" / a_dir, tmp_path / "shared" / b_dir
+        (tmp_path / "shared" / "x" / "in").mkdir(parents=True)
+        _configure(monkeypatch, {ORG_A: [a], ORG_B: [b]})
+        with caplog.at_level(logging.ERROR, logger=folder_import_roots.__name__):
+            for auth, path in ((auth_a, a), (auth_b, b)):
+                status, body = _post(folders, auth, ROUTES[0], {"path": str(path)})
+                assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
+        assert "another org" in caplog.text
 
-    def test_skips_relative_missing_and_file_entries(self, monkeypatch, tmp_path):
-        good = tmp_path / "good"
-        good.mkdir()
-        a_file = tmp_path / "file.txt"
-        a_file.write_text("x")
-        monkeypatch.setenv(ENV, f"relative, {tmp_path / 'missing'}, {a_file}, {good}")
-        assert folder_upload.get_allowed_upload_dirs() == [good.resolve()]
-
-    def test_reflects_changes_without_reimport(self, monkeypatch, tmp_path):
-        monkeypatch.setenv(ENV, str(tmp_path))
-        assert folder_upload.get_allowed_upload_dirs() == [tmp_path.resolve()]
-        monkeypatch.delenv(ENV)
-        assert folder_upload.get_allowed_upload_dirs() == []
+    @pytest.mark.parametrize("name", folder_import_roots.SECRET_FILE_ENV_VARS)
+    def test_every_key_file_setting_protects_its_directory(self, monkeypatch, tmp_path, name):
+        key = tmp_path / "creds" / "secret.key"
+        key.parent.mkdir()
+        key.write_text("x")
+        _configure(monkeypatch, {ORG_A: [key.parent]})
+        roots = folder_import_roots.org_import_roots
+        protected = folder_import_roots.protected_paths
+        assert roots(ORG_A, protected()) == [key.parent.resolve()]
+        monkeypatch.setenv(name, str(key))
+        assert roots(ORG_A, protected()) == []
