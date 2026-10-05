@@ -198,6 +198,6 @@ This SLA may be updated with 30 days notice. Current version is always available
 
 ---
 
-**Effective Date:** January 28, 2026
+**Effective Date:** January 28, 2026\
 **Document version:** 1.0.0\
 **Last Updated:** January 28, 2026
