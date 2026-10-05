@@ -735,45 +735,48 @@ class ReceiptsHandler(BaseHandler):
             scope, scope_err = require_org_scope(handler)
             if scope is None:
                 return scope_err
+            # The ``context`` argument of the decorated methods is read only by
+            # @require_permission; without it the check cannot see the caller.
+            context = _request_auth_context(handler)
 
             if path == _V1_PREFIX or path.startswith(_V1_PREFIX + "/"):
                 return await self._handle_v1(path, method, body, query_params, handler, scope)
 
             # Stats endpoint
             if path == "/api/v2/receipts/stats" and method == "GET":
-                return await self._get_stats(scope)
+                return await self._get_stats(scope, context=context)
 
             # Retention status endpoint (GDPR compliance)
             if path == "/api/v2/receipts/retention-status" and method == "GET":
-                return await self._get_retention_status(scope)
+                return await self._get_retention_status(scope, context=context)
 
             # DSAR endpoint (GDPR Data Subject Access Request)
             if path.startswith("/api/v2/receipts/dsar/") and method == "GET":
                 parts = path.split("/")
                 if len(parts) >= 6:
                     user_id = parts[5]
-                    return await self._get_dsar(user_id, query_params, scope)
+                    return await self._get_dsar(user_id, query_params, scope, context=context)
                 return error_response("User ID required for DSAR request", 400)
 
             # Search endpoint
             if path == "/api/v2/receipts/search" and method == "GET":
-                return await self._search_receipts(query_params, scope)
+                return await self._search_receipts(query_params, scope, context=context)
 
             # Batch verification
             if path == "/api/v2/receipts/verify-batch" and method == "POST":
-                return await self._verify_batch(body, scope)
+                return await self._verify_batch(body, scope, context=context)
 
             # Batch signing
             if path == "/api/v2/receipts/sign-batch" and method == "POST":
-                return await self._sign_batch(body, scope)
+                return await self._sign_batch(body, scope, context=context)
 
             # Batch export
             if path == "/api/v2/receipts/batch-export" and method == "POST":
-                return await self._batch_export(body, scope)
+                return await self._batch_export(body, scope, context=context)
 
             # List receipts
             if path == "/api/v2/receipts" and method == "GET":
-                return await self._list_receipts(query_params, scope)
+                return await self._list_receipts(query_params, scope, context=context)
 
             # Receipt-specific routes
             if path.startswith("/api/v2/receipts/"):
@@ -790,23 +793,23 @@ class ReceiptsHandler(BaseHandler):
 
                 # Combined verification (signature + integrity)
                 if len(parts) > 5 and parts[5] == "verify" and method == "GET":
-                    return await self._verify_receipt(receipt_id, scope)
+                    return await self._verify_receipt(receipt_id, scope, context=context)
 
                 # Integrity verification
                 if len(parts) > 5 and parts[5] == "verify" and method == "POST":
-                    return await self._verify_integrity(receipt_id, scope)
+                    return await self._verify_integrity(receipt_id, scope, context=context)
 
                 # Signature verification
                 if len(parts) > 5 and parts[5] == "verify-signature" and method == "POST":
-                    return await self._verify_signature(receipt_id, scope)
+                    return await self._verify_signature(receipt_id, scope, context=context)
 
                 # Share receipt
                 if len(parts) > 5 and parts[5] == "share" and method == "POST":
-                    return await self._share_receipt(receipt_id, body, scope)
+                    return await self._share_receipt(receipt_id, body, scope, context=context)
 
                 # Send to channel
                 if len(parts) > 5 and parts[5] == "send-to-channel" and method == "POST":
-                    return await self._send_to_channel(receipt_id, body, scope)
+                    return await self._send_to_channel(receipt_id, body, scope, context=context)
 
                 # Get formatted for channel
                 if len(parts) > 5 and parts[5] == "formatted" and method == "GET":
@@ -815,10 +818,12 @@ class ReceiptsHandler(BaseHandler):
 
                 # Get single receipt
                 if method == "GET":
-                    return await self._get_receipt(receipt_id, scope)
+                    return await self._get_receipt(receipt_id, scope, context=context)
 
             return error_response("Not found", 404)
 
+        except PermissionDeniedError as exc:
+            return _permission_denied_response(exc)
         except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError) as e:
             logger.exception("Error handling receipt request: %s", e)
             return error_response(safe_error_message(e, "receipt request"), 500)
@@ -845,7 +850,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _list_receipts(self, query_params: dict[str, str], scope: OrgScope) -> HandlerResult:
+    async def _list_receipts(
+        self, query_params: dict[str, str], scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """
         List receipts with filtering and pagination.
 
@@ -951,7 +958,7 @@ class ReceiptsHandler(BaseHandler):
     )
     @require_permission("receipts:read")
     async def _search_receipts(
-        self, query_params: dict[str, str], scope: OrgScope
+        self, query_params: dict[str, str], scope: OrgScope, context: Any = None
     ) -> HandlerResult:
         """
         Full-text search across receipt content.
@@ -1035,7 +1042,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _get_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+    async def _get_receipt(
+        self, receipt_id: str, scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """Get a specific receipt by ID or gauntlet ID."""
         receipt = await self._find_owned_receipt(receipt_id, scope, by_gauntlet=True)
         if receipt is None:
@@ -1108,20 +1117,21 @@ class ReceiptsHandler(BaseHandler):
         if route is None:
             return error_response("Not found", 404)
         receipt_id, action = route
+        context = _request_auth_context(handler)
 
         if receipt_id is None:
             if method == "GET":
-                return await self._list_v1_receipts(query_params, scope)
+                return await self._list_v1_receipts(query_params, scope, context=context)
         elif receipt_id == "deliveries" and action is None:
             if method == "GET":
-                return await self._list_delivery_history(query_params, scope)
+                return await self._list_delivery_history(query_params, scope, context=context)
         elif action is None:
             if method == "GET":
-                return await self._get_receipt(receipt_id, scope)
+                return await self._get_receipt(receipt_id, scope, context=context)
         elif action == "export":
             return await self._dispatch_export(receipt_id, method, query_params, handler, scope)
         elif action == "verify":
-            return await self._verify_v1_receipt(receipt_id, scope)
+            return await self._verify_v1_receipt(receipt_id, scope, context=context)
         elif action == "deliver" and method == "POST":
             # The frontend DeliveryModal names its fields differently from the
             # v2 send-to-channel body.
@@ -1134,12 +1144,12 @@ class ReceiptsHandler(BaseHandler):
                 "workspace_id": body.get("workspace_id"),
                 "options": options,
             }
-            return await self._send_to_channel(receipt_id, delivery_body, scope)
+            return await self._send_to_channel(receipt_id, delivery_body, scope, context=context)
         return error_response(f"Method not allowed: {method} {path}", 405)
 
     @require_permission("receipts:read")
     async def _list_v1_receipts(
-        self, query_params: dict[str, Any], scope: OrgScope
+        self, query_params: dict[str, Any], scope: OrgScope, context: Any = None
     ) -> HandlerResult:
         """List the caller org's receipts as legacy summaries."""
         store = self._get_store()
@@ -1169,7 +1179,9 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @require_permission("receipts:verify")
-    async def _verify_v1_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+    async def _verify_v1_receipt(
+        self, receipt_id: str, scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """Integrity check in the legacy shape (``valid``/``match`` plus checksums)."""
         if await self._find_owned_receipt(receipt_id, scope) is None:
             return record_not_found("Receipt")
@@ -1606,7 +1618,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:verify")
-    async def _verify_receipt(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+    async def _verify_receipt(
+        self, receipt_id: str, scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """Verify receipt integrity checksum and signature."""
         if await self._find_owned_receipt(receipt_id, scope) is None:
             return record_not_found("Receipt")
@@ -1653,7 +1667,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:verify")
-    async def _verify_integrity(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+    async def _verify_integrity(
+        self, receipt_id: str, scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """Verify receipt integrity checksum."""
         if await self._find_owned_receipt(receipt_id, scope) is None:
             return record_not_found("Receipt")
@@ -1681,7 +1697,9 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:verify")
-    async def _verify_signature(self, receipt_id: str, scope: OrgScope) -> HandlerResult:
+    async def _verify_signature(
+        self, receipt_id: str, scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """Verify receipt cryptographic signature."""
         if await self._find_owned_receipt(receipt_id, scope) is None:
             return record_not_found("Receipt")
@@ -1694,7 +1712,9 @@ class ReceiptsHandler(BaseHandler):
         return json_response(result.to_dict())
 
     @require_permission("receipts:verify")
-    async def _verify_batch(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
+    async def _verify_batch(
+        self, body: dict[str, Any], scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """
         Batch verify multiple receipt signatures.
 
@@ -1734,7 +1754,7 @@ class ReceiptsHandler(BaseHandler):
         },
     )
     @require_permission("receipts:read")
-    async def _get_stats(self, scope: OrgScope) -> HandlerResult:
+    async def _get_stats(self, scope: OrgScope, context: Any = None) -> HandlerResult:
         """Get statistics over the caller org's receipts."""
         store = self._get_store()
         stats = await _call_nonblocking(store, "stats_for_org", scope.org_id)
@@ -1885,7 +1905,7 @@ class ReceiptsHandler(BaseHandler):
 
     @require_permission("receipts:read")
     async def _list_delivery_history(
-        self, query_params: dict[str, str], scope: OrgScope
+        self, query_params: dict[str, str], scope: OrgScope, context: Any = None
     ) -> HandlerResult:
         """Return the caller org's delivery history in the legacy/frontend shape.
 
@@ -1981,7 +2001,7 @@ class ReceiptsHandler(BaseHandler):
 
     @require_permission("receipts:share")
     async def _send_to_channel(
-        self, receipt_id: str, body: dict[str, Any], scope: OrgScope
+        self, receipt_id: str, body: dict[str, Any], scope: OrgScope, context: Any = None
     ) -> HandlerResult:
         """
         Send a decision receipt to a specified channel.
@@ -2258,7 +2278,7 @@ class ReceiptsHandler(BaseHandler):
             return error_response(safe_error_message(e, "receipt formatting"), 500)
 
     @require_permission("receipts:read")
-    async def _get_retention_status(self, scope: OrgScope) -> HandlerResult:
+    async def _get_retention_status(self, scope: OrgScope, context: Any = None) -> HandlerResult:
         """Get retention status for GDPR compliance. Endpoint: GET /api/v2/receipts/retention-status"""
         store = self._get_store()
         status = await _call_nonblocking(store, "retention_status_for_org", scope.org_id)
@@ -2266,7 +2286,7 @@ class ReceiptsHandler(BaseHandler):
 
     @require_permission("receipts:read")
     async def _get_dsar(
-        self, user_id: str, query_params: dict[str, str], scope: OrgScope
+        self, user_id: str, query_params: dict[str, str], scope: OrgScope, context: Any = None
     ) -> HandlerResult:
         """Handle GDPR DSAR. Endpoint: GET /api/v2/receipts/dsar/{user_id}"""
         if not user_id or len(user_id) < 3:
@@ -2316,7 +2336,7 @@ class ReceiptsHandler(BaseHandler):
     )
     @require_permission("receipts:share")
     async def _share_receipt(
-        self, receipt_id: str, body: dict[str, Any], scope: OrgScope
+        self, receipt_id: str, body: dict[str, Any], scope: OrgScope, context: Any = None
     ) -> HandlerResult:
         """
         Create a shareable link for a receipt.
@@ -2434,7 +2454,9 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @require_permission("receipts:sign")
-    async def _sign_batch(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
+    async def _sign_batch(
+        self, body: dict[str, Any], scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """
         Batch sign multiple receipts.
 
@@ -2556,7 +2578,9 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @require_permission("receipts:export")
-    async def _batch_export(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
+    async def _batch_export(
+        self, body: dict[str, Any], scope: OrgScope, context: Any = None
+    ) -> HandlerResult:
         """
         Batch export multiple receipts to a ZIP file.
 

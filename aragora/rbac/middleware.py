@@ -214,6 +214,9 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?debates?/([^/]+)/run$", "POST", "debates.run", 1),
     RoutePermission(r"^/api/(?:v1/)?debates?/([^/]+)/stop$", "POST", "debates.stop", 1),
     RoutePermission(r"^/api/(?:v1/)?debates?/([^/]+)/fork$", "POST", "debates.fork", 1),
+    RoutePermission(r"^/api/(?:v1/|v2/)?debate-this$", "POST", "debates.create"),
+    RoutePermission(r"^/api/(?:v1/|v2/)?debates/batch/?$", "POST", "debates.create"),
+    RoutePermission(r"^/api/v2/debates?$", "POST", "debates.create"),
     # Settlements
     RoutePermission(r"^/api/(?:v1/)?settlements?$", "GET", "settlements:read"),
     RoutePermission(r"^/api/(?:v1/)?settlements/history$", "GET", "settlements:read"),
@@ -515,6 +518,24 @@ DEFAULT_ROUTE_PERMISSIONS = [
         allow_unauthenticated=True,
     ),
     RoutePermission(r"^/api/v2/receipts/verify$", "POST", "", allow_unauthenticated=True),
+    # Org-owned receipt routes, after the public rules above so those stay
+    # public. The DSAR, batch-export and share-token routes have no rule.
+    RoutePermission(r"^/api/v2/receipts/?$", "GET", "receipts.read"),
+    RoutePermission(
+        r"^/api/v2/receipts/(?:search|stats|retention-status)$", "GET", "receipts.read"
+    ),
+    RoutePermission(r"^/api/v2/receipts/verify-batch$", "POST", "receipts.verify"),
+    RoutePermission(r"^/api/v2/receipts/sign-batch$", "POST", "receipts.sign"),
+    RoutePermission(r"^/api/v2/receipts/[^/]+$", "GET", "receipts.read"),
+    RoutePermission(r"^/api/v2/receipts/[^/]+/formatted/[^/]+$", "GET", "receipts.read"),
+    RoutePermission(r"^/api/v2/receipts/[^/]+/verify$", "GET", "receipts.verify"),
+    RoutePermission(r"^/api/v2/receipts/[^/]+/verify(?:-signature)?$", "POST", "receipts.verify"),
+    RoutePermission(
+        r"^/api/v2/receipts/[^/]+/(?:share|send-to-channel)$", "POST", "receipts.share"
+    ),
+    RoutePermission(r"^/api/v1/receipts/deliveries$", "GET", "receipts.read"),
+    RoutePermission(r"^/api/v1/receipts/[^/]+/deliver$", "POST", "receipts.share"),
+    RoutePermission(r"^/api/(?:v1/)?gauntlet/[^/]+/export$", "GET", "gauntlet.export_data"),
     # Health endpoints (additional patterns)
     RoutePermission(
         r"^/api/(v1/)?health(/detailed|/deep|/stores)?$", "GET", "", allow_unauthenticated=True
