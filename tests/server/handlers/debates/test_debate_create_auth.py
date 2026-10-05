@@ -483,6 +483,32 @@ class TestOrgUserCreates:
         assert probes.start.call_args.args[0].org_id == ORG_A
         assert _debate_rows(probes.storage) == [(body["debate_id"], ORG_A, 0)]
 
+    @pytest.mark.parametrize("path", sorted(CREATE_ALIASES))
+    def test_with_api_token_set_every_alias_creates_for_a_member(
+        self, server, probes, monkeypatch, path
+    ):
+        _install_api_token(monkeypatch, STATIC_TOKEN)
+
+        status, body = _post(
+            server, probes, path, _body_for(path), _jwt(ORG_A), headers=SPOOF_HEADERS
+        )
+
+        assert status == 200, body
+        if CREATE_ALIASES[path] == "_submit_batch":
+            batch = probes.queue.submit_batch.call_args.args[0]
+            assert [item.org_id for item in batch.items] == [ORG_A]
+        else:
+            assert _debate_rows(probes.storage) == [(body["debate_id"], ORG_A, 0)]
+
+    @pytest.mark.parametrize("path", sorted(CREATE_ALIASES))
+    def test_with_api_token_set_viewer_is_refused(self, server, probes, monkeypatch, path):
+        _install_api_token(monkeypatch, STATIC_TOKEN)
+
+        status, body = _post(server, probes, path, _body_for(path), _jwt(ORG_A, role="viewer"))
+
+        assert (status, body["required_permission"]) == (403, "debates.create")
+        _assert_no_side_effect(probes)
+
     def test_custom_role_granted_debate_create_succeeds(self, server, probes, _isolated_auth):
         _isolated_auth._custom_roles[f"{ORG_A}:debate-runner"] = {"permissions": {"debates.create"}}
         path = "/api/v1/debates"
