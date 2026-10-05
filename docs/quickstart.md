@@ -172,7 +172,7 @@ full per-audience breakdown.
 | [Receipt Lineage Reconciliation](specs/RECEIPT_LINEAGE_RECONCILIATION.md) | What a Decision Receipt is: the native record vs. the portable ODR |
 | [Independent Verifier Guide](specs/INDEPENDENT_VERIFIER_GUIDE.md) | Verify a receipt offline with `aragora-verify`, no Aragora install required |
 | [GitHub Action Setup](guides/GITHUB_ACTION_SETUP.md) | Add multi-model CI review + receipts to your pull requests |
-| [CLI Reference](reference/CLI_REFERENCE.md) | All CLI commands and flags |
+| [CLI Reference](CLI_REFERENCE.md) | All CLI commands and flags |
 | [SDK Guide](SDK_GUIDE.md) | Python & TypeScript SDK reference |
 | [API Reference](api/API_REFERENCE.md) | REST API endpoints |
 | [Self-Hosting](DEPLOYMENT.md) | Production deployment |

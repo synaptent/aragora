@@ -2,10 +2,10 @@
 
 Canonical documentation lives in `docs/` and is mirrored into `docs-site/`.
 
-This index intentionally links to actively maintained docs with validated paths.
-For the full goal-oriented landing page, start at **[docs/README.md](README.md)**
-— that page is the canonical documentation landing; this index is the flat
-reference list.
+This is a sub-index of **[docs/README.md](README.md)**, the single
+documentation index. It keeps a short flat list of the most-used pages, and
+every page linked here is also linked from docs/README.md. Start there for the
+full index of top-level pages and curated directories.
 
 ## Public Utility Path
 
@@ -22,7 +22,7 @@ then wire it into CI.
 - [Getting Started](guides/GETTING_STARTED.md)
 - [Cold Reviewer Guide](guides/COLD_REVIEWER_GUIDE.md)
 - [SDK Guide (Python)](SDK_GUIDE.md)
-- [CLI Reference (generated)](reference/CLI_REFERENCE.md)
+- [CLI Reference](CLI_REFERENCE.md)
 
 ## Receipts & Verification
 
