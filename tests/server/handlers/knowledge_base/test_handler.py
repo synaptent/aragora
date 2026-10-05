@@ -232,6 +232,8 @@ def mock_server_context() -> dict[str, Any]:
 def handler(mock_server_context) -> KnowledgeHandler:
     """Create a KnowledgeHandler instance."""
     h = KnowledgeHandler(mock_server_context)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
     h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")  # type: ignore[assignment]
     return h
 
@@ -297,6 +299,7 @@ class TestKnowledgeHandlerInitialization:
         handler._fact_store = None
         store = handler._get_fact_store()
         assert store is not None
+        assert not isinstance(store, ScopedFactStore)
         assert handler._fact_store is store
 
     def test_query_engine_lazy_initialization(self, handler):

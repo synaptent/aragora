@@ -740,10 +740,26 @@ class SyncOperationsMixin(_SyncMixinBase):
         if critique is not None:
             results["critique"] = await self.sync_from_critique(critique)
 
-        # Last: an unscoped fact store raises, and must not cost the other sources their sync.
+        # Last: an unscoped fact store raises; the aggregate records it as an explicit facts
+        # error and keeps the other sources' results. Direct fact sync calls still raise.
         facts = self._facts
         if facts is not None:
-            results["facts"] = await self.sync_from_facts(facts)
+            from aragora.knowledge.fact_store import OrgScopeRequiredError
+            from aragora.knowledge.mound.types import SyncResult
+
+            try:
+                results["facts"] = await self.sync_from_facts(facts)
+            except OrgScopeRequiredError:
+                logger.warning("Fact sync skipped: the fact store has no organization scope")
+                results["facts"] = SyncResult(
+                    source="facts",
+                    nodes_synced=0,
+                    nodes_updated=0,
+                    nodes_skipped=0,
+                    relationships_created=0,
+                    duration_ms=0,
+                    errors=["facts:org_scope_required"],
+                )
 
         logger.info(
             "Sync complete: %d sources, %d total nodes synced",

@@ -76,6 +76,8 @@ def handler():
     """Create a KnowledgeHandler with minimal server context."""
     ctx = {"storage": None, "elo_system": None, "nomic_dir": None}
     h = KnowledgeHandler(ctx)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
     h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
     return h
 

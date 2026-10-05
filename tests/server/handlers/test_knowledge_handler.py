@@ -22,6 +22,8 @@ def knowledge_handler():
     """Create a knowledge handler with mocked dependencies."""
     ctx = {"storage": None, "elo_system": None, "nomic_dir": None}
     handler = KnowledgeHandler(ctx)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
     handler._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
     return handler
 

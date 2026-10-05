@@ -191,8 +191,10 @@ def test_mound_fact_sync_raises_and_writes_no_node(store) -> None:
     mound._continuum = mound._consensus = mound._critique = None
     mound.sync_from_evidence = AsyncMock()
     mound.sync_from_facts = lambda facts: SyncOperationsMixin.sync_from_facts(mound, facts)
-    with pytest.raises(OrgScopeRequiredError):
-        asyncio.run(SyncOperationsMixin.sync_all(mound))
+    results = asyncio.run(SyncOperationsMixin.sync_all(mound))
+    assert results["facts"].errors == ["facts:org_scope_required"]
+    assert results["facts"].nodes_synced == 0
+    assert results["evidence"] is mound.sync_from_evidence.return_value
     mound.sync_from_evidence.assert_awaited_once()
     mound._batch_store.assert_not_called()
 

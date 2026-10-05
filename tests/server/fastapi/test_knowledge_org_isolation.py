@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from aragora.billing.jwt_auth import create_access_token
 from aragora.knowledge import FactFilters, FactStore, ScopedFactStore
+from aragora.knowledge.fact_store import OrgScopeRequiredError
 
 V2 = "/api/v2/knowledge-base"
 
@@ -289,3 +290,76 @@ def test_ara_api_keys_keep_todays_reachability(world) -> None:
     assert r.status_code == 401
     result = _v1(world)._handle_create_fact(_Request(world, world.key, body))
     assert result.status_code == 201, result.body
+
+
+def _world_store(world) -> FactStore:
+    return FactStore(db_path=world.store.db_path)
+
+
+def _assert_unscoped_world_store(store, world) -> None:
+    assert isinstance(store, FactStore) and not isinstance(store, ScopedFactStore)
+    assert store.db_path == world.store.db_path
+
+
+def _assert_only_operator_sees(world, fid: str, rows: tuple[int, int]) -> None:
+    acme = world.callers["acme"].org_id
+    stored = ScopedFactStore(world.store, acme).get_fact(fid)
+    assert stored is not None and stored.org_id == acme
+    assert ScopedFactStore(world.store, world.callers["beta"].org_id).get_fact(fid) is None
+    with pytest.raises(OrgScopeRequiredError):
+        world.store.get_fact(fid)
+    assert _rows(world.store) == rows
+
+
+def test_v2_default_provider_closes_reads_and_creates_cannot_be_read_back(
+    world, monkeypatch
+) -> None:
+    from aragora.server.fastapi.routes import knowledge_base as routes
+
+    monkeypatch.setattr(routes, "_fact_store_instance", None)
+    monkeypatch.setattr(routes, "FactStore", lambda: _world_store(world))
+    client = _v2(world)
+    client.app.state.context.pop("fact_store")  # type: ignore[attr-defined]
+    hdr = {"Authorization": f"Bearer {_token(world, 'acme')}"}
+    r = client.get(V2 + "/facts", headers=hdr)
+    assert r.status_code == 403 and r.json()["code"] == "knowledge_fact_access_closed"
+    before = _rows(world.store)
+    body = {"statement": "Acme renews Contoso", "workspace_id": "acme-research"}
+    r = client.post(V2 + "/facts", json=body, headers=hdr)
+    assert r.status_code == 201, r.text
+    _assert_unscoped_world_store(routes._fact_store_instance, world)
+    fid, after = r.json()["id"], _rows(world.store)
+    assert after[0] == before[0] + 1
+    for method in ("GET", "DELETE"):
+        r = client.request(method, f"{V2}/facts/{fid}", headers=hdr)
+        assert r.status_code == 403 and r.json()["code"] == "knowledge_fact_access_closed"
+    _assert_only_operator_sees(world, fid, after)
+
+
+def test_v1_default_provider_closes_reads_and_creates_cannot_be_read_back(
+    world, monkeypatch
+) -> None:
+    from aragora.server.handlers.knowledge_base import handler as handler_module
+
+    monkeypatch.setattr(handler_module, "FactStore", lambda: _world_store(world))
+    handler = _v1(world, org_id=world.callers["acme"].org_id)
+    handler._fact_store = None
+    bearer = _token(world, "acme")
+    result = handler._handle_list_facts({})
+    assert result.status_code == 403
+    assert _v1_code(_body(result)) == "knowledge_fact_access_closed"
+    before = _rows(world.store)
+    body = {"statement": "Acme renews Contoso", "workspace_id": "acme-research"}
+    result = handler._handle_create_fact(_Request(world, bearer, body))
+    assert result.status_code == 201, result.body
+    _assert_unscoped_world_store(handler._fact_store, world)
+    created = _body(result)
+    fid, after = created.get("data", created)["id"], _rows(world.store)
+    assert after[0] == before[0] + 1
+    for result in (
+        handler._handle_get_fact(fid),
+        handler._handle_delete_fact(fid, _Request(world, bearer, None)),
+    ):
+        assert result.status_code == 403
+        assert _v1_code(_body(result)) == "knowledge_fact_access_closed"
+    _assert_only_operator_sees(world, fid, after)
