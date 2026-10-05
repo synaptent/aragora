@@ -8,11 +8,11 @@
 > **Written:** Early March 2026 (Run 001-003 era). **March 5 update:** Several blockers
 > described below have since been resolved — see update notes inline.
 > **June 10, 2026 update:** Quantified claims below refreshed against
-> [`docs/METRICS.md`](METRICS.md), [`docs/status/B0_BENCHMARK_TRUTH_STATUS.md`](status/B0_BENCHMARK_TRUTH_STATUS.md),
-> and [`docs/FOCUS.md`](FOCUS.md) Sprint 1/2 outcomes — see inline update notes.
+> [`docs/METRICS.md`](../METRICS.md), [`docs/status/B0_BENCHMARK_TRUTH_STATUS.md`](../status/B0_BENCHMARK_TRUTH_STATUS.md),
+> and [`docs/strategy/FOCUS.md`](FOCUS.md) Sprint 1/2 outcomes — see inline update notes.
 >
 > **Metrics note:** Current live scale numbers are auto-regenerated in
-> [`docs/METRICS.md`](METRICS.md), and that file wins over any stale numeric
+> [`docs/METRICS.md`](../METRICS.md), and that file wins over any stale numeric
 > snapshot below. Dated numbers in this document are explicitly labeled as
 > point-in-time snapshots.
 
@@ -42,7 +42,7 @@ The debate engine is real, functional, and battle-tested.
 
 | Capability | Detail |
 |---|---|
-| Agent types | 35 allowlisted agent types (canonical count in [`docs/METRICS.md`](METRICS.md)); older marketing claimed 43 across 8 categories — the allowlist is the measured number |
+| Agent types | 35 allowlisted agent types (canonical count in [`docs/METRICS.md`](../METRICS.md)); older marketing claimed 43 across 8 categories — the allowlist is the measured number |
 | Phase execution | 7 phases: Context Init, Proposals, Debate Rounds, Consensus, Verification, Analytics, Feedback |
 | Consensus modes | 5: judge, majority, supermajority, unanimous, ELO-weighted |
 | Cognitive roles | 9 rotations: Analyst, Skeptic, Lateral Thinker, Devil's Advocate, Synthesizer, Domain Expert, Red Team, Pragmatist, Visionary |
@@ -53,7 +53,7 @@ The debate engine is real, functional, and battle-tested.
 | ELO rankings | Domain-specific ratings, Brier score calibration, persistent leaderboards |
 | Demo mode | Works end-to-end with no API keys required |
 | CLI | `aragora review`, `aragora gauntlet` work in both live and demo modes |
-| Test coverage | Historical snapshot; current test-function and mypy-baseline counts live in [`docs/METRICS.md`](METRICS.md) |
+| Test coverage | Historical snapshot; current test-function and mypy-baseline counts live in [`docs/METRICS.md`](../METRICS.md) |
 
 ### Idea-to-Execution Pipeline (90% Working)
 
@@ -76,7 +76,7 @@ This is production-grade infrastructure, not prototyping code.
 
 | Area | Scale | Key Capabilities |
 |---|---|---|
-| RBAC | 12,969 LOC (Mar 2026 snapshot) | 424 unique permission strings across 1,365 `@require_permission` call sites (canonical in [`docs/METRICS.md`](METRICS.md)) |
+| RBAC | 12,969 LOC (Mar 2026 snapshot) | 424 unique permission strings across 1,365 `@require_permission` call sites (canonical in [`docs/METRICS.md`](../METRICS.md)) |
 | Billing | 23,114 LOC (Mar 2026 snapshot) | Stripe integration, metering, forecasting |
 | Observability | 17,280 LOC (Mar 2026 snapshot) | Prometheus metrics, OpenTelemetry tracing, Grafana dashboards |
 | Authentication | Production | OIDC/SAML SSO, MFA (TOTP/HOTP), SCIM 2.0 provisioning |
@@ -94,7 +94,7 @@ the blocker remains an external penetration test that has not been commissioned.
 | System | What It Does |
 |---|---|
 | Continuum Memory | 4-tier (Google's Nested Learning): FAST 1h, MEDIUM 24h, SLOW 7d, GLACIAL 30d with surprise-driven tier transitions |
-| Knowledge Mound | 41 registered adapter specs (46 adapter files; canonical in [`docs/METRICS.md`](METRICS.md)) creating a federated knowledge graph across subsystems |
+| Knowledge Mound | 41 registered adapter specs (46 adapter files; canonical in [`docs/METRICS.md`](../METRICS.md)) creating a federated knowledge graph across subsystems |
 | ConsensusMemory | Cross-debate institutional learning |
 | CritiqueStore | Post-mortem critique-to-fix pattern extraction |
 
@@ -102,9 +102,9 @@ the blocker remains an external penetration test that has not been commissioned.
 
 | Component | Scale |
 |---|---|
-| Python SDK | 198 modules (canonical in [`docs/METRICS.md`](METRICS.md)) |
-| TypeScript SDK | 215 modules (canonical in [`docs/METRICS.md`](METRICS.md)); parity tracked by the SDK-parity CI gate, not a hand-counted percentage |
-| REST API | Broad OpenAPI surface; operation/path counts canonical in [`docs/METRICS.md`](METRICS.md) |
+| Python SDK | 198 modules (canonical in [`docs/METRICS.md`](../METRICS.md)) |
+| TypeScript SDK | 215 modules (canonical in [`docs/METRICS.md`](../METRICS.md)); parity tracked by the SDK-parity CI gate, not a hand-counted percentage |
+| REST API | Broad OpenAPI surface; operation/path counts canonical in [`docs/METRICS.md`](../METRICS.md) |
 | WebSocket events | 190+ event types for real-time streaming |
 
 ---
@@ -143,7 +143,7 @@ The self-improvement infrastructure is production-grade with all six phases full
 
 **[June 10, 2026 update — measured benchmark truth replaces dogfood scores.]** The
 authoritative quality surface is now the fixed B0 benchmark corpus
-([`docs/status/B0_BENCHMARK_TRUTH_STATUS.md`](status/B0_BENCHMARK_TRUTH_STATUS.md),
+([`docs/status/B0_BENCHMARK_TRUTH_STATUS.md`](../status/B0_BENCHMARK_TRUTH_STATUS.md),
 corpus `tw-01-bounded-execution-v1` rev-6, success contract `mergeable_pr_or_merged_pr`):
 
 | B0 metric (2026-06-06 publication) | Value |
@@ -165,7 +165,7 @@ redundant quorum status patch fixed (PR #7748). The post-#7496 proof sequence
 passed for both an operator run (`validate-env` → `doctor` → `ask
 --decision-integrity` → `receipt verify`, all exit 0) and a strict
 non-operator demo (`aragora demo --receipt` with no provider keys; receipt
-verified `VALID (3/3 checks passed)`) — see `docs/FOCUS.md` Sprint 2 goal 2.
+verified `VALID (3/3 checks passed)`) — see `docs/strategy/FOCUS.md` Sprint 2 goal 2.
 A boss-loop merge-gate resilience design draft is in flight but not yet on
 main, so it is deliberately not cited here as a repo artifact until it
 lands. Open governance liability: the operator
@@ -202,7 +202,7 @@ These are areas where claims need honest qualification. The code exists, but the
 
 | Claim | Reality |
 |---|---|
-| 43 agents running in parallel | 35 allowlisted agent types exist (canonical in [`docs/METRICS.md`](METRICS.md)) and work individually; the "43" figure predates the allowlist |
+| 43 agents running in parallel | 35 allowlisted agent types exist (canonical in [`docs/METRICS.md`](../METRICS.md)) and work individually; the "43" figure predates the allowlist |
 | Massive parallelism | Running all agent types simultaneously hits provider rate limits |
 | Practical limit | 2-6 agents per debate for real-time, up to 10 for batch |
 
@@ -221,7 +221,7 @@ These are areas where claims need honest qualification. The code exists, but the
 **[June 10, 2026 update]:** "Proven autonomous cycles" is no longer a scaffolding
 claim — the B0 benchmark corpus now measures end-to-end bounded-execution issue
 resolution at 100% verified / 69.2% full-corpus (see
-[`docs/status/B0_BENCHMARK_TRUTH_STATUS.md`](status/B0_BENCHMARK_TRUTH_STATUS.md)
+[`docs/status/B0_BENCHMARK_TRUTH_STATUS.md`](../status/B0_BENCHMARK_TRUTH_STATUS.md)
 and the Nomic Loop section above). What *remains* honest qualification: the
 verified set is only 5 issues; 4 of the 8 in-progress cohort issues (#5182,
 #5183, #5184, #5186) have not graduated; and the dominant recorded failure
@@ -341,7 +341,7 @@ Aragora's core value proposition is **real and defensible**: multi-agent adversa
 - The CLI works.
 - The API works.
 - The enterprise security works.
-- A large, auto-counted test suite and the quality gates support it; see [`docs/METRICS.md`](METRICS.md) for current counts.
+- A large, auto-counted test suite and the quality gates support it; see [`docs/METRICS.md`](../METRICS.md) for current counts.
 
 This combination is unique. No funded competitor does it. It represents a new category -- Decision Integrity -- not a feature added to an existing category.
 
@@ -351,7 +351,7 @@ This combination is unique. No funded competitor does it. It represents a new ca
 |---|---|---|
 | B0 benchmark: 100% verified rate covers only 5 issues; full-corpus is 69.2%; 4 of 8 in-progress cohort issues (#5182, #5183, #5184, #5186) ungraduated | Medium | Graduate the cohort; dominant failure class `blocked_not_dispatch_bounded` (12 occurrences) needs reduction |
 | No external penetration test; SOC 2 Type II not certified | Medium | Commission the pen test (~10 weeks to certification afterward) |
-| Tier-5 scope creep: ~25% of the codebase (~490 files / ~200K LOC per [`docs/FOCUS.md`](FOCUS.md)) does not serve the core product thesis | Medium | Deprioritize or extract; this share has not materially shrunk since the tiering was published |
+| Tier-5 scope creep: ~25% of the codebase (~490 files / ~200K LOC per [`docs/strategy/FOCUS.md`](FOCUS.md)) does not serve the core product thesis | Medium | Deprioritize or extract; this share has not materially shrunk since the tiering was published |
 | Operator design-review #7472 pending — advisory reviews resolve to `unknown_model_reviewer` | Medium | Requires an operator yes/no on the Tier-4 design doc |
 | Semantic convergence degrades silently to TF-IDF/Jaccard without `sentence-transformers` installed | Low | Surface a degradation warning; document the dependency |
 | "Blockchain" receipts are SHA-256 hashing | Low | Reframe messaging; the audit trail is the value |

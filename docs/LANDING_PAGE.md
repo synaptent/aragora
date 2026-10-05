@@ -222,7 +222,7 @@ pip install aragora-debate
 
 ### Secondary
 
-[View pricing](PRICING_PAGE.md) | [Read the docs](SDK_GUIDE.md) | [GitHub](https://github.com/synaptent/aragora)
+[View pricing](strategy/PRICING.md) | [Read the docs](SDK_GUIDE.md) | [GitHub](https://github.com/synaptent/aragora)
 
 ---
 
@@ -231,7 +231,7 @@ pip install aragora-debate
 - [Getting Started](guides/GETTING_STARTED.md)
 - [Documentation](SDK_GUIDE.md)
 - [API Reference](api/API_REFERENCE.md)
-- [Pricing](PRICING_PAGE.md)
+- [Pricing](strategy/PRICING.md)
 - [GitHub](https://github.com/synaptent/aragora)
 - [Sales: sales@aragora.ai](mailto:sales@aragora.ai)
 - [Support: support@aragora.ai](mailto:support@aragora.ai)

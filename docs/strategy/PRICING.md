@@ -20,7 +20,7 @@ Aragora is open source (MIT). Use the full debate engine for free, forever. Comm
 <tr><td colspan="4"><strong>Core Debate</strong></td></tr>
 <tr>
 <td>Multi-agent debates</td>
-<td align="center">100/month</td>
+<td align="center">10/month</td>
 <td align="center">Unlimited</td>
 <td align="center">Unlimited</td>
 </tr>
@@ -251,7 +251,7 @@ For individual developers and teams evaluating Aragora.
 The full `aragora-debate` standalone package is MIT-licensed with no usage limits. The Free tier applies to the hosted platform and full `aragora` package with API access.
 
 **Includes:**
-- 100 debates per month with up to 3 agents each
+- 10 debates per month with up to 3 agents each
 - 10 AI code reviews per month
 - 5 Gauntlet adversarial stress tests per month
 - Decision receipts in Markdown format
@@ -380,7 +380,7 @@ Pro is priced per seat at $49/month. A "seat" is a user account that can run deb
 
 |  | **Free** | **Pro** | **Enterprise** |
 |---|:---:|:---:|:---:|
-| Debates/month | 100 | Unlimited | Unlimited |
+| Debates/month | 10 | Unlimited | Unlimited |
 | Agents per debate | 3 | 10 | Unlimited |
 | Code reviews | 10/mo | Unlimited | Unlimited |
 | Receipt formats | Markdown | + HTML, JSON, SARIF, CSV | + PDF with signatures |
@@ -397,4 +397,4 @@ Pro is priced per seat at $49/month. A "seat" is a user account that can run deb
 - **Sales:** [sales@aragora.ai](mailto:sales@aragora.ai)
 - **Support:** [support@aragora.ai](mailto:support@aragora.ai)
 - **GitHub:** [github.com/synaptent/aragora](https://github.com/synaptent/aragora)
-- **Getting Started:** [GETTING_STARTED.md](guides/GETTING_STARTED.md)
+- **Getting Started:** [GETTING_STARTED.md](../guides/GETTING_STARTED.md)
