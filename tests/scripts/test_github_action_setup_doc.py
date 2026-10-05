@@ -1,4 +1,4 @@
-"""Field-drift guard for docs/GITHUB_ACTION_SETUP.md's receipt-emission section.
+"""Field-drift guard for docs/guides/GITHUB_ACTION_SETUP.md's receipt-emission section.
 
 The doc hand-transcribes action.yml input/output names and a "uses:" target into
 prose and YAML snippets. Nothing enforces that transcription stays accurate as
@@ -18,7 +18,7 @@ import yaml
 
 from aragora.gauntlet.odr_verify import verify_odr_document
 
-DOC_PATH = Path("docs/GITHUB_ACTION_SETUP.md")
+DOC_PATH = Path("docs/guides/GITHUB_ACTION_SETUP.md")
 DOCS_SITE_DOC_PATH = Path("docs-site/docs/guides/github-action-setup.md")
 README_PATH = Path("README.md")
 NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")

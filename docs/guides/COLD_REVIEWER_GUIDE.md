@@ -53,18 +53,18 @@ defensible layer is the governance substrate around those executors:
 
 ## Inspect These First
 
-1. [README](../README.md) for product framing and install paths.
-2. [Supported API Surface](api/SUPPORTED_SURFACE.md) for what is stable, beta,
+1. [README](../../README.md) for product framing and install paths.
+2. [Supported API Surface](../api/SUPPORTED_SURFACE.md) for what is stable, beta,
    internal, or experimental.
-3. [Canonical Goals](CANONICAL_GOALS.md) and
-   [Evolution Roadmap](plans/ARAGORA_EVOLUTION_ROADMAP.md) for the staged
+3. [Canonical Goals](../CANONICAL_GOALS.md) and
+   [Evolution Roadmap](../plans/ARAGORA_EVOLUTION_ROADMAP.md) for the staged
    maximalist thesis.
-4. [Next Steps Canonical](status/NEXT_STEPS_CANONICAL.md) for current execution
+4. [Next Steps Canonical](../status/NEXT_STEPS_CANONICAL.md) for current execution
    priorities.
-5. [B0 Benchmark Truth Status](status/B0_BENCHMARK_TRUTH_STATUS.md) and
-   [TW03 Rescue Productization Status](status/TW03_RESCUE_PRODUCTIZATION_STATUS.md)
+5. [B0 Benchmark Truth Status](../status/B0_BENCHMARK_TRUTH_STATUS.md) and
+   [TW03 Rescue Productization Status](../status/TW03_RESCUE_PRODUCTIZATION_STATUS.md)
    for recurring proof surfaces.
-6. [GitHub PR Review API](integrations/GITHUB_PR_REVIEW.md) for the current practical
+6. [GitHub PR Review API](../integrations/GITHUB_PR_REVIEW.md) for the current practical
    control-plane wedge.
 
 ## Fast Verification

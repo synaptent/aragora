@@ -32,7 +32,7 @@ This index is scoped to high-signal, actively maintained docs with validated pat
 ## Deployment and Operations
 
 - Production deployment: [../deployment/PRODUCTION_DEPLOYMENT.md](../deployment/PRODUCTION_DEPLOYMENT.md)
-- Deployment guide: [../deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md)
+- Deployment guide: [../DEPLOYMENT.md](../DEPLOYMENT.md)
 - Security deployment: [../deployment/SECURITY_DEPLOYMENT.md](../deployment/SECURITY_DEPLOYMENT.md)
 - Runbook: [../deployment/RUNBOOK.md](../deployment/RUNBOOK.md)
 - Incident response: [../deployment/INCIDENT_RESPONSE.md](../deployment/INCIDENT_RESPONSE.md)

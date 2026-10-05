@@ -116,7 +116,7 @@ Related:
 |---|---|---|---|
 | HOST-06 | Security + DevOps/SRE | `SECURITY.md`, `deploy/`, `docs/security/` | Secure-by-default compose: no unsafe defaults; clear hardening checklist |
 | HOST-07 | DevOps/SRE + Docs | `deploy/`, `docs/deployment/` | TLS setup guide tested on a clean machine |
-| HOST-08 | Docs | `docs/CONFIGURATION.md`, `.env.production.example` | Env var docs are complete and match runtime config parsing |
+| HOST-08 | Docs | `docs/reference/CONFIGURATION.md`, `.env.production.example` | Env var docs are complete and match runtime config parsing |
 
 ---
 
@@ -142,7 +142,7 @@ Related:
 
 | ID | Owner | Primary Files/Areas | Definition of Done (Gate) |
 |---|---|---|---|
-| HOST-09 | DevOps/SRE + Backend (Core) | `deploy/observability/`, `aragora/observability/`, `docs/OPERATIONS.md` | Metrics/logging bundle works out-of-the-box; dashboards load |
+| HOST-09 | DevOps/SRE + Backend (Core) | `deploy/observability/`, `aragora/observability/`, `docs/operations/OPERATIONS.md` | Metrics/logging bundle works out-of-the-box; dashboards load |
 | HOST-10 | DevOps/SRE | `deploy/observability/`, `deploy/grafana/` (if present) | Sample Grafana dashboards are versioned and documented |
 
 ### QA Track

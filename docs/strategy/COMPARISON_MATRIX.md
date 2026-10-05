@@ -133,7 +133,7 @@ This comparison is based on public documentation, source code analysis, and publ
 
 ### YC QM (Quartermaster) — added August 2026
 
-Company-wide "multiplayer agent harness" (Slack + web), MIT, open-sourced by Y Combinator Jul 2026; wraps external agent harnesses (Claude Code, Codex, OpenCode, Pi) rather than providing its own agent brain. See the full analysis in [docs/research/2026-08-26-yc-qm-brief.md](research/2026-08-26-yc-qm-brief.md).
+Company-wide "multiplayer agent harness" (Slack + web), MIT, open-sourced by Y Combinator Jul 2026; wraps external agent harnesses (Claude Code, Codex, OpenCode, Pi) rather than providing its own agent brain. The full analysis is in the research brief `2026-08-26-yc-qm-brief.md` (archived dated snapshot).
 
 - **Stronger**: Slack-native everyday UX (turn detection, approval cards), single "scope" org primitive, breadth of mundane org work, momentum (14k+ stars in a month).
 - **Structural gap (verified in source)**: audit log is unsigned rows — no hash chain, no tamper evidence, no decision receipts; zero multi-agent cross-checking, debate, or dissent capture; SECURITY.md disclaims certification. QM approves *commands*; Aragora vets *decisions*.

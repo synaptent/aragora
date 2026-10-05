@@ -1,7 +1,7 @@
 # X Bookmark Triage — 2026-08-26
 
 > **Status:** NON-CANONICAL RESEARCH BRIEF.
-> **Authority:** None. This document records triage verdicts on externally sourced ideas. It does not bind architecture, create tracks, or add scope to [CANONICAL_GOALS.md](../CANONICAL_GOALS.md) or [NEXT_STEPS_CANONICAL.md](../status/NEXT_STEPS_CANONICAL.md).
+> **Authority:** None. This document records triage verdicts on externally sourced ideas. It does not bind architecture, create tracks, or add scope to [CANONICAL_GOALS.md](../../CANONICAL_GOALS.md) or [NEXT_STEPS_CANONICAL.md](../../status/NEXT_STEPS_CANONICAL.md).
 > **Gate:** Nothing here carries `boss-ready`. Adopted items become `research-intake`-labeled issues that require explicit promotion (a `### Do now` code in NEXT_STEPS_CANONICAL.md) before any autonomous dispatch.
 > **Date:** 2026-08-26
 
@@ -17,7 +17,7 @@ This brief is also the seed corpus for the standing **X intake pipeline** (bookm
 - Pass 2 (2026-08-29 refresh): 24 further bookmarks captured from X's new History page (everything added since pass 1, tweet dates Aug 24–28), plus the first page of Likes. X throttled timeline pagination hard on both feeds — deeper history was unreachable by browser. **This is the operational argument for the pipeline this brief seeds**: full-history backfill comes from the X data export (already parseable by `aragora ideacloud load --source twitter-bookmarks/-likes`), and incremental sync from the OAuth API mode.
 - Likes signal-to-noise is much lower than bookmarks (social/casual engagement dominates); likes triage should always run through the ideacloud quality/dedup gate rather than manual review.
 - Known limits: X shows tweet dates, not bookmark dates; long posts truncated; media-only posts not evaluated.
-- Judged against: `docs/THESIS.md`, `docs/CANONICAL_GOALS.md`, `docs/FOCUS.md`, `docs/status/NEXT_STEPS_CANONICAL.md`, `docs/FEATURE_GAP_LIST.md` (ODR tranche + dormant table), and recent git history.
+- Judged against: `docs/THESIS.md`, `docs/CANONICAL_GOALS.md`, `docs/strategy/FOCUS.md`, `docs/status/NEXT_STEPS_CANONICAL.md`, `docs/FEATURE_GAP_LIST.md` (ODR tranche + dormant table), and recent git history.
 
 ## Candidates
 
@@ -37,7 +37,7 @@ Aug 25 ([x.com/simile_ai/status/2092299277154291843](https://x.com/simile_ai/sta
 
 Jul 31 ([x.com/ycombinator/status/2083243960684908768](https://x.com/ycombinator/status/2083243960684908768)). Multi-agent harness used across accounting, legal, events, engineering, in Slack and on the web. Closest public artifact to Aragora's "Chief of Staff / Organization Substrate" stages.
 
-**Verdict: ADOPT.** Deep-dive brief: [2026-08-26-yc-qm-brief.md](2026-08-26-yc-qm-brief.md). Destination: `docs/COMPARISON_MATRIX.md` row; differentiation question is whether QM has any decision-integrity/receipt story.
+**Verdict: ADOPT.** Deep-dive brief: [2026-08-26-yc-qm-brief.md](2026-08-26-yc-qm-brief.md). Destination: `docs/strategy/COMPARISON_MATRIX.md` row; differentiation question is whether QM has any decision-integrity/receipt story.
 
 ### 4. Prime Intellect — Prime Agent + verifiers v1
 
@@ -129,10 +129,10 @@ The outcome was a **failed consensus, and the receipt says so**:
   profile-expiry failure mode), degrading the debate to effectively one participant.
 - Round 2 revision hit the 600s phase timeout; consensus was not reached (confidence 0.0)
   and goal parsing fell back to heuristics.
-- Receipt: [`receipts/2026-08-29-x-intake-ranking-receipt.json`](receipts/2026-08-29-x-intake-ranking-receipt.json)
+- Receipt: [`receipts/2026-08-29-x-intake-ranking-receipt.json`](../../research/receipts/2026-08-29-x-intake-ranking-receipt.json)
   (verdict `FAIL`, receipt_id `2ecd2231-f415-4d89-abff-726166909606`,
   sha256 `29d3453cb9cc0708408e724eca998f14f446d8835db002082da93615b62dee49`); run record
-  [`receipts/2026-08-29-x-intake-ranking-run.json`](receipts/2026-08-29-x-intake-ranking-run.json).
+  [`receipts/2026-08-29-x-intake-ranking-run.json`](../../research/receipts/2026-08-29-x-intake-ranking-run.json).
 
 Consequence: the per-candidate verdicts in this brief remain **analyst verdicts, not
 debate-settled ones** — exactly what the receipt-preserving posture requires us to say.
@@ -144,21 +144,21 @@ leaving claude's full grounded proposal (it verified candidate 11's code claim a
 itself) with no second perspective. Claude's own critique flagged that this mirrors candidate 1's
 collaboration-vs-independence failure mode. Artifacts:
 
-- Re-run receipt: [`receipts/2026-08-29-x-intake-ranking-rerun-receipt.json`](receipts/2026-08-29-x-intake-ranking-rerun-receipt.json) (verdict `FAIL`, cause only visible in `agent_responses`)
-- Claude's single-model ranking: [`receipts/2026-08-29-claude-ranking-proposal.md`](receipts/2026-08-29-claude-ranking-proposal.md) — promotes the DeepMind verifier-metric audit (#9868) to rank 1 and diverges from the analyst verdicts by rejecting candidates #3, #7, and #8
+- Re-run receipt: [`receipts/2026-08-29-x-intake-ranking-rerun-receipt.json`](../../research/receipts/2026-08-29-x-intake-ranking-rerun-receipt.json) (verdict `FAIL`, cause only visible in `agent_responses`)
+- Claude's single-model ranking: [`receipts/2026-08-29-claude-ranking-proposal.md`](../../research/receipts/2026-08-29-claude-ranking-proposal.md) — promotes the DeepMind verifier-metric audit (#9868) to rank 1 and diverges from the analyst verdicts by rejecting candidates #3, #7, and #8
 - Defect filed: [#9872](https://github.com/synaptent/aragora/issues/9872) — MetaPlanner degrades silently when a proposer times out; fix that, then re-run for a true consensus receipt.
 
 ## Rules of the road for this brief
 
 1. Nothing here carries `boss-ready`. Nothing here is canonical. Nothing here adds a track.
 2. Adopted items become `research-intake` + `needs-triage` issues in the validated body format, ranked by an Aragora debate whose DecisionReceipt is linked from each issue (dogfooding rule: research intake goes through the same adversarial vetting the product sells).
-3. Promotion to dispatch requires an explicit founder decision: a code under `### Do now` in [NEXT_STEPS_CANONICAL.md](../status/NEXT_STEPS_CANONICAL.md). The proof-first reconciler will (correctly) strip `boss-ready` from anything that skips this.
+3. Promotion to dispatch requires an explicit founder decision: a code under `### Do now` in [NEXT_STEPS_CANONICAL.md](../../status/NEXT_STEPS_CANONICAL.md). The proof-first reconciler will (correctly) strip `boss-ready` from anything that skips this.
 4. Future bookmark/like triage passes append new dated briefs in `docs/research/`; this brief does not grow into a rolling log.
 
 ## Related
 
-- [Roadmap Intake Register](../status/ROADMAP_INTAKE_REGISTER.md) — register rows for every adopted item (the durability gate)
-- [FEATURE_GAP_LIST.md](../FEATURE_GAP_LIST.md) — X-intake pipeline capability rows
-- [COMPARISON_MATRIX.md](../COMPARISON_MATRIX.md) — QM/buzz positioning
+- [Roadmap Intake Register](../../status/ROADMAP_INTAKE_REGISTER.md) — register rows for every adopted item (the durability gate)
+- [FEATURE_GAP_LIST.md](../../FEATURE_GAP_LIST.md) — X-intake pipeline capability rows
+- [COMPARISON_MATRIX.md](../../strategy/COMPARISON_MATRIX.md) — QM/buzz positioning
 - Deep-dive briefs: [Anthropic multiagent patterns](2026-08-26-anthropic-multiagent-patterns-brief.md) · [Simile confidence model](2026-08-26-simile-confidence-model-brief.md) · [YC QM](2026-08-26-yc-qm-brief.md)
 - Ranking receipt: recorded under `.aragora/receipts/` and linked from the filed issues (see register row)

@@ -817,7 +817,7 @@ asyncio.run(analyze_decision())
 
 ## Related Documentation
 
-- [SDK Quickstart](SDK_QUICKSTART.md) - Install to first debate in 2 minutes
+- [SDK Quickstart](guides/SDK_QUICKSTART.md) - Install to first debate in 2 minutes
 - [API Reference](./api/API_REFERENCE.md) - Full REST API documentation
 - [WebSocket Events](./streaming/WEBSOCKET_EVENTS.md) - Real-time streaming events
 - [Gauntlet Guide](./debate/GAUNTLET.md) - Adversarial validation details

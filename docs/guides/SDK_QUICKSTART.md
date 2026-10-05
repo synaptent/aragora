@@ -262,12 +262,12 @@ aragora repl
 
 | Example | What it does | File |
 |---------|-------------|------|
-| Basic debate + receipt | Run a debate, get signed receipt | [`examples/quickstart/basic_debate.py`](../examples/quickstart/basic_debate.py) |
-| Batch claim verification | Verify multiple claims concurrently | [`examples/batch_verify_claims.py`](../examples/batch_verify_claims.py) |
-| Slack bot | `/debate` command with streaming | [`examples/nodejs-slack-bot/`](../examples/nodejs-slack-bot/) |
-| Healthcare review | Clinical decision vetting | [`examples/quickstart/healthcare_review.py`](../examples/quickstart/healthcare_review.py) |
-| Gauntlet demo | Adversarial stress-testing | [`examples/gauntlet_demo.py`](../examples/gauntlet_demo.py) |
-| TypeScript SDK | Basic debate in TypeScript | [`examples/typescript/01-basic-debate.ts`](../examples/typescript/01-basic-debate.ts) |
+| Basic debate + receipt | Run a debate, get signed receipt | [`examples/quickstart/basic_debate.py`](../../examples/quickstart/basic_debate.py) |
+| Batch claim verification | Verify multiple claims concurrently | [`examples/batch_verify_claims.py`](../../examples/batch_verify_claims.py) |
+| Slack bot | `/debate` command with streaming | [`examples/nodejs-slack-bot/`](../../examples/nodejs-slack-bot/) |
+| Healthcare review | Clinical decision vetting | [`examples/quickstart/healthcare_review.py`](../../examples/quickstart/healthcare_review.py) |
+| Gauntlet demo | Adversarial stress-testing | [`examples/gauntlet_demo.py`](../../examples/gauntlet_demo.py) |
+| TypeScript SDK | Basic debate in TypeScript | [`examples/typescript/01-basic-debate.ts`](../../examples/typescript/01-basic-debate.ts) |
 
 All examples work offline with mock agents (no API keys needed).
 
@@ -275,9 +275,9 @@ All examples work offline with mock agents (no API keys needed).
 
 | Goal | Guide |
 |------|-------|
-| Full SDK reference | [SDK Guide](SDK_GUIDE.md) |
-| REST API docs | [API Reference](api/API_REFERENCE.md) |
-| Gauntlet (adversarial validation) | [Gauntlet Guide](./debate/GAUNTLET.md) |
-| Streaming events (WebSocket) | [WebSocket Events](./streaming/WEBSOCKET_EVENTS.md) |
-| Self-host with Docker | [`deploy/README.md`](../deploy/README.md) |
-| EU AI Act compliance | [EU AI Act Guide](compliance/EU_AI_ACT_GUIDE.md) |
+| Full SDK reference | [SDK Guide](../SDK_GUIDE.md) |
+| REST API docs | [API Reference](../api/API_REFERENCE.md) |
+| Gauntlet (adversarial validation) | [Gauntlet Guide](../debate/GAUNTLET.md) |
+| Streaming events (WebSocket) | [WebSocket Events](../streaming/WEBSOCKET_EVENTS.md) |
+| Self-host with Docker | [`deploy/README.md`](../../deploy/README.md) |
+| EU AI Act compliance | [EU AI Act Guide](../compliance/EU_AI_ACT_GUIDE.md) |
