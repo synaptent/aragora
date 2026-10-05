@@ -1334,6 +1334,7 @@ class DebateController:
 
         successful_runs: list[tuple[dict[str, Any], Any, DebateConfig, dict[str, Any] | None]] = []
         failures: list[dict[str, Any]] = []
+        deadline_stops = 0
 
         for candidate_index, candidate_agents in enumerate(candidates, start=1):
             candidate_config = replace(config, agents_str=candidate_agents)
@@ -1344,6 +1345,8 @@ class DebateController:
                     hooks,
                 )
             except Exception as exc:  # noqa: BLE001 - comparison mode should continue on per-candidate failures
+                if isinstance(exc, _DebateDeadlineReached):
+                    deadline_stops += 1
                 logger.warning(
                     "[debate] Comparison candidate %s failed for %s: %s",
                     candidate_index,
@@ -1372,6 +1375,11 @@ class DebateController:
             successful_runs.append((summary, candidate_result, candidate_config, quality_meta))
 
         if not successful_runs:
+            # Any genuine candidate failure keeps the run an error, even alongside deadline stops.
+            if failures and deadline_stops == len(failures):
+                raise _DebateDeadlineReached(
+                    f"All {deadline_stops} comparison candidates stopped at their deadline"
+                )
             raise ValueError("All comparison candidates failed")
 
         if pick_best_result:

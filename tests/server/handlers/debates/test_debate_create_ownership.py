@@ -50,12 +50,22 @@ def _reset_limits_and_share_state(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _clear_active_debates():
-    yield
-    from aragora.server.debate_utils import _active_debates, _active_debates_lock
+def state_managers():
+    """A fresh real StateManager per test; the process-wide one is restored afterwards."""
+    from aragora.server.state import StateManager, get_state_manager
+    from aragora.services import ServiceRegistry
 
-    with _active_debates_lock:
-        _active_debates.clear()
+    registry, inherited, owned = ServiceRegistry.get(), get_state_manager(), StateManager()
+    registry.unregister(StateManager)
+    registry.register(StateManager, owned)
+    assert get_state_manager() is owned and owned.get_active_debate_count() == 0
+    try:
+        yield SimpleNamespace(inherited=inherited, owned=owned)
+    finally:
+        registry.unregister(StateManager)
+        registry.register(StateManager, inherited)
+        owned.shutdown()
+    assert get_state_manager() is inherited and owned.get_active_debate_count() == 0
 
 
 @pytest.fixture

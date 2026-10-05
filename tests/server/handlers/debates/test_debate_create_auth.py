@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from aragora.config import MAX_CONCURRENT_DEBATES
 from aragora.server.debate_controller import DebateController
 from aragora.server.handlers.debates.handler import DebatesHandler
 from aragora.storage.debate_storage import DebateStorage
@@ -124,14 +125,27 @@ def _isolated_auth(monkeypatch):
         lambda *a, **k: RateLimitResult(allowed=True, remaining=99, limit=100, key="test"),
     )
     reset_rate_limiters()
-    from aragora.server.state import get_state_manager
-
-    state = get_state_manager()
-    before = set(state.get_active_debates())
     yield checker
     reset_rate_limiters()
-    for debate_id in set(state.get_active_debates()) - before:
-        state.unregister_debate(debate_id)
+
+
+@pytest.fixture(autouse=True)
+def state_managers():
+    """A fresh real StateManager per test; the process-wide one is restored afterwards."""
+    from aragora.server.state import StateManager, get_state_manager
+    from aragora.services import ServiceRegistry
+
+    registry, inherited, owned = ServiceRegistry.get(), get_state_manager(), StateManager()
+    registry.unregister(StateManager)
+    registry.register(StateManager, owned)
+    assert get_state_manager() is owned and owned.get_active_debate_count() == 0
+    try:
+        yield SimpleNamespace(inherited=inherited, owned=owned)
+    finally:
+        registry.unregister(StateManager)
+        registry.register(StateManager, inherited)
+        owned.shutdown()
+    assert get_state_manager() is inherited and owned.get_active_debate_count() == 0
 
 
 def _jwt(org_id: str | None, role: str = "member", user_id: str = "user-a") -> str:
@@ -477,3 +491,26 @@ class TestOrgUserCreates:
 
         assert status == 200, body
         assert _debate_rows(probes.storage) == [(body["debate_id"], ORG_A, 0)]
+
+    def test_debates_left_running_by_earlier_tests_do_not_use_this_tests_capacity(
+        self, server, probes, state_managers
+    ):
+        leftover = [f"left-running-{n}" for n in range(MAX_CONCURRENT_DEBATES)]
+        for debate_id in leftover:
+            state_managers.inherited.register_debate(debate_id, "left running", ["demo"])
+        path = "/api/v1/debates"
+        try:
+            status, body = _post(server, probes, path, _body_for(path), _jwt(ORG_A))
+            assert (status, body["success"]) == (200, True), body
+            assert _debate_rows(probes.storage) == [(body["debate_id"], ORG_A, 0)]
+            assert set(leftover) <= set(state_managers.inherited.get_active_debates())
+
+            for n in range(MAX_CONCURRENT_DEBATES):
+                state_managers.owned.register_debate(f"own-running-{n}", "running", ["demo"])
+            _, refused = _post(server, probes, path, _body_for(path), _jwt(ORG_A))
+            assert refused["success"] is False
+            assert "Server at capacity" in refused["error"]
+            assert len(_debate_rows(probes.storage)) == 1
+        finally:
+            for debate_id in leftover:
+                state_managers.inherited.unregister_debate(debate_id)
