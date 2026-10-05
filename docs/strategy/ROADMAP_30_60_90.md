@@ -130,7 +130,7 @@ All 22 endpoints aligned. Paths corrected (`/actions`, `/sessions/{id}/end`), mi
 | Task | File | Test Gate |
 |------|------|-----------|
 | Decision → Action → Audit → Attestation demo | `examples/decision_pipeline.py` | Full pipeline produces receipt + on-chain anchor |
-| Cross-org trust portability doc | `docs/TRUST_PORTABILITY.md` | ERC-8004 reputation transfer between orgs |
+| Cross-org trust portability doc | `docs/architecture/TRUST_PORTABILITY.md` | ERC-8004 reputation transfer between orgs |
 | EU AI Act compliance demo | `examples/eu_ai_act_compliance.py` | Produces Art. 12/13/14 compliant artifacts |
 
 ### P7: Metrics & Validation (Ongoing)

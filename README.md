@@ -233,7 +233,7 @@ Secrets load from AWS Secrets Manager in production (never standing env keys);
 local development uses a gitignored `.env`. See the
 [security overview](docs/enterprise/SECURITY.md),
 [compliance overview](docs/enterprise/COMPLIANCE.md), and
-[deployment guide](docs/deployment/DEPLOYMENT.md).
+[deployment guide](docs/DEPLOYMENT.md).
 
 ## Contributing & License
 

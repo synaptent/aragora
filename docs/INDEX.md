@@ -50,7 +50,7 @@ then wire it into CI.
 ## Operations
 
 - [Production Deployment](deployment/PRODUCTION_DEPLOYMENT.md)
-- [Deployment Guide](deployment/DEPLOYMENT.md)
+- [Deployment Guide](DEPLOYMENT.md)
 - [Security Deployment](deployment/SECURITY_DEPLOYMENT.md)
 - [Runbook](deployment/RUNBOOK.md)
 - [Incident Response](deployment/INCIDENT_RESPONSE.md)

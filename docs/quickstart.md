@@ -175,5 +175,5 @@ full per-audience breakdown.
 | [CLI Reference](reference/CLI_REFERENCE.md) | All CLI commands and flags |
 | [SDK Guide](SDK_GUIDE.md) | Python & TypeScript SDK reference |
 | [API Reference](api/API_REFERENCE.md) | REST API endpoints |
-| [Self-Hosting](deployment/DEPLOYMENT.md) | Production deployment |
+| [Self-Hosting](DEPLOYMENT.md) | Production deployment |
 | [Documentation Landing](README.md) | Deeper architectural overview |

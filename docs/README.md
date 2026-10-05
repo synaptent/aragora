@@ -28,7 +28,7 @@ wire it into CI — comes first below; everything else follows.
 | Build a TypeScript integration | [TypeScript SDK](./guides/SDK_TYPESCRIPT.md) |
 | Use the REST API | [API Reference](./api/API_REFERENCE.md) |
 | Stream events via WebSocket | [WebSocket Events](./streaming/WEBSOCKET_EVENTS.md) |
-| Deploy to production | [Deployment Guide](./deployment/DEPLOYMENT.md) |
+| Deploy to production | [Deployment Guide](./DEPLOYMENT.md) |
 | Set up Slack/Telegram/WhatsApp | [Chat Connector Guide](./guides/CHAT_CONNECTOR_GUIDE.md) |
 | Troubleshoot an issue | [Troubleshooting](./guides/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](./architecture/ARCHITECTURE.md) |
@@ -170,13 +170,14 @@ aragora backup restore          # Restore from backup
 aragora skills scan file.py     # Scan for malicious patterns
 ```
 
-See [CLI_REFERENCE](./reference/CLI_REFERENCE.md) for full documentation.
+See [CLI_REFERENCE](./CLI_REFERENCE.md) for full documentation and the
+[generated flag catalog](./reference/CLI_REFERENCE.md) for every option.
 
 ## Operations & Deployment
 
 | Document | Description |
 |----------|-------------|
-| [DEPLOYMENT](./deployment/DEPLOYMENT.md) | Deployment guide |
+| [DEPLOYMENT](./DEPLOYMENT.md) | Deployment guide |
 | [OPERATIONS](./OPERATIONS.md) | Operations runbook |
 | [RUNBOOK](./deployment/RUNBOOK.md) | Incident response procedures |
 | [PRODUCTION_READINESS](./deployment/PRODUCTION_READINESS.md) | Production readiness checklist |
@@ -206,7 +207,7 @@ See [CLI_REFERENCE](./reference/CLI_REFERENCE.md) for full documentation.
 |----------|-------------|
 | [ENVIRONMENT](./reference/ENVIRONMENT.md) | Environment variables reference |
 | [DATABASE](./reference/DATABASE.md) | Database architecture |
-| [CLI_REFERENCE](./reference/CLI_REFERENCE.md) | CLI command reference |
+| [CLI_REFERENCE](./CLI_REFERENCE.md) | CLI command reference ([generated flag catalog](./reference/CLI_REFERENCE.md)) |
 
 ## Development
 
