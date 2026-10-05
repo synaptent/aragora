@@ -89,7 +89,7 @@ pip install ./aragora-verify
 ```
 
 > Use **0.2.0+** (`pip install -U 'aragora-verify>=0.2.0'`): it is the first
-> line that verifies ODR v0.2, the default output since Aragora 2.11.0 (0.1.x
+> line that verifies ODR v0.2, the default output since the 2.11.0 release (0.1.x
 > rejects v0.2 documents at `schema_conformance`), and it still verifies v0.1
 > receipts. Like 0.1.1, it binds each signature's recorded `key_id` to the key
 > you supply, so a relabeled signer fails as tampering. 0.1.0 lacks that

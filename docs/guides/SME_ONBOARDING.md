@@ -302,4 +302,4 @@ After completing onboarding:
 
 ---
 
-*Version: 1.0.0 | Last Updated: January 2026*
+*Document version: 1.0.0 | Last Updated: January 2026*
