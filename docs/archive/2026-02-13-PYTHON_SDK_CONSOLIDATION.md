@@ -551,6 +551,6 @@ class AragoraClient:
 
 ## Related Documentation
 
-- [sdk/python/README.md](../sdk/python/README.md) - Full SDK documentation
-- [docs/SDK_GUIDE.md](SDK_GUIDE.md) - SDK architecture overview
-- [TypeScript SDK Consolidation](../docs-site/docs/guides/sdk-consolidation.md) - TypeScript equivalent
+- [sdk/python/README.md](../../sdk/python/README.md) - Full SDK documentation
+- [docs/SDK_GUIDE.md](../SDK_GUIDE.md) - SDK architecture overview
+- [TypeScript SDK Consolidation](../../docs-site/docs/guides/sdk-consolidation.md) - TypeScript equivalent
