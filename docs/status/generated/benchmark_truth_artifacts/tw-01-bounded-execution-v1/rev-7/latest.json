@@ -50,7 +50,7 @@
   "failure_class_distribution": {
     "blocked_not_dispatch_bounded": 5
   },
-  "generated_at": "2026-09-29T13:36:38Z",
+  "generated_at": "2026-10-05T13:40:25Z",
   "in_flight_metrics": {
     "in_progress_attempted_count": 5,
     "in_progress_expected_count": 5,
