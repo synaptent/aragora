@@ -53,6 +53,39 @@ This index is scoped to high-signal, actively maintained docs with validated pat
 - Breaking changes: [BREAKING_CHANGES.md](BREAKING_CHANGES.md)
 - Status: [../status/STATUS.md](../status/STATUS.md)
 
+## Configuration and Data
+
+- Configuration reference: [CONFIGURATION.md](CONFIGURATION.md)
+- Choosing dependencies and install extras: [DEPENDENCIES.md](DEPENDENCIES.md)
+- Database architecture: [DATABASE.md](DATABASE.md)
+- Database schema: [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)
+- Canonical stores for convoys, beads, gateway and inbox: [CANONICAL_STORES.md](CANONICAL_STORES.md)
+- Document ingestion: [DOCUMENTS.md](DOCUMENTS.md)
+
+## Server, Errors and Administration
+
+- HTTP handler index: [HANDLERS.md](HANDLERS.md)
+- Message binding router: [BINDINGS.md](BINDINGS.md)
+- Control plane: [CONTROL_PLANE.md](CONTROL_PLANE.md)
+- Admin console: [ADMIN.md](ADMIN.md)
+- Error codes: [ERROR_CODES.md](ERROR_CODES.md)
+- Error handling patterns: [ERROR_HANDLING.md](ERROR_HANDLING.md)
+- Error tracking with Sentry: [ERROR_TRACKING.md](ERROR_TRACKING.md)
+
+## Billing and Service Terms
+
+- Billing system: [BILLING.md](BILLING.md)
+- Billing units and token metering: [BILLING_UNITS.md](BILLING_UNITS.md)
+- Accounting automation with QuickBooks Online: [ACCOUNTING.md](ACCOUNTING.md)
+- Service level agreement: [SLA.md](SLA.md)
+
+## Development
+
+- Implementation pipeline (`aragora/implement/`): [IMPLEMENT.md](IMPLEMENT.md)
+- Type checking with mypy: [TYPE_CHECKING.md](TYPE_CHECKING.md)
+- Repository root allowlist: [ROOT_ALLOWLIST.md](ROOT_ALLOWLIST.md)
+- Credits and attribution: [CREDITS.md](CREDITS.md)
+
 ## Notes
 
 - This index intentionally avoids deprecated/historical paths.
