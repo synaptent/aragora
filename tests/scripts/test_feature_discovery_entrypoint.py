@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from scripts.validate_doc_links import heading_anchors
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FEATURE_DISCOVERY = REPO_ROOT / "docs" / "FEATURE_DISCOVERY.md"
@@ -65,3 +67,25 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
     for anchor in LEGACY_SECTION_ANCHORS:
         assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in content
         assert anchor in canonical_slugs
+
+
+def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
+    # Links written before this page became a stub still target the old section fragments.
+    content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
+    # Code and HTML comments would hide an anchor from rendering while the checks below still match.
+    for hidden in ("`", "~~~", "<!--", "<pre"):
+        assert hidden not in content.lower(), (
+            f"docs/FEATURE_DISCOVERY.md must not contain {hidden!r}"
+        )
+    assert not re.search(r"^(?: {4}|\t)", content, re.MULTILINE), "no indented code blocks"
+
+    anchors = heading_anchors(FEATURE_DISCOVERY)
+    missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in anchors]
+    assert not missing, f"legacy anchors missing from docs/FEATURE_DISCOVERY.md: {missing}"
+
+    for anchor in LEGACY_SECTION_ANCHORS:
+        slug = re.escape(anchor)
+        definitions = re.findall(rf"\bid=[\"']{slug}[\"']", content)
+        assert len(definitions) == 1, f"{anchor} is defined {len(definitions)} times"
+        link = rf"<a id=\"{slug}\"></a>\[[^\]]+\]\(status/FEATURE_DISCOVERY\.md#{slug}\)"
+        assert re.search(link, content), f"{anchor} must sit directly before its own link"
