@@ -139,9 +139,17 @@ def _load_declared_registrations() -> None:
             or _source_checkout_registrations()
         )
         for entry_point in declared:
+            # A broken registration must not stop the others.
             try:
                 entry_point.load()()
-            except Exception as exc:  # one broken registration must not stop the others
+            except (
+                ImportError,
+                AttributeError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as exc:
                 logger.warning("Decision route registration %s failed: %s", entry_point.value, exc)
 
 
