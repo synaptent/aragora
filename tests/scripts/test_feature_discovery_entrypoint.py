@@ -20,10 +20,22 @@ LEGACY_SECTION_ANCHORS = [
     "9-self-improvement--nomic-loop",
 ]
 
+EXPLICIT_ANCHOR = re.compile(r"""<a\s+(?:id|name)=["']([^"']+)["']""")
+HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
+
 
 def _github_slug(heading: str) -> str:
     text = re.sub(r"[^\w\- ]", "", heading.strip().lower())
     return text.replace(" ", "-")
+
+
+def _anchor_offsets(content: str) -> dict[str, int]:
+    offsets: dict[str, int] = {}
+    for match in EXPLICIT_ANCHOR.finditer(content):
+        offsets.setdefault(match.group(1), match.start())
+    for match in HEADING.finditer(content):
+        offsets.setdefault(_github_slug(match.group(1)), match.start())
+    return offsets
 
 
 def test_root_feature_discovery_is_a_truthful_entrypoint() -> None:
@@ -65,3 +77,18 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
     for anchor in LEGACY_SECTION_ANCHORS:
         assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in content
         assert anchor in canonical_slugs
+
+
+def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
+    # Links written before this page became a stub still target the old section fragments.
+    content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
+    offsets = _anchor_offsets(content)
+
+    missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in offsets]
+    assert not missing, f"legacy anchors missing from docs/FEATURE_DISCOVERY.md: {missing}"
+
+    starts = sorted(offsets[anchor] for anchor in LEGACY_SECTION_ANCHORS)
+    for anchor in LEGACY_SECTION_ANCHORS:
+        start = offsets[anchor]
+        end = min((offset for offset in starts if offset > start), default=len(content))
+        assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in content[start:end], anchor
