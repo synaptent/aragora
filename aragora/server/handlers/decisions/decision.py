@@ -469,19 +469,21 @@ class DecisionHandler(BaseHandler):
         except (TypeError, AttributeError, ValueError):
             pass  # Reason is optional
 
-        # Update the result with cancelled status
+        # Update a copy: the fallback lookup returns the stored dict itself, and
+        # a save that fails must leave it unchanged.
+        result = dict(result)
         result["status"] = "cancelled"
         result["cancelled_at"] = datetime.now(timezone.utc).isoformat()
         if reason:
             result["cancellation_reason"] = reason
 
-        # Persist the update
-        _save_result(
+        if not _save_result(
             request_id,
             result,
             org_id=scope.org_id,
             created_by=result.get("created_by") or scope.user_id,
-        )
+        ):
+            return record_not_found("Decision")
 
         logger.info(
             "Decision %s cancelled by user. Reason: %s", request_id, reason or "not provided"

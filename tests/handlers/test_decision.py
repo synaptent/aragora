@@ -2246,6 +2246,27 @@ class TestOrgOwnership:
         assert saved["created_by"] == "original-user"
 
     @pytest.mark.asyncio
+    async def test_cancel_that_cannot_be_saved_is_identical_to_missing(self, handler):
+        mod = _use_fallback_only()
+        _seed(mod, "dec_own", ORG, status="running")
+        before = dict(mod._decision_results_fallback["dec_own"])
+
+        with (
+            patch(
+                "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
+                return_value=(MagicMock(), None),
+            ),
+            patch("aragora.server.handlers.decision._save_result", return_value=False),
+        ):
+            result = await handler.handle_post(
+                "/api/v1/decisions/dec_own/cancel", {}, _make_http_handler({})
+            )
+
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
+        assert mod._decision_results_fallback == {"dec_own": before}
+
+    @pytest.mark.asyncio
     async def test_retry_saves_new_decision_for_caller(self, handler):
         mod = _use_fallback_only()
         _seed(mod, "dec_own", ORG, status="failed", created_by="original-user")
