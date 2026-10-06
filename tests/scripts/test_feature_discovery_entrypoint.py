@@ -22,8 +22,9 @@ LEGACY_SECTION_ANCHORS = [
     "9-self-improvement--nomic-loop",
 ]
 
+ANCHOR_TAG = re.compile(r"<a\s[^>]*>", re.IGNORECASE)
 # Stricter than HTML_ID_RE in validate_doc_links.py, which also matches data-id= attributes.
-EXPLICIT_ANCHOR = re.compile(r"""<a\s[^>]*?(?<![\w-])(?:id|name)=["']([^"']+)["']""", re.IGNORECASE)
+ANCHOR_ATTRIBUTE = re.compile(r"""(?<![\w-])(?:id|name)=["']([^"']+)["']""", re.IGNORECASE)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
@@ -63,7 +64,12 @@ def _heading_offsets(text: str) -> list[tuple[str, int]]:
 
 
 def _anchor_offsets(content: str) -> dict[str, list[int]]:
-    definitions = [(match.group(1), match.start()) for match in EXPLICIT_ANCHOR.finditer(content)]
+    definitions = [
+        (value, tag.start())
+        for tag in ANCHOR_TAG.finditer(content)
+        # <a name="x" id="x"> defines one anchor, not a duplicate.
+        for value in dict.fromkeys(ANCHOR_ATTRIBUTE.findall(tag.group(0)))
+    ]
     definitions += _heading_offsets(content)
     offsets: dict[str, list[int]] = {}
     for name, offset in sorted(definitions, key=lambda item: item[1]):
