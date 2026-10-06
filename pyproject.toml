@@ -156,6 +156,12 @@ Homepage = "https://aragora.ai"
 Repository = "https://github.com/synaptent/aragora"
 Issues = "https://github.com/synaptent/aragora/issues"
 
+# Run by aragora/core/decision_route_hooks.py on the first lookup that finds nothing
+# registered, so a caller that only imports aragora.core still reaches the workflow,
+# gauntlet, pipeline, chat connector and audit hooks.
+[project.entry-points."aragora.decision_routes"]
+server = "aragora.server.decision_routes:register_decision_routes"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve

@@ -11,7 +11,9 @@ by ``test_decision_route_targets.py``.
 from __future__ import annotations
 
 import ast
+import importlib.metadata
 import re
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -44,6 +46,8 @@ def isolated_hooks(monkeypatch):
     from aragora.core import decision_router as router_module
 
     monkeypatch.setattr(hooks, "_hooks", {})
+    # Treat the declared registrations as already run, so a miss stays a miss.
+    monkeypatch.setattr(hooks, "_declared_registrations_loaded", True)
     monkeypatch.setattr(router_module, "_warned_once", set())
     return hooks
 
@@ -110,6 +114,167 @@ def test_server_registration_installs_every_hook(isolated_hooks):
     assert isinstance(hooks.get_decision_audit_sink(), decision_routes.UnifiedAuditDecisionSink)
     assert hooks.get_decision_integrity_builder() is build_decision_integrity_payload
     assert hooks.get_tts_bridge_factory() is get_tts_bridge
+
+
+# ---------------------------------------------------------------------------
+# Declared registrations run on the first lookup that finds nothing
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def undiscovered_hooks(isolated_hooks, monkeypatch):
+    """Empty registries on which the declared registrations have not run yet."""
+    import aragora.gauntlet  # noqa: F401
+    import aragora.workflow  # noqa: F401
+
+    monkeypatch.setattr(hooks, "_route_targets", {})
+    monkeypatch.setattr(hooks, "_declared_registrations_loaded", False)
+    return hooks
+
+
+def _declare(monkeypatch, *registrations):
+    """Make ``registrations`` the only entry points of the aragora.decision_routes group."""
+    entry_points = [
+        SimpleNamespace(value=f"tests.declared:{index}", load=lambda fn=fn: fn)
+        for index, fn in enumerate(registrations)
+    ]
+    monkeypatch.setattr(
+        importlib.metadata,
+        "entry_points",
+        lambda *, group: entry_points if group == "aragora.decision_routes" else [],
+    )
+
+
+def test_a_lookup_miss_runs_the_declared_registrations_once(undiscovered_hooks, monkeypatch):
+    sink = MagicMock()
+    calls = []
+
+    def register():
+        calls.append("register")
+        hooks.register_decision_audit_sink(sink)
+
+    _declare(monkeypatch, register)
+
+    assert hooks.get_decision_audit_sink() is sink
+    assert hooks.get_decision_audit_sink() is sink
+    with pytest.raises(hooks.DecisionRouteNotRegisteredError, match="workflow"):
+        hooks.get_route_target(hooks.ROUTE_WORKFLOW)
+    assert calls == ["register"]
+
+
+def test_a_route_lookup_miss_runs_the_declared_registrations(undiscovered_hooks, monkeypatch):
+    target = AsyncMock()
+    _declare(monkeypatch, lambda: hooks.register_route_target(hooks.ROUTE_GAUNTLET, target))
+
+    assert hooks.get_route_target(hooks.ROUTE_GAUNTLET) is target
+
+
+def test_the_registry_snapshot_does_not_run_the_declared_registrations(
+    undiscovered_hooks, monkeypatch
+):
+    calls = []
+    _declare(monkeypatch, lambda: calls.append("register"))
+
+    assert hooks.get_registered_routes() == {}
+    assert calls == []
+
+
+def test_a_failing_declared_registration_is_logged_and_the_lookup_still_raises(
+    undiscovered_hooks, monkeypatch, caplog
+):
+    def broken():
+        raise ImportError("optional dependency missing")
+
+    _declare(monkeypatch, broken)
+
+    with caplog.at_level("WARNING", logger="aragora.core.decision_route_hooks"):
+        with pytest.raises(hooks.DecisionRouteNotRegisteredError, match="aragora.decision_routes"):
+            hooks.get_decision_integrity_builder()
+    assert "optional dependency missing" in caplog.text
+
+
+def test_a_failing_declared_registration_does_not_stop_the_later_ones(
+    undiscovered_hooks, monkeypatch, caplog
+):
+    sink = MagicMock()
+
+    def broken():
+        raise KeyError("missing setting")
+
+    _declare(monkeypatch, broken, lambda: hooks.register_decision_audit_sink(sink))
+
+    with caplog.at_level("WARNING", logger="aragora.core.decision_route_hooks"):
+        assert hooks.get_decision_audit_sink() is sink
+    assert "missing setting" in caplog.text
+
+
+def test_an_unexpected_registration_error_reaches_the_caller_after_the_later_ones_ran(
+    undiscovered_hooks, monkeypatch
+):
+    class PluginBug(Exception):
+        pass
+
+    sink = MagicMock()
+
+    def broken():
+        raise PluginBug("plugin defect")
+
+    _declare(monkeypatch, broken, lambda: hooks.register_decision_audit_sink(sink))
+
+    with pytest.raises(PluginBug):
+        hooks.get_decision_audit_sink()
+    assert hooks.get_decision_audit_sink() is sink
+
+
+def _require_toml_parser():
+    if sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
+
+
+def test_a_source_checkout_uses_its_pyproject_declarations_when_metadata_has_none(
+    undiscovered_hooks, monkeypatch
+):
+    # An editable install keeps the entry points it was installed with; a source tree
+    # run against older metadata still reaches the registrations its pyproject declares.
+    from aragora.server.decision_routes import UnifiedAuditDecisionSink
+
+    _require_toml_parser()
+    _declare(monkeypatch)
+
+    assert isinstance(hooks.get_decision_audit_sink(), UnifiedAuditDecisionSink)
+    assert sorted(hooks.get_registered_routes()) == ["gauntlet", "workflow"]
+
+
+def test_source_checkout_declarations_use_tomli_before_python_3_11(monkeypatch):
+    # Stands the 3.11+ stdlib parser in for tomli, so the 3.10 branch runs on any interpreter.
+    tomllib = pytest.importorskip("tomllib")
+
+    server = [("server", "aragora.server.decision_routes:register_decision_routes")]
+    monkeypatch.setattr(sys, "version_info", (3, 10, 14))
+    monkeypatch.setitem(sys.modules, "tomli", tomllib)
+    assert [(ep.name, ep.value) for ep in hooks._source_checkout_registrations()] == server
+
+    # Without tomli the fallback finds nothing rather than failing the lookup.
+    monkeypatch.setitem(sys.modules, "tomli", None)
+    assert hooks._source_checkout_registrations() == []
+
+
+def test_source_checkout_declarations_come_only_from_aragoras_pyproject(monkeypatch, tmp_path):
+    _require_toml_parser()
+    assert [(ep.name, ep.value) for ep in hooks._source_checkout_registrations()] == [
+        ("server", "aragora.server.decision_routes:register_decision_routes")
+    ]
+
+    other = tmp_path / "pyproject.toml"
+    other.write_text(
+        '[project]\nname = "other"\n\n[project.entry-points."aragora.decision_routes"]\n'
+        'other = "other.routes:register"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hooks, "_SOURCE_PYPROJECT", other)
+    assert hooks._source_checkout_registrations() == []
+    monkeypatch.setattr(hooks, "_SOURCE_PYPROJECT", tmp_path / "missing.toml")
+    assert hooks._source_checkout_registrations() == []
 
 
 def _function_calls(path: Path, function_name: str) -> set[str]:

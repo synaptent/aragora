@@ -513,6 +513,11 @@ class DecisionRouter:
                 except (OSError, RuntimeError, TypeError, ValueError) as audit_err:
                     logger.debug("Audit log (error) failed: %s", audit_err)
 
+            # Only the registry error's own text is returned: it names what to load, while
+            # other exception messages can carry internal details.
+            error_message = f"Decision routing failed: {error_type}"
+            if isinstance(e, DecisionRouteNotRegisteredError):
+                error_message = f"{error_message}: {e}"
             error_result = DecisionResult(
                 request_id=request.request_id,
                 decision_type=request.decision_type,
@@ -520,7 +525,7 @@ class DecisionRouter:
                 confidence=0.0,
                 consensus_reached=False,
                 success=False,
-                error=f"Decision routing failed: {type(e).__name__}",
+                error=error_message,
                 duration_seconds=error_duration,
             )
 
