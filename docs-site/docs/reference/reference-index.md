@@ -58,6 +58,39 @@ This index is scoped to high-signal, actively maintained docs with validated pat
 - Breaking changes: [BREAKING_CHANGES.md](./breaking-changes)
 - Status: [../status/STATUS.md](../contributing/status)
 
+## Configuration and Data
+
+- Configuration reference: [CONFIGURATION.md](../getting-started/configuration)
+- Choosing dependencies and install extras: [DEPENDENCIES.md](../contributing/dependencies)
+- Database architecture: [DATABASE.md](../deployment/database)
+- Database schema: [DATABASE_SCHEMA.md](../deployment/database-schema)
+- Canonical stores for convoys, beads, gateway and inbox: [CANONICAL_STORES.md](./canonical-stores)
+- Document ingestion: [DOCUMENTS.md](../guides/documents)
+
+## Server, Errors and Administration
+
+- HTTP handler index: [HANDLERS.md](../contributing/handlers)
+- Message binding router: [BINDINGS.md](./bindings)
+- Control plane: [CONTROL_PLANE.md](../enterprise/control-plane-overview)
+- Admin console: [ADMIN.md](../admin/overview)
+- Error codes: [ERROR_CODES.md](./error-codes)
+- Error handling patterns: [ERROR_HANDLING.md](./error-handling)
+- Error tracking with Sentry: [ERROR_TRACKING.md](./error-tracking)
+
+## Billing and Service Terms
+
+- Billing system: [BILLING.md](../enterprise/billing)
+- Billing units and token metering: [BILLING_UNITS.md](../enterprise/billing-units)
+- Accounting automation with QuickBooks Online: [ACCOUNTING.md](../guides/accounting)
+- Service level agreement: [SLA.md](../enterprise/sla)
+
+## Development
+
+- Implementation pipeline (`aragora/implement/`): [IMPLEMENT.md](./implement)
+- Type checking with mypy: [TYPE_CHECKING.md](./type-checking)
+- Repository root allowlist: [ROOT_ALLOWLIST.md](./root-allowlist)
+- Credits and attribution: [CREDITS.md](./credits)
+
 ## Notes
 
 - This index intentionally avoids deprecated/historical paths.
