@@ -29,12 +29,14 @@ def _github_slug(heading: str) -> str:
     return text.replace(" ", "-")
 
 
-def _anchor_offsets(content: str) -> dict[str, int]:
-    offsets: dict[str, int] = {}
-    for match in EXPLICIT_ANCHOR.finditer(content):
-        offsets.setdefault(match.group(1), match.start())
-    for match in HEADING.finditer(content):
-        offsets.setdefault(_github_slug(match.group(1)), match.start())
+def _anchor_offsets(content: str) -> dict[str, list[int]]:
+    definitions = [(match.group(1), match.start()) for match in EXPLICIT_ANCHOR.finditer(content)]
+    definitions += [
+        (_github_slug(match.group(1)), match.start()) for match in HEADING.finditer(content)
+    ]
+    offsets: dict[str, list[int]] = {}
+    for name, offset in sorted(definitions, key=lambda item: item[1]):
+        offsets.setdefault(name, []).append(offset)
     return offsets
 
 
@@ -69,9 +71,7 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
     content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
     canonical_slugs = {
         _github_slug(match.group(1))
-        for match in re.finditer(
-            r"^#{1,6}\s+(.+)$", CANONICAL.read_text(encoding="utf-8"), re.MULTILINE
-        )
+        for match in HEADING.finditer(CANONICAL.read_text(encoding="utf-8"))
     }
 
     for anchor in LEGACY_SECTION_ANCHORS:
@@ -86,9 +86,11 @@ def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
 
     missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in offsets]
     assert not missing, f"legacy anchors missing from docs/FEATURE_DISCOVERY.md: {missing}"
+    duplicated = [anchor for anchor in LEGACY_SECTION_ANCHORS if len(offsets[anchor]) > 1]
+    assert not duplicated, f"legacy anchors defined more than once: {duplicated}"
 
-    starts = sorted(offsets[anchor] for anchor in LEGACY_SECTION_ANCHORS)
+    starts = sorted(offsets[anchor][0] for anchor in LEGACY_SECTION_ANCHORS)
     for anchor in LEGACY_SECTION_ANCHORS:
-        start = offsets[anchor]
+        start = offsets[anchor][0]
         end = min((offset for offset in starts if offset > start), default=len(content))
         assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in content[start:end], anchor
