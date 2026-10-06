@@ -73,8 +73,11 @@ def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
     # Links written before this page became a stub still target the old section fragments.
     content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
     # Code and HTML comments would hide an anchor from rendering while the checks below still match.
-    for hidden in ("`", "~~~", "<!--"):
-        assert hidden not in content, f"docs/FEATURE_DISCOVERY.md must not contain {hidden!r}"
+    for hidden in ("`", "~~~", "<!--", "<pre"):
+        assert hidden not in content.lower(), (
+            f"docs/FEATURE_DISCOVERY.md must not contain {hidden!r}"
+        )
+    assert not re.search(r"^(?: {4}|\t)", content, re.MULTILINE), "no indented code blocks"
 
     anchors = heading_anchors(FEATURE_DISCOVERY)
     missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in anchors]
