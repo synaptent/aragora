@@ -86,7 +86,8 @@ class TestFlagGate:
         enable_agent_metering()
         assert os.environ == before
 
-    def test_reset_clears_override(self) -> None:
+    def test_reset_clears_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
         enable_agent_metering()
         reset_agent_metering()
         assert _metering_module._metering_enabled_override is None  # noqa: SLF001
@@ -248,7 +249,8 @@ class TestCreateMeteringRecord:
         restored = TaskResult.from_dict(json.loads(json.dumps(result.to_dict(), allow_nan=False)))
         payload = restored.metadata["metering"]
         assert payload == json.loads(rec.to_json())
-        assert payload["total_cost_usd"] == 0.1875
+        assert "total_cost_usd" not in payload
+        assert rec.total_cost_usd == 0.1875
         assert payload["content_hash"] == _payload_hash(payload)
 
 
@@ -285,16 +287,16 @@ class TestAgentMeteringRecord:
             "compute_units",
             "debate_cost_usd",
             "verifier_cost_usd",
-            "total_cost_usd",
             "timestamp",
             "content_hash",
         }
-        assert required.issubset(d.keys())
+        assert set(d) == required
 
-    def test_to_dict_total_cost_matches_property(self) -> None:
+    def test_to_dict_omits_derived_total(self) -> None:
         rec = self._make(debate_cost_usd=0.07, verifier_cost_usd=0.02)
         d = rec.to_dict()
-        assert d["total_cost_usd"] == rec.total_cost_usd
+        assert "total_cost_usd" not in d
+        assert rec.total_cost_usd == d["debate_cost_usd"] + d["verifier_cost_usd"]
 
     def test_to_json_is_valid_json(self) -> None:
         rec = self._make()
@@ -340,7 +342,10 @@ class TestRecordInvariants:
         with pytest.raises(ValueError, match=match):
             AgentMeteringRecord(**fields)
 
-    def test_direct_construction_accepts_valid_fields_without_flag(self) -> None:
+    def test_direct_construction_accepts_valid_fields_without_flag(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
         assert not agent_metering_enabled()
         rec = AgentMeteringRecord(agent_id="ag-1", session_id="s-1", compute_units=2.0)
         assert rec.content_hash == ""
@@ -364,5 +369,26 @@ class TestRecordInvariants:
         )
         payload = json.loads(rec.to_json())
         assert payload["content_hash"] == _payload_hash(payload)
-        tampered = dict(payload, total_cost_usd=999.0)
-        assert tampered["content_hash"] != _payload_hash(tampered)
+        for field, value in (("debate_cost_usd", 999.0), ("timestamp", "2026-08-26T00:00:00Z")):
+            changed = dict(payload, **{field: value})
+            assert changed["content_hash"] != _payload_hash(changed)
+
+    def test_emitted_numbers_are_the_caller_supplied_values(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="s-1",
+            compute_units=1.0,
+            debate_cost_usd=0.1,
+            verifier_cost_usd=0.2,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        raw = rec.to_json()
+        payload = json.loads(raw)
+        emitted = {
+            value
+            for value in payload.values()
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+        }
+        assert emitted == {1.0, 0.1, 0.2}
+        assert repr(0.1 + 0.2) not in raw

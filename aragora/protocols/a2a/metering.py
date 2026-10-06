@@ -4,7 +4,10 @@ This module is the AGT-02 billing sub-deliverable.  It gives external software
 agents a canonical, machine-parseable record of the compute units, debate cost,
 and verifier cost billed to them for a single A2A session.  The record is
 content-addressed (SHA-256 of the canonical JSON of every serialised field
-except ``content_hash``) so downstream audit pipelines can detect tampering.
+except ``content_hash``) so downstream pipelines can detect accidental
+corruption.  The hash is unkeyed: anyone who changes a record can recompute
+it, so it is an integrity checksum, not proof of origin or of tamper-freedom.
+Callers that need authenticity must sign the serialised record.
 
 See ``docs/plans/AGENT_CONSUMER_SURFACE.md`` §S3 (billing primitives) and
 ``docs/plans/AGENT_CIVILIZATION_SUBSTRATE.md`` (AGT-02).
@@ -114,9 +117,14 @@ class AgentMeteringRecord:
 
     ``content_hash`` is set by :func:`create_metering_record` as the SHA-256
     hex digest of the compact, key-sorted JSON of every field in
-    :meth:`to_dict` except ``content_hash`` itself (``total_cost_usd``
-    included), so a consumer can verify a received payload without
-    module-private knowledge.
+    :meth:`to_dict` except ``content_hash`` itself, so a consumer can check a
+    received payload for corruption without module-private knowledge.  It is
+    an unkeyed checksum and does not authenticate the record.
+
+    :meth:`to_dict` emits only the caller-supplied values.  The derived
+    :attr:`total_cost_usd` is not serialised, because a binary-float sum
+    (``0.1 + 0.2 == 0.30000000000000004``) would put summation noise into the
+    payload and the hash; consumers derive the total from the emitted costs.
     """
 
     agent_id: str
@@ -160,7 +168,6 @@ class AgentMeteringRecord:
             "compute_units": self.compute_units,
             "debate_cost_usd": self.debate_cost_usd,
             "verifier_cost_usd": self.verifier_cost_usd,
-            "total_cost_usd": self.total_cost_usd,
             "timestamp": self.timestamp,
             "content_hash": self.content_hash,
         }
