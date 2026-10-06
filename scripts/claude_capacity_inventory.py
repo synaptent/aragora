@@ -14,9 +14,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from aragora.agents.claude_capacity import collect, discover  # noqa: E402
 
 
+def _default_profile_root() -> Path:
+    # Mirrors scripts/audit_claude_profiles.py: a blank value means unset, and "~" is not expanded.
+    override = os.environ.get("CLAUDE_PROFILE_ROOT", "").strip()
+    return Path(override) if override else Path.home() / ".aragora-claude"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile-root", type=Path, default=Path.home() / ".aragora-claude")
+    parser.add_argument(
+        "--profile-root",
+        type=Path,
+        default=_default_profile_root(),
+        help="Profile root (default: $CLAUDE_PROFILE_ROOT, else ~/.aragora-claude)",
+    )
     parser.add_argument("--proxy-auth-dir", type=Path, default=Path.home() / ".cli-proxy-api")
     parser.add_argument("--timeout", type=float, default=10, help="Socket timeout, at most 15s")
     parser.add_argument(
