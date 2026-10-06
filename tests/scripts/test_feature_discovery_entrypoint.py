@@ -20,7 +20,7 @@ LEGACY_SECTION_ANCHORS = [
     "9-self-improvement--nomic-loop",
 ]
 
-EXPLICIT_ANCHOR = re.compile(r"""<a\s+(?:id|name)=["']([^"']+)["']""")
+EXPLICIT_ANCHOR = re.compile(r"""<a\s[^>]*?(?<![\w-])(?:id|name)=["']([^"']+)["']""")
 HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
 
 
