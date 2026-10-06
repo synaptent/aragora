@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from scripts.validate_doc_links import HEADING_RE, github_slug
+from scripts.validate_doc_links import heading_anchors
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -22,75 +22,10 @@ LEGACY_SECTION_ANCHORS = [
     "9-self-improvement--nomic-loop",
 ]
 
-ANCHOR_TAG = re.compile(r"<a\s[^>]*>", re.IGNORECASE)
-# Stricter than HTML_ID_RE in validate_doc_links.py, which also matches data-id= attributes.
-ANCHOR_ATTRIBUTE = re.compile(
-    r"""(?<![\w-])(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))""", re.IGNORECASE
-)
-FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
-HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)")
 
-
-def _blank(match: re.Match[str]) -> str:
-    # Keeps the text length, so offsets stay comparable across the blanked and original text.
-    return re.sub(r"[^\n]", " ", match.group(0))
-
-
-def _rendered_source(text: str) -> str:
-    # Fenced code and HTML comments do not render, so anchors and headings inside them do not exist.
-    # CommonMark: only the opener's character, at least as long and with nothing after it, closes a
-    # fence, so a ```` block can quote ``` examples.
-    kept: list[str] = []
-    opener = ""
-    for line in text.splitlines():
-        fence = FENCE.match(line)
-        if opener:
-            if (
-                fence
-                and fence.group(1)[0] == opener[0]
-                and len(fence.group(1)) >= len(opener)
-                and not fence.group(2).strip()
-            ):
-                opener = ""
-            kept.append("")
-        elif fence and not (fence.group(1)[0] == "`" and "`" in fence.group(2)):
-            opener = fence.group(1)
-            kept.append("")
-        else:
-            kept.append(line)
-    return HTML_COMMENT.sub(_blank, "\n".join(kept))
-
-
-def _without_code_spans(text: str) -> str:
-    return CODE_SPAN.sub(_blank, text)
-
-
-def _heading_offsets(text: str) -> list[tuple[str, int]]:
-    found: list[tuple[str, int]] = []
-    offset = 0
-    for line in text.splitlines(keepends=True):
-        heading = HEADING_RE.match(line.rstrip("\r\n"))
-        if heading:
-            found.append((github_slug(heading.group(1).strip()), offset))
-        offset += len(line)
-    return found
-
-
-def _anchor_offsets(content: str) -> dict[str, list[int]]:
-    definitions = [
-        (value, tag.start())
-        for tag in ANCHOR_TAG.finditer(_without_code_spans(content))
-        # <a name="x" id="x"> defines one anchor, not a duplicate.
-        for value in dict.fromkeys(
-            "".join(groups) for groups in ANCHOR_ATTRIBUTE.findall(tag.group(0))
-        )
-    ]
-    definitions += _heading_offsets(content)
-    offsets: dict[str, list[int]] = {}
-    for name, offset in sorted(definitions, key=lambda item: item[1]):
-        offsets.setdefault(name, []).append(offset)
-    return offsets
+def _github_slug(heading: str) -> str:
+    text = re.sub(r"[^\w\- ]", "", heading.strip().lower())
+    return text.replace(" ", "-")
 
 
 def test_root_feature_discovery_is_a_truthful_entrypoint() -> None:
@@ -123,8 +58,10 @@ def test_root_feature_discovery_is_a_short_redirect_stub() -> None:
 def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() -> None:
     content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
     canonical_slugs = {
-        slug
-        for slug, _ in _heading_offsets(_rendered_source(CANONICAL.read_text(encoding="utf-8")))
+        _github_slug(match.group(1))
+        for match in re.finditer(
+            r"^#{1,6}\s+(.+)$", CANONICAL.read_text(encoding="utf-8"), re.MULTILINE
+        )
     }
 
     for anchor in LEGACY_SECTION_ANCHORS:
@@ -134,17 +71,18 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
 
 def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
     # Links written before this page became a stub still target the old section fragments.
-    content = _rendered_source(FEATURE_DISCOVERY.read_text(encoding="utf-8"))
-    offsets = _anchor_offsets(content)
-    links = _without_code_spans(content)
+    content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
+    # Code and HTML comments would hide an anchor from rendering while the checks below still match.
+    for hidden in ("`", "~~~", "<!--"):
+        assert hidden not in content, f"docs/FEATURE_DISCOVERY.md must not contain {hidden!r}"
 
-    missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in offsets]
+    anchors = heading_anchors(FEATURE_DISCOVERY)
+    missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in anchors]
     assert not missing, f"legacy anchors missing from docs/FEATURE_DISCOVERY.md: {missing}"
-    duplicated = [anchor for anchor in LEGACY_SECTION_ANCHORS if len(offsets[anchor]) > 1]
-    assert not duplicated, f"legacy anchors defined more than once: {duplicated}"
 
-    starts = sorted(offsets[anchor][0] for anchor in LEGACY_SECTION_ANCHORS)
     for anchor in LEGACY_SECTION_ANCHORS:
-        start = offsets[anchor][0]
-        end = min((offset for offset in starts if offset > start), default=len(content))
-        assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in links[start:end], anchor
+        slug = re.escape(anchor)
+        definitions = re.findall(rf"\bid=[\"']{slug}[\"']", content)
+        assert len(definitions) == 1, f"{anchor} is defined {len(definitions)} times"
+        link = rf"<a id=\"{slug}\"></a>\[[^\]]+\]\(status/FEATURE_DISCOVERY\.md#{slug}\)"
+        assert re.search(link, content), f"{anchor} must sit directly before its own link"
