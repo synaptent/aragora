@@ -24,11 +24,21 @@ LEGACY_SECTION_ANCHORS = [
 
 ANCHOR_TAG = re.compile(r"<a\s[^>]*>", re.IGNORECASE)
 # Stricter than HTML_ID_RE in validate_doc_links.py, which also matches data-id= attributes.
-ANCHOR_ATTRIBUTE = re.compile(r"""(?<![\w-])(?:id|name)=["']([^"']+)["']""", re.IGNORECASE)
+ANCHOR_ATTRIBUTE = re.compile(
+    r"""(?<![\w-])(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))""", re.IGNORECASE
+)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)")
 
 
-def _outside_fences(text: str) -> str:
+def _blank(match: re.Match[str]) -> str:
+    # Keeps the text length, so offsets stay comparable across the blanked and original text.
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+def _rendered_source(text: str) -> str:
+    # Fenced code and HTML comments do not render, so anchors and headings inside them do not exist.
     # CommonMark: only the opener's character, at least as long and with nothing after it, closes a
     # fence, so a ```` block can quote ``` examples.
     kept: list[str] = []
@@ -49,7 +59,11 @@ def _outside_fences(text: str) -> str:
             kept.append("")
         else:
             kept.append(line)
-    return "\n".join(kept)
+    return HTML_COMMENT.sub(_blank, "\n".join(kept))
+
+
+def _without_code_spans(text: str) -> str:
+    return CODE_SPAN.sub(_blank, text)
 
 
 def _heading_offsets(text: str) -> list[tuple[str, int]]:
@@ -66,9 +80,11 @@ def _heading_offsets(text: str) -> list[tuple[str, int]]:
 def _anchor_offsets(content: str) -> dict[str, list[int]]:
     definitions = [
         (value, tag.start())
-        for tag in ANCHOR_TAG.finditer(content)
+        for tag in ANCHOR_TAG.finditer(_without_code_spans(content))
         # <a name="x" id="x"> defines one anchor, not a duplicate.
-        for value in dict.fromkeys(ANCHOR_ATTRIBUTE.findall(tag.group(0)))
+        for value in dict.fromkeys(
+            "".join(groups) for groups in ANCHOR_ATTRIBUTE.findall(tag.group(0))
+        )
     ]
     definitions += _heading_offsets(content)
     offsets: dict[str, list[int]] = {}
@@ -107,7 +123,8 @@ def test_root_feature_discovery_is_a_short_redirect_stub() -> None:
 def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() -> None:
     content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
     canonical_slugs = {
-        slug for slug, _ in _heading_offsets(_outside_fences(CANONICAL.read_text(encoding="utf-8")))
+        slug
+        for slug, _ in _heading_offsets(_rendered_source(CANONICAL.read_text(encoding="utf-8")))
     }
 
     for anchor in LEGACY_SECTION_ANCHORS:
@@ -117,8 +134,9 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
 
 def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
     # Links written before this page became a stub still target the old section fragments.
-    content = _outside_fences(FEATURE_DISCOVERY.read_text(encoding="utf-8"))
+    content = _rendered_source(FEATURE_DISCOVERY.read_text(encoding="utf-8"))
     offsets = _anchor_offsets(content)
+    links = _without_code_spans(content)
 
     missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in offsets]
     assert not missing, f"legacy anchors missing from docs/FEATURE_DISCOVERY.md: {missing}"
@@ -129,4 +147,4 @@ def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
     for anchor in LEGACY_SECTION_ANCHORS:
         start = offsets[anchor][0]
         end = min((offset for offset in starts if offset > start), default=len(content))
-        assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in content[start:end], anchor
+        assert f"(status/FEATURE_DISCOVERY.md#{anchor})" in links[start:end], anchor
