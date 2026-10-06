@@ -3,8 +3,8 @@
 This module is the AGT-02 billing sub-deliverable.  It gives external software
 agents a canonical, machine-parseable record of the compute units, debate cost,
 and verifier cost billed to them for a single A2A session.  The record is
-content-addressed (SHA-256 of the canonical JSON) so downstream audit pipelines
-can detect tampering.
+content-addressed (SHA-256 of the canonical JSON of every serialised field
+except ``content_hash``) so downstream audit pipelines can detect tampering.
 
 See ``docs/plans/AGENT_CONSUMER_SURFACE.md`` §S3 (billing primitives) and
 ``docs/plans/AGENT_CIVILIZATION_SUBSTRATE.md`` (AGT-02).
@@ -22,7 +22,7 @@ import hashlib
 import json
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -68,6 +68,33 @@ def reset_agent_metering() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+
+def _validate_fields(
+    *,
+    agent_id: str,
+    session_id: str,
+    compute_units: float,
+    debate_cost_usd: float,
+    verifier_cost_usd: float,
+) -> None:
+    if not agent_id or not agent_id.strip():
+        raise ValueError("agent_id must be a non-empty string")
+    if not session_id or not session_id.strip():
+        raise ValueError("session_id must be a non-empty string")
+    if not math.isfinite(compute_units) or compute_units < 0:
+        raise ValueError(f"compute_units must be finite and >= 0, got {compute_units}")
+    if not math.isfinite(debate_cost_usd) or debate_cost_usd < 0:
+        raise ValueError(f"debate_cost_usd must be finite and >= 0, got {debate_cost_usd}")
+    if not math.isfinite(verifier_cost_usd) or verifier_cost_usd < 0:
+        raise ValueError(f"verifier_cost_usd must be finite and >= 0, got {verifier_cost_usd}")
+    if not math.isfinite(debate_cost_usd + verifier_cost_usd):
+        raise ValueError("total_cost_usd must be finite")
+
+
+# ---------------------------------------------------------------------------
 # Record type
 # ---------------------------------------------------------------------------
 
@@ -80,8 +107,16 @@ class AgentMeteringRecord:
     platform unit (e.g., 1 unit ≈ 1 000 tokens processed).  Both default
     to zero so callers can build records incrementally.
 
-    ``content_hash`` is set automatically by :func:`create_metering_record`
-    as the SHA-256 hex digest of the canonical JSON serialisation.
+    Field values are validated on every construction (non-empty identifiers,
+    finite non-negative units and costs, finite total), so a record can always
+    be serialised as strict JSON.  Direct construction is not flag-gated and
+    leaves ``content_hash`` empty.
+
+    ``content_hash`` is set by :func:`create_metering_record` as the SHA-256
+    hex digest of the compact, key-sorted JSON of every field in
+    :meth:`to_dict` except ``content_hash`` itself (``total_cost_usd``
+    included), so a consumer can verify a received payload without
+    module-private knowledge.
     """
 
     agent_id: str
@@ -94,6 +129,15 @@ class AgentMeteringRecord:
     )
     schema_version: str = METERING_SCHEMA_VERSION
     content_hash: str = ""
+
+    def __post_init__(self) -> None:
+        _validate_fields(
+            agent_id=self.agent_id,
+            session_id=self.session_id,
+            compute_units=self.compute_units,
+            debate_cost_usd=self.debate_cost_usd,
+            verifier_cost_usd=self.verifier_cost_usd,
+        )
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -122,7 +166,7 @@ class AgentMeteringRecord:
         }
 
     def to_json(self, *, indent: int | None = None) -> str:
-        return json.dumps(self.to_dict(), sort_keys=True, indent=indent)
+        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, allow_nan=False)
 
 
 # ---------------------------------------------------------------------------
@@ -130,26 +174,11 @@ class AgentMeteringRecord:
 # ---------------------------------------------------------------------------
 
 
-def _canonical_payload(
-    agent_id: str,
-    session_id: str,
-    compute_units: float,
-    debate_cost_usd: float,
-    verifier_cost_usd: float,
-    timestamp: str,
-    schema_version: str,
-) -> str:
-    """Return the deterministic JSON string used for content-addressing."""
-    payload: dict[str, Any] = {
-        "agent_id": agent_id,
-        "compute_units": compute_units,
-        "debate_cost_usd": debate_cost_usd,
-        "schema_version": schema_version,
-        "session_id": session_id,
-        "timestamp": timestamp,
-        "verifier_cost_usd": verifier_cost_usd,
-    }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+def _content_hash(payload: dict[str, Any]) -> str:
+    """Return the SHA-256 hex digest of every serialised field except ``content_hash``."""
+    canonical = {key: value for key, value in payload.items() if key != "content_hash"}
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def create_metering_record(
@@ -176,21 +205,8 @@ def create_metering_record(
             "metering records must not be created outside opted-in contexts."
         )
 
-    if not agent_id or not agent_id.strip():
-        raise ValueError("agent_id must be a non-empty string")
-    if not session_id or not session_id.strip():
-        raise ValueError("session_id must be a non-empty string")
-    if not math.isfinite(compute_units) or compute_units < 0:
-        raise ValueError(f"compute_units must be finite and >= 0, got {compute_units}")
-    if not math.isfinite(debate_cost_usd) or debate_cost_usd < 0:
-        raise ValueError(f"debate_cost_usd must be finite and >= 0, got {debate_cost_usd}")
-    if not math.isfinite(verifier_cost_usd) or verifier_cost_usd < 0:
-        raise ValueError(f"verifier_cost_usd must be finite and >= 0, got {verifier_cost_usd}")
-    if not math.isfinite(debate_cost_usd + verifier_cost_usd):
-        raise ValueError("total_cost_usd must be finite")
-
     ts = timestamp or datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
-    canonical = _canonical_payload(
+    unhashed = AgentMeteringRecord(
         agent_id=agent_id,
         session_id=session_id,
         compute_units=compute_units,
@@ -199,15 +215,4 @@ def create_metering_record(
         timestamp=ts,
         schema_version=METERING_SCHEMA_VERSION,
     )
-    content_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-    return AgentMeteringRecord(
-        agent_id=agent_id,
-        session_id=session_id,
-        compute_units=compute_units,
-        debate_cost_usd=debate_cost_usd,
-        verifier_cost_usd=verifier_cost_usd,
-        timestamp=ts,
-        schema_version=METERING_SCHEMA_VERSION,
-        content_hash=content_hash,
-    )
+    return replace(unhashed, content_hash=_content_hash(unhashed.to_dict()))

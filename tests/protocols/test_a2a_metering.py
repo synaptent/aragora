@@ -36,6 +36,14 @@ def _reset_metering_override() -> pytest.IterableFixture:  # type: ignore[type-a
     reset_agent_metering()
 
 
+def _payload_hash(payload: dict[str, Any]) -> str:
+    """Recompute a record's content hash the way an independent consumer would."""
+    canonical = {key: value for key, value in payload.items() if key != "content_hash"}
+    return hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # Flag-gate tests
 # ---------------------------------------------------------------------------
@@ -241,15 +249,7 @@ class TestCreateMeteringRecord:
         payload = restored.metadata["metering"]
         assert payload == json.loads(rec.to_json())
         assert payload["total_cost_usd"] == 0.1875
-        canonical = {
-            key: value
-            for key, value in payload.items()
-            if key not in {"content_hash", "total_cost_usd"}
-        }
-        expected_hash = hashlib.sha256(
-            json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        assert payload["content_hash"] == expected_hash
+        assert payload["content_hash"] == _payload_hash(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -311,3 +311,58 @@ class TestAgentMeteringRecord:
         rec = self._make()
         with pytest.raises((AttributeError, TypeError)):
             rec.compute_units = 999.0  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Record invariants (hold for direct construction as well as the factory)
+# ---------------------------------------------------------------------------
+
+
+class TestRecordInvariants:
+    @pytest.mark.parametrize(
+        ("overrides", "match"),
+        [
+            ({"compute_units": float("nan")}, "compute_units"),
+            ({"debate_cost_usd": float("inf")}, "debate_cost_usd"),
+            ({"verifier_cost_usd": float("-inf")}, "verifier_cost_usd"),
+            ({"compute_units": -1.0}, "compute_units"),
+            ({"verifier_cost_usd": -0.01}, "verifier_cost_usd"),
+            ({"debate_cost_usd": 1e308, "verifier_cost_usd": 1e308}, "total_cost_usd"),
+            ({"agent_id": ""}, "agent_id"),
+            ({"session_id": "   "}, "session_id"),
+        ],
+    )
+    def test_direct_construction_rejects_invalid_fields(
+        self, overrides: dict[str, Any], match: str
+    ) -> None:
+        fields: dict[str, Any] = {"agent_id": "ag-1", "session_id": "s-1"}
+        fields.update(overrides)
+        with pytest.raises(ValueError, match=match):
+            AgentMeteringRecord(**fields)
+
+    def test_direct_construction_accepts_valid_fields_without_flag(self) -> None:
+        assert not agent_metering_enabled()
+        rec = AgentMeteringRecord(agent_id="ag-1", session_id="s-1", compute_units=2.0)
+        assert rec.content_hash == ""
+        assert json.loads(rec.to_json())["compute_units"] == 2.0
+
+    def test_to_json_refuses_non_finite_values(self) -> None:
+        rec = AgentMeteringRecord(agent_id="ag-1", session_id="s-1")
+        object.__setattr__(rec, "compute_units", float("nan"))
+        with pytest.raises(ValueError):
+            rec.to_json()
+
+    def test_content_hash_covers_every_emitted_field(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="s-1",
+            compute_units=1.0,
+            debate_cost_usd=0.5,
+            verifier_cost_usd=0.25,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        payload = json.loads(rec.to_json())
+        assert payload["content_hash"] == _payload_hash(payload)
+        tampered = dict(payload, total_cost_usd=999.0)
+        assert tampered["content_hash"] != _payload_hash(tampered)
