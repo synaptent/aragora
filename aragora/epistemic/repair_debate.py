@@ -16,6 +16,7 @@ DIC-22 / issue #6033.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -102,35 +103,32 @@ def run_repair_debate(
     if not agents:
         raise ValueError("run_repair_debate requires at least one agent")
 
-    question = question_override or (
-        f"Is the proposed repair for {spec.code_unit_id!r} (kind={spec.repair_kind!r}) "
-        "sound and bounded?"
-    )
+    # RepairSpec is frozen only at the top level: its lists, dict and DecaySignal
+    # stay mutable. Agents therefore never see the caller's object or a shared
+    # context; the receipt is built from this pre-debate snapshot.
+    snapshot = copy.deepcopy(spec)
 
-    context: dict[str, Any] = {
-        "code_unit_id": spec.code_unit_id,
-        "repair_kind": spec.repair_kind,
-        "linked_claims": list(spec.linked_claims),
-        "linked_crux_ids": list(spec.linked_crux_ids),
-        "validation_commands": list(spec.validation_commands),
-    }
+    question = question_override or (
+        f"Is the proposed repair for {snapshot.code_unit_id!r} "
+        f"(kind={snapshot.repair_kind!r}) sound and bounded?"
+    )
 
     evaluations: list[dict[str, Any]] = []
     for agent in agents:
-        ev = dict(agent.evaluate(spec, context))
+        ev = dict(agent.evaluate(copy.deepcopy(snapshot), _agent_context(snapshot)))
         ev["agent"] = agent.name
         evaluations.append(ev)
 
-    crux_entries = _collect_crux_entries(spec, evaluations)
+    crux_entries = _collect_crux_entries(snapshot, evaluations)
 
     support_count = sum(1 for ev in evaluations if ev.get("supports_repair") is True)
     consensus = support_count > len(evaluations) / 2
     recommended_action = "proceed_with_repair" if consensus else "request_human_review"
 
-    receipt = _build_receipt(spec, question, crux_entries, evaluations, consensus)
+    receipt = _build_receipt(snapshot, question, crux_entries, evaluations, consensus)
 
     return RepairDebateResult(
-        spec_id=spec.spec_id,
+        spec_id=snapshot.spec_id,
         receipt=receipt,
         agent_evaluations=evaluations,
         consensus_reached=consensus,
@@ -141,6 +139,17 @@ def run_repair_debate(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _agent_context(spec: RepairSpec) -> dict[str, Any]:
+    """Return a fresh context for one agent, sharing no mutable object with *spec*."""
+    return {
+        "code_unit_id": spec.code_unit_id,
+        "repair_kind": spec.repair_kind,
+        "linked_claims": list(spec.linked_claims),
+        "linked_crux_ids": list(spec.linked_crux_ids),
+        "validation_commands": list(spec.validation_commands),
+    }
 
 
 def _collect_crux_entries(
