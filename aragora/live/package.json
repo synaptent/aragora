@@ -99,7 +99,7 @@
     "typescript-eslint": "^8.54.0"
   },
   "overrides": {
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "postcss": "^8.5.23",
     "uuid": "^14.0.0",
     "@babel/core": "^7.29.7",
