@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from scripts.validate_doc_links import HEADING_RE, github_slug
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FEATURE_DISCOVERY = REPO_ROOT / "docs" / "FEATURE_DISCOVERY.md"
@@ -20,33 +22,49 @@ LEGACY_SECTION_ANCHORS = [
     "9-self-improvement--nomic-loop",
 ]
 
+# Stricter than HTML_ID_RE in validate_doc_links.py, which also matches data-id= attributes.
 EXPLICIT_ANCHOR = re.compile(r"""<a\s[^>]*?(?<![\w-])(?:id|name)=["']([^"']+)["']""", re.IGNORECASE)
-HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
-FENCE = re.compile(r"^\s*(```|~~~)")
-
-
-def _github_slug(heading: str) -> str:
-    text = re.sub(r"[^\w\- ]", "", heading.strip().lower())
-    return text.replace(" ", "-")
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
 def _outside_fences(text: str) -> str:
+    # CommonMark: only the opener's character, at least as long and with nothing after it, closes a
+    # fence, so a ```` block can quote ``` examples.
     kept: list[str] = []
-    fenced = False
+    opener = ""
     for line in text.splitlines():
-        if FENCE.match(line):
-            fenced = not fenced
+        fence = FENCE.match(line)
+        if opener:
+            if (
+                fence
+                and fence.group(1)[0] == opener[0]
+                and len(fence.group(1)) >= len(opener)
+                and not fence.group(2).strip()
+            ):
+                opener = ""
             kept.append("")
-            continue
-        kept.append("" if fenced else line)
+        elif fence and not (fence.group(1)[0] == "`" and "`" in fence.group(2)):
+            opener = fence.group(1)
+            kept.append("")
+        else:
+            kept.append(line)
     return "\n".join(kept)
+
+
+def _heading_offsets(text: str) -> list[tuple[str, int]]:
+    found: list[tuple[str, int]] = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        heading = HEADING_RE.match(line.rstrip("\r\n"))
+        if heading:
+            found.append((github_slug(heading.group(1).strip()), offset))
+        offset += len(line)
+    return found
 
 
 def _anchor_offsets(content: str) -> dict[str, list[int]]:
     definitions = [(match.group(1), match.start()) for match in EXPLICIT_ANCHOR.finditer(content)]
-    definitions += [
-        (_github_slug(match.group(1)), match.start()) for match in HEADING.finditer(content)
-    ]
+    definitions += _heading_offsets(content)
     offsets: dict[str, list[int]] = {}
     for name, offset in sorted(definitions, key=lambda item: item[1]):
         offsets.setdefault(name, []).append(offset)
@@ -83,8 +101,7 @@ def test_root_feature_discovery_is_a_short_redirect_stub() -> None:
 def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() -> None:
     content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
     canonical_slugs = {
-        _github_slug(match.group(1))
-        for match in HEADING.finditer(_outside_fences(CANONICAL.read_text(encoding="utf-8")))
+        slug for slug, _ in _heading_offsets(_outside_fences(CANONICAL.read_text(encoding="utf-8")))
     }
 
     for anchor in LEGACY_SECTION_ANCHORS:
