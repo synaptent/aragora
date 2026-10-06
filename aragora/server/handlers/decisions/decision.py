@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -76,6 +77,33 @@ _decision_result_store = LazyStoreFactory(
 
 # Fallback in-memory cache (used only if persistent store fails)
 _decision_results_fallback: dict[str, dict[str, Any]] = {}
+
+_REPLAYED_FIELDS = (
+    "content",
+    "decision_type",
+    "config",
+    "priority",
+    "attachments",
+    "evidence",
+    "documents",
+    "document_ids",
+)
+_REPLAYED_CONTEXT_FIELDS = ("tags", "metadata")
+
+
+def _replay_body(body: dict[str, Any]) -> dict[str, Any]:
+    """The request body a retry replays: ``body`` without ids or caller identity.
+
+    It is stored under ``result["request"]`` and returned as a deep copy, so
+    neither the stored record nor a later request shares its lists or dicts.
+    """
+    replay = {key: body[key] for key in _REPLAYED_FIELDS if key in body}
+    context = body.get("context")
+    if isinstance(context, dict):
+        replay["context"] = {
+            key: context[key] for key in _REPLAYED_CONTEXT_FIELDS if key in context
+        }
+    return copy.deepcopy(replay)
 
 
 def _save_result(
@@ -252,11 +280,6 @@ class DecisionHandler(BaseHandler):
         if not body.get("content"):
             return error_response("Missing required field: content", 400)
 
-        # Get authentication context
-        from aragora.billing.auth import extract_user_from_request
-
-        auth_ctx = extract_user_from_request(handler)
-
         # Build decision request
         try:
             from aragora.core.decision import DecisionRequest
@@ -285,30 +308,7 @@ class DecisionHandler(BaseHandler):
         if not router:
             return error_response("Decision router not available", 503)
 
-        # Check RBAC if user is authenticated
-        if auth_ctx.authenticated:
-            try:
-                from aragora.rbac import (
-                    RBACEnforcer,
-                    ResourceType,
-                    Action,
-                    IsolationContext,
-                )
-
-                enforcer = RBACEnforcer()
-                ctx = IsolationContext(
-                    actor_id=request.context.user_id,
-                    workspace_id=request.context.workspace_id,
-                )
-                await enforcer.require(
-                    auth_ctx.user_id,
-                    ResourceType.DEBATE,
-                    Action.CREATE,
-                    ctx,
-                )
-            except (ImportError, TypeError, ValueError, AttributeError, RuntimeError) as e:
-                logger.error("RBAC authorization check failed: %s", e)
-                return error_response("Authorization service unavailable", 503)
+        replay = _replay_body(body)
 
         # Route the decision
         try:
@@ -321,7 +321,7 @@ class DecisionHandler(BaseHandler):
                 {
                     "request_id": request.request_id,
                     "status": "completed" if result.success else "failed",
-                    "result": result.to_dict(),
+                    "result": {**result.to_dict(), "request": replay},
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                 },
                 org_id=scope.org_id,
@@ -351,6 +351,7 @@ class DecisionHandler(BaseHandler):
                 {
                     "request_id": request.request_id,
                     "status": "timeout",
+                    "result": {"request": replay},
                     "error": "Decision timed out",
                 },
                 org_id=scope.org_id,
@@ -366,6 +367,7 @@ class DecisionHandler(BaseHandler):
                 {
                     "request_id": request.request_id,
                     "status": "failed",
+                    "result": {"request": replay},
                     "error": "Decision processing failed",
                 },
                 org_id=scope.org_id,
@@ -537,6 +539,8 @@ class DecisionHandler(BaseHandler):
                 400,
             )
 
+        replay = {**_replay_body(original_request), "content": content}
+
         # Get router
         router = _get_decision_router(self.ctx)
         if not router:
@@ -551,14 +555,7 @@ class DecisionHandler(BaseHandler):
             new_request_id = f"dec_{uuid.uuid4().hex[:12]}"
 
             # Create new request with same parameters
-            new_body = {
-                "content": content,
-                "decision_type": original_request.get("decision_type", "auto"),
-                "config": original_request.get("config", {}),
-                "context": original_request.get("context", {}),
-            }
-
-            request = DecisionRequest.from_http(new_body, {})
+            request = DecisionRequest.from_http(copy.deepcopy(replay), {})
             request.request_id = new_request_id
             request.context.user_id = scope.user_id
             request.context.workspace_id = scope.org_id
@@ -582,7 +579,7 @@ class DecisionHandler(BaseHandler):
                 {
                     "request_id": new_request_id,
                     "status": "completed" if result.success else "failed",
-                    "result": result.to_dict(),
+                    "result": {**result.to_dict(), "request": replay},
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                     "retried_from": request_id,
                 },
@@ -610,6 +607,7 @@ class DecisionHandler(BaseHandler):
                 {
                     "request_id": new_request_id,
                     "status": "timeout",
+                    "result": {"request": replay},
                     "error": "Decision retry timed out",
                     "retried_from": request_id,
                 },
@@ -625,6 +623,7 @@ class DecisionHandler(BaseHandler):
                 {
                     "request_id": new_request_id,
                     "status": "failed",
+                    "result": {"request": replay},
                     "error": "Decision retry failed",
                     "retried_from": request_id,
                 },

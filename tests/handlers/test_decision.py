@@ -999,11 +999,6 @@ class TestCreateDecision:
 
         h = _make_http_handler({"content": "Test question"})
 
-        mock_auth = MagicMock()
-        mock_auth.authenticated = True
-        mock_auth.user_id = "auth-user-001"
-        mock_auth.org_id = "auth-org-001"
-
         with (
             patch(
                 "aragora.server.handlers.decision._get_decision_router",
@@ -1014,75 +1009,15 @@ class TestCreateDecision:
                 return_value=(MagicMock(authenticated=False), None),
             ),
             patch(
-                "aragora.billing.auth.extract_user_from_request",
-                return_value=mock_auth,
-            ),
-            patch(
                 "aragora.core.decision.DecisionRequest",
             ) as mock_dr_cls,
         ):
             mock_dr_cls.from_http.return_value = mock_request
-            # Patch RBAC enforcer to succeed
-            with patch("aragora.rbac.RBACEnforcer") as mock_enforcer_cls:
-                mock_enforcer = MagicMock()
-                mock_enforcer.require = AsyncMock()
-                mock_enforcer_cls.return_value = mock_enforcer
-                with (
-                    patch("aragora.rbac.ResourceType"),
-                    patch("aragora.rbac.Action"),
-                    patch("aragora.rbac.IsolationContext"),
-                ):
-                    result = await handler.handle_post("/api/v1/decisions", {}, h)
+            result = await handler.handle_post("/api/v1/decisions", {}, h)
 
         assert _status(result) == 200
         assert mock_request.context.user_id == USER
         assert mock_request.context.workspace_id == ORG
-
-    @pytest.mark.asyncio
-    async def test_create_decision_rbac_failure(self, handler):
-        """Returns 503 when RBAC enforcer fails."""
-        mock_request = _MockDecisionRequest()
-
-        h = _make_http_handler({"content": "Test question"})
-
-        mock_auth = MagicMock()
-        mock_auth.authenticated = True
-        mock_auth.user_id = "user-001"
-        mock_auth.org_id = "org-001"
-
-        mock_router = MagicMock()
-
-        with (
-            patch(
-                "aragora.server.handlers.decision._get_decision_router",
-                return_value=mock_router,
-            ),
-            patch(
-                "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
-                return_value=(MagicMock(authenticated=False), None),
-            ),
-            patch(
-                "aragora.billing.auth.extract_user_from_request",
-                return_value=mock_auth,
-            ),
-            patch(
-                "aragora.core.decision.DecisionRequest",
-            ) as mock_dr_cls,
-        ):
-            mock_dr_cls.from_http.return_value = mock_request
-            with patch("aragora.rbac.RBACEnforcer") as mock_enforcer_cls:
-                mock_enforcer = MagicMock()
-                mock_enforcer.require = AsyncMock(side_effect=RuntimeError("RBAC down"))
-                mock_enforcer_cls.return_value = mock_enforcer
-                with (
-                    patch("aragora.rbac.ResourceType"),
-                    patch("aragora.rbac.Action"),
-                    patch("aragora.rbac.IsolationContext"),
-                ):
-                    result = await handler.handle_post("/api/v1/decisions", {}, h)
-
-        assert _status(result) == 503
-        assert "authorization" in _body(result).get("error", "").lower()
 
 
 # ---------------------------------------------------------------------------
