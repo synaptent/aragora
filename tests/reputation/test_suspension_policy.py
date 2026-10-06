@@ -6,6 +6,8 @@ monkeypatch so the global environment is never mutated between tests.
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import pytest
 
@@ -28,6 +30,16 @@ from aragora.reputation.types import ReputationDelta
 # ---------------------------------------------------------------------------
 
 _FLAG = "ARAGORA_REPUTATION_SUSPENSION_ENABLED"
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _flag_not_leaked_by_module():
+    # Module scope: the repo conftest's autouse fixtures request monkeypatch
+    # first, so a function-scoped check would run before monkeypatch's undo.
+    # Module teardown sees what the next test module in the worker inherits.
+    before = os.environ.get(_FLAG)
+    yield
+    assert os.environ.get(_FLAG) == before, f"{_FLAG} leaked out of this module"
 
 
 def _delta(
@@ -75,10 +87,12 @@ def test_flag_off_by_default(monkeypatch):
 
 
 def test_enable_suspension_sets_flag(monkeypatch):
-    monkeypatch.delenv(_FLAG, raising=False)
+    # setenv records the original value, so teardown restores it even though
+    # enable_suspension() writes os.environ directly.
+    monkeypatch.setenv(_FLAG, "0")
+    assert not suspension_enabled()
     enable_suspension()
     assert suspension_enabled()
-    monkeypatch.delenv(_FLAG, raising=False)
 
 
 def test_flag_disabled_returns_not_suspended(monkeypatch):
@@ -123,8 +137,28 @@ def test_threshold_rejects_nan_suspension_days():
 def test_threshold_rejects_nan_score_floor():
     # Every comparison with NaN is False, so a NaN floor would suspend any
     # agent with enough samples regardless of score.
-    with pytest.raises(ValueError, match="score_floor must be a number"):
+    with pytest.raises(ValueError, match="score_floor must be a finite number"):
         SuspensionThreshold(score_floor=float("nan"))
+
+
+@pytest.mark.parametrize("floor", [math.inf, -math.inf])
+def test_threshold_rejects_infinite_score_floor(floor):
+    # +inf suspends every agent with enough samples; -inf never suspends.
+    with pytest.raises(ValueError, match="score_floor must be a finite number"):
+        SuspensionThreshold(score_floor=floor)
+
+
+def test_threshold_rejects_infinite_suspension_days():
+    with pytest.raises(ValueError, match="suspension_days must be > 0 and finite"):
+        SuspensionThreshold(suspension_days=math.inf)
+
+
+@pytest.mark.parametrize("value", [float("nan"), 2.5, True])
+def test_threshold_rejects_non_integer_min_samples(value):
+    # ``sample_count < nan`` is always False, so a NaN minimum would let
+    # suspension fire on a single sample.
+    with pytest.raises(ValueError, match="min_samples must be an integer"):
+        SuspensionThreshold(min_samples=value)
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +313,29 @@ def test_score_below_floor_suspended(monkeypatch):
     assert decision.reason == "score_below_floor"
     assert decision.score is not None and decision.score < threshold.score_floor
     assert decision.sample_count == 10
+
+
+@pytest.mark.parametrize("domains", [None, frozenset({"prediction_market"})])
+def test_non_finite_score_is_not_suspended(monkeypatch, tmp_path, domains):
+    # json.loads accepts a NaN literal, so one damaged ledger line makes the
+    # score NaN; NaN >= floor is False and must not read as below the floor.
+    monkeypatch.setenv(_FLAG, "1")
+    path = tmp_path / "deltas.jsonl"
+    store = ReputationStore(path=path)
+    for i in range(12):
+        store.record_delta(_delta("agent-n", delta=5.0, idx=i))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    damaged = json.loads(lines[0])
+    damaged["delta"] = float("nan")
+    lines[0] = json.dumps(damaged, sort_keys=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    checker = SuspensionChecker(threshold=SuspensionThreshold(domains=domains))
+    decision = checker.check("agent-n", ReputationStore.load_from_file(path))
+    assert not decision.suspended
+    assert decision.reason == "non_finite_score"
+    assert decision.score is None
+    assert decision.sample_count == 12
 
 
 def test_suspension_carries_advisory_days(monkeypatch):

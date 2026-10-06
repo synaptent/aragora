@@ -95,12 +95,14 @@ class SuspensionThreshold:
     domains: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
-        if math.isnan(self.score_floor):
-            raise ValueError(f"score_floor must be a number; got {self.score_floor}")
+        if not math.isfinite(self.score_floor):
+            raise ValueError(f"score_floor must be a finite number; got {self.score_floor}")
+        if isinstance(self.min_samples, bool) or not isinstance(self.min_samples, int):
+            raise ValueError(f"min_samples must be an integer; got {self.min_samples!r}")
         if self.min_samples < 1:
             raise ValueError(f"min_samples must be >= 1; got {self.min_samples}")
-        if not self.suspension_days > 0:
-            raise ValueError(f"suspension_days must be > 0; got {self.suspension_days}")
+        if not (self.suspension_days > 0 and math.isfinite(self.suspension_days)):
+            raise ValueError(f"suspension_days must be > 0 and finite; got {self.suspension_days}")
 
     def fingerprint(self) -> str:
         """Return a 64-char SHA-256 hex digest of this policy for audit trails."""
@@ -123,9 +125,11 @@ class SuspensionDecision:
         suspended: ``True`` when the agent should be excluded from dispatch.
         reason: Machine-readable verdict code — one of:
             ``"flag_disabled"``, ``"no_data"``, ``"insufficient_samples"``,
-            ``"score_above_floor"``, ``"score_below_floor"``.
+            ``"non_finite_score"``, ``"score_above_floor"``,
+            ``"score_below_floor"``.
         score: Running reputation score used for the decision. ``None``
-            when there is no data or the flag is disabled.
+            when there is no data, the flag is disabled or the computed
+            score is not finite.
         sample_count: Number of non-reversed deltas evaluated (after
             domain filter).
         threshold_fingerprint: SHA-256 fingerprint of the
@@ -245,6 +249,16 @@ class SuspensionChecker:
             score = store.get_score(agent_id, apply_decay=True)
         else:
             score = sum(d.delta for d in relevant)
+
+        # A NaN or infinite score (for example from a damaged ledger line) is
+        # not evidence; NaN would otherwise compare as below every floor.
+        if not math.isfinite(score):
+            return _make(
+                suspended=False,
+                reason="non_finite_score",
+                score=None,
+                sample_count=sample_count,
+            )
 
         if score >= self._threshold.score_floor:
             return _make(
