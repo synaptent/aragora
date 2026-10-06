@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from aragora.storage.decision_result_store import (
+    DecisionOwnershipConflict,
     DecisionResultStore,
     DecisionResultEntry,
     get_decision_result_store,
@@ -330,34 +331,60 @@ class TestDecisionResultOwnership:
         assert store.count_for_org("org-none") == 0
         assert store.count() == 4
 
-    def test_later_save_does_not_change_owner(self, store, temp_db):
+    def test_owner_save_updates_result_and_keeps_creator(self, store, temp_db):
         store.save("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
-        store.save("req-1", {"status": "completed"}, org_id="org-b", created_by="u2")
+        store.save(
+            "req-1",
+            {"status": "completed", "result": {"answer": "a2"}},
+            org_id="org-a",
+            created_by="u3",
+        )
 
-        cached = store.get("req-1")
-        assert cached["status"] == "completed"
-        assert (cached["org_id"], cached["created_by"]) == ("org-a", "u1")
         fresh = DecisionResultStore(db_path=temp_db).get("req-1")
-        assert fresh["status"] == "completed"
+        assert (fresh["status"], fresh["result"]) == ("completed", {"answer": "a2"})
         assert (fresh["org_id"], fresh["created_by"]) == ("org-a", "u1")
+
+    @pytest.mark.parametrize("fresh_writer", [False, True])
+    @pytest.mark.parametrize("writer_org", ["org-b", None])
+    def test_save_over_another_orgs_result_is_rejected(
+        self, store, temp_db, writer_org, fresh_writer
+    ):
+        store.save(
+            "req-1",
+            {"status": "pending", "result": {"answer": "a"}},
+            org_id="org-a",
+            created_by="u1",
+        )
+        writer = DecisionResultStore(db_path=temp_db, ttl_seconds=3600) if fresh_writer else store
+
+        with pytest.raises(DecisionOwnershipConflict):
+            writer.save(
+                "req-1",
+                {"status": "completed", "result": {"answer": "b"}},
+                org_id=writer_org,
+                created_by="u2",
+            )
+
+        for reader in (store, writer, DecisionResultStore(db_path=temp_db)):
+            kept = reader.get("req-1")
+            assert (kept["status"], kept["result"]) == ("pending", {"answer": "a"})
+            assert (kept["org_id"], kept["created_by"]) == ("org-a", "u1")
         assert store.count_for_org("org-b") == 0
 
-    def test_save_from_uncached_instance_keeps_stored_owner(self, store, temp_db):
-        store.save("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
-        other = DecisionResultStore(db_path=temp_db, ttl_seconds=3600)
-        other.save("req-1", {"status": "completed"}, org_id="org-b", created_by="u2")
+    def test_ownerless_result_is_not_claimed(self, store, temp_db):
+        store.save("req-1", {"status": "pending", "result": {"answer": "legacy"}})
 
-        assert other.get_for_org("req-1", "org-b") is None
-        owned = other.get_for_org("req-1", "org-a")
-        assert owned is not None
-        assert (owned["status"], owned["created_by"]) == ("completed", "u1")
+        with pytest.raises(DecisionOwnershipConflict):
+            store.save("req-1", {"status": "completed"}, org_id="org-a", created_by="u1")
 
-    def test_later_save_claims_ownerless_result(self, store, temp_db):
-        store.save("req-1", {"status": "pending"})
-        store.save("req-1", {"status": "completed"}, org_id="org-a", created_by="u1")
+        for reader in (store, DecisionResultStore(db_path=temp_db)):
+            kept = reader.get("req-1")
+            assert (kept["status"], kept["result"]) == ("pending", {"answer": "legacy"})
+            assert (kept["org_id"], kept["created_by"]) == (None, None)
+            assert reader.get_for_org("req-1", "org-a") is None
 
-        fresh = DecisionResultStore(db_path=temp_db).get("req-1")
-        assert (fresh["org_id"], fresh["created_by"]) == ("org-a", "u1")
+    def test_ownership_conflict_is_a_value_error(self):
+        assert issubclass(DecisionOwnershipConflict, ValueError)
 
     def test_migrates_table_without_owner_columns(self, temp_db):
         import sqlite3

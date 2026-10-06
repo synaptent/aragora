@@ -1978,21 +1978,45 @@ class TestSaveAndGetResult:
         assert mod._decision_results_fallback["test_id"]["status"] == "completed"
         assert mod._decision_results_fallback["test_id"]["org_id"] == ORG
 
-    def test_save_fallback_keeps_existing_owner(self):
-        """A later fallback save carrying another org does not change the owner."""
+    def test_save_fallback_owner_update_keeps_creator(self):
+        """A later fallback save by the owning org updates the entry, not its creator."""
         import aragora.server.handlers.decision as mod
 
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = None
 
-        mod._save_result("test_id", {"status": "pending"}, org_id=ORG, created_by=USER)
-        mod._save_result(
-            "test_id", {"status": "completed"}, org_id=OTHER_ORG, created_by="intruder"
-        )
+        assert mod._save_result("test_id", {"status": "pending"}, org_id=ORG, created_by=USER)
+        assert mod._save_result("test_id", {"status": "completed"}, org_id=ORG, created_by="u2")
         saved = mod._decision_results_fallback["test_id"]
         assert saved["status"] == "completed"
-        assert saved["org_id"] == ORG
-        assert saved["created_by"] == USER
+        assert (saved["org_id"], saved["created_by"]) == (ORG, USER)
+
+    @pytest.mark.parametrize("owner", [OTHER_ORG, None])
+    def test_save_fallback_rejects_entry_not_owned_by_org(self, owner):
+        """A fallback entry of another org or without an owner is neither overwritten nor claimed."""
+        import aragora.server.handlers.decision as mod
+
+        mod._decision_result_store = MagicMock()
+        mod._decision_result_store.get.return_value = None
+        mod._decision_results_fallback["test_id"] = {"status": "pending", "org_id": owner}
+
+        saved = mod._save_result("test_id", {"status": "completed"}, org_id=ORG, created_by=USER)
+
+        assert saved is False
+        assert mod._decision_results_fallback["test_id"] == {"status": "pending", "org_id": owner}
+
+    def test_save_store_conflict_does_not_fall_back(self, tmp_path):
+        """A store ownership conflict is reported, never retried in the fallback."""
+        import aragora.server.handlers.decision as mod
+
+        store = _real_store(mod, tmp_path)
+        store.save("test_id", {"status": "pending"}, org_id=OTHER_ORG, created_by="owner")
+
+        saved = mod._save_result("test_id", {"status": "completed"}, org_id=ORG, created_by=USER)
+
+        assert saved is False
+        assert mod._decision_results_fallback == {}
+        assert store.get("test_id")["status"] == "pending"
 
     def test_get_from_store(self):
         """Gets from persistent store, scoped to the org, when available."""
@@ -2095,6 +2119,15 @@ def _use_fallback_only():
     mod._decision_result_store = MagicMock()
     mod._decision_result_store.get.return_value = None
     return mod
+
+
+def _real_store(mod, tmp_path):
+    from aragora.storage.decision_result_store import DecisionResultStore
+
+    store = DecisionResultStore(db_path=tmp_path / "decision_results.db", ttl_seconds=3600)
+    mod._decision_result_store = MagicMock()
+    mod._decision_result_store.get.return_value = store
+    return store
 
 
 def _seed(mod, request_id: str, org_id: str | None, status: str = "failed", **extra):
@@ -2273,6 +2306,59 @@ class TestOrgOwnership:
         args, kwargs = mock_save.call_args
         assert args[0] == "dec_created"
         assert kwargs == {"org_id": ORG, "created_by": USER}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "route_error",
+        [None, asyncio.TimeoutError(), RuntimeError("boom")],
+        ids=["routed", "timeout", "failed"],
+    )
+    @pytest.mark.parametrize("owner", [OTHER_ORG, None])
+    async def test_create_reusing_unowned_request_id_is_identical_to_missing(
+        self, handler, mock_http_handler, tmp_path, owner, route_error
+    ):
+        import aragora.server.handlers.decision as mod
+
+        store = _real_store(mod, tmp_path)
+        store.save(
+            "dec_taken",
+            {"status": "completed", "result": {"answer": "owner answer"}},
+            org_id=owner,
+            created_by="owner-user",
+        )
+        before = store.get("dec_taken")
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(
+            return_value=_MockDecisionResult(answer="caller answer"), side_effect=route_error
+        )
+
+        with (
+            patch(
+                "aragora.server.handlers.decision._get_decision_router",
+                return_value=mock_router,
+            ),
+            patch(
+                "aragora.server.handlers.decision.DecisionHandler.require_permission_or_error",
+                return_value=(MagicMock(), None),
+            ),
+            patch(
+                "aragora.billing.auth.extract_user_from_request",
+                return_value=MagicMock(authenticated=False),
+            ),
+            patch("aragora.core.decision.DecisionRequest") as mock_dr_cls,
+        ):
+            mock_dr_cls.from_http.return_value = _MockDecisionRequest(request_id="dec_taken")
+            result = await handler.handle_post(
+                "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
+            )
+        missing = handler.handle("/api/v1/decisions/dec_missing", {}, mock_http_handler)
+
+        assert _status(result) == _status(missing) == 404
+        assert _body(result) == _body(missing) == NOT_FOUND_BODY
+        assert store.get("dec_taken") == before
+        fresh = type(store)(db_path=tmp_path / "decision_results.db").get("dec_taken")
+        assert (fresh["result"], fresh["org_id"]) == ({"answer": "owner answer"}, owner)
+        assert mod._decision_results_fallback == {}
 
     @pytest.mark.no_auto_auth
     @pytest.mark.asyncio

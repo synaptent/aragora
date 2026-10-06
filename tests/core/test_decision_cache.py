@@ -335,6 +335,92 @@ class TestDecisionCacheHashing:
 
 
 # =============================================================================
+# DecisionCache Tests - Org and document partitioning
+# =============================================================================
+
+
+def _org_request(org_id, content="Should we ship?", documents=()):
+    from aragora.core.decision import DecisionRequest, DecisionType, RequestContext
+
+    return DecisionRequest(
+        content=content,
+        decision_type=DecisionType.DEBATE,
+        context=RequestContext(workspace_id=org_id),
+        documents=list(documents),
+    )
+
+
+class TestDecisionCacheOrgPartition:
+    """Cached and in-flight results are never shared across orgs or document sets."""
+
+    def test_hash_differs_by_org_and_documents(self):
+        cache = DecisionCache()
+
+        assert cache._compute_hash(_org_request("org-a")) == cache._compute_hash(
+            _org_request("org-a")
+        )
+        assert cache._compute_hash(_org_request("org-a")) != cache._compute_hash(
+            _org_request("org-b")
+        )
+        assert cache._compute_hash(_org_request("org-a", documents=["doc-1"])) != (
+            cache._compute_hash(_org_request("org-a", documents=["doc-2"]))
+        )
+        assert cache._compute_hash(_org_request("org-a", documents=["d1", "d2"])) == (
+            cache._compute_hash(_org_request("org-a", documents=["d2", "d1"]))
+        )
+
+    @pytest.mark.asyncio
+    async def test_cached_result_is_only_returned_to_same_org(self):
+        cache = DecisionCache()
+        await cache.set(_org_request("org-a"), "result for org-a")
+
+        assert await cache.get(_org_request("org-b")) is None
+        assert await cache.get(_org_request("org-a", documents=["doc-1"])) is None
+        assert await cache.get(_org_request("org-a")) == "result for org-a"
+
+    @pytest.mark.asyncio
+    async def test_in_flight_request_is_not_shared_across_orgs(self):
+        cache = DecisionCache()
+        await cache.mark_in_flight(_org_request("org-a"))
+
+        assert await cache.is_in_flight(_org_request("org-b")) is False
+        assert await cache.wait_for_result(_org_request("org-b"), timeout=0.01) is None
+        assert await cache.is_in_flight(_org_request("org-a")) is True
+
+    @pytest.mark.asyncio
+    async def test_router_serves_each_org_its_own_result(self):
+        from aragora.core import decision_router
+        from aragora.core.decision import DecisionResult, DecisionRouter, DecisionType
+
+        router = DecisionRouter(enable_caching=True, enable_deduplication=True)
+        calls = []
+
+        async def fake_debate(request):
+            org = request.context.workspace_id
+            calls.append(org)
+            return DecisionResult(
+                request_id=request.request_id,
+                decision_type=DecisionType.DEBATE,
+                answer=f"answer for {org}",
+                confidence=0.9,
+                consensus_reached=True,
+            )
+
+        with (
+            patch.object(decision_router, "_cache_imported", True),
+            patch.object(decision_router, "_decision_cache", DecisionCache()),
+            patch.object(router, "_route_to_debate", fake_debate),
+        ):
+            first_a = await router.route(_org_request("org-a"))
+            first_b = await router.route(_org_request("org-b"))
+            repeat_a = await router.route(_org_request("org-a"))
+
+        assert (first_a.answer, first_b.answer) == ("answer for org-a", "answer for org-b")
+        assert repeat_a.answer == "answer for org-a"
+        assert calls == ["org-a", "org-b"]
+
+
+# =============================================================================
 # DecisionCache Tests - Get/Set Operations
 # =============================================================================
 

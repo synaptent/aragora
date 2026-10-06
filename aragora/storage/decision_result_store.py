@@ -8,7 +8,8 @@ Provides persistent storage for decision routing results with:
 - SQLite persistence for durability
 - Ownership: each result records the org and user that created it; the
   ``*_for_org`` reads only return that org's results (results without an org
-  are never returned by them)
+  are never returned by them), and a save from another org (or into a result
+  without an org) raises ``DecisionOwnershipConflict``
 
 Replaces the in-memory _decision_results dict for production use.
 
@@ -58,6 +59,10 @@ DEFAULT_MAX_ENTRIES = int(
 DEFAULT_CACHE_SIZE = 1000  # In-memory cache size
 DEFAULT_DB_PATH = Path(resolve_db_path("decision_results.db"))
 DEFAULT_CLEANUP_INTERVAL = 300  # 5 minutes
+
+
+class DecisionOwnershipConflict(ValueError):
+    """A save targeted a decision result owned by another org (or by no org)."""
 
 
 @dataclass
@@ -318,8 +323,10 @@ class DecisionResultStore:
             for column in ("org_id", "created_by"):
                 safe_add_column(conn, "decision_results", column, "TEXT")
 
-    # Ownership is fixed by the first save that carries it; later saves of the
-    # same request (status updates) never move a result to another org.
+    # Ownership is fixed by the first save. A later save of the same request
+    # only applies when its org matches the stored one (both NULL for ownerless
+    # results), so a result is never overwritten or claimed by another tenant.
+    # The NULL branch is spelled out because ``IS`` on text is SQLite-only.
     _UPSERT_SQL = """
         INSERT INTO decision_results
         (request_id, status, result_json, created_at, completed_at, error, expires_at,
@@ -330,12 +337,9 @@ class DecisionResultStore:
             result_json = excluded.result_json,
             completed_at = excluded.completed_at,
             error = excluded.error,
-            expires_at = excluded.expires_at,
-            org_id = COALESCE(decision_results.org_id, excluded.org_id),
-            created_by = CASE
-                WHEN decision_results.org_id IS NULL THEN excluded.created_by
-                ELSE decision_results.created_by
-            END
+            expires_at = excluded.expires_at
+        WHERE decision_results.org_id = excluded.org_id
+            OR (decision_results.org_id IS NULL AND excluded.org_id IS NULL)
     """
 
     def save(
@@ -354,6 +358,10 @@ class DecisionResultStore:
             data: Result data including status, result, completed_at, error
             org_id: Org that owns the result (defaults to ``data["org_id"]``)
             created_by: User that created the result (defaults to ``data["created_by"]``)
+
+        Raises:
+            DecisionOwnershipConflict: ``request_id`` already belongs to another
+                org, or to no org while ``org_id`` is set. Nothing is written.
         """
         now = time.time()
         expires_at = now + self._ttl_seconds
@@ -393,9 +401,14 @@ class DecisionResultStore:
             conn.commit()
             owner = conn.execute(owner_query, (request_id,)).fetchone()
 
-        # The upsert may have kept an earlier owner; cache what was stored.
+        # The stored org never changes after the insert, so a different org
+        # here means the conditional update was skipped.
         if owner is not None:
-            entry.org_id, entry.created_by = owner[0], owner[1]
+            if owner[0] != entry.org_id:
+                raise DecisionOwnershipConflict(
+                    f"Decision result {request_id} belongs to another owner"
+                )
+            entry.created_by = owner[1]
 
         # Update cache
         with self._cache_lock:
@@ -808,6 +821,7 @@ def reset_decision_result_store() -> None:
 
 
 __all__ = [
+    "DecisionOwnershipConflict",
     "DecisionResultStore",
     "DecisionResultEntry",
     "get_decision_result_store",

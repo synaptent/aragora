@@ -84,28 +84,34 @@ def _save_result(
     *,
     org_id: str | None = None,
     created_by: str | None = None,
-) -> None:
-    """Save a decision result, owned by ``org_id``, to persistent store with fallback."""
+) -> bool:
+    """Save a decision result, owned by ``org_id``, to persistent store with fallback.
+
+    Returns False, writing nothing, when ``request_id`` already belongs to
+    another org or to no org.
+    """
     store = _decision_result_store.get()
     if store:
+        from aragora.storage.decision_result_store import DecisionOwnershipConflict
+
         try:
             store.save(request_id, data, org_id=org_id, created_by=created_by)
-            return
+            return True
+        except DecisionOwnershipConflict:
+            return False
         except (KeyError, ValueError, OSError, TypeError) as e:
             logger.warning("Failed to persist result, using fallback: %s", e)
-    # Fallback to in-memory; an existing owner is kept, as in the store.
-    previous = _decision_results_fallback.get(request_id) or {}
-    owner_org = previous.get("org_id") or org_id or data.get("org_id")
-    owner_user = (
-        previous.get("created_by")
-        if previous.get("org_id")
-        else (created_by or data.get("created_by"))
-    )
-    _decision_results_fallback[request_id] = {
-        **data,
-        "org_id": owner_org,
-        "created_by": owner_user,
-    }
+    # Fallback to in-memory, with the same ownership rule as the store.
+    owner_org = org_id or data.get("org_id")
+    previous = _decision_results_fallback.get(request_id)
+    if previous is not None and previous.get("org_id") != owner_org:
+        return False
+    if previous is not None:
+        creator = previous.get("created_by")
+    else:
+        creator = created_by or data.get("created_by")
+    _decision_results_fallback[request_id] = {**data, "org_id": owner_org, "created_by": creator}
+    return True
 
 
 def _get_result(request_id: str, org_id: str | None) -> dict[str, Any] | None:
@@ -308,8 +314,9 @@ class DecisionHandler(BaseHandler):
         try:
             result = await router.route(request)
 
-            # Cache result for polling (persistent)
-            _save_result(
+            # Cache result for polling (persistent). A request_id that already
+            # belongs to another org (or to none) is reported like a missing one.
+            if not _save_result(
                 request.request_id,
                 {
                     "request_id": request.request_id,
@@ -319,7 +326,8 @@ class DecisionHandler(BaseHandler):
                 },
                 org_id=scope.org_id,
                 created_by=scope.user_id,
-            )
+            ):
+                return record_not_found("Decision")
 
             return json_response(
                 {
@@ -338,7 +346,7 @@ class DecisionHandler(BaseHandler):
 
         except asyncio.TimeoutError:
             # Save as pending for async polling
-            _save_result(
+            if not _save_result(
                 request.request_id,
                 {
                     "request_id": request.request_id,
@@ -347,12 +355,13 @@ class DecisionHandler(BaseHandler):
                 },
                 org_id=scope.org_id,
                 created_by=scope.user_id,
-            )
+            ):
+                return record_not_found("Decision")
             return error_response("Decision request timed out", 408)
 
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.exception("Decision routing failed: %s", e)
-            _save_result(
+            if not _save_result(
                 request.request_id,
                 {
                     "request_id": request.request_id,
@@ -361,7 +370,8 @@ class DecisionHandler(BaseHandler):
                 },
                 org_id=scope.org_id,
                 created_by=scope.user_id,
-            )
+            ):
+                return record_not_found("Decision")
             logger.warning("Handler error: %s", e)
             return error_response("Decision processing failed", 500)
 

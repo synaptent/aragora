@@ -129,7 +129,11 @@ USER = "test-user-001"
 
 
 class MockDecisionResultStore:
-    """Mock decision result store for testing, with org ownership like the real store."""
+    """Mock decision result store for testing, with org ownership like the real store.
+
+    ``save`` also stands in for ``_save_result``: it returns False, writing
+    nothing, for a result owned by another org or by no org.
+    """
 
     def __init__(self):
         self._results: dict[str, dict[str, Any]] = {}
@@ -141,16 +145,21 @@ class MockDecisionResultStore:
         *,
         org_id: str | None = None,
         created_by: str | None = None,
-    ) -> None:
-        previous = self._results.get(request_id) or {}
-        owned = bool(previous.get("org_id"))
+    ) -> bool:
+        previous = self._results.get(request_id)
+        owner = org_id or data.get("org_id")
+        if previous is not None and previous.get("org_id") != owner:
+            return False
         self._results[request_id] = {
             **data,
-            "org_id": previous["org_id"] if owned else (org_id or data.get("org_id")),
+            "org_id": owner,
             "created_by": (
-                previous.get("created_by") if owned else (created_by or data.get("created_by"))
+                previous.get("created_by")
+                if previous is not None
+                else (created_by or data.get("created_by"))
             ),
         }
+        return True
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         return self._results.get(request_id)

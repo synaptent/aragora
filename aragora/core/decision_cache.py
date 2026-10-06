@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -143,7 +144,16 @@ class DecisionCache:
                 if agents:
                     key_parts.append(f"agents:{','.join(sorted(agents))}")
 
-        key_str = "|".join(key_parts)
+        # Results carry tenant data (including document-grounded answers), so
+        # an entry or an in-flight wait is never shared across orgs or document
+        # sets, whatever the config says. JSON keeps the parts unambiguous.
+        context = getattr(request, "context", None)
+        key_parts.append(f"org:{getattr(context, 'workspace_id', None) or ''}")
+        key_parts.append(f"tenant:{getattr(context, 'tenant_id', None) or ''}")
+        documents = getattr(request, "documents", None) or []
+        key_parts.append(f"documents:{json.dumps(sorted(str(d) for d in documents))}")
+
+        key_str = json.dumps(key_parts)
         return hashlib.sha256(key_str.encode()).hexdigest()[:32]
 
     async def get(self, request: Any) -> Any | None:
