@@ -34,12 +34,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from aragora.config import DEFAULT_ROUNDS
+from aragora.core.decision_models import normalize_document_ids
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +145,22 @@ class DecisionCache:
                 if agents:
                     key_parts.append(f"agents:{','.join(sorted(agents))}")
 
-        key_str = "|".join(key_parts)
+        # Results carry tenant data (including document-grounded answers), so
+        # an entry or an in-flight wait is never shared across orgs or document
+        # sets, whatever the config says. The router also grounds on document
+        # ids from the context metadata, so those join the set. JSON keeps the
+        # parts unambiguous.
+        context = getattr(request, "context", None)
+        key_parts.append(f"org:{getattr(context, 'workspace_id', None) or ''}")
+        key_parts.append(f"tenant:{getattr(context, 'tenant_id', None) or ''}")
+        documents = {str(d) for d in getattr(request, "documents", None) or []}
+        metadata = getattr(context, "metadata", None)
+        if isinstance(metadata, dict):
+            for name in ("documents", "document_ids"):
+                documents.update(normalize_document_ids(metadata.get(name)))
+        key_parts.append(f"documents:{json.dumps(sorted(documents))}")
+
+        key_str = json.dumps(key_parts)
         return hashlib.sha256(key_str.encode()).hexdigest()[:32]
 
     async def get(self, request: Any) -> Any | None:
