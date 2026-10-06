@@ -35,7 +35,9 @@ for _mod_name in (
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
+from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.features.folder_upload import (
     FolderUploadHandler,
     FolderUploadJob,
@@ -427,3 +429,79 @@ class TestFolderJobStatusUpdate:
 
         assert len(FolderUploadHandler._jobs["folder123"].errors) == 1
         assert FolderUploadHandler._jobs["folder123"].errors[0]["error"] == "Test error"
+
+
+GET_ROUTES = [
+    "/api/v1/documents/folders",
+    "/api/v1/documents/folders/a-job",
+    "/api/v1/documents/folder/upload/a-job/status",
+]
+
+
+@pytest.mark.no_auto_auth
+class TestFolderGetPermissionDenial:
+    """GET routes through handle() with the real permission checker, as the server calls it."""
+
+    @pytest.fixture(autouse=True)
+    def org_a_job(self):
+        now = datetime.now(timezone.utc)
+        FolderUploadHandler._jobs["a-job"] = FolderUploadJob(
+            folder_id="a-job",
+            root_path="/imports/org-a/board-minutes",
+            status=FolderUploadStatus.COMPLETED,
+            created_at=now,
+            updated_at=now,
+            user_id="a-owner",
+            org_id="org-a",
+            document_ids=["doc-a-1"],
+        )
+
+    def _get(self, path, *, user_id, org_id, role):
+        import json
+
+        store = MagicMock()
+        user = MagicMock(
+            is_authenticated=True, user_id=user_id, org_id=org_id, role=role, error_reason=None
+        )
+        http = SimpleNamespace(
+            headers={},
+            client_address=("127.0.0.1", 12345),
+            _auth_context=AuthorizationContext(
+                user_id=user_id, org_id=org_id, roles={role}, permissions=set()
+            ),
+        )
+        before = {k: job.to_dict() for k, job in FolderUploadHandler._jobs.items()}
+        with patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=user):
+            result = FolderUploadHandler({"document_store": store}).handle(path, {}, http)
+        assert {k: job.to_dict() for k, job in FolderUploadHandler._jobs.items()} == before
+        assert store.mock_calls == []
+        return result.status_code, json.loads(result.body)
+
+    @pytest.mark.parametrize("path", GET_ROUTES)
+    @pytest.mark.parametrize("org_id", ["org-a", None])
+    def test_caller_without_upload_create_gets_403_not_500(self, path, org_id):
+        status, body = self._get(path, user_id="a-member", org_id=org_id, role="member")
+        assert status == 403
+        assert body == {"error": "An error occurred", "error_code": "FORBIDDEN"}
+
+    @pytest.mark.parametrize("path", GET_ROUTES)
+    def test_authorized_same_org_caller_gets_its_own_data(self, path):
+        status, body = self._get(path, user_id="a-owner", org_id="org-a", role="owner")
+        assert status == 200
+        jobs = body["folders"] if "folders" in body else [body]
+        assert [job["folder_id"] for job in jobs] == ["a-job"]
+        assert jobs[0]["root_path"] == "/imports/org-a/board-minutes"
+
+    @pytest.mark.parametrize("path", GET_ROUTES)
+    def test_foreign_org_caller_gets_no_data_of_the_first_org(self, path):
+        status, body = self._get(path, user_id="b-owner", org_id="org-b", role="owner")
+        assert (status, body) in (
+            (200, {"folders": [], "count": 0}),
+            (404, {"error": "Folder not found", "code": "not_found"}),
+        )
+
+    @pytest.mark.parametrize("path", GET_ROUTES)
+    def test_no_org_caller_with_upload_create_gets_org_required(self, path):
+        status, body = self._get(path, user_id="noorg-owner", org_id=None, role="owner")
+        assert status == 403
+        assert body["code"] == "org_required"

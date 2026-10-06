@@ -199,6 +199,7 @@ class FolderUploadHandler(BaseHandler):
             return True
         return False
 
+    @handle_errors("folder upload retrieval")
     @require_permission("upload:create")
     @rate_limit(requests_per_minute=30)
     def handle(self, path: str, query_params: dict, handler) -> HandlerResult | None:
