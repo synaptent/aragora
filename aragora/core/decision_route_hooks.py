@@ -106,12 +106,28 @@ _declared_registrations_lock = threading.RLock()
 _SOURCE_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
 
+_REGISTRATION_ERRORS = (
+    ImportError,
+    SyntaxError,
+    AttributeError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+
+
 def _source_checkout_registrations() -> list[importlib.metadata.EntryPoint]:
     # An editable install keeps the entry points it was installed with, so a source
     # checkout run against older metadata reads the declarations from its own pyproject.
-    if sys.version_info < (3, 11):
-        return []
-    import tomllib
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        try:
+            import tomli as tomllib
+        except ImportError:
+            return []
 
     try:
         project = tomllib.loads(_SOURCE_PYPROJECT.read_text(encoding="utf-8")).get("project", {})
@@ -138,19 +154,22 @@ def _load_declared_registrations() -> None:
             list(importlib.metadata.entry_points(group=DECISION_ROUTES_ENTRY_POINT_GROUP))
             or _source_checkout_registrations()
         )
-        for entry_point in declared:
-            # A broken registration must not stop the others.
-            try:
-                entry_point.load()()
-            except (
-                ImportError,
-                AttributeError,
-                OSError,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                logger.warning("Decision route registration %s failed: %s", entry_point.value, exc)
+        _run_registrations(declared)
+
+
+def _run_registrations(entry_points: list[importlib.metadata.EntryPoint]) -> None:
+    if not entry_points:
+        return
+    entry_point, rest = entry_points[0], entry_points[1:]
+    try:
+        entry_point.load()()
+    except _REGISTRATION_ERRORS as exc:
+        logger.warning("Decision route registration %s failed: %s", entry_point.value, exc)
+    finally:
+        # The rest run even when an error of another type escapes, so one broken plugin
+        # cannot keep aragora's own registration from running; that error still reaches
+        # the caller afterwards.
+        _run_registrations(rest)
 
 
 def register_route_target(kind: str, target: DecisionRouteTarget) -> None:

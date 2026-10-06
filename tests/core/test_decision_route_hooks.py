@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast
 import importlib.metadata
 import re
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -192,6 +193,44 @@ def test_a_failing_declared_registration_is_logged_and_the_lookup_still_raises(
     assert "optional dependency missing" in caplog.text
 
 
+def test_a_failing_declared_registration_does_not_stop_the_later_ones(
+    undiscovered_hooks, monkeypatch, caplog
+):
+    sink = MagicMock()
+
+    def broken():
+        raise KeyError("missing setting")
+
+    _declare(monkeypatch, broken, lambda: hooks.register_decision_audit_sink(sink))
+
+    with caplog.at_level("WARNING", logger="aragora.core.decision_route_hooks"):
+        assert hooks.get_decision_audit_sink() is sink
+    assert "missing setting" in caplog.text
+
+
+def test_an_unexpected_registration_error_reaches_the_caller_after_the_later_ones_ran(
+    undiscovered_hooks, monkeypatch
+):
+    class PluginBug(Exception):
+        pass
+
+    sink = MagicMock()
+
+    def broken():
+        raise PluginBug("plugin defect")
+
+    _declare(monkeypatch, broken, lambda: hooks.register_decision_audit_sink(sink))
+
+    with pytest.raises(PluginBug):
+        hooks.get_decision_audit_sink()
+    assert hooks.get_decision_audit_sink() is sink
+
+
+def _require_toml_parser():
+    if sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
+
+
 def test_a_source_checkout_uses_its_pyproject_declarations_when_metadata_has_none(
     undiscovered_hooks, monkeypatch
 ):
@@ -199,14 +238,29 @@ def test_a_source_checkout_uses_its_pyproject_declarations_when_metadata_has_non
     # run against older metadata still reaches the registrations its pyproject declares.
     from aragora.server.decision_routes import UnifiedAuditDecisionSink
 
+    _require_toml_parser()
     _declare(monkeypatch)
 
     assert isinstance(hooks.get_decision_audit_sink(), UnifiedAuditDecisionSink)
     assert sorted(hooks.get_registered_routes()) == ["gauntlet", "workflow"]
 
 
+def test_source_checkout_declarations_use_tomli_before_python_3_11(monkeypatch):
+    # Stands the 3.11+ stdlib parser in for tomli, so the 3.10 branch runs on any interpreter.
+    tomllib = pytest.importorskip("tomllib")
+
+    server = [("server", "aragora.server.decision_routes:register_decision_routes")]
+    monkeypatch.setattr(sys, "version_info", (3, 10, 14))
+    monkeypatch.setitem(sys.modules, "tomli", tomllib)
+    assert [(ep.name, ep.value) for ep in hooks._source_checkout_registrations()] == server
+
+    # Without tomli the fallback finds nothing rather than failing the lookup.
+    monkeypatch.setitem(sys.modules, "tomli", None)
+    assert hooks._source_checkout_registrations() == []
+
+
 def test_source_checkout_declarations_come_only_from_aragoras_pyproject(monkeypatch, tmp_path):
-    pytest.importorskip("tomllib")
+    _require_toml_parser()
     assert [(ep.name, ep.value) for ep in hooks._source_checkout_registrations()] == [
         ("server", "aragora.server.decision_routes:register_decision_routes")
     ]
