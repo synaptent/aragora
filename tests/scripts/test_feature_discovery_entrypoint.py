@@ -20,13 +20,26 @@ LEGACY_SECTION_ANCHORS = [
     "9-self-improvement--nomic-loop",
 ]
 
-EXPLICIT_ANCHOR = re.compile(r"""<a\s[^>]*?(?<![\w-])(?:id|name)=["']([^"']+)["']""")
+EXPLICIT_ANCHOR = re.compile(r"""<a\s[^>]*?(?<![\w-])(?:id|name)=["']([^"']+)["']""", re.IGNORECASE)
 HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
+FENCE = re.compile(r"^\s*(```|~~~)")
 
 
 def _github_slug(heading: str) -> str:
     text = re.sub(r"[^\w\- ]", "", heading.strip().lower())
     return text.replace(" ", "-")
+
+
+def _outside_fences(text: str) -> str:
+    kept: list[str] = []
+    fenced = False
+    for line in text.splitlines():
+        if FENCE.match(line):
+            fenced = not fenced
+            kept.append("")
+            continue
+        kept.append("" if fenced else line)
+    return "\n".join(kept)
 
 
 def _anchor_offsets(content: str) -> dict[str, list[int]]:
@@ -71,7 +84,7 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
     content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
     canonical_slugs = {
         _github_slug(match.group(1))
-        for match in HEADING.finditer(CANONICAL.read_text(encoding="utf-8"))
+        for match in HEADING.finditer(_outside_fences(CANONICAL.read_text(encoding="utf-8")))
     }
 
     for anchor in LEGACY_SECTION_ANCHORS:
@@ -81,7 +94,7 @@ def test_root_feature_discovery_links_legacy_sections_to_canonical_headings() ->
 
 def test_root_feature_discovery_keeps_legacy_section_anchors() -> None:
     # Links written before this page became a stub still target the old section fragments.
-    content = FEATURE_DISCOVERY.read_text(encoding="utf-8")
+    content = _outside_fences(FEATURE_DISCOVERY.read_text(encoding="utf-8"))
     offsets = _anchor_offsets(content)
 
     missing = [anchor for anchor in LEGACY_SECTION_ANCHORS if anchor not in offsets]
