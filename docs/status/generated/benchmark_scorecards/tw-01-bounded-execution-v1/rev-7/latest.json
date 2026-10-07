@@ -38,34 +38,34 @@
   "failure_class_distribution": {
     "blocked_not_dispatch_bounded": 5
   },
-  "generated_at": "2026-09-04T13:28:39Z",
-  "observation_status": {
-    "raw_inputs": "unavailable",
-    "elapsed_time": "unmeasured",
-    "rescue_history": "incomplete",
-    "raw_input_replay": "unmeasured"
-  },
+  "generated_at": "2026-09-29T13:36:50Z",
+  "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
   "observation_limits": {
-    "reason": "Original raw metrics/rescue inputs are unavailable; independent replay is unmeasured. An input reset or replacement has not been independently proven.",
-    "value_semantics": "Listed fields retain legacy snapshot values, not authoritative measurements of elapsed time or complete rescue history. Empty counts and false rescue flags do not retract prior observations.",
     "non_authoritative_fields": [
-      "proxy_metrics",
       "proxy_metrics.mean_elapsed_seconds",
       "proxy_metrics.median_elapsed_seconds",
       "failure_class_distribution",
       "rescue_counts_by_type",
       "truth_metrics.no_rescue_truth_success_rate",
+      "proxy_metrics.no_rescue_success_rate",
+      "proxy_metrics.failure_classes",
+      "proxy_metrics.terminal_class_distribution",
       "deltas.no_rescue_truth_success_rate",
-      "deltas.proxy_no_rescue_success_rate"
+      "deltas.proxy_no_rescue_success_rate",
+      "deltas.unique_issues_attempted"
     ],
-    "historical_artifacts": [
-      "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json"
-    ]
+    "reason": "No metrics row carries a positive `elapsed_seconds` sample, so the elapsed aggregates are placeholders. The linked truth artifact reports rescue history as `incomplete`; see its `observation_limits`. The previous snapshot marks the source value of some deltas as non-authoritative. Independent raw-input replay was not performed.",
+    "value_semantics": "Listed fields retain the values computed for this snapshot but are not authoritative measurements. Zero elapsed seconds do not establish zero-duration execution. Empty rescue counts and no-rescue rates do not establish that no rescue occurred."
   },
-  "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
+  "observation_status": {
+    "elapsed_time": "unmeasured",
+    "raw_input_replay": "unmeasured",
+    "raw_inputs": "available",
+    "rescue_history": "incomplete"
+  },
   "previous_artifact": {
-    "generated_at": "2026-09-01T13:38:29Z",
-    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json"
+    "generated_at": "2026-09-04T13:28:39Z",
+    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260904T132839Z.json"
   },
   "proxy_metrics": {
     "corpus": {
@@ -106,8 +106,8 @@
     "unique_issues_succeeded": 0
   },
   "rescue_counts_by_type": {},
-  "truth_artifact_generated_at": "2026-09-04T13:28:28Z",
-  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260904T132828Z.json",
+  "truth_artifact_generated_at": "2026-09-29T13:36:38Z",
+  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260929T133638Z.json",
   "truth_metrics": {
     "merged_only_rate": 0.5,
     "no_rescue_truth_success_rate": 0.5,

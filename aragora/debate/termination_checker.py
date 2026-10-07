@@ -44,7 +44,7 @@ from collections.abc import Callable
 
 if TYPE_CHECKING:
     from aragora.core import Agent, Message
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 logger = logging.getLogger(__name__)
 

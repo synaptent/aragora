@@ -6,6 +6,49 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-10-03)
+
+#### Breaking Changes
+
+The flat-client method `AragoraClient.exportReplay(replayId, format)` is removed,
+with no replacement, because it called `GET /api/v1/replays/{replayId}/export`,
+a route no handler serves (it is absent from both OpenAPI documents and rejected
+by `ReplaysHandler.can_handle`, and the 2026-09-03 batch already removed the same
+route from `ReplaysAPI.export`).
+
+### Unreleased (2026-09-28)
+
+#### Breaking Changes
+
+Contract-drift batch 5 removes 3 TypeScript operations whose routes no server
+handler implements. Each SDK path, with its `/api/v1` and legacy twin, was
+dispatched through the real `HANDLER_REGISTRY` as an owner and as an admin: each
+answered `handler_no_result`, and no FastAPI route matches it. The Python SDK is
+unchanged; its `ap_automation.add_invoice()` (sync and async) still calls
+`POST /api/v1/ap/invoices` and is left for a later change. A Migration cell names
+an alternative only where that route was dispatched and served.
+`UnsubscriptionResult`, used only by `crossPollination.unsubscribe` and not
+re-exported from `src/namespaces/index.ts`, is deleted with it.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `crossPollination.unsubscribe` | `DELETE /api/v1/cross-pollination/subscribers/{id}` | No replacement |
+| `apAutomation.addAPInvoice` | `POST /api/v1/ap/invoices` | No replacement: `apAutomation.addInvoice()` calls `POST /api/v1/accounting/ap/invoices`, which answers `handler_no_result` too |
+| `policies.resolveViolation` | `POST /api/policies/violations/{id}/resolve` | No typed TypeScript call. Send `{ "status": "resolved", "resolution_notes": "..." }` with `PATCH /api/v1/compliance/violations/{id}` (Python: `policies.update_violation(violation_id, "resolved")`). `compliance.updateViolation()` sends `PUT`, which that route does not dispatch |
+
+### Unreleased (2026-09-27)
+
+#### Breaking Changes
+
+Stale-path cleanup removes two methods whose routes the server does not serve.
+Python removes the same two methods from both synchronous and asynchronous
+clients; no server routes are removed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `ModesAPI.getMode` | `GET /api/v1/modes/{mode_name}` | No replacement |
+| `SpectateAPI.connectSSE` | `GET /api/v1/spectate/{debate_id}/stream` | No replacement |
+
 ### Unreleased (2026-09-21)
 
 #### Breaking Changes

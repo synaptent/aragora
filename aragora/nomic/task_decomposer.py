@@ -2473,7 +2473,7 @@ class TaskDecomposer:
             )
             return self.analyze(goal, depth=self.config.max_depth)
         from aragora.core import Environment
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         # Build the debate task - ask agents to decompose the goal
         debate_task = self._build_debate_task(goal, context)
@@ -2650,7 +2650,7 @@ class TaskDecomposer:
 
             # Rebuild environment and protocol for fresh debate
             from aragora.core import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             fallback_env = Environment(
                 task=self._build_debate_task(goal, context),
