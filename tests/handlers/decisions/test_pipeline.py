@@ -15,11 +15,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.tenancy.record_scope import OrgScope
 
 pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
 
@@ -1474,6 +1475,15 @@ class TestBuildImplementationProfilePayload:
 # ---------------------------------------------------------------------------
 
 
+_LOADER_SCOPE = OrgScope(org_id="org-1", user_id="user-1", role="owner")
+
+
+def _storage_owned_by(org_id: str | None) -> MagicMock:
+    storage = MagicMock()
+    storage.get_org_id.return_value = org_id
+    return storage
+
+
 class TestLoadDebateResult:
     """Tests for the _load_debate_result helper."""
 
@@ -1492,60 +1502,83 @@ class TestLoadDebateResult:
 
             mock_trace = MagicMock()
             mock_trace.to_debate_result.return_value = MagicMock(task="test")
+            ctx = {"nomic_dir": tmpdir, "storage": _storage_owned_by("org-1")}
             with patch("aragora.debate.traces.DebateTrace") as MockTrace:
                 MockTrace.load.return_value = mock_trace
-                result = await _load_debate_result("debate-001", {"nomic_dir": tmpdir})
+                result = await _load_debate_result("debate-001", ctx, _LOADER_SCOPE)
             assert result is not None
 
     @pytest.mark.asyncio
     async def test_loads_from_storage(self):
         from aragora.server.handlers.decisions.pipeline import _load_debate_result
 
-        mock_storage = MagicMock()
+        mock_storage = _storage_owned_by("org-1")
         mock_result = MagicMock()
-        mock_storage.get_result = MagicMock(return_value=mock_result)
+        mock_storage.get_result = AsyncMock(return_value=mock_result)
 
-        # Make get_result a proper awaitable
-        import asyncio
-
-        async def mock_get_result(debate_id):
-            return mock_result
-
-        mock_storage.get_result = mock_get_result
-        result = await _load_debate_result("debate-001", {"storage": mock_storage})
+        result = await _load_debate_result("debate-001", {"storage": mock_storage}, _LOADER_SCOPE)
         assert result is mock_result
 
     @pytest.mark.asyncio
     async def test_loads_from_cache(self):
         from aragora.server.handlers.decisions.pipeline import _load_debate_result
 
+        cached = MagicMock(debate_id="debate-001")
         mock_cache = MagicMock()
-        mock_cache.get.return_value = MagicMock()
+        mock_cache.get = AsyncMock(return_value=cached)
+        ctx = {"storage": _storage_owned_by("org-1")}
         with patch("aragora.core.decision_cache.get_decision_cache", return_value=mock_cache):
-            result = await _load_debate_result("debate-001", {})
-        assert result is not None
+            result = await _load_debate_result("debate-001", ctx, _LOADER_SCOPE)
+        assert result is cached
+
+    @pytest.mark.asyncio
+    async def test_ignores_cache_entry_for_another_debate(self):
+        from aragora.server.handlers.decisions.pipeline import _load_debate_result
+
+        mock_cache = MagicMock()
+        mock_cache.get = AsyncMock(return_value=MagicMock(debate_id="debate-other"))
+        ctx = {"storage": _storage_owned_by("org-1")}
+        with patch("aragora.core.decision_cache.get_decision_cache", return_value=mock_cache):
+            result = await _load_debate_result("debate-001", ctx, _LOADER_SCOPE)
+        assert result is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("owner", ["org-2", None])
+    async def test_unowned_debate_reads_no_source(self, owner):
+        from aragora.server.handlers.decisions.pipeline import _load_debate_result
+
+        mock_storage = _storage_owned_by(owner)
+        mock_storage.get_result = AsyncMock(return_value=MagicMock())
+        mock_cache = MagicMock()
+        mock_cache.get = AsyncMock(return_value=MagicMock(debate_id="debate-001"))
+        with patch("aragora.core.decision_cache.get_decision_cache", return_value=mock_cache):
+            result = await _load_debate_result(
+                "debate-001", {"storage": mock_storage}, _LOADER_SCOPE
+            )
+        assert result is None
+        mock_storage.get_result.assert_not_called()
+        mock_cache.get.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_returns_none_when_all_fail(self):
         from aragora.server.handlers.decisions.pipeline import _load_debate_result
 
+        ctx = {"storage": _storage_owned_by("org-1")}
         with patch("aragora.core.decision_cache.get_decision_cache", return_value=None):
-            result = await _load_debate_result("debate-notexist", {})
+            result = await _load_debate_result("debate-notexist", ctx, _LOADER_SCOPE)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_storage_error_falls_through(self):
         from aragora.server.handlers.decisions.pipeline import _load_debate_result
 
-        mock_storage = MagicMock()
-
-        async def mock_get_result(debate_id):
-            raise ValueError("broken")
-
-        mock_storage.get_result = mock_get_result
+        mock_storage = _storage_owned_by("org-1")
+        mock_storage.get_result = AsyncMock(side_effect=ValueError("broken"))
 
         with patch("aragora.core.decision_cache.get_decision_cache", return_value=None):
-            result = await _load_debate_result("debate-001", {"storage": mock_storage})
+            result = await _load_debate_result(
+                "debate-001", {"storage": mock_storage}, _LOADER_SCOPE
+            )
         assert result is None
 
 

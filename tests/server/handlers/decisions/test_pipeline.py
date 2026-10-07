@@ -687,3 +687,81 @@ def test_reject_plan_rejects_illegal_state_transition() -> None:
 
     assert result.status_code == 409
     assert "cannot be rejected in status" in _parse_body(result)["error"]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/decisions/plans: the source debate must belong to the caller
+# ---------------------------------------------------------------------------
+
+SOURCE_ID = "debate-src"
+
+
+def _source_ctx(root, owner: str | None, *, row: bool = True, trace: bool = True) -> dict:
+    """Handler context whose debate storage and trace files hold ``SOURCE_ID`` as asked."""
+    from aragora.debate.traces import DebateTrace
+    from aragora.storage.debate_storage import DebateStorage
+
+    (root / "traces").mkdir(parents=True)
+    if trace:
+        DebateTrace(
+            trace_id="trace-src",
+            debate_id=SOURCE_ID,
+            task="Private source question",
+            agents=["agent-1", "agent-2"],
+            random_seed=1,
+            final_result={"final_answer": "Private answer", "consensus_reached": True},
+        ).save(root / "traces" / f"{SOURCE_ID}.json")
+    storage = DebateStorage(str(root / "debates.db"))
+    if row:
+        storage.save_dict({"id": SOURCE_ID, "task": "Private source question"}, org_id=owner)
+    return {"storage": storage, "nomic_dir": str(root)}
+
+
+def _create_from_source(ctx: dict):
+    handler = DecisionPipelineHandler(ctx)
+    request = _make_http_handler({"debate_id": SOURCE_ID})
+    user = SimpleNamespace(user_id=SCOPE.user_id)
+    with (
+        patch.object(handler, "_check_circuit_breaker", return_value=None),
+        patch("aragora.server.debate_origin.get_debate_origin", return_value=None),
+        patch(
+            "aragora.server.handlers.decisions.pipeline.require_org_scope",
+            return_value=(SCOPE, None),
+        ),
+        patch.object(handler, "require_auth_or_error", return_value=(user, None)),
+        patch.object(handler, "require_permission_or_error", return_value=(user, None)),
+        patch("aragora.pipeline.executor.store_plan") as store_plan,
+    ):
+        result = handler.handle_post("/api/v1/decisions/plans", {}, request)
+    return result, store_plan
+
+
+def test_create_plan_from_callers_own_debate(tmp_path) -> None:
+    result, store_plan = _create_from_source(_source_ctx(tmp_path, SCOPE.org_id))
+
+    assert result.status_code == 201
+    assert _parse_body(result)["plan"]["task"] == "Private source question"
+    store_plan.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("owner", "row"),
+    [("other-org-999", True), (None, True), (None, False)],
+    ids=["other-org", "unknown-owner", "no-debate-row"],
+)
+def test_create_plan_from_unowned_source_matches_missing(tmp_path, owner, row) -> None:
+    result, store_plan = _create_from_source(_source_ctx(tmp_path / "src", owner, row=row))
+
+    assert result.status_code == 404
+    store_plan.assert_not_called()
+    assert "Private" not in json.dumps(_parse_body(result))
+    missing, _ = _create_from_source(_source_ctx(tmp_path / "none", None, row=False, trace=False))
+    assert (missing.status_code, _parse_body(missing)) == (404, _parse_body(result))
+
+
+def test_create_plan_from_owned_debate_without_loadable_result_is_not_found(tmp_path) -> None:
+    """With no trace, the decision-cache fallback must not hand a coroutine to the factory."""
+    result, store_plan = _create_from_source(_source_ctx(tmp_path, SCOPE.org_id, trace=False))
+
+    assert result.status_code == 404
+    store_plan.assert_not_called()
