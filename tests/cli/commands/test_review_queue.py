@@ -1418,6 +1418,38 @@ class TestUnstableCancellationReceipt:
 
         assert receipt == {}
 
+    def test_rejects_pr_modifying_optional_only_unstable_predicate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The live gate imports its optional-only UNSTABLE proof from this
+        # module, so editing it is editing the gate.
+        head_sha = "exact-head"
+        pr = _make_pr(
+            number=9034,
+            checks=[self._cancelled_build_check()],
+            merge_state_status="UNSTABLE",
+        )
+        pr["headRefOid"] = head_sha
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._fetch_required_pr_check_surface",
+            lambda *_args, **_kwargs: self._required_surface(),
+        )
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            self._gh_json_dispatch(
+                self._cancelled_build_run(head_sha),
+                files=[{"filename": "aragora/swarm/auto_merge_green.py"}],
+            ),
+        )
+
+        receipt = _verified_unstable_non_required_cancellation_receipt(
+            pr=pr,
+            pr_number=9034,
+            repo_override="synaptent/aragora",
+        )
+
+        assert receipt == {}
+
     def test_rejects_empty_changed_files_listing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         head_sha = "exact-head"
         pr = _make_pr(

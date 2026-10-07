@@ -237,6 +237,25 @@ def test_9453_optional_security_failures_reach_would_merge(tmp_path):
     assert _actions(summary)[100] == "would-merge"
 
 
+def test_9453_shape_with_a_cancelled_optional_row_is_skipped(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Integration Smoke", "conclusion": "CANCELLED"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _packet(check_surfaces=_optional_only_unstable_surface())
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == []
+    assert _actions(summary)[100] == "skip"
+
+
 def test_dry_run_writes_no_receipts_and_no_halt_even_on_red_main(tmp_path):
     h = _Harness({100: _view()}, {100: _packet()})
     h.main_runs = _main_runs_red()

@@ -280,6 +280,89 @@ def test_context_from_gh_preserves_packet_required_check_surface():
     assert decision.blockers == ()
 
 
+def test_unstable_proof_does_not_waive_live_cancelled_optional_row():
+    # The packet's rollup counts never include cancelled non-quorum rows, so a
+    # live cancellation is outside what the optional-only proof covers.
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    states["Docs Consistency"] = "CANCELLED"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+    assert any("Docs Consistency" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_never_waives_a_cancelled_row_even_when_counts_match():
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Docs Consistency"] = "CANCELLED"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_does_not_waive_a_live_failure_the_packet_did_not_count():
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    states["Newly Added Check"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_context_from_gh_unstable_proof_keeps_live_cancelled_row_blocking():
+    view = {
+        "number": 9453,
+        "headRefOid": "a" * 40,
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "UNSTABLE",
+        "statusCheckRollup": [
+            *[
+                {"name": name, "conclusion": "SUCCESS"}
+                for name in sorted(REQUIRED_CHECKS | {"aragora-merge-quorum"})
+            ],
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Integration Smoke", "conclusion": "CANCELLED"},
+        ],
+    }
+    packet = {
+        "pr_number": 9453,
+        "head_sha": "a" * 40,
+        "tier": 2,
+        "status": "satisfied",
+        "verdict": "admin_squash_allowed",
+        "admin_squash_allowed": True,
+        "requires_human_risk_settlement": False,
+        "unresolved_dissent": False,
+        "check_surfaces": _optional_only_unstable_surface(),
+    }
+    decision = decide_auto_merge(context_from_gh(view, packet))
+    assert decision.should_merge is False
+    assert any("Integration Smoke" in blocker for blocker in decision.blockers)
+
+
 def test_quorum_not_green_is_blocked():
     states = _green_checks()
     states["aragora-merge-quorum"] = "FAILURE"

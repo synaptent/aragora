@@ -33,6 +33,7 @@ UNSTABLE_RECEIPT_GUARD_PATHS: frozenset[str] = frozenset(
         *UNSTABLE_ALLOWLISTED_WORKFLOW_PATHS.values(),
         ".github/workflows/required-check-priority.yml",
         "aragora/cli/commands/review_queue_unstable.py",
+        "aragora/swarm/auto_merge_green.py",
         "scripts/check_required_check_priority_policy.py",
     }
 )

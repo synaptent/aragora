@@ -46,6 +46,9 @@ _SAFE_MERGE_STATES = frozenset({"CLEAN", "BLOCKED"})
 # would not show up as UNSTABLE; without this guard it would pass every other
 # check and be --admin-merged. This also closes the REQUIRED_CHECKS drift hazard
 # (a newly-required check failing is caught here regardless of the static list).
+# The one exception is an optional-only UNSTABLE proof, and it waives only live
+# failing rows that match the packet's proven failing count; cancelled rows are
+# never waived there (see _live_failures_match_optional_only_proof).
 _FAILING_CHECK_STATES = frozenset(
     {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"}
 )
@@ -139,6 +142,28 @@ def required_check_surface_proves_optional_only_unstable(check_surfaces: Any) ->
     )
 
 
+def _live_failures_match_optional_only_proof(
+    check_states: dict[str, str], check_surfaces: dict[str, Any], failing: list[str]
+) -> bool:
+    """Whether the live failing rows are exactly the rows the packet proved optional.
+
+    The proof comes from the packet's rollup, a separate fetch from the live view,
+    so it cannot vouch for a row it never counted. Its rollup buckets skip
+    cancelled non-quorum rows entirely, so a live ``CANCELLED`` row is never
+    covered (verified cancellations have their own receipt path), and the live
+    failing count must equal the packet's proven failing count.
+    """
+    rollup = check_surfaces.get("pr_rollup") if isinstance(check_surfaces, dict) else None
+    if not isinstance(rollup, dict):
+        return False
+    proven = rollup.get("failing_or_cancelled_count")
+    if not isinstance(proven, int) or isinstance(proven, bool):
+        return False
+    if any(check_states.get(name) == "CANCELLED" for name in failing):
+        return False
+    return len(failing) == proven
+
+
 def decide_auto_merge(
     ctx: PRMergeContext,
     *,
@@ -219,7 +244,10 @@ def decide_auto_merge(
             blockers.append(f"required check not green: {name}={state or 'absent'}")
 
     failing = sorted(n for n, s in ctx.check_states.items() if s in _FAILING_CHECK_STATES)
-    if failing and not optional_only_unstable:
+    if failing and not (
+        optional_only_unstable
+        and _live_failures_match_optional_only_proof(ctx.check_states, ctx.check_surfaces, failing)
+    ):
         shown = ", ".join(failing[:3])
         blockers.append(
             f"failing checks present (incl. non-required): {shown}{', …' if len(failing) > 3 else ''}"
