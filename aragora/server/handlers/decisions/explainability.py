@@ -45,7 +45,7 @@ from aragora.server.handlers.decisions.explainability_store import (
     get_batch_job_store,
 )
 from aragora.tenancy.debate_access import (
-    debate_read_denial,
+    authorize_debate_read,
     debate_visible_to_org,
     find_debate_access,
 )
@@ -399,17 +399,17 @@ class ExplainabilityHandler(BaseHandler):
         # /explain/{id} is a shortcut for /debates/{id}/explanation
         parts = normalized.split("/")
         if parts[0] == "explain" and len(parts) >= 2:
-            debate_id, endpoint = parts[1], "explanation"
+            debate_ref, endpoint = parts[1], "explanation"
         elif parts[0] == "debates" and len(parts) >= 3:
-            debate_id, endpoint = parts[1], "/".join(parts[2:])
+            debate_ref, endpoint = parts[1], "/".join(parts[2:])
         else:
             return error_response("Invalid explainability endpoint", 400)
         # "summary" is owned by DebatesHandler — not dispatched here.
         if endpoint not in _DEBATE_ENDPOINTS:
             return error_response("Invalid explainability endpoint", 400)
 
-        denial = debate_read_denial(handler, self._debate_storage(), debate_id)
-        if denial is not None:
+        debate_id, denial = authorize_debate_read(handler, self._debate_storage(), debate_ref)
+        if debate_id is None:
             return denial
 
         if endpoint == "explanation":
@@ -794,8 +794,12 @@ class ExplainabilityHandler(BaseHandler):
             start_time = time.time()
             try:
                 # Debates the job's org may not read are reported like missing ones.
-                visible = debate_visible_to_org(find_debate_access(storage, debate_id), owner_org)
-                decision = await self._get_or_build_decision(debate_id) if visible else None
+                access = find_debate_access(storage, debate_id)
+                decision = (
+                    await self._get_or_build_decision(access.debate_id)
+                    if access is not None and debate_visible_to_org(access, owner_org)
+                    else None
+                )
 
                 if decision is None:
                     job.results.append(
@@ -1028,9 +1032,10 @@ class ExplainabilityHandler(BaseHandler):
             storage = self._debate_storage()
             debates = {}
             for debate_id in debate_ids:
-                if not debate_visible_to_org(find_debate_access(storage, debate_id), scope.org_id):
+                access = find_debate_access(storage, debate_id)
+                if access is None or not debate_visible_to_org(access, scope.org_id):
                     continue
-                decision = await self._get_or_build_decision(debate_id)
+                decision = await self._get_or_build_decision(access.debate_id)
                 if decision:
                     debates[debate_id] = decision
 

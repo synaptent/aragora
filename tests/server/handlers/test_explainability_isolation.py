@@ -125,6 +125,11 @@ def _text(result) -> str:
     return raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
 
 
+def _slug(storage: DebateStorage, debate_id: str) -> str:
+    with storage.connection() as conn:
+        return conn.execute("SELECT slug FROM debates WHERE id = ?", (debate_id,)).fetchone()[0]
+
+
 def _paths(debate_id: str) -> list[str]:
     paths = [f"/api/v1/debates/{debate_id}/{endpoint}" for endpoint in ENDPOINTS]
     return [*paths, f"/api/v1/explain/{debate_id}"]
@@ -186,6 +191,37 @@ class TestPerDebateRoutes:
         assert "Same id stored by org B" not in _text(as_a)
 
 
+class TestSlugRefs:
+    """Explanations are built and cached for the debate id the access check resolved."""
+
+    def test_owner_reads_by_slug_like_by_id(self, call, storage):
+        slug = _slug(storage, DA)
+        for by_id, by_slug in zip(_paths(DA), _paths(slug), strict=True):
+            id_result, slug_result = call(USER_A, by_id), call(USER_A, by_slug)
+            assert id_result.status_code == 200, by_id
+            assert (slug_result.status_code, _text(slug_result)) == (200, _text(id_result))
+        assert set(explain_mod._decision_cache._cache) == {DA}
+
+    def test_hidden_slugs_get_the_missing_debate_404(self, call, storage):
+        for user, debate_id in ((USER_B, DA), (USER_A, DN), (USER_B, DN)):
+            for path in _paths(_slug(storage, debate_id)):
+                result = call(user, path)
+                assert (result.status_code, _body(result)) == (404, NOT_FOUND), path
+        slug_path = f"/api/v1/debates/{_slug(storage, DA)}/explanation"
+        assert call(ANON, slug_path).status_code == 401
+        assert _body(call(USER_NO_ORG, slug_path))["code"] == "org_required"
+
+    def test_a_slug_never_shadows_another_orgs_id(self, call, storage):
+        with storage.connection() as conn:
+            conn.execute("UPDATE debates SET slug = ? WHERE id = ?", (DB, DA))
+
+        as_a = call(USER_A, f"/api/v1/debates/{DB}/evidence")
+        as_b = call(USER_B, f"/api/v1/debates/{DB}/evidence")
+
+        assert (as_a.status_code, _body(as_a)) == (404, NOT_FOUND)
+        assert (as_b.status_code, _body(as_b)["debate_id"]) == (200, DB)
+
+
 class TestBatchAndCompare:
     @pytest.fixture
     def run_batches_inline(self, monkeypatch, handler):
@@ -227,6 +263,20 @@ class TestBatchAndCompare:
             assert _body(other)["error"].replace(batch_id, "ID") == _body(missing)["error"].replace(
                 "batch-missing00", "ID"
             )
+
+    def test_batch_and_compare_build_slugs_by_the_resolved_id(
+        self, call, storage, run_batches_inline
+    ):
+        slug = _slug(storage, DA)
+        batch_id = _body(call(USER_A, "/api/v1/explainability/batch", {"debate_ids": [slug]}))[
+            "batch_id"
+        ]
+        results = call(USER_A, f"/api/v1/explainability/batch/{batch_id}/results")
+        compared = call(USER_A, "/api/v1/explainability/compare", {"debate_ids": [slug, DP]})
+
+        assert [r["status"] for r in _body(results)["results"]] == ["success"]
+        assert compared.status_code == 200
+        assert set(explain_mod._decision_cache._cache) == {DA, DP}
 
     def test_batch_routes_require_an_org(self, call):
         for user, status in ((ANON, 401), (USER_NO_ORG, 403)):

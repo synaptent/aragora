@@ -1,8 +1,8 @@
 """Org scope for reads of a single debate.
 
 Every legacy route that returns data about one debate (by id or slug) asks
-:func:`debate_read_denial` before it reads anything. The rules extend
-:mod:`aragora.tenancy.record_scope`:
+:func:`authorize_debate_read` before it reads anything, then reads the debate by
+the id it returns. The rules extend :mod:`aragora.tenancy.record_scope`:
 
 * A debate stored with ``is_public = 1`` is readable by anyone, signed in or
   not. Nothing else makes a debate public on these routes.
@@ -58,23 +58,29 @@ def debate_visible_to_org(access: DebateAccess | None, org_id: str | None) -> bo
     return isinstance(org_id, str) and bool(org_id) and access.org_id == org_id
 
 
-def debate_read_denial(
+def authorize_debate_read(
     handler: Any, storage: Any, ref: str, resource: str = "Debate"
-) -> HandlerResult | None:
-    """None when the caller may read the debate ``ref`` names, else the error to return."""
+) -> tuple[str, None] | tuple[None, HandlerResult]:
+    """``(debate_id, None)`` when the caller may read the debate ``ref`` names, else
+    ``(None, error)``.
+
+    ``ref`` is an id or a slug; ``debate_id`` is the id of the debate that was
+    authorized. Debate loaders look debates up by id only, so callers must read
+    by ``debate_id`` and never by ``ref``.
+    """
     access = find_debate_access(storage, ref)
     if access is not None and access.is_public:
-        return None
+        return access.debate_id, None
     scope, denial = require_org_scope(handler)
     if denial is not None:
-        return denial
+        return None, denial
     if access is None and not storage:
         from aragora.server.handlers.utils.responses import error_response
 
-        return error_response("Storage not available", 503)
-    if scope is None or not debate_visible_to_org(access, scope.org_id):
-        return record_not_found(resource)
-    return None
+        return None, error_response("Storage not available", 503)
+    if scope is None or access is None or not debate_visible_to_org(access, scope.org_id):
+        return None, record_not_found(resource)
+    return access.debate_id, None
 
 
 def _running_debate_access(debate_id: str) -> DebateAccess | None:
@@ -97,7 +103,7 @@ def _running_debate_access(debate_id: str) -> DebateAccess | None:
 
 __all__ = [
     "DebateAccess",
-    "debate_read_denial",
+    "authorize_debate_read",
     "debate_visible_to_org",
     "find_debate_access",
 ]

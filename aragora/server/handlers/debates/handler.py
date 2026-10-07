@@ -46,7 +46,7 @@ from aragora.server.debate_utils import _active_debates  # noqa: F401
 from aragora.server.http_utils import run_async
 from aragora.server.validation import validate_debate_id
 from aragora.server.validation.schema import validate_against_schema  # noqa: F401
-from aragora.tenancy.debate_access import debate_read_denial
+from aragora.tenancy.debate_access import authorize_debate_read
 from aragora.tenancy.record_scope import record_not_found, require_org_scope
 
 from ..base import (
@@ -232,14 +232,19 @@ class DebatesHandler(
         is_valid, err = validate_debate_id(debate_ref)
         if not is_valid:
             return error_response(err, 400)
-        access_error = debate_read_denial(handler, self.get_storage(), debate_ref)
-        if access_error:
+        debate_id, access_error = authorize_debate_read(handler, self.get_storage(), debate_ref)
+        if debate_id is None:
             return access_error
 
         if normalized.startswith("/api/debates/slug/"):
             if len(parts) != 5:
                 return record_not_found("Debate")
-            return self._get_debate_by_slug(handler, debate_ref)
+            return self._get_debate_by_slug(handler, debate_id)
+
+        # The loaders below read by id only, so a slug in the path is replaced by
+        # the id of the debate that was authorized.
+        parts[3] = debate_id
+        normalized = "/".join(parts)
 
         # Dispatch suffix-based routes (impasse, convergence, citations, messages, etc.)
         result = self._dispatch_suffix_route(normalized, query_params, handler)
@@ -287,7 +292,7 @@ class DebatesHandler(
 
         # Default: GET /api/debates/{id or slug}
         if normalized.startswith("/api/debates/") and len(parts) == 4:
-            return self._get_debate_by_slug(handler, debate_ref)
+            return self._get_debate_by_slug(handler, debate_id)
         # Only the segment checked above may be read; an unknown suffix must not
         # fall back to looking up its last segment as a slug.
         if parts[-1]:
