@@ -5,8 +5,8 @@ Allows debate owners to generate public share links for the public debate viewer
 and provides a public SSE endpoint for shared debates.
 
 Routes:
-    POST   /api/v1/debates/{id}/share             - Enable public sharing (auth required)
-    DELETE /api/v1/debates/{id}/share             - Revoke public sharing (auth required)
+    POST   /api/v1/debates/{id}/share             - Enable public sharing (debate's org only)
+    DELETE /api/v1/debates/{id}/share             - Revoke public sharing (debate's org only)
     GET    /api/v1/debates/{id}/spectate/public   - Public SSE stream (no auth, rate-limited)
 """
 
@@ -27,6 +27,8 @@ from aragora.server.handlers.base import (
     json_response,
     handle_errors,
 )
+from aragora.tenancy.debate_access import authorize_debate_write
+from aragora.tenancy.record_scope import scope_denial_first
 
 logger = logging.getLogger(__name__)
 
@@ -168,29 +170,68 @@ class DebateShareHandler(BaseHandler):
             return parts[4]
         return None
 
-    def _set_public_storage_flag(self, debate_id: str, enabled: bool) -> None:
-        """Best-effort persistence for public share state."""
+    def _get_storage(self) -> Any | None:
         storage = self.ctx.get("storage")
-        if storage is None:
-            try:
-                from aragora.server.storage import get_debates_db
+        if storage is not None:
+            return storage
+        try:
+            from aragora.server.storage import get_debates_db
 
-                storage = get_debates_db()
-            except (ImportError, OSError, RuntimeError, ValueError) as exc:
-                logger.debug("Debate storage unavailable while updating share state: %s", exc)
-                return
+            return get_debates_db()
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
+            logger.debug("Debate storage unavailable while updating share state: %s", exc)
+            return None
 
-        if storage is None:
-            return
-
+    def _set_public_storage_flag(
+        self, storage: Any, debate_id: str, enabled: bool, org_id: str
+    ) -> None:
+        """Best-effort persistence for public share state."""
         setter = getattr(storage, "set_public", None)
         if not callable(setter):
             return
 
         try:
-            setter(debate_id, enabled)
+            setter(debate_id, enabled, org_id=org_id)
         except (OSError, RuntimeError, ValueError) as exc:
             logger.warning("Failed to persist public state for debate %s: %s", debate_id, exc)
+
+    def _set_share(self, path: str, handler: Any, enabled: bool) -> HandlerResult:
+        """Share or unshare the debate ``path`` names, for the debate's own org only.
+
+        Another org's debate (public or not), one with no recorded org and a
+        missing id all get the 404 of a missing debate, and nothing changes.
+        """
+        debate_ref = self._extract_debate_id(path)
+        if not debate_ref:
+            return error_response("Missing debate ID", 400)
+
+        storage = self._get_storage()
+        write, write_error = authorize_debate_write(handler, storage, debate_ref)
+        if write is None:
+            return write_error
+
+        set_public_spectate(write.debate_id, enabled)
+        self._set_public_storage_flag(storage, write.debate_id, enabled, write.scope.org_id)
+
+        if not enabled:
+            return json_response({"debate_id": write.debate_id, "public_spectate": False})
+
+        host = _DEFAULT_HOST
+        if handler and hasattr(handler, "headers"):
+            host = handler.headers.get("Host", _DEFAULT_HOST)
+
+        # Share links should land on the public debate viewer page. The
+        # spectate API endpoint remains available separately via `sse_url`.
+        share_url = f"/debate/{write.debate_id}"
+
+        return json_response(
+            {
+                "debate_id": write.debate_id,
+                "public_spectate": True,
+                "share_url": share_url,
+                "full_url": f"https://{host}{share_url}",
+            }
+        )
 
     # ------------------------------------------------------------------
     # GET /api/v1/debates/{id}/spectate/public
@@ -249,7 +290,8 @@ class DebateShareHandler(BaseHandler):
     # ------------------------------------------------------------------
 
     @handle_errors("debate share creation")
-    @require_permission("debates:write")
+    @scope_denial_first
+    @require_permission("debates:update")
     def handle_post(
         self,
         path: str,
@@ -259,42 +301,15 @@ class DebateShareHandler(BaseHandler):
         parts = path.split("/")
         if not (len(parts) == 6 and parts[5] == "share"):
             return None
-
-        debate_id = self._extract_debate_id(path)
-        if not debate_id:
-            return error_response("Missing debate ID", 400)
-
-        # Auth required for sharing
-        user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
-
-        set_public_spectate(debate_id, True)
-        self._set_public_storage_flag(debate_id, True)
-
-        host = _DEFAULT_HOST
-        if handler and hasattr(handler, "headers"):
-            host = handler.headers.get("Host", _DEFAULT_HOST)
-
-        # Share links should land on the public debate viewer page. The
-        # spectate API endpoint remains available separately via `sse_url`.
-        share_url = f"/debate/{debate_id}"
-
-        return json_response(
-            {
-                "debate_id": debate_id,
-                "public_spectate": True,
-                "share_url": share_url,
-                "full_url": f"https://{host}{share_url}",
-            }
-        )
+        return self._set_share(path, handler, enabled=True)
 
     # ------------------------------------------------------------------
     # DELETE /api/v1/debates/{id}/share
     # ------------------------------------------------------------------
 
     @handle_errors("debate share deletion")
-    @require_permission("debates:write")
+    @scope_denial_first
+    @require_permission("debates:update")
     def handle_delete(
         self,
         path: str,
@@ -304,25 +319,7 @@ class DebateShareHandler(BaseHandler):
         parts = path.split("/")
         if not (len(parts) == 6 and parts[5] == "share"):
             return None
-
-        debate_id = self._extract_debate_id(path)
-        if not debate_id:
-            return error_response("Missing debate ID", 400)
-
-        # Auth required for revoking
-        user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
-
-        set_public_spectate(debate_id, False)
-        self._set_public_storage_flag(debate_id, False)
-
-        return json_response(
-            {
-                "debate_id": debate_id,
-                "public_spectate": False,
-            }
-        )
+        return self._set_share(path, handler, enabled=False)
 
 
 # ---------------------------------------------------------------------------

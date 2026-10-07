@@ -39,6 +39,11 @@ from aragora.server.handlers.debates.share import (
     set_public_spectate,
 )
 
+# Share writes are org-scoped; requests act as test-user-001 of test-org-001.
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+TEST_ORG = "test-org-001"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,6 +85,21 @@ def _make_http_handler(
         h.rfile.read.return_value = b"{}"
         h.headers = {"Content-Length": "2", "Host": host}
     return h
+
+
+def _org_storage(org_id: str = TEST_ORG) -> MagicMock:
+    """Debate storage in which every debate id is a private debate of ``org_id``."""
+    storage = MagicMock()
+    storage.get_access_info.side_effect = lambda ref: (ref, org_id, False)
+    return storage
+
+
+@pytest.fixture(autouse=True)
+def debates_db(monkeypatch):
+    """The default debate store: every debate belongs to the caller's org."""
+    storage = _org_storage()
+    monkeypatch.setattr("aragora.server.storage.get_debates_db", lambda: storage)
+    return storage
 
 
 # ---------------------------------------------------------------------------
@@ -350,13 +370,13 @@ class TestSharePost:
         assert is_publicly_shared("my-debate") is True
 
     def test_share_persists_public_state_to_storage(self):
-        storage = MagicMock()
+        storage = _org_storage()
         h = DebateShareHandler(ctx={"storage": storage})
 
         result = h.handle_post("/api/v1/debates/stored/share", {}, _make_http_handler())
 
         assert _status(result) == 200
-        storage.set_public.assert_called_once_with("stored", True)
+        storage.set_public.assert_called_once_with("stored", True, org_id=TEST_ORG)
 
     def test_full_url_uses_host_header(self):
         h = DebateShareHandler()
@@ -410,6 +430,31 @@ class TestSharePost:
         result = h.handle_post("/api/v1/debates/share", {}, _make_http_handler())
         assert result is None
 
+    def test_other_org_debate_is_not_shared(self):
+        storage = _org_storage("org-other")
+        h = DebateShareHandler(ctx={"storage": storage})
+
+        result = h.handle_post("/api/v1/debates/theirs/share", {}, _make_http_handler())
+
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Debate not found", "code": "not_found"}
+        assert is_publicly_shared("theirs") is False
+        storage.set_public.assert_not_called()
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_share_is_refused(self, monkeypatch, debates_db):
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: MagicMock(is_authenticated=False, org_id=None),
+        )
+        h = DebateShareHandler()
+
+        result = h.handle_post("/api/v1/debates/mine/share", {}, _make_http_handler())
+
+        assert _status(result) == 401
+        assert is_publicly_shared("mine") is False
+        debates_db.set_public.assert_not_called()
+
     def test_full_url_https_scheme(self):
         h = DebateShareHandler()
         result = h.handle_post("/api/v1/debates/test/share", {}, _make_http_handler())
@@ -436,13 +481,24 @@ class TestShareDelete:
         assert is_publicly_shared("my-debate") is False
 
     def test_revoke_persists_private_state_to_storage(self):
-        storage = MagicMock()
+        storage = _org_storage()
         h = DebateShareHandler(ctx={"storage": storage})
 
         result = h.handle_delete("/api/v1/debates/stored/share", {}, _make_http_handler())
 
         assert _status(result) == 200
-        storage.set_public.assert_called_once_with("stored", False)
+        storage.set_public.assert_called_once_with("stored", False, org_id=TEST_ORG)
+
+    def test_other_org_cannot_revoke(self):
+        set_public_spectate("theirs", True)
+        storage = _org_storage("org-other")
+        h = DebateShareHandler(ctx={"storage": storage})
+
+        result = h.handle_delete("/api/v1/debates/theirs/share", {}, _make_http_handler())
+
+        assert _status(result) == 404
+        assert is_publicly_shared("theirs") is True
+        storage.set_public.assert_not_called()
 
     def test_revoke_nonexistent_share_succeeds(self):
         """Revoking a debate that was never shared should still succeed."""

@@ -45,6 +45,19 @@ def _make_handler(authenticated: bool = True) -> MagicMock:
     return handler
 
 
+# Share writes are org-scoped; requests act as test-user-001 of test-org-001.
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+
+@pytest.fixture(autouse=True)
+def caller_org_owns_debates(monkeypatch):
+    """Every debate in the default debate store belongs to the caller's org."""
+    storage = MagicMock()
+    storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
+    monkeypatch.setattr("aragora.server.storage.get_debates_db", lambda: storage)
+    return storage
+
+
 @pytest.fixture(autouse=True)
 def reset_state():
     _reset_share_state()
