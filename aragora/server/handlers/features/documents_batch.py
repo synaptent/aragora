@@ -60,6 +60,13 @@ MAX_BATCH_SIZE = 50
 MAX_FILE_SIZE_MB = 100
 MAX_TOTAL_BATCH_SIZE_MB = 500
 
+# Routes published in the OpenAPI spec and SDK with no implementation yet.
+_UNIMPLEMENTED_ROUTES = frozenset({"/api/v1/batch", "/api/v1/batch/queue/status"})
+
+
+def _not_implemented(method: str, path: str) -> HandlerResult:
+    return error_response(f"{method} {path} is not implemented", 501)
+
 
 class DocumentBatchHandler(BaseHandler):
     """Handler for batch document upload and processing endpoints."""
@@ -103,6 +110,8 @@ class DocumentBatchHandler(BaseHandler):
     @require_permission("documents:read")
     async def handle(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route GET requests."""
+        if path in _UNIMPLEMENTED_ROUTES:
+            return _not_implemented("GET", path)
         parts = self._split_path(path)
         is_knowledge_job = parts[:4] == ["api", "v1", "knowledge", "jobs"] and len(parts) == 5
         is_batch_job = parts[:4] == ["api", "v1", "documents", "batch"] and (
@@ -164,6 +173,8 @@ class DocumentBatchHandler(BaseHandler):
     @require_permission("documents:create")
     async def handle_post(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route POST requests."""
+        if path == "/api/v1/batch":
+            return _not_implemented("POST", path)
         if path != "/api/v1/documents/batch":
             return None
 

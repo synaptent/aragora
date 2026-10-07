@@ -121,7 +121,7 @@ class TestBatchStatus:
         mixin = BatchOperationsMixin()
 
         # Invalid ID with path traversal
-        result = mixin._get_batch_status("batch/../../../etc/passwd")
+        result = mixin._get_batch_status("batch/../../../etc/passwd", "org-1")
 
         assert result.status_code == 400
 
@@ -132,7 +132,7 @@ class TestBatchStatus:
         mixin = BatchOperationsMixin()
 
         # Use a valid-looking ID - will return 503 if queue not initialized
-        result = mixin._get_batch_status("batch_abc123xyz")
+        result = mixin._get_batch_status("batch_abc123xyz", "org-1")
 
         # Should either be 404 (not found) or 503 (queue not init)
         assert result.status_code in (404, 503)
@@ -145,7 +145,7 @@ class TestBatchStatus:
 
         # With no queue, should return 503
         with patch("aragora.server.debate_queue.get_debate_queue_sync", return_value=None):
-            result = mixin._get_batch_status("batch_valid123")
+            result = mixin._get_batch_status("batch_valid123", "org-1")
 
             assert result.status_code == 503
 
@@ -160,7 +160,7 @@ class TestListBatches:
         mixin = BatchOperationsMixin()
 
         with patch("aragora.server.debate_queue.get_debate_queue_sync", return_value=None):
-            result = mixin._list_batches(limit=10)
+            result = mixin._list_batches(limit=10, org_id="org-1")
 
             assert result.status_code == 200
             response = json.loads(result.body.decode())
@@ -174,7 +174,7 @@ class TestListBatches:
         mixin = BatchOperationsMixin()
 
         with patch("aragora.server.debate_queue.get_debate_queue_sync", return_value=MagicMock()):
-            result = mixin._list_batches(limit=10, status_filter="invalid_status")
+            result = mixin._list_batches(limit=10, status_filter="invalid_status", org_id="org-1")
 
             assert result.status_code == 400
 

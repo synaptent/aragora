@@ -297,6 +297,8 @@ class BatchRequest:
     webhook_url: str | None = None  # Called when batch completes
     webhook_headers: dict[str, str] = field(default_factory=dict)
     max_parallel: int | None = None  # Override queue's default
+    # The org that submitted the batch; only it can list or read the batch.
+    org_id: str | None = None
 
     # Populated during execution
     batch_id: str = field(default_factory=lambda: f"batch_{uuid.uuid4().hex[:12]}")
@@ -427,12 +429,20 @@ class DebateQueue:
 
         return batch.batch_id
 
-    def get_batch_status(self, batch_id: str) -> dict[str, Any] | None:
-        """Get status of a batch."""
+    def get_batch_status(
+        self, batch_id: str, *, org_id: str | None = None
+    ) -> dict[str, Any] | None:
+        """Get status of a batch.
+
+        With ``org_id``, a batch of another org (or with no recorded org) is
+        treated as missing.
+        """
         batch = self._batches.get(batch_id)
-        if batch:
-            return batch.to_dict()
-        return None
+        if batch is None:
+            return None
+        if org_id is not None and not (batch.org_id and batch.org_id == org_id):
+            return None
+        return batch.to_dict()
 
     def get_batch_summary(self, batch_id: str) -> dict[str, Any] | None:
         """Get summary of a batch (without individual items)."""
@@ -445,9 +455,17 @@ class DebateQueue:
         self,
         status: BatchStatus | None = None,
         limit: int = 50,
+        *,
+        org_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List batches, optionally filtered by status."""
+        """List batches, optionally filtered by status.
+
+        With ``org_id`` only that org's batches are listed.
+        """
         batches = list(self._batches.values())
+
+        if org_id is not None:
+            batches = [b for b in batches if b.org_id and b.org_id == org_id]
 
         if status:
             batches = [b for b in batches if b.status == status]
