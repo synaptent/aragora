@@ -87,6 +87,7 @@ _REPLAYED_FIELDS = (
     "evidence",
     "documents",
     "document_ids",
+    "response_channels",
 )
 _REPLAYED_CONTEXT_FIELDS = ("tags", "metadata")
 

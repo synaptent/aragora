@@ -36,6 +36,10 @@ CREATE_BODY: dict[str, Any] = {
     "decision_type": "debate",
     "config": {"agents": ["grok", "openai-api"], "rounds": 1, "consensus": "majority"},
     "documents": ["doc-a-vendor-policy"],
+    "response_channels": [
+        {"platform": "webhook", "webhook_url": "https://hooks.example.test/decisions"},
+        {"platform": "slack", "channel_id": "C-vendor-review", "thread_id": "171.42"},
+    ],
     "context": {
         "user_id": "spoofed-user",
         "workspace_id": ORG_B,
@@ -199,6 +203,12 @@ def test_owner_retry_replays_the_stored_request(
     assert retried.config.to_dict() == first.config.to_dict()
     assert (retried.config.agents, retried.config.rounds) == (["grok", "openai-api"], 1)
     assert retried.documents == ["doc-a-vendor-policy"]
+    channels = [rc.to_dict() for rc in retried.response_channels]
+    assert channels == [rc.to_dict() for rc in first.response_channels]
+    assert [(c["platform"], c["webhook_url"], c["channel_id"]) for c in channels] == [
+        ("webhook", "https://hooks.example.test/decisions", None),
+        ("slack", None, "C-vendor-review"),
+    ]
     assert retried.context.tags == ["vendor-review"]
     assert retried.context.metadata["topic"] == "key rotation"
     assert retried.context.metadata["retried_from"] == original_id
@@ -206,6 +216,9 @@ def test_owner_retry_replays_the_stored_request(
     saved = _on_disk(tmp_path, body["request_id"])
     assert (saved["status"], saved["org_id"]) == ("completed", ORG_A)
     assert saved["result"]["request"]["content"] == CREATE_BODY["content"]
+    assert saved["result"]["request"]["response_channels"] == CREATE_BODY["response_channels"]
+    assert "request_id" not in saved["result"]["request"]
+    assert set(saved["result"]["request"]["context"]) == {"tags", "metadata"}
 
 
 def test_retry_of_a_failed_retry_keeps_the_request(store, monkeypatch):
