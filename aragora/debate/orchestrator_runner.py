@@ -458,7 +458,7 @@ async def _record_debate_telemetry(
     if org_id:
         try:
             from aragora.billing.usage_metering_integration import record_debate_tokens
-            from aragora.services.usage_metering import get_usage_meter
+            from aragora.billing.usage_metering import get_usage_meter
 
             usage_summary = await record_debate_tokens(
                 org_id=org_id,
