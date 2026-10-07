@@ -19,13 +19,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aragora.server.handlers.checkpoints import CheckpointHandler
 
+# The org the auto-auth fixture authenticates every request as.
+ORG_ID = "test-org-001"
+
 
 @pytest.fixture
 def checkpoint_handler():
-    """Create a checkpoint handler with mocked dependencies."""
-    ctx = {"storage": None, "elo_system": None}
+    """Create a checkpoint handler whose storage puts every debate in ORG_ID."""
+    storage = MagicMock()
+    storage.get_access_info.side_effect = lambda ref: (ref, ORG_ID, False)
+    ctx = {"storage": storage, "elo_system": None}
     handler = CheckpointHandler(ctx)
     return handler
+
+
+def owned_checkpoint(debate_id: str = "deb-1") -> MagicMock:
+    """A checkpoint of a debate the caller's org owns."""
+    checkpoint = MagicMock()
+    checkpoint.debate_id = debate_id
+    return checkpoint
 
 
 @pytest.fixture
@@ -137,9 +149,9 @@ class TestListCheckpoints:
     async def test_list_checkpoints_with_status_filter(self, checkpoint_handler, mock_http_handler):
         """List checkpoints should filter by status."""
         checkpoints = [
-            {"id": "cp-1", "status": "complete"},
-            {"id": "cp-2", "status": "resuming"},
-            {"id": "cp-3", "status": "complete"},
+            {"id": "cp-1", "debate_id": "deb-1", "status": "complete"},
+            {"id": "cp-2", "debate_id": "deb-1", "status": "resuming"},
+            {"id": "cp-3", "debate_id": "deb-2", "status": "complete"},
         ]
         mock_store = AsyncMock()
         mock_store.list_checkpoints = AsyncMock(return_value=checkpoints)
@@ -158,7 +170,7 @@ class TestListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_checkpoints_with_pagination(self, checkpoint_handler, mock_http_handler):
         """List checkpoints should support pagination."""
-        checkpoints = [{"id": f"cp-{i}"} for i in range(10)]
+        checkpoints = [{"id": f"cp-{i}", "debate_id": f"deb-{i}"} for i in range(10)]
         mock_store = AsyncMock()
         mock_store.list_checkpoints = AsyncMock(return_value=checkpoints)
 
@@ -219,7 +231,7 @@ class TestGetCheckpoint:
     @pytest.mark.asyncio
     async def test_get_checkpoint_success(self, checkpoint_handler, mock_http_handler):
         """Get checkpoint should return checkpoint details."""
-        mock_checkpoint = MagicMock()
+        mock_checkpoint = owned_checkpoint()
         mock_checkpoint.to_dict.return_value = {
             "id": "cp-123",
             "debate_id": "deb-1",
@@ -279,6 +291,7 @@ class TestResumeCheckpoint:
         handler = make_post_handler({"resumed_by": "user-1"})
 
         with patch.object(checkpoint_handler, "_get_checkpoint_manager") as mock_mgr:
+            mock_mgr.return_value.store.load = AsyncMock(return_value=owned_checkpoint())
             mock_mgr.return_value.resume_from_checkpoint = AsyncMock(return_value=mock_resumed)
             result = await checkpoint_handler.handle(
                 "/api/v1/checkpoints/cp-123/resume", {}, handler, b'{"resumed_by": "user-1"}'
@@ -296,6 +309,7 @@ class TestResumeCheckpoint:
         handler = make_post_handler({})
 
         with patch.object(checkpoint_handler, "_get_checkpoint_manager") as mock_mgr:
+            mock_mgr.return_value.store.load = AsyncMock(return_value=None)
             mock_mgr.return_value.resume_from_checkpoint = AsyncMock(return_value=None)
             result = await checkpoint_handler.handle(
                 "/api/v1/checkpoints/nonexistent/resume", {}, handler, b"{}"
@@ -311,7 +325,7 @@ class TestDeleteCheckpoint:
     @pytest.mark.asyncio
     async def test_delete_checkpoint_success(self, checkpoint_handler):
         """Delete checkpoint should succeed for existing checkpoint."""
-        mock_checkpoint = MagicMock()
+        mock_checkpoint = owned_checkpoint()
         mock_store = AsyncMock()
         mock_store.load = AsyncMock(return_value=mock_checkpoint)
         mock_store.delete = AsyncMock(return_value=True)
@@ -362,6 +376,26 @@ class TestDebateCheckpoints:
 
         assert result is not None
         assert result.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_other_org_checkpoint_is_not_found(self, checkpoint_handler, mock_http_handler):
+        """A checkpoint of another org's debate gets the same 404 as a missing one."""
+        checkpoint_handler.ctx["storage"].get_access_info.side_effect = lambda ref: (
+            ref,
+            "other-org",
+            False,
+        )
+        mock_store = AsyncMock()
+        mock_store.load = AsyncMock(return_value=owned_checkpoint())
+
+        with patch.object(checkpoint_handler, "_get_checkpoint_manager") as mock_mgr:
+            mock_mgr.return_value.store = mock_store
+            result = await checkpoint_handler.handle(
+                "/api/v1/checkpoints/cp-123", {}, mock_http_handler
+            )
+
+        assert result.status_code == 404
+        assert json.loads(result.body) == {"error": "Checkpoint not found", "code": "not_found"}
 
 
 class TestNotFoundHandling:

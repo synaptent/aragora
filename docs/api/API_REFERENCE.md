@@ -5625,6 +5625,11 @@ Valid types: `upset_victory`, `position_reversal`, `calibration_vindication`, `a
 
 Pause, checkpoint, and resume debates.
 
+Checkpoints are visible only to the organization that owns their debate; a
+checkpoint of another org's debate (public or not) answers `404`, the same as a
+missing one. The static API token alone is refused on these routes with `403`
+`org_required`: sign in as a member of the organization instead.
+
 ### List Checkpoints
 
 ```http
