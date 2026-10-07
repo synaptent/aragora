@@ -1427,6 +1427,7 @@ class TestGraphDebateHandlerE2E:
 # ============================================================================
 
 
+@pytest.mark.usefixtures("org_user")
 class TestMatrixDebateHandlerE2E:
     """E2E tests for the matrix debates HTTP handler."""
 
@@ -1506,6 +1507,7 @@ class TestMatrixDebateHandlerE2E:
             "task": "API Design",
             "scenario_count": 3,
             "results": [],
+            "org_id": E2E_ORG,
         }
 
         mock_storage = AsyncMock()
@@ -1530,6 +1532,7 @@ class TestMatrixDebateHandlerE2E:
 
         mock_storage = AsyncMock()
         mock_storage.get_matrix_scenarios = AsyncMock(return_value=scenarios)
+        mock_storage.get_matrix_debate = AsyncMock(return_value={"org_id": E2E_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await matrix_handler.handle_get(
@@ -1553,6 +1556,7 @@ class TestMatrixDebateHandlerE2E:
 
         mock_storage = AsyncMock()
         mock_storage.get_matrix_conclusions = AsyncMock(return_value=conclusions)
+        mock_storage.get_matrix_debate = AsyncMock(return_value={"org_id": E2E_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await matrix_handler.handle_get(
