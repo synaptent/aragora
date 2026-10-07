@@ -23,6 +23,9 @@ from aragora.debate.graph_orchestrator import (
 )
 from aragora.debate.graph import NodeType
 from aragora.server.handlers.debates import GraphDebatesHandler
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="org-graph", user_id="user-graph", role="member")
 
 
 # ============================================================================
@@ -220,7 +223,7 @@ class TestGraphDebatesHandlerIntegration:
         """Test 404 response for non-existent debate."""
         handler = GraphDebatesHandler({})
 
-        result = await handler._get_graph_debate(mock_handler, "nonexistent-id")
+        result = await handler._get_graph_debate(mock_handler, "nonexistent-id", SCOPE)
 
         assert result.status_code == 404
 
@@ -228,8 +231,12 @@ class TestGraphDebatesHandlerIntegration:
     async def test_get_branches_empty(self, mock_handler):
         """Test empty branches response."""
         handler = GraphDebatesHandler({})
+        mock_handler.storage.get_graph_debate.return_value = {
+            "debate_id": "debate-123",
+            "org_id": SCOPE.org_id,
+        }
 
-        result = await handler._get_branches(mock_handler, "debate-123")
+        result = await handler._get_branches(mock_handler, "debate-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)

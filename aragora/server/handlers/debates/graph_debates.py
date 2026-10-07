@@ -44,6 +44,12 @@ _SUSPICIOUS_PATTERNS = [
 from ..utils.rate_limit import RateLimiter, get_client_ip
 from aragora.resilience import with_timeout
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +120,10 @@ def _get_cached_graph_debate(debate_id: str) -> dict[str, Any] | None:
     return deepcopy(debate) if debate is not None else None
 
 
+def _graph_debate_visible(debate: Any, scope: OrgScope) -> bool:
+    return isinstance(debate, dict) and record_visible(debate.get("org_id"), scope)
+
+
 def _list_cached_graph_debates(limit: int = 20) -> list[dict[str, Any]]:
     """Return cached graph debates newest-first."""
     debates = list(reversed(_graph_debate_cache.values()))
@@ -181,6 +191,10 @@ class GraphDebatesHandler(SecureHandler):
     @handle_errors("graph debates GET")
     async def handle_get(self, handler: Any, path: str, query_params: dict) -> HandlerResult:
         """Handle GET requests for graph debates with RBAC."""
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
+
         # RBAC: Require authentication and debates:read permission
         try:
             auth_context = await self.get_auth_context(handler, require_auth=True)
@@ -198,7 +212,7 @@ class GraphDebatesHandler(SecureHandler):
         parts = normalized.rstrip("/").split("/")
 
         if normalized.rstrip("/") == "/api/debates/graph":
-            return await self._list_graph_debates(handler, query_params)
+            return await self._list_graph_debates(handler, query_params, scope)
 
         # GET /api/debates/graph/{id} - Get specific graph debate
         # Path structure: ['', 'api', 'debates', 'graph', '{id}', ...]
@@ -207,13 +221,13 @@ class GraphDebatesHandler(SecureHandler):
 
             # GET /api/v1/debates/graph/{id}/branches
             if len(parts) >= 6 and parts[5] == "branches":
-                return await self._get_branches(handler, debate_id)
+                return await self._get_branches(handler, debate_id, scope)
 
             # GET /api/v1/debates/graph/{id}/nodes
             if len(parts) >= 6 and parts[5] == "nodes":
-                return await self._get_nodes(handler, debate_id)
+                return await self._get_nodes(handler, debate_id, scope)
 
-            return await self._get_graph_debate(handler, debate_id)
+            return await self._get_graph_debate(handler, debate_id, scope)
 
         return error_response("Not found", 404)
 
@@ -243,14 +257,13 @@ class GraphDebatesHandler(SecureHandler):
         handler = None
         path = ""
         data: dict = {}
+        read_body = False
 
         if len(args) >= 3:
             if isinstance(args[0], str):
                 path = args[0]
                 handler = args[2]
-                data, error = self.read_json_body_validated(handler)
-                if error:
-                    return error
+                read_body = True
             else:
                 handler = args[0]
                 path = args[1]
@@ -261,10 +274,16 @@ class GraphDebatesHandler(SecureHandler):
             data = kwargs.get("data") or kwargs.get("body") or {}
             if handler is None:
                 return error_response("Invalid request", 400)
-            if not data:
-                data, error = self.read_json_body_validated(handler)
-                if error:
-                    return error
+            read_body = not data
+
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
+
+        if read_body:
+            data, error = self.read_json_body_validated(handler)
+            if error:
+                return error
 
         normalized = strip_version_prefix(path)
         if normalized.startswith("/api/graph-debates"):
@@ -289,10 +308,10 @@ class GraphDebatesHandler(SecureHandler):
             return error_response("Rate limit exceeded. Please try again later.", 429)
 
         logger.debug("POST /api/debates/graph - running graph debate")
-        return await self._run_graph_debate(handler, data)
+        return await self._run_graph_debate(handler, data, scope)
 
     @with_timeout(180.0)
-    async def _run_graph_debate(self, handler: Any, data: dict) -> HandlerResult:
+    async def _run_graph_debate(self, handler: Any, data: dict, scope: OrgScope) -> HandlerResult:
         """Run a graph-structured debate with automatic branching.
 
         Request body:
@@ -440,6 +459,8 @@ class GraphDebatesHandler(SecureHandler):
                 ],
                 "node_count": len(graph.nodes),
                 "branch_count": len(graph.branches),
+                "org_id": scope.org_id,
+                "created_by": scope.user_id,
             }
             await self._persist_graph_debate(handler, debate_payload)
             return json_response(debate_payload)
@@ -483,7 +504,9 @@ class GraphDebatesHandler(SecureHandler):
         except (KeyError, ValueError, OSError, TypeError, AttributeError, RuntimeError) as e:
             logger.warning("Failed to persist graph debate %s: %s", cached.get("debate_id"), e)
 
-    async def _list_graph_debates(self, handler: Any, query_params: dict) -> HandlerResult:
+    async def _list_graph_debates(
+        self, handler: Any, query_params: dict, scope: OrgScope
+    ) -> HandlerResult:
         """List recently available graph debates for the live graph browser."""
         limit_raw = query_params.get("limit", 20)
         try:
@@ -501,6 +524,8 @@ class GraphDebatesHandler(SecureHandler):
             try:
                 stored = await _maybe_await(list_graph_debates(limit=limit))
                 for debate in stored or []:
+                    if not _graph_debate_visible(debate, scope):
+                        continue
                     normalized = _remember_graph_debate(debate)
                     debate_id = normalized.get("debate_id")
                     if isinstance(debate_id, str) and debate_id:
@@ -509,6 +534,8 @@ class GraphDebatesHandler(SecureHandler):
                 logger.warning("Failed to list graph debates from storage: %s", e)
 
         for debate in _list_cached_graph_debates(limit=-1):
+            if not _graph_debate_visible(debate, scope):
+                continue
             debate_id = debate.get("debate_id")
             if isinstance(debate_id, str) and debate_id and debate_id not in combined:
                 combined[debate_id] = debate
@@ -516,24 +543,34 @@ class GraphDebatesHandler(SecureHandler):
         debates = sorted(combined.values(), key=_graph_debate_created_at, reverse=True)[:limit]
         return json_response({"debates": debates})
 
-    async def _get_graph_debate(self, handler: Any, debate_id: str) -> HandlerResult:
-        """Get a graph debate by ID."""
+    async def _resolve_graph_debate(
+        self, handler: Any, debate_id: str, scope: OrgScope
+    ) -> dict[str, Any] | None:
+        """Return the graph debate when it belongs to the caller's org, else None."""
+        debate: Any = None
         storage = getattr(handler, "storage", None)
         if storage and callable(getattr(storage, "get_graph_debate", None)):
             try:
                 debate = await _maybe_await(storage.get_graph_debate(debate_id))
-                if debate:
-                    return json_response(_remember_graph_debate(debate))
             except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
                 logger.warning("Failed to get graph debate %s from storage: %s", debate_id, e)
+                debate = None
+        if debate:
+            if not _graph_debate_visible(debate, scope):
+                return None
+            return _remember_graph_debate(debate)
 
         debate = _get_cached_graph_debate(debate_id)
-        if debate:
-            return json_response(debate)
+        return debate if _graph_debate_visible(debate, scope) else None
 
-        if not storage:
-            return error_response("Graph debate not found", 404)
-        return error_response("Graph debate not found", 404)
+    async def _get_graph_debate(
+        self, handler: Any, debate_id: str, scope: OrgScope
+    ) -> HandlerResult:
+        """Get a graph debate by ID."""
+        debate = await self._resolve_graph_debate(handler, debate_id, scope)
+        if debate is None:
+            return record_not_found("Graph debate")
+        return json_response(debate)
 
     @api_endpoint(
         method="GET",
@@ -550,8 +587,12 @@ class GraphDebatesHandler(SecureHandler):
             "503": {"description": "Storage not configured"},
         },
     )
-    async def _get_branches(self, handler: Any, debate_id: str) -> HandlerResult:
+    async def _get_branches(self, handler: Any, debate_id: str, scope: OrgScope) -> HandlerResult:
         """Get all branches for a graph debate."""
+        debate = await self._resolve_graph_debate(handler, debate_id, scope)
+        if debate is None:
+            return record_not_found("Graph debate")
+
         storage = getattr(handler, "storage", None)
         if storage and callable(getattr(storage, "get_debate_branches", None)):
             try:
@@ -560,21 +601,17 @@ class GraphDebatesHandler(SecureHandler):
             except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
                 logger.warning("Failed to get branches for %s from storage: %s", debate_id, e)
 
-        debate = _get_cached_graph_debate(debate_id)
-        if debate:
-            branches = debate.get("branches")
-            if isinstance(branches, list):
-                return json_response({"debate_id": debate_id, "branches": branches})
-            graph = debate.get("graph")
-            if isinstance(graph, dict):
-                graph_branches = graph.get("branches")
-                if isinstance(graph_branches, dict):
-                    return json_response(
-                        {"debate_id": debate_id, "branches": list(graph_branches.values())}
-                    )
+        branches = debate.get("branches")
+        if isinstance(branches, list):
+            return json_response({"debate_id": debate_id, "branches": branches})
+        graph = debate.get("graph")
+        if isinstance(graph, dict):
+            graph_branches = graph.get("branches")
+            if isinstance(graph_branches, dict):
+                return json_response(
+                    {"debate_id": debate_id, "branches": list(graph_branches.values())}
+                )
 
-        if not storage:
-            return error_response("Graph debate not found", 404)
         return error_response("Failed to retrieve branches", 500)
 
     @api_endpoint(
@@ -592,8 +629,12 @@ class GraphDebatesHandler(SecureHandler):
             "503": {"description": "Storage not configured"},
         },
     )
-    async def _get_nodes(self, handler: Any, debate_id: str) -> HandlerResult:
+    async def _get_nodes(self, handler: Any, debate_id: str, scope: OrgScope) -> HandlerResult:
         """Get all nodes in a graph debate."""
+        debate = await self._resolve_graph_debate(handler, debate_id, scope)
+        if debate is None:
+            return record_not_found("Graph debate")
+
         storage = getattr(handler, "storage", None)
         if storage and callable(getattr(storage, "get_debate_nodes", None)):
             try:
@@ -602,16 +643,10 @@ class GraphDebatesHandler(SecureHandler):
             except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
                 logger.warning("Failed to get nodes for %s from storage: %s", debate_id, e)
 
-        debate = _get_cached_graph_debate(debate_id)
-        if debate:
-            graph = debate.get("graph")
-            if isinstance(graph, dict):
-                graph_nodes = graph.get("nodes")
-                if isinstance(graph_nodes, dict):
-                    return json_response(
-                        {"debate_id": debate_id, "nodes": list(graph_nodes.values())}
-                    )
+        graph = debate.get("graph")
+        if isinstance(graph, dict):
+            graph_nodes = graph.get("nodes")
+            if isinstance(graph_nodes, dict):
+                return json_response({"debate_id": debate_id, "nodes": list(graph_nodes.values())})
 
-        if not storage:
-            return error_response("Graph debate not found", 404)
         return error_response("Failed to retrieve nodes", 500)

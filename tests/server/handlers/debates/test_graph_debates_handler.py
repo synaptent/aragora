@@ -145,7 +145,7 @@ class TestHandleGet:
     async def test_get_debate_calls_storage(self, handler, mock_http_handler, mock_auth_context):
         """Should call storage to get debate."""
         mock_http_handler.storage.get_graph_debate = AsyncMock(
-            return_value={"id": "abc-123", "task": "Test task"}
+            return_value={"id": "abc-123", "task": "Test task", "org_id": "test-org-001"}
         )
 
         with patch.object(handler, "get_auth_context", new_callable=AsyncMock) as mock_auth:
@@ -178,6 +178,9 @@ class TestHandleGet:
     @pytest.mark.asyncio
     async def test_get_branches(self, handler, mock_http_handler, mock_auth_context):
         """Should get branches for a debate."""
+        mock_http_handler.storage.get_graph_debate = AsyncMock(
+            return_value={"org_id": "test-org-001"}
+        )
         mock_http_handler.storage.get_debate_branches = AsyncMock(
             return_value=[{"id": "branch-1"}, {"id": "branch-2"}]
         )
@@ -197,6 +200,9 @@ class TestHandleGet:
     @pytest.mark.asyncio
     async def test_get_nodes(self, handler, mock_http_handler, mock_auth_context):
         """Should get nodes for a debate."""
+        mock_http_handler.storage.get_graph_debate = AsyncMock(
+            return_value={"org_id": "test-org-001"}
+        )
         mock_http_handler.storage.get_debate_nodes = AsyncMock(
             return_value=[{"id": "node-1"}, {"id": "node-2"}]
         )

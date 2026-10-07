@@ -39,6 +39,7 @@ def mock_storage():
             "task": "Test task",
             "nodes": [],
             "branches": [],
+            "org_id": "test-org-001",
         }
     )
     storage.get_debate_branches = AsyncMock(
