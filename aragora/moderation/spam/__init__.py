@@ -1,21 +1,26 @@
 """
 ML-Enhanced Spam Classification Service.
 
-This module is a backwards-compatibility shim that re-exports all public
-APIs from the ``aragora.moderation.spam`` package.  The implementation has
-been refactored into focused submodules:
+Provides machine learning-based spam detection with online learning
+from user feedback. Falls back to rule-based classification when
+model confidence is low.
 
-- ``aragora.moderation.spam.models``    -- data classes and enums
-- ``aragora.moderation.spam.patterns``  -- pattern constants and word lists
-- ``aragora.moderation.spam.features``  -- feature extraction engine
-- ``aragora.moderation.spam.model``     -- Naive Bayes ML classifier
-- ``aragora.moderation.spam.classifier``-- main SpamClassifier and convenience functions
+Features:
+- Feature extraction from email content, headers, and sender patterns
+- Domain reputation scoring (known spam domains, free email providers)
+- Subject line analysis (spam keywords, excessive punctuation, ALL CAPS ratio)
+- Content n-grams (unigrams, bigrams) for statistical classification
+- Header analysis (missing headers, suspicious routing, authentication)
+- URL analysis (shortened URLs, suspicious domains, redirect detection)
+- Attachment analysis (dangerous extensions, executable files)
+- Online learning from user actions (mark as spam, not spam)
+- Confidence scoring with fallback to heuristics
+- Persistent model storage
+- Batch classification support
+- Integration with EmailPrioritizer for inbox scoring
 
-All names previously importable from ``aragora.services.spam_classifier``
-remain importable from this module.
-
-Usage (unchanged):
-    from aragora.services.spam_classifier import SpamClassifier
+Usage:
+    from aragora.moderation.spam import SpamClassifier
 
     classifier = SpamClassifier()
     await classifier.initialize()
@@ -39,12 +44,8 @@ Usage (unchanged):
     result = await classify_email(email_dict)
 """
 
-# Re-export everything from the spam package for backwards compatibility.
-# All public APIs that were previously defined in this module are now
-# implemented in aragora.moderation.spam submodules.
-
 # Models and data types
-from aragora.moderation.spam.models import (  # noqa: F401
+from aragora.moderation.spam.models import (
     EmailFeatures,
     SpamCategory,
     SpamClassificationResult,
@@ -53,7 +54,7 @@ from aragora.moderation.spam.models import (  # noqa: F401
 )
 
 # Pattern constants
-from aragora.moderation.spam.patterns import (  # noqa: F401
+from aragora.moderation.spam.patterns import (
     DANGEROUS_EXTENSIONS,
     FREE_EMAIL_PROVIDERS,
     KNOWN_SPAM_DOMAINS,
@@ -67,13 +68,13 @@ from aragora.moderation.spam.patterns import (  # noqa: F401
 )
 
 # Feature extraction
-from aragora.moderation.spam.features import SpamFeatures  # noqa: F401
+from aragora.moderation.spam.features import SpamFeatures
 
 # ML model
-from aragora.moderation.spam.model import NaiveBayesClassifier  # noqa: F401
+from aragora.moderation.spam.model import NaiveBayesClassifier
 
 # Classifier and convenience functions
-from aragora.moderation.spam.classifier import (  # noqa: F401
+from aragora.moderation.spam.classifier import (
     SpamClassifier,
     classify_email,
     classify_email_spam,

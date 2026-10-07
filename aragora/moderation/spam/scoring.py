@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from aragora.services.spam.models import EmailFeatures, SpamCategory, SpamClassifierConfig
+from aragora.moderation.spam.models import EmailFeatures, SpamCategory, SpamClassifierConfig
 
 
 def score_content(content: str, features: EmailFeatures) -> float:
