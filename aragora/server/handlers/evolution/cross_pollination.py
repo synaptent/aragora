@@ -63,10 +63,15 @@ class CrossPollinationStatsHandler(BaseHandler):
         _, perm_err = self.require_permission_or_error(handler, "cross_pollination:write")
         if perm_err:
             return perm_err
-        return error_response(
-            "Resolving cross-pollination conflicts is not implemented",
-            501,
-            code="not_implemented",
+        # Not error_response: in production it rewrites every 5xx message to "Internal server error".
+        return json_response(
+            {
+                "error": {
+                    "code": "not_implemented",
+                    "message": "Resolving cross-pollination conflicts is not implemented",
+                }
+            },
+            status=501,
         )
 
     @require_permission("cross_pollination:read")

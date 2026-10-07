@@ -185,6 +185,24 @@ def test_conflict_resolve_is_answered_by_the_cross_pollination_handler(registry_
     )
 
 
+NOT_IMPLEMENTED = {
+    "teams.listTeams": "Listing teams is not implemented",
+    "crossPollination.resolveConflict": "Resolving cross-pollination conflicts is not implemented",
+}
+
+
+@pytest.mark.parametrize("env", ["development", "production"])
+@pytest.mark.parametrize("route_id", sorted(NOT_IMPLEMENTED))
+def test_not_implemented_answers_keep_their_message_in_production(
+    registry_cls, monkeypatch, caplog, route_id: str, env: str
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENV", env)
+    method, path, body = ROUTES[route_id]
+    status, payload = _dispatch(registry_cls, method, path, body, caller="owner")
+    error = {"code": "not_implemented", "message": NOT_IMPLEMENTED[route_id]}
+    assert (status, payload, "Sanitized" in caplog.text) == (501, {"error": error}, False)
+
+
 @pytest.mark.parametrize("caller", CALLERS)
 @pytest.mark.parametrize("route_id", sorted(ROUTES))
 def test_real_jwt_callers_get_the_route_permission_answer(
@@ -420,35 +438,28 @@ def test_category_feedback_is_not_implemented_and_learns_nothing(
 def test_other_users_cannot_read_or_change_the_owners_email_state(
     registry_cls, services, intruder
 ) -> None:
-    assert (
-        _dispatch(
-            registry_cls,
-            "POST",
-            SNOOZE,
-            {"snooze_until": _utc_z(days=30), "label": "mine"},
-            **OWNER,
-        )[0]
-        == 200
+    def snooze(who: dict[str, Any], label: str, **delta: float) -> int:
+        body = {"snooze_until": _utc_z(**delta), "label": label}
+        return _dispatch(registry_cls, "POST", SNOOZE, body, **who)[0]
+
+    def labels(who: dict[str, Any]) -> list[str]:
+        snoozed = _data(_dispatch(registry_cls, "GET", SNOOZED, **who)[1])["snoozed"]
+        return [s["label"] for s in snoozed]
+
+    assert snooze(OWNER, "mine", minutes=-1) == 200
+    # To anyone else the owner's snooze answers exactly like an id nobody snoozed.
+    unknown = "/api/v1/email/never-snoozed/snooze"
+    assert _dispatch(registry_cls, "DELETE", SNOOZE, **intruder) == _dispatch(
+        registry_cls, "DELETE", unknown, **intruder
     )
-    entry = dict(email_module._snoozed_emails["probe-email"])
-    assert _dispatch(registry_cls, "DELETE", SNOOZE, **intruder)[0] == 404
-    assert (
-        _dispatch(
-            registry_cls,
-            "POST",
-            SNOOZE,
-            {"snooze_until": _utc_z(days=9), "label": "theirs"},
-            **intruder,
-        )[0]
-        == 404
-    )
-    assert _data(_dispatch(registry_cls, "GET", SNOOZED, **intruder)[1])["total"] == 0
-    assert email_module._snoozed_emails == {"probe-email": entry}
-    email_module._snoozed_emails["probe-email"]["snooze_until"] = datetime.now() - timedelta(
-        minutes=1
-    )
+    assert labels(intruder) == []
     assert _data(_dispatch(registry_cls, "POST", PROCESS_DUE, {}, **intruder)[1])["processed"] == []
-    assert "probe-email" in email_module._snoozed_emails
+    assert snooze(intruder, "theirs", days=9) == 200
+    assert (labels(OWNER), labels(intruder)) == (["mine"], ["theirs"])
+    assert _dispatch(registry_cls, "DELETE", SNOOZE, **intruder)[0] == 200
+    assert _data(_dispatch(registry_cls, "POST", PROCESS_DUE, {}, **OWNER)[1])["processed"] == [
+        "probe-email"
+    ]
 
     mark = {
         "email_id": "e-1",

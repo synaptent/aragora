@@ -90,8 +90,9 @@ _snooze_recommender_lock = threading.Lock()
 _email_categorizer: Any | None = None
 _email_categorizer_lock = threading.Lock()
 
-# In-memory snooze storage (replace with DB in production)
-_snoozed_emails: dict[str, dict[str, Any]] = {}
+# In-memory snooze storage (replace with DB in production), keyed by (user_id, org_id, email_id)
+# so one caller's snooze of an email id can neither block nor reveal another caller's.
+_snoozed_emails: dict[tuple[str, str | None, str], dict[str, Any]] = {}
 _snoozed_emails_lock = threading.Lock()
 # Follow-up id -> (user_id, org_id) of the principal that created it
 _followup_owners: dict[str, tuple[str, str | None]] = {}
@@ -634,10 +635,7 @@ async def handle_apply_snooze(
 
         # Store snooze (in production, use Gmail API or database)
         with _snoozed_emails_lock:
-            current = _snoozed_emails.get(email_id)
-            if current is not None and not _owns(current, owner):
-                return error_response("Email not found", status=404)
-            _snoozed_emails[email_id] = {
+            _snoozed_emails[(*owner, email_id)] = {
                 "email_id": email_id,
                 "user_id": owner[0],
                 "org_id": owner[1],
@@ -698,11 +696,8 @@ async def handle_cancel_snooze(
 
     try:
         with _snoozed_emails_lock:
-            entry = _snoozed_emails.get(email_id)
-            if entry is None or not _owns(entry, _owner(auth_context)):
+            if _snoozed_emails.pop((*_owner(auth_context), email_id), None) is None:
                 return error_response("Email not snoozed", status=404)
-
-            del _snoozed_emails[email_id]
 
         # Try to remove Gmail snooze label
         try:
@@ -802,14 +797,14 @@ async def handle_process_due_snoozes(
 
         with _snoozed_emails_lock:
             due_emails = [
-                (eid, s)
-                for eid, s in _snoozed_emails.items()
+                (key, s)
+                for key, s in _snoozed_emails.items()
                 if _owns(s, _owner(auth_context)) and s["snooze_until"] <= now
             ]
 
-            for email_id, snooze_data in due_emails:
-                del _snoozed_emails[email_id]
-                processed.append(email_id)
+            for key, snooze_data in due_emails:
+                del _snoozed_emails[key]
+                processed.append(snooze_data["email_id"])
 
         # Try to unarchive in Gmail
         for email_id in processed:

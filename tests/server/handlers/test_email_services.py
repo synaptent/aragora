@@ -184,6 +184,10 @@ class TestFollowUpHandlers:
         assert result["data"]["overdue_count"] == 0
 
     @pytest.mark.asyncio
+    @patch.dict(
+        "aragora.server.handlers.email_services._followup_owners",
+        {"fu_123": ("test-user-001", "test-org-001")},
+    )
     async def test_resolve_followup_success(self, mock_tracker, admin_auth):
         """Should resolve follow-up successfully."""
         mock_item = MagicMock()

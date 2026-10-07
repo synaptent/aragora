@@ -876,7 +876,11 @@ class TeamsHandler(SecureEndpointMixin, BotHandlerMixin, SecureHandler):  # type
         return None
 
     async def _list_teams_not_implemented(self, auth_context: Any = None) -> HandlerResult:
-        return error_response("Listing teams is not implemented", 501, code="not_implemented")
+        # Not error_response: in production it rewrites every 5xx message to "Internal server error".
+        return json_response(
+            {"error": {"code": "not_implemented", "message": "Listing teams is not implemented"}},
+            status=501,
+        )
 
     @handle_errors("teams creation")
     @rate_limit(requests_per_minute=60, limiter_name="teams_messages")

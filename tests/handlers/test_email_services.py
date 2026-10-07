@@ -49,6 +49,7 @@ from aragora.services.snooze_recommender import SnoozeReason
 # The conftest principal; the module takes ownership from the auth context.
 OWNER = ("test-user-001", "test-org-001")
 MINE = {"user_id": OWNER[0], "org_id": OWNER[1]}
+KEY = (*OWNER, "email-001")
 
 
 # ---------------------------------------------------------------------------
@@ -743,7 +744,7 @@ class TestApplySnooze:
         assert resp["email_id"] == "email-001"
         assert resp["status"] == "snoozed"
         assert resp["label"] == "Monday morning"
-        assert "email-001" in _snoozed_emails
+        assert KEY in _snoozed_emails
 
     @pytest.mark.asyncio
     async def test_apply_snooze_missing_snooze_until(self, mock_auth):
@@ -783,7 +784,7 @@ class TestApplySnooze:
     async def test_apply_snooze_stores_the_callers_identity(self, mock_auth):
         data = {"snooze_until": "2026-03-01T10:00:00Z"}
         await handle_apply_snooze("email-001", data, user_id="user1", auth_context=mock_auth)
-        assert _snoozed_emails["email-001"] | MINE == _snoozed_emails["email-001"]
+        assert _snoozed_emails[KEY] | MINE == _snoozed_emails[KEY]
 
     @pytest.mark.asyncio
     async def test_apply_snooze_overwrites_existing(self, mock_auth):
@@ -792,7 +793,7 @@ class TestApplySnooze:
         data2 = {"snooze_until": "2026-03-02T10:00:00Z", "label": "Second"}
         await handle_apply_snooze("email-001", data1, auth_context=mock_auth)
         await handle_apply_snooze("email-001", data2, auth_context=mock_auth)
-        assert _snoozed_emails["email-001"]["label"] == "Second"
+        assert _snoozed_emails[KEY]["label"] == "Second"
 
     @pytest.mark.asyncio
     async def test_apply_snooze_gmail_import_failure(self, mock_auth):
@@ -814,7 +815,7 @@ class TestCancelSnooze:
     @pytest.mark.asyncio
     async def test_cancel_snooze_success(self, mock_auth):
         # First add a snooze
-        _snoozed_emails["email-001"] = {
+        _snoozed_emails[KEY] = {
             "email_id": "email-001",
             **MINE,
             "snooze_until": datetime.now() + timedelta(hours=2),
@@ -825,7 +826,7 @@ class TestCancelSnooze:
         assert _status(result) == 200
         resp = _data(result)
         assert resp["status"] == "unsnooze"
-        assert "email-001" not in _snoozed_emails
+        assert KEY not in _snoozed_emails
 
     @pytest.mark.asyncio
     async def test_cancel_snooze_not_found(self, mock_auth):
@@ -1441,7 +1442,7 @@ class TestEmailServicesHandlerDelete:
 
     @pytest.mark.asyncio
     async def test_delete_cancel_snooze(self, handler, mock_http_handler):
-        _snoozed_emails["email-001"] = {
+        _snoozed_emails[KEY] = {
             "email_id": "email-001",
             **MINE,
             "snooze_until": datetime.now() + timedelta(hours=2),
@@ -1550,7 +1551,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_cancel_then_resnooze(self, mock_auth):
         """Cancel and then re-snooze the same email."""
-        _snoozed_emails["e-1"] = {
+        _snoozed_emails[(*OWNER, "e-1")] = {
             "email_id": "e-1",
             **MINE,
             "snooze_until": datetime.now() + timedelta(hours=1),
@@ -1558,12 +1559,12 @@ class TestEdgeCases:
             "snoozed_at": datetime.now(),
         }
         await handle_cancel_snooze("e-1", user_id="user1", auth_context=mock_auth)
-        assert "e-1" not in _snoozed_emails
+        assert (*OWNER, "e-1") not in _snoozed_emails
 
         data = {"snooze_until": "2026-04-01T10:00:00Z", "label": "New"}
         result = await handle_apply_snooze("e-1", data, user_id="user1", auth_context=mock_auth)
         assert _status(result) == 200
-        assert _snoozed_emails["e-1"]["label"] == "New"
+        assert _snoozed_emails[(*OWNER, "e-1")]["label"] == "New"
 
     @pytest.mark.asyncio
     async def test_get_snooze_suggestions_empty_data(self, mock_recommender, mock_auth):
