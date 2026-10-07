@@ -10,6 +10,8 @@ Covers all 6 endpoints:
 
 Also covers:
 - Auth/permission checks (via RBAC decorator)
+- Owner-org scope: requests act as test-user-001 of test-org-001, which owns
+  every debate the fake storage knows
 - Invalid debate ID handling
 - Missing/invalid body handling
 - can_handle routing
@@ -29,6 +31,12 @@ from aragora.server.handlers.debates.interventions import (
     DebateInterventionsHandler,
     _extract_debate_id_from_path,
 )
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+# The org ``org_scoped_request_user`` authenticates every request as.
+TEST_ORG = "test-org-001"
+TEST_USER = "test-user-001"
 
 
 def _parse(result: HandlerResult) -> dict:
@@ -69,11 +77,15 @@ def reset_state():
 
 
 class _FakeStorage:
-    """Minimal storage stub: knows a fixed set of debate IDs (default live)."""
+    """Minimal storage stub: knows a fixed set of debate IDs (default live),
+    all owned by ``TEST_ORG``."""
 
     def __init__(self, known_ids: set[str], statuses: dict[str, str] | None = None):
         self.known_ids = set(known_ids)
         self.statuses = statuses or {}
+
+    def get_access_info(self, ref: str) -> tuple[str, str, bool] | None:
+        return (ref, TEST_ORG, False) if ref in self.known_ids else None
 
     def get_debate(self, debate_id: str) -> dict | None:
         if debate_id in self.known_ids:
@@ -133,11 +145,7 @@ class TestCanHandle:
 class TestPauseEndpoint:
     """POST /api/v1/debates/{id}/pause."""
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_pause_success(self, mock_uid, handler_instance):
+    def test_pause_success(self, handler_instance):
         mock_handler = _make_handler()
         result = handler_instance._pause_debate("/api/v1/debates/test-debate/pause", mock_handler)
         data = _parse(result)
@@ -145,12 +153,9 @@ class TestPauseEndpoint:
         assert data["success"] is True
         assert data["state"] == "paused"
         assert data["debate_id"] == "test-debate"
+        assert data["intervention"]["user_id"] == TEST_USER
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_double_pause_returns_400(self, mock_uid, handler_instance):
+    def test_double_pause_returns_400(self, handler_instance):
         mock_handler = _make_handler()
         handler_instance._pause_debate("/api/v1/debates/test-debate/pause", mock_handler)
         result = handler_instance._pause_debate("/api/v1/debates/test-debate/pause", mock_handler)
@@ -165,11 +170,7 @@ class TestPauseEndpoint:
 class TestResumeEndpoint:
     """POST /api/v1/debates/{id}/resume."""
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_resume_after_pause(self, mock_uid, handler_instance):
+    def test_resume_after_pause(self, handler_instance):
         mock_handler = _make_handler()
         handler_instance._pause_debate("/api/v1/debates/test-debate/pause", mock_handler)
         result = handler_instance._resume_debate("/api/v1/debates/test-debate/resume", mock_handler)
@@ -178,11 +179,7 @@ class TestResumeEndpoint:
         assert data["success"] is True
         assert data["state"] == "running"
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_resume_without_pause_returns_400(self, mock_uid, handler_instance):
+    def test_resume_without_pause_returns_400(self, handler_instance):
         mock_handler = _make_handler()
         result = handler_instance._resume_debate("/api/v1/debates/test-debate/resume", mock_handler)
         # First access creates manager in running state, so resume fails
@@ -197,11 +194,7 @@ class TestResumeEndpoint:
 class TestNudgeEndpoint:
     """POST /api/v1/debates/{id}/nudge."""
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_nudge_success(self, mock_uid, handler_instance):
+    def test_nudge_success(self, handler_instance):
         mock_handler = _make_handler({"message": "Think about costs"})
         result = handler_instance._nudge_debate("/api/v1/debates/test-debate/nudge", mock_handler)
         data = _parse(result)
@@ -209,11 +202,7 @@ class TestNudgeEndpoint:
         assert data["success"] is True
         assert data["intervention"]["message"] == "Think about costs"
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_nudge_with_target_agent(self, mock_uid, handler_instance):
+    def test_nudge_with_target_agent(self, handler_instance):
         mock_handler = _make_handler({"message": "Focus", "target_agent": "claude"})
         result = handler_instance._nudge_debate("/api/v1/debates/test-debate/nudge", mock_handler)
         data = _parse(result)
@@ -233,11 +222,7 @@ class TestNudgeEndpoint:
 class TestChallengeEndpoint:
     """POST /api/v1/debates/{id}/challenge."""
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_challenge_success(self, mock_uid, handler_instance):
+    def test_challenge_success(self, handler_instance):
         mock_handler = _make_handler({"challenge": "What about privacy?"})
         result = handler_instance._challenge_debate(
             "/api/v1/debates/test-debate/challenge", mock_handler
@@ -263,11 +248,7 @@ class TestChallengeEndpoint:
 class TestInjectEvidenceEndpoint:
     """POST /api/v1/debates/{id}/inject-evidence."""
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_inject_evidence_success(self, mock_uid, handler_instance):
+    def test_inject_evidence_success(self, handler_instance):
         mock_handler = _make_handler(
             {"evidence": "Studies show...", "source": "https://example.com"}
         )
@@ -305,11 +286,7 @@ class TestInterventionLogEndpoint:
         assert data["entry_count"] == 0
         assert data["entries"] == []
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_log_reflects_interventions(self, mock_uid, handler_instance):
+    def test_log_reflects_interventions(self, handler_instance):
         mock_handler = _make_handler({"message": "hint"})
         handler_instance._nudge_debate("/api/v1/debates/test-debate/nudge", mock_handler)
 
@@ -373,11 +350,7 @@ class TestMalformedPathShape:
         assert handler_instance.can_handle("/api/v1/debates/victim/pause") is True
         assert handler_instance.can_handle("/api/debates/victim/pause") is True
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_malformed_pause_is_rejected_and_no_action_taken(self, mock_uid, handler_instance):
+    def test_malformed_pause_is_rejected_and_no_action_taken(self, handler_instance):
         """Even if a malformed path reaches the endpoint (defense in depth),
         it is rejected and no intervention state is created for 'victim'."""
         from aragora.debate.intervention import get_intervention_manager
@@ -386,11 +359,7 @@ class TestMalformedPathShape:
         assert result.status_code in (400, 404)
         assert get_intervention_manager("victim", create=False) is None
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_malformed_path_does_not_pause_existing_debate(self, mock_uid):
+    def test_malformed_path_does_not_pause_existing_debate(self):
         """A real debate must not be paused through a malformed path."""
         storage = _FakeStorage({"victim"})
         handler_instance = DebateInterventionsHandler(ctx={"storage": storage})
@@ -428,11 +397,7 @@ class TestCompletedDebateRefusesActions:
 
         assert get_intervention_manager(self.DONE, create=False) is None
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_pause_completed_refused_no_state(self, mock_uid, completed_handler):
+    def test_pause_completed_refused_no_state(self, completed_handler):
         result = completed_handler._pause_debate(
             f"/api/v1/debates/{self.DONE}/pause", _make_handler()
         )
@@ -440,33 +405,21 @@ class TestCompletedDebateRefusesActions:
         assert b"not live" in result.body
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_resume_completed_refused_no_state(self, mock_uid, completed_handler):
+    def test_resume_completed_refused_no_state(self, completed_handler):
         result = completed_handler._resume_debate(
             f"/api/v1/debates/{self.DONE}/resume", _make_handler()
         )
         assert result.status_code == 400
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_nudge_completed_refused_no_state(self, mock_uid, completed_handler):
+    def test_nudge_completed_refused_no_state(self, completed_handler):
         result = completed_handler._nudge_debate(
             f"/api/v1/debates/{self.DONE}/nudge", _make_handler({"message": "hint"})
         )
         assert result.status_code == 400
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_challenge_completed_refused_no_state(self, mock_uid, completed_handler):
+    def test_challenge_completed_refused_no_state(self, completed_handler):
         result = completed_handler._challenge_debate(
             f"/api/v1/debates/{self.DONE}/challenge",
             _make_handler({"challenge": "counterpoint"}),
@@ -474,11 +427,7 @@ class TestCompletedDebateRefusesActions:
         assert result.status_code == 400
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_inject_evidence_completed_refused_no_state(self, mock_uid, completed_handler):
+    def test_inject_evidence_completed_refused_no_state(self, completed_handler):
         result = completed_handler._inject_evidence(
             f"/api/v1/debates/{self.DONE}/inject-evidence",
             _make_handler({"evidence": "late evidence"}),
@@ -495,11 +444,7 @@ class TestCompletedDebateRefusesActions:
         assert result.status_code == 200
         assert data["entry_count"] == 0
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_stale_manager_refuses_after_completion(self, mock_uid):
+    def test_stale_manager_refuses_after_completion(self):
         """A manager minted while live refuses actions once storage says completed."""
         from aragora.debate.intervention import get_intervention_manager
 
@@ -512,11 +457,7 @@ class TestCompletedDebateRefusesActions:
         assert result.status_code == 400
         assert b"not live" in result.body
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_paused_stored_status_passes_liveness_gate(self, mock_uid):
+    def test_paused_stored_status_passes_liveness_gate(self):
         """'paused' is in the live set: the action gate admits it. The fresh
         manager is restored to PAUSED, so a second pause is correctly a 400
         state error (already paused), not a liveness refusal."""
@@ -526,11 +467,7 @@ class TestCompletedDebateRefusesActions:
         assert result.status_code == 400
         assert b"not live" not in result.body  # state error, not liveness refusal
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_resume_stored_paused_debate_without_manager(self, mock_uid):
+    def test_resume_stored_paused_debate_without_manager(self):
         """Round-5 P2: resume must work after manager loss. A fresh manager
         for a stored-paused debate is restored to PAUSED, so resume() -> 200
         and subsequent actions work."""
@@ -546,11 +483,7 @@ class TestCompletedDebateRefusesActions:
         )
         assert nudged.status_code == 200
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_existing_running_manager_not_overridden_by_stored_paused(self, mock_uid):
+    def test_existing_running_manager_not_overridden_by_stored_paused(self):
         """An existing in-memory manager is the truth: stored 'paused' must
         not flip a live RUNNING manager back to paused."""
         from aragora.debate.intervention import get_intervention_manager
@@ -563,15 +496,14 @@ class TestCompletedDebateRefusesActions:
         assert result.status_code == 200
         assert manager.is_paused
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_absent_stored_status_fails_closed(self, mock_uid):
+    def test_absent_stored_status_fails_closed(self):
         """Round-5 P3: a storage row with no status is NOT proof of liveness."""
         from aragora.debate.intervention import get_intervention_manager
 
         class _NoStatusStorage:
+            def get_access_info(self, ref):
+                return (ref, TEST_ORG, False)
+
             def get_debate(self, debate_id):
                 return {"id": debate_id}  # no status key
 
@@ -599,33 +531,21 @@ class TestNonexistentDebateReturns404:
 
         assert get_intervention_manager(self.GHOST, create=False) is None
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_pause_nonexistent_404_no_state(self, mock_uid, handler_instance):
+    def test_pause_nonexistent_404_no_state(self, handler_instance):
         result = handler_instance._pause_debate(
             f"/api/v1/debates/{self.GHOST}/pause", _make_handler()
         )
         assert result.status_code == 404
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_resume_nonexistent_404_no_state(self, mock_uid, handler_instance):
+    def test_resume_nonexistent_404_no_state(self, handler_instance):
         result = handler_instance._resume_debate(
             f"/api/v1/debates/{self.GHOST}/resume", _make_handler()
         )
         assert result.status_code == 404
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_nudge_nonexistent_404_no_state(self, mock_uid, handler_instance):
+    def test_nudge_nonexistent_404_no_state(self, handler_instance):
         result = handler_instance._nudge_debate(
             f"/api/v1/debates/{self.GHOST}/nudge",
             _make_handler({"message": "hint"}),
@@ -633,11 +553,7 @@ class TestNonexistentDebateReturns404:
         assert result.status_code == 404
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_challenge_nonexistent_404_no_state(self, mock_uid, handler_instance):
+    def test_challenge_nonexistent_404_no_state(self, handler_instance):
         result = handler_instance._challenge_debate(
             f"/api/v1/debates/{self.GHOST}/challenge",
             _make_handler({"challenge": "counterpoint"}),
@@ -645,11 +561,7 @@ class TestNonexistentDebateReturns404:
         assert result.status_code == 404
         self._assert_no_manager_state()
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_inject_evidence_nonexistent_404_no_state(self, mock_uid, handler_instance):
+    def test_inject_evidence_nonexistent_404_no_state(self, handler_instance):
         result = handler_instance._inject_evidence(
             f"/api/v1/debates/{self.GHOST}/inject-evidence",
             _make_handler({"evidence": "some evidence"}),
@@ -673,32 +585,46 @@ class TestNonexistentDebateReturns404:
         assert result.status_code == 200
         assert data["entry_count"] == 0
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_active_state_only_debate_passes_gate(self, mock_uid):
+    def test_active_state_only_debate_passes_gate(self):
         """A debate live in the active state manager (no storage) is real."""
         from types import SimpleNamespace
 
         handler_instance = DebateInterventionsHandler(ctx={})
         state_mgr = MagicMock()
-        state_mgr.get_debate.return_value = SimpleNamespace(status="running")
+        state_mgr.get_debate.return_value = SimpleNamespace(
+            status="running", metadata={"org_id": TEST_ORG}
+        )
         with patch("aragora.server.state.get_state_manager", return_value=state_mgr):
             result = handler_instance._pause_debate(
                 "/api/v1/debates/live-only/pause", _make_handler()
             )
         assert result.status_code == 200
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_active_state_without_status_fails_closed(self, mock_uid):
-        """Round-5 P3: active state lacking a status attribute is not live."""
+    def test_active_state_of_another_org_is_not_found(self):
+        """A running debate's owner comes from its active-state metadata."""
+        from types import SimpleNamespace
+
+        from aragora.debate.intervention import get_intervention_manager
+
         handler_instance = DebateInterventionsHandler(ctx={})
         state_mgr = MagicMock()
-        state_mgr.get_debate.return_value = object()  # no status attribute
+        state_mgr.get_debate.return_value = SimpleNamespace(
+            status="running", metadata={"org_id": "other-org"}
+        )
+        with patch("aragora.server.state.get_state_manager", return_value=state_mgr):
+            result = handler_instance._pause_debate(
+                "/api/v1/debates/live-other/pause", _make_handler()
+            )
+        assert result.status_code == 404
+        assert get_intervention_manager("live-other", create=False) is None
+
+    def test_active_state_without_status_fails_closed(self):
+        """Round-5 P3: active state lacking a status attribute is not live."""
+        from types import SimpleNamespace
+
+        handler_instance = DebateInterventionsHandler(ctx={})
+        state_mgr = MagicMock()
+        state_mgr.get_debate.return_value = SimpleNamespace(metadata={"org_id": TEST_ORG})
         with patch("aragora.server.state.get_state_manager", return_value=state_mgr):
             result = handler_instance._pause_debate(
                 "/api/v1/debates/statusless/pause", _make_handler()
@@ -706,76 +632,74 @@ class TestNonexistentDebateReturns404:
         assert result.status_code == 400
         assert b"not live" in result.body
 
-    @patch(
-        "aragora.server.handlers.debates.interventions.DebateInterventionsHandler._extract_user_id",
-        return_value="user-1",
-    )
-    def test_existing_manager_passes_gate_without_state_or_storage(self, mock_uid):
-        """A previously created manager keeps resume working after state/storage move on."""
+    def test_existing_manager_without_known_owner_is_refused(self):
+        """A leftover manager does not prove which org owns the debate: with
+        neither active state nor a stored row the action is refused."""
         from aragora.debate.intervention import get_intervention_manager
 
-        # Simulate a manager created while the debate was live and validated.
-        get_intervention_manager("was-live", create=True)
-        handler_instance = DebateInterventionsHandler(ctx={})
+        manager = get_intervention_manager("was-live", create=True)
+        handler_instance = DebateInterventionsHandler(ctx={"storage": _FakeStorage(set())})
         result = handler_instance._pause_debate("/api/v1/debates/was-live/pause", _make_handler())
-        assert result.status_code == 200
+        assert result.status_code == 404
+        assert manager.is_running
 
 
 # ============================================================================
 # Permission gates (round-5 P2): GET log requires debates:read, POST actions
-# require debates:update — pinned with real auth (no conftest bypass).
+# require debates:update — pinned with real auth (no conftest bypass). A caller
+# without an org gets the org-scope denial instead of the permission denial.
 # ============================================================================
 
 
+@pytest.mark.no_auto_auth
 class TestPermissionGates:
     """The intervention log leaks intervener user_ids and injected text;
     both routers must enforce their RBAC decorators."""
 
-    @pytest.mark.no_auto_auth
-    def test_intervention_log_requires_debates_read(self):
-        """Without an auth context under real auth, the GET router's
-        @require_permission("debates:read") denies; @handle_errors converts
-        the PermissionDeniedError to a 403 FORBIDDEN result."""
-        import os
+    ROUTES = (
+        ("handle", "/api/v1/debates/abc-123/intervention-log"),
+        ("handle_post", "/api/v1/debates/abc-123/pause"),
+    )
 
+    @pytest.fixture(autouse=True)
+    def real_auth(self, monkeypatch):
         from aragora.server.auth import auth_config
 
-        orig_enabled = auth_config.enabled
-        os.environ["ARAGORA_TEST_REAL_AUTH"] = "1"
-        auth_config.enabled = True
-        try:
-            handler_instance = DebateInterventionsHandler(
-                ctx={"storage": _FakeStorage({"abc-123"})}
-            )
-            result = handler_instance.handle(
-                "/api/v1/debates/abc-123/intervention-log", {}, _make_handler()
-            )
-            assert result is not None
-            assert result.status_code == 403
-            assert b"FORBIDDEN" in result.body
-        finally:
-            auth_config.enabled = orig_enabled
-            del os.environ["ARAGORA_TEST_REAL_AUTH"]
+        monkeypatch.setenv("ARAGORA_TEST_REAL_AUTH", "1")
+        monkeypatch.setattr(auth_config, "enabled", True)
 
-    @pytest.mark.no_auto_auth
-    def test_post_actions_require_debates_update(self):
-        import os
+    def _call(self, method: str, path: str, request: MagicMock) -> HandlerResult:
+        handler_instance = DebateInterventionsHandler(ctx={"storage": _FakeStorage({"abc-123"})})
+        result = getattr(handler_instance, method)(path, {}, request)
+        assert result is not None
+        return result
 
-        from aragora.server.auth import auth_config
+    @pytest.mark.parametrize(("method", "path"), ROUTES)
+    def test_anonymous_caller_gets_401(self, method, path):
+        result = self._call(method, path, _make_handler())
+        assert result.status_code == 401
+        assert _parse(result)["code"] == "auth_required"
 
-        orig_enabled = auth_config.enabled
-        os.environ["ARAGORA_TEST_REAL_AUTH"] = "1"
-        auth_config.enabled = True
-        try:
-            handler_instance = DebateInterventionsHandler(
-                ctx={"storage": _FakeStorage({"abc-123"})}
-            )
-            result = handler_instance.handle_post(
-                "/api/v1/debates/abc-123/pause", {}, _make_handler()
-            )
-            assert result is not None
-            assert result.status_code == 403
-            assert b"FORBIDDEN" in result.body
-        finally:
-            auth_config.enabled = orig_enabled
-            del os.environ["ARAGORA_TEST_REAL_AUTH"]
+    @pytest.mark.parametrize(("method", "path"), ROUTES)
+    def test_org_member_without_the_permission_gets_403(self, method, path, monkeypatch):
+        """With an org scope, @require_permission denies and @handle_errors
+        converts the PermissionDeniedError to a 403 FORBIDDEN result."""
+        from aragora.billing.auth.context import UserAuthContext
+        from aragora.debate.intervention import get_intervention_manager
+        from aragora.rbac.models import AuthorizationContext
+
+        user = UserAuthContext(
+            authenticated=True, user_id=TEST_USER, org_id=TEST_ORG, role="member"
+        )
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
+        request = _make_handler()
+        request._auth_context = AuthorizationContext(
+            user_id=TEST_USER, org_id=TEST_ORG, roles=set()
+        )
+        result = self._call(method, path, request)
+        assert result.status_code == 403
+        assert b"FORBIDDEN" in result.body
+        assert get_intervention_manager("abc-123", create=False) is None
