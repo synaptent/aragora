@@ -84,6 +84,7 @@ def _optional_only_unstable_surface() -> dict:
             "available": True,
             "non_green_count": 2,
             "non_required_non_green_count": 2,
+            "non_required_non_green_sample": ["npm Security Scan", "Security Gate Summary"],
             "failing_or_cancelled_count": 2,
             "pending_count": 0,
         },
@@ -244,6 +245,25 @@ def test_9453_shape_with_a_cancelled_optional_row_is_skipped(tmp_path):
             {"name": "npm Security Scan", "conclusion": "FAILURE"},
             {"name": "Security Gate Summary", "conclusion": "FAILURE"},
             {"name": "Integration Smoke", "conclusion": "CANCELLED"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _packet(check_surfaces=_optional_only_unstable_surface())
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == []
+    assert _actions(summary)[100] == "skip"
+
+
+def test_9453_shape_with_an_unproven_row_failing_in_a_proven_rows_place_is_skipped(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "SUCCESS"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Release Readiness", "conclusion": "FAILURE"},
         ]
     )
     view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
