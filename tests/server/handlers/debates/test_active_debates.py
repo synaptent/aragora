@@ -21,6 +21,7 @@ from aragora.server.handlers.debates.crud import CrudOperationsMixin, _epoch_to_
 from aragora.server.handlers.base import HandlerResult
 from aragora.server.state import DebateState
 
+ORG = "test-org-001"
 
 # ============================================================================
 # Helpers
@@ -89,7 +90,7 @@ class TestGetActiveDebates:
             "aragora.server.state.get_state_manager",
             return_value=mock_state_manager,
         ):
-            result = handler._get_active_debates()
+            result = handler._get_active_debates(ORG)
 
         assert isinstance(result, HandlerResult)
         body, status = _parse_result(result)
@@ -107,6 +108,7 @@ class TestGetActiveDebates:
             status="running",
             current_round=2,
             total_rounds=5,
+            metadata={"org_id": ORG},
         )
         mock_state_manager.get_active_debates.return_value = {
             "debate-abc": debate_state,
@@ -116,7 +118,7 @@ class TestGetActiveDebates:
             "aragora.server.state.get_state_manager",
             return_value=mock_state_manager,
         ):
-            result = handler._get_active_debates()
+            result = handler._get_active_debates(ORG)
 
         body, status = _parse_result(result)
         assert status == 200
@@ -144,6 +146,7 @@ class TestGetActiveDebates:
                 status="running",
                 current_round=1,
                 total_rounds=3,
+                metadata={"org_id": ORG},
             ),
             "debate-2": DebateState(
                 debate_id="debate-2",
@@ -153,6 +156,22 @@ class TestGetActiveDebates:
                 status="paused",
                 current_round=3,
                 total_rounds=3,
+                metadata={"org_id": ORG},
+            ),
+            "debate-other-org": DebateState(
+                debate_id="debate-other-org",
+                task="Topic of another org",
+                agents=["claude"],
+                start_time=now - 30,
+                status="running",
+                metadata={"org_id": "org-other"},
+            ),
+            "debate-no-org": DebateState(
+                debate_id="debate-no-org",
+                task="Topic without an org",
+                agents=["claude"],
+                start_time=now - 30,
+                status="running",
             ),
         }
         mock_state_manager.get_active_debates.return_value = debates
@@ -161,13 +180,14 @@ class TestGetActiveDebates:
             "aragora.server.state.get_state_manager",
             return_value=mock_state_manager,
         ):
-            result = handler._get_active_debates()
+            result = handler._get_active_debates(ORG)
 
         body, status = _parse_result(result)
         assert status == 200
         assert len(body["debates"]) == 2
 
         ids = {d["id"] for d in body["debates"]}
+        # Debates of another org, or with no recorded org, are left out.
         assert ids == {"debate-1", "debate-2"}
 
         # Verify paused debate has correct status

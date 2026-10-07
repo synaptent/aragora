@@ -22,6 +22,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Debate reads are org-scoped; requests act as test-user-001 of test-org-001.
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+TEST_ORG = "test-org-001"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,6 +68,8 @@ def mock_storage():
     storage.search.return_value = ([], 0)
     storage.is_public.return_value = False
     storage.delete_debate.return_value = True
+    # Every debate id resolves to a private debate of the caller's org.
+    storage.get_access_info.side_effect = lambda ref: (ref, TEST_ORG, False)
     return storage
 
 
@@ -182,14 +189,22 @@ class TestHandleSearchRoute:
         assert _status(result) == 200
         assert _body(result)["offset"] == 10
 
-    def test_search_no_user_passes_none_org(self, mock_storage, mock_http_handler):
-        handler = _make_handler(storage=mock_storage, user=None)
-        # user=None means _make_handler creates a mock user, but let's test with None
-        handler._mock_user = None
-        handler.get_current_user = lambda self_h: None
-        mock_storage.search.return_value = ([], 0)
+    def test_search_passes_caller_org(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/search", {"q": "test"}, mock_http_handler)
         assert _status(result) == 200
+        assert mock_storage.search.call_args.kwargs["org_id"] == TEST_ORG
+
+    @pytest.mark.no_auto_auth
+    def test_search_without_user_is_401(self, mock_storage, mock_http_handler, monkeypatch):
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: None,
+        )
+        handler = _make_handler(storage=mock_storage)
+        result = handler.handle("/api/search", {"q": "test"}, mock_http_handler)
+        assert _status(result) == 401
+        mock_storage.search.assert_not_called()
 
 
 class TestHandleCostEstimation:
@@ -549,14 +564,14 @@ class TestHandleSuffixRoutes:
             body = _body(result)
             assert body["debate_id"] == "d1"
 
-    def test_meta_critique_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_meta_critique_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/meta-critique", {}, mock_http_handler)
         # No nomic_dir => 503
         assert _status(result) == 503
 
-    def test_graph_stats_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_graph_stats_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/graph/stats", {}, mock_http_handler)
         # Without nomic dir, returns 503
         assert _status(result) == 503
@@ -585,13 +600,13 @@ class TestHandleSuffixRoutes:
         result = handler.handle("/api/debates/d1/forks", {}, mock_http_handler)
         assert result is not None
 
-    def test_rhetorical_route_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_rhetorical_route_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/rhetorical", {}, mock_http_handler)
         assert _status(result) == 503
 
-    def test_trickster_route_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_trickster_route_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/trickster", {}, mock_http_handler)
         assert _status(result) == 503
 
@@ -599,9 +614,9 @@ class TestHandleSuffixRoutes:
 class TestHandleDecisionIntegrity:
     """Tests for decision integrity endpoint."""
 
-    def test_decision_integrity_wrong_method(self, mock_http_handler):
+    def test_decision_integrity_wrong_method(self, mock_storage, mock_http_handler):
         mock_http_handler.command = "GET"
-        handler = _make_handler()
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/decision-integrity", {}, mock_http_handler)
         assert _status(result) == 405
 
@@ -1159,12 +1174,12 @@ class TestAuthDispatch:
         result = handler.handle("/api/search", {"q": "test"}, mock_http_handler)
         assert _status(result) == 401
 
-    def test_no_auth_for_public_endpoints(self, mock_storage, mock_http_handler):
+    def test_list_is_scoped_to_caller_org(self, mock_storage, mock_http_handler):
         mock_storage.list_recent.return_value = []
         handler = _make_handler(storage=mock_storage)
-        # List debates should work without auth
         result = handler.handle("/api/debates", {}, mock_http_handler)
         assert _status(result) == 200
+        assert mock_storage.list_recent.call_args.kwargs["org_id"] == TEST_ORG
 
 
 # ===========================================================================

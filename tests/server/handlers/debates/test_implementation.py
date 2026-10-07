@@ -96,6 +96,8 @@ def mock_storage():
         "agents": ["claude", "gpt4"],
         "metadata": {},
     }
+    # The debate belongs to the auto-auth test org.
+    storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 

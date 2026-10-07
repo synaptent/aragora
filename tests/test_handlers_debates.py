@@ -50,6 +50,17 @@ def mock_rbac_checker():
 
 
 @pytest.fixture(autouse=True)
+def org_member_request_user(monkeypatch):
+    """Debate reads are org-scoped; requests act as a member of test-org-001."""
+    user = Mock(user_id="test-user", org_id="test-org-001", role="admin", is_authenticated=True)
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    return user
+
+
+@pytest.fixture(autouse=True)
 def mock_auth_context():
     """Provide a mock AuthorizationContext for all tests."""
     ctx = AuthorizationContext(
@@ -141,6 +152,8 @@ def mock_storage():
         "convergence_status": "converged",
         "convergence_similarity": 0.92,
     }
+    # Every debate id resolves to a private debate of the caller's org.
+    storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 
@@ -1631,13 +1644,13 @@ class TestSpecificExceptionHandling:
         if result is not None:
             assert result.status_code == 404
 
-    def test_build_graph_storage_error_returns_500(self, debates_handler, mock_storage):
-        """Build graph with StorageError should return 500."""
+    def test_unknown_graph_suffix_is_not_read_as_a_slug(self, debates_handler, mock_storage):
+        """/{id}/graph is not a DebatesHandler route, so its last segment is never looked up."""
         from aragora.exceptions import StorageError
 
         mock_storage.get_debate.side_effect = StorageError("Storage unavailable")
 
         result = debates_handler.handle("/api/v1/debates/test-id/graph", {}, None)
 
-        if result is not None:
-            assert result.status_code == 500
+        assert result.status_code == 404
+        mock_storage.get_debate.assert_not_called()

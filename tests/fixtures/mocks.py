@@ -37,6 +37,9 @@ def mock_storage() -> Mock:
         "rounds_used": 3,
     }
     storage.get_debate_by_slug.return_value = storage.get_debate.return_value
+    # Debate reads are org-scoped: every id resolves to a private debate of the
+    # org the handler test fixtures authenticate as.
+    storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 

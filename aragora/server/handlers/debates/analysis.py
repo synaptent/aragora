@@ -334,7 +334,7 @@ class AnalysisOperationsMixin:
                 replay_path = nomic_dir / "replays" / debate_id / "events.jsonl"
                 if replay_path.exists():
                     return _build_graph_from_replay(debate_id, replay_path)
-                return error_response("Debate not found", 404)
+                return error_response("Debate trace not found", 404)
 
             # Load from trace file
             trace = DebateTrace.load(trace_path)

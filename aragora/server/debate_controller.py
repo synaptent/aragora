@@ -1061,6 +1061,7 @@ class DebateController:
                 "mode": mode_meta,
                 "settlement": settlement_snapshot,
                 "comparison_config": comparison_config,
+                "org_id": request.org_id,
             }
 
         # Periodic cleanup

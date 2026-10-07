@@ -82,6 +82,21 @@ def temp_dir():
 
 
 @pytest.fixture
+def org_member_request_user(monkeypatch):
+    """Debate reads are org-scoped; requests act as a member of test-org-001."""
+    from aragora.billing.auth.context import UserAuthContext
+
+    user = UserAuthContext(
+        authenticated=True, user_id="test-user-001", org_id="test-org-001", role="admin"
+    )
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    return user
+
+
+@pytest.fixture
 def handler_context(temp_dir):
     """Create handler context with mock dependencies."""
     from aragora.ranking.elo import EloSystem
@@ -281,6 +296,7 @@ class TestLeaderboardWorkflow:
         assert len(data) <= 5
 
 
+@pytest.mark.usefixtures("org_member_request_user")
 class TestDebateHistoryWorkflow:
     """Test debate history API workflow."""
 
@@ -448,6 +464,7 @@ class TestErrorHandling:
         # Should handle gracefully (either default or error response)
         assert status in (200, 400)
 
+    @pytest.mark.usefixtures("org_member_request_user")
     def test_missing_resource_handled_gracefully(self, handler_context, temp_dir):
         """Test missing resource is handled gracefully."""
         from aragora.storage.debate_storage import DebateStorage

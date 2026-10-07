@@ -86,6 +86,8 @@ def mock_storage():
     storage.get_debate = MagicMock(return_value=sample_debate)
     storage.list_recent = MagicMock(return_value=[sample_debate])
     storage.is_public = MagicMock(return_value=True)
+    # Every debate id resolves to a private debate of the test user's org.
+    storage.get_access_info = MagicMock(side_effect=lambda ref: (ref, "test-org-001", False))
 
     return storage
 
@@ -600,8 +602,8 @@ class TestAuthentication:
     def test_public_debate_artifacts_no_auth(
         self, debates_handler, mock_http_handler, mock_storage
     ):
-        """Test public debate artifacts don't require auth."""
-        mock_storage.is_public.return_value = True
+        """A debate stored as public is readable outside its org."""
+        mock_storage.get_access_info.side_effect = lambda ref: (ref, "org-other", True)
 
         result = debates_handler.handle(
             "/api/v1/debates/debate_123/messages", {}, mock_http_handler

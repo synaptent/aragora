@@ -102,8 +102,12 @@ class StorageAdapter:
         return result
 
     def save_debate(self, debate_data: dict) -> str:
-        """Save a debate and return its slug."""
-        return self._storage.save_dict(debate_data)
+        """Save a debate of the test user's org and return its slug.
+
+        Debate reads are org-scoped, and the autouse auth fixture acts as
+        test-org-001, so debates stored without an org would be invisible.
+        """
+        return self._storage.save_dict(debate_data, org_id="test-org-001")
 
     # Pass through other methods
     def __getattr__(self, name):
@@ -218,6 +222,21 @@ def handler_ensemble(integrated_storage, integrated_elo, integration_nomic_dir):
         "metrics": MetricsHandler(ctx),
         "ctx": ctx,
     }
+
+
+@pytest.fixture(autouse=True)
+def org_member_request_user(monkeypatch):
+    """Debate reads are org-scoped; requests act as a member of test-org-001."""
+    from aragora.billing.auth.context import UserAuthContext
+
+    user = UserAuthContext(
+        authenticated=True, user_id="test-user-001", org_id="test-org-001", role="admin"
+    )
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    return user
 
 
 @pytest.fixture

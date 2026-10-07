@@ -208,6 +208,10 @@ class PostgresDebateStorage(PostgresStore):
         """Check if debate is public (sync wrapper)."""
         return run_async(self.is_public_async(debate_id))
 
+    def get_access_info(self, ref: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for a debate id, else slug (sync wrapper)."""
+        return run_async(self.get_access_info_async(ref))
+
     def set_public(self, debate_id: str, is_public: bool, org_id: str | None = None) -> bool:
         """Set debate public status (sync wrapper)."""
         return run_async(self.set_public_async(debate_id, is_public, org_id))
@@ -559,6 +563,22 @@ class PostgresDebateStorage(PostgresStore):
         async with self.connection() as conn:
             row = await conn.fetchrow("SELECT is_public FROM debates WHERE id = $1", debate_id)
             return bool(row and row["is_public"])
+
+    async def get_access_info_async(self, ref: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for the debate with this id, else this slug."""
+        if not ref or len(ref) > 500:
+            return None
+        async with self.connection() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, org_id, is_public FROM debates WHERE id = $1", ref
+            )
+            if row is None:
+                row = await conn.fetchrow(
+                    "SELECT id, org_id, is_public FROM debates WHERE slug = $1", ref
+                )
+        if row is None:
+            return None
+        return row["id"], row["org_id"] or None, bool(row["is_public"])
 
     async def set_public_async(
         self, debate_id: str, is_public: bool, org_id: str | None = None

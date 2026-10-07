@@ -46,6 +46,8 @@ from aragora.server.debate_utils import _active_debates  # noqa: F401
 from aragora.server.http_utils import run_async
 from aragora.server.validation import validate_debate_id
 from aragora.server.validation.schema import validate_against_schema  # noqa: F401
+from aragora.tenancy.debate_access import debate_read_denial
+from aragora.tenancy.record_scope import record_not_found, require_org_scope
 
 from ..base import (
     BaseHandler,
@@ -79,6 +81,15 @@ from .search import SearchOperationsMixin
 
 
 logger = logging.getLogger(__name__)
+
+
+def _debate_ref(normalized: str, parts: list[str]) -> str | None:
+    """The debate id or slug a per-debate path names, or None for other paths."""
+    if normalized.startswith("/api/debates/slug/"):
+        return parts[4] if len(parts) > 4 else ""
+    if normalized.startswith(("/api/debates/", "/api/debate/")) and len(parts) > 3:
+        return parts[3]
+    return None
 
 
 class DebatesHandler(
@@ -153,15 +164,15 @@ class DebatesHandler(
 
         # Search endpoint
         if normalized in ("/api/search", "/api/debates/search"):
+            scope, scope_error = require_org_scope(handler)
+            if scope is None:
+                return scope_error
             query = query_params.get("q", query_params.get("query", ""))
             if isinstance(query, list):
                 query = query[0] if query else ""
             limit = min(get_int_param(query_params, "limit", 20), 100)
             offset = get_int_param(query_params, "offset", 0)
-            # Get authenticated user for org-scoped search
-            user = self.get_current_user(handler)
-            org_id = user.org_id if user else None
-            return self._search_debates(query, limit, offset, org_id)
+            return self._search_debates(query, limit, offset, scope.org_id)
 
         # Cost estimation endpoint (no auth required - public preview)
         if normalized == "/api/debates/estimate-cost":
@@ -197,20 +208,38 @@ class DebatesHandler(
 
         # Active (in-progress) debates
         if normalized == "/api/debates/active":
-            return self._get_active_debates()
+            scope, scope_error = require_org_scope(handler)
+            if scope is None:
+                return scope_error
+            return self._get_active_debates(scope.org_id)
 
         # Exact path matches - list debates
         if normalized in ("/api/debates", "/api/debates/"):
+            scope, scope_error = require_org_scope(handler)
+            if scope is None:
+                return scope_error
             limit = min(get_int_param(query_params, "limit", 20), 100)
             offset = max(get_int_param(query_params, "offset", 0), 0)
-            # Get authenticated user for org-scoped results
-            user = self.get_current_user(handler)
-            org_id = user.org_id if user else None
-            return self._list_debates(limit, org_id, offset)
+            # The org is a positional argument so the list cache keys on it.
+            return self._list_debates(limit, scope.org_id, offset)
+
+        # Everything below reads one debate, named by the path segment after
+        # /debates/ (or /debates/slug/).
+        parts = normalized.split("/")
+        debate_ref = _debate_ref(normalized, parts)
+        if debate_ref is None:
+            return None
+        is_valid, err = validate_debate_id(debate_ref)
+        if not is_valid:
+            return error_response(err, 400)
+        access_error = debate_read_denial(handler, self.get_storage(), debate_ref)
+        if access_error:
+            return access_error
 
         if normalized.startswith("/api/debates/slug/"):
-            slug = normalized.split("/")[-1]
-            return self._get_debate_by_slug(handler, slug)
+            if len(parts) != 5:
+                return record_not_found("Debate")
+            return self._get_debate_by_slug(handler, debate_ref)
 
         # Dispatch suffix-based routes (impasse, convergence, citations, messages, etc.)
         result = self._dispatch_suffix_route(normalized, query_params, handler)
@@ -256,11 +285,13 @@ class DebatesHandler(
                     )
                 return self._export_debate(handler, debate_id, export_format, table)
 
-        # Default: treat as slug lookup
-        if normalized.startswith("/api/debates/"):
-            slug = normalized.split("/")[-1]
-            if slug and slug not in ("impasse", "convergence"):
-                return self._get_debate_by_slug(handler, slug)
+        # Default: GET /api/debates/{id or slug}
+        if normalized.startswith("/api/debates/") and len(parts) == 4:
+            return self._get_debate_by_slug(handler, debate_ref)
+        # Only the segment checked above may be read; an unknown suffix must not
+        # fall back to looking up its last segment as a slug.
+        if parts[-1]:
+            return record_not_found("Debate")
 
         return None
 

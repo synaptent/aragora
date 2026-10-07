@@ -71,8 +71,8 @@ class _DebatesHandlerProtocol(Protocol):
 
     ctx: dict[str, Any]
 
-    def get_storage(self) -> Any | None:
-        """Get debate storage instance."""
+    def get_storage(self) -> Any:
+        """Get debate storage instance (``@require_storage`` routes never see None)."""
         ...
 
     def read_json_body(self, handler: Any, max_size: int | None = None) -> dict[str, Any] | None:
@@ -217,11 +217,13 @@ class CrudOperationsMixin:
         },
     )
     @handle_errors("list active debates")
-    def _get_active_debates(self: _DebatesHandlerProtocol) -> HandlerResult:
-        """List currently running debates from the server state manager.
+    def _get_active_debates(self: _DebatesHandlerProtocol, org_id: str) -> HandlerResult:
+        """List the caller's org's currently running debates from the server state manager.
 
         Returns debates tracked in StateManager that have status 'running' or 'paused'.
         These are debates actively being processed, not yet completed/persisted.
+        A running debate belongs to the org recorded in its metadata when it was
+        created; debates without one are not listed.
         """
         from aragora.server.state import get_state_manager
 
@@ -230,6 +232,9 @@ class CrudOperationsMixin:
 
         debates_list = []
         for debate_id, debate_state in active.items():
+            metadata = getattr(debate_state, "metadata", None)
+            if not org_id or not isinstance(metadata, dict) or metadata.get("org_id") != org_id:
+                continue
             info = debate_state.to_dict()
             debates_list.append(
                 {
@@ -289,9 +294,13 @@ class CrudOperationsMixin:
         SECURITY: After retrieval, verifies the requesting user's tenant/org matches
         the debate's tenant to prevent cross-tenant data access (IDOR).
         """
-        # First check persistent storage
+        # First check persistent storage (by id, then by slug)
         storage = self.get_storage()
         debate = storage.get_debate(slug)
+        if not debate:
+            by_slug = getattr(storage, "get_debate_by_slug", None)
+            found = by_slug(slug) if callable(by_slug) else None
+            debate = found if isinstance(found, dict) else None
         if debate:
             # Public playground debates are accessible without authentication
             visibility = debate.get("visibility", "private")

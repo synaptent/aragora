@@ -333,6 +333,7 @@ class TestGetDebateBySlug:
     def test_get_debate_not_found(self, handler, mock_storage, mock_handler_request):
         """Test getting non-existent debate."""
         mock_storage.get_debate = Mock(return_value=None)
+        mock_storage.get_debate_by_slug = Mock(return_value=None)
 
         result = handler._get_debate_by_slug(mock_handler_request, "missing")
 

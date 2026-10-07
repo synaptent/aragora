@@ -1506,6 +1506,7 @@ class TestGetReceiptStore:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("org_scoped_request_user")
 class TestHandleDispatch:
     """Test that the handler.handle() method correctly dispatches decision-integrity."""
 
@@ -1519,6 +1520,7 @@ class TestHandleDispatch:
         storage = MagicMock()
         storage.get_debate.return_value = {"task": "T", "status": "concluded"}
         storage.is_public.return_value = False
+        storage.get_access_info.return_value = ("debate-001", "test-org-001", False)
 
         pkg = _MockPackage()
         mock_ra.return_value = pkg
@@ -1539,6 +1541,7 @@ class TestHandleDispatch:
         from aragora.server.handlers.debates.handler import DebatesHandler
 
         storage = MagicMock()
+        storage.get_access_info.return_value = ("debate-001", "test-org-001", False)
         handler_obj = DebatesHandler(server_context={"storage": storage})
         http_handler = _mock_http_handler(command="GET")
 
