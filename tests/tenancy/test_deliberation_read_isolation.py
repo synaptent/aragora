@@ -26,6 +26,15 @@ from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi import create_app
 from aragora.server.handlers.control_plane import ControlPlaneHandler
 from aragora.storage.decision_result_store import DecisionResultStore
+from tests.server.rbac_dispatch import (
+    AUTH_REQUIRED_BODY,
+    ORG_REQUIRED_BODY,
+    STATIC_TOKEN,
+    build_server,
+    dispatch,
+    isolate_auth,
+    jwt,
+)
 
 ORG_A, ORG_B = "org-a", "org-b"
 WEBHOOK = "https://hooks.example.test/deliver"
@@ -160,6 +169,83 @@ class TestFastAPIRoutes:
     def test_callers_without_org_scope_are_refused(self, v2_get, template, caller, expected):
         status, body = v2_get(template.format(id="dec_a"), caller)
         assert (status, json.loads(body)["code"]) == expected
+
+
+# --- Legacy reads through the real dispatch (RBAC gate, MFA gate, handler) ---
+
+
+@pytest.fixture(scope="module")
+def server():
+    return build_server()
+
+
+@pytest.mark.parametrize("template", LEGACY_PATHS)
+@pytest.mark.parametrize("api_token", [STATIC_TOKEN, None], ids=["token-set", "token-unset"])
+class TestLegacyReadsThroughDispatch:
+    @pytest.fixture(autouse=True)
+    def _auth(self, monkeypatch, api_token):
+        isolate_auth(monkeypatch, api_token)
+
+    def test_owner_org_reads_without_stored_request(self, server, template):
+        path = template.format(id="dec_a")
+        status, body = dispatch(server, "GET", path, jwt("user-a", ORG_A, "owner"))
+        assert status == 200, body
+        _owner_body_ok(path, body)
+
+    @pytest.mark.parametrize("caller,request_id", HIDDEN)
+    def test_other_org_and_ownerless_match_missing(self, server, template, caller, request_id):
+        org_id, user_id, role = CALLERS[caller]
+        auth = jwt(user_id, org_id, role)
+        hidden = dispatch(server, "GET", template.format(id=request_id), auth)
+        assert hidden == dispatch(server, "GET", template.format(id="dec_missing"), auth)
+        assert hidden == (404, NOT_FOUND)
+
+
+@pytest.mark.parametrize("template", LEGACY_PATHS)
+class TestLegacyReadsRefusedWithTheTokenSet:
+    @pytest.fixture(autouse=True)
+    def _auth(self, monkeypatch):
+        isolate_auth(monkeypatch, STATIC_TOKEN)
+
+    @pytest.mark.parametrize(
+        "caller,expected",
+        [
+            (None, (401, AUTH_REQUIRED_BODY)),
+            ("static", (403, ORG_REQUIRED_BODY)),
+            ("noorg-owner", (403, ORG_REQUIRED_BODY)),
+            ("noorg-member", (403, ORG_REQUIRED_BODY)),
+        ],
+    )
+    def test_callers_without_org_scope_are_refused(self, server, template, caller, expected):
+        auth = {None: None, "static": f"Bearer {STATIC_TOKEN}"}.get(caller)
+        if caller in CALLERS:
+            org_id, user_id, role = CALLERS[caller]
+            auth = jwt(user_id, org_id, role)
+        assert dispatch(server, "GET", template.format(id="dec_a"), auth) == expected
+
+    def test_member_without_control_plane_read_is_denied_by_the_gate(self, server, template):
+        status, body = dispatch(
+            server, "GET", template.format(id="dec_a"), jwt("m", ORG_A, "member")
+        )
+        assert (status, body["code"], body["required_permission"]) == (
+            403,
+            "permission_denied",
+            "control_plane.read",
+        )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/control-plane/deliberations/dec_a/transcript",
+        "/api/v1/control-plane/deliberations/dec_a/status/extra",
+    ],
+)
+def test_other_deliberation_suffixes_get_no_read_rule(server, monkeypatch, path):
+    isolate_auth(monkeypatch, STATIC_TOKEN)
+    status, body = dispatch(server, "GET", path, jwt("user-a", ORG_A, "owner"))
+    assert (status, body["code"], body["required_permission"]) == (403, "permission_denied", None)
+    assert dispatch(server, "GET", path, f"Bearer {STATIC_TOKEN}") == (401, AUTH_REQUIRED_BODY)
 
 
 def test_in_memory_fallback_is_owner_checked(monkeypatch):
@@ -301,6 +387,25 @@ async def test_another_org_cannot_take_over_an_id(legacy_post, legacy_get, route
     assert status == 200 and store.get("dec_a")["result"] == STORED["result"]
     assert decision_results._decision_results_fallback == {}
     _only_org_a_reads(legacy_get, LEGACY_PATHS, "dec_a")
+
+
+@pytest.mark.asyncio
+async def test_writes_route_under_the_caller_org_whatever_the_body_says(
+    legacy_post, v2_post, router
+):
+    spoofed = {"content": "Ship?", "context": {"workspace_id": ORG_A, "user_id": "user-a"}}
+    for mode in ("sync", "async"):
+        assert (await legacy_post(POST_PATHS[0], "b", {**spoofed, "mode": mode}))[0] in (200, 202)
+    for async_mode in (False, True):
+        assert v2_post("b", {**spoofed, "async_mode": async_mode})[0] == 202
+
+    routed = [call.args[0].context for call in router.route.call_args_list]
+    queued = [
+        submit.call_args.kwargs["payload"]["context"]
+        for submit in (legacy_post.submit_task, v2_post.submit_task)
+    ]
+    assert [(c.workspace_id, c.user_id) for c in routed] == [(ORG_B, "user-b")] * 2
+    assert [(c["workspace_id"], c["user_id"]) for c in queued] == [(ORG_B, "user-b")] * 2
 
 
 def test_in_memory_fallback_keeps_the_first_owner(monkeypatch):

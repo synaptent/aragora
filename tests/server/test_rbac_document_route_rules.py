@@ -239,7 +239,7 @@ class TestFolderDelete:
         assert FOLDER_A in FolderUploadHandler._jobs
 
 
-# Core and derived document routes; the GETs check documents.read before the org.
+# Core and derived document routes; without an org every one answers org_required.
 NO_ORG_ROUTES = [
     ("GET", "/api/v1/documents"),
     ("GET", "/api/documents"),
@@ -260,12 +260,14 @@ NO_ORG_ROUTES = [
 ]
 
 
-class TestStockBackendPermissionAndOrgOrder:
-    """ARAGORA_API_TOKEN unset: the RBAC gate is open and the handlers decide."""
+@pytest.mark.parametrize("api_token", [None, STATIC_TOKEN], ids=["token-unset", "token-set"])
+class TestPermissionAndOrgOrder:
+    """A missing org outranks a missing permission, whether the RBAC gate
+    (ARAGORA_API_TOKEN set) or the handler (unset) refuses the caller."""
 
     @pytest.fixture(autouse=True)
-    def _stock(self, monkeypatch):
-        install_api_token(monkeypatch, None)
+    def _token(self, monkeypatch, api_token):
+        install_api_token(monkeypatch, api_token)
 
     @pytest.mark.parametrize("role", ["member", "owner"])
     @pytest.mark.parametrize(("method", "template"), NO_ORG_ROUTES)

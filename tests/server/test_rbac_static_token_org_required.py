@@ -5,8 +5,8 @@ Requests go through the legacy server's real dispatch methods
 budget gates). Handler dispatch is replaced by a spy, so a request that passes
 every gate answers 299 ``{"reached": path}`` and a refused one never reaches it.
 
-"Unchanged" cases compare each response with the one produced when the new
-static-token branch is disabled, i.e. the previous behavior.
+"Unchanged" cases compare each response with the one produced when the
+static-token and missing-org branches are disabled, i.e. the previous behavior.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import http.client
 import io
 import json
 import threading
-from contextlib import nullcontext
+from contextlib import ExitStack
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -160,18 +160,15 @@ def _dispatch(
         return True
 
     request._try_modular_handler = _handler_spy
-    previous = (
-        patch("aragora.tenancy.record_scope.static_token_denial", return_value=None)
-        if legacy
-        else nullcontext()
-    )
-    with (
-        previous,
-        patch(
-            "aragora.server.middleware.rate_limit.should_apply_default_rate_limit",
-            return_value=False,
-        ),
-    ):
+    with ExitStack() as stack:
+        for name in ("static_token_denial", "missing_org_denial") if legacy else ():
+            stack.enter_context(patch(f"aragora.tenancy.record_scope.{name}", return_value=None))
+        stack.enter_context(
+            patch(
+                "aragora.server.middleware.rate_limit.should_apply_default_rate_limit",
+                return_value=False,
+            )
+        )
         if method == "GET":
             request._do_GET_internal(path, {})
         else:
@@ -221,12 +218,34 @@ class TestStaticTokenOnOrgScopedRoutes:
         assert (status, body, reached) == (401, AUTH_REQUIRED_BODY, [])
 
 
+class TestJwtWithoutOrg:
+    @pytest.mark.parametrize(
+        "path", ["/api/v1/documents", "/api/v1/documents/doc-1", "/api/v1/knowledge/jobs"]
+    )
+    def test_member_without_org_gets_org_required_not_permission_denied(self, path):
+        assert _dispatch("GET", path, _jwt(None)) == (403, ORG_REQUIRED_BODY, [])
+
+    @pytest.mark.parametrize("role", ["member", "owner"])
+    @pytest.mark.parametrize(("method", "path"), ORG_SCOPED_REQUESTS, ids=_ids(ORG_SCOPED_REQUESTS))
+    def test_a_permission_denial_becomes_org_required_and_nothing_else_changes(
+        self, method, path, role
+    ):
+        authorization = _jwt(None, role)
+
+        current = _dispatch(method, path, authorization)
+        previous = _dispatch(method, path, authorization, legacy=True)
+
+        if previous[1].get("code") == "permission_denied":
+            assert current == (403, ORG_REQUIRED_BODY, [])
+        else:
+            assert current == previous
+
+
 class TestUnchangedBehavior:
     @pytest.mark.parametrize("role", ["member", "owner"])
-    @pytest.mark.parametrize("org_id", [ORG_A, None], ids=["with-org", "without-org"])
     @pytest.mark.parametrize(("method", "path"), ORG_SCOPED_REQUESTS, ids=_ids(ORG_SCOPED_REQUESTS))
-    def test_jwt_users_get_exactly_the_previous_response(self, method, path, org_id, role):
-        authorization = _jwt(org_id, role)
+    def test_jwt_users_with_an_org_get_exactly_the_previous_response(self, method, path, role):
+        authorization = _jwt(ORG_A, role)
 
         current = _dispatch(method, path, authorization)
 
@@ -240,7 +259,9 @@ class TestUnchangedBehavior:
         assert (status, reached) == (REACHED, ["/api/v1/plans"])
 
     @pytest.mark.parametrize(
-        "authorization", [None, f"Bearer {STATIC_TOKEN}"], ids=["anonymous", "static-token"]
+        "authorization",
+        [None, f"Bearer {STATIC_TOKEN}", "no-org-jwt"],
+        ids=["anonymous", "static-token", "no-org-jwt"],
     )
     @pytest.mark.parametrize(
         ("method", "path"),
@@ -250,6 +271,8 @@ class TestUnchangedBehavior:
     def test_paths_outside_the_matcher_and_public_paths_are_unchanged(
         self, method, path, authorization
     ):
+        if authorization == "no-org-jwt":
+            authorization = _jwt(None)
         current = _dispatch(method, path, authorization)
 
         assert current == _dispatch(method, path, authorization, legacy=True)

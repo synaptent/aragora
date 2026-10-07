@@ -263,7 +263,17 @@ async def run_deliberation(
     org_id: str | None = None,
     created_by: str | None = None,
 ) -> DecisionResult:
-    """Run a deliberation and persist the result."""
+    """Run a deliberation under the given owner and persist the result.
+
+    The owner is bound to the request before routing: the decision cache and
+    in-flight deduplication are partitioned by the request's workspace, so a
+    request routed under another (or no) workspace could be answered with a
+    result computed for a different org.
+    """
+    if org_id:
+        request.context.workspace_id = org_id
+    if created_by:
+        request.context.user_id = created_by
     decision_router = router or get_decision_router()
     result = await decision_router.route(request)
     save_decision_result(

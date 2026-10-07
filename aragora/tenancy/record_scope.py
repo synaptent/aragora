@@ -132,6 +132,8 @@ _PUBLIC_IN_ORG_SCOPED_FAMILIES = re.compile(
     r"|gauntlet/personas(?:/.*)?"
     r")$"
 )
+# Org-owned routes in families that are otherwise not org-scoped.
+_ORG_SCOPED_ROUTES = re.compile(r"^/api/control-plane/deliberations/[^/]+(?:/status)?$")
 _VERSION_SEGMENT = re.compile(r"^/api/v\d+(?=/|$)")
 
 
@@ -191,8 +193,9 @@ def is_org_scoped_path(path: str) -> bool:
 
     Plans, plan executions and runs, documents and knowledge jobs, receipts
     (gauntlet included), debates and their create aliases, debate checkpoints,
-    search, pipelines and the decision workspace. Any ``/api/v<N>/`` form
-    matches like ``/api/``.
+    search, pipelines and the decision workspace, plus the per-id control-plane
+    deliberation result and status reads. Any ``/api/v<N>/`` form matches like
+    ``/api/``.
     Public-by-design routes in those families do not match: receipt share
     links, the signing key and the stateless verifier, the public debate
     viewer and spectate page, and gauntlet personas.
@@ -202,6 +205,8 @@ def is_org_scoped_path(path: str) -> bool:
     normalized = _VERSION_SEGMENT.sub("/api", path, count=1)
     if _PUBLIC_IN_ORG_SCOPED_FAMILIES.match(normalized):
         return False
+    if _ORG_SCOPED_ROUTES.match(normalized):
+        return True
     return any(
         normalized == family or normalized.startswith(family + "/")
         for family in _ORG_SCOPED_FAMILIES
@@ -217,6 +222,19 @@ def static_token_denial(path: str, headers: Any) -> ScopeDenial | None:
     the caller gets the same answer the handler would give.
     """
     if is_org_scoped_path(path) and carries_static_api_token(headers):
+        return ORG_REQUIRED
+    return None
+
+
+def missing_org_denial(path: str, org_id: Any) -> ScopeDenial | None:
+    """``ORG_REQUIRED`` for an authenticated user without an org on an
+    org-scoped path, else None.
+
+    For auth gates that refuse such a user before the handler: the answer
+    replaces their permission denial, as :func:`scope_denial_first` does in
+    the handlers, so a missing org outranks a missing permission everywhere.
+    """
+    if is_org_scoped_path(path) and not (isinstance(org_id, str) and org_id.strip()):
         return ORG_REQUIRED
     return None
 
@@ -373,6 +391,7 @@ __all__ = [
     "ScopeDenial",
     "carries_static_api_token",
     "is_org_scoped_path",
+    "missing_org_denial",
     "not_found_body",
     "record_not_found",
     "record_not_found_error",

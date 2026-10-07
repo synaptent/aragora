@@ -983,20 +983,16 @@ class TaskHandlerMixin:
 
         try:
             from aragora.core.decision import DecisionRequest
-            from aragora.billing.auth import extract_user_from_request
 
             headers = {}
             if hasattr(handler, "headers"):
                 headers = dict(handler.headers)
 
             request = DecisionRequest.from_http(body, headers)
-
-            auth_ctx = extract_user_from_request(handler)
-            if auth_ctx.authenticated:
-                if not request.context.user_id:
-                    request.context.user_id = auth_ctx.user_id
-                if not request.context.workspace_id:
-                    request.context.workspace_id = auth_ctx.org_id
+            # Routed, cached and queued under the caller's scope, never under
+            # an org or user named in the body.
+            request.context.user_id = scope.user_id
+            request.context.workspace_id = scope.org_id
         except ValueError as e:
             logger.warning("Handler error: %s", e)
             return error_response("Invalid request", 400)
