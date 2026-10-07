@@ -35,7 +35,8 @@ Migration Notes:
     covers the lower-level FactStore API (facts, relations, queries, search).
 
 Organization scoping:
-    Stored facts carry no organization yet. Until they do, every route that
+    POST /facts binds each new fact to the caller's organization. Until
+    organization scoping lands for the other fact routes, every route that
     reads or changes stored facts (everything except POST /facts and
     GET /sync-status) answers 401 to anonymous callers and 403
     ``knowledge_fact_access_closed`` to every authenticated caller.
@@ -332,8 +333,8 @@ async def _fact_access_closed(
 ) -> None:
     """Answer 403 to every authenticated caller of a route that touches stored facts.
 
-    Stored facts carry no organization, so any caller who can read or change them
-    reaches every organization's facts. Route-level dependencies run before the
+    Organization scoping has not landed for these routes yet, so none of them
+    may touch stored facts. Route-level dependencies run before the
     route's own parameters are resolved, so this answers before the route's
     permission check and before the fact store or query engine is created;
     anonymous callers still get 401 from ``require_authenticated``.
@@ -482,6 +483,17 @@ async def _call_store(store: Any, method_name: str, *args: Any, **kwargs: Any) -
     return result
 
 
+def _caller_org(auth: AuthorizationContext) -> str:
+    """The organization fact writes bind to: only the verified auth context."""
+    if not auth.org_id:
+        raise APIError(
+            "Creating knowledge facts requires an organization",
+            status_code=403,
+            code="knowledge_org_required",
+        )
+    return auth.org_id
+
+
 # =============================================================================
 # Fact CRUD Endpoints
 # =============================================================================
@@ -567,9 +579,10 @@ async def create_fact(
     Adds a fact to the knowledge base with the given statement, confidence,
     topics, and metadata. Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
-        # Store deduplication matches statement and the caller-supplied workspace
-        # only, so it would hand another organization's existing fact to this caller.
+        # Each create stores a new fact; store deduplication would instead return an
+        # existing fact with the same statement in the caller's organization and workspace.
         fact = await _call_store(
             store,
             "add_fact",
@@ -580,6 +593,7 @@ async def create_fact(
             confidence=body.confidence,
             topics=body.topics,
             metadata=body.metadata,
+            org_id=org_id,
             deduplicate=False,
         )
         return _fact_to_detail(fact)
@@ -1088,6 +1102,7 @@ async def import_knowledge_base(
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     imported = 0
     skipped = 0
     errors = 0
@@ -1104,7 +1119,7 @@ async def import_knowledge_base(
             # Check for existing fact by ID if merge strategy requires it
             fact_id = fact_data.get("id")
             if fact_id and body.merge_strategy == "skip_existing":
-                existing = await _call_store(store, "get_fact", fact_id)
+                existing = await _call_store(store, "get_fact", fact_id, org_id=org_id)
                 if existing:
                     skipped += 1
                     continue
@@ -1119,6 +1134,7 @@ async def import_knowledge_base(
                 confidence=fact_data.get("confidence", 0.5),
                 topics=fact_data.get("topics", []),
                 metadata=fact_data.get("metadata", {}),
+                org_id=org_id,
                 deduplicate=False,
             )
             imported += 1

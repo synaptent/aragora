@@ -43,7 +43,7 @@ from collections.abc import AsyncGenerator, Callable
 
 import os
 
-from aragora.server.errors import safe_error_message
+from aragora.api_errors import safe_error_message
 
 logger = logging.getLogger(__name__)
 

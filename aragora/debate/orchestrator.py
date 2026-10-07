@@ -165,7 +165,7 @@ if TYPE_CHECKING:
     from aragora.ranking.elo import EloSystem
     from aragora.reasoning.citations import CitationExtractor
     from aragora.reasoning.evidence_grounding import EvidenceGrounder
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
     from aragora.workflow.engine import Workflow
 
 
@@ -391,7 +391,7 @@ class Arena(ArenaDelegatesMixin):
         memory: Any = None,
         event_hooks: dict[str, Any] | None = None,
         hook_manager: Any = None,
-        event_emitter: EventEmitterProtocol | None = None,
+        event_emitter: LegacyEventEmitterProtocol | None = None,
         spectator: SpectatorStream | None = None,
         debate_embeddings: Any = None,
         insight_store: Any = None,

@@ -1,4 +1,4 @@
-"""The v2 knowledge-base fact routes stay closed until stored facts carry an organization.
+"""The v2 knowledge-base fact routes stay closed until organization scoping lands for them.
 
 Requests go through the real FastAPI app (``create_app``) with access tokens from
 ``create_access_token``, so ``require_authenticated`` and ``require_permission`` see the
@@ -26,6 +26,8 @@ pytestmark = pytest.mark.no_auto_auth
 
 PREFIX = "/api/v2/knowledge-base"
 ROLES = ("owner", "admin", "member", "analyst", "viewer")
+ORG_A = "org-a"
+ORG_B = "org-b"
 ORG_A_STATEMENT = "Org A acquisition target is Northwind, closing 2026-11-30"
 ORG_A_WORKSPACE = "ws-org-a"
 ORG_A_METADATA = {"deal_room": "org-a-only"}
@@ -106,9 +108,12 @@ class _ApiKeyUserStore:
 def seeded(fastapi_app) -> dict[str, Any]:
     inner = InMemoryFactStore()
     fact_a = inner.add_fact(
-        statement=ORG_A_STATEMENT, workspace_id=ORG_A_WORKSPACE, metadata=ORG_A_METADATA
+        statement=ORG_A_STATEMENT,
+        workspace_id=ORG_A_WORKSPACE,
+        metadata=ORG_A_METADATA,
+        org_id=ORG_A,
     )
-    default_fact_a = inner.add_fact(statement=ORG_A_STATEMENT, workspace_id="default")
+    default_fact_a = inner.add_fact(statement=ORG_A_STATEMENT, workspace_id="default", org_id=ORG_A)
     store = _Recording(inner)
     engine = _Recording(
         SimpleQueryEngine(fact_store=inner, embedding_service=InMemoryEmbeddingService())
@@ -161,7 +166,7 @@ def _assert_no_org_a_data(seeded, response) -> None:
 def _assert_untouched(seeded) -> None:
     assert seeded["store"].calls == []
     assert seeded["engine"].calls == []
-    assert seeded["inner"].get_fact(seeded["fact_a"].id).confidence == 0.5
+    assert seeded["inner"].get_fact(seeded["fact_a"].id, org_id=ORG_A).confidence == 0.5
 
 
 @pytest.mark.parametrize(("method", "path", "body"), CLOSED_ROUTES, ids=ROUTE_IDS)
@@ -220,8 +225,9 @@ def test_create_with_another_orgs_statement_stores_a_new_fact(
     assert created["workspace_id"] == workspace_id
     assert created["metadata"] == {}
     assert ORG_A_METADATA["deal_room"] not in response.text
-    assert seeded["inner"].get_fact(created["id"]) is not None
-    assert seeded["inner"].get_statistics()["total_facts"] == 3
+    assert seeded["inner"].get_fact(created["id"], org_id=ORG_B) is not None
+    assert seeded["inner"].get_statistics(org_id=ORG_A)["total_facts"] == 2
+    assert seeded["inner"].get_statistics(org_id=ORG_B)["total_facts"] == 1
 
 
 @pytest.mark.parametrize("role", ("admin", "member", "analyst", "viewer"))
@@ -263,7 +269,7 @@ def test_sync_status_stays_open(fastapi_client, seeded, role) -> None:
 @pytest.mark.asyncio
 async def test_import_body_never_deduplicates_against_stored_facts() -> None:
     store = InMemoryFactStore()
-    existing = store.add_fact(statement=ORG_A_STATEMENT, workspace_id="default")
+    existing = store.add_fact(statement=ORG_A_STATEMENT, workspace_id="default", org_id=ORG_B)
 
     result = await knowledge_base.import_knowledge_base(
         body=knowledge_base.ImportRequest(
@@ -271,11 +277,11 @@ async def test_import_body_never_deduplicates_against_stored_facts() -> None:
             workspace_id="default",
             merge_strategy="skip_existing",
         ),
-        auth=AuthorizationContext(user_id="user-org-b-owner", org_id="org-b", roles={"owner"}),
+        auth=AuthorizationContext(user_id="user-org-b-owner", org_id=ORG_B, roles={"owner"}),
         store=store,
     )
 
     assert result.imported == 1
-    ids = {fact.id for fact in store.list_facts(knowledge_base.FactFilters(limit=10))}
+    ids = {fact.id for fact in store.list_facts(knowledge_base.FactFilters(limit=10, org_id=ORG_B))}
     assert existing.id in ids
     assert len(ids) == 2

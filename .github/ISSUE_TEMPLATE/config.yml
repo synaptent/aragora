@@ -7,7 +7,7 @@ contact_links:
     url: https://github.com/synaptent/aragora/blob/main/docs/deployment/TROUBLESHOOTING.md
     about: Step-by-step troubleshooting for common deployment issues.
   - name: Zero-Config Guide
-    url: https://github.com/synaptent/aragora/blob/main/docs/ZERO_CONFIG.md
+    url: https://github.com/synaptent/aragora/blob/main/docs/getting-started/ZERO_CONFIG.md
     about: Get started without any API keys.
   - name: Security Advisories (Private Disclosure)
     url: https://github.com/synaptent/aragora/security/advisories/new
