@@ -7,8 +7,8 @@ Provides REST API endpoints for unified decision-making capabilities:
 - GET  /api/v1/decisions/:id/status - Get decision status for polling
 
 Every route needs an authenticated member of an organization. Decisions belong
-to the org that created them; another org's (or an unknown owner's) decision is
-reported exactly like a missing one.
+to the org that created them; another org's (or an unknown owner's) decision
+gets the same 404 as a missing one, on the status route too.
 
 Usage:
     # In unified_server.py
@@ -422,8 +422,8 @@ class DecisionHandler(BaseHandler):
     def _get_decision_status(self, request_id: str, scope: OrgScope) -> HandlerResult:
         """Get decision status for polling.
 
-        A decision owned by another org reports ``not_found`` exactly like a
-        missing one.
+        A missing decision, or one owned by another org or by no org, gets the
+        same 404 as ``GET /api/v1/decisions/:id``.
         """
         result = _get_result(request_id, scope.org_id)
         if result:
@@ -434,12 +434,7 @@ class DecisionHandler(BaseHandler):
                     "completed_at": result.get("completed_at"),
                 }
             )
-        return json_response(
-            {
-                "request_id": request_id,
-                "status": "not_found",
-            }
-        )
+        return record_not_found("Decision")
 
     def _list_decisions(self, query_params: dict, scope: OrgScope) -> HandlerResult:
         """List the caller org's recent decisions."""

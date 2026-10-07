@@ -80,6 +80,7 @@ DECISION_ENDPOINTS = {
             ],
             "responses": {
                 "200": _ok_response("Decision status", "DecisionStatus"),
+                "404": STANDARD_ERRORS["404"],
                 "500": STANDARD_ERRORS["500"],
             },
         }
