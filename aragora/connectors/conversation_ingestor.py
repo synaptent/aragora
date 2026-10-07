@@ -726,7 +726,7 @@ class ConversationIngestorConnector(BaseConnector):
 
         return preview
 
-    def _conversation_to_evidence(self, conv: Conversation, title: str = None) -> Evidence:
+    def _conversation_to_evidence(self, conv: Conversation, title: str | None = None) -> Evidence:
         """Convert conversation to Evidence object."""
         return Evidence(
             id=f"conv_{conv.id}",
@@ -749,7 +749,7 @@ class ConversationIngestorConnector(BaseConnector):
         msg: ConversationMessage,
         conv: Conversation,
         context: str,
-        match_preview: str = None,
+        match_preview: str | None = None,
     ) -> Evidence:
         """Convert message to Evidence object."""
         return Evidence(
