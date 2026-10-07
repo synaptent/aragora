@@ -5,6 +5,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from aragora.server.fastapi import create_app
@@ -13,12 +14,13 @@ from aragora.storage.connection_factory import DatabaseConfig, StorageBackendTyp
 
 
 @contextmanager
-def _patched_startup_dependencies():
+def _patched_startup_dependencies(*, patch_storage: bool = True):
     with ExitStack() as stack:
         mocked = {}
-        mocked["storage"] = stack.enter_context(
-            patch("aragora.storage.debate_storage.DebateStorage")
-        )
+        if patch_storage:
+            mocked["storage"] = stack.enter_context(
+                patch("aragora.storage.debate_storage.DebateStorage")
+            )
         mocked["get_user_store"] = stack.enter_context(
             patch("aragora.storage.user_store.get_user_store", return_value=MagicMock())
         )
@@ -78,6 +80,44 @@ def test_create_app_lifespan_starts_with_fastapi_context(tmp_path: Path, monkeyp
     mocked["storage"].assert_called_once_with(str(tmp_path / "debates.db"))
     mocked["init_postgres_pool"].assert_awaited_once()
     mocked["close_postgres_pool"].assert_awaited_once()
+
+
+@pytest.mark.parametrize("env_nomic_dir", [None, "elsewhere"])
+def test_create_app_nomic_dir_is_used_by_the_lifespan(
+    tmp_path: Path, monkeypatch, env_nomic_dir: str | None
+):
+    nomic_dir = tmp_path / "nomic"
+    if env_nomic_dir is None:
+        monkeypatch.delenv("ARAGORA_NOMIC_DIR", raising=False)
+    else:
+        monkeypatch.setenv("ARAGORA_NOMIC_DIR", str(tmp_path / env_nomic_dir))
+
+    with _patched_startup_dependencies() as mocked:
+        with TestClient(create_app(nomic_dir=nomic_dir)) as client:
+            assert client.get("/healthz").status_code == 200
+
+    mocked["storage"].assert_called_once_with(str(nomic_dir / "debates.db"))
+
+
+def test_fastapi_saved_debate_is_listed_by_the_legacy_store(tmp_path: Path, monkeypatch):
+    from aragora.storage.debate_storage import DebateStorage
+
+    nomic_dir = tmp_path / "nomic"
+    nomic_dir.mkdir()
+    monkeypatch.delenv("ARAGORA_NOMIC_DIR", raising=False)
+    monkeypatch.setenv("ARAGORA_DATA_DIR", str(tmp_path / "data"))
+    app = create_app(nomic_dir=nomic_dir)
+
+    with _patched_startup_dependencies(patch_storage=False):
+        with TestClient(app):
+            app.state.context["storage"].save_dict(
+                {"id": "fastapi-debate", "task": "Adopt a four-day week?", "agents": []},
+                org_id="org-a",
+            )
+
+    legacy = DebateStorage(str(nomic_dir / "debates.db"))
+    assert [d.debate_id for d in legacy.list_recent(org_id="org-a")] == ["fastapi-debate"]
+    assert legacy.list_recent(org_id="org-b") == []
 
 
 def test_lifespan_registers_webhook_store_before_context_construction():

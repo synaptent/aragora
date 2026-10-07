@@ -7,9 +7,12 @@ This module provides intelligent agent selection using:
 
 Every stage only returns agents that the debate controller's credential
 preflight accepts, and skips agent types that need no credential at all.
+Under ``ARAGORA_MODEL_TRANSPORT=vibeproxy-required`` every stage is further
+limited to the approved routes (openai-api through VibeProxy and direct grok).
 """
 
 import logging
+import os
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -19,6 +22,7 @@ from aragora.agents.credential_validator import (
     get_credential_status,
 )
 from aragora.agents.spec import AgentSpec
+from aragora.agents.transports.vibeproxy import TransportMode
 from aragora.config import ALLOWED_AGENT_TYPES
 from aragora.server.initialization import (
     ROUTING_AVAILABLE,
@@ -39,6 +43,16 @@ _FALLBACK_TEAM = "gemini|||proposer,anthropic-api|||critic"
 _MIN_TEAM_SIZE = 2
 # Same rotation the question classifier uses when it builds its agent string.
 _ROLE_ROTATION = ("proposer", "critic", "synthesizer", "judge")
+# The only model routes allowed under vibeproxy-required. Credentials for other
+# providers (including the VibeProxy placeholder OPENAI_API_KEY that codex also
+# maps to) are present without making those providers usable.
+_VIBEPROXY_REQUIRED_ROUTES = ("openai-api", "grok")
+_VIBEPROXY_REQUIRED_FALLBACK_TEAM = "openai-api|||proposer,grok|||critic"
+
+
+def _vibeproxy_required() -> bool:
+    mode = os.environ.get("ARAGORA_MODEL_TRANSPORT", "").strip().lower()
+    return mode == TransportMode.REQUIRED.value
 
 
 class NoEligibleAgentTeamError(ValueError):
@@ -53,9 +67,16 @@ class NoEligibleAgentTeamError(ValueError):
             )
             or "none"
         )
+        route_note = (
+            "ARAGORA_MODEL_TRANSPORT=vibeproxy-required limits automatic selection to "
+            f"{', '.join(_VIBEPROXY_REQUIRED_ROUTES)}. "
+            if _vibeproxy_required()
+            else ""
+        )
         super().__init__(
             "Automatic agent selection found no team of at least "
             f"{_MIN_TEAM_SIZE} agents with configured credentials. "
+            f"{route_note}"
             f"Missing credentials: {missing_text}. "
             f"Eligible agents: {', '.join(eligible) or 'none'}. "
             "Configure the missing API keys or choose agents explicitly."
@@ -67,12 +88,27 @@ def _credentialed(specs: list[AgentSpec], missing: dict[str, list[str]]) -> list
 
     Agent types without any credential requirement (demo, local, CLI wrappers,
     unregistered types) pass preflight but say nothing about whether the agent
-    can actually run, so automatic selection never picks them.
+    can actually run, so automatic selection never picks them. Under
+    vibeproxy-required, providers outside the approved routes are skipped too.
     """
+    required_mode = _vibeproxy_required()
+    if required_mode:
+        specs = [spec for spec in specs if spec.provider in _VIBEPROXY_REQUIRED_ROUTES]
     available, filtered = filter_available_agents(specs, log_filtered=False, min_agents=0)
     for provider, _reason in filtered:
         missing.setdefault(provider, get_credential_status(provider).missing_vars)
-    return [spec for spec in available if AGENT_CREDENTIAL_MAP.get(spec.provider)]
+    team = [spec for spec in available if AGENT_CREDENTIAL_MAP.get(spec.provider)]
+    if not required_mode:
+        return team
+    # The OpenRouter fallback is not an approved route: only the provider's own key counts.
+    direct = []
+    for spec in team:
+        own_keys = AGENT_CREDENTIAL_MAP[spec.provider]
+        if get_credential_status(spec.provider).available_via in own_keys:
+            direct.append(spec)
+        else:
+            missing.setdefault(spec.provider, list(own_keys))
+    return direct
 
 
 def _classifier_team(
@@ -196,13 +232,14 @@ def _selector_team(
 
 
 def _fallback_team(missing: dict[str, list[str]], eligible: set[str]) -> str:
-    specs = AgentSpec.coerce_list(_FALLBACK_TEAM, warn=False)
+    fallback = _VIBEPROXY_REQUIRED_FALLBACK_TEAM if _vibeproxy_required() else _FALLBACK_TEAM
+    specs = AgentSpec.coerce_list(fallback, warn=False)
     team = _credentialed(specs, missing)
     eligible.update(spec.provider for spec in team)
     if len(team) < _MIN_TEAM_SIZE:
         raise NoEligibleAgentTeamError(missing, sorted(eligible))
     if len(team) == len(specs):
-        return _FALLBACK_TEAM
+        return fallback
     return ",".join(spec.to_string() for spec in team)
 
 

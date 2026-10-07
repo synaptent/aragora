@@ -38,9 +38,13 @@ CLASSIFIER_TEAM = (
 
 @pytest.fixture
 def credentials(monkeypatch) -> dict[str, str]:
-    """Configured secrets, by env var name. Starts empty: no provider is configured."""
+    """Configured secrets, by env var name. Starts empty: no provider is configured.
+
+    The model transport starts at its default (direct) mode.
+    """
     configured: dict[str, str] = {}
     monkeypatch.setattr(credential_validator, "_get_secret", lambda name: configured.get(name))
+    monkeypatch.delenv("ARAGORA_MODEL_TRANSPORT", raising=False)
     return configured
 
 
@@ -107,6 +111,20 @@ def _body(result) -> dict[str, Any]:
     return json.loads(raw) if isinstance(raw, str) else raw
 
 
+def _spy_selector(monkeypatch) -> list[str]:
+    """Record the agent types registered in the AgentSelector pool."""
+    registered: list[str] = []
+    real_selector = agent_selection.AgentSelector
+
+    class _SpySelector(real_selector):  # type: ignore[misc,valid-type]
+        def register_agent(self, profile):
+            registered.append(profile.agent_type)
+            return super().register_agent(profile)
+
+    monkeypatch.setattr(agent_selection, "AgentSelector", _SpySelector)
+    return registered
+
+
 # ---------------------------------------------------------------------------
 # Stage 1: keyword classifier
 # ---------------------------------------------------------------------------
@@ -165,22 +183,10 @@ class TestClassifierStage:
 
 
 class TestSelectorPoolStage:
-    def _spy_selector(self, monkeypatch) -> list[str]:
-        registered: list[str] = []
-        real_selector = agent_selection.AgentSelector
-
-        class _SpySelector(real_selector):  # type: ignore[misc,valid-type]
-            def register_agent(self, profile):
-                registered.append(profile.agent_type)
-                return super().register_agent(profile)
-
-        monkeypatch.setattr(agent_selection, "AgentSelector", _SpySelector)
-        return registered
-
     def test_pool_contains_only_credentialed_agents(self, credentials, classifier, monkeypatch):
         credentials.update({"OPENAI_API_KEY": "configured", "XAI_API_KEY": "configured"})
         classifier("anthropic-api||claude|proposer,anthropic-api||sox|critic")
-        registered = self._spy_selector(monkeypatch)
+        registered = _spy_selector(monkeypatch)
 
         selected = agent_selection.auto_select_agents("Which queue should we use?", {})
 
@@ -243,6 +249,75 @@ class TestFixedFallbackStage:
             agent_selection.auto_select_agents("Q?", {})
 
         assert "ANTHROPIC_API_KEY" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# ARAGORA_MODEL_TRANSPORT=vibeproxy-required: only the approved routes qualify
+# ---------------------------------------------------------------------------
+
+APPROVED_ROUTES = {"openai-api", "grok"}
+# Present but not proof of an approved route: the VibeProxy placeholder (which
+# codex also maps to), an invalid Gemini key, and other providers' keys.
+PRESENT_CREDENTIALS = {
+    "OPENAI_API_KEY": "vibeproxy-local",
+    "XAI_API_KEY": "configured",
+    "GEMINI_API_KEY": "present-but-invalid",
+    "ANTHROPIC_API_KEY": "configured",
+    "MISTRAL_API_KEY": "configured",
+    "OPENROUTER_API_KEY": "configured",
+}
+
+
+class TestVibeProxyRequiredRoutes:
+    @pytest.fixture(autouse=True)
+    def _required_mode(self, credentials, monkeypatch):
+        credentials.update(PRESENT_CREDENTIALS)
+        monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-required")
+
+    def test_classifier_team_keeps_only_approved_routes(self, classifier):
+        classifier(CLASSIFIER_TEAM)
+
+        selected = agent_selection.auto_select_agents("Should we adopt a four-day week?", {})
+
+        assert _providers(selected) == ["openai-api", "grok"]
+        assert _roles(selected) == ["proposer", "critic"]
+
+    def test_selector_pool_contains_only_approved_routes(self, classifier, monkeypatch):
+        classifier("anthropic-api||claude|proposer,gemini||devops_engineer|critic")
+        registered = _spy_selector(monkeypatch)
+
+        selected = agent_selection.auto_select_agents("Which queue should we use?", {})
+
+        assert set(registered) == APPROVED_ROUTES
+        assert set(_providers(selected)) == APPROVED_ROUTES
+
+    def test_fallback_team_uses_approved_routes(self, classifier, monkeypatch):
+        monkeypatch.setattr(agent_selection, "ROUTING_AVAILABLE", False)
+        classifier("qwen||qwen|proposer,kimi||kimi|critic")
+
+        selected = agent_selection.auto_select_agents("Q?", {})
+
+        assert selected == "openai-api|||proposer,grok|||critic"
+
+    def test_unapproved_and_openrouter_fallback_credentials_give_no_eligible_team(
+        self, credentials, classifier, monkeypatch
+    ):
+        # Without XAI_API_KEY, grok is only reachable through the OpenRouter fallback.
+        del credentials["XAI_API_KEY"]
+        monkeypatch.setattr(agent_selection, "ROUTING_AVAILABLE", False)
+        classifier(CLASSIFIER_TEAM)
+
+        with pytest.raises(_no_eligible_team_error()) as excinfo:
+            agent_selection.auto_select_agents("Q?", {})
+
+        assert "vibeproxy-required" in str(excinfo.value)
+        assert "XAI_API_KEY" in str(excinfo.value)
+
+    def test_default_mode_still_accepts_every_credentialed_provider(self, classifier, monkeypatch):
+        monkeypatch.delenv("ARAGORA_MODEL_TRANSPORT")
+        classifier(CLASSIFIER_TEAM)
+
+        assert agent_selection.auto_select_agents("Q?", {}) == CLASSIFIER_TEAM
 
 
 # ---------------------------------------------------------------------------

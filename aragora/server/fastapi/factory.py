@@ -243,8 +243,11 @@ async def lifespan(app: FastAPI):
     except (ImportError, OSError, RuntimeError, ValueError) as e:
         logger.debug("PostgreSQL pool startup unavailable: %s", e)
 
-    # Initialize server context
-    nomic_dir = Path(os.environ.get("ARAGORA_NOMIC_DIR", "."))
+    # Initialize server context. The nomic_dir given to create_app wins so
+    # FastAPI and the legacy server share {nomic_dir}/debates.db.
+    nomic_dir = getattr(app.state, "nomic_dir", None)
+    if not isinstance(nomic_dir, Path):
+        nomic_dir = Path(os.environ.get("ARAGORA_NOMIC_DIR", "."))
     ctx = _build_server_context(nomic_dir)
     app.state.context = ctx
 
@@ -313,6 +316,8 @@ def create_app(
         debug=debug,
         lifespan=lifespan,
     )
+    if nomic_dir is not None:
+        app.state.nomic_dir = Path(nomic_dir)
 
     # Add middleware (order matters - first added is outermost)
 

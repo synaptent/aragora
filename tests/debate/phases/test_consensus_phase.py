@@ -1867,3 +1867,50 @@ class TestGuaranteedEvents:
 
         # Should not raise
         phase._emit_guaranteed_events(ctx)
+
+
+class TestCancelledSynthesis:
+    """A cancelled phase leaves the terminal events to whoever cancelled it."""
+
+    @staticmethod
+    def _phase() -> tuple[DebateContext, ConsensusPhase, dict[str, MagicMock]]:
+        ctx, protocol = make_context()
+        hooks = {"on_consensus": MagicMock(), "on_debate_end": MagicMock()}
+        deps = ConsensusDependencies(protocol=protocol, hooks=hooks)
+        return ctx, ConsensusPhase(deps=deps, callbacks=ConsensusCallbacks()), hooks
+
+    @pytest.mark.asyncio
+    async def test_cancellation_during_synthesis_emits_no_debate_end(self):
+        ctx, phase, hooks = self._phase()
+        entered = asyncio.Event()
+
+        async def _never_finishes(_ctx):
+            entered.set()
+            await asyncio.Event().wait()
+
+        with patch.object(
+            phase._synthesis_generator, "generate_mandatory_synthesis", _never_finishes
+        ):
+            task = asyncio.create_task(phase.execute(ctx))
+            await entered.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        hooks["on_debate_end"].assert_not_called()
+        hooks["on_consensus"].assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_completed_synthesis_still_emits_one_debate_end(self):
+        ctx, phase, hooks = self._phase()
+
+        with patch.object(
+            phase._synthesis_generator,
+            "generate_mandatory_synthesis",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            await phase.execute(ctx)
+
+        hooks["on_debate_end"].assert_called_once()
+        hooks["on_consensus"].assert_called_once()

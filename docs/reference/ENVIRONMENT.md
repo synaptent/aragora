@@ -135,6 +135,14 @@ but in `vibeproxy-required` mode the agent never sends it: proxy requests use
 `OPENAI_API_KEY` (for example OpenAI embeddings) will get `401` with a
 placeholder and use their fallbacks.
 
+**Automatic agent selection under `vibeproxy-required`:** debates that pick
+their own agents (for example `POST /api/v1/debate-this`) only consider
+`openai-api` (through VibeProxy, so the placeholder `OPENAI_API_KEY` is
+enough) and `grok` with its own `XAI_API_KEY`. Other agent types are skipped
+even when a key is present (for example `codex`, which also reads
+`OPENAI_API_KEY`), and the OpenRouter fallback does not count. Agents the
+caller names explicitly are not filtered.
+
 ## Web Research (Experimental)
 
 Enable external web research during debates (set the keys below):
