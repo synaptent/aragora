@@ -324,3 +324,79 @@ def test_transitive_impact_text_output_contains_header(
     out = capsys.readouterr().out
     assert "Transitive impact" in out
     assert "test.unit.beta" in out
+
+
+def _failing_beta_claim(tmp_path: Path, status: str = "fail") -> Path:
+    cr = tmp_path / "cr.jsonl"
+    cr.write_text(
+        json.dumps({"claim_id": "claim.beta.ok", "status": status, "message": "x"}) + "\n",
+        encoding="utf-8",
+    )
+    return cr
+
+
+def test_transitive_impact_verifier_error_claim_included(
+    monkeypatch, units_dir_with_claim: Path, tmp_path: Path, capsys
+) -> None:
+    """A verifier error on a claim also contributes to the impact set."""
+    monkeypatch.setenv(_FLAG, "1")
+    cr = _failing_beta_claim(tmp_path, status="error")
+    cmd_decay_monitor(
+        _ns_transitive(str(units_dir_with_claim), claim_results=str(cr), json_out=True)
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert out["transitive_impact_set"] == ["test.unit.beta"]
+
+
+def test_duplicate_unit_ids_without_transitive_impact_still_report(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """The default report keeps evaluating every manifest, duplicates included."""
+    monkeypatch.setenv(_FLAG, "1")
+    units = tmp_path / "units"
+    units.mkdir()
+    (units / "unit_beta.yaml").write_text(_UNIT_WITH_CLAIM_YAML, encoding="utf-8")
+    (units / "unit_beta.backup.yaml").write_text(_UNIT_WITH_CLAIM_YAML, encoding="utf-8")
+    cr = _failing_beta_claim(tmp_path)
+    rc = cmd_decay_monitor(_ns(str(units), claim_results=str(cr), json_out=True))
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["total"] == 2
+
+
+def test_transitive_impact_duplicate_unit_ids_exit_1_cleanly(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Duplicate code_unit_ids under --transitive-impact give a CLI error, not a traceback."""
+    monkeypatch.setenv(_FLAG, "1")
+    units = tmp_path / "units"
+    units.mkdir()
+    (units / "unit_beta.yaml").write_text(_UNIT_WITH_CLAIM_YAML, encoding="utf-8")
+    (units / "unit_beta.backup.yaml").write_text(_UNIT_WITH_CLAIM_YAML, encoding="utf-8")
+    cr = _failing_beta_claim(tmp_path)
+    rc = cmd_decay_monitor(_ns_transitive(str(units), claim_results=str(cr), json_out=True))
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: --transitive-impact")
+    assert "duplicate code_unit_id 'test.unit.beta'" in captured.err
+
+
+def test_transitive_impact_missing_unit_ids_exit_1_cleanly(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Two manifests without code_unit_id collide on the empty id; report it cleanly."""
+    monkeypatch.setenv(_FLAG, "1")
+    units = tmp_path / "units"
+    units.mkdir()
+    no_id = "\n".join(
+        line for line in _UNIT_WITH_CLAIM_YAML.splitlines() if not line.startswith("code_unit_id")
+    )
+    (units / "first.yaml").write_text(no_id + "\n", encoding="utf-8")
+    (units / "second.yaml").write_text(no_id + "\n", encoding="utf-8")
+    cr = _failing_beta_claim(tmp_path)
+    rc = cmd_decay_monitor(_ns_transitive(str(units), claim_results=str(cr)))
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: --transitive-impact")
+    assert "duplicate code_unit_id ''" in captured.err

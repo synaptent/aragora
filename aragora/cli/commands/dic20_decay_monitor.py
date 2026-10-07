@@ -146,7 +146,13 @@ def cmd_decay_monitor(args: argparse.Namespace) -> int:
             for r in s.reasons
             if r.claim_id and r.kind in {"failed_claim", "stale_evidence", "verifier_error"}
         }
-        graph = ProofUnitConstraintGraph(units)
+        try:
+            graph = ProofUnitConstraintGraph(units)
+        except ValueError as exc:
+            # The graph requires unique ids (manifests that omit code_unit_id
+            # all load as ""), while the default report tolerates duplicates.
+            print(f"error: --transitive-impact: {exc}", file=sys.stderr)
+            return 1
         transitive_impact_set = compute_decay_impact_set(graph, failing_claim_ids, transitive=True)
 
     ts = datetime.now(timezone.utc).isoformat()
