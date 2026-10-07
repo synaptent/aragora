@@ -9,7 +9,9 @@ through :func:`create_code_scanner`.
 A process that only imports ``aragora.agents`` never loads the audit package. The
 first lookup that finds nothing registered therefore runs, once per process, the
 registrations declared under the ``aragora.code_scanners`` entry-point group;
-aragora's own ``pyproject.toml`` declares the audit registration there.
+aragora's own ``pyproject.toml`` declares the audit registration there. A source
+checkout whose installed metadata predates a declaration also reads it from that
+``pyproject.toml`` (on Python 3.10 only when ``tomli`` is installed).
 
 :func:`create_code_scanner` raises :class:`CodeScannerNotRegisteredError` when nothing
 is registered for a kind after that. Registration is keyed, so registering again
@@ -90,11 +92,21 @@ def _load_declared_registrations() -> None:
             return
         # Set before loading: a registration that builds a scanner must not start another load.
         _declared_registrations_loaded = True
-        declared = (
-            list(importlib.metadata.entry_points(group=CODE_SCANNERS_ENTRY_POINT_GROUP))
-            or _source_checkout_registrations()
+        try:
+            installed = list(importlib.metadata.entry_points(group=CODE_SCANNERS_ENTRY_POINT_GROUP))
+        except _REGISTRATION_ERRORS as exc:
+            logger.warning(
+                "Reading the %s entry points failed: %s", CODE_SCANNERS_ENTRY_POINT_GROUP, exc
+            )
+            installed = []
+        # Merged by target rather than by name: an unrelated installed plugin, even one
+        # with the same entry-point name, must not hide a declaration that only the source
+        # checkout's pyproject carries yet, and no registration runs twice.
+        installed_targets = {entry_point.value for entry_point in installed}
+        _run_registrations(
+            installed
+            + [ep for ep in _source_checkout_registrations() if ep.value not in installed_targets]
         )
-        _run_registrations(declared)
 
 
 def _run_registrations(entry_points: list[importlib.metadata.EntryPoint]) -> None:

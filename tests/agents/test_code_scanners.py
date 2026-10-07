@@ -41,18 +41,36 @@ def isolated_scanners(monkeypatch):
 
 
 @pytest.fixture
-def undiscovered_scanners(isolated_scanners, monkeypatch):
-    """An empty registry on which the declared registrations have not run yet."""
+def undiscovered_scanners(isolated_scanners, monkeypatch, tmp_path):
+    """An empty registry on which the declared registrations have not run yet.
+
+    The source-checkout pyproject is pointed at a missing file, so only the entry points a
+    test declares run; tests of the source-checkout fallback point it back at the repo.
+    """
     monkeypatch.setattr(scanners, "_declared_registrations_loaded", False)
+    monkeypatch.setattr(scanners, "_SOURCE_PYPROJECT", tmp_path / "missing.toml")
     return scanners
 
 
+def _use_the_repo_pyproject(monkeypatch):
+    if sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
+    monkeypatch.setattr(scanners, "_SOURCE_PYPROJECT", REPO_ROOT / "pyproject.toml")
+
+
 def _declare(monkeypatch, *registrations):
-    """Make ``registrations`` the only entry points of the aragora.code_scanners group."""
-    entry_points = [
-        SimpleNamespace(value=f"tests.declared:{index}", load=lambda fn=fn: fn)
-        for index, fn in enumerate(registrations)
-    ]
+    """Make ``registrations`` the only installed entry points of the aragora.code_scanners group.
+
+    Each registration is a callable, or a ``(name, "module:function", callable)`` triple
+    that sets its entry point's name and target.
+    """
+    entry_points = []
+    for index, registration in enumerate(registrations):
+        if isinstance(registration, tuple):
+            name, value, fn = registration
+        else:
+            name, value, fn = f"d{index}", f"tests.declared:d{index}", registration
+        entry_points.append(SimpleNamespace(name=name, value=value, load=lambda fn=fn: fn))
     monkeypatch.setattr(
         importlib.metadata,
         "entry_points",
@@ -165,11 +183,57 @@ def test_a_source_checkout_uses_its_pyproject_declarations_when_metadata_has_non
 ):
     from aragora.audit.security_scanner import SecurityScanner
 
-    if sys.version_info < (3, 11):
-        pytest.importorskip("tomli")
+    _use_the_repo_pyproject(monkeypatch)
     _declare(monkeypatch)
 
     assert isinstance(scanners.create_code_scanner(scanners.SECURITY_SCANNER), SecurityScanner)
+
+
+def test_an_unrelated_installed_plugin_does_not_hide_the_source_checkout_declarations(
+    undiscovered_scanners, monkeypatch
+):
+    from aragora.audit.security_scanner import SecurityScanner
+
+    _use_the_repo_pyproject(monkeypatch)
+    # Named like aragora's own entry point, but with another target.
+    _declare(monkeypatch, ("audit", "other.scanners:register", lambda: None))
+
+    assert isinstance(scanners.create_code_scanner(scanners.SECURITY_SCANNER), SecurityScanner)
+
+
+def test_an_installed_declaration_is_not_run_again_from_the_source_checkout(
+    undiscovered_scanners, monkeypatch
+):
+    calls = []
+
+    def installed_audit():
+        calls.append("installed")
+        scanners.register_code_scanner(scanners.BUG_DETECTOR, object)
+
+    _use_the_repo_pyproject(monkeypatch)
+    _declare(monkeypatch, (*AUDIT_REGISTRATION, installed_audit))
+
+    assert scanners.create_code_scanner(scanners.BUG_DETECTOR) is not None
+    assert calls == ["installed"]
+    # The source-checkout audit registration would have registered this one too.
+    with pytest.raises(scanners.CodeScannerNotRegisteredError):
+        scanners.create_code_scanner(scanners.SECURITY_SCANNER)
+
+
+def test_unreadable_entry_point_metadata_is_logged_and_the_source_checkout_still_registers(
+    undiscovered_scanners, monkeypatch, caplog
+):
+    from aragora.audit.bug_detector import BugDetector
+
+    def unreadable(*, group):
+        raise RuntimeError("corrupt dist-info")
+
+    _use_the_repo_pyproject(monkeypatch)
+    monkeypatch.setattr(importlib.metadata, "entry_points", unreadable)
+
+    with caplog.at_level("WARNING", logger="aragora.agents.code_scanners"):
+        assert isinstance(scanners.create_code_scanner(scanners.BUG_DETECTOR), BugDetector)
+    assert "corrupt dist-info" in caplog.text
 
 
 def test_pyproject_declares_the_audit_registration(monkeypatch, tmp_path):
@@ -191,6 +255,10 @@ def test_pyproject_declares_the_audit_registration(monkeypatch, tmp_path):
 
 
 def test_an_agents_only_process_still_builds_both_scanners(tmp_path):
+    # Installed metadata that predates the entry point leaves the pyproject fallback,
+    # which needs tomli before Python 3.11.
+    if sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
     script = (
         "import sys\n"
         "from aragora.agents.codebase_agent import CodebaseUnderstandingAgent\n"
