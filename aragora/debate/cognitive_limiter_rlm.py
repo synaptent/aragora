@@ -452,8 +452,11 @@ class RLMCognitiveLoadLimiter(CognitiveLoadLimiter):
                 levels_used[level] = levels_used.get(level, 0) + 1
 
         logger.info(
-            f"[rlm_compress] {result.original_chars} -> {result.compressed_chars} chars "
-            f"(ratio={ratio:.2f}, levels={result.abstraction_levels})"
+            "[rlm_compress] %s -> %s chars (ratio=%.2f, levels=%s)",
+            result.original_chars,
+            result.compressed_chars,
+            ratio,
+            result.abstraction_levels,
         )
 
         return result

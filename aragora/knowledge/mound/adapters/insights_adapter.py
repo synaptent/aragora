@@ -878,7 +878,7 @@ class InsightsAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
             "debates_with_insights": len(self._debate_insights),
             "agents_with_flips": len(self._agent_flips),
             "domains_with_flips": len(self._domain_flips),
-            "insight_types": dict((t, len(ids)) for t, ids in self._type_insights.items()),
+            "insight_types": {t: len(ids) for t, ids in self._type_insights.items()},
             "flip_types": flip_types,
             # Reverse flow stats
             "km_validations_applied": self._km_validations_applied,
