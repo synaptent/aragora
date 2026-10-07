@@ -798,28 +798,34 @@ class TestHandlePost:
         result = handler.handle_post("/api/debates/batch/", {}, mock_http_handler)
         handler._submit_batch.assert_called_once()
 
-    def test_fork_post(self, mock_http_handler):
-        handler = _make_handler()
+    def test_fork_post(self, mock_http_handler, mock_storage):
+        handler = _make_handler(storage=mock_storage)
         handler._fork_debate = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle_post("/api/v1/debates/d1/fork", {}, mock_http_handler)
-        handler._fork_debate.assert_called_once_with(mock_http_handler, "d1")
+        handler._fork_debate.assert_called_once()
+        args, kwargs = handler._fork_debate.call_args
+        assert args == (mock_http_handler, "d1")
+        assert kwargs["scope"].org_id == TEST_ORG
 
-    def test_verify_post(self, mock_http_handler):
-        handler = _make_handler()
+    def test_verify_post(self, mock_http_handler, mock_storage):
+        handler = _make_handler(storage=mock_storage)
         handler._verify_outcome = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle_post("/api/v1/debates/d1/verify", {}, mock_http_handler)
         handler._verify_outcome.assert_called_once_with(mock_http_handler, "d1")
 
-    def test_followup_post(self, mock_http_handler):
-        handler = _make_handler()
+    def test_followup_post(self, mock_http_handler, mock_storage):
+        handler = _make_handler(storage=mock_storage)
         handler._create_followup_debate = MagicMock(
             return_value=MagicMock(status_code=200, body=b"{}")
         )
         result = handler.handle_post("/api/v1/debates/d1/followup", {}, mock_http_handler)
-        handler._create_followup_debate.assert_called_once_with(mock_http_handler, "d1")
+        handler._create_followup_debate.assert_called_once()
+        args, kwargs = handler._create_followup_debate.call_args
+        assert args == (mock_http_handler, "d1")
+        assert kwargs["scope"].org_id == TEST_ORG
 
-    def test_cancel_post(self, mock_http_handler):
-        handler = _make_handler()
+    def test_cancel_post(self, mock_http_handler, mock_storage):
+        handler = _make_handler(storage=mock_storage)
         handler._cancel_debate = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle_post("/api/v1/debates/d1/cancel", {}, mock_http_handler)
         handler._cancel_debate.assert_called_once_with(mock_http_handler, "d1")

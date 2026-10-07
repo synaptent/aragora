@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import OrgScope
 
 from ..base import (
     HandlerResult,
@@ -30,6 +31,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _owner_fields(scope: OrgScope | None) -> dict[str, str | None]:
+    """The org and user a fork or follow-up record is created for."""
+    if scope is None:
+        return {"org_id": None, "created_by": None}
+    return {"org_id": scope.org_id, "created_by": scope.user_id}
+
+
 class _DebatesHandlerProtocol(Protocol):
     """Protocol defining the interface expected by ForkOperationsMixin.
 
@@ -43,8 +51,8 @@ class _DebatesHandlerProtocol(Protocol):
         """Read and parse JSON body from request handler."""
         ...
 
-    def get_storage(self) -> Any | None:
-        """Get debate storage instance."""
+    def get_storage(self) -> Any:
+        """Get debate storage instance (``@require_storage`` routes never see None)."""
         ...
 
     def get_nomic_dir(self) -> Path | None:
@@ -94,8 +102,16 @@ class ForkOperationsMixin:
     @user_rate_limit(action="debate_create")
     @rate_limit(requests_per_minute=5, limiter_name="debates_fork")
     @require_storage
-    def _fork_debate(self: _DebatesHandlerProtocol, handler: Any, debate_id: str) -> HandlerResult:
+    def _fork_debate(
+        self: _DebatesHandlerProtocol,
+        handler: Any,
+        debate_id: str,
+        *,
+        scope: OrgScope | None = None,
+    ) -> HandlerResult:
         """Create a counterfactual fork of a debate at a specific branch point.
+
+        The fork record is stamped with ``scope``'s org and user.
 
         Request body:
             {
@@ -180,6 +196,7 @@ class ForkOperationsMixin:
                 "pivot_claim": branch.pivot_claim.statement,
                 "status": "created",
                 "messages_inherited": branch_point,
+                **_owner_fields(scope),
             }
 
             # Try to store in nomic dir
@@ -434,9 +451,15 @@ class ForkOperationsMixin:
     @rate_limit(requests_per_minute=5, limiter_name="debates_followup")
     @require_storage
     def _create_followup_debate(
-        self: _DebatesHandlerProtocol, handler: Any, debate_id: str
+        self: _DebatesHandlerProtocol,
+        handler: Any,
+        debate_id: str,
+        *,
+        scope: OrgScope | None = None,
     ) -> HandlerResult:
         """Create a follow-up debate to resolve a specific crux.
+
+        The follow-up record is stamped with ``scope``'s org and user.
 
         POST body:
             crux_id: str - ID of the crux to explore
@@ -524,6 +547,7 @@ class ForkOperationsMixin:
                 "crux_description": crux_data.get("description") if crux_data else None,
                 "status": "pending",
                 "created_at": time.time(),
+                **_owner_fields(scope),
             }
 
             # Store in nomic dir

@@ -1281,7 +1281,9 @@ class TestHandlePostRouting:
         """POST /api/v1/debates/{id}/cancel routes to _cancel_debate."""
         mock_state = MagicMock()
         mock_state.status = "running"
-        mock_state.metadata = {}
+        # A running debate's org comes from the active-debate registry; only
+        # that org may cancel it.
+        mock_state.metadata = {"org_id": "test-org-001"}
         mock_manager = MagicMock()
         mock_manager.get_debate.return_value = mock_state
         mock_get_manager.return_value = mock_manager

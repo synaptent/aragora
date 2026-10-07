@@ -28,6 +28,7 @@ from aragora.server.validation.schema import (
     DEBATE_UPDATE_SCHEMA,
     validate_against_schema,
 )
+from aragora.tenancy.debate_access import find_debate_access
 
 from ..base import (
     HandlerResult,
@@ -60,6 +61,33 @@ def _epoch_to_iso(epoch: float) -> str:
     if not epoch:
         return ""
     return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+
+
+def _check_debate_access(
+    storage: Any, user: Any, debate_id: str, debate: dict[str, Any], action: Action
+) -> Any:
+    """ABAC decision for ``user`` changing a stored debate.
+
+    The debate's org is the one recorded on its storage row (the artifact
+    JSON does not carry it), and the user's role is their role in their org.
+    """
+    access = find_debate_access(storage, debate_id)
+    return check_resource_access(
+        user_id=user.user_id,
+        user_role=getattr(user, "role", "user"),
+        user_plan=getattr(user, "plan", "free"),
+        resource_type=ResourceType.DEBATE,
+        resource_id=debate_id,
+        action=action,
+        resource_owner_id=debate.get("user_id") or debate.get("owner_id"),
+        resource_workspace_id=(
+            (access.org_id if access else None)
+            or debate.get("workspace_id")
+            or debate.get("org_id")
+        ),
+        user_workspace_id=getattr(user, "org_id", None),
+        user_workspace_role=getattr(user, "org_role", None) or getattr(user, "role", None),
+    )
 
 
 class _DebatesHandlerProtocol(Protocol):
@@ -602,22 +630,9 @@ class CrudOperationsMixin:
             # ABAC: Check if user has write access to this debate
             user = self.get_current_user(handler)
             if user:
-                debate_owner_id = debate.get("user_id") or debate.get("owner_id")
-                debate_workspace_id = debate.get("workspace_id") or debate.get("org_id")
-
-                access_decision = check_resource_access(
-                    user_id=user.user_id,
-                    user_role=getattr(user, "role", "user"),
-                    user_plan=getattr(user, "plan", "free"),
-                    resource_type=ResourceType.DEBATE,
-                    resource_id=debate_id,
-                    action=Action.WRITE,
-                    resource_owner_id=debate_owner_id,
-                    resource_workspace_id=debate_workspace_id,
-                    user_workspace_id=getattr(user, "org_id", None),
-                    user_workspace_role=getattr(user, "org_role", None),
+                access_decision = _check_debate_access(
+                    storage, user, debate_id, debate, Action.WRITE
                 )
-
                 if not access_decision.allowed:
                     logger.warning(
                         "ABAC denied WRITE access to debate %s for user %s: %s",
@@ -850,22 +865,9 @@ class CrudOperationsMixin:
             # ABAC: Check if user has delete access to this debate
             user = self.get_current_user(handler)
             if user:
-                debate_owner_id = debate.get("user_id") or debate.get("owner_id")
-                debate_workspace_id = debate.get("workspace_id") or debate.get("org_id")
-
-                access_decision = check_resource_access(
-                    user_id=user.user_id,
-                    user_role=getattr(user, "role", "user"),
-                    user_plan=getattr(user, "plan", "free"),
-                    resource_type=ResourceType.DEBATE,
-                    resource_id=debate_id,
-                    action=Action.DELETE,
-                    resource_owner_id=debate_owner_id,
-                    resource_workspace_id=debate_workspace_id,
-                    user_workspace_id=getattr(user, "org_id", None),
-                    user_workspace_role=getattr(user, "org_role", None),
+                access_decision = _check_debate_access(
+                    storage, user, debate_id, debate, Action.DELETE
                 )
-
                 if not access_decision.allowed:
                     logger.warning(
                         "ABAC denied DELETE access to debate %s for user %s: %s",

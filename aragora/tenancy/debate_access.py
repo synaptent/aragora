@@ -1,13 +1,17 @@
-"""Org scope for reads of a single debate.
+"""Org scope for reads and writes of a single debate.
 
 Every legacy route that returns data about one debate (by id or slug) asks
 :func:`authorize_debate_read` before it reads anything, then reads the debate by
-the id it returns. The rules extend :mod:`aragora.tenancy.record_scope`:
+the id it returns. Every route that changes a debate or creates something from
+it asks :func:`authorize_debate_write` before it has any effect. The rules
+extend :mod:`aragora.tenancy.record_scope`:
 
 * A debate stored with ``is_public = 1`` is readable by anyone, signed in or
-  not. Nothing else makes a debate public on these routes.
+  not. Nothing else makes a debate public on these routes. Public grants no
+  write: only the owning org may change a public debate.
 * Otherwise the caller needs an org scope (401 ``auth_required`` / 403
   ``org_required``), and the debate's ``org_id`` must equal the caller's org.
+  Writes always need the org scope, checked before the debate is looked up.
 * A missing debate, another org's debate and a debate with no recorded org all
   get the same 404 body.
 * A debate that is still running has no stored row yet. Its org comes from the
@@ -19,7 +23,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from aragora.tenancy.record_scope import record_not_found, require_org_scope
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 if TYPE_CHECKING:
     from aragora.server.handlers.utils.responses import HandlerResult
@@ -83,6 +92,38 @@ def authorize_debate_read(
     return access.debate_id, None
 
 
+@dataclass(frozen=True, slots=True)
+class DebateWrite:
+    """A write the caller may make: the debate it targets and the caller's scope."""
+
+    debate_id: str
+    scope: OrgScope
+
+
+def authorize_debate_write(
+    handler: Any, storage: Any, ref: str, resource: str = "Debate"
+) -> tuple[DebateWrite, None] | tuple[None, HandlerResult]:
+    """``(write, None)`` when the caller's org owns the debate ``ref`` names, else
+    ``(None, error)``.
+
+    For every route that changes a debate or derives a record from it. Being
+    public does not let another org (or an anonymous caller) write. Callers act
+    on ``write.debate_id`` (never on ``ref``, which may be a slug) and stamp
+    ``write.scope.org_id`` on anything they create.
+    """
+    scope, denial = require_org_scope(handler)
+    if denial is not None:
+        return None, denial
+    access = find_debate_access(storage, ref)
+    if access is None and not storage:
+        from aragora.server.handlers.utils.responses import error_response
+
+        return None, error_response("Storage not available", 503)
+    if scope is None or access is None or not record_visible(access.org_id, scope):
+        return None, record_not_found(resource)
+    return DebateWrite(debate_id=access.debate_id, scope=scope), None
+
+
 def _running_debate_access(debate_id: str) -> DebateAccess | None:
     try:
         from aragora.server.state import get_state_manager
@@ -103,7 +144,9 @@ def _running_debate_access(debate_id: str) -> DebateAccess | None:
 
 __all__ = [
     "DebateAccess",
+    "DebateWrite",
     "authorize_debate_read",
+    "authorize_debate_write",
     "debate_visible_to_org",
     "find_debate_access",
 ]
