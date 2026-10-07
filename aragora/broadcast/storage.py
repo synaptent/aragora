@@ -364,8 +364,8 @@ class AudioFileStore:
         if file_size > MAX_FILE_SIZE_BYTES:
             logger.error(
                 "Audio file too large: %s bytes > %s bytes limit",
-                format(file_size, ","),
-                format(MAX_FILE_SIZE_BYTES, ","),
+                f"{file_size:,}",
+                f"{MAX_FILE_SIZE_BYTES:,}",
             )
             return None
 
@@ -442,8 +442,8 @@ class AudioFileStore:
         if len(audio_data) > MAX_FILE_SIZE_BYTES:
             logger.error(
                 "Audio data too large: %s bytes > %s bytes limit",
-                format(len(audio_data), ","),
-                format(MAX_FILE_SIZE_BYTES, ","),
+                f"{len(audio_data):,}",
+                f"{MAX_FILE_SIZE_BYTES:,}",
             )
             return None
 
