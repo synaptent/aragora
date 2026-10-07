@@ -278,7 +278,11 @@ Before a step opens, its lane re-runs the open-PR overlap census (§11). A step
 does not start while another open PR touches the lines it moves, unless that
 PR's owner agrees to rebase afterwards. At 2026-10-07T04:27Z, these open PRs
 touched `review_queue.py`: #10177 (draft), #9992 (draft) and #9011. These
-touched `review_queue_unstable.py`: #9512 and #9011.
+touched `review_queue_unstable.py`: #9512 and #9011. #9011 also changes
+`review_queue_rest_fallback.py` and adds a new sibling,
+`review_queue_park_records.py`. Under I3 that new path classifies as Tier 2
+unless it is registered in both dependency tuples, so the sibling list in §2
+is not fixed: each step re-measures it at its own base.
 
 ## 6. Test strategy
 

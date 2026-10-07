@@ -50,6 +50,7 @@ before relying on them.
 | [P4A_EVENTS_QUEUE_INVERSION](./P4A_EVENTS_QUEUE_INVERSION.md) | Event bus and job-queue registry inversion (status: implemented) |
 | [P4B_HANDLERS_DECOMPOSITION](./P4B_HANDLERS_DECOMPOSITION.md) | Decomposition of the flat `aragora/server/handlers` root (design) |
 | [P5_REVIEW_QUEUE_SPLIT_DESIGN](./P5_REVIEW_QUEUE_SPLIT_DESIGN.md) | Split of `aragora/cli/commands/review_queue.py` into a facade and units (Tier-4 design, awaiting operator preapproval) |
+| [P5_CLI_PARSER_SPLIT_DESIGN](./P5_CLI_PARSER_SPLIT_DESIGN.md) | Split of `aragora/cli/parser.py` into a facade and registration modules (Tier-4 design, awaiting operator preapproval) |
 | [QUEUE_ADOPTION_DISPOSITION](./QUEUE_ADOPTION_DISPOSITION.md) | Decision to adopt `aragora/queue` as the canonical durable job API |
 | [MODULE_QUARANTINE_PROPOSAL](./MODULE_QUARANTINE_PROPOSAL.md) | Module quarantine boundary (status: proposal only, no moves) |
 | [CHARTER_COMPLIANCE_CHECKER](./CHARTER_COMPLIANCE_CHECKER.md) | Advisory checker that reports changes against `charters.yaml` |
