@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from aragora.audit.log import AuditEvent, AuditQuery
+    from aragora.observability.audit_log import AuditEvent, AuditQuery
 
 
 class AuditPersistenceBackend(ABC):

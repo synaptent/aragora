@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from .base import AuditPersistenceBackend, PersistenceError
 
 if TYPE_CHECKING:
-    from aragora.audit.log import AuditEvent, AuditQuery
+    from aragora.observability.audit_log import AuditEvent, AuditQuery
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +294,7 @@ class PostgresBackend(AuditPersistenceBackend):
         end_date: datetime | None = None,
     ) -> tuple[bool, list[str]]:
         """Verify hash chain integrity."""
-        from aragora.audit.log import AuditQuery
+        from aragora.observability.audit_log import AuditQuery
 
         errors = []
         # AuditQuery structure preserved for potential future use
@@ -357,7 +357,7 @@ class PostgresBackend(AuditPersistenceBackend):
 
     def _row_to_event(self, row: tuple, description: Any) -> AuditEvent:
         """Convert database row to AuditEvent."""
-        from aragora.audit.log import AuditCategory, AuditEvent, AuditOutcome
+        from aragora.observability.audit_log import AuditCategory, AuditEvent, AuditOutcome
 
         columns = [col[0] for col in description]
         data = dict(zip(columns, row))
