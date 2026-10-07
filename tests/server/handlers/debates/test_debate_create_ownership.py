@@ -533,10 +533,12 @@ class TestVisibilityAfterCreate:
         assert result is not None
         assert result.status_code == 404
 
-    def test_share_flow_makes_debate_public_in_storage(self, storage):
+    def test_share_flow_makes_debate_public_in_storage(self, storage, caller):
         from aragora.server.handlers.debates.share import DebateShareHandler, _reset_share_state
 
         debate_id = self._create(storage, ORG_A)
+        # Only the debate's own org may share it.
+        caller(_user(ORG_A))
         share_result = DebateShareHandler(ctx={"storage": storage}).handle_post(
             f"/api/v1/debates/{debate_id}/share", {}, _http_handler()
         )

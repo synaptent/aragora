@@ -492,6 +492,9 @@ class RouteIndex:
             # Without this entry the version-stripped path falls into
             # DebatesHandler's slug lookup, which skips the is_public check.
             "_public_debate_viewer_handler": ["/api/v1/debates/public/"],
+            # Share writes check that the caller's org owns the debate; without
+            # this entry DebatesHandler's slug lookup answered them with a 404.
+            "_debate_share_handler": ["/api/v1/debates/"],
             "_agents_handler": [
                 "/api/agent/",
                 "/api/agents",
