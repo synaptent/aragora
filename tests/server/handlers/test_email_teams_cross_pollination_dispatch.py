@@ -8,12 +8,10 @@ carries a real HS256 access token, so handlers see the ``UserAuthContext`` that
 
 from __future__ import annotations
 
-import asyncio
 import io
 import itertools
 import json
 import threading
-from collections import namedtuple
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
@@ -126,9 +124,22 @@ ROUTES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
         "/api/v1/cross-pollination/conflicts/probe-conflict/resolve",
         {"resolution": "keep_a"},
     ),
+    "email.categoryFeedback": (
+        "POST",
+        "/api/v1/email/categories/learn",
+        {"email_id": "e1", "predicted_category": "newsletters", "correct_category": "projects"},
+    ),
 }
 
 EXPECTED: dict[str, dict[str, int]] = {
+    "email.categoryFeedback": {
+        "owner": 501,
+        "admin": 403,
+        "member": 403,
+        "analyst": 403,
+        "viewer": 403,
+        "anon": 401,
+    },
     "teams.listTeams": {
         "owner": 501,
         "admin": 501,
@@ -252,9 +263,6 @@ SNOOZE = "/api/v1/email/probe-email/snooze"
 SNOOZED = "/api/v1/email/snoozed"
 PROCESS_DUE = "/api/v1/email/snooze/process-due"
 LEARN = "/api/v1/email/categories/learn"
-
-
-_Mail = namedtuple("_Mail", "id subject body sender")  # hashable, as categorize_email needs
 
 
 def _data(payload: Any) -> Any:
@@ -387,38 +395,23 @@ def test_snooze_routes_work_for_their_owner(registry_cls, services) -> None:
     assert email_module._snoozed_emails == {}
 
 
-def test_category_feedback_is_recorded_and_applied_for_its_owner_only(
-    registry_cls, services
+@pytest.mark.parametrize("env", ["development", "production"])
+def test_category_feedback_is_not_implemented_and_learns_nothing(
+    registry_cls, services, monkeypatch, env
 ) -> None:
+    monkeypatch.setenv("ARAGORA_ENV", env)
     status, body = _dispatch(registry_cls, "GET", "/api/v1/email/categories", **OWNER)
     assert status == 200 and {c["id"] for c in _data(body)["categories"]} == {
         c.value for c in EmailCategory
     }
-    learn: dict[str, Any] = {
-        "email_id": "e-9",
-        "predicted_category": "newsletters",
-        "correct_category": "nope",
-    }
-    assert _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)[0] == 400
-    learn |= {"correct_category": "projects", "email_metadata": {"sender": "Digest@Corp.example"}}
-    status, body = _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)
-    assert status == 200 and _data(body)["feedback_recorded"] is True, body
-    categorizer = email_module.get_email_categorizer()
-    mail = _Mail("e-10", "Weekly newsletter", "unsubscribe", "digest@corp.example")
-
-    def category(email: Any = mail, **owner: str) -> EmailCategory:
-        return asyncio.run(categorizer.categorize_email(email, **owner)).category
-
-    assert category(user_id="jwt-owner", org_id="org-1") is EmailCategory.PROJECTS
-    assert category(_Mail("e-9", "", "", ""), user_id="jwt-owner", org_id="org-1") is (
-        EmailCategory.PROJECTS
-    )
-    others = {
-        category(user_id="jwt-owner-2", org_id="org-1"),
-        category(user_id="jwt-owner", org_id="org-2"),
-    }
-    assert others == {category()} and category() is not EmailCategory.PROJECTS
-    assert categorizer.config.custom_sender_categories == {}
+    for learn in ({}, {"email_id": "e-9", "predicted_category": "x", "correct_category": "y"}):
+        status, body = _dispatch(registry_cls, "POST", LEARN, learn, **OWNER)
+        assert status == 501, body
+        assert (body["error"]["code"], body["error"]["message"]) == (
+            "not_implemented",
+            "Learning from category feedback is not implemented",
+        )
+    assert email_module._email_categorizer is None
 
 
 @pytest.mark.parametrize(
@@ -509,7 +502,7 @@ UPDATE_ROUTES = {
         "POST",
         LEARN,
         {"email_id": "e1", "predicted_category": "newsletters", "correct_category": "projects"},
-        200,
+        501,
     ),
 }
 

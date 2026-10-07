@@ -293,29 +293,6 @@ class EmailCategorizer:
         self.config = config or EmailCategorizerConfig()
         self._compiled_patterns: dict[EmailCategory, list[tuple]] = {}
         self._compile_patterns()
-        # (org_id, user_id) -> {("id", email_id) | ("sender", address): category}
-        self._feedback: dict[tuple[str | None, str], dict[tuple[str, str], EmailCategory]] = {}
-
-    async def record_feedback(
-        self,
-        email_id: str,
-        predicted_category: str,
-        correct_category: str,
-        user_id: str,
-        org_id: str | None,
-        sender: str = "",
-    ) -> None:
-        """Remember one owner's correction; it changes only that owner's categorizations.
-
-        Raises:
-            ValueError: if either category is not an ``EmailCategory`` value.
-        """
-        EmailCategory(predicted_category)
-        category = EmailCategory(correct_category)
-        learned = self._feedback.setdefault((org_id, user_id), {})
-        learned[("id", email_id)] = category
-        if sender:
-            learned[("sender", sender.lower())] = category
 
     def _compile_patterns(self) -> None:
         """Pre-compile regex patterns for performance."""
@@ -352,16 +329,12 @@ class EmailCategorizer:
     async def categorize_email(
         self,
         email: EmailLike,
-        user_id: str | None = None,
-        org_id: str | None = None,
     ) -> CategorizationResult:
         """
         Categorize a single email.
 
         Args:
             email: Email message to categorize
-            user_id: Owner whose recorded feedback applies (none when omitted)
-            org_id: Organization of that owner
 
         Returns:
             CategorizationResult with category and confidence
@@ -370,19 +343,6 @@ class EmailCategorizer:
         subject = getattr(email, "subject", "")
         body = getattr(email, "body", getattr(email, "snippet", ""))
         sender = getattr(email, "sender", getattr(email, "from_", ""))
-
-        learned = self._feedback.get((org_id, user_id), {}) if user_id else {}
-        corrected = learned.get(("id", email_id)) or learned.get(("sender", sender.lower()))
-        if corrected:
-            return CategorizationResult(
-                email_id=email_id,
-                category=corrected,
-                confidence=0.9,
-                matched_patterns=["Owner feedback"],
-                suggested_label=f"Aragora/{corrected.value.title()}",
-                auto_archive=self._should_auto_archive(corrected),
-                rationale="Learned from this owner's category feedback",
-            )
 
         # Quick domain-based categorization
         domain = self._extract_domain(sender)

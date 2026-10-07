@@ -1061,42 +1061,22 @@ class TestCategoryFeedback:
     """Tests for POST /api/v1/email/categories/learn."""
 
     @pytest.mark.asyncio
-    async def test_feedback_success(self, mock_categorizer, mock_auth):
-        data = {
-            "email_id": "e-001",
-            "predicted_category": "newsletters",
-            "correct_category": "invoices",
-        }
+    @pytest.mark.parametrize(
+        "data",
+        [
+            {
+                "email_id": "e-001",
+                "predicted_category": "newsletters",
+                "correct_category": "invoices",
+            },
+            {},
+        ],
+    )
+    async def test_feedback_is_not_implemented(self, mock_categorizer, mock_auth, data):
         result = await handle_category_feedback(data, auth_context=mock_auth)
-        assert _status(result) == 200
-        resp = _data(result)
-        assert resp["feedback_recorded"] is True
-        assert resp["predicted"] == "newsletters"
-        assert resp["correct"] == "invoices"
-        mock_categorizer.record_feedback.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_feedback_missing_email_id(self, mock_categorizer, mock_auth):
-        data = {"predicted_category": "a", "correct_category": "b"}
-        result = await handle_category_feedback(data, auth_context=mock_auth)
-        assert _status(result) == 400
-
-    @pytest.mark.asyncio
-    async def test_feedback_missing_predicted(self, mock_categorizer, mock_auth):
-        data = {"email_id": "e-001", "correct_category": "b"}
-        result = await handle_category_feedback(data, auth_context=mock_auth)
-        assert _status(result) == 400
-
-    @pytest.mark.asyncio
-    async def test_feedback_missing_correct(self, mock_categorizer, mock_auth):
-        data = {"email_id": "e-001", "predicted_category": "a"}
-        result = await handle_category_feedback(data, auth_context=mock_auth)
-        assert _status(result) == 400
-
-    @pytest.mark.asyncio
-    async def test_feedback_empty_data(self, mock_categorizer, mock_auth):
-        result = await handle_category_feedback({}, auth_context=mock_auth)
-        assert _status(result) == 400
+        assert _status(result) == 501
+        assert _body(result)["error"]["code"] == "not_implemented"
+        mock_categorizer.record_feedback.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_feedback_no_auth(self, mock_categorizer):
@@ -1107,17 +1087,6 @@ class TestCategoryFeedback:
         }
         result = await handle_category_feedback(data, auth_context=None)
         assert _status(result) == 401
-
-    @pytest.mark.asyncio
-    async def test_feedback_categorizer_error(self, mock_categorizer, mock_auth):
-        mock_categorizer.record_feedback.side_effect = OSError("save failed")
-        data = {
-            "email_id": "e-001",
-            "predicted_category": "a",
-            "correct_category": "b",
-        }
-        result = await handle_category_feedback(data, auth_context=mock_auth)
-        assert _status(result) == 500
 
 
 # ============================================================================
@@ -1382,7 +1351,7 @@ class TestEmailServicesHandlerPost:
             "Content-Type": "application/json",
         }
         result = await handler.handle_post("/api/v1/email/categories/learn", {}, mock_http_handler)
-        assert _status(result) == 200
+        assert _status(result) == 501
 
     @pytest.mark.asyncio
     async def test_post_unknown_path(self, handler, mock_http_handler):

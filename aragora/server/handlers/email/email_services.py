@@ -16,7 +16,7 @@ Endpoints:
 - DELETE /api/v1/email/{id}/snooze - Cancel snooze
 - GET /api/v1/email/snoozed - List snoozed emails
 - GET /api/v1/email/categories - List available categories
-- POST /api/v1/email/categories/learn - Submit category feedback
+- POST /api/v1/email/categories/learn - Category feedback (501: learning is not implemented)
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from aragora.server.handlers.base import (
     handle_errors,
 )
 from aragora.server.handlers.secure import SecureHandler, UnauthorizedError, ForbiddenError
-from aragora.server.handlers.utils.responses import HandlerResult
+from aragora.server.handlers.utils.responses import HandlerResult, json_response
 
 logger = logging.getLogger(__name__)
 
@@ -888,63 +888,25 @@ async def handle_category_feedback(
     auth_context: Any | None = None,
 ) -> HandlerResult:
     """
-    Submit feedback on email categorization to improve learning.
+    Refuse category feedback, because nothing learns from it yet.
 
     POST /api/v1/email/categories/learn
-    Body: {
-        email_id: str,
-        predicted_category: str,
-        correct_category: str,
-        email_metadata: dict (optional)
-    }
+    A caller holding ``email:update`` gets 501 ``not_implemented``, so a correction
+    is never acknowledged as recorded. The request body is not read.
     """
-    # Check RBAC permission
     perm_error = _check_email_permission(auth_context, "email:update")
     if perm_error:
         return perm_error
-
-    try:
-        categorizer = get_email_categorizer()
-
-        email_id = data.get("email_id")
-        predicted = data.get("predicted_category")
-        correct = data.get("correct_category")
-
-        if not email_id or not predicted or not correct:
-            return error_response(
-                "email_id, predicted_category, and correct_category are required",
-                status=400,
-            )
-
-        owner = _owner(auth_context)
-        metadata = data.get("email_metadata")
-        sender = metadata.get("sender") if isinstance(metadata, dict) else None
-        try:
-            await categorizer.record_feedback(
-                email_id=email_id,
-                predicted_category=predicted,
-                correct_category=correct,
-                user_id=owner[0],
-                org_id=owner[1],
-                sender=sender if isinstance(sender, str) else "",
-            )
-        except ValueError:
-            return error_response(
-                "predicted_category and correct_category must be known categories", status=400
-            )
-
-        return success_response(
-            {
-                "email_id": email_id,
-                "feedback_recorded": True,
-                "predicted": predicted,
-                "correct": correct,
+    # Not error_response: in production it rewrites every 5xx message to "Internal server error".
+    return json_response(
+        {
+            "error": {
+                "code": "not_implemented",
+                "message": "Learning from category feedback is not implemented",
             }
-        )
-
-    except (TypeError, ValueError, KeyError, AttributeError, OSError):
-        logger.exception("Error recording category feedback")
-        return error_response("Feedback recording failed", status=500)
+        },
+        status=501,
+    )
 
 
 def _get_category_description(category) -> str:

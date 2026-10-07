@@ -389,19 +389,9 @@ class TestCategoryHandlers:
         assert "name" in cat
         assert "description" in cat
 
-    @pytest.fixture
-    def mock_categorizer(self):
-        """Create mock email categorizer."""
-        with patch("aragora.server.handlers.email_services.get_email_categorizer") as mock:
-            categorizer = MagicMock()
-            mock.return_value = categorizer
-            yield categorizer
-
     @pytest.mark.asyncio
-    async def test_category_feedback_success(self, mock_categorizer, admin_auth):
-        """Should record category feedback."""
-        mock_categorizer.record_feedback = AsyncMock()
-
+    async def test_category_feedback_is_not_implemented(self, admin_auth):
+        """Authorized category feedback answers 501; nothing is learned."""
         result = parse_result(
             await handle_category_feedback(
                 data={
@@ -414,22 +404,8 @@ class TestCategoryHandlers:
             )
         )
 
-        assert result["success"] is True
-        assert result["data"]["feedback_recorded"] is True
-
-    @pytest.mark.asyncio
-    async def test_category_feedback_missing_fields(self, mock_categorizer, admin_auth):
-        """Should fail when missing required fields."""
-        result = parse_result(
-            await handle_category_feedback(
-                data={"email_id": "email_123"},
-                auth_context=admin_auth,
-            )
-        )
-
-        assert result["success"] is False or "error" in result
-        error_msg = result.get("error", "").lower()
-        assert "required" in error_msg or "missing" in error_msg
+        assert result["_status_code"] == 501
+        assert result["error"]["code"] == "not_implemented"
 
 
 class TestProcessDueSnoozes:

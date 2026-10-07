@@ -233,9 +233,7 @@ class MockEmailCategorizer:
         email_id: str,
         predicted_category: str,
         correct_category: str,
-        user_id: str,
-        org_id: str | None,
-        sender: str = "",
+        user_id: str = "default",
     ) -> None:
         pass
 
@@ -558,22 +556,6 @@ class TestEmailServicesValidation:
         body = unwrap_response(json.loads(result.body))
         assert "invalid" in body.get("error", "").lower()
 
-    @pytest.mark.asyncio
-    async def test_category_feedback_missing_fields(self, mock_auth_context):
-        """Test category feedback missing required fields returns 400."""
-        with patch("aragora.server.handlers.email_services.get_email_categorizer") as mock_get:
-            mock_get.return_value = MockEmailCategorizer()
-
-            result = await handle_category_feedback(
-                data={"email_id": "e1"},  # Missing predicted_category and correct_category
-                user_id="test_user",
-                auth_context=mock_auth_context,
-            )
-
-            assert result.status_code == 400
-            body = unwrap_response(json.loads(result.body))
-            assert "required" in body.get("error", "").lower()
-
 
 # ===========================================================================
 # Happy Path Tests - Follow-ups
@@ -883,11 +865,9 @@ class TestCategoryFeedback:
     """Test category feedback endpoint."""
 
     @pytest.mark.asyncio
-    async def test_category_feedback_success(self, mock_auth_context):
-        """Test submitting category feedback."""
+    async def test_category_feedback_is_not_implemented(self, mock_auth_context):
+        """Authorized category feedback answers 501 without touching a categorizer."""
         with patch("aragora.server.handlers.email_services.get_email_categorizer") as mock_get:
-            mock_get.return_value = MockEmailCategorizer()
-
             result = await handle_category_feedback(
                 data={
                     "email_id": "email_123",
@@ -898,10 +878,9 @@ class TestCategoryFeedback:
                 auth_context=mock_auth_context,
             )
 
-            assert result.status_code == 200
-            body = unwrap_response(json.loads(result.body))
-            assert body["email_id"] == "email_123"
-            assert body["feedback_recorded"] is True
+            assert result.status_code == 501
+            assert json.loads(result.body)["error"]["code"] == "not_implemented"
+            mock_get.assert_not_called()
 
 
 # ===========================================================================
