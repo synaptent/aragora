@@ -312,9 +312,18 @@ class DebatesHandler(
     def _handle_batch_export(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
-        """Route batch export requests to appropriate methods."""
+        """Route batch export requests to appropriate methods.
+
+        Export jobs belong to the org that started them and only export that
+        org's debates; every route needs the caller's org scope.
+        """
         # Normalize to unversioned for consistent checking
         normalized = path.replace("/api/v1/", "/api/").replace("/api/v2/", "/api/")
+
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
+        org_id = scope.org_id
 
         # The root path serves two verbs: POST starts a batch export, GET
         # lists export jobs. The POST branch previously matched
@@ -327,29 +336,32 @@ class DebatesHandler(
                     return error_response("Invalid or missing JSON body", 400)
                 debate_ids = body.get("debate_ids", [])
                 format = body.get("format", "json")
-                return self._start_batch_export(handler, debate_ids, format)  # Mixin method
+                return self._start_batch_export(handler, debate_ids, format, org_id=org_id)
 
             # GET /api/debates/export/batch - list export jobs
             limit = min(get_int_param(query_params, "limit", 50), 100)
-            return self._list_batch_exports(limit)  # Mixin method
+            return self._list_batch_exports(limit, org_id=org_id)
 
         # Extract job ID from normalized path
+        # Parts: ['', 'api', 'debates', 'export', 'batch', '{job_id}', '{route}']
         parts = normalized.split("/")
-        if len(parts) < 5:
+        if len(parts) != 7:
             return error_response("Invalid batch export path", 400)
 
-        job_id = parts[4]
+        job_id = parts[5]
 
         # GET /api/debates/export/batch/{job_id}/status
         if path.endswith("/status"):
-            return self._get_batch_export_status(job_id)  # Mixin method
+            return self._get_batch_export_status(job_id, org_id=org_id)
 
         # GET /api/debates/export/batch/{job_id}/results
         if path.endswith("/results"):
-            return self._get_batch_export_results(job_id)  # Mixin method
+            return self._get_batch_export_results(job_id, org_id=org_id)
 
         # GET /api/debates/export/batch/{job_id}/stream - SSE stream
         if path.endswith("/stream"):
+            if not self._batch_export_visible(job_id, org_id):
+                return record_not_found("Export job")
 
             async def stream() -> AsyncIterator[Any]:
                 async for chunk in self._stream_batch_export_progress(job_id):  # Mixin method

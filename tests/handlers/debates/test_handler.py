@@ -1017,7 +1017,7 @@ class TestHandleBatchExportMethod:
         handler._list_batch_exports.assert_called_once()
 
     def test_batch_export_status(self, mock_http_handler):
-        """Batch export status extracts parts[4] from /api/debates/export/batch/{id}/status."""
+        """Batch export status extracts parts[5] from /api/debates/export/batch/{id}/status."""
         handler = _make_handler()
         handler._get_batch_export_status = MagicMock(
             return_value=MagicMock(status_code=200, body=b"{}")
@@ -1026,8 +1026,7 @@ class TestHandleBatchExportMethod:
             "/api/debates/export/batch/job1/status", {}, mock_http_handler
         )
         # parts = ['', 'api', 'debates', 'export', 'batch', 'job1', 'status']
-        # parts[4] = 'batch' (handler behavior)
-        handler._get_batch_export_status.assert_called_once_with("batch")
+        handler._get_batch_export_status.assert_called_once_with("job1", org_id=TEST_ORG)
 
     def test_batch_export_results(self, mock_http_handler):
         handler = _make_handler()
@@ -1037,8 +1036,7 @@ class TestHandleBatchExportMethod:
         result = handler._handle_batch_export(
             "/api/debates/export/batch/job1/results", {}, mock_http_handler
         )
-        # parts[4] = 'batch' (handler behavior)
-        handler._get_batch_export_results.assert_called_once_with("batch")
+        handler._get_batch_export_results.assert_called_once_with("job1", org_id=TEST_ORG)
 
     def test_batch_export_stream(self, mock_http_handler):
         handler = _make_handler()
@@ -1047,6 +1045,7 @@ class TestHandleBatchExportMethod:
             yield b"data: test\n\n"
 
         handler._stream_batch_export_progress = _mock_stream
+        handler._batch_export_visible = MagicMock(return_value=True)
         with patch("aragora.server.handlers.debates.handler.run_async") as mock_run:
             mock_run.return_value = iter([b"data: test\n\n"])
             result = handler._handle_batch_export(
@@ -1054,6 +1053,16 @@ class TestHandleBatchExportMethod:
             )
             assert _status(result) == 200
             assert result.content_type == "text/event-stream"
+        handler._batch_export_visible.assert_called_once_with("job1", TEST_ORG)
+
+    def test_batch_export_stream_other_org_job_not_found(self, mock_http_handler):
+        handler = _make_handler()
+        handler._batch_export_visible = MagicMock(return_value=False)
+        result = handler._handle_batch_export(
+            "/api/debates/export/batch/job1/stream", {}, mock_http_handler
+        )
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Export job not found", "code": "not_found"}
 
     def test_batch_export_unknown_endpoint(self, mock_http_handler):
         handler = _make_handler()

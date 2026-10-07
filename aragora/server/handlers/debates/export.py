@@ -12,14 +12,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Coroutine
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.debate_access import find_debate_access
+from aragora.tenancy.record_scope import record_not_found
 from ..openapi_decorator import api_endpoint
 
 from ..base import (
@@ -68,6 +71,9 @@ class BatchExportJob:
 
     job_id: str
     items: list[BatchExportItem]
+    # The org that started the job; only it sees the job, and only its debates
+    # are exported.
+    org_id: str | None = None
     status: BatchExportStatus = BatchExportStatus.PENDING
     created_at: float = field(default_factory=time.time)
     completed_at: float | None = None
@@ -102,6 +108,31 @@ class BatchExportJob:
 # In-memory job storage (production would use Redis)
 _batch_export_jobs: dict[str, BatchExportJob] = {}
 _batch_export_events: dict[str, asyncio.Queue] = {}
+
+_EXPORT_NOT_FOUND = "Debate not found"
+_export_tasks: set[asyncio.Task[None]] = set()
+
+
+def _run_in_background(coro: Coroutine[Any, Any, None]) -> None:
+    """Run an export job without blocking the request.
+
+    The legacy server calls handlers on threads with no running event loop,
+    where ``asyncio.create_task`` raises; such jobs get their own thread.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        threading.Thread(
+            target=asyncio.run, args=(coro,), name="debate-batch-export", daemon=True
+        ).start()
+        return
+    task = loop.create_task(coro)
+    _export_tasks.add(task)
+    task.add_done_callback(_export_tasks.discard)
+
+
+def _job_visible(job: BatchExportJob | None, org_id: str | None) -> bool:
+    return job is not None and bool(job.org_id) and job.org_id == org_id
 
 
 class _DebatesHandlerProtocol(Protocol):
@@ -149,9 +180,14 @@ class ExportOperationsMixin:
         handler: Any,
         debate_ids: list[str],
         format: str,
+        *,
+        org_id: str,
     ) -> HandlerResult:
         """
-        Start a batch export job.
+        Start a batch export job owned by ``org_id``.
+
+        Only ``org_id``'s debates are exported; any other id (another org's,
+        one with no org, or a missing one) is reported as not found.
 
         POST body:
         {
@@ -180,14 +216,13 @@ class ExportOperationsMixin:
         # Create job
         job_id = f"export_{uuid.uuid4().hex[:12]}"
         items = [BatchExportItem(debate_id=did, format=format) for did in debate_ids]
-        job = BatchExportJob(job_id=job_id, items=items)
+        job = BatchExportJob(job_id=job_id, items=items, org_id=org_id)
         _batch_export_jobs[job_id] = job
 
         # Create event queue for SSE streaming
         _batch_export_events[job_id] = asyncio.Queue()
 
-        # Start processing in background
-        asyncio.create_task(self._process_batch_export(job))
+        _run_in_background(self._process_batch_export(job))
 
         logger.info("Batch export %s started with %s items", job_id, len(items))
 
@@ -218,8 +253,16 @@ class ExportOperationsMixin:
             )
             return
 
+        # Only the job's org's debates are exported. Another org's debate, one
+        # with no recorded org and a missing id all get the same error.
+        owned: dict[str, str] = {}
+        for item in job.items:
+            access = find_debate_access(storage, item.debate_id)
+            if access is not None and job.org_id and access.org_id == job.org_id:
+                owned[item.debate_id] = access.debate_id
+
         # Pre-fetch all debates in a single batch query to avoid N+1 pattern
-        debate_ids = [item.debate_id for item in job.items]
+        debate_ids = sorted(set(owned.values()))
         debates_map: dict[str, dict | None] = {}
         try:
             if hasattr(storage, "get_debates_batch"):
@@ -245,10 +288,11 @@ class ExportOperationsMixin:
                 item.started_at = time.time()
 
                 # Use pre-fetched debate data
-                debate = debates_map.get(item.debate_id)
+                owned_id = owned.get(item.debate_id)
+                debate = debates_map.get(owned_id) if owned_id else None
                 if not debate:
                     item.status = BatchExportStatus.FAILED
-                    item.error = f"Debate not found: {item.debate_id}"
+                    item.error = _EXPORT_NOT_FOUND
                     job.error_count += 1
                 else:
                     # Generate export content
@@ -361,11 +405,13 @@ class ExportOperationsMixin:
             "404": {"description": "Export job not found"},
         },
     )
-    def _get_batch_export_status(self: _DebatesHandlerProtocol, job_id: str) -> HandlerResult:
-        """Get status of a batch export job."""
+    def _get_batch_export_status(
+        self: _DebatesHandlerProtocol, job_id: str, *, org_id: str
+    ) -> HandlerResult:
+        """Get status of one of ``org_id``'s batch export jobs."""
         job = _batch_export_jobs.get(job_id)
-        if not job:
-            return error_response(f"Export job not found: {job_id}", 404)
+        if job is None or not _job_visible(job, org_id):
+            return record_not_found("Export job")
 
         items_summary = []
         for item in job.items:
@@ -400,11 +446,13 @@ class ExportOperationsMixin:
             "404": {"description": "Export job not found"},
         },
     )
-    def _get_batch_export_results(self: _DebatesHandlerProtocol, job_id: str) -> HandlerResult:
-        """Get results of a completed batch export."""
+    def _get_batch_export_results(
+        self: _DebatesHandlerProtocol, job_id: str, *, org_id: str
+    ) -> HandlerResult:
+        """Get results of one of ``org_id``'s completed batch exports."""
         job = _batch_export_jobs.get(job_id)
-        if not job:
-            return error_response(f"Export job not found: {job_id}", 404)
+        if job is None or not _job_visible(job, org_id):
+            return record_not_found("Export job")
 
         if job.status != BatchExportStatus.COMPLETED:
             return error_response(f"Export job not complete (status: {job.status.value})", 400)
@@ -473,10 +521,16 @@ class ExportOperationsMixin:
             logger.warning("SSE stream error for %s: %s", job_id, e)
             yield f"data: {json.dumps({'type': 'error', 'message': 'Stream error'})}\n\n"
 
-    def _list_batch_exports(self: _DebatesHandlerProtocol, limit: int = 50) -> HandlerResult:
-        """List batch export jobs."""
+    def _batch_export_visible(self: _DebatesHandlerProtocol, job_id: str, org_id: str) -> bool:
+        """Whether ``job_id`` is one of ``org_id``'s batch export jobs."""
+        return _job_visible(_batch_export_jobs.get(job_id), org_id)
+
+    def _list_batch_exports(
+        self: _DebatesHandlerProtocol, limit: int = 50, *, org_id: str
+    ) -> HandlerResult:
+        """List ``org_id``'s batch export jobs."""
         jobs = sorted(
-            _batch_export_jobs.values(),
+            (job for job in _batch_export_jobs.values() if _job_visible(job, org_id)),
             key=lambda j: j.created_at,
             reverse=True,
         )[:limit]

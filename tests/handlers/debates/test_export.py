@@ -140,6 +140,15 @@ def _make_handler(storage=None, ctx_extra: dict[str, Any] | None = None):
     return _Handler()
 
 
+ORG = "org-1"
+
+
+def _owned_by(storage: MagicMock, org_id: str = ORG) -> MagicMock:
+    """Make every debate id in ``storage`` a private debate of ``org_id``."""
+    storage.get_access_info = MagicMock(side_effect=lambda ref: (ref, org_id, False))
+    return storage
+
+
 def _mock_http_handler(command: str = "GET") -> MagicMock:
     """Create a mock HTTP handler object."""
     h = MagicMock()
@@ -284,11 +293,14 @@ class TestBatchExportStatus:
 class TestStartBatchExport:
     """Tests for _start_batch_export."""
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_valid_json_format(self, mock_task):
         handler = _make_handler()
         http = _mock_http_handler("POST")
-        result = handler._start_batch_export(http, ["d1", "d2"], "json")
+        result = handler._start_batch_export(http, ["d1", "d2"], "json", org_id=ORG)
         assert _status(result) == 200
         body = _body(result)
         assert "job_id" in body
@@ -297,103 +309,136 @@ class TestStartBatchExport:
         assert "/stream" in body["stream_url"]
         assert "/status" in body["status_url"]
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_valid_csv_format(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "csv")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "csv", org_id=ORG)
         assert _status(result) == 200
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_valid_html_format(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "html")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "html", org_id=ORG)
         assert _status(result) == 200
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_valid_txt_format(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "txt")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "txt", org_id=ORG)
         assert _status(result) == 200
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_valid_md_format(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "md")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "md", org_id=ORG)
         assert _status(result) == 200
 
     def test_invalid_format(self):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "pdf")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "pdf", org_id=ORG)
         assert _status(result) == 400
         assert "Invalid format" in _body(result).get("error", "")
 
     def test_invalid_format_latex(self):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "latex")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "latex", org_id=ORG)
         assert _status(result) == 400
 
     def test_empty_debate_ids(self):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), [], "json")
+        result = handler._start_batch_export(_mock_http_handler(), [], "json", org_id=ORG)
         assert _status(result) == 400
         assert "cannot be empty" in _body(result).get("error", "")
 
     def test_exceeds_100_debates(self):
         handler = _make_handler()
         ids = [f"d{i}" for i in range(101)]
-        result = handler._start_batch_export(_mock_http_handler(), ids, "json")
+        result = handler._start_batch_export(_mock_http_handler(), ids, "json", org_id=ORG)
         assert _status(result) == 400
         assert "100" in _body(result).get("error", "")
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_exactly_100_debates_ok(self, mock_task):
         handler = _make_handler()
         ids = [f"d{i}" for i in range(100)]
-        result = handler._start_batch_export(_mock_http_handler(), ids, "json")
+        result = handler._start_batch_export(_mock_http_handler(), ids, "json", org_id=ORG)
         assert _status(result) == 200
         assert _body(result)["total_count"] == 100
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_job_stored_in_global_dict(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         job_id = _body(result)["job_id"]
         assert job_id in _batch_export_jobs
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_event_queue_created(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         job_id = _body(result)["job_id"]
         assert job_id in _batch_export_events
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_job_id_format(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         job_id = _body(result)["job_id"]
         assert job_id.startswith("export_")
         # 12 hex chars after prefix
         assert len(job_id) == len("export_") + 12
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_stream_url_contains_job_id(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         body = _body(result)
         assert body["job_id"] in body["stream_url"]
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_status_url_contains_job_id(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         body = _body(result)
         assert body["job_id"] in body["status_url"]
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
-    def test_create_task_called(self, mock_task):
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
+    def test_background_run_called(self, mock_task):
         handler = _make_handler()
-        handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         mock_task.assert_called_once()
 
 
@@ -407,17 +452,25 @@ class TestGetBatchExportStatus:
 
     def test_job_not_found(self):
         handler = _make_handler()
-        result = handler._get_batch_export_status("nonexistent-id")
+        result = handler._get_batch_export_status("nonexistent-id", org_id=ORG)
         assert _status(result) == 404
-        assert "not found" in _body(result).get("error", "")
+        assert _body(result) == {"error": "Export job not found", "code": "not_found"}
+
+    def test_other_org_job_not_found(self):
+        _batch_export_jobs["j1"] = BatchExportJob(job_id="j1", items=[], org_id="org-2")
+
+        handler = _make_handler()
+        result = handler._get_batch_export_status("j1", org_id=ORG)
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Export job not found", "code": "not_found"}
 
     def test_pending_job_status(self):
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_status("j1")
+        result = handler._get_batch_export_status("j1", org_id=ORG)
         assert _status(result) == 200
         body = _body(result)
         assert body["status"] == "pending"
@@ -434,11 +487,13 @@ class TestGetBatchExportStatus:
             status=BatchExportStatus.COMPLETED,
             result='{"data": "value"}',
         )
-        job = BatchExportJob(job_id="j2", items=[item], status=BatchExportStatus.COMPLETED)
+        job = BatchExportJob(
+            job_id="j2", items=[item], status=BatchExportStatus.COMPLETED, org_id=ORG
+        )
         _batch_export_jobs["j2"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_status("j2")
+        result = handler._get_batch_export_status("j2", org_id=ORG)
         body = _body(result)
         assert body["items"][0]["has_result"] is True
         assert body["items"][0]["error"] is None
@@ -450,11 +505,11 @@ class TestGetBatchExportStatus:
             status=BatchExportStatus.FAILED,
             error="Debate not found: d1",
         )
-        job = BatchExportJob(job_id="j3", items=[item])
+        job = BatchExportJob(job_id="j3", items=[item], org_id=ORG)
         _batch_export_jobs["j3"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_status("j3")
+        result = handler._get_batch_export_status("j3", org_id=ORG)
         body = _body(result)
         assert body["items"][0]["error"] == "Debate not found: d1"
 
@@ -468,11 +523,11 @@ class TestGetBatchExportStatus:
             ),
             BatchExportItem(debate_id="d3", format="json"),
         ]
-        job = BatchExportJob(job_id="j4", items=items)
+        job = BatchExportJob(job_id="j4", items=items, org_id=ORG)
         _batch_export_jobs["j4"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_status("j4")
+        result = handler._get_batch_export_status("j4", org_id=ORG)
         body = _body(result)
         assert len(body["items"]) == 3
         assert body["items"][0]["status"] == "completed"
@@ -490,32 +545,33 @@ class TestGetBatchExportResults:
 
     def test_job_not_found(self):
         handler = _make_handler()
-        result = handler._get_batch_export_results("nonexistent")
+        result = handler._get_batch_export_results("nonexistent", org_id=ORG)
         assert _status(result) == 404
+        assert _body(result) == {"error": "Export job not found", "code": "not_found"}
 
     def test_job_not_complete(self):
-        job = BatchExportJob(job_id="j1", items=[], status=BatchExportStatus.PROCESSING)
+        job = BatchExportJob(job_id="j1", items=[], status=BatchExportStatus.PROCESSING, org_id=ORG)
         _batch_export_jobs["j1"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_results("j1")
+        result = handler._get_batch_export_results("j1", org_id=ORG)
         assert _status(result) == 400
         assert "not complete" in _body(result).get("error", "")
 
     def test_job_pending_not_complete(self):
-        job = BatchExportJob(job_id="j1", items=[], status=BatchExportStatus.PENDING)
+        job = BatchExportJob(job_id="j1", items=[], status=BatchExportStatus.PENDING, org_id=ORG)
         _batch_export_jobs["j1"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_results("j1")
+        result = handler._get_batch_export_results("j1", org_id=ORG)
         assert _status(result) == 400
 
     def test_job_failed_not_complete(self):
-        job = BatchExportJob(job_id="j1", items=[], status=BatchExportStatus.FAILED)
+        job = BatchExportJob(job_id="j1", items=[], status=BatchExportStatus.FAILED, org_id=ORG)
         _batch_export_jobs["j1"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_results("j1")
+        result = handler._get_batch_export_results("j1", org_id=ORG)
         assert _status(result) == 400
 
     def test_completed_job_returns_results(self):
@@ -533,11 +589,13 @@ class TestGetBatchExportResults:
                 error="not found",
             ),
         ]
-        job = BatchExportJob(job_id="j1", items=items, status=BatchExportStatus.COMPLETED)
+        job = BatchExportJob(
+            job_id="j1", items=items, status=BatchExportStatus.COMPLETED, org_id=ORG
+        )
         _batch_export_jobs["j1"] = job
 
         handler = _make_handler()
-        result = handler._get_batch_export_results("j1")
+        result = handler._get_batch_export_results("j1", org_id=ORG)
         assert _status(result) == 200
         body = _body(result)
         assert body["job_id"] == "j1"
@@ -559,32 +617,32 @@ class TestListBatchExports:
 
     def test_empty_list(self):
         handler = _make_handler()
-        result = handler._list_batch_exports()
+        result = handler._list_batch_exports(org_id=ORG)
         assert _status(result) == 200
         body = _body(result)
         assert body["jobs"] == []
         assert body["count"] == 0
 
     def test_single_job(self):
-        job = BatchExportJob(job_id="j1", items=[])
+        job = BatchExportJob(job_id="j1", items=[], org_id=ORG)
         _batch_export_jobs["j1"] = job
 
         handler = _make_handler()
-        result = handler._list_batch_exports()
+        result = handler._list_batch_exports(org_id=ORG)
         body = _body(result)
         assert body["count"] == 1
         assert body["jobs"][0]["job_id"] == "j1"
 
     def test_sorted_newest_first(self):
-        job1 = BatchExportJob(job_id="j1", items=[], created_at=100.0)
-        job2 = BatchExportJob(job_id="j2", items=[], created_at=200.0)
-        job3 = BatchExportJob(job_id="j3", items=[], created_at=150.0)
+        job1 = BatchExportJob(job_id="j1", items=[], created_at=100.0, org_id=ORG)
+        job2 = BatchExportJob(job_id="j2", items=[], created_at=200.0, org_id=ORG)
+        job3 = BatchExportJob(job_id="j3", items=[], created_at=150.0, org_id=ORG)
         _batch_export_jobs["j1"] = job1
         _batch_export_jobs["j2"] = job2
         _batch_export_jobs["j3"] = job3
 
         handler = _make_handler()
-        result = handler._list_batch_exports()
+        result = handler._list_batch_exports(org_id=ORG)
         body = _body(result)
         job_ids = [j["job_id"] for j in body["jobs"]]
         assert job_ids == ["j2", "j3", "j1"]
@@ -592,22 +650,22 @@ class TestListBatchExports:
     def test_limit_applied(self):
         for i in range(10):
             _batch_export_jobs[f"j{i}"] = BatchExportJob(
-                job_id=f"j{i}", items=[], created_at=float(i)
+                job_id=f"j{i}", items=[], created_at=float(i), org_id=ORG
             )
 
         handler = _make_handler()
-        result = handler._list_batch_exports(limit=3)
+        result = handler._list_batch_exports(limit=3, org_id=ORG)
         body = _body(result)
         assert body["count"] == 3
 
     def test_default_limit_50(self):
         for i in range(55):
             _batch_export_jobs[f"j{i}"] = BatchExportJob(
-                job_id=f"j{i}", items=[], created_at=float(i)
+                job_id=f"j{i}", items=[], created_at=float(i), org_id=ORG
             )
 
         handler = _make_handler()
-        result = handler._list_batch_exports()
+        result = handler._list_batch_exports(org_id=ORG)
         body = _body(result)
         assert body["count"] == 50
 
@@ -624,7 +682,7 @@ class TestProcessBatchExport:
     async def test_no_storage_fails_job(self):
         handler = _make_handler(storage=None)
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -635,7 +693,7 @@ class TestProcessBatchExport:
     async def test_no_storage_emits_error_event(self):
         handler = _make_handler(storage=None)
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         queue = asyncio.Queue()
         _batch_export_events["j1"] = queue
@@ -652,10 +710,10 @@ class TestProcessBatchExport:
         debate = _sample_debate()
         storage = MagicMock()
         storage.get_debate.return_value = debate
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -670,10 +728,10 @@ class TestProcessBatchExport:
     async def test_debate_not_found_in_batch(self):
         storage = MagicMock()
         storage.get_debates_batch.return_value = {"d1": None}
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -684,14 +742,31 @@ class TestProcessBatchExport:
         assert "not found" in items[0].error
 
     @pytest.mark.asyncio
+    async def test_other_org_debate_not_exported(self):
+        storage = MagicMock()
+        storage.get_debates_batch.return_value = {"d1": _sample_debate("d1")}
+        handler = _make_handler(storage=_owned_by(storage, "org-2"))
+
+        items = [BatchExportItem(debate_id="d1", format="json")]
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
+        _batch_export_jobs["j1"] = job
+        _batch_export_events["j1"] = asyncio.Queue()
+
+        await handler._process_batch_export(job)
+        assert job.success_count == 0
+        assert items[0].status == BatchExportStatus.FAILED
+        assert items[0].error == "Debate not found"
+        assert items[0].result is None
+
+    @pytest.mark.asyncio
     async def test_batch_uses_batch_query_when_available(self):
         debate = _sample_debate()
         storage = MagicMock()
         storage.get_debates_batch.return_value = {"d1": debate}
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -704,10 +779,10 @@ class TestProcessBatchExport:
         debate = _sample_debate()
         storage = MagicMock(spec=[])  # No get_debates_batch
         storage.get_debate = MagicMock(return_value=debate)
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -721,10 +796,10 @@ class TestProcessBatchExport:
         storage = MagicMock()
         storage.get_debates_batch.side_effect = RuntimeError("batch query failed")
         storage.get_debate.return_value = debate
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -736,10 +811,10 @@ class TestProcessBatchExport:
         storage = MagicMock()
         storage.get_debates_batch.side_effect = RuntimeError("batch failed")
         storage.get_debate.side_effect = OSError("disk error")
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -753,13 +828,13 @@ class TestProcessBatchExport:
         debate1 = _sample_debate("d1")
         storage = MagicMock()
         storage.get_debates_batch.return_value = {"d1": debate1, "d2": None}
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [
             BatchExportItem(debate_id="d1", format="json"),
             BatchExportItem(debate_id="d2", format="json"),
         ]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -773,13 +848,13 @@ class TestProcessBatchExport:
         debate = _sample_debate()
         storage = MagicMock()
         storage.get_debate.return_value = debate
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [
             BatchExportItem(debate_id="d1", format="json"),
             BatchExportItem(debate_id="d2", format="json"),
         ]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         queue = asyncio.Queue()
         _batch_export_events["j1"] = queue
@@ -799,10 +874,10 @@ class TestProcessBatchExport:
     async def test_completed_at_set(self):
         storage = MagicMock()
         storage.get_debate.return_value = _sample_debate()
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -813,10 +888,10 @@ class TestProcessBatchExport:
     async def test_item_timestamps_set(self):
         storage = MagicMock()
         storage.get_debate.return_value = _sample_debate()
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -945,7 +1020,7 @@ class TestStreamBatchExportProgress:
     @pytest.mark.asyncio
     async def test_initial_status_sent(self):
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         queue = asyncio.Queue()
         _batch_export_events["j1"] = queue
@@ -966,7 +1041,7 @@ class TestStreamBatchExportProgress:
     @pytest.mark.asyncio
     async def test_stream_ends_on_completed_event(self):
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         queue = asyncio.Queue()
         _batch_export_events["j1"] = queue
@@ -984,7 +1059,7 @@ class TestStreamBatchExportProgress:
     @pytest.mark.asyncio
     async def test_stream_ends_on_failed_event(self):
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         queue = asyncio.Queue()
         _batch_export_events["j1"] = queue
@@ -1001,7 +1076,7 @@ class TestStreamBatchExportProgress:
     @pytest.mark.asyncio
     async def test_stream_ends_on_cancelled_event(self):
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         queue = asyncio.Queue()
         _batch_export_events["j1"] = queue
@@ -1018,7 +1093,9 @@ class TestStreamBatchExportProgress:
     @pytest.mark.asyncio
     async def test_creates_queue_if_missing(self):
         items = [BatchExportItem(debate_id="d1", format="json")]
-        job = BatchExportJob(job_id="j1", items=items, status=BatchExportStatus.COMPLETED)
+        job = BatchExportJob(
+            job_id="j1", items=items, status=BatchExportStatus.COMPLETED, org_id=ORG
+        )
         _batch_export_jobs["j1"] = job
         # No queue created intentionally
 
@@ -1403,7 +1480,7 @@ class TestEdgeCases:
         debate = _sample_debate()
         storage = MagicMock()
         storage.get_debate.return_value = debate
-        handler = _make_handler(storage=storage)
+        handler = _make_handler(storage=_owned_by(storage))
 
         # Patch _generate_export_content to raise on second call
         call_count = [0]
@@ -1421,7 +1498,7 @@ class TestEdgeCases:
             BatchExportItem(debate_id="d1", format="json"),
             BatchExportItem(debate_id="d2", format="json"),
         ]
-        job = BatchExportJob(job_id="j1", items=items)
+        job = BatchExportJob(job_id="j1", items=items, org_id=ORG)
         _batch_export_jobs["j1"] = job
         _batch_export_events["j1"] = asyncio.Queue()
 
@@ -1431,18 +1508,24 @@ class TestEdgeCases:
         assert items[0].status == BatchExportStatus.COMPLETED
         assert items[1].status == BatchExportStatus.FAILED
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_single_debate_id_batch(self, mock_task):
         handler = _make_handler()
-        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json")
+        result = handler._start_batch_export(_mock_http_handler(), ["d1"], "json", org_id=ORG)
         assert _status(result) == 200
         assert _body(result)["total_count"] == 1
 
-    @patch("aragora.server.handlers.debates.export.asyncio.create_task")
+    @patch(
+        "aragora.server.handlers.debates.export._run_in_background",
+        side_effect=lambda coro: coro.close(),
+    )
     def test_all_valid_formats_accepted_by_batch(self, mock_task):
         handler = _make_handler()
         for fmt in ("json", "csv", "html", "txt", "md"):
-            result = handler._start_batch_export(_mock_http_handler(), ["d1"], fmt)
+            result = handler._start_batch_export(_mock_http_handler(), ["d1"], fmt, org_id=ORG)
             assert _status(result) == 200, f"Format {fmt} should be accepted"
 
     def test_csv_export_critiques_table(self):

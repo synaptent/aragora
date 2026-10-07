@@ -26,6 +26,8 @@ from aragora.server.handlers.debates.export import (
 )
 
 
+ORG = "org-1"
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -81,6 +83,8 @@ def mock_storage(sample_debate):
         return result
 
     storage.get_debates_batch = mock_get_debates_batch
+    # Batch exports only include debates owned by the job's org.
+    storage.get_access_info.side_effect = lambda ref: (ref, ORG, False)
     return storage
 
 
@@ -240,11 +244,15 @@ class TestStartBatchExport:
 
     def test_start_export_valid(self, export_handler, mock_http_handler):
         """Test starting a valid batch export."""
-        with patch("asyncio.create_task"):
+        with patch(
+            "aragora.server.handlers.debates.export._run_in_background",
+            side_effect=lambda coro: coro.close(),
+        ):
             result = export_handler._start_batch_export(
                 mock_http_handler,
                 debate_ids=["debate-1", "debate-2"],
                 format="json",
+                org_id=ORG,
             )
 
         assert result.status_code == 200
@@ -261,6 +269,7 @@ class TestStartBatchExport:
             mock_http_handler,
             debate_ids=["debate-1"],
             format="invalid",
+            org_id=ORG,
         )
 
         assert result.status_code == 400
@@ -274,6 +283,7 @@ class TestStartBatchExport:
             mock_http_handler,
             debate_ids=[],
             format="json",
+            org_id=ORG,
         )
 
         assert result.status_code == 400
@@ -287,6 +297,7 @@ class TestStartBatchExport:
             mock_http_handler,
             debate_ids=[f"debate-{i}" for i in range(101)],
             format="json",
+            org_id=ORG,
         )
 
         assert result.status_code == 400
@@ -299,11 +310,15 @@ class TestStartBatchExport:
         valid_formats = ["json", "csv", "html", "txt", "md"]
 
         for fmt in valid_formats:
-            with patch("asyncio.create_task"):
+            with patch(
+                "aragora.server.handlers.debates.export._run_in_background",
+                side_effect=lambda coro: coro.close(),
+            ):
                 result = export_handler._start_batch_export(
                     mock_http_handler,
                     debate_ids=["debate-1"],
                     format=fmt,
+                    org_id=ORG,
                 )
             assert result.status_code == 200, f"Format {fmt} should be valid"
 
@@ -320,7 +335,7 @@ class TestProcessBatchExport:
     async def test_process_export_success(self, export_handler, sample_debate):
         """Test successful batch export processing."""
         items = [BatchExportItem(debate_id="debate-123", format="json")]
-        job = BatchExportJob(job_id="test_job", items=items)
+        job = BatchExportJob(job_id="test_job", items=items, org_id=ORG)
         _batch_export_jobs["test_job"] = job
         _batch_export_events["test_job"] = asyncio.Queue()
 
@@ -340,7 +355,7 @@ class TestProcessBatchExport:
         mock_storage.get_debates_batch = lambda ids: dict.fromkeys(ids)
 
         items = [BatchExportItem(debate_id="missing-debate", format="json")]
-        job = BatchExportJob(job_id="not_found_job", items=items)
+        job = BatchExportJob(job_id="not_found_job", items=items, org_id=ORG)
         _batch_export_jobs["not_found_job"] = job
         _batch_export_events["not_found_job"] = asyncio.Queue()
 
@@ -357,7 +372,7 @@ class TestProcessBatchExport:
         export_handler._storage = None
 
         items = [BatchExportItem(debate_id="debate-1", format="json")]
-        job = BatchExportJob(job_id="no_storage_job", items=items)
+        job = BatchExportJob(job_id="no_storage_job", items=items, org_id=ORG)
         _batch_export_jobs["no_storage_job"] = job
         _batch_export_events["no_storage_job"] = asyncio.Queue()
 
@@ -381,7 +396,7 @@ class TestProcessBatchExport:
             BatchExportItem(debate_id="d2", format="json"),
             BatchExportItem(debate_id="d3", format="json"),
         ]
-        job = BatchExportJob(job_id="multi_job", items=items)
+        job = BatchExportJob(job_id="multi_job", items=items, org_id=ORG)
         _batch_export_jobs["multi_job"] = job
         _batch_export_events["multi_job"] = asyncio.Queue()
 
@@ -395,7 +410,7 @@ class TestProcessBatchExport:
     async def test_process_export_emits_events(self, export_handler, sample_debate):
         """Test that processing emits SSE events."""
         items = [BatchExportItem(debate_id="debate-123", format="json")]
-        job = BatchExportJob(job_id="events_job", items=items)
+        job = BatchExportJob(job_id="events_job", items=items, org_id=ORG)
         _batch_export_jobs["events_job"] = job
         event_queue = asyncio.Queue()
         _batch_export_events["events_job"] = event_queue
@@ -435,7 +450,7 @@ class TestProcessBatchExport:
             BatchExportItem(debate_id="d2", format="json"),
             BatchExportItem(debate_id="d3", format="json"),
         ]
-        job = BatchExportJob(job_id="batch_test", items=items)
+        job = BatchExportJob(job_id="batch_test", items=items, org_id=ORG)
         _batch_export_jobs["batch_test"] = job
         _batch_export_events["batch_test"] = asyncio.Queue()
 
@@ -467,7 +482,7 @@ class TestProcessBatchExport:
             BatchExportItem(debate_id="d1", format="json"),
             BatchExportItem(debate_id="d2", format="json"),
         ]
-        job = BatchExportJob(job_id="fallback_test", items=items)
+        job = BatchExportJob(job_id="fallback_test", items=items, org_id=ORG)
         _batch_export_jobs["fallback_test"] = job
         _batch_export_events["fallback_test"] = asyncio.Queue()
 
