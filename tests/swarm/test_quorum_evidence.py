@@ -1899,9 +1899,25 @@ def test_collect_overall_timeout_fails_closed_and_ignores_late_results() -> None
     assert posted == []
 
 
+def _claude_passes_openai_blocks_others_stall_runner(
+    family: str, prompt: str, delay: float
+) -> ReviewerResult:
+    """Module-level for the same picklability reason as ``_claude_passes_others_stall_runner``."""
+    if family == "claude":
+        return ReviewerResult(family, "Verdict: PASS from claude", True)
+    if family == "openai":
+        return ReviewerResult(family, "Verdict: CHANGES-REQUESTED\n- [P1] blocker", True)
+    time.sleep(delay)
+    return ReviewerResult(family, f"Verdict: PASS from {family}", True)
+
+
 def test_collect_overall_timeout_records_adjudication_for_partial_stall(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Spawn-only platforms boot a fresh interpreter per worker, which the
+    # deadline cannot absorb.
+    if not {"fork", "forkserver"} & set(multiprocessing.get_all_start_methods()):
+        pytest.skip("process-supervised timeout regression needs fork or forkserver")
     from aragora.swarm import review_adjudicator
 
     monkeypatch.setenv("ARAGORA_ENABLE_REVIEW_ADJUDICATOR", "1")
@@ -1916,23 +1932,19 @@ def test_collect_overall_timeout_records_adjudication_for_partial_stall(
             }
         )
 
-    def runner(family: str, prompt: str) -> ReviewerResult:
-        if family == "claude":
-            return ReviewerResult(family, "Verdict: PASS from claude", True)
-        if family == "openai":
-            return ReviewerResult(family, "Verdict: CHANGES-REQUESTED\n- [P1] blocker", True)
-        time.sleep(1.5)
-        return ReviewerResult(family, "Verdict: PASS from grok", True)
-
     monkeypatch.setattr(review_adjudicator, "adjudicate", fake_adjudicate)
-    fakes["reviewer_runner"] = runner
+    # Deadline leaves room for forkserver worker boot while staying well under
+    # grok's stall, so only grok times out.
+    fakes["reviewer_runner"] = functools.partial(
+        _claude_passes_openai_blocks_others_stall_runner, delay=3.0
+    )
     outcome = collect_evidence(
         repo="o/r",
         pr=1,
         families=["claude", "openai", "grok"],
         author="me",
         apply=True,
-        overall_timeout_seconds=0.2,
+        overall_timeout_seconds=0.75,
         **fakes,
     )
 
