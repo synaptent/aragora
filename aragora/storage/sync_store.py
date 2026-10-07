@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Import distributed state requirements
-from aragora.control_plane.leader import (
+from aragora.resilience.leader import (
     DistributedStateError,
     is_distributed_state_required,
 )

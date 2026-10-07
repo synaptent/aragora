@@ -11,7 +11,7 @@ Features:
 - Query agents by blockchain address
 
 Usage:
-    from aragora.control_plane.blockchain_identity import BlockchainIdentityBridge
+    from aragora.blockchain.agent_registry import BlockchainIdentityBridge
     from aragora.blockchain.provider import Web3Provider
 
     provider = Web3Provider.from_env()

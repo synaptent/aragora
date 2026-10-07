@@ -388,7 +388,7 @@ class ERC8004Adapter(KnowledgeMoundAdapter):
 
     def _get_identity_bridge(self) -> Any:
         """Get the blockchain identity bridge for agent ID mappings."""
-        from aragora.control_plane.blockchain_identity import get_blockchain_identity_bridge
+        from aragora.blockchain.agent_registry import get_blockchain_identity_bridge
 
         bridge = get_blockchain_identity_bridge()
         # Ensure the bridge uses our provider if set
