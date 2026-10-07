@@ -46,8 +46,12 @@ from aragora.server.debate_utils import _active_debates  # noqa: F401
 from aragora.server.http_utils import run_async
 from aragora.server.validation import validate_debate_id
 from aragora.server.validation.schema import validate_against_schema  # noqa: F401
-from aragora.tenancy.debate_access import authorize_debate_read
-from aragora.tenancy.record_scope import record_not_found, require_org_scope
+from aragora.tenancy.debate_access import (
+    DebateWrite,
+    authorize_debate_read,
+    authorize_debate_write,
+)
+from aragora.tenancy.record_scope import record_not_found, require_org_scope, scope_denial_first
 
 from ..base import (
     BaseHandler,
@@ -81,6 +85,10 @@ from .search import SearchOperationsMixin
 
 
 logger = logging.getLogger(__name__)
+
+# POST /api/debates/{id}/<suffix> routes served by handle_post. Each changes the
+# debate or creates a record from it, so only the debate's org may call them.
+_DEBATE_POST_SUFFIXES = ("fork", "verify", "followup", "cancel")
 
 
 def _debate_ref(normalized: str, parts: list[str]) -> str | None:
@@ -251,17 +259,17 @@ class DebatesHandler(
         if result:
             return result
 
-        # Decision integrity package (POST /api/debates/{id}/decision-integrity)
+        # Decision integrity package (POST /api/debates/{id}/decision-integrity).
+        # It derives a receipt and a plan from the debate, so it is a write: a
+        # public debate passes the read check above but not this one.
         if normalized.endswith("/decision-integrity"):
             # Enforce POST
             if handler is not None and getattr(handler, "command", "POST") != "POST":
                 return error_response("Method not allowed", 405)
-            debate_id, err = self._extract_debate_id(normalized)
-            if err:
-                return error_response(err, 400)
-            if not debate_id:
-                return error_response("Invalid debate id", 400)
-            return self._create_decision_integrity(handler, debate_id)
+            write, write_error = self._authorize_debate_write(normalized, handler)
+            if write is None:
+                return write_error
+            return self._create_decision_integrity(handler, write.debate_id)
 
         # Export route (special handling for format/table validation)
         # URL: /api/debates/{id}/export/{format}
@@ -361,7 +369,17 @@ class DebatesHandler(
 
         return error_response(f"Unknown batch export endpoint: {path}", 404)
 
+    def _authorize_debate_write(
+        self, path: str, handler: Any
+    ) -> tuple[DebateWrite, None] | tuple[None, HandlerResult]:
+        """The org-scope and owner-org check for a write to the debate a path names."""
+        debate_ref, err = self._extract_debate_id(path)
+        if debate_ref is None:
+            return None, error_response(err or "Invalid debate id", 400)
+        return authorize_debate_write(handler, self.get_storage(), debate_ref)
+
     @handle_errors("debates creation")
+    @scope_denial_first
     @require_permission("debates:create")
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
@@ -396,37 +414,28 @@ class DebatesHandler(
         ):
             return self._submit_batch(handler)
 
-        if path.endswith("/fork"):
-            debate_id, err = self._extract_debate_id(path)
-            if err:
-                return error_response(err, 400)
-            if debate_id:
-                return self._fork_debate(handler, debate_id)
+        # POST /api/debates/{id}/{suffix}
+        # Parts: ['', 'api', 'debates', '{id}', '{suffix}']
+        normalized = path.replace("/api/v1/", "/api/").replace("/api/v2/", "/api/")
+        parts = normalized.split("/")
+        if not normalized.startswith("/api/debates/") or parts[-1] not in _DEBATE_POST_SUFFIXES:
+            return None
+        if len(parts) != 5:
+            return error_response("Invalid debate path", 400)
+        write, write_error = self._authorize_debate_write(normalized, handler)
+        if write is None:
+            return write_error
 
-        if path.endswith("/verify"):
-            debate_id, err = self._extract_debate_id(path)
-            if err:
-                return error_response(err, 400)
-            if debate_id:
-                return self._verify_outcome(handler, debate_id)
-
-        if path.endswith("/followup"):
-            debate_id, err = self._extract_debate_id(path)
-            if err:
-                return error_response(err, 400)
-            if debate_id:
-                return self._create_followup_debate(handler, debate_id)
-
-        if path.endswith("/cancel"):
-            debate_id, err = self._extract_debate_id(path)
-            if err:
-                return error_response(err, 400)
-            if debate_id:
-                return self._cancel_debate(handler, debate_id)
-
-        return None
+        if parts[4] == "fork":
+            return self._fork_debate(handler, write.debate_id, scope=write.scope)
+        if parts[4] == "verify":
+            return self._verify_outcome(handler, write.debate_id)
+        if parts[4] == "followup":
+            return self._create_followup_debate(handler, write.debate_id, scope=write.scope)
+        return self._cancel_debate(handler, write.debate_id)
 
     @handle_errors("debates modification")
+    @scope_denial_first
     @require_permission("debates:update")
     def handle_patch(
         self, path: str, query_params: dict[str, Any], handler: Any
@@ -441,14 +450,14 @@ class DebatesHandler(
         # Handle /api/debates/{id} pattern for updates
         normalized = path.replace("/api/v1/", "/api/").replace("/api/v2/", "/api/")
         if normalized.startswith("/api/debates/") and normalized.count("/") == 3:
-            debate_id, err = self._extract_debate_id(normalized)
-            if err:
-                return error_response(err, 400)
-            if debate_id:
-                return self._patch_debate(handler, debate_id)
+            write, write_error = self._authorize_debate_write(normalized, handler)
+            if write is None:
+                return write_error
+            return self._patch_debate(handler, write.debate_id)
         return None
 
     @handle_errors("debates deletion")
+    @scope_denial_first
     @require_permission("debates:delete")
     def handle_delete(
         self, path: str, query_params: dict[str, Any], handler: Any
@@ -461,11 +470,10 @@ class DebatesHandler(
         # Handle DELETE /api/debates/{id}
         normalized = path.replace("/api/v1/", "/api/").replace("/api/v2/", "/api/")
         if normalized.startswith("/api/debates/") and normalized.count("/") == 3:
-            debate_id, err = self._extract_debate_id(normalized)
-            if err:
-                return error_response(err, 400)
-            if debate_id:
-                return self._delete_debate(handler, debate_id)
+            write, write_error = self._authorize_debate_write(normalized, handler)
+            if write is None:
+                return write_error
+            return self._delete_debate(handler, write.debate_id)
         return None
 
 

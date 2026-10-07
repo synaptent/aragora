@@ -717,6 +717,29 @@ class DebateStorage(SQLiteStore):
             conn.commit()
         return updated
 
+    def save_debate(self, debate_id: str, debate_data: dict) -> bool:
+        """
+        Replace the stored artifact of an existing debate.
+
+        The row's id, slug, org and public flag are kept; only the artifact
+        JSON changes.
+
+        Args:
+            debate_id: Debate ID
+            debate_data: The full updated debate artifact
+
+        Returns:
+            True if updated, False if no debate has this ID
+        """
+        with self.connection() as conn:
+            cursor = conn.execute(
+                "UPDATE debates SET artifact_json = ? WHERE id = ?",
+                (json.dumps(debate_data), debate_id),
+            )
+            updated = cursor.rowcount > 0
+            conn.commit()
+        return updated
+
     def get(self, debate_id: str) -> dict | None:
         """
         Get debate by ID (alias for get_by_id for interface compatibility).

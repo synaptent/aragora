@@ -705,6 +705,8 @@ class TestHandlePost:
         from aragora.server.handlers.debates.handler import DebatesHandler
 
         mock_storage = MagicMock()
+        # Debate writes are org-scoped: the debate belongs to the caller's org.
+        mock_storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
         return DebatesHandler(server_context={"storage": mock_storage})
 
     def test_handle_post_routes_to_create_debate(self, handler_with_storage):
@@ -773,6 +775,8 @@ class TestHandlePatch:
             }
         )
         mock_storage.save_debate = MagicMock()
+        # Debate writes are org-scoped: the debate belongs to the caller's org.
+        mock_storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
         return DebatesHandler(server_context={"storage": mock_storage})
 
     def test_handle_patch_updates_debate(self, handler_with_storage):
