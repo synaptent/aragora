@@ -19,6 +19,10 @@ import logging
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
+from aragora.events.agent_registry_hooks import (
+    AgentRegistryNotRegisteredError,
+    create_agent_registry,
+)
 from aragora.events.subscribers.config import (
     AsyncDispatchConfig,
     RetryConfig,
@@ -359,11 +363,9 @@ class CrossSubscriberManager(
         )
 
         try:
-            from aragora.control_plane.registry import AgentRegistry
-
             import asyncio
 
-            registry = AgentRegistry()
+            registry = create_agent_registry()
 
             if event_subtype in ("birth", "agent_birth"):
                 capabilities = data.get("capabilities", [])
@@ -415,7 +417,7 @@ class CrossSubscriberManager(
                     pass
                 logger.debug("Scheduled evolved agent %s for control plane update", agent_id)
 
-        except ImportError:
+        except (ImportError, AgentRegistryNotRegisteredError):
             pass  # Control plane not available
         except (RuntimeError, TypeError, AttributeError, ValueError) as e:
             logger.debug("Genesis → control plane sync failed: %s", e)
