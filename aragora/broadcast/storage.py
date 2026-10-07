@@ -363,7 +363,9 @@ class AudioFileStore:
         file_size = audio_path.stat().st_size
         if file_size > MAX_FILE_SIZE_BYTES:
             logger.error(
-                f"Audio file too large: {file_size:,} bytes > {MAX_FILE_SIZE_BYTES:,} bytes limit"
+                "Audio file too large: %s bytes > %s bytes limit",
+                format(file_size, ","),
+                format(MAX_FILE_SIZE_BYTES, ","),
             )
             return None
 
@@ -439,7 +441,9 @@ class AudioFileStore:
         # Validate size
         if len(audio_data) > MAX_FILE_SIZE_BYTES:
             logger.error(
-                f"Audio data too large: {len(audio_data):,} bytes > {MAX_FILE_SIZE_BYTES:,} bytes limit"
+                "Audio data too large: %s bytes > %s bytes limit",
+                format(len(audio_data), ","),
+                format(MAX_FILE_SIZE_BYTES, ","),
             )
             return None
 

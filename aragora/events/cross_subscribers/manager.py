@@ -234,7 +234,7 @@ class CrossSubscriberManager(
         if not total_cost:
             return
 
-        logger.debug(f"Recording debate cost: {debate_id} ${total_cost:.4f}")
+        logger.debug("Recording debate cost: %s $%.4f", debate_id, total_cost)
 
         try:
             from aragora.billing.cost_tracker import get_cost_tracker
@@ -264,8 +264,10 @@ class CrossSubscriberManager(
         confidence = data.get("confidence", 0.0)
 
         logger.debug(
-            f"Debate ended for explainability: {debate_id} "
-            f"consensus={consensus} confidence={confidence:.2f}"
+            "Debate ended for explainability: %s consensus=%s confidence=%.2f",
+            debate_id,
+            consensus,
+            confidence,
         )
 
     def _handle_culture_to_debate(self, event: StreamEvent) -> None:
@@ -288,7 +290,7 @@ class CrossSubscriberManager(
         workspace_id = data.get("workspace_id", "")
 
         logger.debug(
-            f"Culture patterns available: {patterns_count} patterns in workspace {workspace_id}"
+            "Culture patterns available: %s patterns in workspace %s", patterns_count, workspace_id
         )
 
         # Culture patterns are used passively during debate initialization
