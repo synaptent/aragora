@@ -37,8 +37,8 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
-from collections.abc import Callable, Coroutine
+from typing import Any, cast
+from collections.abc import Awaitable, Callable, Coroutine
 
 # Observability
 from aragora.observability import get_logger
@@ -154,7 +154,7 @@ class RegionalEventBus:
                 encoding="utf-8",
                 decode_responses=True,
             )
-            await self._redis.ping()
+            await cast(Awaitable[bool], self._redis.ping())
             self._connected = True
 
             # Create pubsub connection
