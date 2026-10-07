@@ -1530,7 +1530,6 @@ scripts/benchmark_debate.py:0: error: Argument 1 to "append" of "list" has incom
 scripts/benchmark_trickster.py:0: error: Argument "agents" to "Arena" has incompatible type "list[StyledMockAgent]"; expected "list[Agent]"  [arg-type]
 scripts/benchmarks/bench_adaptive_stopping.py:0: error: Need type annotation for "counts" (hint: "counts: dict[<type>, <type>] = ...")  [var-annotated]
 scripts/capability_gap_report.py:0: error: Need type annotation for "gaps"  [var-annotated]
-scripts/check_docs_consistency.py:0: error: "object" has no attribute "__iter__"; maybe "__dir__" or "__str__"? (not iterable)  [attr-defined]
 scripts/check_test_dependencies.py:0: error: "str" has no attribute "group"  [attr-defined]
 scripts/check_test_dependencies.py:0: error: Incompatible types in assignment (expression has type "list[str]", variable has type "EntryPoints")  [assignment]
 scripts/cleanup_nomic_state.py:0: error: Incompatible types in assignment (expression has type "float", target has type "int")  [assignment]

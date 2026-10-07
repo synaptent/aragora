@@ -22,7 +22,7 @@ def create_backup(
     reason: str = "pre_cycle",
     cycle_count: int = 0,
     log_func: Callable = print,
-    stream_emit: Callable = None,
+    stream_emit: Callable | None = None,
 ) -> Path:
     """
     Create a backup of protected files before making changes.
@@ -76,7 +76,7 @@ def restore_backup(
     backup_path: Path,
     aragora_path: Path,
     log_func: Callable = print,
-    stream_emit: Callable = None,
+    stream_emit: Callable | None = None,
 ) -> bool:
     """
     Restore protected files from a backup.
