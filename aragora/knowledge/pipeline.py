@@ -83,10 +83,10 @@ MOUND_AVAILABLE: bool = False
 
 try:
     from aragora.knowledge.mound import (  # type: ignore[no-redef]
-        KnowledgeMound,  # type: ignore[no-redef]
-        MoundConfig,  # type: ignore[no-redef]
-        IngestionRequest,  # type: ignore[no-redef]
-        KnowledgeSource,  # type: ignore[no-redef]
+        KnowledgeMound,
+        MoundConfig,
+        IngestionRequest,
+        KnowledgeSource,
     )
 
     MOUND_AVAILABLE = True

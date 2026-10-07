@@ -530,7 +530,7 @@ def get_all_jobs(
     # Sort by created_at descending
     jobs.sort(key=lambda j: j.created_at, reverse=True)
 
-    return [get_job_status(j.job_id) for j in jobs[:limit] if get_job_status(j.job_id)]  # type: ignore[misc]
+    return [found for j in jobs[:limit] if (found := get_job_status(j.job_id))]
 
 
 async def shutdown_pipeline() -> None:
