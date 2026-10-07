@@ -8,6 +8,40 @@ import-and-call tests at both paths.
 
 | old path | new path | PR | retire-after |
 |---|---|---|---|
+| `aragora.audit.log:AuditCategory` | `aragora.observability.audit_log:AuditCategory` | #10382 | not before M4 seal |
+| `aragora.audit.log:AuditEvent` | `aragora.observability.audit_log:AuditEvent` | #10382 | not before M4 seal |
+| `aragora.audit.log:AuditLog` | `aragora.observability.audit_log:AuditLog` | #10382 | not before M4 seal |
+| `aragora.audit.log:AuditOutcome` | `aragora.observability.audit_log:AuditOutcome` | #10382 | not before M4 seal |
+| `aragora.audit.log:AuditQuery` | `aragora.observability.audit_log:AuditQuery` | #10382 | not before M4 seal |
+| `aragora.audit.log:audit_admin_action` | `aragora.observability.audit_log:audit_admin_action` | #10382 | not before M4 seal |
+| `aragora.audit.log:audit_auth_login` | `aragora.observability.audit_log:audit_auth_login` | #10382 | not before M4 seal |
+| `aragora.audit.log:audit_data_access` | `aragora.observability.audit_log:audit_data_access` | #10382 | not before M4 seal |
+| `aragora.audit.log:get_audit_log` | `aragora.observability.audit_log:get_audit_log` | #10382 | not before M4 seal |
+| `aragora.audit.log:reset_audit_log` | `aragora.observability.audit_log:reset_audit_log` | #10382 | not before M4 seal |
+| `aragora.audit.persistence:AuditPersistenceBackend` | `aragora.observability.audit_persistence:AuditPersistenceBackend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence:FileBackend` | `aragora.observability.audit_persistence:FileBackend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence:PostgresBackend` | `aragora.observability.audit_persistence:PostgresBackend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence:get_backend` | `aragora.observability.audit_persistence:get_backend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence.base:AuditPersistenceBackend` | `aragora.observability.audit_persistence.base:AuditPersistenceBackend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence.base:PersistenceError` | `aragora.observability.audit_persistence.base:PersistenceError` | #10382 | not before M4 seal |
+| `aragora.audit.persistence.file:FileBackend` | `aragora.observability.audit_persistence.file:FileBackend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence.postgres:PostgresBackend` | `aragora.observability.audit_persistence.postgres:PostgresBackend` | #10382 | not before M4 seal |
+| `aragora.audit.unified:AuditOutcome` | `aragora.observability.unified_audit:AuditOutcome` | #10382 | not before M4 seal |
+| `aragora.audit.unified:AuditSeverity` | `aragora.observability.unified_audit:AuditSeverity` | #10382 | not before M4 seal |
+| `aragora.audit.unified:UnifiedAuditCategory` | `aragora.observability.unified_audit:UnifiedAuditCategory` | #10382 | not before M4 seal |
+| `aragora.audit.unified:UnifiedAuditEvent` | `aragora.observability.unified_audit:UnifiedAuditEvent` | #10382 | not before M4 seal |
+| `aragora.audit.unified:UnifiedAuditLogger` | `aragora.observability.unified_audit:UnifiedAuditLogger` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_access` | `aragora.observability.unified_audit:audit_access` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_action` | `aragora.observability.unified_audit:audit_action` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_admin` | `aragora.observability.unified_audit:audit_admin` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_data` | `aragora.observability.unified_audit:audit_data` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_debate` | `aragora.observability.unified_audit:audit_debate` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_log` | `aragora.observability.unified_audit:audit_log` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_login` | `aragora.observability.unified_audit:audit_login` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_logout` | `aragora.observability.unified_audit:audit_logout` | #10382 | not before M4 seal |
+| `aragora.audit.unified:audit_security` | `aragora.observability.unified_audit:audit_security` | #10382 | not before M4 seal |
+| `aragora.audit.unified:configure_unified_audit_logger` | `aragora.observability.unified_audit:configure_unified_audit_logger` | #10382 | not before M4 seal |
+| `aragora.audit.unified:get_unified_audit_logger` | `aragora.observability.unified_audit:get_unified_audit_logger` | #10382 | not before M4 seal |
 | `aragora.debate.cache.embeddings_lru:EmbeddingCache` | `aragora.shared.embedding_cache:EmbeddingCache` | #10301 | not before M4 seal |
 | `aragora.debate.cache.embeddings_lru:EmbeddingCacheManager` | `aragora.shared.embedding_cache:EmbeddingCacheManager` | #10301 | not before M4 seal |
 | `aragora.debate.cache.embeddings_lru:get_embedding_cache` | `aragora.shared.embedding_cache:get_embedding_cache` | #10301 | not before M4 seal |
