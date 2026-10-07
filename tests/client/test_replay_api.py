@@ -5,7 +5,7 @@ Tests cover:
 - ReplayAPI.list() and list_async() for listing replays
 - ReplayAPI.get() and get_async() for retrieving a replay
 - ReplayAPI.delete() and delete_async() for deleting a replay
-- ReplayAPI.export() and export_async() for exporting replay data
+- Absence of the unserved export() and export_async() methods
 - Response extraction logic for dict-wrapped and raw responses
 """
 
@@ -445,134 +445,6 @@ class TestReplayAPIUnservedExportRemoved:
 
 
 # ============================================================================
-# ReplayAPI.export() Tests
-# ============================================================================
-
-
-class TestReplayAPIExport:
-    """Tests for ReplayAPI.export() method."""
-
-    def test_export_default_format(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export() with default json format."""
-        mock_client._get.return_value = {"data": '{"replay_id": "rpl-001"}'}
-
-        result = replay_api.export("rpl-001")
-
-        assert result == '{"replay_id": "rpl-001"}'
-        mock_client._get.assert_called_once_with(
-            "/api/replays/rpl-001/export", params={"format": "json"}
-        )
-
-    def test_export_csv_format(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export() with csv format."""
-        csv_data = "event_type,timestamp,agent_id\nround_start,2026-01-01,\n"
-        mock_client._get.return_value = {"data": csv_data}
-
-        result = replay_api.export("rpl-csv", format="csv")
-
-        assert result == csv_data
-        mock_client._get.assert_called_once_with(
-            "/api/replays/rpl-csv/export", params={"format": "csv"}
-        )
-
-    def test_export_handles_string_response(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export() handles non-dict response by converting to string."""
-        mock_client._get.return_value = "raw string data"
-
-        result = replay_api.export("rpl-raw")
-
-        assert result == "raw string data"
-
-    def test_export_handles_missing_data_key(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export() returns empty string when dict lacks 'data' key."""
-        mock_client._get.return_value = {"other_key": "value"}
-
-        result = replay_api.export("rpl-nodata")
-
-        assert result == ""
-
-    def test_export_handles_empty_data(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export() returns empty string when data is empty."""
-        mock_client._get.return_value = {"data": ""}
-
-        result = replay_api.export("rpl-empty")
-
-        assert result == ""
-
-
-# ============================================================================
-# ReplayAPI.export_async() Tests
-# ============================================================================
-
-
-class TestReplayAPIExportAsync:
-    """Tests for ReplayAPI.export_async() method."""
-
-    @pytest.mark.asyncio
-    async def test_export_async_default_format(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export_async() with default json format."""
-        mock_client._get_async = AsyncMock(return_value={"data": '{"replay_id": "rpl-async"}'})
-
-        result = await replay_api.export_async("rpl-async")
-
-        assert result == '{"replay_id": "rpl-async"}'
-        mock_client._get_async.assert_called_once_with(
-            "/api/replays/rpl-async/export", params={"format": "json"}
-        )
-
-    @pytest.mark.asyncio
-    async def test_export_async_csv_format(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export_async() with csv format."""
-        csv_data = "col1,col2\nval1,val2\n"
-        mock_client._get_async = AsyncMock(return_value={"data": csv_data})
-
-        result = await replay_api.export_async("rpl-csv", format="csv")
-
-        assert result == csv_data
-
-    @pytest.mark.asyncio
-    async def test_export_async_handles_string_response(
-        self,
-        replay_api: ReplayAPI,
-        mock_client: MagicMock,
-    ):
-        """Test export_async() handles non-dict response."""
-        mock_client._get_async = AsyncMock(return_value="raw async data")
-
-        result = await replay_api.export_async("rpl-raw-async")
-
-        assert result == "raw async data"
-
-
-# ============================================================================
 # Integration-like Tests
 # ============================================================================
 
@@ -612,22 +484,17 @@ class TestReplayAPIIntegration:
         assert full_replay.replay_id == replay_id
         assert len(full_replay.events) == 2
 
-    def test_get_export_delete_workflow(
+    def test_get_then_delete_workflow(
         self,
         replay_api: ReplayAPI,
         mock_client: MagicMock,
         sample_replay: dict,
     ):
-        """Test getting, exporting, then deleting a replay."""
+        """Test getting, then deleting a replay."""
         # Get
         mock_client._get.return_value = sample_replay
         replay = replay_api.get("rpl-001")
         assert replay.replay_id == "rpl-001"
-
-        # Export
-        mock_client._get.return_value = {"data": '{"exported": true}'}
-        exported = replay_api.export("rpl-001", format="json")
-        assert exported == '{"exported": true}'
 
         # Delete
         mock_client._delete.return_value = None

@@ -124,6 +124,16 @@ See [DEPRECATION_POLICY.md](./DEPRECATION_POLICY.md) for the full deprecation ti
 
 ### Python SDK
 
+#### Unreleased (2026-10-07)
+
+`ReplayAPI.export(replay_id, format)` and `ReplayAPI.export_async(replay_id, format)`
+in `aragora.client` (`client.replays.export` and `client.replays.export_async`) are
+removed, with no replacement, because they called `GET /api/replays/{replay_id}/export`,
+a route no handler serves (it is absent from the OpenAPI documents and rejected by
+`ReplaysHandler.can_handle`, and the TypeScript SDK already removed the same route from
+`AragoraClient.exportReplay`). Accessing either name now raises `AttributeError`.
+`client.replays.get(replay_id)` still returns the full replay.
+
 #### v2.0.0
 
 | Change | Before | After |
@@ -196,4 +206,4 @@ Use the template at [templates/breaking_change_template.md](../templates/breakin
 
 ---
 
-*Last updated: 2026-01-31*
+*Last updated: 2026-10-07*
