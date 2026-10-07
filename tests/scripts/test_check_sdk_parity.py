@@ -851,3 +851,101 @@ def test_representative_invocation_stderr_free_of_deprecation_warnings():
     assert proc.stdout.strip(), "checker produced no report on stdout"
     deprecation_lines = [line for line in proc.stderr.splitlines() if "DeprecationWarning" in line]
     assert deprecation_lines == [], "\n".join(deprecation_lines)
+
+
+# Runs check_sdk_parity.main() with the production argv in a fresh interpreter
+# and reports every DeprecationWarning that reaches the top level. Mode
+# "unlisted" empties _LEGACY_WARNING_MODULES first, so each listed module's
+# notice surfaces wherever the handler cascade imports it.
+_DEPRECATION_PROBE = """
+import contextlib
+import io
+import json
+import sys
+import warnings
+
+project_root, mode, *argv = sys.argv[1:]
+sys.path.insert(0, project_root)
+import scripts.check_sdk_parity as checker
+
+listed = list(checker._LEGACY_WARNING_MODULES)
+if mode == "unlisted":
+    checker._LEGACY_WARNING_MODULES = ()
+sys.argv = [checker.__file__, *argv]
+with warnings.catch_warnings(record=True) as caught, contextlib.redirect_stdout(io.StringIO()):
+    rc = checker.main()
+    handler_count = len(checker.extract_handler_routes())
+print(
+    json.dumps(
+        {
+            "rc": rc,
+            "handler_count": handler_count,
+            "listed": listed,
+            "deprecations": [
+                str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+            ],
+        }
+    )
+)
+"""
+
+
+def _run_deprecation_probe(mode: str) -> dict[str, Any]:
+    baseline = PROJECT_ROOT / "scripts" / "baselines" / "check_sdk_parity.json"
+    budget = PROJECT_ROOT / "scripts" / "baselines" / "check_sdk_parity_budget.json"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("AWS_")}
+    env.pop("PYTHONWARNINGS", None)
+    env["AWS_EC2_METADATA_DISABLED"] = "true"
+    env.setdefault("ARAGORA_SECRETS_STRICT", "false")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-W",
+            "always::DeprecationWarning",
+            "-c",
+            _DEPRECATION_PROBE,
+            str(PROJECT_ROOT),
+            mode,
+            "--strict",
+            "--baseline",
+            str(baseline),
+            "--budget",
+            str(budget),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env=env,
+        timeout=600,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    report: dict[str, Any] = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert report["rc"] in (0, 1), proc.stderr
+    assert report["handler_count"] > 0, "handler cascade did not run; the probe proves nothing"
+    return report
+
+
+def test_legacy_warning_modules_match_live_import_cascade():
+    """Every listed module must still warn during a run, and stay silent once listed.
+
+    Default filters hide shim notices attributed to non-__main__ modules, so
+    the stderr test above passes whatever the list holds. Both runs here force
+    DeprecationWarning visible. A listed module whose notice no longer fires
+    with the list emptied is stale and should be removed from the list.
+    """
+    unlisted = _run_deprecation_probe("unlisted")
+    listed = unlisted["listed"]
+    stale = [
+        module
+        for module in listed
+        if not any(message.startswith(module) for message in unlisted["deprecations"])
+    ]
+    assert stale == [], (
+        "these _LEGACY_WARNING_MODULES entries no longer warn during the checker run "
+        f"and should be removed: {stale}"
+    )
+
+    committed = _run_deprecation_probe("committed")
+    leaked = [message for message in committed["deprecations"] if message.startswith(tuple(listed))]
+    assert leaked == [], "\n".join(leaked)
