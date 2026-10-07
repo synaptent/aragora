@@ -2383,7 +2383,8 @@ async def _post_with_attachment(handler, request_id: str, on_run=None):
             runs.append(self.task)
             if on_run:
                 on_run()
-            return SimpleNamespace(final_answer="ok", consensus_reached=True, summary="")
+            summary = lambda: "debate summary"  # noqa: E731 - DebateResult.summary is a method
+            return SimpleNamespace(final_answer="ok", consensus_reached=True, summary=summary)
 
     doc_store = MagicMock()
     router = DecisionRouter(
@@ -2459,6 +2460,7 @@ class TestCreateClaimsRequestIdFirst:
         assert seen == ["pending", None]
         saved = mod._get_result("dec_fresh", ORG)
         assert (saved["status"], saved["org_id"], saved["created_by"]) == ("completed", ORG, USER)
+        assert _body(result)["reasoning"] == saved["result"]["reasoning"] == "debate summary"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
