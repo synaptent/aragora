@@ -266,6 +266,12 @@ class FactsOperationsMixin:
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
+        if not getattr(user, "org_id", None):
+            return error_response(
+                "Creating knowledge facts requires an organization",
+                403,
+                code="knowledge_org_required",
+            )
 
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
@@ -293,6 +299,7 @@ class FactsOperationsMixin:
             confidence=data.get("confidence", 0.5),
             topics=data.get("topics", []),
             metadata=data.get("metadata", {}),
+            org_id=user.org_id,
         )
 
         return json_response(fact.to_dict(), status=201)
