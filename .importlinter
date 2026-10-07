@@ -79,6 +79,8 @@ ignore_imports =
     aragora.exceptions -> aragora.server.handlers.exceptions
     # Authorized one-release compatibility shim; TODO remove when aragora.utils.redis_cache is retired.
     aragora.utils.redis_cache -> aragora.caching.redis
+    # Sanctioned M3 seam (architecture B8): aragora.exceptions mirrors the control-plane exception types through its lazy __getattr__.
+    aragora.exceptions -> aragora.control_plane.exceptions
 layers =
     server : cli : mcp : gateway : bots : channels : integrations : connectors
     workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate : analytics : audit : control_plane : golden : inbox : marketplace : services : skills : stores
