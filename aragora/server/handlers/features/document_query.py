@@ -39,6 +39,7 @@ from aragora.tenancy.record_scope import (
     record_not_found,
     record_visible,
     require_org_scope,
+    scope_denial_first,
 )
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,8 @@ class DocumentQueryHandler(BaseHandler):
         """Check if this handler can process the given path."""
         return path in self.ROUTES
 
+    @handle_errors("document search")
+    @scope_denial_first
     @require_permission("documents:read")
     def handle(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Handle GET requests: search, or 405 for the POST-only query endpoints."""
@@ -144,6 +147,7 @@ class DocumentQueryHandler(BaseHandler):
         )
 
     @handle_errors("document query creation")
+    @scope_denial_first
     @require_permission("documents:read")
     def handle_post(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route POST requests to appropriate methods."""

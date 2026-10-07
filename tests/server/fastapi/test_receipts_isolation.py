@@ -33,6 +33,10 @@ from aragora.storage.receipt_store import ReceiptStore
 ORG_A = "org-a"
 ORG_B = "org-b"
 RECEIPT_NOT_FOUND = {"error": "Receipt not found", "code": "not_found"}
+ORG_REQUIRED_BODY = {
+    "error": "This resource belongs to an organization; sign in as a member of one",
+    "code": "org_required",
+}
 RUN_NOT_FOUND = {"error": "Gauntlet run not found", "code": "not_found"}
 
 GID_A = "gauntlet-20261004130000-aaaaaa"
@@ -140,11 +144,11 @@ def _clean_shared_state():
     runs.clear()
 
 
-def _bearer(user_id: str, org_id: str) -> dict[str, str]:
+def _bearer(user_id: str, org_id: str | None, role: str = "owner") -> dict[str, str]:
     from aragora.billing.auth.tokens import create_access_token
 
     # Only the owner role is granted receipts:share, which the share and send routes require.
-    token = create_access_token(user_id, f"{user_id}@example.test", org_id, "owner")
+    token = create_access_token(user_id, f"{user_id}@example.test", org_id, role)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -264,6 +268,30 @@ class TestAnonymous:
 
         assert response.status_code == 200
         assert response.json()["receipt"]["receipt_id"] == "rcpt-a"
+
+
+class TestCallerWithoutOrg:
+    # viewer holds neither receipts:share nor gauntlet:run; member holds only gauntlet:run.
+    @pytest.mark.parametrize("role", ["viewer", "member", "owner"])
+    @pytest.mark.parametrize(("method", "path", "body"), _ALL_SCOPED_ROUTES)
+    def test_every_scoped_route_answers_403_org_required(
+        self, client, share_store, method, path, body, role
+    ):
+        response = client.request(method, path, json=body, headers=_bearer("user-n", None, role))
+
+        assert (response.status_code, response.json()) == (403, ORG_REQUIRED_BODY)
+        assert share_store.links == {}
+        assert get_receipt_delivery_history_store() == []
+        assert list(get_gauntlet_runs()) == [GID_LIVE_A]
+
+    def test_org_member_without_receipts_share_is_still_refused(self, client, share_store):
+        response = client.post(
+            "/api/v2/receipts/rcpt-a/share", json={}, headers=_bearer("user-a3", ORG_A, "member")
+        )
+
+        assert response.status_code == 403
+        assert "org_required" not in response.text
+        assert share_store.links == {}
 
 
 class TestOtherOrg:

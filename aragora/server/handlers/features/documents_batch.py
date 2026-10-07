@@ -43,6 +43,7 @@ from aragora.tenancy.record_scope import (
     record_not_found,
     record_visible,
     require_org_scope,
+    scope_denial_first,
 )
 
 # Knowledge processing enabled by default
@@ -97,6 +98,8 @@ class DocumentBatchHandler(BaseHandler):
             return len(parts) == 5 and bool(parts[4])
         return False
 
+    @handle_errors("document batch retrieval")
+    @scope_denial_first
     @require_permission("documents:read")
     async def handle(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route GET requests."""
@@ -157,6 +160,7 @@ class DocumentBatchHandler(BaseHandler):
         return self._get_document_context(doc_id, scope, max_tokens, model)
 
     @handle_errors("document batch creation")
+    @scope_denial_first
     @require_permission("documents:create")
     async def handle_post(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route POST requests."""
@@ -174,6 +178,7 @@ class DocumentBatchHandler(BaseHandler):
         return await self._upload_batch(handler, scope)
 
     @handle_errors("document batch deletion")
+    @scope_denial_first
     @require_permission("documents:delete")
     async def handle_delete(self, path: str, query_params: dict, handler) -> HandlerResult | None:
         """Route DELETE requests."""
