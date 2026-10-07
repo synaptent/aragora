@@ -178,10 +178,10 @@ class TestEmitFollowupFlag:
         monkeypatch.delenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", raising=False)
         rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
         assert rc == 0
-        out = capsys.readouterr().out
+        captured = capsys.readouterr()
         # The --emit-followup section is printed but proposals list is empty
         # (env gate not set), so the "follow-up proposals (N)" line must not appear
-        assert "follow-up proposals" not in out
+        assert "follow-up proposals" not in captured.out
 
     def test_emit_followup_populates_proposals_in_text(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -244,3 +244,38 @@ class TestEmitFollowupFlag:
         report = CoherenceReport(scanned=0)
         _render_proposals(report)
         assert capsys.readouterr().out == ""
+
+    def test_emit_followup_warns_on_stderr_when_env_disabled(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--emit-followup with env gate off emits a warning to stderr, exit 0."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.delenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", raising=False)
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
+        assert rc == 0
+        captured = capsys.readouterr()
+        assert "ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED" in captured.err
+        assert "suppressed" in captured.err
+
+    def test_render_proposals_defensive_against_none_provenance(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """_render_proposals must not crash when provenance is None or belief_ids is None."""
+        from aragora.epistemic.coherence import CoherenceReport
+        from aragora.epistemic.followup import FollowupProposal
+
+        proposal = FollowupProposal(
+            source_kind="coherence_issue",
+            source_key="test-key",
+            title="test-proposal",
+            body="body text",
+            labels=(),
+            rationale="test rationale",
+            provenance=None,  # type: ignore[arg-type]
+        )
+        report = CoherenceReport(scanned=1)
+        report.proposals = [proposal]
+        _render_proposals(report)
+        out = capsys.readouterr().out
+        assert "test-proposal" in out
+        assert "printed, not filed" in out

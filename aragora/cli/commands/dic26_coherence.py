@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aragora.epistemic import epistemic_followup_enabled
 from aragora.epistemic.coherence import (
     BeliefEntry,
     CoherenceReport,
@@ -74,13 +75,13 @@ def _render_proposals(report: CoherenceReport) -> None:
     print()
     print(f"  follow-up proposals ({len(report.proposals)}):")
     for p in report.proposals:
-        prov = p.provenance
+        prov = p.provenance or {}
         kind = prov.get("kind", "?")
-        ids_list = prov.get("belief_ids", [])
+        ids_list = prov.get("belief_ids") or []
         ids_str = ", ".join(str(i) for i in ids_list)
         print(f"    [{kind}] {p.title[:100]}")
         print(f"      beliefs: {ids_str}")
-        print(f"      labels : {', '.join(p.labels)}")
+        print(f"      labels : {', '.join(p.labels or [])}")
     print()
     print("  (proposals printed, not filed — no live queue effect)")
 
@@ -106,6 +107,12 @@ def cmd_coherence_scan(args: argparse.Namespace) -> int:
         return 1
 
     emit_followup: bool = getattr(args, "emit_followup", False)
+    if emit_followup and not epistemic_followup_enabled():
+        print(
+            "WARNING: --emit-followup is set but ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED is disabled;"
+            " proposals suppressed.",
+            file=sys.stderr,
+        )
     report = scan_coherence(
         entries,
         contradiction_gap=float(getattr(args, "contradiction_gap", _DEFAULT_GAP)),
