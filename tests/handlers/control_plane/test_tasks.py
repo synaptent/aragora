@@ -1375,6 +1375,7 @@ class TestTaskHistory:
 
 SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
 NOT_FOUND_BODY = {"error": "Deliberation not found", "code": "not_found"}
+SCOPE_OWNER = {"org_id": SCOPE.org_id, "created_by": SCOPE.user_id}
 
 
 class TestGetDeliberation:
@@ -1459,7 +1460,7 @@ class TestSubmitDeliberation:
     @pytest.mark.asyncio
     async def test_submit_deliberation_missing_content(self, handler, mock_http_handler):
         body = {"mode": "async"}
-        result = await handler._handle_submit_deliberation(body, mock_http_handler)
+        result = await handler._handle_submit_deliberation(body, mock_http_handler, SCOPE)
         assert _status(result) == 400
         assert "content" in _body(result).get("error", "").lower()
 
@@ -1475,7 +1476,9 @@ class TestSubmitDeliberation:
             MockDR.from_http.return_value = mock_request
             with patch("aragora.billing.auth.extract_user_from_request") as mock_extract:
                 mock_extract.return_value = MagicMock(authenticated=False)
-                result = await handler_no_coord._handle_submit_deliberation(body, mock_http_handler)
+                result = await handler_no_coord._handle_submit_deliberation(
+                    body, mock_http_handler, SCOPE
+                )
         assert _status(result) == 503
 
     @pytest.mark.asyncio
@@ -1502,7 +1505,9 @@ class TestSubmitDeliberation:
                         "aragora.server.handlers.control_plane.tasks._run_async",
                         return_value="task-delib-001",
                     ):
-                        result = await handler._handle_submit_deliberation(body, mock_http_handler)
+                        result = await handler._handle_submit_deliberation(
+                            body, mock_http_handler, SCOPE
+                        )
         assert _status(result) == 202
         data = _body(result)
         assert data["status"] == "queued"
@@ -1535,7 +1540,9 @@ class TestSubmitDeliberation:
                         "aragora.server.handlers.control_plane.tasks._run_async",
                         return_value="task-mode",
                     ):
-                        result = await handler._handle_submit_deliberation(body, mock_http_handler)
+                        result = await handler._handle_submit_deliberation(
+                            body, mock_http_handler, SCOPE
+                        )
         assert _status(result) == 202
 
     @pytest.mark.asyncio
@@ -1558,7 +1565,9 @@ class TestSubmitDeliberation:
                     MockTaskPriority,
                     create=True,
                 ):
-                    result = await handler._handle_submit_deliberation(body, mock_http_handler)
+                    result = await handler._handle_submit_deliberation(
+                        body, mock_http_handler, SCOPE
+                    )
         assert _status(result) == 400
         assert "priority" in _body(result).get("error", "").lower()
 
@@ -1593,7 +1602,9 @@ class TestSubmitDeliberation:
                     return_value=mock_result,
                 ):
                     with patch("aragora.control_plane.deliberation.record_deliberation_error"):
-                        result = await handler._handle_submit_deliberation(body, mock_http_handler)
+                        result = await handler._handle_submit_deliberation(
+                            body, mock_http_handler, SCOPE
+                        )
         assert _status(result) == 200
         data = _body(result)
         assert data["status"] == "completed"
@@ -1622,9 +1633,13 @@ class TestSubmitDeliberation:
                     with patch(
                         "aragora.control_plane.deliberation.record_deliberation_error"
                     ) as mock_record:
-                        result = await handler._handle_submit_deliberation(body, mock_http_handler)
+                        result = await handler._handle_submit_deliberation(
+                            body, mock_http_handler, SCOPE
+                        )
         assert _status(result) == 408
-        mock_record.assert_called_once_with("req-timeout", "Deliberation timed out", "timeout")
+        mock_record.assert_called_once_with(
+            "req-timeout", "Deliberation timed out", "timeout", **SCOPE_OWNER
+        )
 
     @pytest.mark.asyncio
     async def test_submit_deliberation_sync_failure(
@@ -1648,16 +1663,18 @@ class TestSubmitDeliberation:
                     with patch(
                         "aragora.control_plane.deliberation.record_deliberation_error"
                     ) as mock_record:
-                        result = await handler._handle_submit_deliberation(body, mock_http_handler)
+                        result = await handler._handle_submit_deliberation(
+                            body, mock_http_handler, SCOPE
+                        )
         assert _status(result) == 500
-        mock_record.assert_called_once_with("req-fail", "Deliberation failed")
+        mock_record.assert_called_once_with("req-fail", "Deliberation failed", **SCOPE_OWNER)
 
     @pytest.mark.asyncio
     async def test_submit_deliberation_parse_error(self, handler, mock_http_handler):
         body = {"content": "test"}
         with patch("aragora.core.decision.DecisionRequest") as MockDR:
             MockDR.from_http.side_effect = ValueError("bad body")
-            result = await handler._handle_submit_deliberation(body, mock_http_handler)
+            result = await handler._handle_submit_deliberation(body, mock_http_handler, SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -1665,7 +1682,7 @@ class TestSubmitDeliberation:
         body = {"content": "test"}
         with patch("aragora.core.decision.DecisionRequest") as MockDR:
             MockDR.from_http.side_effect = ImportError("missing module")
-            result = await handler._handle_submit_deliberation(body, mock_http_handler)
+            result = await handler._handle_submit_deliberation(body, mock_http_handler, SCOPE)
         assert _status(result) == 400
 
 

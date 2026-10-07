@@ -391,6 +391,15 @@ class ControlPlaneHandler(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Handle POST requests."""
+        path = self._normalize_path(path)
+
+        # A deliberation is owned by the creator's org, as on the reads.
+        scope: OrgScope | None = None
+        if path == "/api/control-plane/deliberations":
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+
         # Auth and permission check
         user, err = self.require_auth_or_error(handler)
         if err:
@@ -399,14 +408,12 @@ class ControlPlaneHandler(
         if perm_err:
             return perm_err
 
-        path = self._normalize_path(path)
-
         # /api/control-plane/deliberations
-        if path == "/api/control-plane/deliberations":
+        if scope is not None:
             body, err = self.read_json_body_validated(handler)
             if err:
                 return err
-            return await self._handle_submit_deliberation(body, handler)
+            return await self._handle_submit_deliberation(body, handler, scope)
 
         # /api/control-plane/agents
         if path == "/api/control-plane/agents":

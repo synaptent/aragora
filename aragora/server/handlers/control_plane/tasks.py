@@ -962,7 +962,7 @@ class TaskHandlerMixin:
         tags=["Control Plane"],
     )
     async def _handle_submit_deliberation(
-        self, body: dict[str, Any], handler: Any
+        self, body: dict[str, Any], handler: Any, scope: OrgScope
     ) -> HandlerResult:
         """Submit a deliberation (sync or async via control plane)."""
         user, err = self.require_auth_or_error(handler)
@@ -1004,6 +1004,7 @@ class TaskHandlerMixin:
             logger.warning("Failed to parse deliberation request: %s", e)
             return error_response("Failed to parse request", 400)
 
+        owner = {"org_id": scope.org_id, "created_by": scope.user_id}
         async_mode = bool(body.get("async", False)) or body.get("mode") == "async"
         priority = body.get("priority", "normal")
         required_capabilities = body.get("required_capabilities") or ["deliberation"]
@@ -1022,7 +1023,7 @@ class TaskHandlerMixin:
                         required_capabilities=required_capabilities,
                         priority=priority_enum,
                         timeout_seconds=timeout_seconds,
-                        metadata={"request_id": request.request_id},
+                        metadata={"request_id": request.request_id, **owner},
                     )
                 )
 
@@ -1054,7 +1055,7 @@ class TaskHandlerMixin:
                 record_deliberation_error,
             )
 
-            result = await run_deliberation(request)
+            result = await run_deliberation(request, **owner)
 
             return json_response(
                 {
@@ -1071,7 +1072,9 @@ class TaskHandlerMixin:
                 }
             )
         except asyncio.TimeoutError:
-            record_deliberation_error(request.request_id, "Deliberation timed out", "timeout")
+            record_deliberation_error(
+                request.request_id, "Deliberation timed out", "timeout", **owner
+            )
             return error_response("Deliberation request timed out", 408)
         except (
             ValueError,
@@ -1083,5 +1086,5 @@ class TaskHandlerMixin:
             ImportError,
         ) as e:  # broad catch: last-resort handler
             logger.exception("Deliberation failed: %s", e)
-            record_deliberation_error(request.request_id, "Deliberation failed")
+            record_deliberation_error(request.request_id, "Deliberation failed", **owner)
             return error_response("Deliberation failed", 500)

@@ -532,8 +532,11 @@ async def get_deliberation_status(
 
 
 @router.post("/deliberations", status_code=202)
-async def submit_deliberation(body: SubmitDeliberationRequest):
+async def submit_deliberation(
+    body: SubmitDeliberationRequest, scope: OrgScope = Depends(require_org_scope_fastapi)
+):
     """Submit a deliberation (sync or async via control plane)."""
+    owner = {"org_id": scope.org_id, "created_by": scope.user_id}
     try:
         from aragora.control_plane.integration import get_integrated_control_plane
 
@@ -565,7 +568,7 @@ async def submit_deliberation(body: SubmitDeliberationRequest):
                 required_capabilities=required_capabilities,
                 priority=priority_enum,
                 timeout_seconds=body.timeout_seconds,
-                metadata={"request_id": request_id},
+                metadata={"request_id": request_id, **owner},
             )
 
             return {
@@ -585,7 +588,7 @@ async def submit_deliberation(body: SubmitDeliberationRequest):
         request = DecisionRequest(content=body.content)
 
         try:
-            result = await run_deliberation(request)
+            result = await run_deliberation(request, **owner)
             return {
                 "data": {
                     "request_id": request.request_id,

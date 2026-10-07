@@ -33,11 +33,20 @@ def save_decision_result(request_id: str, data: dict[str, Any]) -> None:
     """Save a decision result to persistent store with fallback."""
     store = _get_result_store()
     if store:
+        from aragora.storage.decision_result_store import DecisionOwnershipConflict
+
         try:
             store.save(request_id, data)
             return
+        except DecisionOwnershipConflict:
+            logger.warning("Decision result %s belongs to another owner; not saved", request_id)
+            return
         except (OSError, RuntimeError, ValueError) as e:
             logger.warning("Failed to persist result, using fallback: %s", e)
+    existing = _decision_results_fallback.get(request_id)
+    if existing is not None and existing.get("org_id") != data.get("org_id"):
+        logger.warning("Decision result %s belongs to another owner; not saved", request_id)
+        return
     _decision_results_fallback[request_id] = data
 
 
