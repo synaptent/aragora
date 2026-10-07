@@ -577,9 +577,8 @@ class TestGetDecisionStatus:
             return_value=mock_result_store,
         ):
             result = h.handle("/api/v1/decisions/nonexistent/status", {}, mock_handler)
-            assert result.status_code == 200
-            body = json.loads(result.body)
-            assert body["status"] == "not_found"
+            assert result.status_code == 404
+            assert json.loads(result.body) == {"error": "Decision not found", "code": "not_found"}
 
 
 # ===========================================================================

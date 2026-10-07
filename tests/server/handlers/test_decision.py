@@ -308,16 +308,15 @@ class TestGetDecisionStatus:
             assert parsed["request_id"] == "dec_123"
             assert parsed["status"] == "completed"
 
-    def test_returns_not_found_status(self, handler, clear_fallback):
-        """Returns not_found status for missing decision."""
+    def test_returns_404_for_missing_decision(self, handler, clear_fallback):
+        """A missing decision answers the standard not-found 404."""
         with patch(
             "aragora.server.handlers.decision._decision_result_store.get", return_value=None
         ):
             result = handler._get_decision_status("nonexistent", SCOPE)
-            parsed = parse_result(result)
 
-            assert parsed["request_id"] == "nonexistent"
-            assert parsed["status"] == "not_found"
+            assert result.status_code == 404
+            assert parse_result(result) == {"error": "Decision not found", "code": "not_found"}
 
     def test_uses_persistent_store(self, handler, clear_fallback):
         """Uses persistent store when available."""

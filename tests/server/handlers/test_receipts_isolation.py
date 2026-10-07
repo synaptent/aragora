@@ -293,6 +293,24 @@ class TestForeignActionsHaveNoSideEffect:
         assert manifest["not_found"] == ["rcpt-a"]
         assert manifest["exported"] == 1
 
+    @pytest.mark.parametrize(("user", "own"), [(USER_A, "rcpt-a"), (USER_B, "rcpt-b")])
+    @pytest.mark.asyncio
+    async def test_batch_export_reports_unowned_receipt_like_a_missing_one(
+        self, receipts, act_as, user, own
+    ):
+        act_as(user)
+        result = await _call(
+            receipts,
+            "POST",
+            "/api/v2/receipts/batch-export",
+            body={"receipt_ids": ["rcpt-null", "rcpt-missing", own]},
+        )
+        archive = zipfile.ZipFile(io.BytesIO(result.body))
+        manifest = json.loads(archive.read("manifest.json"))
+        assert sorted(archive.namelist()) == ["manifest.json", f"receipt-{own}.json"]
+        assert manifest["not_found"] == ["rcpt-null", "rcpt-missing"]
+        assert manifest["exported"] == 1
+
     @pytest.mark.asyncio
     async def test_verify_batch_does_not_see_other_orgs(self, receipts, act_as):
         act_as(USER_B)

@@ -482,18 +482,16 @@ class TestGetDecisionStatus:
         assert body["status"] == "completed"
         assert body["completed_at"] == "2026-01-01T00:00:00Z"
 
-    def test_status_not_found_returns_not_found_status(self, handler, mock_http_handler):
-        """Returns not_found status when decision not found anywhere."""
+    def test_status_not_found_returns_404(self, handler, mock_http_handler):
+        """A decision found nowhere answers the standard not-found 404."""
         import aragora.server.handlers.decision as mod
 
         mod._decision_result_store = MagicMock()
         mod._decision_result_store.get.return_value = None
 
         result = handler.handle("/api/v1/decisions/dec_unknown/status", {}, mock_http_handler)
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["status"] == "not_found"
-        assert body["request_id"] == "dec_unknown"
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
 
     def test_status_fallback_missing_completed_at(self, handler, mock_http_handler):
         """Fallback result without completed_at returns None."""
@@ -2091,14 +2089,39 @@ class TestOrgOwnership:
         assert _status(foreign) == _status(missing) == 404
         assert _body(foreign) == _body(missing) == NOT_FOUND_BODY
 
-    def test_status_reports_not_found_for_other_org(self, handler, mock_http_handler):
+    def test_status_of_other_org_decision_is_404(self, handler, mock_http_handler):
         mod = _use_fallback_only()
         _seed(mod, "dec_foreign", OTHER_ORG, status="running", completed_at="2026-01-01")
 
         result = handler.handle("/api/v1/decisions/dec_foreign/status", {}, mock_http_handler)
 
-        assert _status(result) == 200
-        assert _body(result) == {"request_id": "dec_foreign", "status": "not_found"}
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
+
+    def test_status_of_unowned_decision_is_identical_to_missing(
+        self, handler, mock_http_handler, tmp_path
+    ):
+        import aragora.server.handlers.decision as mod
+
+        store = _real_store(mod, tmp_path)
+        store.save("dec_mine", {"status": "running"}, org_id=ORG, created_by=USER)
+        store.save("dec_theirs", {"status": "running"}, org_id=OTHER_ORG, created_by="u-other")
+        store.save("dec_ownerless", {"status": "running"})
+
+        def status_of(request_id: str):
+            return handler.handle(f"/api/v1/decisions/{request_id}/status", {}, mock_http_handler)
+
+        own = status_of("dec_mine")
+        assert _status(own) == 200
+        assert _body(own) == {"request_id": "dec_mine", "status": "running", "completed_at": None}
+
+        missing = status_of("dec_missing")
+        assert _status(missing) == 404
+        assert _body(missing) == NOT_FOUND_BODY
+        for request_id in ("dec_theirs", "dec_ownerless"):
+            result = status_of(request_id)
+            assert (result.status_code, result.body) == (missing.status_code, missing.body)
+            assert store.get(request_id)["status"] == "running"
 
     def test_status_store_lookup_is_scoped_to_org(self, handler, mock_http_handler):
         import aragora.server.handlers.decision as mod
@@ -2110,7 +2133,8 @@ class TestOrgOwnership:
 
         result = handler.handle("/api/v1/decisions/dec_x/status", {}, mock_http_handler)
 
-        assert _body(result)["status"] == "not_found"
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
         mock_store.get_for_org.assert_called_once_with("dec_x", ORG)
         mock_store.get_status.assert_not_called()
 
