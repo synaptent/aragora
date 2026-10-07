@@ -104,6 +104,22 @@ def mock_http_handler():
     return handler
 
 
+E2E_ORG = "org-e2e"
+
+
+@pytest.fixture
+def org_user(monkeypatch):
+    """Requests act as a member of ``E2E_ORG``."""
+    from types import SimpleNamespace
+
+    user = SimpleNamespace(user_id="user-e2e", org_id=E2E_ORG, role="member", is_authenticated=True)
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    return user
+
+
 # ============================================================================
 # Graph Debate Core Lifecycle Tests
 # ============================================================================
@@ -1232,6 +1248,7 @@ class TestMatrixDebateLifecycle:
 # ============================================================================
 
 
+@pytest.mark.usefixtures("org_user")
 class TestGraphDebateHandlerE2E:
     """E2E tests for the graph debates HTTP handler."""
 
@@ -1284,6 +1301,7 @@ class TestGraphDebateHandlerE2E:
         assert "graph" in data
         assert "branches" in data
         assert data["node_count"] >= 1
+        assert (data["org_id"], data["created_by"]) == (E2E_ORG, "user-e2e")
 
     @pytest.mark.asyncio
     async def test_post_with_custom_branch_policy(self, graph_handler, mock_http_handler):
@@ -1334,6 +1352,7 @@ class TestGraphDebateHandlerE2E:
             "task": "Test task",
             "nodes": [{"id": "n1", "content": "Root"}],
             "branches": [{"id": "main", "name": "Main"}],
+            "org_id": E2E_ORG,
         }
 
         mock_storage = AsyncMock()
@@ -1359,6 +1378,7 @@ class TestGraphDebateHandlerE2E:
 
         mock_storage = AsyncMock()
         mock_storage.get_debate_branches = AsyncMock(return_value=branches)
+        mock_storage.get_graph_debate = AsyncMock(return_value={"org_id": E2E_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await graph_handler.handle_get(
@@ -1380,6 +1400,7 @@ class TestGraphDebateHandlerE2E:
 
         mock_storage = AsyncMock()
         mock_storage.get_debate_nodes = AsyncMock(return_value=nodes)
+        mock_storage.get_graph_debate = AsyncMock(return_value={"org_id": E2E_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await graph_handler.handle_get(

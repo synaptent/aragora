@@ -13,6 +13,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.tenancy.record_scope import OrgScope
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+TEST_ORG = "test-org-001"
+SCOPE = OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 @pytest.fixture
 def graph_handler():
@@ -145,6 +152,8 @@ def graph_debate_payload():
         "merge_results": [],
         "node_count": 1,
         "branch_count": 1,
+        "org_id": TEST_ORG,
+        "created_by": "test-user-001",
     }
 
 
@@ -207,7 +216,7 @@ class TestGraphDebatesLiveListing:
 
         graph_debates._remember_graph_debate(graph_debate_payload)
 
-        result = await graph_handler._get_graph_debate(mock_http_handler, "graph-123")
+        result = await graph_handler._get_graph_debate(mock_http_handler, "graph-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -569,7 +578,7 @@ class TestGraphDebateGetEndpoints:
     @pytest.mark.asyncio
     async def test_get_debate_returns_debate_data(self, graph_handler, mock_http_handler):
         """Returns debate data when found."""
-        debate_data = {"id": "test-123", "task": "Test task", "nodes": []}
+        debate_data = {"id": "test-123", "task": "Test task", "nodes": [], "org_id": TEST_ORG}
         mock_storage = AsyncMock()
         mock_storage.get_graph_debate = AsyncMock(return_value=debate_data)
         mock_http_handler.storage = mock_storage
@@ -596,6 +605,7 @@ class TestGraphDebateGetEndpoints:
         branches = [{"id": "branch-1"}, {"id": "branch-2"}]
         mock_storage = AsyncMock()
         mock_storage.get_debate_branches = AsyncMock(return_value=branches)
+        mock_storage.get_graph_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await graph_handler.handle_get(
@@ -621,6 +631,7 @@ class TestGraphDebateGetEndpoints:
         nodes = [{"id": "node-1", "content": "First"}, {"id": "node-2", "content": "Second"}]
         mock_storage = AsyncMock()
         mock_storage.get_debate_nodes = AsyncMock(return_value=nodes)
+        mock_storage.get_graph_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await graph_handler.handle_get(
@@ -726,6 +737,7 @@ class TestGraphDebateErrorHandling:
         """Returns 500 on storage error when getting branches."""
         mock_storage = AsyncMock()
         mock_storage.get_debate_branches = AsyncMock(side_effect=RuntimeError("Database error"))
+        mock_storage.get_graph_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await graph_handler.handle_get(
@@ -738,6 +750,7 @@ class TestGraphDebateErrorHandling:
         """Returns 500 on storage error when getting nodes."""
         mock_storage = AsyncMock()
         mock_storage.get_debate_nodes = AsyncMock(side_effect=RuntimeError("Database error"))
+        mock_storage.get_graph_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await graph_handler.handle_get(
