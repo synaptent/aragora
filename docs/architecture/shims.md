@@ -52,6 +52,12 @@ import-and-call tests at both paths.
 | `aragora.control_plane.blockchain_identity:AgentBlockchainLink` | `aragora.blockchain.agent_registry:AgentBlockchainLink` | #10399 | not before M4 seal |
 | `aragora.control_plane.blockchain_identity:BlockchainIdentityBridge` | `aragora.blockchain.agent_registry:BlockchainIdentityBridge` | #10399 | not before M4 seal |
 | `aragora.control_plane.blockchain_identity:get_blockchain_identity_bridge` | `aragora.blockchain.agent_registry:get_blockchain_identity_bridge` | #10399 | not before M4 seal |
+| `aragora.control_plane.channels:NotificationEventType` | `aragora.events.notification_types:NotificationEventType` | #10401 | not before M4 seal |
+| `aragora.control_plane.channels:NotificationPriority` | `aragora.events.notification_types:NotificationPriority` | #10401 | not before M4 seal |
+| `aragora.control_plane.deliberation_events:CATEGORIES` | `aragora.events.deliberation_events:CATEGORIES` | #10401 | not before M4 seal |
+| `aragora.control_plane.deliberation_events:DeliberationEventType` | `aragora.events.deliberation_events:DeliberationEventType` | #10401 | not before M4 seal |
+| `aragora.control_plane.deliberation_events:EVENT_TYPES_BY_CATEGORY` | `aragora.events.deliberation_events:EVENT_TYPES_BY_CATEGORY` | #10401 | not before M4 seal |
+| `aragora.control_plane.deliberation_events:TERMINAL_EVENT_TYPES` | `aragora.events.deliberation_events:TERMINAL_EVENT_TYPES` | #10401 | not before M4 seal |
 | `aragora.control_plane.leader:DistributedStateError` | `aragora.resilience.leader:DistributedStateError` | #10399 | not before M4 seal |
 | `aragora.control_plane.leader:LeaderConfig` | `aragora.resilience.leader:LeaderConfig` | #10399 | not before M4 seal |
 | `aragora.control_plane.leader:LeaderElection` | `aragora.resilience.leader:LeaderElection` | #10399 | not before M4 seal |

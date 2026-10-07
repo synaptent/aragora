@@ -1,4 +1,4 @@
-"""Old aragora.control_plane paths re-export the leader and blockchain identity objects that moved down."""
+"""Old aragora.control_plane paths re-export the objects that moved to lower layers."""
 
 from __future__ import annotations
 
@@ -11,8 +11,12 @@ import pytest
 
 import aragora.blockchain.agent_registry as new_identity
 import aragora.control_plane.blockchain_identity as old_identity
+import aragora.control_plane.channels as channels
+import aragora.control_plane.deliberation_events as old_deliberation
 import aragora.control_plane.leader as old_leader
 import aragora.control_plane.regional_sync as regional_sync
+import aragora.events.deliberation_events as new_deliberation
+import aragora.events.notification_types as notification_types
 import aragora.resilience.leader as new_leader
 import aragora.resilience.regional_events as regional_events
 
@@ -38,11 +42,20 @@ IDENTITY_NAMES = (
     "get_blockchain_identity_bridge",
 )
 REGIONAL_EVENT_NAMES = ("RegionalEvent", "RegionalEventType")
+DELIBERATION_NAMES = (
+    "CATEGORIES",
+    "DeliberationEventType",
+    "EVENT_TYPES_BY_CATEGORY",
+    "TERMINAL_EVENT_TYPES",
+)
+NOTIFICATION_TYPE_NAMES = ("NotificationEventType", "NotificationPriority")
 
 PAIRS = (
     [(old_leader, new_leader, name) for name in LEADER_NAMES + ("_InMemoryRedis",)]
     + [(old_identity, new_identity, name) for name in IDENTITY_NAMES]
     + [(regional_sync, regional_events, name) for name in REGIONAL_EVENT_NAMES]
+    + [(old_deliberation, new_deliberation, name) for name in ("DeliberationEventType",)]
+    + [(channels, notification_types, name) for name in NOTIFICATION_TYPE_NAMES]
 )
 
 
@@ -64,9 +77,15 @@ def test_implementation_lives_in_the_lower_layer(old, new, name: str) -> None:
     assert inspect.getmodule(getattr(old, name)) is new
 
 
+@pytest.mark.parametrize("name", DELIBERATION_NAMES)
+def test_deliberation_constants_are_shared(name: str) -> None:
+    assert getattr(old_deliberation, name) is getattr(new_deliberation, name)
+
+
 def test_old_path_all_lists_unchanged() -> None:
     assert sorted(old_leader.__all__) == sorted(LEADER_NAMES)
     assert sorted(old_identity.__all__) == sorted(IDENTITY_NAMES)
+    assert sorted(old_deliberation.__all__) == sorted(DELIBERATION_NAMES)
 
 
 def test_fixed_input_leader_calls_at_both_paths() -> None:
@@ -166,11 +185,16 @@ MOVED_MODULES = [
     "aragora/resilience/leader.py",
     "aragora/resilience/regional_events.py",
     "aragora/blockchain/agent_registry.py",
+    "aragora/events/deliberation_events.py",
+    "aragora/events/notification_types.py",
+    "aragora/events/agent_registry_hooks.py",
 ]
 FLIPPED_SITES = [
     "aragora/storage/sync_store.py",
     "aragora/blockchain/receipt_settlement.py",
     "aragora/knowledge/mound/adapters/erc8004_adapter.py",
+    "aragora/events/registry.py",
+    "aragora/events/cross_subscribers/manager.py",
 ]
 
 
