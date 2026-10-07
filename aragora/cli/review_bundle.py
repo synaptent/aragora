@@ -44,6 +44,10 @@ class ReviewBundle:
 
     def capture(self, result: Any, findings: dict[str, Any]) -> None:
         self.result, self.findings = result, findings
+        if findings.get("unparsed_reviews"):
+            self.reasons.append(
+                "Unparsed reviewer output: " + ", ".join(findings["unparsed_reviews"])
+            )
         if self.context["demo"]:
             self.reasons.append("Demo findings are fabricated; no providers were called.")
         else:
@@ -61,8 +65,13 @@ class ReviewBundle:
                 responding_agents=sorted(observed),
                 missing_agents=missing,
                 duration_seconds=getattr(result, "duration_seconds", None),
-                total_tokens=getattr(result, "total_tokens", None),
-                total_cost_usd=getattr(result, "total_cost_usd", None),
+                # Default zero counters do not establish measured zero consumption.
+                total_tokens=getattr(result, "total_tokens", None) or None,
+                total_cost_usd=getattr(result, "total_cost_usd", None) or None,
+                usage_status={
+                    key: "reported" if getattr(result, key, None) else "unknown"
+                    for key in ("total_tokens", "total_cost_usd")
+                },
             )
             if missing:
                 self.reasons.append(

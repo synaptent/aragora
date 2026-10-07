@@ -350,7 +350,13 @@ async def run_review_debate(
 
     # Create environment and protocol
     env = Environment(task=task, max_rounds=rounds)
-    protocol = DebateProtocol(rounds=rounds, consensus="majority")
+    protocol = DebateProtocol(
+        rounds=rounds,
+        consensus="majority",
+        enable_research=False,
+        enable_trending_injection=False,
+        enable_knowledge_injection=False,
+    )
 
     # Run debate
     arena = Arena(env, agents, protocol)
@@ -411,6 +417,65 @@ def _is_meta_review_issue(issue: str, suggestions: list[str], raw_target: Any) -
     return _looks_like_agent_target(raw_target) and _extract_location_hint(issue) is None
 
 
+def _proposal_findings(result: DebateResult) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+    """Read the labeled response contract from reviewers, never the echoed PR prompt."""
+    latest = {m.agent: m.content for m in result.messages if getattr(m, "role", None) == "proposer"}
+    findings = []
+    unparsed = []
+    for agent, content in latest.items():
+        plain = re.sub(r"(?ms)^[ \t]*```.*?^[ \t]*```[^\n]*", "", content).replace("**", "")
+        start = len(findings)
+        prefix = r"^\s*(?:[-*]|\d+\.)?\s*"
+        for block in re.split(r"(?m)(?=" + prefix + r"Severity:)", plain):
+            fields = dict(
+                re.findall(
+                    r"(?ms)" + prefix + r"(Severity|Location|Issue|Suggestion):[ \t]*(.*?)"
+                    r"(?=" + prefix + r"(?:Severity|Location|Issue|Suggestion):|\n\s*\n|\Z)",
+                    block,
+                )
+            )
+            severity = fields.get("Severity", "").strip().lower()
+            issue = fields.get("Issue", "").strip()
+            if severity not in {"critical", "high", "medium", "low"} or not issue:
+                if fields:
+                    unparsed.append(agent)
+                continue
+            target = _extract_location_hint(fields.get("Location", ""))
+            if not target:
+                unparsed.append(agent)
+            findings.append(
+                (
+                    severity,
+                    {
+                        "agent": agent,
+                        "issue": issue,
+                        "target": target,
+                        "suggestions": [fields["Suggestion"].strip()]
+                        if fields.get("Suggestion")
+                        else [],
+                        "grounded": bool(target),
+                        "source": "proposal",
+                    },
+                )
+            )
+        if len(findings) == start and "no issues found" not in plain.lower():
+            unparsed.append(agent)
+    return findings, sorted(set(unparsed))
+
+
+def _findings_summary(findings: dict[str, Any]) -> str:
+    lines = [
+        f"[{severity.upper()}] {issue['issue']} ({issue.get('target') or 'location unknown'}; "
+        f"reported by {issue.get('agent', 'unknown')})"
+        for severity in ("critical", "high", "medium", "low")
+        for issue in findings.get(f"{severity}_issues", [])
+    ]
+    summary = "\n".join(lines) or findings.get("final_summary", "")
+    if lines and str(findings.get("final_summary", "")).startswith("[DEMO MODE]"):
+        summary = "[DEMO MODE] Fabricated sample findings, not a real review.\n" + summary
+    return summary
+
+
 def extract_review_findings(result: DebateResult) -> dict:
     """Extract structured findings from debate result."""
     reporter = DisagreementReporter()
@@ -455,6 +520,21 @@ def extract_review_findings(result: DebateResult) -> dict:
             else:
                 low_issues.append(issue_data)
 
+    buckets = dict(
+        zip(
+            ("critical", "high", "medium", "low"),
+            (critical_issues, high_issues, medium_issues, low_issues),
+        )
+    )
+    proposals, unparsed = _proposal_findings(result)
+    for severity, issue in proposals:
+        if not any(
+            i["issue"] == issue["issue"] and i["agent"] == issue["agent"]
+            for values in buckets.values()
+            for i in values
+        ):
+            buckets[severity].append(issue)
+
     return {
         "unanimous_critiques": report.unanimous_critiques,
         "split_opinions": report.split_opinions,
@@ -467,6 +547,7 @@ def extract_review_findings(result: DebateResult) -> dict:
         "low_issues": low_issues,
         "meta_issues": meta_issues,
         "all_critiques": result.critiques,
+        "unparsed_reviews": unparsed,
         "final_summary": result.final_answer,
         "agents_used": list(set(m.agent for m in result.messages)) if result.messages else [],
     }
@@ -500,21 +581,28 @@ def format_github_comment(result: DebateResult | None, findings: dict[str, Any])
             lines.append(f"- {issue}")
         lines.extend(["", "</details>", ""])
 
-    # Critical/High issues
+    # Render all findings, including proposal-only low/medium issues.
     critical = findings.get("critical_issues", [])
     high = findings.get("high_issues", [])
-    if critical or high:
-        count = len(critical) + len(high)
+    medium = findings.get("medium_issues", [])
+    low = findings.get("low_issues", [])
+    if critical or high or medium or low:
+        count = len(critical) + len(high) + len(medium) + len(low)
+        title = "Review Findings" if medium or low else "Critical & High Severity Issues"
         lines.extend(
             [
                 "<details open>",
-                f"<summary><strong>Critical & High Severity Issues</strong> ({count} found)</summary>",
+                f"<summary><strong>{title}</strong> ({count} found)</summary>",
                 "",
             ]
         )
-        for issue in (critical + high)[:5]:
-            severity = "CRITICAL" if issue in critical else "HIGH"
-            lines.append(f"- **{severity}**: {issue['issue'][:200]}")
+        for severity in ("critical", "high", "medium", "low"):
+            for issue in findings.get(f"{severity}_issues", []):
+                lines.append(f"- **{severity.upper()}**: {issue['issue']}")
+                if issue.get("target"):
+                    lines.append(f"  Location: `{issue['target']}`")
+                for suggestion in issue.get("suggestions", []):
+                    lines.append(f"  Suggestion: {suggestion}")
         lines.extend(["", "</details>", ""])
 
     # Split opinions
@@ -549,7 +637,7 @@ def format_github_comment(result: DebateResult | None, findings: dict[str, Any])
         lines.extend(["", "</details>", ""])
 
     # Summary if available
-    summary = findings.get("final_summary", "")
+    summary = _findings_summary(findings)
     if summary and len(summary) > 50:
         lines.extend(
             [
@@ -900,6 +988,7 @@ def _write_review_odr(
         pr_url=pr_url,
         reviewer_agents=agents_used or None,
     )
+    receipt = replace(receipt, verdict_reasoning=_findings_summary(findings), artifact_hash="")
     context = findings.get("review_context")
     if context:
         receipt.gauntlet_id = context["review_run_id"]
