@@ -161,20 +161,13 @@ class PRReviewerSkill(Skill):
         diff: str,
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Run the Aragora review engine on a diff."""
-        try:
-            from aragora.cli.review import run_review_on_diff  # type: ignore[attr-defined]
-
-            findings = await run_review_on_diff(diff, demo=self._demo)
-            return findings, None
-        except ImportError:
-            # Fallback: run as subprocess
-            return await self._run_review_subprocess(diff)
+        return await self._run_review_subprocess(diff)
 
     async def _run_review_subprocess(
         self,
         diff: str,
     ) -> tuple[dict[str, Any] | None, str | None]:
-        """Fallback: run review as a subprocess."""
+        """Run ``aragora review`` as a subprocess and parse its JSON output."""
         import json
 
         cmd = ["aragora", "review", "--format", "json"]
