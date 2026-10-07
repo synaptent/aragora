@@ -41,6 +41,7 @@ import io
 import json
 import logging
 import secrets
+import threading
 import zipfile
 from datetime import datetime, timezone
 from inspect import signature
@@ -570,6 +571,8 @@ class ReceiptsHandler(BaseHandler):
         # across a rotation. A cached error is re-raised so an export storm
         # cannot amplify into Secrets Manager.
         self._signing_key_cache: tuple[float, Any] | None = None
+        # Serializes refreshes of the slot; fresh reads stay lock-free.
+        self._signing_key_lock = threading.Lock()
 
     def _get_store(self):
         """Get receipt store (lazy initialization)."""
@@ -1616,38 +1619,46 @@ class ReceiptsHandler(BaseHandler):
         private_key = load_signing_key_from_secrets()
         return private_key, public_key_pem(private_key), compute_key_id(private_key.public_key())
 
+    def _fresh_signing_key_entry(self, now: float) -> Any:
+        """Return the slot's material or cached OdrSigningError within its TTL, else None."""
+        from aragora.gauntlet.odr_signing import OdrSigningError
+
+        cached = self._signing_key_cache
+        if cached is None:
+            return None
+        ttl = (
+            self.SIGNING_KEY_NEGATIVE_CACHE_TTL_SECONDS
+            if isinstance(cached[1], OdrSigningError)
+            else self.SIGNING_KEY_CACHE_TTL_SECONDS
+        )
+        return cached[1] if now - cached[0] < ttl else None
+
     def _signing_key_material(self) -> tuple[Any, str, str]:
         """Return the cached (private_key, public_key_pem, key_id), reloading on TTL.
 
-        Runs in a worker thread from its async callers; a concurrent first call
-        may load the key twice, but the tuple swap is atomic, so both see a
-        usable entry.
+        Runs in a worker thread from its async callers. A refresh holds
+        ``_signing_key_lock`` and rechecks the slot before loading, so
+        overlapping refreshes run one load and a load that began before a key
+        rotation can never replace a newer key that has already signed.
         """
         import time
 
         from aragora.gauntlet.odr_signing import OdrSigningError
 
-        now = time.monotonic()
-        cached = self._signing_key_cache
-        if cached is not None:
-            failed = isinstance(cached[1], OdrSigningError)
-            ttl = (
-                self.SIGNING_KEY_NEGATIVE_CACHE_TTL_SECONDS
-                if failed
-                else self.SIGNING_KEY_CACHE_TTL_SECONDS
-            )
-            if now - cached[0] < ttl:
-                if failed:
-                    raise cached[1]
-                return cached[1]
-
-        try:
-            material = self._resolve_signing_key_material()
-        except OdrSigningError as e:
-            self._signing_key_cache = (now, e)
-            raise
-        self._signing_key_cache = (now, material)
-        return material
+        entry = self._fresh_signing_key_entry(time.monotonic())
+        if entry is None:
+            with self._signing_key_lock:
+                now = time.monotonic()
+                entry = self._fresh_signing_key_entry(now)
+                if entry is None:
+                    try:
+                        entry = self._resolve_signing_key_material()
+                    except OdrSigningError as e:
+                        entry = e
+                    self._signing_key_cache = (now, entry)
+        if isinstance(entry, OdrSigningError):
+            raise entry
+        return entry
 
     async def _get_signing_public_key(self) -> tuple[str, str] | None:
         """Return cached (public_key_pem, key_id), or None when unconfigured."""

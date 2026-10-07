@@ -14,7 +14,10 @@ Tests cover:
 
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -511,6 +514,23 @@ def _signing_material() -> tuple[Any, str, str]:
     return private_key, public_key_pem(private_key), compute_key_id(private_key.public_key())
 
 
+class _ContentionSignalingLock:
+    """A ``threading.Lock`` stand-in that calls ``on_wait`` when a caller has to queue."""
+
+    def __init__(self, on_wait: Callable[[], None]) -> None:
+        self._lock = threading.Lock()
+        self._on_wait = on_wait
+
+    def __enter__(self) -> _ContentionSignalingLock:
+        if not self._lock.acquire(blocking=False):
+            self._on_wait()
+            self._lock.acquire()
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self._lock.release()
+
+
 class TestPublicOdrExport:
     """GET /api/v2/receipts/{id}/export?format=odr is public and self-describing."""
 
@@ -729,6 +749,63 @@ class TestPublicOdrExport:
 
             clock[0] += handler.SIGNING_KEY_CACHE_TTL_SECONDS
             assert await _export_verifies_against_the_served_key()
+
+    @pytest.mark.asyncio
+    async def test_overlapping_refreshes_cannot_publish_an_older_key(self, monkeypatch):
+        """A slow load that began before a rotation must not replace a newer key."""
+        from aragora.gauntlet.odr_verify import load_public_key, verify_odr_document
+
+        handler = _receipts_handler()
+        current = [_signing_material()]
+        rotated = _signing_material()
+        resolutions: list[str] = []
+        a_loading, release_a, b_settled = threading.Event(), threading.Event(), threading.Event()
+        exports: list[HandlerResult] = []
+
+        def _resolve() -> tuple[Any, str, str]:
+            material = current[0]
+            resolutions.append(material[2])
+            if len(resolutions) == 1:
+                a_loading.set()
+                release_a.wait(5)
+            return material
+
+        def _export_in_b() -> None:
+            try:
+                exports.append(
+                    asyncio.run(
+                        handler.handle(
+                            "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+                        )
+                    )
+                )
+            finally:
+                b_settled.set()
+
+        monkeypatch.setattr(handler, "_resolve_signing_key_material", _resolve)
+        # B either finishes on its own or reports that it is queued behind A's refresh.
+        handler._signing_key_lock = _ContentionSignalingLock(b_settled.set)
+        thread_a = threading.Thread(target=handler._signing_key_material, daemon=True)
+        thread_b = threading.Thread(target=_export_in_b, daemon=True)
+        try:
+            thread_a.start()
+            assert a_loading.wait(5)
+            current[0] = rotated
+            thread_b.start()
+            assert b_settled.wait(5)
+        finally:
+            release_a.set()
+        thread_a.join(5)
+        thread_b.join(5)
+        assert not thread_a.is_alive() and not thread_b.is_alive()
+
+        served = await handler.handle("GET", "/.well-known/aragora-odr-signing-key", {}, {})
+        outcome = verify_odr_document(
+            json.loads(exports[0].body), public_key=load_public_key(served.body)
+        )
+        assert [c.status for c in outcome.checks if c.name == "signature"] == ["pass"]
+        assert outcome.ok
+        assert len(resolutions) == 1
 
     @pytest.mark.asyncio
     async def test_legacy_format_needs_a_context_when_auth_is_enabled(self):
