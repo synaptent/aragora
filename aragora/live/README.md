@@ -57,12 +57,14 @@ Open <http://localhost:3120/healthz/> for the local liveness document.
 If a different tracing root nests `server.js`, use that generated path and
 copy the assets beside it instead.
 
-Static-export verification currently stops at the existing
-`/autonomous/bridge/[run_id]` page, which lacks `generateStaticParams()`.
-`NEXT_OUTPUT=export npx next build --webpack` exits non-zero before writing
-`out/healthz*`, so `/healthz/` is not part of static-export output today.
-The health handler itself opts into static generation, but the export scripts
-above remain blocked by that pre-existing page.
+Static-export verification currently stops at two existing routes: the edge
+route `src/app/api/og/debate/[id]/route.tsx`, which does not opt into static
+generation, and the `/autonomous/bridge/[run_id]` page, which lacks
+`generateStaticParams()`. `NEXT_OUTPUT=export npx next build --webpack` exits
+non-zero before writing `out/healthz*`, so `/healthz/` is not part of
+static-export output today. The health handler itself opts into static
+generation, but the export scripts above remain blocked by those pre-existing
+routes.
 
 Public environment values are baked into the client build. Rebuild after
 changing them. Output overrides (`NEXT_OUTPUT` or `ARAGORA_NEXT_OUTPUT`) also
