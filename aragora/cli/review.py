@@ -420,8 +420,8 @@ def _is_meta_review_issue(issue: str, suggestions: list[str], raw_target: Any) -
 def _proposal_findings(result: DebateResult) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
     """Read the labeled response contract from reviewers, never the echoed PR prompt."""
     latest = {m.agent: m.content for m in result.messages if getattr(m, "role", None) == "proposer"}
-    findings = []
-    unparsed = []
+    findings: list[tuple[str, dict[str, Any]]] = []
+    unparsed: list[str] = []
     for agent, content in latest.items():
         plain = re.sub(r"(?ms)^[ \t]*```.*?^[ \t]*```[^\n]*", "", content).replace("**", "")
         start = len(findings)
