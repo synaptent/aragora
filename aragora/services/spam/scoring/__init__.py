@@ -14,6 +14,13 @@ from aragora.moderation.spam.scoring import (
     score_urls,
 )
 
+# The old module also exposed these names, imported from its sibling spam modules.
+from aragora.moderation.spam.scoring import (
+    EmailFeatures,
+    SpamCategory,
+    SpamClassifierConfig,
+)
+
 __all__ = [
     "check_phishing",
     "determine_category",
@@ -24,4 +31,7 @@ __all__ = [
     "score_sender",
     "score_subject",
     "score_urls",
+    "EmailFeatures",
+    "SpamCategory",
+    "SpamClassifierConfig",
 ]

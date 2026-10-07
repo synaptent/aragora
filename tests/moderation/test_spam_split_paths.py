@@ -59,6 +59,38 @@ SUBMODULE_NAMES = {
         "score_urls",
     ),
 }
+# Names each old submodule also exposed because it imported them from a sibling spam module.
+SUBMODULE_SIBLING_NAMES = {
+    "classifier": (
+        "NaiveBayesClassifier",
+        "PROMOTIONAL_PATTERNS",
+        "SpamCategory",
+        "SpamClassificationResult",
+        "SpamClassifierConfig",
+        "SpamFeatures",
+        "determine_category",
+        "score_attachments",
+        "score_content",
+        "score_headers",
+        "score_patterns",
+        "score_sender",
+        "score_subject",
+        "score_urls",
+    ),
+    "features": (
+        "DANGEROUS_EXTENSIONS",
+        "EmailFeatures",
+        "FREE_EMAIL_PROVIDERS",
+        "KNOWN_SPAM_DOMAINS",
+        "MONEY_WORDS",
+        "REQUIRED_HEADERS",
+        "SPAM_WORDS",
+        "SUSPICIOUS_TLDS",
+        "URGENCY_WORDS",
+        "URL_SHORTENERS",
+    ),
+    "scoring": ("EmailFeatures", "SpamCategory", "SpamClassifierConfig"),
+}
 # __all__ of aragora/services/spam/__init__.py before the move.
 PACKAGE_NAMES = (
     "SpamClassifier",
@@ -90,6 +122,11 @@ PAIRS = (
         for sub, names in SUBMODULE_NAMES.items()
         for name in names
     ]
+    + [
+        (f"aragora.services.spam.{sub}", f"aragora.moderation.spam.{sub}", name)
+        for sub, names in SUBMODULE_SIBLING_NAMES.items()
+        for name in names
+    ]
     + [("aragora.services.spam", "aragora.moderation.spam", name) for name in PACKAGE_NAMES]
     + [
         ("aragora.services.spam_classifier", "aragora.moderation.spam", name)
@@ -112,7 +149,8 @@ def test_old_path_all_lists_unchanged() -> None:
     assert new_spam.__all__ == list(PACKAGE_NAMES)
     for sub, names in SUBMODULE_NAMES.items():
         shim = importlib.import_module(f"aragora.services.spam.{sub}")
-        assert sorted(shim.__all__) == sorted(names)
+        expected = set(names) | set(SUBMODULE_SIBLING_NAMES.get(sub, ()))
+        assert sorted(shim.__all__) == sorted(expected)
 
 
 def test_fixed_input_scoring_at_both_paths() -> None:
