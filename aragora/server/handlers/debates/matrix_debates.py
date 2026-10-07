@@ -76,6 +76,12 @@ from ..openapi_decorator import api_endpoint
 from ..secure import SecureHandler, ForbiddenError, UnauthorizedError
 from ..utils.rate_limit import RateLimiter, get_client_ip
 from aragora.resilience import with_timeout
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +149,10 @@ class MatrixDebatesHandler(SecureHandler):
         self, handler: Any, path: str, query_params: dict[str, Any]
     ) -> HandlerResult:
         """Handle GET requests for matrix debates with RBAC."""
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
+
         # RBAC: Require authentication and debates:read permission
         try:
             auth_context = await self.get_auth_context(handler, require_auth=True)
@@ -165,13 +175,13 @@ class MatrixDebatesHandler(SecureHandler):
 
             # GET /api/debates/matrix/{id}/scenarios
             if len(segments) >= 5 and segments[4] == "scenarios":
-                return await self._get_scenarios(handler, matrix_id)
+                return await self._get_scenarios(handler, matrix_id, scope)
 
             # GET /api/debates/matrix/{id}/conclusions
             if len(segments) >= 5 and segments[4] == "conclusions":
-                return await self._get_conclusions(handler, matrix_id)
+                return await self._get_conclusions(handler, matrix_id, scope)
 
-            return await self._get_matrix_debate(handler, matrix_id)
+            return await self._get_matrix_debate(handler, matrix_id, scope)
 
         return error_response("Not found", 404)
 
@@ -200,14 +210,13 @@ class MatrixDebatesHandler(SecureHandler):
         handler = None
         path = ""
         data: dict[str, Any] = {}
+        read_body = False
 
         if len(args) >= 3:
             if isinstance(args[0], str):
                 path = args[0]
                 handler = args[2]
-                data, error = self.read_json_body_validated(handler)
-                if error:
-                    return error
+                read_body = True
             else:
                 handler = args[0]
                 path = args[1]
@@ -218,10 +227,16 @@ class MatrixDebatesHandler(SecureHandler):
             data = kwargs.get("data") or kwargs.get("body") or {}
             if handler is None:
                 return error_response("Invalid request", 400)
-            if not data:
-                data, error = self.read_json_body_validated(handler)
-                if error:
-                    return error
+            read_body = not data
+
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
+
+        if read_body:
+            data, error = self.read_json_body_validated(handler)
+            if error:
+                return error
 
         normalized = strip_version_prefix(path)
         if normalized.startswith("/api/matrix-debates"):
@@ -246,10 +261,12 @@ class MatrixDebatesHandler(SecureHandler):
             return error_response("Rate limit exceeded. Please try again later.", 429)
 
         logger.debug("POST /api/debates/matrix - running matrix debate")
-        return await self._run_matrix_debate(handler, data)
+        return await self._run_matrix_debate(handler, data, scope)
 
     @with_timeout(180.0)
-    async def _run_matrix_debate(self, handler: Any, data: dict[str, Any]) -> HandlerResult:
+    async def _run_matrix_debate(
+        self, handler: Any, data: dict[str, Any], scope: OrgScope
+    ) -> HandlerResult:
         """Run parallel scenario debates.
 
         Request body:
@@ -393,13 +410,13 @@ class MatrixDebatesHandler(SecureHandler):
             data = dict(data)
             data["model_combinations"] = normalized_model_combinations
             data["select_best_result"] = select_best_result
-            return await self._run_matrix_debate_fallback(handler, data)
+            return await self._run_matrix_debate_fallback(handler, data, scope)
 
         if normalized_combinations:
             data = dict(data)
             data["agent_combinations"] = normalized_combinations
             data["select_best_result"] = select_best_result
-            return await self._run_matrix_debate_fallback(handler, data)
+            return await self._run_matrix_debate_fallback(handler, data, scope)
 
         try:
             # Dynamic import of scenario module classes
@@ -460,12 +477,14 @@ class MatrixDebatesHandler(SecureHandler):
                     "universal_conclusions": results.universal_conclusions,
                     "conditional_conclusions": results.conditional_conclusions,
                     "comparison_matrix": results.comparison_matrix,
+                    "org_id": scope.org_id,
+                    "created_by": scope.user_id,
                 }
             )
 
         except ImportError as e:
             logger.warning("Matrix debate module not available, using fallback: %s", e)
-            return await self._run_matrix_debate_fallback(handler, data)
+            return await self._run_matrix_debate_fallback(handler, data, scope)
         except (ValueError, TypeError, KeyError, AttributeError, RuntimeError, OSError) as e:
             logger.exception("Matrix debate failed: %s", e)
             return error_response(safe_error_message(e, "matrix debate"), 500)
@@ -703,7 +722,7 @@ class MatrixDebatesHandler(SecureHandler):
         )
 
     async def _run_matrix_debate_fallback(
-        self, handler: Any, data: dict[str, Any]
+        self, handler: Any, data: dict[str, Any], scope: OrgScope
     ) -> HandlerResult:
         """Fallback implementation using Arena directly for each scenario."""
         from aragora.core import DebateProtocol, Environment
@@ -813,6 +832,8 @@ class MatrixDebatesHandler(SecureHandler):
                     protocol,
                     document_store=document_store,
                     evidence_store=evidence_store,
+                    receipt_org_id=scope.org_id,
+                    receipt_created_by=scope.user_id,
                 )
 
                 result = await arena.run()
@@ -876,6 +897,8 @@ class MatrixDebatesHandler(SecureHandler):
                     "universal_conclusions": universal_conclusions,
                     "conditional_conclusions": conditional_conclusions,
                     "comparison_matrix": comparison_matrix,
+                    "org_id": scope.org_id,
+                    "created_by": scope.user_id,
                 }
             )
 
@@ -936,21 +959,36 @@ class MatrixDebatesHandler(SecureHandler):
         names = agent_names or ["claude", "openai"]
         return await self._load_agents_from_specs(names)
 
-    async def _get_matrix_debate(self, handler: Any, matrix_id: str) -> HandlerResult:
-        """Get a matrix debate by ID."""
+    async def _load_visible_matrix(
+        self, handler: Any, matrix_id: str, scope: OrgScope
+    ) -> tuple[Any, HandlerResult | None]:
+        """Load a matrix debate of the caller's org: ``(matrix, None)`` or ``(None, error)``."""
         storage = getattr(handler, "storage", None)
         if not storage:
-            return error_response("Storage not configured", 503)
+            return None, error_response("Storage not configured", 503)
 
         try:
             matrix = await storage.get_matrix_debate(matrix_id)
-            if not matrix:
-                return error_response("Matrix debate not found", 404)
-
-            return json_response(matrix)
         except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
             logger.error("Failed to get matrix debate %s: %s", matrix_id, e)
-            return error_response("Failed to retrieve matrix debate", 500)
+            return None, error_response("Failed to retrieve matrix debate", 500)
+
+        if isinstance(matrix, dict):
+            org_id = matrix.get("org_id")
+        else:
+            org_id = getattr(matrix, "org_id", None)
+        if not matrix or not record_visible(org_id, scope):
+            return None, record_not_found("Matrix debate")
+        return matrix, None
+
+    async def _get_matrix_debate(
+        self, handler: Any, matrix_id: str, scope: OrgScope
+    ) -> HandlerResult:
+        """Get a matrix debate by ID."""
+        matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
+        if error is not None:
+            return error
+        return json_response(matrix)
 
     @api_endpoint(
         method="GET",
@@ -967,12 +1005,13 @@ class MatrixDebatesHandler(SecureHandler):
             "503": {"description": "Storage not configured"},
         },
     )
-    async def _get_scenarios(self, handler: Any, matrix_id: str) -> HandlerResult:
+    async def _get_scenarios(self, handler: Any, matrix_id: str, scope: OrgScope) -> HandlerResult:
         """Get all scenario results for a matrix debate."""
-        storage = getattr(handler, "storage", None)
-        if not storage:
-            return error_response("Storage not configured", 503)
+        _matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
+        if error is not None:
+            return error
 
+        storage: Any = getattr(handler, "storage", None)
         try:
             scenarios = await storage.get_matrix_scenarios(matrix_id)
             return json_response({"matrix_id": matrix_id, "scenarios": scenarios})
@@ -995,12 +1034,15 @@ class MatrixDebatesHandler(SecureHandler):
             "503": {"description": "Storage not configured"},
         },
     )
-    async def _get_conclusions(self, handler: Any, matrix_id: str) -> HandlerResult:
+    async def _get_conclusions(
+        self, handler: Any, matrix_id: str, scope: OrgScope
+    ) -> HandlerResult:
         """Get conclusions for a matrix debate."""
-        storage = getattr(handler, "storage", None)
-        if not storage:
-            return error_response("Storage not configured", 503)
+        _matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
+        if error is not None:
+            return error
 
+        storage: Any = getattr(handler, "storage", None)
         try:
             conclusions = await storage.get_matrix_conclusions(matrix_id)
             return json_response(

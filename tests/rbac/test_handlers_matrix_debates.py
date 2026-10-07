@@ -51,6 +51,7 @@ def mock_storage():
             "task": "Test task",
             "scenario_count": 2,
             "results": [],
+            "org_id": "test-org-001",
         }
     )
     storage.get_matrix_scenarios = AsyncMock(

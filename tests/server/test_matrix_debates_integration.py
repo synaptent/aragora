@@ -14,6 +14,9 @@ from unittest.mock import Mock, AsyncMock, patch
 
 # Import MatrixDebatesHandler directly since it's now available
 from aragora.server.handlers.debates import MatrixDebatesHandler
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="org-matrix", user_id="user-matrix", role="member")
 
 
 # ============================================================================
@@ -161,7 +164,7 @@ class TestMatrixDebatesGetEndpoints:
         """Test 404 response for non-existent matrix debate."""
         handler = MatrixDebatesHandler({})
 
-        result = await handler._get_matrix_debate(mock_handler, "nonexistent-id")
+        result = await handler._get_matrix_debate(mock_handler, "nonexistent-id", SCOPE)
 
         assert result.status_code == 404
         data = json.loads(result.body)
@@ -176,12 +179,13 @@ class TestMatrixDebatesGetEndpoints:
                 "matrix_id": "test-123",
                 "task": "Test task",
                 "scenario_count": 3,
+                "org_id": SCOPE.org_id,
             }
         )
         mock_handler.storage = mock_storage
 
         handler = MatrixDebatesHandler({})
-        result = await handler._get_matrix_debate(mock_handler, "test-123")
+        result = await handler._get_matrix_debate(mock_handler, "test-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -193,7 +197,7 @@ class TestMatrixDebatesGetEndpoints:
         mock_handler.storage = None
 
         handler = MatrixDebatesHandler({})
-        result = await handler._get_matrix_debate(mock_handler, "test-123")
+        result = await handler._get_matrix_debate(mock_handler, "test-123", SCOPE)
 
         assert result.status_code == 503
 
@@ -202,7 +206,9 @@ class TestMatrixDebatesGetEndpoints:
         """Test empty scenarios response."""
         handler = MatrixDebatesHandler({})
 
-        result = await handler._get_scenarios(mock_handler, "matrix-123")
+        mock_handler.storage.get_matrix_debate = AsyncMock(return_value={"org_id": SCOPE.org_id})
+
+        result = await handler._get_scenarios(mock_handler, "matrix-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -214,7 +220,9 @@ class TestMatrixDebatesGetEndpoints:
         """Test empty conclusions response."""
         handler = MatrixDebatesHandler({})
 
-        result = await handler._get_conclusions(mock_handler, "matrix-123")
+        mock_handler.storage.get_matrix_debate = AsyncMock(return_value={"org_id": SCOPE.org_id})
+
+        result = await handler._get_conclusions(mock_handler, "matrix-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -239,7 +247,8 @@ class TestMatrixDebatesPostEndpoint:
         # Call internal method directly to avoid decorator complexity
         result = await handler._run_matrix_debate(
             mock_handler,
-            {"scenarios": [{"name": "Test"}]},
+            scope=SCOPE,
+            data={"scenarios": [{"name": "Test"}]},
         )
 
         assert result.status_code == 400
@@ -254,7 +263,8 @@ class TestMatrixDebatesPostEndpoint:
         # Call internal method directly (task must be 10+ chars)
         result = await handler._run_matrix_debate(
             mock_handler,
-            {"task": "Test matrix debate task"},
+            scope=SCOPE,
+            data={"task": "Test matrix debate task"},
         )
 
         assert result.status_code == 400
@@ -269,7 +279,8 @@ class TestMatrixDebatesPostEndpoint:
         # Task must be 10+ chars to pass task validation first
         result = await handler._run_matrix_debate(
             mock_handler,
-            {"task": "Test matrix debate task", "scenarios": []},
+            scope=SCOPE,
+            data={"task": "Test matrix debate task", "scenarios": []},
         )
 
         assert result.status_code == 400
@@ -428,6 +439,7 @@ class TestHandleGetRouting:
             return_value={
                 "matrix_id": "abc-123",
                 "task": "Test",
+                "org_id": SCOPE.org_id,
             }
         )
         mock_handler.storage = mock_storage
@@ -435,7 +447,7 @@ class TestHandleGetRouting:
         handler = MatrixDebatesHandler({})
 
         # Call internal method directly
-        result = await handler._get_matrix_debate(mock_handler, "abc-123")
+        result = await handler._get_matrix_debate(mock_handler, "abc-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -454,7 +466,9 @@ class TestHandleGetRouting:
 
         handler = MatrixDebatesHandler({})
 
-        result = await handler._get_scenarios(mock_handler, "abc-123")
+        mock_handler.storage.get_matrix_debate = AsyncMock(return_value={"org_id": SCOPE.org_id})
+
+        result = await handler._get_scenarios(mock_handler, "abc-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -474,7 +488,9 @@ class TestHandleGetRouting:
 
         handler = MatrixDebatesHandler({})
 
-        result = await handler._get_conclusions(mock_handler, "abc-123")
+        mock_handler.storage.get_matrix_debate = AsyncMock(return_value={"org_id": SCOPE.org_id})
+
+        result = await handler._get_conclusions(mock_handler, "abc-123", SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -524,7 +540,8 @@ class TestMatrixDebateFallback:
 
                     result = await handler._run_matrix_debate_fallback(
                         mock_handler,
-                        {
+                        scope=SCOPE,
+                        data={
                             "task": "Test task",
                             "scenarios": sample_scenarios,
                             "agents": ["claude"],
@@ -547,7 +564,8 @@ class TestMatrixDebateFallback:
 
             result = await handler._run_matrix_debate_fallback(
                 mock_handler,
-                {
+                scope=SCOPE,
+                data={
                     "task": "Test task",
                     "scenarios": sample_scenarios,
                 },
@@ -599,7 +617,8 @@ class TestMatrixDebateFallback:
             with patch("aragora.debate.orchestrator.Arena", side_effect=[weak_arena, strong_arena]):
                 result = await handler._run_matrix_debate_fallback(
                     mock_handler,
-                    {
+                    scope=SCOPE,
+                    data={
                         "task": "Compare the same debate across multiple model combinations",
                         "model_combinations": [
                             {"name": "combo-a", "agents": ["anthropic-api"]},

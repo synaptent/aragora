@@ -135,7 +135,7 @@ class TestHandleGet:
     async def test_get_matrix_calls_storage(self, handler, mock_http_handler, mock_auth_context):
         """Should call storage to get matrix debate."""
         mock_http_handler.storage.get_matrix_debate = AsyncMock(
-            return_value={"id": "abc-123", "task": "Test task"}
+            return_value={"id": "abc-123", "task": "Test task", "org_id": "test-org-001"}
         )
 
         with patch.object(handler, "get_auth_context", new_callable=AsyncMock) as mock_auth:
@@ -168,6 +168,9 @@ class TestHandleGet:
     @pytest.mark.asyncio
     async def test_get_scenarios(self, handler, mock_http_handler, mock_auth_context):
         """Should get scenarios for a matrix debate."""
+        mock_http_handler.storage.get_matrix_debate = AsyncMock(
+            return_value={"org_id": "test-org-001"}
+        )
         mock_http_handler.storage.get_matrix_scenarios = AsyncMock(
             return_value=[{"name": "scenario-1"}, {"name": "scenario-2"}]
         )
@@ -187,6 +190,9 @@ class TestHandleGet:
     @pytest.mark.asyncio
     async def test_get_conclusions(self, handler, mock_http_handler, mock_auth_context):
         """Should get conclusions for a matrix debate."""
+        mock_http_handler.storage.get_matrix_debate = AsyncMock(
+            return_value={"org_id": "test-org-001"}
+        )
         mock_http_handler.storage.get_matrix_conclusions = AsyncMock(
             return_value={
                 "universal": ["All scenarios agree"],

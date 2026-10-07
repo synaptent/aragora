@@ -15,6 +15,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from aragora.server.handlers.utils.responses import HandlerResult
 
+from aragora.tenancy.record_scope import OrgScope
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+TEST_ORG = "test-org-001"
+SCOPE = OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 @pytest.fixture
 def matrix_handler():
@@ -131,7 +138,9 @@ class TestMatrixDebatePostValidation:
         )
 
         assert result.status_code == 200
-        matrix_handler._run_matrix_debate.assert_awaited_once_with(mock_http_handler, payload)
+        matrix_handler._run_matrix_debate.assert_awaited_once_with(
+            mock_http_handler, payload, SCOPE
+        )
 
     @pytest.mark.asyncio
     async def test_returns_400_without_task(self, matrix_handler, mock_http_handler):
@@ -188,7 +197,8 @@ class TestMatrixDebatePostValidation:
         """Returns 400 when both matrix modes are requested together."""
         result = await matrix_handler._run_matrix_debate(
             mock_http_handler,
-            {
+            scope=SCOPE,
+            data={
                 "task": "What is the best approach for this problem?",
                 "scenarios": [{"name": "baseline"}],
                 "agent_combinations": [
@@ -339,7 +349,8 @@ class TestMatrixDebateModelCombinationValidation:
         """Returns 400 when model_combinations is not an array."""
         result = await matrix_handler._run_matrix_debate(
             mock_http_handler,
-            {
+            scope=SCOPE,
+            data={
                 "task": "Compare the same debate across multiple model combinations",
                 "model_combinations": "invalid",
             },
@@ -356,7 +367,8 @@ class TestMatrixDebateModelCombinationValidation:
         """Returns 400 for ambiguous legacy/new execution settings."""
         result = await matrix_handler._run_matrix_debate(
             mock_http_handler,
-            {
+            scope=SCOPE,
+            data={
                 "task": "Compare the same debate across multiple model combinations",
                 "agents": ["anthropic-api", "openai-api"],
                 "model_combinations": [
@@ -376,7 +388,8 @@ class TestMatrixDebateModelCombinationValidation:
         """Returns 400 because cross-product execution is not supported here."""
         result = await matrix_handler._run_matrix_debate(
             mock_http_handler,
-            {
+            scope=SCOPE,
+            data={
                 "task": "Compare the same debate across multiple model combinations",
                 "scenarios": [{"name": "baseline"}],
                 "model_combinations": [
@@ -404,7 +417,8 @@ class TestMatrixDebateModelCombinationValidation:
 
         result = await matrix_handler._run_matrix_debate(
             mock_http_handler,
-            {
+            scope=SCOPE,
+            data={
                 "task": "Compare the same debate across multiple model combinations",
                 "model_combinations": [
                     {"name": "combo-a", "agents": ["anthropic-api", "openai-api"]},
@@ -424,7 +438,8 @@ class TestMatrixDebateModelCombinationValidation:
         """Returns 400 when select_best_result is not a boolean."""
         result = await matrix_handler._run_matrix_debate(
             mock_http_handler,
-            {
+            scope=SCOPE,
+            data={
                 "task": "Compare the same debate across multiple model combinations",
                 "model_combinations": [
                     {"name": "combo-a", "agents": ["anthropic-api", "openai-api"]}
@@ -609,7 +624,7 @@ class TestMatrixDebateGetEndpoints:
     @pytest.mark.asyncio
     async def test_get_debate_returns_debate_data(self, matrix_handler, mock_http_handler):
         """Returns debate data when found."""
-        debate_data = {"id": "test-123", "task": "Test task", "scenarios": []}
+        debate_data = {"id": "test-123", "task": "Test task", "scenarios": [], "org_id": TEST_ORG}
         mock_storage = AsyncMock()
         mock_storage.get_matrix_debate = AsyncMock(return_value=debate_data)
         mock_http_handler.storage = mock_storage
@@ -638,6 +653,7 @@ class TestMatrixDebateGetEndpoints:
         scenarios = [{"name": "scenario-1"}, {"name": "scenario-2"}]
         mock_storage = AsyncMock()
         mock_storage.get_matrix_scenarios = AsyncMock(return_value=scenarios)
+        mock_storage.get_matrix_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await matrix_handler.handle_get(
@@ -668,6 +684,7 @@ class TestMatrixDebateGetEndpoints:
         }
         mock_storage = AsyncMock()
         mock_storage.get_matrix_conclusions = AsyncMock(return_value=conclusions)
+        mock_storage.get_matrix_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await matrix_handler.handle_get(
@@ -873,7 +890,7 @@ class TestMatrixAgentCombinationMode:
         ):
             with patch("aragora.debate.orchestrator.Arena", FakeArena):
                 result = await matrix_handler._run_matrix_debate_fallback(
-                    mock_http_handler, payload
+                    mock_http_handler, payload, SCOPE
                 )
 
         assert result.status_code == 200
@@ -955,7 +972,7 @@ class TestMatrixAgentCombinationMode:
             side_effect=fake_load_agents,
         ):
             with patch("aragora.debate.orchestrator.Arena", FakeArena):
-                result = await matrix_handler._run_matrix_debate(mock_http_handler, payload)
+                result = await matrix_handler._run_matrix_debate(mock_http_handler, payload, SCOPE)
 
         assert result.status_code == 200
         data = json.loads(result.body)
@@ -978,7 +995,7 @@ class TestMatrixDebateErrorHandling:
         # Test that when _load_agents returns empty, we get 400 error
         # We need to mock the scenario import to work and return agents as empty
 
-        async def mock_run_matrix_debate(handler, data):
+        async def mock_run_matrix_debate(handler, data, scope):
             # Simulate the code path that checks for valid agents
             from aragora.server.handlers.debates.matrix_debates import error_response
 
@@ -1021,6 +1038,7 @@ class TestMatrixDebateErrorHandling:
         """Returns 500 on storage error when getting scenarios."""
         mock_storage = AsyncMock()
         mock_storage.get_matrix_scenarios = AsyncMock(side_effect=RuntimeError("Database error"))
+        mock_storage.get_matrix_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await matrix_handler.handle_get(
@@ -1033,6 +1051,7 @@ class TestMatrixDebateErrorHandling:
         """Returns 500 on storage error when getting conclusions."""
         mock_storage = AsyncMock()
         mock_storage.get_matrix_conclusions = AsyncMock(side_effect=RuntimeError("Database error"))
+        mock_storage.get_matrix_debate = AsyncMock(return_value={"org_id": TEST_ORG})
         mock_http_handler.storage = mock_storage
 
         result = await matrix_handler.handle_get(
