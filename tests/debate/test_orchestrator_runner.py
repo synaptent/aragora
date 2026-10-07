@@ -974,7 +974,7 @@ class TestHandleDebateCompletion:
                 new_callable=AsyncMock,
             ) as mock_record_tokens,
             patch(
-                "aragora.services.usage_metering.get_usage_meter",
+                "aragora.billing.usage_metering.get_usage_meter",
                 return_value=usage_meter,
             ),
             patch(
@@ -1381,7 +1381,7 @@ class TestHandleDebateCompletion:
                     }
                 ),
             ) as mock_record,
-            patch("aragora.services.usage_metering.get_usage_meter", return_value=meter),
+            patch("aragora.billing.usage_metering.get_usage_meter", return_value=meter),
             patch(
                 "aragora.analytics.debate_analytics.get_debate_analytics",
                 side_effect=ImportError,
@@ -1479,7 +1479,7 @@ class TestHandleDebateCompletion:
                 "aragora.billing.usage_metering_integration.record_debate_tokens",
                 new=AsyncMock(return_value={}),
             ),
-            patch("aragora.services.usage_metering.get_usage_meter", return_value=meter),
+            patch("aragora.billing.usage_metering.get_usage_meter", return_value=meter),
             patch(
                 "aragora.analytics.debate_analytics.get_debate_analytics", return_value=analytics
             ),
