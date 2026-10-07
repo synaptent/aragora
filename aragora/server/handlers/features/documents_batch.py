@@ -320,6 +320,7 @@ class DocumentBatchHandler(BaseHandler):
                             workspace_id=workspace_id,
                             tags=tags,
                             metadata=ingest_metadata,
+                            org_id=ingest_metadata["org_id"],
                         )
                         knowledge_job_ids.append(kp_job_id)
                     logger.info(

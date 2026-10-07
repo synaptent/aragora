@@ -15,12 +15,15 @@ from typing import Any
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
+from aragora.knowledge.fact_store import OrgScopeRequiredError
 from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig, ProcessingResult
 
 logger = logging.getLogger(__name__)
 
-# Global pipeline instances per workspace (lazily initialized)
-_pipelines: dict[str, KnowledgePipeline] = {}
+# Pipelines keyed by (org_id, workspace_id): workspace ids are not unique across
+# organizations, so two orgs must never share a pipeline. A None org is the
+# unscoped pipeline, whose fact reads and writes fail closed.
+_pipelines: dict[tuple[str | None, str], KnowledgePipeline] = {}
 _pipeline_lock = asyncio.Lock()
 
 # Thread pool for running async code from sync context
@@ -67,27 +70,34 @@ class ProcessingJob:
 _jobs: dict[str, ProcessingJob] = {}
 
 
-async def get_pipeline(workspace_id: str = "default") -> KnowledgePipeline:
-    """Get or create the knowledge pipeline for a workspace.
+async def get_pipeline(
+    workspace_id: str = "default", *, org_id: str | None = None
+) -> KnowledgePipeline:
+    """Get or create the knowledge pipeline for an organization's workspace.
 
     Args:
         workspace_id: Workspace identifier
+        org_id: Organization from verified authentication. Without it the
+            pipeline's fact reads and writes fail closed.
 
     Returns:
         Initialized KnowledgePipeline
     """
+    org_id = org_id or None
+    key = (org_id, workspace_id)
     async with _pipeline_lock:
-        pipeline = _pipelines.get(workspace_id)
+        pipeline = _pipelines.get(key)
         if pipeline is None:
             config = PipelineConfig(
                 workspace_id=workspace_id,
+                org_id=org_id,
                 use_weaviate=_should_use_weaviate(),
                 extract_facts=True,
                 use_knowledge_mound=_should_use_knowledge_mound(),
             )
             pipeline = KnowledgePipeline(config)
             await pipeline.start()
-            _pipelines[workspace_id] = pipeline
+            _pipelines[key] = pipeline
             logger.info("Knowledge pipeline initialized for workspace %s", workspace_id)
 
         return pipeline
@@ -121,6 +131,8 @@ async def process_document_async(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     config: KnowledgeProcessingConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> ProcessingResult:
     """Process a document through the knowledge pipeline.
 
@@ -130,13 +142,14 @@ async def process_document_async(
         workspace_id: Workspace identifier
         document_id: Optional existing document ID
         config: Processing configuration
+        org_id: Organization from verified authentication
 
     Returns:
         ProcessingResult with chunks and facts
     """
     config = config or KnowledgeProcessingConfig()
 
-    pipeline = await get_pipeline(workspace_id)
+    pipeline = await get_pipeline(workspace_id, org_id=org_id)
 
     result = await pipeline.process_document(
         content=content,
@@ -170,6 +183,8 @@ def process_document_sync(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     config: KnowledgeProcessingConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> ProcessingResult:
     """Synchronous wrapper for process_document_async.
 
@@ -181,6 +196,7 @@ def process_document_sync(
         workspace_id: Workspace identifier
         document_id: Optional existing document ID
         config: Processing configuration
+        org_id: Organization from verified authentication
 
     Returns:
         ProcessingResult with chunks and facts
@@ -196,6 +212,7 @@ def process_document_sync(
                 tags=tags,
                 metadata=metadata,
                 config=config,
+                org_id=org_id,
             )
         )
     finally:
@@ -210,6 +227,8 @@ async def process_text_async(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     config: KnowledgeProcessingConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> ProcessingResult:
     """Process raw text through the knowledge pipeline.
 
@@ -221,13 +240,14 @@ async def process_text_async(
         tags: Optional tags for categorization
         metadata: Optional metadata to attach to the document
         config: Processing configuration
+        org_id: Organization from verified authentication
 
     Returns:
         ProcessingResult with chunks and facts
     """
     config = config or KnowledgeProcessingConfig()
 
-    pipeline = await get_pipeline(workspace_id)
+    pipeline = await get_pipeline(workspace_id, org_id=org_id)
 
     result = await pipeline.process_text(
         text=text,
@@ -261,6 +281,8 @@ def process_text_sync(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     config: KnowledgeProcessingConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> ProcessingResult:
     """Synchronous wrapper for process_text_async.
 
@@ -277,6 +299,7 @@ def process_text_sync(
                 tags=tags,
                 metadata=metadata,
                 config=config,
+                org_id=org_id,
             )
         )
     finally:
@@ -291,10 +314,14 @@ def queue_text_processing(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     config: KnowledgeProcessingConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> str:
     """Queue raw text for background knowledge processing.
 
     Returns immediately with a job ID that can be used to check status.
+    The job runs in the pipeline of ``org_id``, which must come from
+    verified authentication.
     """
     import uuid
 
@@ -322,6 +349,7 @@ def queue_text_processing(
                 tags=tags,
                 metadata=metadata,
                 config=config,
+                org_id=org_id,
             )
             job.result = result
             job.status = "completed" if result.success else "failed"
@@ -335,7 +363,14 @@ def queue_text_processing(
                 result.fact_count,
             )
 
-        except (OSError, RuntimeError, ValueError, ConnectionError, KeyError) as e:  # noqa: BLE001 - adapter isolation
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            ConnectionError,
+            KeyError,
+            OrgScopeRequiredError,
+        ) as e:  # noqa: BLE001 - adapter isolation
             job.status = "failed"
             job.error = f"Processing failed: {type(e).__name__}"
             job.completed_at = datetime.now(timezone.utc)
@@ -355,6 +390,8 @@ def queue_document_processing(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     config: KnowledgeProcessingConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> str:
     """Queue a document for background knowledge processing.
 
@@ -366,6 +403,7 @@ def queue_document_processing(
         workspace_id: Workspace identifier
         document_id: Optional existing document ID
         config: Processing configuration
+        org_id: Organization from verified authentication
 
     Returns:
         Job ID for tracking
@@ -396,6 +434,7 @@ def queue_document_processing(
                 tags=tags,
                 metadata=metadata,
                 config=config,
+                org_id=org_id,
             )
             job.result = result
             job.status = "completed" if result.success else "failed"
@@ -409,7 +448,14 @@ def queue_document_processing(
                 result.fact_count,
             )
 
-        except (OSError, RuntimeError, ValueError, ConnectionError, KeyError) as e:  # noqa: BLE001 - adapter isolation
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            ConnectionError,
+            KeyError,
+            OrgScopeRequiredError,
+        ) as e:  # noqa: BLE001 - adapter isolation
             job.status = "failed"
             job.error = f"Processing failed: {type(e).__name__}"
             job.completed_at = datetime.now(timezone.utc)
@@ -491,7 +537,7 @@ async def shutdown_pipeline() -> None:
     """Shutdown the knowledge pipeline gracefully."""
     async with _pipeline_lock:
         if _pipelines:
-            for workspace_id, pipeline in list(_pipelines.items()):
+            for (_, workspace_id), pipeline in list(_pipelines.items()):
                 try:
                     await pipeline.stop()
                     logger.info(
@@ -515,6 +561,8 @@ def process_uploaded_document(
     async_processing: bool = True,
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
+    *,
+    org_id: str | None = None,
 ) -> dict[str, Any]:
     """Process an uploaded document through the knowledge pipeline.
 
@@ -528,6 +576,8 @@ def process_uploaded_document(
         async_processing: If True, process in background and return job_id
         tags: Optional tags for categorization
         metadata: Optional metadata to attach to the document
+        org_id: Organization of the authenticated uploader. Never take it
+            from request input or ``metadata``.
 
     Returns:
         Dict with processing info:
@@ -542,6 +592,7 @@ def process_uploaded_document(
             document_id=document_id,
             tags=tags,
             metadata=metadata,
+            org_id=org_id,
         )
         return {
             "knowledge_processing": {
@@ -557,6 +608,7 @@ def process_uploaded_document(
             document_id=document_id,
             tags=tags,
             metadata=metadata,
+            org_id=org_id,
         )
         return {
             "knowledge_processing": {
@@ -577,8 +629,14 @@ def process_uploaded_text(
     async_processing: bool = True,
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
+    *,
+    org_id: str | None = None,
 ) -> dict[str, Any]:
-    """Process uploaded text through the knowledge pipeline."""
+    """Process uploaded text through the knowledge pipeline.
+
+    ``org_id`` is the authenticated uploader's organization; never take it
+    from request input or ``metadata``.
+    """
     if async_processing:
         job_id = queue_text_processing(
             text=text,
@@ -587,6 +645,7 @@ def process_uploaded_text(
             document_id=document_id,
             tags=tags,
             metadata=metadata,
+            org_id=org_id,
         )
         return {
             "knowledge_processing": {
@@ -601,6 +660,7 @@ def process_uploaded_text(
         document_id=document_id,
         tags=tags,
         metadata=metadata,
+        org_id=org_id,
     )
     return {
         "knowledge_processing": {

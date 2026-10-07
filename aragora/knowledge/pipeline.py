@@ -69,7 +69,7 @@ from aragora.knowledge.embeddings import (
     InMemoryEmbeddingService,
     WeaviateEmbeddingService,
 )
-from aragora.knowledge.fact_store import FactStore, InMemoryFactStore
+from aragora.knowledge.fact_store import FactStore, InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.query_engine import DatasetQueryEngine, QueryOptions, SimpleQueryEngine
 from aragora.knowledge.types import Fact, QueryResult, ValidationStatus
 
@@ -114,6 +114,9 @@ class PipelineConfig:
 
     # Workspace
     workspace_id: str = "default"
+    # Set only from verified authentication. Without it, fact reads and
+    # writes fail closed with OrgScopeRequiredError.
+    org_id: str | None = None
 
     # Chunking
     chunk_size: int = 512
@@ -186,7 +189,7 @@ class KnowledgePipeline:
     def __init__(
         self,
         config: PipelineConfig | None = None,
-        fact_store: FactStore | InMemoryFactStore | None = None,
+        fact_store: FactStore | InMemoryFactStore | ScopedFactStore | None = None,
         embedding_service: WeaviateEmbeddingService | InMemoryEmbeddingService | None = None,
         agents: list | None = None,
         knowledge_mound: Any | None = None,  # KnowledgeMound if available
@@ -226,6 +229,10 @@ class KnowledgePipeline:
         # Callbacks
         self._on_progress: Callable[[str, float, str], None] | None = None
 
+    @property
+    def _org_id(self) -> str | None:
+        return self.config.org_id or None
+
     def set_progress_callback(self, callback: Callable[[str, float, str], None]) -> None:
         """Set progress callback: callback(document_id, progress, message)."""
         self._on_progress = callback
@@ -252,6 +259,8 @@ class KnowledgePipeline:
                 except (OSError, RuntimeError, ValueError) as e:
                     logger.warning("Failed to create FactStore, using in-memory: %s", e)
                     self._fact_store = InMemoryFactStore()
+        if self.config.org_id and not isinstance(self._fact_store, ScopedFactStore):
+            self._fact_store = ScopedFactStore(self._fact_store, self.config.org_id)
 
         # Initialize embedding service
         if self._embedding_service is None:
@@ -782,6 +791,7 @@ Include dates, numbers, names, and specific claims where possible."""
                             evidence_ids=[c.id for c in context_chunks],
                             confidence=self.config.min_fact_confidence,
                             validation_status=ValidationStatus.UNVERIFIED,
+                            org_id=self._org_id,
                         )
                         facts.append(fact)
 
@@ -925,7 +935,9 @@ Include dates, numbers, names, and specific claims where possible."""
             raise RuntimeError("Query engine not initialized")
 
         # Standard query through query engine
-        result = await self._query_engine.query(question, self.config.workspace_id, options)
+        result = await self._query_engine.query(
+            question, self.config.workspace_id, options, org_id=self._org_id
+        )
 
         # Augment with Knowledge Mound results if available
         if use_mound and self._knowledge_mound and MOUND_AVAILABLE:
@@ -1034,6 +1046,7 @@ Include dates, numbers, names, and specific claims where possible."""
             workspace_id=self.config.workspace_id,
             min_confidence=min_confidence,
             limit=limit,
+            org_id=self._org_id,
         )
 
         if query:
@@ -1049,7 +1062,9 @@ Include dates, numbers, names, and specific claims where possible."""
 
         fact_stats = {}
         if self._fact_store:
-            fact_stats = self._fact_store.get_statistics(self.config.workspace_id)
+            fact_stats = self._fact_store.get_statistics(
+                self.config.workspace_id, org_id=self._org_id
+            )
 
         mound_stats: dict[str, Any] = {}
         if self._knowledge_mound:

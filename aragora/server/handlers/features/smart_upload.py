@@ -450,6 +450,8 @@ async def process_file(
     category: FileCategory,
     action: ProcessingAction,
     options: dict[str, Any] | None = None,
+    *,
+    org_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Process a file based on its category and action.
@@ -460,6 +462,8 @@ async def process_file(
         category: Detected file category
         action: Processing action to perform
         options: Optional processing options
+        org_id: Verified organization that owns any extracted knowledge;
+            never read from ``options``
 
     Returns:
         Processing result dict
@@ -502,6 +506,7 @@ async def process_file(
                 action=action,
                 filename=filename,
                 processing_result=result,
+                org_id=org_id,
             )
             if knowledge_result and knowledge_result.get("knowledge_processing"):
                 result["knowledge_processing"] = knowledge_result.get("knowledge_processing")
@@ -571,6 +576,7 @@ async def _queue_knowledge_from_result(
     action: ProcessingAction,
     filename: str,
     processing_result: dict[str, Any],
+    org_id: str | None = None,
 ) -> dict[str, Any] | None:
     text: str | None = None
     suffix = ""
@@ -614,6 +620,7 @@ async def _queue_knowledge_from_result(
             async_processing=async_processing,
             tags=tags,
             metadata=ingest_metadata,
+            org_id=org_id,
         )
     except ImportError:
         logger.warning("Knowledge pipeline not available, skipping knowledge ingestion")
@@ -931,6 +938,8 @@ async def smart_upload(
     mime_type: str | None = None,
     override_action: ProcessingAction | None = None,
     options: dict[str, Any] | None = None,
+    *,
+    org_id: str | None = None,
 ) -> UploadResult:
     """
     Smart upload with auto-detection and processing.
@@ -941,6 +950,8 @@ async def smart_upload(
         mime_type: Optional MIME type hint
         override_action: Override the auto-detected action
         options: Processing options
+        org_id: Verified organization of the uploader. Without it, knowledge
+            ingestion fails closed.
 
     Returns:
         UploadResult with processing status
@@ -1016,6 +1027,7 @@ async def smart_upload(
             category,
             action,
             options,
+            org_id=org_id,
         )
 
         result.status = "completed"
@@ -1079,7 +1091,7 @@ if HANDLER_BASE_AVAILABLE:
                 metadata = {}
 
             metadata.setdefault("user_id", getattr(auth_context, "user_id", None))
-            metadata.setdefault("org_id", getattr(auth_context, "org_id", None))
+            metadata["org_id"] = getattr(auth_context, "org_id", None)
             metadata.setdefault("workspace_id", getattr(auth_context, "workspace_id", None))
             metadata.setdefault(
                 "tenant_id",
@@ -1093,6 +1105,16 @@ if HANDLER_BASE_AVAILABLE:
                 options["workspace_id"] = metadata.get("workspace_id")
 
             return options
+
+        async def _verified_org_id(self, handler: Any) -> str | None:
+            """Organization of the verified caller, never taken from the request body."""
+            try:
+                from aragora.server.handlers.utils.auth import get_auth_context
+
+                auth_context = await get_auth_context(handler, require_auth=True)
+            except (ImportError, AttributeError):
+                return None
+            return getattr(auth_context, "org_id", None)
 
         def handle(
             self,
@@ -1154,7 +1176,14 @@ if HANDLER_BASE_AVAILABLE:
                 file_content = base64.b64decode(file_content)
 
             override_action = ProcessingAction(action) if action else None
-            result = await smart_upload(file_content, filename, mime_type, override_action, options)
+            result = await smart_upload(
+                file_content,
+                filename,
+                mime_type,
+                override_action,
+                options,
+                org_id=await self._verified_org_id(handler),
+            )
 
             return json_response(
                 {
@@ -1182,7 +1211,7 @@ if HANDLER_BASE_AVAILABLE:
             if not files:
                 return error_response("No files provided", 400)
 
-            # Process all files
+            org_id = await self._verified_org_id(handler)
             results = []
             for file_info in files:
                 content = file_info.get("content", "")
@@ -1196,6 +1225,7 @@ if HANDLER_BASE_AVAILABLE:
                     file_info.get("mime_type"),
                     ProcessingAction(file_info["action"]) if file_info.get("action") else None,
                     options,
+                    org_id=org_id,
                 )
                 results.append(
                     {

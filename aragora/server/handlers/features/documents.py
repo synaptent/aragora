@@ -489,6 +489,7 @@ class DocumentHandler(BaseHandler):
                         document_id=doc_id,
                         async_processing=True,  # Queue for background processing
                         metadata=metadata,
+                        org_id=getattr(user, "org_id", None),
                     )
                     response_data.update(knowledge_result)
                     logger.info(
