@@ -27,6 +27,10 @@ import pytest
 
 from aragora.server.handlers.checkpoints import CheckpointHandler
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+# The org ``org_scoped_request_user`` authenticates every request as.
+ORG_ID = "test-org-001"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -145,7 +149,7 @@ def mock_store():
     """Create a mock checkpoint store."""
     store = AsyncMock()
     store.list_checkpoints = AsyncMock(return_value=[])
-    store.load = AsyncMock(return_value=None)
+    store.load = AsyncMock(return_value=MockDebateCheckpoint())
     store.save = AsyncMock(return_value="path/to/checkpoint")
     store.delete = AsyncMock(return_value=True)
     return store
@@ -164,9 +168,17 @@ def mock_manager(mock_store):
 
 
 @pytest.fixture
-def handler(mock_manager):
+def mock_storage():
+    """Debate storage in which every debate belongs to ORG_ID."""
+    storage = MagicMock()
+    storage.get_access_info.side_effect = lambda ref: (ref, ORG_ID, False)
+    return storage
+
+
+@pytest.fixture
+def handler(mock_manager, mock_storage):
     """Create CheckpointHandler with mocked manager."""
-    h = CheckpointHandler({})
+    h = CheckpointHandler({"storage": mock_storage})
     h._checkpoint_manager = mock_manager
     return h
 
@@ -297,9 +309,9 @@ class TestListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_with_status_filter(self, handler, mock_http_handler, mock_store):
         checkpoints = [
-            {"checkpoint_id": "cp-001", "status": "complete"},
-            {"checkpoint_id": "cp-002", "status": "expired"},
-            {"checkpoint_id": "cp-003", "status": "complete"},
+            {"checkpoint_id": "cp-001", "debate_id": "dbt-001", "status": "complete"},
+            {"checkpoint_id": "cp-002", "debate_id": "dbt-001", "status": "expired"},
+            {"checkpoint_id": "cp-003", "debate_id": "dbt-002", "status": "complete"},
         ]
         mock_store.list_checkpoints.return_value = checkpoints
 
@@ -316,8 +328,29 @@ class TestListCheckpoints:
             assert cp["status"] == "complete"
 
     @pytest.mark.asyncio
+    async def test_list_drops_other_org_debates(
+        self, handler, mock_http_handler, mock_store, mock_storage
+    ):
+        mock_storage.get_access_info.side_effect = lambda ref: (
+            (ref, ORG_ID, False) if ref == "dbt-001" else (ref, "other-org", True)
+        )
+        mock_store.list_checkpoints.return_value = [
+            {"checkpoint_id": "cp-001", "debate_id": "dbt-001", "status": "complete"},
+            {"checkpoint_id": "cp-002", "debate_id": "dbt-002", "status": "complete"},
+            {"checkpoint_id": "cp-003", "status": "complete"},
+        ]
+
+        result = await handler.handle("/api/v1/checkpoints", {}, mock_http_handler)
+        body = _body(result)
+        assert body["total"] == 1
+        assert [cp["checkpoint_id"] for cp in body["checkpoints"]] == ["cp-001"]
+
+    @pytest.mark.asyncio
     async def test_list_pagination(self, handler, mock_http_handler, mock_store):
-        checkpoints = [{"checkpoint_id": f"cp-{i:03d}", "status": "complete"} for i in range(10)]
+        checkpoints = [
+            {"checkpoint_id": f"cp-{i:03d}", "debate_id": "dbt-001", "status": "complete"}
+            for i in range(10)
+        ]
         mock_store.list_checkpoints.return_value = checkpoints
 
         result = await handler.handle(
@@ -1355,7 +1388,10 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_pagination_offset_beyond_total(self, handler, mock_http_handler, mock_store):
         """Offset beyond total returns empty list."""
-        checkpoints = [{"checkpoint_id": f"cp-{i}", "status": "complete"} for i in range(3)]
+        checkpoints = [
+            {"checkpoint_id": f"cp-{i}", "debate_id": "dbt-001", "status": "complete"}
+            for i in range(3)
+        ]
         mock_store.list_checkpoints.return_value = checkpoints
 
         result = await handler.handle(
@@ -1372,7 +1408,7 @@ class TestEdgeCases:
     async def test_status_filter_no_matches(self, handler, mock_http_handler, mock_store):
         """Status filter that matches nothing returns empty."""
         checkpoints = [
-            {"checkpoint_id": "cp-001", "status": "complete"},
+            {"checkpoint_id": "cp-001", "debate_id": "dbt-001", "status": "complete"},
         ]
         mock_store.list_checkpoints.return_value = checkpoints
 

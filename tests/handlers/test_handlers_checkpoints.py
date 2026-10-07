@@ -29,6 +29,10 @@ from aragora.debate.checkpoint import (
 )
 from aragora.core import Message, Vote
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+# The org ``org_scoped_request_user`` authenticates every request as.
+ORG_ID = "test-org-001"
 
 # ============================================================================
 # Test Fixtures
@@ -68,9 +72,11 @@ def mock_checkpoint_manager(mock_checkpoint_store):
 
 @pytest.fixture
 def checkpoint_handler():
-    """Create a CheckpointHandler with mock dependencies."""
+    """Create a CheckpointHandler whose storage puts every debate in ORG_ID."""
+    storage = MagicMock()
+    storage.get_access_info.side_effect = lambda ref: (ref, ORG_ID, False)
     ctx = {
-        "storage": None,
+        "storage": storage,
         "elo_system": None,
     }
     return CheckpointHandler(ctx)
@@ -487,6 +493,7 @@ class TestResumeCheckpoint:
             ],
         )
         mock_checkpoint_manager.resume_from_checkpoint.return_value = resumed
+        mock_checkpoint_manager.store.load.return_value = sample_checkpoint
 
         with patch.object(
             checkpoint_handler, "_get_checkpoint_manager", return_value=mock_checkpoint_manager
@@ -518,6 +525,7 @@ class TestResumeCheckpoint:
             votes=[],
         )
         mock_checkpoint_manager.resume_from_checkpoint.return_value = resumed
+        mock_checkpoint_manager.store.load.return_value = sample_checkpoint
 
         with patch.object(
             checkpoint_handler, "_get_checkpoint_manager", return_value=mock_checkpoint_manager
@@ -652,12 +660,13 @@ class TestAddIntervention:
 
     @pytest.mark.asyncio
     async def test_add_intervention_success(
-        self, checkpoint_handler, mock_handler, mock_checkpoint_manager
+        self, checkpoint_handler, mock_handler, mock_checkpoint_manager, sample_checkpoint
     ):
         """Successfully adds intervention note."""
         mock_handler.command = "POST"
         body = json.dumps({"note": "Human review: Agents stuck in loop", "by": "admin"}).encode()
         mock_checkpoint_manager.add_intervention.return_value = True
+        mock_checkpoint_manager.store.load.return_value = sample_checkpoint
 
         with patch.object(
             checkpoint_handler, "_get_checkpoint_manager", return_value=mock_checkpoint_manager

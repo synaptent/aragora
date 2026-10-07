@@ -9,6 +9,10 @@ Endpoints:
 - GET /api/debates/{id}/checkpoints - List checkpoints for a debate
 - POST /api/debates/{id}/checkpoint - Create checkpoint for running debate
 - POST /api/debates/{id}/pause - Pause debate and create checkpoint
+
+A checkpoint belongs to the org that owns its debate. Every route needs a
+signed-in org member; checkpoints of another org's debate (public or not), of a
+debate with no recorded org and unknown ids all answer the same 404.
 """
 
 from __future__ import annotations
@@ -23,9 +27,18 @@ from typing import Any
 from aragora.debate.checkpoint import (
     CheckpointManager,
     DatabaseCheckpointStore,
+    DebateCheckpoint,
 )
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.debate_access import authorize_debate_write, find_debate_access
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found,
+    record_visible,
+    require_org_scope,
+    scope_denial_first,
+)
 from ..base import (
     BaseHandler,
     HandlerResult,
@@ -76,6 +89,35 @@ class CheckpointHandler(BaseHandler):
             or (path.startswith("/api/v1/debates/") and "/checkpoint" in path)
         )
 
+    def _debate_owned(self, debate_id: Any, scope: OrgScope) -> bool:
+        access = find_debate_access(self.get_storage(), debate_id)
+        # The lookup falls back to slugs; a checkpoint names its debate by id only.
+        return (
+            access is not None
+            and access.debate_id == debate_id
+            and record_visible(access.org_id, scope)
+        )
+
+    def _owned_rows(self, rows: list[dict[str, Any]], scope: OrgScope) -> list[dict[str, Any]]:
+        owned: dict[Any, bool] = {}
+        visible = []
+        for row in rows:
+            debate_id = row.get("debate_id")
+            if debate_id not in owned:
+                owned[debate_id] = self._debate_owned(debate_id, scope)
+            if owned[debate_id]:
+                visible.append(row)
+        return visible
+
+    async def _load_owned(
+        self, manager: CheckpointManager, checkpoint_id: str, scope: OrgScope
+    ) -> DebateCheckpoint | None:
+        checkpoint = await manager.store.load(checkpoint_id)
+        if checkpoint is None or not self._debate_owned(checkpoint.debate_id, scope):
+            return None
+        return checkpoint
+
+    @scope_denial_first
     @require_permission("checkpoints:read")
     @handle_errors("checkpoint handling")
     async def handle(
@@ -92,15 +134,19 @@ class CheckpointHandler(BaseHandler):
             logger.warning("Rate limit exceeded for checkpoint endpoint: %s", client_ip)
             return error_response("Rate limit exceeded. Please try again later.", 429)
 
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
+
         method = handler.command
 
         # GET /api/checkpoints
         if path == "/api/v1/checkpoints" and method == "GET":
-            return await self.list_checkpoints(query_params)
+            return await self.list_checkpoints(query_params, scope)
 
         # GET /api/checkpoints/resumable
         if path == "/api/v1/checkpoints/resumable" and method == "GET":
-            return await self.list_resumable_debates()
+            return await self.list_resumable_debates(scope)
 
         # /api/v1/checkpoints/{id}...
         if path.startswith("/api/v1/checkpoints/") and not path.startswith(
@@ -113,26 +159,29 @@ class CheckpointHandler(BaseHandler):
 
                 # GET /api/v1/checkpoints/{id} (5 parts)
                 if method == "GET" and len(parts) == 5:
-                    return await self.get_checkpoint(checkpoint_id)
+                    return await self.get_checkpoint(checkpoint_id, scope)
 
                 # POST /api/v1/checkpoints/{id}/resume (6 parts)
                 if method == "POST" and len(parts) >= 6 and parts[5] == "resume":
-                    return await self.resume_checkpoint(checkpoint_id, body)
+                    return await self.resume_checkpoint(checkpoint_id, body, scope)
 
                 # DELETE /api/v1/checkpoints/{id} (5 parts)
                 if method == "DELETE" and len(parts) == 5:
-                    return await self.delete_checkpoint(checkpoint_id)
+                    return await self.delete_checkpoint(checkpoint_id, scope)
 
                 # POST /api/v1/checkpoints/{id}/intervention (6 parts)
                 if method == "POST" and len(parts) >= 6 and parts[5] == "intervention":
-                    return await self.add_intervention(checkpoint_id, body)
+                    return await self.add_intervention(checkpoint_id, body, scope)
 
         # /api/v1/debates/{id}/checkpoint...
         if path.startswith("/api/v1/debates/") and "/checkpoint" in path:
             parts = path.split("/")
             # Parts: ["", "api", "v1", "debates", ":id", ...]
-            if len(parts) >= 5:
-                debate_id = parts[4]
+            if len(parts) >= 6:
+                write, write_error = authorize_debate_write(handler, self.get_storage(), parts[4])
+                if write is None:
+                    return write_error
+                debate_id = write.debate_id
 
                 # GET /api/v1/debates/{id}/checkpoints (6 parts)
                 if method == "GET" and len(parts) >= 6 and parts[5] == "checkpoints":
@@ -153,11 +202,13 @@ class CheckpointHandler(BaseHandler):
 
         return error_response("Not found", 404)
 
-    async def list_checkpoints(self, query_params: dict[str, str]) -> HandlerResult:
+    async def list_checkpoints(
+        self, query_params: dict[str, str], scope: OrgScope
+    ) -> HandlerResult:
         """
         GET /api/checkpoints
 
-        List all checkpoints with optional filtering.
+        List the checkpoints of the caller's org's debates, with optional filtering.
 
         Query params:
         - debate_id: Filter by debate ID
@@ -173,7 +224,9 @@ class CheckpointHandler(BaseHandler):
         offset = get_int_param(query_params, "offset", 0)
 
         # List checkpoints from store
-        all_checkpoints = await manager.store.list_checkpoints(debate_id=debate_id)
+        all_checkpoints = self._owned_rows(
+            await manager.store.list_checkpoints(debate_id=debate_id), scope
+        )
 
         # Filter by status if requested
         if status_filter:
@@ -192,14 +245,14 @@ class CheckpointHandler(BaseHandler):
             }
         )
 
-    async def list_resumable_debates(self) -> HandlerResult:
+    async def list_resumable_debates(self, scope: OrgScope) -> HandlerResult:
         """
         GET /api/checkpoints/resumable
 
-        List all debates that have resumable checkpoints.
+        List the caller's org's debates that have resumable checkpoints.
         """
         manager = self._get_checkpoint_manager()
-        debates = await manager.list_debates_with_checkpoints()
+        debates = self._owned_rows(await manager.list_debates_with_checkpoints(), scope)
 
         return json_response(
             {
@@ -208,17 +261,17 @@ class CheckpointHandler(BaseHandler):
             }
         )
 
-    async def get_checkpoint(self, checkpoint_id: str) -> HandlerResult:
+    async def get_checkpoint(self, checkpoint_id: str, scope: OrgScope) -> HandlerResult:
         """
         GET /api/checkpoints/{id}
 
         Get detailed information about a specific checkpoint.
         """
         manager = self._get_checkpoint_manager()
-        checkpoint = await manager.store.load(checkpoint_id)
+        checkpoint = await self._load_owned(manager, checkpoint_id, scope)
 
         if not checkpoint:
-            return error_response(f"Checkpoint not found: {checkpoint_id}", 404)
+            return record_not_found("Checkpoint")
 
         # Include integrity status
         checkpoint_dict = checkpoint.to_dict()
@@ -226,7 +279,9 @@ class CheckpointHandler(BaseHandler):
 
         return json_response({"checkpoint": checkpoint_dict})
 
-    async def resume_checkpoint(self, checkpoint_id: str, body: bytes | None) -> HandlerResult:
+    async def resume_checkpoint(
+        self, checkpoint_id: str, body: bytes | None, scope: OrgScope
+    ) -> HandlerResult:
         """
         POST /api/checkpoints/{id}/resume
 
@@ -242,6 +297,8 @@ class CheckpointHandler(BaseHandler):
         }
         """
         manager = self._get_checkpoint_manager()
+        if await self._load_owned(manager, checkpoint_id, scope) is None:
+            return record_not_found("Checkpoint")
 
         # Parse request body
         data = safe_json_parse(body) or {}
@@ -277,7 +334,7 @@ class CheckpointHandler(BaseHandler):
             status=200,
         )
 
-    async def delete_checkpoint(self, checkpoint_id: str) -> HandlerResult:
+    async def delete_checkpoint(self, checkpoint_id: str, scope: OrgScope) -> HandlerResult:
         """
         DELETE /api/checkpoints/{id}
 
@@ -285,10 +342,9 @@ class CheckpointHandler(BaseHandler):
         """
         manager = self._get_checkpoint_manager()
 
-        # Check if checkpoint exists
-        checkpoint = await manager.store.load(checkpoint_id)
+        checkpoint = await self._load_owned(manager, checkpoint_id, scope)
         if not checkpoint:
-            return error_response(f"Checkpoint not found: {checkpoint_id}", 404)
+            return record_not_found("Checkpoint")
 
         # Delete
         success = await manager.store.delete(checkpoint_id)
@@ -301,7 +357,9 @@ class CheckpointHandler(BaseHandler):
         else:
             return error_response("Failed to delete checkpoint", 500)
 
-    async def add_intervention(self, checkpoint_id: str, body: bytes | None) -> HandlerResult:
+    async def add_intervention(
+        self, checkpoint_id: str, body: bytes | None, scope: OrgScope
+    ) -> HandlerResult:
         """
         POST /api/checkpoints/{id}/intervention
 
@@ -321,6 +379,8 @@ class CheckpointHandler(BaseHandler):
             return error_response("Missing required field: note", 400)
 
         manager = self._get_checkpoint_manager()
+        if await self._load_owned(manager, checkpoint_id, scope) is None:
+            return record_not_found("Checkpoint")
         success = await manager.add_intervention(
             checkpoint_id=checkpoint_id,
             note=note,
@@ -335,7 +395,7 @@ class CheckpointHandler(BaseHandler):
                 }
             )
         else:
-            return error_response(f"Checkpoint not found: {checkpoint_id}", 404)
+            return record_not_found("Checkpoint")
 
     async def list_debate_checkpoints(
         self, debate_id: str, query_params: dict[str, str]
