@@ -113,8 +113,8 @@ class _DebatesHandlerProtocol(Protocol):
 
     ctx: dict[str, Any]
 
-    def get_storage(self) -> Any | None:
-        """Get debate storage instance."""
+    def get_storage(self) -> Any:
+        """Get debate storage instance (``@require_storage`` routes never see None)."""
         ...
 
     def _process_batch_export(self, job: BatchExportJob) -> Any:
@@ -520,7 +520,7 @@ class ExportOperationsMixin:
             "500": {"description": "Database error"},
         },
     )
-    @require_permission("export:read")
+    @require_permission("debates:read")
     @require_storage
     def _export_debate(
         self: _DebatesHandlerProtocol,
