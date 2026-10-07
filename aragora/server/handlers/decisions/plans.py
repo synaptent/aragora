@@ -166,7 +166,6 @@ class PlansHandler(BaseHandler):
         scope, err = require_org_scope(handler)
         if scope is None:
             return err
-        self.set_request_context(handler, query_params)
         parsed = _parse_plan_path(path)
         if parsed is None:
             return _unknown_route()
@@ -191,20 +190,21 @@ class PlansHandler(BaseHandler):
         if perm_err:
             return perm_err
 
-        self.set_request_context(handler, query_params)
+        # One instance serves every request thread, so the request handler is
+        # passed down explicitly instead of through set_request_context().
         parsed = _parse_plan_path(path)
         if parsed is None:
             return _unknown_route()
         plan_id, action = parsed
         if plan_id is None:
-            return self._create_plan(scope)
+            return self._create_plan(handler, scope)
         params = {"plan_id": plan_id}
         if action == "approve":
-            return self._approve_plan(params, scope)
+            return self._approve_plan(params, handler, scope)
         if action == "reject":
-            return self._reject_plan(params, scope)
+            return self._reject_plan(params, handler, scope)
         if action == "execute":
-            return self._execute_plan(params, scope)
+            return self._execute_plan(params, handler, scope)
         return _unknown_route()
 
     @handle_errors("plans approval")
@@ -219,10 +219,9 @@ class PlansHandler(BaseHandler):
         if perm_err:
             return perm_err
 
-        self.set_request_context(handler, query_params)
         parsed = _parse_plan_path(path)
         if parsed is not None and parsed[0] is not None and parsed[1] == "approve":
-            return self._approve_plan({"plan_id": parsed[0]}, scope)
+            return self._approve_plan({"plan_id": parsed[0]}, handler, scope)
         return _unknown_route()
 
     @staticmethod
@@ -310,7 +309,7 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans
     # -------------------------------------------------------------------------
 
-    def _create_plan(self, scope: OrgScope) -> HandlerResult:
+    def _create_plan(self, handler: Any, scope: OrgScope) -> HandlerResult:
         """Create a new decision plan owned by the caller's org."""
         from aragora.pipeline.decision_plan.core import ApprovalMode, DecisionPlan, PlanStatus
         from aragora.server.decision_integrity_utils import (
@@ -318,7 +317,7 @@ class PlansHandler(BaseHandler):
             sync_decision_plan_backbone_receipt,
         )
 
-        body = self.get_json_body()
+        body = self.read_json_body(handler)
         if body is None:
             return error_response("Invalid or missing JSON body", 400)
 
@@ -376,7 +375,7 @@ class PlansHandler(BaseHandler):
             plan.metadata["estimated_duration"] = str(estimated_duration)
 
         store = _get_plan_store()
-        user = self.get_current_user(self._current_handler) if self._current_handler else None
+        user = self.get_current_user(handler)
         run_id = ensure_decision_plan_backbone_run(
             plan,
             auth_context=user,
@@ -399,11 +398,11 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans/{plan_id}/approve
     # -------------------------------------------------------------------------
 
-    def _approve_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
+    def _approve_plan(self, params: dict[str, str], handler: Any, scope: OrgScope) -> HandlerResult:
         """Approve a decision plan. Requires plans:approve permission."""
         from aragora.pipeline.decision_plan.core import PlanStatus
 
-        user, perm_err = self.require_permission_or_error(self._current_handler, "plans:approve")
+        user, perm_err = self.require_permission_or_error(handler, "plans:approve")
         if perm_err:
             return perm_err
 
@@ -423,7 +422,7 @@ class PlansHandler(BaseHandler):
         approver_id = getattr(user, "user_id", "unknown") if user else "unknown"
         runtime = BackboneRuntime(store)
 
-        body = self.get_json_body() or {}
+        body = self.read_json_body(handler) or {}
         reason = body.get("reason", "")
         conditions = body.get("conditions", [])
 
@@ -510,11 +509,11 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans/{plan_id}/reject
     # -------------------------------------------------------------------------
 
-    def _reject_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
+    def _reject_plan(self, params: dict[str, str], handler: Any, scope: OrgScope) -> HandlerResult:
         """Reject a decision plan with reason."""
         from aragora.pipeline.decision_plan.core import PlanStatus
 
-        user, perm_err = self.require_permission_or_error(self._current_handler, "plans:deny")
+        user, perm_err = self.require_permission_or_error(handler, "plans:deny")
         if perm_err:
             return perm_err
 
@@ -531,7 +530,7 @@ class PlansHandler(BaseHandler):
                 409,
             )
 
-        body = self.get_json_body() or {}
+        body = self.read_json_body(handler) or {}
         reason = body.get("reason", "")
         if not reason:
             return error_response("reason is required for rejection", 400)
@@ -568,7 +567,7 @@ class PlansHandler(BaseHandler):
     # POST /api/v1/plans/{plan_id}/execute
     # -------------------------------------------------------------------------
 
-    def _execute_plan(self, params: dict[str, str], scope: OrgScope) -> HandlerResult:
+    def _execute_plan(self, params: dict[str, str], handler: Any, scope: OrgScope) -> HandlerResult:
         """Execute an approved decision plan. Requires plans:approve permission.
 
         The plan must be in APPROVED status. Execution is scheduled as a
@@ -576,7 +575,7 @@ class PlansHandler(BaseHandler):
         """
         from aragora.pipeline.decision_plan.core import PlanStatus
 
-        user, perm_err = self.require_permission_or_error(self._current_handler, "plans:approve")
+        user, perm_err = self.require_permission_or_error(handler, "plans:approve")
         if perm_err:
             return perm_err
 
@@ -601,7 +600,7 @@ class PlansHandler(BaseHandler):
             )
 
         # Parse optional execution mode from body
-        body = self.get_json_body() or {}
+        body = self.read_json_body(handler) or {}
         execution_mode = body.get("execution_mode")
 
         try:

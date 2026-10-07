@@ -16,6 +16,7 @@ Tests cover:
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -317,7 +318,7 @@ class TestCreatePlan:
                 "aragora.server.handlers.plans._get_plan_store",
                 return_value=mock_store,
             ),
-            patch.object(handler, "get_json_body", return_value=body),
+            patch.object(handler, "read_json_body", return_value=body),
             patch(
                 "aragora.pipeline.decision_plan.core.DecisionPlan",
                 MockPlan,
@@ -334,7 +335,7 @@ class TestCreatePlan:
                 "aragora.server.handlers.plans._fire_plan_notification",
             ),
         ):
-            result = handler._create_plan(SCOPE)
+            result = handler._create_plan(_make_mock_handler(), SCOPE)
             assert result.status_code == 201
 
     def test_create_plan_missing_body(self, handler, mock_store):
@@ -343,9 +344,9 @@ class TestCreatePlan:
                 "aragora.server.handlers.plans._get_plan_store",
                 return_value=mock_store,
             ),
-            patch.object(handler, "get_json_body", return_value=None),
+            patch.object(handler, "read_json_body", return_value=None),
         ):
-            result = handler._create_plan(SCOPE)
+            result = handler._create_plan(_make_mock_handler(), SCOPE)
             assert result.status_code == 400
 
     def test_create_plan_missing_debate_id(self, handler, mock_store):
@@ -354,9 +355,9 @@ class TestCreatePlan:
                 "aragora.server.handlers.plans._get_plan_store",
                 return_value=mock_store,
             ),
-            patch.object(handler, "get_json_body", return_value={"task": "Do something"}),
+            patch.object(handler, "read_json_body", return_value={"task": "Do something"}),
         ):
-            result = handler._create_plan(SCOPE)
+            result = handler._create_plan(_make_mock_handler(), SCOPE)
             assert result.status_code == 400
 
     def test_create_plan_missing_task(self, handler, mock_store):
@@ -365,9 +366,9 @@ class TestCreatePlan:
                 "aragora.server.handlers.plans._get_plan_store",
                 return_value=mock_store,
             ),
-            patch.object(handler, "get_json_body", return_value={"debate_id": "d-1"}),
+            patch.object(handler, "read_json_body", return_value={"debate_id": "d-1"}),
         ):
-            result = handler._create_plan(SCOPE)
+            result = handler._create_plan(_make_mock_handler(), SCOPE)
             assert result.status_code == 400
 
 
@@ -392,12 +393,12 @@ class TestApprovePlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
             patch(
                 "aragora.server.handlers.plans._fire_plan_notification",
             ),
         ):
-            result = handler._approve_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._approve_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 200
             data = _parse_body(result)
             assert data["status"] == "approved"
@@ -414,7 +415,7 @@ class TestApprovePlan:
                 MockPlanStatus,
             ),
         ):
-            result = handler._approve_plan({"plan_id": "nonexistent"}, SCOPE)
+            result = handler._approve_plan({"plan_id": "nonexistent"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 404
 
     def test_approve_already_approved(self, handler, mock_store):
@@ -430,7 +431,7 @@ class TestApprovePlan:
                 MockPlanStatus,
             ),
         ):
-            result = handler._approve_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._approve_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 409
 
 
@@ -455,12 +456,12 @@ class TestRejectPlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={"reason": "Not ready"}),
+            patch.object(handler, "read_json_body", return_value={"reason": "Not ready"}),
             patch(
                 "aragora.server.handlers.plans._fire_plan_notification",
             ),
         ):
-            result = handler._reject_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._reject_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 200
             data = _parse_body(result)
             assert data["status"] == "rejected"
@@ -478,9 +479,9 @@ class TestRejectPlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
         ):
-            result = handler._reject_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._reject_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 400
 
     def test_reject_plan_not_found(self, handler, mock_store):
@@ -495,7 +496,7 @@ class TestRejectPlan:
                 MockPlanStatus,
             ),
         ):
-            result = handler._reject_plan({"plan_id": "nonexistent"}, SCOPE)
+            result = handler._reject_plan({"plan_id": "nonexistent"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 404
 
 
@@ -528,7 +529,7 @@ class TestExecutePlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
             patch(
                 "aragora.pipeline.canonical_execution.queue_plan_execution",
                 return_value=launch,
@@ -545,7 +546,7 @@ class TestExecutePlan:
                 "aragora.server.handlers.plans._fire_plan_notification",
             ),
         ):
-            result = handler._execute_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._execute_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 202
             body = _parse_body(result)
             assert body["run_id"] == "run-001"
@@ -566,9 +567,9 @@ class TestExecutePlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
         ):
-            result = handler._execute_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._execute_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 409
 
     def test_execute_already_executing(self, handler, mock_store):
@@ -583,9 +584,9 @@ class TestExecutePlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
         ):
-            result = handler._execute_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._execute_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 409
 
     def test_execute_completed_plan(self, handler, mock_store):
@@ -600,9 +601,9 @@ class TestExecutePlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
         ):
-            result = handler._execute_plan({"plan_id": "plan-001"}, SCOPE)
+            result = handler._execute_plan({"plan_id": "plan-001"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 409
 
     def test_execute_not_found(self, handler, mock_store):
@@ -616,9 +617,9 @@ class TestExecutePlan:
                 "aragora.pipeline.decision_plan.core.PlanStatus",
                 MockPlanStatus,
             ),
-            patch.object(handler, "get_json_body", return_value={}),
+            patch.object(handler, "read_json_body", return_value={}),
         ):
-            result = handler._execute_plan({"plan_id": "nonexistent"}, SCOPE)
+            result = handler._execute_plan({"plan_id": "nonexistent"}, _make_mock_handler(), SCOPE)
             assert result.status_code == 404
 
 
@@ -716,3 +717,107 @@ class TestHandleRouting:
             result = handler.handle("/api/v1/plans", {}, mock_handler)
             assert result.status_code == 401
             mock_store.list_for_org.assert_not_called()
+
+
+# ===========================================================================
+# Concurrent requests on the shared handler instance
+# ===========================================================================
+
+SCOPE_A = OrgScope(org_id="org-a", user_id="user-a", role="admin")
+SCOPE_B = OrgScope(org_id="org-b", user_id="user-b", role="admin")
+
+
+def _post_interleaved(handler, requests: dict[str, tuple[str, OrgScope, dict]]) -> dict[str, Any]:
+    """POST each (path, scope, body) on its own thread through one shared handler.
+
+    Every thread passes the scope and permission checks before any thread reads
+    its body, which is the interleaving a ThreadingHTTPServer can produce.
+    """
+    from aragora.server.handlers.decisions import plans as plans_mod
+
+    barrier = threading.Barrier(len(requests), timeout=10)
+    real_parse = plans_mod._parse_plan_path
+    results: dict[str, Any] = {}
+
+    def parse_once_all_arrived(path: str):
+        barrier.wait()
+        return real_parse(path)
+
+    def run(name: str, path: str, scope: OrgScope, body: dict) -> None:
+        request = _make_mock_handler("POST", json.dumps(body).encode(), user_id=scope.user_id)
+        request.test_scope = scope
+        results[name] = handler.handle_post(path, {}, request)
+
+    with (
+        patch.object(plans_mod, "_parse_plan_path", side_effect=parse_once_all_arrived),
+        patch.object(plans_mod, "require_org_scope", side_effect=lambda r: (r.test_scope, None)),
+        patch.object(plans_mod, "_fire_plan_notification"),
+    ):
+        threads = [threading.Thread(target=run, args=(n, *req)) for n, req in requests.items()]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+    return results
+
+
+class TestConcurrentRequestState:
+    """PlansHandler is one registry instance shared by all request threads."""
+
+    def test_concurrent_creates_keep_their_own_body_and_user(self, handler, mock_store):
+        handler.get_current_user = MagicMock(side_effect=lambda request: request._user)
+        backbone = MagicMock(return_value="run-1")
+        with (
+            patch(
+                "aragora.server.decision_integrity_utils.ensure_decision_plan_backbone_run",
+                backbone,
+            ),
+            patch("aragora.server.decision_integrity_utils.sync_decision_plan_backbone_receipt"),
+        ):
+            results = _post_interleaved(
+                handler,
+                {
+                    "a": ("/api/v1/plans", SCOPE_A, {"debate_id": "d-a", "task": "Task A"}),
+                    "b": ("/api/v1/plans", SCOPE_B, {"debate_id": "d-b", "task": "Task B"}),
+                },
+            )
+
+        assert results["a"].status_code == 201
+        assert results["b"].status_code == 201
+        assert _parse_body(results["a"])["task"] == "Task A"
+        assert _parse_body(results["b"])["task"] == "Task B"
+        created = {(c.args[0].task, c.args[0].org_id) for c in mock_store.create.call_args_list}
+        assert created == {("Task A", "org-a"), ("Task B", "org-b")}
+        backbone_callers = {
+            (c.kwargs["org_id"], c.kwargs["auth_context"].user_id) for c in backbone.call_args_list
+        }
+        assert backbone_callers == {("org-a", "user-a"), ("org-b", "user-b")}
+        assert handler._current_handler is None
+
+    def test_concurrent_rejects_keep_their_own_body_and_user(self, handler, mock_store):
+        plans = {
+            "plan-a": MockPlan("plan-a", org_id="org-a"),
+            "plan-b": MockPlan("plan-b", org_id="org-b"),
+        }
+        mock_store.get.side_effect = plans.get
+        handler.require_permission_or_error = MagicMock(
+            side_effect=lambda request, _perm: (request._user, None)
+        )
+        with patch("aragora.pipeline.decision_plan.core.PlanStatus", MockPlanStatus):
+            results = _post_interleaved(
+                handler,
+                {
+                    "a": ("/api/v1/plans/plan-a/reject", SCOPE_A, {"reason": "A reason"}),
+                    "b": ("/api/v1/plans/plan-b/reject", SCOPE_B, {"reason": "B reason"}),
+                },
+            )
+
+        seen = {
+            name: tuple(_parse_body(r)[k] for k in ("plan_id", "reason", "rejected_by"))
+            for name, r in results.items()
+        }
+        assert seen == {
+            "a": ("plan-a", "A reason", "user-a"),
+            "b": ("plan-b", "B reason", "user-b"),
+        }
+        assert handler._current_handler is None

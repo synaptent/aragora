@@ -25,6 +25,7 @@ from __future__ import annotations
 __all__ = ["DecisionPipelineHandler"]
 
 import logging
+import sqlite3
 from typing import TYPE_CHECKING, Any, cast
 
 from aragora.pipeline.backbone_errors import (
@@ -430,7 +431,7 @@ class DecisionPipelineHandler(SecureHandler):
         from aragora.utils.async_utils import get_event_loop_safe
 
         debate_result = get_event_loop_safe().run_until_complete(
-            _load_debate_result(debate_id, self.ctx)
+            _load_debate_result(debate_id, self.ctx, scope)
         )
         if debate_result is None:
             return error_response(f"Debate {debate_id} not found", 404)
@@ -789,16 +790,34 @@ class DecisionPipelineHandler(SecureHandler):
 # ---------------------------------------------------------------------------
 
 
-async def _load_debate_result(debate_id: str, ctx: dict) -> Any | None:
-    """Load a DebateResult by debate ID from available stores.
+def _source_debate_owned(debate_id: str, ctx: dict, scope: OrgScope) -> bool:
+    """True only when the persisted debate row belongs to the caller's org."""
+    get_org_id = getattr(ctx.get("storage"), "get_org_id", None)
+    if get_org_id is None:
+        return False
+    try:
+        owner = get_org_id(debate_id)
+    except (sqlite3.Error, OSError, RuntimeError, ValueError, TypeError) as e:
+        logger.warning("Debate owner lookup failed for %s: %s", debate_id, e)
+        return False
+    return record_visible(owner, scope)
 
-    Tries multiple sources in order:
+
+async def _load_debate_result(debate_id: str, ctx: dict, scope: OrgScope) -> Any | None:
+    """Load the DebateResult of a debate owned by the caller's org.
+
+    The persisted owner is checked before any source is read, so a debate of
+    another org, or one with no recorded owner, loads exactly like a missing
+    one (None). Then tries, in order:
     1. Trace files on disk
     2. Storage backend
     3. Decision cache
     """
     import os
     from pathlib import Path
+
+    if not _source_debate_owned(debate_id, ctx, scope):
+        return None
 
     # Try trace files
     try:
@@ -829,8 +848,10 @@ async def _load_debate_result(debate_id: str, ctx: dict) -> Any | None:
 
         cache = get_decision_cache()
         if cache:
-            result = cache.get(debate_id)
-            if result:
+            result = await cache.get(debate_id)
+            # Entries are keyed by a request hash, not a debate id, so only a
+            # result recorded for this very debate may stand in for it.
+            if result is not None and getattr(result, "debate_id", None) == debate_id:
                 return result
     except (ImportError, KeyError, ValueError, TypeError, AttributeError) as e:
         logger.debug("Failed to load from cache for %s: %s", debate_id, e)
