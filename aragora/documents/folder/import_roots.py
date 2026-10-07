@@ -5,6 +5,11 @@ and is read on every request. A root counts only if it resolves to an existing
 directory that does not equal, contain or lie inside a protected server path or
 another org's root (overlapping roots are rejected for both orgs). Rejected
 roots are logged and grant nothing.
+
+An authorized folder is opened and read with ``open_folder`` and
+``read_file_in_folder``, which never follow a symlink below the import root, so
+swapping a directory or file for a link after the check cannot move the read
+outside the folder.
 """
 
 from __future__ import annotations
@@ -12,8 +17,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import stat
 from collections.abc import Iterable, Sequence
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from aragora.persistence.db_config import get_default_data_dir
@@ -70,7 +76,9 @@ def protected_paths(nomic_dir: Any = None, document_store_dir: Any = None) -> li
         value = os.environ.get(name) or _SECRET_FILE_DEFAULTS.get(name)
         # Credential settings that also accept inline JSON or PEM content name no file.
         if value and "\n" not in value and not value.lstrip().startswith(("{", "-----")):
-            candidates.append(Path(value).expanduser().parent)
+            configured = Path(value).expanduser()
+            target = _resolve(configured)  # a symlinked key file is protected where it lives
+            candidates += [configured.parent] + ([target.parent] if target else [])
     return [path for path in map(_resolve, candidates) if path is not None]
 
 
@@ -87,21 +95,96 @@ def org_import_roots(org_id: str, protected: Iterable[Path]) -> list[Path]:
         return []
 
     protected = list(protected)
-    candidates: list[tuple[str, Path]] = []
+    # Every resolvable root takes part in the cross-org overlap check, even one rejected
+    # for another reason, so an invalid root never leaves an overlapping one usable.
+    configured: list[tuple[str, Any, Path, bool]] = []
     for org, entries in mapping.items():
         for entry in entries if isinstance(entries, list) else [entries]:
             root = _resolve(entry) if isinstance(entry, str) and os.path.isabs(entry) else None
-            if root is None or not isinstance(entries, list) or not root.is_dir():
+            usable = root is not None and isinstance(entries, list) and root.is_dir()
+            if not usable:
                 _reject(entry, org, "is not an absolute existing directory in a list")
-            elif any(_overlaps(root, path) for path in protected):
-                _reject(entry, org, "overlaps a protected server path")
-            else:
-                candidates.append((str(org), root))
+            if root is not None:
+                configured.append((str(org), entry, root, usable))
 
     roots: list[Path] = []
-    for org, root in candidates:
-        if any(other_org != org and _overlaps(root, other) for other_org, other in candidates):
-            _reject(str(root), org, "overlaps a root of another org")
+    for org, entry, root, usable in configured:
+        if not usable:
+            continue
+        if any(_overlaps(root, path) for path in protected):
+            _reject(entry, org, "overlaps a protected server path")
+        elif any(other != org and _overlaps(root, r) for other, _, r, _ in configured):
+            _reject(entry, org, "overlaps a root of another org")
         elif org == org_id:
             roots.append(root)
     return roots
+
+
+def _nofollow_supported() -> bool:
+    flags = ("O_NOFOLLOW", "O_DIRECTORY")
+    return all(hasattr(os, flag) for flag in flags) and os.open in os.supports_dir_fd
+
+
+def _open_below(dir_fd: int, rel: PurePath, last_flags: int) -> int:
+    """Open ``rel`` below ``dir_fd`` one name at a time, failing on any symlink."""
+    if not _nofollow_supported() or rel.is_absolute() or ".." in rel.parts:
+        raise PermissionError("cannot open a path confined below a directory")
+    fd = os.dup(dir_fd)
+    try:
+        for index, name in enumerate(rel.parts):
+            last = index == len(rel.parts) - 1
+            flags = last_flags if last else os.O_RDONLY | os.O_DIRECTORY
+            child = os.open(name, flags | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+            os.close(fd)
+            fd = child
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def open_folder(folder: Path, roots: Sequence[Path]) -> int:
+    """Directory fd of the authorized, already resolved ``folder``.
+
+    ``folder`` is not resolved again: it is opened from the import root that
+    contains it without following any symlink, so a folder swapped for a link
+    after the request fails to open instead of becoming the new boundary.
+    """
+    root = next((r for r in roots if folder.is_relative_to(r)), None)
+    if root is None:
+        raise PermissionError("folder is outside the import roots")
+    root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        return _open_below(root_fd, folder.relative_to(root), os.O_RDONLY | os.O_DIRECTORY)
+    finally:
+        os.close(root_fd)
+
+
+def still_folder(folder_fd: int, folder: Path) -> bool:
+    """Whether ``folder`` still names the directory held open as ``folder_fd``."""
+    try:
+        now, held = os.stat(folder), os.fstat(folder_fd)
+    except OSError:
+        return False
+    return (now.st_dev, now.st_ino) == (held.st_dev, held.st_ino)
+
+
+def file_in_folder(folder: Path, path: Any) -> PurePath | None:
+    """Location of ``path`` relative to ``folder`` once resolved; None when it leaves it."""
+    resolved = _resolve(path)
+    if resolved is None or not resolved.is_relative_to(folder):
+        return None
+    return resolved.relative_to(folder)
+
+
+def read_file_in_folder(folder_fd: int, rel: PurePath, limit: int) -> bytes:
+    """Read at most ``limit`` bytes of the regular file ``rel`` below ``folder_fd``.
+
+    Every name is opened with O_NOFOLLOW, so an entry swapped for a link after
+    ``file_in_folder`` checked it fails to open instead of being read.
+    """
+    fd = _open_below(folder_fd, rel, os.O_RDONLY | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise PermissionError("not a regular file")
+        return handle.read(limit)

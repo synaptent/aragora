@@ -400,6 +400,114 @@ class TestOutsideTheRoot:
         assert store.list_for_org(ORG_A) == []
 
 
+B_SECRET = "org b folder secret text"
+
+
+def _swap_for_link(path: Path, target: Path) -> None:
+    """Move ``path`` aside and put a symlink to ``target`` in its place."""
+    path.rename(path.with_name(path.name + ".orig"))
+    path.symlink_to(target, target_is_directory=target.is_dir())
+
+
+def _swap_when_scanned(monkeypatch, swap) -> None:
+    from aragora.documents.folder.scanner import FolderScanner
+
+    original = FolderScanner.scan
+
+    async def scan(self, root_path):
+        swap()
+        return await original(self, root_path)
+
+    monkeypatch.setattr(FolderScanner, "scan", scan)
+
+
+def _swap_before_open(monkeypatch, filename: str, swap) -> None:
+    """Run ``swap`` once, after the job checked ``filename`` and before it opens it."""
+    original, pending = folder_upload.validate_file_upload, [swap]
+
+    def validate(*args, **kwargs):
+        if kwargs.get("filename") == filename and pending:
+            pending.pop()()
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(folder_upload, "validate_file_upload", validate)
+
+
+def _stored_text(store: DocumentStore) -> str:
+    return " ".join(path.read_text() for path in store.storage_dir.glob("*.json"))
+
+
+class TestConfinementAfterTheRequest:
+    @pytest.fixture
+    def b_folder(self, b_root: Path) -> Path:
+        (b_root / "b-folder").mkdir()
+        for name in ("notes.md", "inner.md", "b-only.md"):
+            (b_root / "b-folder" / name).write_text(B_SECRET)
+        return b_root / "b-folder"
+
+    @pytest.mark.parametrize("when", ["before_the_job", "when_scanned"])
+    def test_folder_swapped_for_a_link_after_the_request_imports_nothing(
+        self, monkeypatch, configured, folders, store, auth_a, a_folder, b_folder, when
+    ):
+        status, body = _post(folders, auth_a, ROUTES[1], {"path": str(a_folder)})
+        assert status == 200, body
+        swap = lambda: _swap_for_link(a_folder, b_folder)  # noqa: E731
+        swap() if when == "before_the_job" else _swap_when_scanned(monkeypatch, swap)
+
+        _run_background_work()
+
+        job = FolderUploadHandler._jobs[body["folder_id"]]
+        assert job.status.value == "failed"
+        assert job.document_ids == [] and store.list_for_org(ORG_A) == []
+        assert B_SECRET not in _stored_text(store)
+
+    def test_scan_of_a_folder_swapped_for_a_link_is_refused(
+        self, monkeypatch, configured, folders, auth_a, a_folder, b_folder
+    ):
+        _swap_when_scanned(monkeypatch, lambda: _swap_for_link(a_folder, b_folder))
+        status, body = _post(folders, auth_a, ROUTES[0], {"path": str(a_folder)})
+        assert (status, body["code"]) == (403, "path_not_allowed")
+        assert "b-only" not in json.dumps(body) and str(b_folder) not in json.dumps(body)
+
+    @pytest.mark.parametrize("swapped", ["file", "parent_dir"])
+    def test_entry_swapped_for_a_link_between_check_and_open_is_not_read(
+        self, monkeypatch, configured, folders, store, auth_a, a_folder, b_folder, swapped
+    ):
+        (a_folder / "sub").mkdir()
+        (a_folder / "sub" / "inner.md").write_text("a nested note")
+        victim, filename, target = {
+            "file": (a_folder / "notes.md", "notes.md", b_folder / "notes.md"),
+            "parent_dir": (a_folder / "sub", "inner.md", b_folder),
+        }[swapped]
+        _swap_before_open(monkeypatch, filename, lambda: _swap_for_link(victim, target))
+
+        status, body = _post(folders, auth_a, ROUTES[1], {"path": str(a_folder)})
+        assert status == 200, body
+        _run_background_work()
+
+        job = FolderUploadHandler._jobs[body["folder_id"]]
+        assert (job.files_uploaded, job.files_failed) == (2, 1)
+        assert B_SECRET not in _stored_text(store)
+
+    def test_nested_files_and_links_inside_the_folder_are_still_imported(
+        self, configured, folders, store, auth_a, a_folder
+    ):
+        (a_folder / "nested" / "deep").mkdir(parents=True)
+        (a_folder / "nested" / "deep" / "deep.md").write_text("deep note")
+        (a_folder / "alias.md").symlink_to(a_folder / "notes.md")
+        payload = {"path": str(a_folder), "config": {"followSymlinks": True}}
+
+        status, body = _post(folders, auth_a, ROUTES[1], payload)
+        assert status == 200, body
+        _run_background_work()
+
+        docs = [store.get(d) for d in FolderUploadHandler._jobs[body["folder_id"]].document_ids]
+        by_name = {doc.filename: doc.text for doc in docs}
+        assert sorted(by_name) == ["alias.md", "deep.md", "notes.md", "plan.txt"]
+        assert by_name["alias.md"] == by_name["notes.md"] == "upload root notes"
+        assert by_name["deep.md"] == "deep note"
+
+
 class TestInvalidRoots:
     @pytest.fixture(autouse=True)
     def _key_file(self, monkeypatch, tmp_path):
@@ -436,6 +544,37 @@ class TestInvalidRoots:
                 status, body = _post(folders, auth, ROUTES[0], {"path": str(path)})
                 assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
         assert "another org" in caplog.text
+
+    @pytest.mark.parametrize("b_invalid", ["overlaps_protected_path", "not_a_list"])
+    def test_overlap_with_a_root_invalid_for_another_reason_still_rejects_both(
+        self, monkeypatch, caplog, folders, auth_a, tmp_path, b_invalid
+    ):
+        a_root = tmp_path / "shared" / "a"
+        a_root.mkdir(parents=True)
+        # B's root contains A's root; it is also invalid on its own (it holds the data dir,
+        # or it is not given as a list).
+        b_value = {"overlaps_protected_path": [str(tmp_path)], "not_a_list": str(a_root.parent)}
+        monkeypatch.setenv(ENV, json.dumps({ORG_A: [str(a_root)], ORG_B: b_value[b_invalid]}))
+        with caplog.at_level(logging.ERROR, logger=import_roots.__name__):
+            status, body = _post(folders, auth_a, ROUTES[0], {"path": str(a_root)})
+        assert (status, body["code"]) == (403, NOT_CONFIGURED_CODE)
+        assert "another org" in caplog.text
+
+    @pytest.mark.parametrize("name", import_roots.SECRET_FILE_ENV_VARS)
+    def test_every_key_file_setting_protects_the_directory_of_its_link_target(
+        self, monkeypatch, tmp_path, name
+    ):
+        target = tmp_path / "imports" / "credentials.json"
+        target.parent.mkdir()
+        target.write_text("{}")
+        link = tmp_path / "config" / "credentials.json"
+        link.parent.mkdir()
+        link.symlink_to(target)
+        _configure(monkeypatch, {ORG_A: [target.parent]})
+        roots, protected = import_roots.org_import_roots, import_roots.protected_paths
+        assert roots(ORG_A, protected()) == [target.parent.resolve()]
+        monkeypatch.setenv(name, str(link))
+        assert roots(ORG_A, protected()) == []
 
     @pytest.mark.parametrize("name", import_roots.SECRET_FILE_ENV_VARS)
     def test_every_key_file_setting_protects_its_directory(self, monkeypatch, tmp_path, name):

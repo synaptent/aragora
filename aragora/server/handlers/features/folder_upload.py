@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import uuid
 from collections.abc import Sequence
@@ -30,7 +31,15 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from aragora.documents.folder.import_roots import inside_roots, org_import_roots, protected_paths
+from aragora.documents.folder.import_roots import (
+    file_in_folder,
+    inside_roots,
+    open_folder,
+    org_import_roots,
+    protected_paths,
+    read_file_in_folder,
+    still_folder,
+)
 from ..base import (
     BaseHandler,
     HandlerResult,
@@ -64,6 +73,14 @@ def _import_roots_not_configured() -> HandlerResult:
     )
 
 
+def _path_not_allowed() -> HandlerResult:
+    logger.warning("Folder path outside the caller's import roots refused")
+    return json_response(
+        {"error": "Access denied: path not in allowed directories", "code": "path_not_allowed"},
+        status=403,
+    )
+
+
 def _validate_upload_path(folder_path: str, roots: Sequence[Path]) -> Path | HandlerResult:
     """Resolve a requested folder, or return the error response refusing it.
 
@@ -72,11 +89,7 @@ def _validate_upload_path(folder_path: str, roots: Sequence[Path]) -> Path | Han
     allowed directory gets the same answer whether or not it exists.
     """
     if not inside_roots(folder_path, roots):
-        logger.warning("Folder path outside the caller's import roots refused")
-        return json_response(
-            {"error": "Access denied: path not in allowed directories", "code": "path_not_allowed"},
-            status=403,
-        )
+        return _path_not_allowed()
 
     path = Path(folder_path).resolve()
     if not path.exists():
@@ -87,8 +100,8 @@ def _validate_upload_path(folder_path: str, roots: Sequence[Path]) -> Path | Han
 
 
 def _drop_entries_outside(result, folder: Path) -> None:
-    """Remove every scan entry whose resolved path leaves ``folder``, so it is never read."""
-    own, link = [folder.resolve()], "Symlink points outside root: "
+    """Remove every scan entry whose resolved path leaves the resolved ``folder``."""
+    own, link = [folder], "Symlink points outside root: "
     result.included_files = [f for f in result.included_files if inside_roots(f.absolute_path, own)]
     result.excluded_files = [f for f in result.excluded_files if inside_roots(folder / f.path, own)]
     result.warnings = [w for w in result.warnings if not w.startswith(link)]
@@ -311,8 +324,17 @@ class FolderUploadHandler(BaseHandler):
 
             scanner = FolderScanner(config)
 
-            # Run scan
-            result = await scanner.scan(path)
+            try:
+                folder_fd = open_folder(path, roots)
+            except OSError:
+                return _path_not_allowed()  # swapped for a link since the check
+            try:
+                result = await scanner.scan(path)
+                unchanged = still_folder(folder_fd, path)
+            finally:
+                os.close(folder_fd)
+            if not unchanged:
+                return _path_not_allowed()
             _drop_entries_outside(result, path)
 
             return json_response(result.to_dict())
@@ -367,7 +389,7 @@ class FolderUploadHandler(BaseHandler):
 
         job = FolderUploadJob(
             folder_id=folder_id,
-            root_path=str(path.resolve()),
+            root_path=str(path),
             status=FolderUploadStatus.PENDING,
             created_at=now,
             updated_at=now,
@@ -382,7 +404,7 @@ class FolderUploadHandler(BaseHandler):
         # Start async upload in background
         thread = threading.Thread(
             target=self._run_upload_job,
-            args=(folder_id, path, body.get("config", {}), scope),
+            args=(folder_id, path, body.get("config", {}), scope, list(roots)),
             daemon=True,
         )
         thread.start()
@@ -396,11 +418,23 @@ class FolderUploadHandler(BaseHandler):
         )
 
     def _run_upload_job(
-        self, folder_id: str, path: Path, config_data: dict, scope: OrgScope
+        self,
+        folder_id: str,
+        path: Path,
+        config_data: dict,
+        scope: OrgScope,
+        roots: Sequence[Path],
     ) -> None:
-        """Run folder upload job in background thread, storing documents under the scope's org."""
+        """Run folder upload job in background thread, storing documents under the scope's org.
+
+        ``path`` is the folder as resolved when the request was checked against ``roots``.
+        It is held open from those roots and every file is read through that handle, so
+        nothing outside it is read even if the folder or a file is swapped for a link.
+        """
+        folder_fd: int | None = None
         try:
             self._update_job_status(folder_id, FolderUploadStatus.SCANNING)
+            folder_fd = open_folder(path, roots)
 
             from aragora.documents.folder import FolderScanner, FolderUploadConfig
 
@@ -424,6 +458,8 @@ class FolderUploadHandler(BaseHandler):
                 scan_result = loop.run_until_complete(scanner.scan(path))
             finally:
                 loop.close()
+            if not still_folder(folder_fd, path):
+                raise PermissionError("folder was replaced during the scan")
             _drop_entries_outside(scan_result, path)
 
             # Update job with scan results
@@ -460,7 +496,8 @@ class FolderUploadHandler(BaseHandler):
             for file_info in scan_result.included_files:
                 try:
                     file_path = Path(file_info.absolute_path)
-                    if not inside_roots(file_path, [Path(path).resolve()]):
+                    rel = file_in_folder(path, file_path)
+                    if rel is None:
                         continue  # replaced by a link leaving the folder after the scan
 
                     # Validate file before reading (check filename security and size)
@@ -473,8 +510,7 @@ class FolderUploadHandler(BaseHandler):
                     if not file_validation.valid:
                         raise ValueError(file_validation.error_message or "File validation failed")
 
-                    with open(file_path, "rb") as f:
-                        content = f.read()
+                    content = read_file_in_folder(folder_fd, rel, MAX_FILE_SIZE + 1)
 
                     # Verify actual size matches expected
                     if len(content) > MAX_FILE_SIZE:
@@ -517,6 +553,9 @@ class FolderUploadHandler(BaseHandler):
             logger.error("Folder upload job %s failed: %s", folder_id, e)
             self._update_job_error(folder_id, "Folder upload failed")
             self._update_job_status(folder_id, FolderUploadStatus.FAILED)
+        finally:
+            if folder_fd is not None:
+                os.close(folder_fd)
 
     def _update_job_status(self, folder_id: str, status: FolderUploadStatus) -> None:
         """Update job status."""

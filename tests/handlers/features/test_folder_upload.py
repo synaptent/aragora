@@ -1285,7 +1285,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-1", tmp_path, {}, SCOPE)
+            handler._run_upload_job("bg-1", tmp_path, {}, SCOPE, [tmp_path])
 
         assert FolderUploadHandler._jobs["bg-1"].status == FolderUploadStatus.COMPLETED
 
@@ -1324,7 +1324,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-2", tmp_path, {}, SCOPE)
+            handler._run_upload_job("bg-2", tmp_path, {}, SCOPE, [tmp_path])
 
         assert FolderUploadHandler._jobs["bg-2"].status == FolderUploadStatus.FAILED
 
@@ -1342,7 +1342,7 @@ class TestRunUploadJob:
             # ModuleNotFoundError (subclass of ImportError) is not caught by
             # _run_upload_job's outer except block
             with pytest.raises(ModuleNotFoundError):
-                handler._run_upload_job("bg-3", tmp_path, {}, SCOPE)
+                handler._run_upload_job("bg-3", tmp_path, {}, SCOPE, [tmp_path])
 
     def test_run_upload_job_updates_scan_results(self, handler, tmp_path):
         """Upload job populates scan result fields on the job."""
@@ -1376,7 +1376,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-4", tmp_path, {}, SCOPE)
+            handler._run_upload_job("bg-4", tmp_path, {}, SCOPE, [tmp_path])
 
         j = FolderUploadHandler._jobs["bg-4"]
         assert j.total_files_found == 10
@@ -1418,7 +1418,7 @@ class TestRunUploadJob:
                 "aragora.server.documents": None,
             },
         ):
-            handler_with_store._run_upload_job("bg-5", tmp_path, {}, SCOPE)
+            handler_with_store._run_upload_job("bg-5", tmp_path, {}, SCOPE, [tmp_path])
 
         assert FolderUploadHandler._jobs["bg-5"].status == FolderUploadStatus.FAILED
 
@@ -1442,7 +1442,7 @@ class TestRunUploadJob:
                 )
             },
         ):
-            handler._run_upload_job("bg-6", tmp_path, {}, SCOPE)
+            handler._run_upload_job("bg-6", tmp_path, {}, SCOPE, [tmp_path])
 
         assert FolderUploadHandler._jobs["bg-6"].status == FolderUploadStatus.FAILED
 
@@ -1689,7 +1689,7 @@ class TestOrgScope:
             folder_id="f-up", status=FolderUploadStatus.PENDING, document_ids=[]
         )
 
-        handler._run_upload_job("f-up", folder, {}, SCOPE)
+        handler._run_upload_job("f-up", folder, {}, SCOPE, [folder])
 
         job = FolderUploadHandler._jobs["f-up"]
         assert job.status == FolderUploadStatus.COMPLETED
