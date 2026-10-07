@@ -17,15 +17,15 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.config import resolve_db_path
-from aragora.services.spam.features import SpamFeatures
-from aragora.services.spam.model import NaiveBayesClassifier
-from aragora.services.spam.models import (
+from aragora.moderation.spam.features import SpamFeatures
+from aragora.moderation.spam.model import NaiveBayesClassifier
+from aragora.moderation.spam.models import (
     SpamCategory,
     SpamClassificationResult,
     SpamClassifierConfig,
 )  # EmailFeatures used indirectly via scoring module
-from aragora.services.spam.patterns import PROMOTIONAL_PATTERNS
-from aragora.services.spam.scoring import (
+from aragora.moderation.spam.patterns import PROMOTIONAL_PATTERNS
+from aragora.moderation.spam.scoring import (
     determine_category,
     score_attachments,
     score_content,
