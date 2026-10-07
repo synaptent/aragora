@@ -96,9 +96,9 @@ def _slug(storage: DebateStorage, debate_id: str) -> str:
         return conn.execute("SELECT slug FROM debates WHERE id = ?", (debate_id,)).fetchone()[0]
 
 
-def _user(org_id: str | None, user_id: str) -> SimpleNamespace:
+def _user(org_id: str | None, user_id: str, role: str = "member") -> SimpleNamespace:
     return SimpleNamespace(
-        user_id=user_id, org_id=org_id, role="member", is_authenticated=True, authenticated=True
+        user_id=user_id, org_id=org_id, role=role, is_authenticated=True, authenticated=True
     )
 
 
@@ -423,6 +423,114 @@ def test_anonymous_without_rbac_bypass_still_gets_401(call):
         result = call(ANON, path)
         assert result.status_code == 401, path
         assert DA_TASK not in _text(result)
+
+
+OWNER_A = _user(ORG_A, "owner-a", "owner")
+OWNER_B = _user(ORG_B, "owner-b", "owner")
+OWNER_NO_ORG = _user(None, "owner-no-org", "owner")
+
+
+class _RegistryRequest:
+    """A request as the handler registry passes it on, carrying the caller's RBAC
+    context, so ``require_permission`` runs the real role check."""
+
+    command = "GET"
+    client_address = ("10.0.0.7", 4000)
+
+    def __init__(self, user: Any) -> None:
+        from aragora.rbac.models import AuthorizationContext
+
+        self.headers = {"Host": "localhost"}
+        self._auth_context = (
+            AuthorizationContext(user_id=user.user_id, org_id=user.org_id, roles={user.role})
+            if user.is_authenticated
+            else None
+        )
+
+
+@pytest.mark.no_auto_auth
+class TestExportWithRealRoleChecks:
+    """Debate export (VAL-DEB-014) with the real permission checker, no test bypass."""
+
+    @pytest.fixture
+    def handler(self, storage, tmp_path):
+        return DebatesHandler(ctx={"storage": storage, "nomic_dir": tmp_path})
+
+    @pytest.fixture
+    def export(self, monkeypatch, handler):
+        def _export(user: Any, debate_id: str, fmt: str = "json"):
+            monkeypatch.setattr(
+                "aragora.billing.jwt_auth.extract_user_from_request",
+                lambda request, user_store=None: user,
+            )
+            path = f"/api/v1/debates/{debate_id}/export/{fmt}"
+            return handler.handle(path, {}, _RegistryRequest(user))
+
+        return _export
+
+    @pytest.mark.parametrize("fmt", sorted(DebatesHandler.ALLOWED_EXPORT_FORMATS))
+    def test_owner_exports_every_accepted_format(self, export, fmt):
+        result = export(OWNER_A, DA, fmt)
+
+        assert result.status_code == 200, _text(result)
+        assert DA_TASK in _text(result)
+
+    @pytest.mark.parametrize("fmt", sorted(DebatesHandler.ALLOWED_EXPORT_FORMATS))
+    def test_other_org_and_null_org_get_the_missing_debate_404(self, export, fmt):
+        for user, debate_id in ((OWNER_B, DA), (OWNER_A, DN), (OWNER_B, DN), (OWNER_B, DX)):
+            result = export(user, debate_id, fmt)
+            assert (result.status_code, _body(result)) == (404, NOT_FOUND), debate_id
+            assert "Content-Disposition" not in (result.headers or {})
+
+    def test_refusals_never_reach_the_export_handler(self, export, handler, monkeypatch):
+        spy = MagicMock()
+        monkeypatch.setattr(handler, "_export_debate", spy)
+
+        for user, debate_id in ((OWNER_B, DA), (OWNER_A, DN), (ANON, DA), (OWNER_NO_ORG, DA)):
+            assert export(user, debate_id).status_code in (401, 403, 404)
+        spy.assert_not_called()
+
+    def test_anonymous_gets_401_with_and_without_the_api_token(self, export, monkeypatch):
+        from aragora.server.auth import auth_config
+
+        token_unset = export(ANON, DA)
+        monkeypatch.setattr(auth_config, "api_token", "static-test-token")
+        monkeypatch.setattr(auth_config, "enabled", True)
+        token_set = export(ANON, DA)
+
+        for result in (token_unset, token_set):
+            assert result.status_code == 401
+            assert DA_TASK not in _text(result)
+
+    def test_user_without_org_gets_403_org_required(self, export):
+        result = export(OWNER_NO_ORG, DA)
+
+        assert (result.status_code, _body(result)["code"]) == (403, "org_required")
+
+
+def test_export_permission_key_is_registered_and_held_by_owner():
+    import ast
+    import inspect
+
+    from aragora.rbac.defaults import SYSTEM_PERMISSIONS, get_role_permissions
+    from aragora.server.handlers.debates import export as export_module
+
+    export_fn = next(
+        node
+        for node in ast.walk(ast.parse(inspect.getsource(export_module)))
+        if isinstance(node, ast.FunctionDef) and node.name == "_export_debate"
+    )
+    keys = [
+        decorator.args[0].value
+        for decorator in export_fn.decorator_list
+        if isinstance(decorator, ast.Call)
+        and getattr(decorator.func, "id", None) == "require_permission"
+    ]
+
+    assert len(keys) == 1
+    key = keys[0].replace(":", ".")
+    assert key in SYSTEM_PERMISSIONS
+    assert key in get_role_permissions("owner", include_inherited=True)
 
 
 class TestStorageAccessInfo:
