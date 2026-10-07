@@ -168,6 +168,19 @@ _TRANCHES: dict[str, dict[str, tuple[str, ...]]] = {
             "work",
         ),
     },
+    "T4a": {
+        "application": (
+            "analytics",
+            "audit",
+            "control_plane",
+            "golden",
+            "inbox",
+            "marketplace",
+            "services",
+            "skills",
+            "stores",
+        ),
+    },
 }
 
 _SEAMS = {
