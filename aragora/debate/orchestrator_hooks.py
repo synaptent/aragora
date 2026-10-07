@@ -80,7 +80,7 @@ async def create_debate_bead(
 
     if result.confidence < min_confidence:
         logger.debug(
-            f"Skipping bead creation: confidence {result.confidence:.2f} < {min_confidence}"
+            "Skipping bead creation: confidence %.2f < %s", result.confidence, min_confidence
         )
         return None
 
