@@ -103,6 +103,7 @@ fails the test).
 |--------|-------------|
 | `review-path` | Path to generated review file |
 | `review-generated` | Whether a PR comment was generated |
+| `review-status` | Execution status (`complete`, `incomplete`, `failed`), not a findings verdict |
 | `review-json-path` | Path to the generated `review.json` (structured output) |
 | `review-log-path` | Path to the `review.log` file |
 | `unanimous-count` | Issues all agents agree on |
@@ -224,8 +225,27 @@ Outputs: `receipt-path`, `receipt-verdict`, `receipt-digest`, `receipt-verified`
 requested: if `emit-receipt: 'true'` and no verified receipt comes out, the action's
 own `Check receipt emission` step fails the job rather than silently skipping it.
 
+### Single-run review artifacts
+
+The Action runs advisory review once and renders `comment.md`, `review.json`, and
+`review.sarif` from that result. `bundle.json` records their hashes, run identity,
+input-diff digest, PR head, reviewer coverage and execution limitations. Receipt
+quorum remains a separate opt-in model pass on the same head. A changed PR is not
+commented on; failed or truncated review is not treated as clean, regardless of
+the findings threshold. Diagnostic artifacts remain available after failure.
+
+For local exports, use `aragora review --diff-file pr.diff --bundle --output-dir artifacts`.
+Bundle mode exports locally; PR posting uses the Action's head check. Existing flags keep their
+defaults. `--head-sha` records a caller-supplied head, not independent head proof;
+`--diff-truncated` discloses externally truncated input. `--emit-odr` optionally
+adds a receipt bound to the bundle run and diff; incomplete runs are inconclusive.
+`--demo --bundle --output-dir artifacts` exercises formatting offline but cannot
+demonstrate reviewer quality. These bundle options require a CLI revision that
+contains them; the Action installs its own trusted source revision.
+
 ### Secret-dependent limits
 
+- Fork PRs stop before review or signing. No secrets are requested or exposed to fork code.
 - **Receipts are unsigned unless you pass `odr-signing-key`.** An unsigned receipt
   still verifies (exit `0`) on schema conformance, quorum consistency and a digest
   the verifier recomputes from the file it is given, so it cannot show that a copy

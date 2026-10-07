@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -30,6 +31,7 @@ from aragora.core import Agent, DebateResult, Environment
 from aragora.debate.disagreement import DisagreementReporter
 from aragora.debate.orchestrator import Arena, DebateProtocol
 from aragora.config.settings import DebateSettings, AgentSettings
+from aragora.cli.review_bundle import ReviewBundle
 
 logger = logging.getLogger(__name__)
 
@@ -896,6 +898,23 @@ def _write_review_odr(
         pr_url=pr_url,
         reviewer_agents=agents_used or None,
     )
+    context = findings.get("review_context")
+    if context:
+        receipt.gauntlet_id = context["review_run_id"]
+        receipt.input_hash = context.get("input_diff_sha256", receipt.input_hash)
+        receipt.settlement_metadata = {
+            key: context[source]
+            for key, source in (
+                ("repo", "repository"),
+                ("pr", "pr_number"),
+                ("head_sha", "head_sha"),
+            )
+            if context.get(source) is not None
+        }
+        receipt.verdict_reasoning += "\nReview context: " + json.dumps(context, sort_keys=True)
+        if context["status"] != "complete":
+            receipt.verdict = "INCONCLUSIVE"
+        receipt = replace(receipt, artifact_hash="")
     # ARAGORA_ODR_PROFILE_VERSION selects the profile, as for `aragora receipt export`;
     # unset means the library default (0.2). An invalid value raises ValueError.
     odr = decision_receipt_to_odr(receipt, odr_version=resolve_odr_version(None))
@@ -951,7 +970,41 @@ def _emit_requested_odr(
 
 def cmd_review(args: argparse.Namespace) -> int:
     """Handle 'review' command."""
+    if not getattr(args, "bundle", False):
+        return _cmd_review(args)
+    if not args.output_dir:
+        print("Error: --bundle requires --output-dir", file=sys.stderr)
+        return 1
+    if getattr(args, "post_comment", False):
+        print(
+            "Error: --bundle exports locally; use the Action's head-checked comment publisher",
+            file=sys.stderr,
+        )
+        return 1
+    head = getattr(args, "head_sha", None)
+    if head and not re.fullmatch(r"[0-9a-fA-F]{40}", head):
+        print("Error: --head-sha must be a full 40-character commit SHA", file=sys.stderr)
+        return 1
+    bundle = ReviewBundle(args)
+    try:
+        code = _cmd_review(args, bundle)
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+        print(f"Error: review bundle failed ({type(exc).__name__})", file=sys.stderr)
+        code = 3
+    findings_exit = bool(
+        getattr(args, "ci", False) and bundle.findings is not None and code in (1, 2)
+    )
+    try:
+        bundle.write(code, findings_exit=findings_exit)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        print(f"Error: could not write review bundle ({type(exc).__name__})", file=sys.stderr)
+        return 3
+    if bundle.status != "complete" and not getattr(args, "demo", False):
+        return code or 3
+    return code
 
+
+def _cmd_review(args: argparse.Namespace, bundle: ReviewBundle | None = None) -> int:
     # Fail fast if --emit-odr swallowed the PR URL positional (nargs="?" footgun):
     # otherwise the receipt would be written under a literal "https:/..." directory.
     emit_odr_path = getattr(args, "emit_odr", None)
@@ -1013,6 +1066,8 @@ def cmd_review(args: argparse.Namespace) -> int:
             except (OSError, ValueError, KeyError) as e:
                 print(f"Warning: SARIF export failed: {e}", file=sys.stderr)
 
+        if bundle:
+            bundle.capture(None, findings)
         odr_ok = _emit_requested_odr(args, findings, output_dir)
 
         print("\n---", file=sys.stderr)
@@ -1094,6 +1149,12 @@ def cmd_review(args: argparse.Namespace) -> int:
         print("    aragora review --diff-file d.patch # Review a diff file", file=sys.stderr)
         print("    aragora review <PR-URL>           # Review a GitHub PR", file=sys.stderr)
         return 1
+
+    if bundle:
+        bundle.bind_diff(
+            diff,
+            truncated=len(diff) > MAX_DIFF_SIZE or getattr(args, "diff_truncated", False),
+        )
 
     # Determine which agents to use
     agents_str = args.agents
@@ -1223,6 +1284,8 @@ def cmd_review(args: argparse.Namespace) -> int:
         except (OSError, ConnectionError, RuntimeError, ValueError) as e:
             print(f"Warning: Gauntlet stress-test failed: {e}", file=sys.stderr)
             logger.debug("Gauntlet error details", exc_info=True)
+            if bundle:
+                bundle.reasons.append("Requested gauntlet did not complete.")
 
     # Generate SARIF output if requested
     sarif_output = getattr(args, "sarif", None)
@@ -1287,7 +1350,11 @@ def cmd_review(args: argparse.Namespace) -> int:
 
     # Emit the receipt after the other artifact steps so an emit failure cannot
     # suppress SARIF/comment output.
+    if bundle:
+        bundle.capture(result, findings)
     odr_ok = _emit_requested_odr(args, findings, output_dir)
+    if bundle and not odr_ok:
+        return 3
 
     # CI mode exit codes — findings verdicts take priority over artifact-IO errors
     if getattr(args, "ci", False):
@@ -1352,6 +1419,20 @@ def create_review_parser(subparsers) -> None:
     parser.add_argument(
         "--output-dir",
         help="Directory to save output artifacts",
+    )
+    parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Export one result as Markdown, JSON, SARIF and a provenance manifest; requires --output-dir",
+    )
+    parser.add_argument(
+        "--head-sha",
+        help="Caller-supplied PR head SHA for bundle provenance (not independently verified)",
+    )
+    parser.add_argument(
+        "--diff-truncated",
+        action="store_true",
+        help="Mark externally truncated bundle input as incomplete",
     )
 
     parser.add_argument(

@@ -37,6 +37,12 @@ def render_outputs(review_json_path: str | Path) -> str:
         data = {}
     if not isinstance(data, dict):
         data = {}
+    context = data.get("review_context")
+    if isinstance(context, dict):
+        status = context.get("status")
+        lines.append(
+            f"review_status={status if status in ('complete', 'incomplete', 'failed') else 'failed'}"
+        )
 
     critical = _count_list(data, "critical_issues")
     high = _count_list(data, "high_issues")

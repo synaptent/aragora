@@ -1951,6 +1951,15 @@ def _add_review_parser(subparsers) -> None:
     )
     parser.add_argument("--output-dir", help="Directory to save output artifacts")
     parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Export one review as Markdown, JSON, SARIF and a manifest",
+    )
+    parser.add_argument("--head-sha", help="Caller-supplied PR head SHA for bundle provenance")
+    parser.add_argument(
+        "--diff-truncated", action="store_true", help="Mark incomplete bundle input"
+    )
+    parser.add_argument(
         "--emit-odr",
         nargs="?",
         const="",

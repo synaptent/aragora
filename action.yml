@@ -97,6 +97,9 @@ outputs:
   review-generated:
     description: 'Whether a review comment was generated'
     value: ${{ steps.review.outputs.review_generated }}
+  review-status:
+    description: 'Review execution status: complete, incomplete or failed; not a findings verdict'
+    value: ${{ steps.review.outputs.review_status }}
   review-json-path:
     description: 'Path to the generated JSON review file'
     value: ${{ steps.review.outputs.review_json_path }}
@@ -155,6 +158,17 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Check review trust
+      shell: bash
+      run: |
+        if [ -n "$HEAD_REPO" ] && [ "$HEAD_REPO" != "$REPO" ]; then
+          echo "::error::Fork review requires a separately approved trusted workflow; no provider or signing secrets are used"
+          exit 1
+        fi
+      env:
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        REPO: ${{ github.repository }}
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
@@ -165,7 +179,8 @@ runs:
       shell: bash
       run: |
         pip install --upgrade pip
-        pip install aragora
+        # Use the trusted Action revision, not a potentially older CLI release.
+        pip install "$GITHUB_ACTION_PATH"
 
     - name: Get PR diff
       id: diff
@@ -180,15 +195,25 @@ runs:
           echo "::error::max-diff-size must be numeric"
           exit 1
         fi
-        gh pr diff "$PR_NUMBER" > pr.diff
+        TARGET=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid,baseRefOid --jq '[.headRefOid,.baseRefOid] | join(" ")')
+        gh pr diff "$PR_NUMBER" --repo "$REPO" > pr.diff
+        AFTER=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid,baseRefOid --jq '[.headRefOid,.baseRefOid] | join(" ")')
+        if [ "$TARGET" != "$AFTER" ]; then
+          echo "::error::PR changed while fetching the diff; no review was started"
+          exit 1
+        fi
+        echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+        echo "head_sha=${TARGET%% *}" >> "$GITHUB_OUTPUT"
 
         # Truncate if needed
         DIFF_SIZE=$(wc -c < pr.diff)
         MAX_SIZE="$MAX_DIFF_SIZE"
+        echo "truncated=false" >> "$GITHUB_OUTPUT"
         if [ "$DIFF_SIZE" -gt "$MAX_SIZE" ]; then
           head -c "$MAX_SIZE" pr.diff > pr_truncated.diff
           echo -e "\n[... diff truncated ...]" >> pr_truncated.diff
           mv pr_truncated.diff pr.diff
+          echo "truncated=true" >> "$GITHUB_OUTPUT"
         fi
 
         echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
@@ -197,6 +222,7 @@ runs:
         EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
         INPUT_PR_NUMBER: ${{ inputs.pr-number }}
         MAX_DIFF_SIZE: ${{ inputs.max-diff-size }}
+        REPO: ${{ github.repository }}
 
     - name: Run Aragora review
       id: review
@@ -204,38 +230,27 @@ runs:
       run: |
         mkdir -p ./aragora-artifacts
 
-        # Run review with github format for PR comment
-        aragora review \
+        EXTRA_ARGS=()
+        if [ "$DIFF_TRUNCATED" = "true" ]; then
+          EXTRA_ARGS+=(--diff-truncated)
+        fi
+        # All advisory artifacts come from this one review. Receipt quorum stays separate.
+        if aragora review "https://github.com/$REPO/pull/$PR" \
           --diff-file pr.diff \
           --output-format github \
           --output-dir ./aragora-artifacts \
-          --agents "${{ inputs.agents }}" \
-          --rounds ${{ inputs.rounds }} \
-          --focus "${{ inputs.focus }}" \
-          > ./aragora-artifacts/comment.md 2> ./aragora-artifacts/review.log || true
-
-        # Also generate JSON output for structured data extraction
-        aragora review \
-          --diff-file pr.diff \
-          --output-format json \
-          --output-dir ./aragora-artifacts \
-          --agents "${{ inputs.agents }}" \
-          --rounds ${{ inputs.rounds }} \
-          --focus "${{ inputs.focus }}" \
-          > /dev/null 2>> ./aragora-artifacts/review.log || true
+          --bundle --head-sha "$HEAD_SHA" \
+          --agents "$REVIEW_AGENTS" \
+          --rounds "$REVIEW_ROUNDS" \
+          --focus "$REVIEW_FOCUS" "${EXTRA_ARGS[@]}" \
+          > /dev/null 2> ./aragora-artifacts/review.log; then
+          REVIEW_EXIT=0
+        else
+          REVIEW_EXIT=$?
+        fi
 
         # Generate SARIF output if requested
-        if [ "${{ inputs.output-format }}" = "sarif" ]; then
-          aragora review \
-            --diff-file pr.diff \
-            --output-format json \
-            --output-dir ./aragora-artifacts \
-            --agents "${{ inputs.agents }}" \
-            --rounds ${{ inputs.rounds }} \
-            --focus "${{ inputs.focus }}" \
-            --sarif ./aragora-artifacts/review.sarif \
-            > /dev/null 2>> ./aragora-artifacts/review.log || true
-
+        if [ "$OUTPUT_FORMAT" = "sarif" ] && [ "$REVIEW_EXIT" -eq 0 ]; then
           if [ -f "./aragora-artifacts/review.sarif" ]; then
             echo "sarif_path=./aragora-artifacts/review.sarif" >> $GITHUB_OUTPUT
           else
@@ -245,7 +260,7 @@ runs:
           echo "sarif_path=" >> $GITHUB_OUTPUT
         fi
 
-        if [ -f "./aragora-artifacts/comment.md" ] && [ -s "./aragora-artifacts/comment.md" ]; then
+        if [ "$REVIEW_EXIT" -eq 0 ] && [ -s "./aragora-artifacts/comment.md" ]; then
           echo "review_path=./aragora-artifacts/comment.md" >> $GITHUB_OUTPUT
           echo "review_generated=true" >> $GITHUB_OUTPUT
         else
@@ -257,14 +272,25 @@ runs:
 
         python3 "$GITHUB_ACTION_PATH/scripts/extract_review_counts.py" \
           ./aragora-artifacts/review.json >> "$GITHUB_OUTPUT"
+        if [ "$REVIEW_EXIT" -ne 0 ]; then
+          echo "review_status=failed" >> "$GITHUB_OUTPUT"
+        fi
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        REVIEW_AGENTS: ${{ inputs.agents }}
+        REVIEW_ROUNDS: ${{ inputs.rounds }}
+        REVIEW_FOCUS: ${{ inputs.focus }}
+        OUTPUT_FORMAT: ${{ inputs.output-format }}
+        DIFF_TRUNCATED: ${{ steps.diff.outputs.truncated }}
+        HEAD_SHA: ${{ steps.diff.outputs.head_sha }}
+        REPO: ${{ github.repository }}
+        PR: ${{ steps.diff.outputs.pr_number }}
 
     - name: Emit decision receipt
       id: receipt
-      if: inputs.emit-receipt == 'true'
+      if: inputs.emit-receipt == 'true' && steps.review.outputs.review_generated == 'true'
       shell: bash
       run: |
         # Receipt emission is explicit opt-in. If enabled, failure to produce a
@@ -322,6 +348,9 @@ runs:
 
         RECEIPT_OK=false
         if [ -s ./aragora-artifacts/outcome.json ]; then
+          if ! "$RECEIPT_PY" -c 'import json,os; d=json.load(open("./aragora-artifacts/outcome.json")); assert d["head_sha"] == os.environ["REVIEW_HEAD"]' >> "$LOG" 2>&1; then
+            receipt_failed "quorum head differs from advisory review head; receipt not emitted"
+          fi
           # An empty path is equivalent to unset: the receipt is emitted unsigned.
           # The collection above never posts evidence, so the receipt decides on
           # the reviewer verdicts themselves (--decision-basis reviews); the basis
@@ -353,6 +382,7 @@ runs:
             echo "---"
             echo "### 🧾 Decision Receipt"
             echo ""
+            echo "Separate quorum collection on the same head, not the advisory review run above."
             echo "- Receipt: \`$RID\`  ·  Verdict: \`$VERDICT\`"
             if [ -n "$KID" ]; then
               echo "- Signed with Ed25519 key \`$KID\`. Verify offline against this repository's published public key: \`pip install aragora-verify && aragora-verify decision-receipt.odr.json --pubkey <public-key.pem>\`"
@@ -361,6 +391,8 @@ runs:
             fi
             echo "- The full portable receipt is attached as a build artifact."
           } >> ./aragora-artifacts/comment.md
+          # Keep manifest hashes current after attaching the separately collected receipt.
+          python3 -c 'import hashlib,json,pathlib; p=pathlib.Path("aragora-artifacts"); m=json.loads((p/"bundle.json").read_text()); m["files"]["comment.md"]=hashlib.sha256((p/"comment.md").read_bytes()).hexdigest(); m["files"]["decision-receipt.odr.json"]=hashlib.sha256((p/"decision-receipt.odr.json").read_bytes()).hexdigest(); (p/"bundle.json").write_text(json.dumps(m,indent=2)+"\n")' || receipt_failed "could not update bundle manifest"
         fi
         exit 0
       env:
@@ -372,6 +404,7 @@ runs:
         ODR_SIGNING_KEY: ${{ inputs.odr-signing-key }}
         REPO: ${{ github.repository }}
         PR: ${{ steps.diff.outputs.pr_number }}
+        REVIEW_HEAD: ${{ steps.diff.outputs.head_sha }}
         ARAGORA_USE_SECRETS_MANAGER: ${{ inputs.use-secrets-manager }}
         AWS_REGION: ${{ inputs.aws-region }}
 
@@ -379,10 +412,17 @@ runs:
       if: always() && inputs.post-comment == 'true' && steps.review.outputs.review_generated == 'true'
       shell: bash
       run: |
-        gh pr comment "$PR" --body-file ./aragora-artifacts/comment.md
+        CURRENT=$(gh pr view "$PR" --repo "$REPO" --json headRefOid,baseRefOid --jq '[.headRefOid,.baseRefOid] | join(" ")')
+        if [ "$CURRENT" != "$REVIEW_TARGET" ]; then
+          echo "::error::PR changed after review; refusing to post stale findings"
+          exit 1
+        fi
+        gh pr comment "$PR" --repo "$REPO" --body-file ./aragora-artifacts/comment.md
       env:
         GH_TOKEN: ${{ github.token }}
         PR: ${{ steps.diff.outputs.pr_number }}
+        REVIEW_TARGET: ${{ steps.diff.outputs.target }}
+        REPO: ${{ github.repository }}
 
     - name: Upload SARIF
       if: inputs.sarif-upload == 'true' && steps.review.outputs.sarif_path != ''
@@ -401,19 +441,34 @@ runs:
       if: inputs.failure-threshold != '0'
       shell: bash
       run: |
-        TOTAL=${{ steps.review.outputs.total_count }}
-        THRESHOLD=${{ inputs.failure-threshold }}
+        TOTAL="$ISSUE_COUNT"
+        THRESHOLD="$FAILURE_THRESHOLD"
+        if [[ ! "$TOTAL" =~ ^[0-9]+$ || ! "$THRESHOLD" =~ ^[0-9]+$ ]]; then
+          echo "::error::Issue counts and failure-threshold must be numeric"
+          exit 1
+        fi
         if [ "$TOTAL" -ge "$THRESHOLD" ]; then
           echo "::error::Issue count ($TOTAL) exceeds threshold ($THRESHOLD)"
           exit 1
         fi
+      env:
+        ISSUE_COUNT: ${{ steps.review.outputs.total_count }}
+        FAILURE_THRESHOLD: ${{ inputs.failure-threshold }}
 
     - name: Upload artifacts
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: aragora-review-${{ steps.diff.outputs.pr_number }}
         path: ./aragora-artifacts/
         retention-days: 30
+
+    - name: Check review execution
+      if: always() && steps.review.outputs.review_status != 'complete'
+      shell: bash
+      run: |
+        echo "::error::Review did not complete; inspect bundle.json and review.log. Missing findings are not approval."
+        exit 1
 
     - name: Check receipt emission
       if: inputs.emit-receipt == 'true' && steps.receipt.outputs.receipt_verified != 'true'
