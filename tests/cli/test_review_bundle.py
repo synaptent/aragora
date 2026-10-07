@@ -4,7 +4,7 @@ import argparse
 import hashlib
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -164,6 +164,41 @@ def test_default_agent_fallback_is_disclosed_not_missing(execution, monkeypatch)
     assert review.cmd_review(args) == 0
     manifest = read_bundle(args)[1]
     assert manifest["effective_agents"] == ["anthropic-api"]
+    assert manifest["missing_agents"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "requested,resolved",
+    [
+        ("anthropic-api", False),
+        ("openai-api", False),
+        ("claude", False),
+        ("claude,codex", False),
+        (review.DEFAULT_REVIEW_AGENTS, True),
+    ],
+)
+async def test_explicit_reviewers_are_not_substituted(requested, resolved, monkeypatch):
+    available = Mock(return_value="anthropic-api,openai-api")
+    create = Mock(return_value=object())
+    monkeypatch.setattr(review, "get_available_agents", available)
+    monkeypatch.setattr(review, "create_agent", create)
+    monkeypatch.setattr(review, "Arena", lambda *a: SimpleNamespace(run=AsyncMock()))
+    await review.run_review_debate("diff", agents_str=requested, rounds=1, resolved_agents=resolved)
+    assert [call.kwargs["model_type"] for call in create.call_args_list] == requested.split(",")
+    available.assert_not_called()
+
+
+@pytest.mark.parametrize("agent", ["anthropic-api", "openai-api"])
+def test_single_key_bundle_records_only_the_selected_provider(execution, monkeypatch, agent):
+    args, result, _, run = execution
+    args.agents = agent
+    monkeypatch.setattr(review, "get_available_agents", lambda: "anthropic-api,openai-api")
+    result.messages = [SimpleNamespace(agent=agent, content="Reviewed", role="reviewer")]
+    assert review.cmd_review(args) == 0
+    assert run.call_args.kwargs["agents_str"] == agent
+    manifest = read_bundle(args)[1]
+    assert manifest["requested_agents"] == manifest["effective_agents"] == [agent]
     assert manifest["missing_agents"] == []
 
 

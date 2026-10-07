@@ -165,9 +165,25 @@ runs:
           echo "::error::Fork review requires a separately approved trusted workflow; no provider or signing secrets are used"
           exit 1
         fi
+        PR_NUMBER="${INPUT_PR_NUMBER:-$EVENT_PR_NUMBER}"
+        if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          echo "::error::A numeric pull request number is required"
+          exit 1
+        fi
+        if ! TARGET_REPO=$(gh api --method GET "repos/$REPO/pulls/$PR_NUMBER" --jq '.head.repo.full_name // empty'); then
+          echo "::error::Cannot verify the selected PR's repository; no review was started"
+          exit 1
+        fi
+        if [ "$TARGET_REPO" != "$REPO" ]; then
+          echo "::error::Selected PR is a fork or has no verifiable head repository"
+          exit 1
+        fi
       env:
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+        EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+        INPUT_PR_NUMBER: ${{ inputs.pr-number }}
 
     - name: Setup Python
       uses: actions/setup-python@v5

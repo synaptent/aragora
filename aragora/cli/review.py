@@ -318,12 +318,14 @@ async def run_review_debate(
     agents_str: str = DEFAULT_REVIEW_AGENTS,
     rounds: int = DEFAULT_ROUNDS,
     focus_areas: list[str] | None = None,
+    *,
+    resolved_agents: bool = False,
 ) -> DebateResult:
     """Run a code review debate on the given diff."""
 
     agent_specs = _parse_review_agents(agents_str)
 
-    if agents_str.strip() == DEFAULT_REVIEW_AGENTS.strip() or len(agent_specs) < 2:
+    if not resolved_agents and agents_str.strip() == DEFAULT_REVIEW_AGENTS.strip():
         available_specs = _parse_review_agents(get_available_agents())
         if available_specs:
             agent_specs = available_specs
@@ -1185,6 +1187,7 @@ def _cmd_review(args: argparse.Namespace, bundle: ReviewBundle | None = None) ->
                 agents_str=agents_str,
                 rounds=args.rounds,
                 focus_areas=args.focus.split(",") if args.focus else None,
+                resolved_agents=True,
             )
         )
     except (OSError, ConnectionError, RuntimeError, ValueError) as e:

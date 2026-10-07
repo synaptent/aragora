@@ -16,15 +16,22 @@ Add multi-agent AI code review to your pull requests in under 5 minutes.
 
 ### 1. Add API Keys as GitHub Secrets
 
-Go to your repo's **Settings > Secrets and variables > Actions** and add at least one:
+Go to your repo's **Settings > Secrets and variables > Actions**. The default
+`agents: anthropic-api,openai-api` requires **both** provider keys. A one-key
+advisory review is supported by explicitly selecting its provider, as shown below.
 
 | Secret | Required | Provider |
 |--------|----------|----------|
-| `ANTHROPIC_API_KEY` | Yes (or OpenAI) | [Anthropic Console](https://console.anthropic.com/) |
-| `OPENAI_API_KEY` | Yes (or Anthropic) | [OpenAI Platform](https://platform.openai.com/) |
+| `ANTHROPIC_API_KEY` | For `anthropic-api` | [Anthropic Console](https://console.anthropic.com/) |
+| `OPENAI_API_KEY` | For `openai-api` | [OpenAI Platform](https://platform.openai.com/) |
 | `OPENROUTER_API_KEY` | No | Fallback provider |
 
-For best results, add both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` -- multi-model consensus produces higher-quality reviews.
+For a one-key setup, set `agents: anthropic-api` and supply only
+`anthropic-api-key`, or set `agents: openai-api` and supply only `openai-api-key`.
+Explicitly requested reviewers are not silently replaced or removed. An absent
+or failed requested reviewer makes the run incomplete, not a clean review.
+This advisory choice does not reduce the independent receipt quorum: when
+`emit-receipt: 'true'`, every configured `receipt-reviewers` family is still required.
 
 ### 2. Add the Workflow File
 

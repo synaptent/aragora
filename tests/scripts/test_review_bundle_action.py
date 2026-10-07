@@ -141,10 +141,51 @@ def test_threshold_input_is_not_shell_code(tmp_path):
     assert not (tmp_path / "injected").exists()
 
 
-@pytest.mark.parametrize("head_repo,code", [("owner/repo", 0), ("fork/repo", 1), ("", 0)])
-def test_fork_stops_before_secret_bearing_steps(tmp_path, head_repo, code):
+@pytest.mark.parametrize(
+    "head_repo,target_repo,pr,lookup_exit,code",
+    [
+        ("owner/repo", "owner/repo", "7", 0, 0),
+        ("fork/repo", "fork/repo", "7", 0, 1),
+        ("", "owner/repo", "7", 0, 0),
+        ("", "fork/repo", "7", 0, 1),
+        ("owner/repo", "fork/repo", "8", 0, 1),
+        ("", "", "7", 0, 1),
+        ("", "owner/repo", "7", 1, 1),
+        ("", "owner/repo", "$(touch injected)", 0, 1),
+    ],
+)
+def test_fork_stops_before_secret_bearing_steps(
+    tmp_path, head_repo, target_repo, pr, lookup_exit, code
+):
     assert ACTION["runs"]["steps"][0]["name"] == "Check review trust"
+    gh = tmp_path / "gh"
+    gh.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$*" > lookup\n'
+        'printf "%s\\n" "$TARGET_REPO"\nexit "$LOOKUP_EXIT"\n'
+    )
+    gh.chmod(0o755)
     result = execute(
-        "Check review trust", tmp_path, {**os.environ, "HEAD_REPO": head_repo, "REPO": "owner/repo"}
+        "Check review trust",
+        tmp_path,
+        {
+            **os.environ,
+            "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"],
+            "HEAD_REPO": head_repo,
+            "REPO": "owner/repo",
+            "EVENT_PR_NUMBER": "7",
+            "INPUT_PR_NUMBER": pr,
+            "TARGET_REPO": target_repo,
+            "LOOKUP_EXIT": str(lookup_exit),
+        },
     )
     assert result.returncode == code
+    assert not (tmp_path / "injected").exists()
+    if code == 0:
+        assert f"repos/owner/repo/pulls/{pr}" in (tmp_path / "lookup").read_text()
+    assert set(step("Check review trust")["env"]) == {
+        "HEAD_REPO",
+        "REPO",
+        "GH_TOKEN",
+        "EVENT_PR_NUMBER",
+        "INPUT_PR_NUMBER",
+    }
