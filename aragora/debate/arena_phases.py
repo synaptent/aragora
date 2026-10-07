@@ -533,6 +533,8 @@ def init_phases(arena: Arena) -> None:
         enable_auto_receipt=getattr(arena, "enable_auto_receipt", True),
         auto_post_receipt=getattr(arena, "auto_post_receipt", False),
         receipt_base_url=getattr(arena, "receipt_base_url", "/api/v2/receipts"),
+        receipt_org_id=getattr(arena, "receipt_org_id", None),
+        receipt_created_by=getattr(arena, "receipt_created_by", None),
     )
 
 

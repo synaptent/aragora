@@ -682,6 +682,7 @@ class DebateFactory:
             .with_event_emitter(self.stream_emitter)
             .with_loop_id(config.debate_id or "")
             .with_strict_loop_scoping(True)  # Enable strict scoping for web debates
+            .with_receipt_owner(config.org_id, config.created_by)
         )
 
         # Add all available subsystems for comprehensive 9-round debates

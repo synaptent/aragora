@@ -311,6 +311,8 @@ class Arena(ArenaDelegatesMixin):
     revalidation_scheduler: Any
     document_store: Any
     document_org_id: str | None
+    receipt_org_id: str | None
+    receipt_created_by: str | None
     evidence_store: Any
     enable_supermemory: bool
     supermemory_adapter: Any
@@ -450,6 +452,8 @@ class Arena(ArenaDelegatesMixin):
         document_store: Any | None = None,
         evidence_store: Any | None = None,
         document_org_id: str | None = None,
+        receipt_org_id: str | None = None,
+        receipt_created_by: str | None = None,
         skill_registry: Any = None,
         enable_skills: bool = False,
         propulsion_engine: Any = None,
@@ -812,6 +816,8 @@ class Arena(ArenaDelegatesMixin):
             document_store=document_store,
             evidence_store=evidence_store,
             document_org_id=document_org_id,
+            receipt_org_id=receipt_org_id,
+            receipt_created_by=receipt_created_by,
         )
 
         # Debate strategy, post-debate workflow, hierarchy, RLM limiter
