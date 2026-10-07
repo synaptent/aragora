@@ -31,6 +31,7 @@ from aragora.tenancy.record_scope import (
     record_not_found,
     record_visible,
     require_org_scope,
+    scope_denial_first,
 )
 
 from ..base import (
@@ -127,6 +128,8 @@ class DocumentHandler(BaseHandler):
             return True
         return False
 
+    @handle_errors("document retrieval")
+    @scope_denial_first
     @require_permission("documents:read")
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route GET document requests to appropriate methods."""
@@ -152,6 +155,7 @@ class DocumentHandler(BaseHandler):
         return None
 
     @handle_errors("document creation")
+    @scope_denial_first
     @require_permission("documents:create")
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
@@ -182,6 +186,7 @@ class DocumentHandler(BaseHandler):
         return None
 
     @handle_errors("document deletion")
+    @scope_denial_first
     @require_permission("documents:delete")
     def handle_delete(
         self, path: str, query_params: dict[str, Any], handler: Any

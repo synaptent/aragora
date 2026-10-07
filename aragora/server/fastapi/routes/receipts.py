@@ -1229,8 +1229,10 @@ async def get_receipt(
 async def share_receipt(
     receipt_id: str,
     body: CreateShareRequest,
-    _auth: Any = Depends(require_permission("receipts:share")),
+    # Dependencies resolve in order: a caller without an org gets org_required
+    # whatever its permissions.
     scope: OrgScope = Depends(require_org_scope_fastapi),
+    _auth: Any = Depends(require_permission("receipts:share")),
     store=Depends(get_receipt_store),
     share_store=Depends(get_receipt_share_store),
 ) -> ShareReceiptResponse:
@@ -1315,8 +1317,8 @@ async def send_receipt_to_channel(
     receipt_id: str,
     body: SendToChannelRequest,
     request: Request,
-    _auth: Any = Depends(require_permission("receipts:share")),
     scope: OrgScope = Depends(require_org_scope_fastapi),
+    _auth: Any = Depends(require_permission("receipts:share")),
     store=Depends(get_receipt_store),
 ) -> SendToChannelResponse:
     """Send one of the caller org's receipts to a configured channel."""

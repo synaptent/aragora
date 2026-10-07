@@ -50,6 +50,9 @@ FAMILY_PATHS = [
     "/api/canvas/pipeline/p-1/graph",
     "/api/workspace",
     "/api/workspace/decisions/dec-1/actions",
+    "/api/checkpoints",
+    "/api/checkpoints/resumable",
+    "/api/checkpoints/cp-1/intervention",
 ]
 
 PUBLIC_PATHS = [
@@ -81,6 +84,7 @@ OTHER_PATHS = [
     "/api/debatesx",
     "/api/debate-thisx",
     "/api/searches",
+    "/api/checkpointsx",
     "/.well-known/aragora-odr-signing-key",
     "/healthz",
     "/",

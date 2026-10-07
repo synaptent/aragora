@@ -55,6 +55,8 @@ ORG_SCOPED_REQUESTS = [
     ("GET", "/api/v1/pipeline/transitions"),
     ("GET", "/api/v1/canvas/pipeline/p-1"),
     ("GET", "/api/v1/workspace/decisions"),
+    ("GET", "/api/v1/checkpoints"),
+    ("POST", "/api/v1/checkpoints/cp-1/resume"),
 ]
 OUTSIDE_MATCHER_REQUESTS = [
     ("GET", "/api/v1/memory/stats"),
@@ -262,13 +264,17 @@ class TestUnchangedBehavior:
 
         assert (status, reached) == (REACHED, [path])
 
-    def test_receipt_export_leaves_the_static_token_to_the_receipts_handler(self):
-        # The RBAC route rule for receipt export admits the request; the
-        # receipts handler then answers a static-token caller 403 org_required.
-        path = "/api/v2/receipts/rcpt-1/export"
+    def test_receipt_export_refuses_the_static_token_before_the_rate_limit(self):
+        # The receipt export route rule admits unauthenticated requests, so
+        # the static-token denial has to come before the route rules.
+        from aragora.server.unified_server import UnifiedHandler
 
-        assert _dispatch("GET", path, f"Bearer {STATIC_TOKEN}")[::2] == (REACHED, [path])
+        path = "/api/v2/receipts/rcpt-1/export"
+        with patch.object(UnifiedHandler, "_check_rate_limit") as rate_limit:
+            assert _dispatch("GET", path, f"Bearer {STATIC_TOKEN}") == (403, ORG_REQUIRED_BODY, [])
+        rate_limit.assert_not_called()
         assert _dispatch("GET", path)[::2] == (401, [])
+        assert _dispatch("GET", path, _jwt(ORG_A))[::2] == (REACHED, [path])
 
     @pytest.mark.parametrize(
         "authorization", [None, f"Bearer {STATIC_TOKEN}"], ids=["anonymous", "static-token"]

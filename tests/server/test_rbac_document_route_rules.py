@@ -237,3 +237,61 @@ class TestFolderDelete:
 
         assert status == 401
         assert FOLDER_A in FolderUploadHandler._jobs
+
+
+# Core and derived document routes; the GETs check documents.read before the org.
+NO_ORG_ROUTES = [
+    ("GET", "/api/v1/documents"),
+    ("GET", "/api/documents"),
+    ("GET", "/api/v1/documents/{doc}"),
+    ("GET", "/api/v1/documents/{doc}/chunks"),
+    ("GET", "/api/v1/documents/{doc}/context"),
+    ("GET", f"/api/v1/documents/batch/{MISSING}"),
+    ("GET", f"/api/v1/documents/batch/{MISSING}/results"),
+    ("GET", "/api/v1/documents/processing/stats"),
+    ("GET", "/api/v1/knowledge/jobs"),
+    ("GET", f"/api/v1/knowledge/jobs/{MISSING}"),
+    ("GET", "/api/v1/documents/search"),
+    ("POST", "/api/v1/documents/upload"),
+    ("POST", "/api/v1/documents/batch"),
+    ("POST", "/api/v1/documents/query"),
+    ("DELETE", "/api/v1/documents/{doc}"),
+    ("DELETE", f"/api/v1/documents/batch/{MISSING}"),
+]
+
+
+class TestStockBackendPermissionAndOrgOrder:
+    """ARAGORA_API_TOKEN unset: the RBAC gate is open and the handlers decide."""
+
+    @pytest.fixture(autouse=True)
+    def _stock(self, monkeypatch):
+        install_api_token(monkeypatch, None)
+
+    @pytest.mark.parametrize("role", ["member", "owner"])
+    @pytest.mark.parametrize(("method", "template"), NO_ORG_ROUTES)
+    def test_caller_without_org_gets_403_org_required(
+        self, server, records, method, template, role
+    ):
+        before = records.store.list_all()
+
+        status, body = dispatch(server, method, _path(template, records), jwt("user-n", None, role))
+
+        assert (status, body) == (403, ORG_REQUIRED_BODY)
+        assert records.store.list_all() == before
+
+    @pytest.mark.parametrize(("method", "template"), [r for r in NO_ORG_ROUTES if r[0] == "GET"])
+    def test_same_org_member_without_documents_read_gets_403(
+        self, server, records, method, template
+    ):
+        member = jwt("a3", ORG_A, "member")
+
+        status, body = dispatch(server, method, _path(template, records), member)
+
+        assert status == 403, body
+        assert body.get("code") != "org_required"
+
+    def test_owner_still_lists_their_documents(self, server, users, records):
+        assert _doc_ids(server, users.a) == {records.a}
+
+    def test_anonymous_still_gets_401(self, server, records):
+        assert dispatch(server, "GET", "/api/v1/documents") == (401, AUTH_REQUIRED_BODY)

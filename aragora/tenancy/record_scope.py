@@ -43,9 +43,10 @@ Usage (FastAPI route)::
 
 from __future__ import annotations
 
+import functools
 import hmac
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -121,6 +122,7 @@ _ORG_SCOPED_FAMILIES = (
     "/api/pipeline",
     "/api/canvas/pipeline",
     "/api/workspace",
+    "/api/checkpoints",
 )
 # Public-by-design routes inside those families.
 _PUBLIC_IN_ORG_SCOPED_FAMILIES = re.compile(
@@ -188,8 +190,9 @@ def is_org_scoped_path(path: str) -> bool:
     """Whether ``path`` belongs to a route family whose records are org-owned.
 
     Plans, plan executions and runs, documents and knowledge jobs, receipts
-    (gauntlet included), debates and their create aliases, search, pipelines
-    and the decision workspace. Any ``/api/v<N>/`` form matches like ``/api/``.
+    (gauntlet included), debates and their create aliases, debate checkpoints,
+    search, pipelines and the decision workspace. Any ``/api/v<N>/`` form
+    matches like ``/api/``.
     Public-by-design routes in those families do not match: receipt share
     links, the signing key and the stateless verifier, the public debate
     viewer and spectate page, and gauntlet personas.
@@ -243,6 +246,55 @@ def require_org_scope(
     if isinstance(outcome, OrgScope):
         return outcome, None
     return None, _denial_result(outcome)
+
+
+def scope_denial_first(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Let a missing org outrank a permission denial on a legacy handler method.
+
+    For ``(self, path, query_params, handler)`` methods decorated with
+    ``require_permission`` that call :func:`require_org_scope` in their body.
+    When the permission check denies a request on an org-scoped path whose
+    caller has no org scope, the caller gets the scope denial (401
+    ``auth_required`` / 403 ``org_required``), the same answer a caller
+    holding the permission gets from the body. Callers with an org get the
+    permission denial unchanged. Place it directly above ``require_permission``.
+    """
+    import asyncio
+
+    from aragora.rbac.decorators import PermissionDeniedError
+
+    def _scope_denial(args: tuple[Any, ...], kwargs: dict[str, Any]) -> HandlerResult | None:
+        path = kwargs.get("path", args[1] if len(args) > 1 else None)
+        handler = kwargs.get("handler", args[3] if len(args) > 3 else None)
+        if handler is None or not isinstance(path, str) or not is_org_scoped_path(path):
+            return None
+        return require_org_scope(handler)[1]
+
+    if asyncio.iscoroutinefunction(method):
+
+        @functools.wraps(method)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await method(*args, **kwargs)
+            except PermissionDeniedError:
+                denial = _scope_denial(args, kwargs)
+                if denial is None:
+                    raise
+                return denial
+
+        return async_wrapper
+
+    @functools.wraps(method)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return method(*args, **kwargs)
+        except PermissionDeniedError:
+            denial = _scope_denial(args, kwargs)
+            if denial is None:
+                raise
+            return denial
+
+    return wrapper
 
 
 async def require_org_scope_fastapi(request: Request) -> OrgScope:
@@ -328,5 +380,6 @@ __all__ = [
     "require_org_scope",
     "require_org_scope_fastapi",
     "resolve_org_scope",
+    "scope_denial_first",
     "static_token_denial",
 ]

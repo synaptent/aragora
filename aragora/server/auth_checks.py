@@ -615,23 +615,27 @@ class AuthChecksMixin:
         except (ValueError, KeyError, AttributeError, TypeError) as e:
             logger.debug("RBAC context extraction failed: %s", e)
 
+        if auth_ctx is None:
+            from aragora.tenancy.record_scope import static_token_denial
+
+            # The static API token identifies no user and so no org; on
+            # org-scoped routes answer as the handler's org check would. This
+            # comes before the route rules because some of them admit
+            # unauthenticated requests (receipt export).
+            denial = static_token_denial(path, self.headers)
+            if denial is not None:
+                self._send_json(denial.body(), status=denial.status)
+                return False
+
         # Check permission
         allowed, reason, permission_key = self.rbac.check_request(path, method, auth_ctx)
 
         if not allowed:
             if auth_ctx is None:
-                from aragora.tenancy.record_scope import static_token_denial
-
-                # The static API token identifies no user and so no org; on
-                # org-scoped routes answer as the handler's org check would.
-                denial = static_token_denial(path, self.headers)
-                if denial is not None:
-                    self._send_json(denial.body(), status=denial.status)
-                else:
-                    self._send_json(
-                        {"error": "Authentication required", "code": "auth_required"},
-                        status=401,
-                    )
+                self._send_json(
+                    {"error": "Authentication required", "code": "auth_required"},
+                    status=401,
+                )
             else:
                 self._send_json(
                     {

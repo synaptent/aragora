@@ -194,8 +194,9 @@ async def _owned_result(store: Any, run_id: str, scope: OrgScope) -> Any | None:
 async def start_gauntlet(
     body: StartGauntletRequest,
     request: Request,
-    auth: AuthorizationContext = Depends(require_permission("gauntlet:run")),
+    # Before the permission check, so a caller without an org gets org_required.
     scope: OrgScope = Depends(require_org_scope_fastapi),
+    auth: AuthorizationContext = Depends(require_permission("gauntlet:run")),
 ) -> StartGauntletResponse:
     """
     Start a new gauntlet stress-test owned by the caller's org.
