@@ -95,3 +95,39 @@ async def test_execute_with_diff_returns_subprocess_findings() -> None:
     assert result.success
     assert result.data["findings"] == {"issues": []}
     assert result.data["comment_posted"] is False
+
+
+@pytest.mark.asyncio
+async def test_execute_with_pr_url_fetches_reviews_and_posts() -> None:
+    skill = PRReviewerSkill(post_comment=True)
+    url = "https://github.com/o/r/pull/7"
+    with (
+        patch.object(
+            PRReviewerSkill, "_fetch_pr_diff", new=AsyncMock(return_value=("the diff", None))
+        ),
+        patch.object(
+            PRReviewerSkill, "_run_review", new=AsyncMock(return_value=({"issues": []}, None))
+        ) as review,
+        patch.object(
+            PRReviewerSkill, "_post_pr_comment", new=AsyncMock(return_value=("c-url", None))
+        ) as post,
+    ):
+        result = await skill.execute({"pr_url": url}, SkillContext(user_id="u1"))
+    review.assert_awaited_once_with("the diff")
+    post.assert_awaited_once_with(url, {"issues": []})
+    assert result.success
+    assert result.data["comment_posted"] is True
+    assert result.data["comment_url"] == "c-url"
+
+
+@pytest.mark.asyncio
+async def test_execute_reports_a_failed_diff_fetch() -> None:
+    skill = PRReviewerSkill()
+    with patch.object(
+        PRReviewerSkill, "_fetch_pr_diff", new=AsyncMock(return_value=(None, "boom"))
+    ):
+        result = await skill.execute(
+            {"pr_url": "https://github.com/o/r/pull/7"}, SkillContext(user_id="u1")
+        )
+    assert not result.success
+    assert result.error_code == "FETCH_FAILED"

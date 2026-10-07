@@ -106,6 +106,11 @@ class PRReviewerSkill(Skill):
                     error_message=f"Failed to fetch PR diff: {error}",
                     error_code="FETCH_FAILED",
                 )
+        if diff is None:
+            return SkillResult.create_failure(
+                error_message="No diff to review",
+                error_code="MISSING_INPUT",
+            )
 
         # Step 2: Run the review
         findings, error = await self._run_review(diff)
@@ -117,7 +122,7 @@ class PRReviewerSkill(Skill):
 
         # Step 3: Post comment if requested
         comment_url = None
-        if post_comment and pr_url:
+        if post_comment and pr_url and findings is not None:
             comment_url, error = await self._post_pr_comment(pr_url, findings)
             if error:
                 logger.warning("Failed to post PR comment: %s", error)
