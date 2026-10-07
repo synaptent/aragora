@@ -121,7 +121,7 @@ class AragoraClient:
         - agents: Agent discovery and profiles
         - leaderboard: ELO rankings
         - gauntlet: Adversarial validation
-        - replays: Debate replay viewing and export
+        - replays: Debate replay listing, viewing, and deletion
         - consensus: Consensus memory, settled topics, and dissent tracking
         - pulse: Trending topics and debate suggestions
         - system: System health, stats, and circuit breaker management

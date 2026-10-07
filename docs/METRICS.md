@@ -12,12 +12,12 @@
 
 | Metric | Value | Source | Command |
 |---|---|---|---|
-| Python files under aragora/ | `4344` | `aragora/` | `git ls-files aragora \| grep -E '\.py$' \| wc -l` |
-| Python lines of code under aragora/ | `2009642` | `aragora/` | `python3 -c "from pathlib import Path; import subprocess; files = subprocess.check_output(['git', 'ls-files', 'aragora'], text=True).splitlines(); print(sum(sum(1 for _ in Path(p).open(encoding='utf-8', errors='replace')) for p in files if p.endswith('.py')))"` |
+| Python files under aragora/ | `4358` | `aragora/` | `git ls-files aragora \| grep -E '\.py$' \| wc -l` |
+| Python lines of code under aragora/ | `2010206` | `aragora/` | `python3 -c "from pathlib import Path; import subprocess; files = subprocess.check_output(['git', 'ls-files', 'aragora'], text=True).splitlines(); print(sum(sum(1 for _ in Path(p).open(encoding='utf-8', errors='replace')) for p in files if p.endswith('.py')))"` |
 | Top-level modules under aragora/ | `144` | `aragora/` | `git ls-files aragora \| awk -F/ 'NF>2 {print $2}' \| sort -u \| wc -l` |
-| Test files (test_*.py under tests/) | `5680` | `tests/` | `git ls-files tests \| grep -E '(^\|/)test_[^/]*\.py$' \| wc -l` |
-| Test functions (class + module level) | `228140` | `tests/` | `git grep -E '^[[:space:]]*(async )?def test_' -- tests \| wc -l` |
-| @pytest.mark.parametrize decorators | `1588` | `tests/` | `git grep -E '@pytest\.mark\.parametrize' -- tests \| wc -l` |
+| Test files (test_*.py under tests/) | `5686` | `tests/` | `git ls-files tests \| grep -E '(^\|/)test_[^/]*\.py$' \| wc -l` |
+| Test functions (class + module level) | `228213` | `tests/` | `git grep -E '^[[:space:]]*(async )?def test_' -- tests \| wc -l` |
+| @pytest.mark.parametrize decorators | `1606` | `tests/` | `git grep -E '@pytest\.mark\.parametrize' -- tests \| wc -l` |
 | CLI top-level command modules | `86` | `aragora/cli/commands/` | `git ls-files aragora/cli/commands \| grep -E '/[^/]*\.py$' \| grep -v '/__' \| wc -l` |
 | OpenAPI paths | `2912` | `docs/api/openapi.json` | `python -c "import json; print(len(json.load(open('docs/api/openapi.json'))['paths']))"` |
 | OpenAPI operations (HTTP verbs) | `3205` | `docs/api/openapi.json` | `python -c "import json; spec=json.load(open('docs/api/openapi.json')); print(sum(1 for p in spec['paths'].values() for m in p if m.lower() in {'get','post','put','delete','patch','head','options'}))"` |
@@ -30,7 +30,7 @@
 | Knowledge Mound adapter files | `47` | `aragora/knowledge/mound/adapters/` | `git ls-files aragora/knowledge/mound/adapters \| grep -E '/[^/]+_adapter\.py$' \| wc -l` |
 | Markdown files under docs/ | `1129` | `docs/` | `git ls-files docs \| grep -E '\.md$' \| wc -l` |
 | GitHub Actions workflows | `100` | `.github/workflows/` | `git ls-files .github/workflows \| grep -E '\.yml$' \| wc -l` |
-| Mypy baseline errors (grandfathered) | `3099` | `.mypy-baseline` | `wc -l .mypy-baseline` |
+| Mypy baseline errors (grandfathered) | `1883` | `.mypy-baseline` | `wc -l .mypy-baseline` |
 
 ## Notes on counting methodology
 
