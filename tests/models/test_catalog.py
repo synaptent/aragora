@@ -81,12 +81,58 @@ def test_catalog_matches_committed_snapshot() -> None:
         assert float(row["output_per_mtok"]) == pytest.approx(spec.output_per_mtok)
 
 
+@pytest.mark.parametrize(
+    ("canonical_id", "openrouter_id", "rates"),
+    [
+        ("sonar-reasoning-pro", "perplexity/sonar-reasoning-pro", (2.0, 8.0)),
+        ("command-a", "cohere/command-a", (2.5, 10.0)),
+        ("jamba-large-1.7", "ai21/jamba-large-1.7", (2.0, 8.0)),
+    ],
+)
+def test_refreshed_openrouter_defaults_are_cataloged(
+    canonical_id: str,
+    openrouter_id: str,
+    rates: tuple[float, float],
+) -> None:
+    spec = CATALOG[canonical_id]
+    assert spec.openrouter_id == openrouter_id
+    assert (spec.input_per_mtok, spec.output_per_mtok) == rates
+
+
+def test_kimi_k3_runtime_metadata_and_soak_boundary() -> None:
+    spec = CATALOG["kimi-k3"]
+
+    assert spec.direct_id == "kimi-k3"
+    assert spec.openrouter_id == "moonshotai/kimi-k3"
+    assert (spec.input_per_mtok, spec.output_per_mtok) == (3.0, 15.0)
+    assert spec.context_window == 1_048_576
+    assert spec.max_output_tokens == 32_768
+    assert spec.release_date == date(2026, 7, 16)
+    assert spec.soak_until == date(2026, 7, 30)
+    assert spec.is_under_soak(today=date(2026, 7, 29))
+    assert not spec.is_under_soak(today=date(2026, 7, 30))
+
+
+def test_qwen38_max_runtime_metadata_and_soak_boundary() -> None:
+    spec = CATALOG["qwen3.8-max"]
+
+    assert spec.direct_id == "qwen3.8-max"
+    assert spec.openrouter_id == "qwen/qwen3.8-max"
+    assert (spec.input_per_mtok, spec.output_per_mtok) == (2.0, 6.0)
+    assert spec.context_window == 1_000_000
+    assert spec.max_output_tokens == 131_072
+    assert spec.release_date == date(2026, 8, 3)
+    assert spec.soak_until == date(2026, 8, 17)
+    assert spec.is_under_soak(today=date(2026, 8, 16))
+    assert not spec.is_under_soak(today=date(2026, 8, 17))
+
+
 # ---------------------------------------------------------------------------
 # Mirror-consistency enforcement
 # ---------------------------------------------------------------------------
 
 
-def _approx_pair(actual_in: float, actual_out: float, spec) -> None:
+def _approx_pair(actual_in: float | Decimal, actual_out: float | Decimal, spec) -> None:
     assert float(actual_in) == pytest.approx(spec.input_per_mtok), (
         f"{spec.canonical_id}: input {actual_in} != catalog {spec.input_per_mtok}"
     )
@@ -168,8 +214,7 @@ def test_provider_config_matches_catalog(canonical_id: str) -> None:
         if row is not None:
             _approx_pair(row.input_cost_per_1k * 1000, row.output_cost_per_1k * 1000, spec)
             checked = True
-    if not checked:
-        pytest.skip(f"provider_config has no row for {canonical_id} (presence not yet required)")
+    assert checked, f"provider_config has no row for {canonical_id}"
 
 
 def test_model_selector_profiles_match_catalog() -> None:
@@ -237,3 +282,41 @@ def test_fallback_targets_resolve_to_catalog_specs() -> None:
             checked_enforced.add(spec.canonical_id)
     # Falsifiability anchor: the map is known to target gpt-5.5 and opus-4.8.
     assert checked_enforced, "no enforced fallback targets were checked"
+
+
+class TestLongContextTiers:
+    """Documented long-context tier pricing (xAI: prompts >= 200k tokens bill
+    the higher rate for ALL tokens in the request; docs.x.ai/developers/pricing
+    verified 2026-07-27, surfaced by openai review on #9064)."""
+
+    def test_grok_tiers_recorded(self) -> None:
+        g45 = CATALOG["grok-4.5"]
+        assert g45.long_context_threshold == 200_000
+        assert (g45.input_per_mtok_long, g45.output_per_mtok_long) == (4.00, 12.00)
+        g43 = CATALOG["grok-4.3"]
+        assert (g43.input_per_mtok_long, g43.output_per_mtok_long) == (2.50, 5.00)
+
+    def test_rates_for_switches_at_threshold(self) -> None:
+        spec = CATALOG["grok-4.5"]
+        assert spec.rates_for(199_999) == (2.00, 6.00)
+        assert spec.rates_for(200_000) == (4.00, 12.00)
+
+    def test_flat_models_ignore_threshold(self) -> None:
+        spec = CATALOG["claude-fable-5"]
+        assert spec.rates_for(10_000_000) == (spec.input_per_mtok, spec.output_per_mtok)
+
+    def test_router_estimator_is_tier_aware(self) -> None:
+        from aragora.routing.provider_config import get_estimated_cost
+
+        below = get_estimated_cost("grok-4.5", 100_000, 10_000)
+        above = get_estimated_cost("grok-4.5", 300_000, 10_000)
+        assert below == pytest.approx(0.1 * 2.00 + 0.01 * 6.00)
+        assert above == pytest.approx(0.3 * 4.00 + 0.01 * 12.00)
+
+    def test_pdb_estimator_is_tier_aware(self) -> None:
+        from aragora.pdb.real_invoker import estimate_cost_usd
+
+        below = estimate_cost_usd(model="x-ai/grok-4.5", tokens_in=100_000, tokens_out=10_000)
+        above = estimate_cost_usd(model="x-ai/grok-4.5", tokens_in=300_000, tokens_out=10_000)
+        assert below == pytest.approx(0.1 * 2.00 + 0.01 * 6.00)
+        assert above == pytest.approx(0.3 * 4.00 + 0.01 * 12.00)

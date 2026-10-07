@@ -1009,22 +1009,44 @@ class TestAgentSelectionDelegates:
         agent2 = MagicMock()
         agent2.name = "critic"
         all_critics = [agent1, agent2]
+        arena.agents = [agent1, agent2]
 
         arena._select_critics_for_proposal("proposer", all_critics)
 
         call_kwargs = arena.agent_pool.select_critics.call_args.kwargs
         assert call_kwargs["proposer"] == agent1
 
-    def test_select_critics_uses_fallback_when_proposer_not_found(self, arena):
-        """Test _select_critics_for_proposal uses fallback when proposer not found."""
-        agent1 = MagicMock()
-        agent1.name = "agent1"
-        all_critics = [agent1]
+    def test_select_critics_preserves_missing_proposer_identity(self, arena):
+        """A critic-only candidate list must not relabel its first critic."""
+        critic = MagicMock()
+        critic.name = "critic"
 
-        arena._select_critics_for_proposal("unknown-proposer", all_critics)
+        arena._select_critics_for_proposal("proposer", [critic])
 
         call_kwargs = arena.agent_pool.select_critics.call_args.kwargs
-        assert call_kwargs["proposer"] == agent1  # Fallback to first agent
+        assert call_kwargs["proposer"] == "proposer"
+
+    def test_select_critics_keeps_sole_two_agent_critic_eligible(self, arena):
+        """A proposer plus one dedicated critic must produce a critique."""
+        proposer = MagicMock()
+        proposer.name = "claude"
+        critic = MagicMock()
+        critic.name = "grok-cli"
+        arena.agents = [proposer, critic]
+
+        def select_critics(*, proposer, candidates):
+            proposer_name = getattr(proposer, "name", str(proposer))
+            return [
+                candidate
+                for candidate in candidates
+                if getattr(candidate, "name", str(candidate)) != proposer_name
+            ]
+
+        arena.agent_pool.select_critics.side_effect = select_critics
+
+        result = arena._select_critics_for_proposal("claude", [critic])
+
+        assert result == [critic]
 
 
 # =============================================================================

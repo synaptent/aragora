@@ -1585,6 +1585,87 @@ class TestJsVulnerabilityChecking:
         assert vulns[0].affected_package == "lodash"
 
     @pytest.mark.asyncio
+    async def test_npm_audit_null_text_fields_use_string_defaults(
+        self, analyzer, tmp_repo, package_json_content
+    ):
+        """Explicit JSON nulls do not leak into string vulnerability fields."""
+        (tmp_repo / "package.json").write_text(package_json_content)
+        mock_result = MagicMock()
+        mock_result.stdout = json.dumps(
+            {
+                "vulnerabilities": {
+                    "lodash": {
+                        "name": "lodash",
+                        "severity": "high",
+                        "via": [
+                            {
+                                "source": None,
+                                "id": "GHSA-test",
+                                "severity": None,
+                                "title": None,
+                                "overview": None,
+                                "url": None,
+                                "vulnerable_versions": None,
+                            }
+                        ],
+                        "range": "<4.17.21",
+                    }
+                }
+            }
+        )
+
+        with patch("subprocess.run", return_value=mock_result):
+            vulns = await analyzer._check_js_vulnerabilities(str(tmp_repo))
+
+        assert len(vulns) == 1
+        assert vulns[0].id == "GHSA-test"
+        assert vulns[0].severity == VulnerabilitySeverity.HIGH
+        assert vulns[0].title == "lodash"
+        assert vulns[0].description == ""
+        assert vulns[0].affected_package == "lodash"
+        assert vulns[0].affected_versions == "<4.17.21"
+
+    @pytest.mark.asyncio
+    async def test_npm_audit_preserves_falsy_text_fields(
+        self, analyzer, tmp_repo, package_json_content
+    ):
+        """Fallbacks distinguish valid falsy values from missing values."""
+        (tmp_repo / "package.json").write_text(package_json_content)
+        mock_result = MagicMock()
+        mock_result.stdout = json.dumps(
+            {
+                "vulnerabilities": {
+                    "lodash": {
+                        "name": "",
+                        "severity": "high",
+                        "via": [
+                            {
+                                "source": 0,
+                                "severity": "",
+                                "title": "",
+                                "overview": "",
+                                "url": "https://example.test/fallback",
+                                "vulnerable_versions": "",
+                            }
+                        ],
+                        "range": "<4.17.21",
+                    }
+                }
+            }
+        )
+
+        with patch("subprocess.run", return_value=mock_result):
+            vulns = await analyzer._check_js_vulnerabilities(str(tmp_repo))
+
+        assert len(vulns) == 1
+        assert vulns[0].id == "0"
+        assert vulns[0].severity == VulnerabilitySeverity.UNKNOWN
+        assert vulns[0].title == ""
+        assert vulns[0].description == ""
+        assert vulns[0].affected_package == ""
+        assert vulns[0].affected_versions == ""
+
+    @pytest.mark.asyncio
     async def test_npm_audit_no_package_json(self, analyzer, tmp_repo):
         """Test npm audit with no package.json."""
         vulns = await analyzer._check_js_vulnerabilities(str(tmp_repo))

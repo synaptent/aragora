@@ -79,7 +79,7 @@ FRONTIER_FAMILY_PREFIXES: tuple[str, ...] = (
 )
 
 # Conservative defaults, USD per 1M tokens. The frontier default is pinned to
-# the cheapest frontier-tier price in the catalog capture (claude-opus-4-8 /
+# the cheapest frontier-tier price in the catalog capture (claude-opus-5 /
 # gpt-5.6 at $5/$25-30) so an unpriced frontier pin is assumed expensive,
 # never free. The unknown default is a mid-tier assumption.
 DEFAULT_FRONTIER_INPUT_PER_MTOK = 5.00

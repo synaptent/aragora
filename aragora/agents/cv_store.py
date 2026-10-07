@@ -126,21 +126,21 @@ class CVStore(SQLiteStore):
             return cv
 
         # Check database
-        cv = self._load_from_db(agent_id)
-        if cv is not None:
+        loaded_cv = self._load_from_db(agent_id)
+        if loaded_cv is not None:
             # Check if stale
-            age = datetime.now() - cv.updated_at
+            age = datetime.now() - loaded_cv.updated_at
             if age < self._cache_ttl:
-                self._cache[agent_id] = (datetime.now(), cv)
-                return cv
+                self._cache[agent_id] = (datetime.now(), loaded_cv)
+                return loaded_cv
 
         # Build from data sources
         if auto_build:
-            cv = self.cv_builder.build_cv(agent_id)
-            await self.save_cv(cv)
-            return cv
+            built_cv = self.cv_builder.build_cv(agent_id)
+            await self.save_cv(built_cv)
+            return built_cv
 
-        return cv
+        return loaded_cv
 
     def get_cv_sync(
         self,
@@ -165,22 +165,22 @@ class CVStore(SQLiteStore):
             return cv
 
         # Check database
-        cv = self._load_from_db(agent_id)
-        if cv is not None:
+        loaded_cv = self._load_from_db(agent_id)
+        if loaded_cv is not None:
             # Check if stale
-            age = datetime.now() - cv.updated_at
+            age = datetime.now() - loaded_cv.updated_at
             if age < self._cache_ttl:
-                self._cache[agent_id] = (datetime.now(), cv)
-                return cv
+                self._cache[agent_id] = (datetime.now(), loaded_cv)
+                return loaded_cv
 
         # Build from data sources
         if auto_build:
-            cv = self.cv_builder.build_cv(agent_id)
-            self._save_to_db(cv)
-            self._cache[agent_id] = (datetime.now(), cv)
-            return cv
+            built_cv = self.cv_builder.build_cv(agent_id)
+            self._save_to_db(built_cv)
+            self._cache[agent_id] = (datetime.now(), built_cv)
+            return built_cv
 
-        return cv
+        return loaded_cv
 
     async def save_cv(self, cv: AgentCV) -> None:
         """
@@ -238,12 +238,12 @@ class CVStore(SQLiteStore):
         # Load from database
         if to_load:
             for agent_id in to_load:
-                cv = self._load_from_db(agent_id)
-                if cv is not None:
-                    age = datetime.now() - cv.updated_at
+                loaded_cv = self._load_from_db(agent_id)
+                if loaded_cv is not None:
+                    age = datetime.now() - loaded_cv.updated_at
                     if age < self._cache_ttl:
-                        result[agent_id] = cv
-                        self._cache[agent_id] = (datetime.now(), cv)
+                        result[agent_id] = loaded_cv
+                        self._cache[agent_id] = (datetime.now(), loaded_cv)
                     else:
                         to_build.append(agent_id)
                 elif auto_build:

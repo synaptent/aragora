@@ -520,8 +520,7 @@ async def execute_final_synthesis_round(
                     content=final_proposal,
                     round=round_num,
                 )
-                ctx.add_message(msg)
-                result.messages.append(msg)
+                ctx.add_message(msg)  # also appends to result.messages (#9661)
                 partial_messages.append(msg)
 
                 # Emit event
@@ -630,7 +629,7 @@ async def fire_propulsion_event(
     round_num: int,
     propulsion_engine: Any,
     enable_propulsion: bool,
-    data: dict = None,
+    data: dict | None = None,
 ) -> None:
     """Fire propulsion event to push work to the next stage.
 

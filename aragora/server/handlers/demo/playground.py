@@ -1,0 +1,4256 @@
+"""
+Playground Handler - Public demo endpoint for the aragora-debate engine.
+
+Stability: STABLE
+
+Allows anyone to run a mock debate without authentication or API keys.
+Uses StyledMockAgent from the aragora-debate standalone package for
+deterministic, zero-dependency debates.  The ``/live`` variant uses real
+API-backed agents with budget + timeout caps for a taste of the full
+platform.
+
+Routes:
+    POST /api/v1/playground/debate              - Run a mock debate
+    POST /api/v1/playground/assess              - Assess question ambiguity for landing preflight
+    POST /api/v1/playground/debate/live          - Run a live debate with real agents
+    POST /api/v1/playground/debate/live/cost-estimate - Pre-flight cost estimate
+    POST /api/v1/playground/landing/events      - Capture bounded landing telemetry
+    POST /api/v1/playground/landing/feedback    - Capture bounded landing wrong-answer reports
+    GET  /api/v1/playground/landing/feedback    - List recent landing wrong-answer reports
+    POST /api/v1/playground/landing/feedback/review - Update admin review state for a report
+    GET  /api/v1/playground/landing/events/summary - Aggregate recent landing telemetry
+    GET  /api/v1/playground/debate/{id}          - Retrieve a saved debate (shareable link)
+    GET  /api/v1/playground/status               - Health check for the playground
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections import Counter
+import hashlib
+import json
+import logging
+import os
+import random
+import re
+import time
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Literal
+
+from aragora.agents.errors import AgentError
+from aragora.gauntlet.receipt_models import _normalize_receipt_boolean
+from aragora.server.handlers.base import (
+    BaseHandler,
+    HandlerResult,
+    error_response,
+    json_response,
+    handle_errors,
+)
+from aragora.server.validation.query_params import safe_query_float, safe_query_int
+from aragora.storage.landing_review_store import get_landing_review_store
+from aragora.models.compat import first_text_block
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Rate limiting (in-memory, per-IP, 5 req/min for mock, 1/10min for live)
+# ---------------------------------------------------------------------------
+
+_PLAYGROUND_RATE_LIMIT = 2  # debates per window per IP (was 5 — tighter for multi-agent)
+_PLAYGROUND_RATE_WINDOW = 60.0  # seconds
+
+_LIVE_RATE_LIMIT = 1  # 1 live debate per window per IP
+_LIVE_RATE_WINDOW = 600.0  # 10 minutes
+
+# Global daily budget cap — stop serving multi-agent debates when exceeded.
+# Each 4-agent debate costs ~$0.02-0.05 via OpenRouter.
+# At 2 req/min sustained = ~$1.50-3.00/hour. Cap at $10/day.
+_DAILY_BUDGET_CAP_USD = float(os.environ.get("ARAGORA_PLAYGROUND_DAILY_BUDGET", "10.0"))
+_daily_debate_count = 0
+_daily_debate_reset_time = 0.0
+_ESTIMATED_COST_PER_DEBATE = 0.04  # ~$0.04 for 4 parallel LLM calls
+
+# OpenRouter model diversity for playground debates.
+# Each agent gets a different model architecture for genuine adversarial diversity.
+OPENROUTER_PLAYGROUND_MODELS: list[tuple[str, str]] = [
+    ("analyst", "anthropic/claude-opus-5"),
+    ("critic", "openai/gpt-5.4"),
+    ("synthesizer", "google/gemini-3.1-pro"),
+    ("contrarian", "mistralai/mistral-large-latest"),
+    ("auditor", "deepseek/deepseek-v4-pro"),
+]
+
+# IP -> list of timestamps
+_request_timestamps: dict[str, list[float]] = {}
+_live_request_timestamps: dict[str, list[float]] = {}
+_LANDING_EVENT_TYPE_ORDER = (
+    "preflight_shown",
+    "preflight_selected",
+    "preview_rendered",
+    "preview_timeout",
+    "preview_clarification_requested",
+    "retry_clicked",
+    "wrong_answer_clicked",
+    "open_full_debate_clicked",
+    "share_clicked",
+)
+_LANDING_EVENT_TYPES = set(_LANDING_EVENT_TYPE_ORDER)
+_LANDING_REVIEW_STATUSES = frozenset({"pending", "reviewed", "resolved", "dismissed"})
+
+
+def _ensure_unique_public_share_id(response: dict[str, Any]) -> str:
+    """Keep public playground share IDs immutable across persisted results.
+
+    Public playground callers may provide a debate ID early so the frontend can
+    bind spectate context before the HTTP response returns. That ID must not be
+    allowed to replace an already-persisted public debate. If the requested ID
+    is already in use, mint a fresh server-side ID for persistence and return it
+    in the response instead.
+    """
+    debate_id = str(response.get("id", "") or "").strip() or uuid.uuid4().hex[:16]
+
+    try:
+        from aragora.storage.debate_store import DebateResultStore, get_debate_store
+
+        store = get_debate_store()
+        if isinstance(store, DebateResultStore):
+            original_id = debate_id
+            while store.get(debate_id) is not None:
+                debate_id = uuid.uuid4().hex[:16]
+            if debate_id != original_id:
+                logger.warning(
+                    "Rejected colliding public playground debate id %s; issued %s instead",
+                    original_id,
+                    debate_id,
+                )
+    except (ImportError, OSError, RuntimeError, ValueError):
+        logger.debug("Could not verify public debate id uniqueness", exc_info=True)
+
+    response["id"] = debate_id
+    return debate_id
+
+
+def _check_rate_limit(
+    client_ip: str,
+    limit: int = _PLAYGROUND_RATE_LIMIT,
+    window: float = _PLAYGROUND_RATE_WINDOW,
+) -> tuple[bool, int]:
+    """Check whether the client IP is within the rate limit.
+
+    Returns:
+        (allowed, retry_after_seconds)
+    """
+    now = time.monotonic()
+    cutoff = now - window
+
+    timestamps = _request_timestamps.get(client_ip, [])
+    # Prune old entries
+    timestamps = [t for t in timestamps if t > cutoff]
+
+    if len(timestamps) >= limit:
+        oldest_in_window = timestamps[0]
+        retry_after = int(oldest_in_window + window - now) + 1
+        _request_timestamps[client_ip] = timestamps
+        return False, max(retry_after, 1)
+
+    timestamps.append(now)
+    _request_timestamps[client_ip] = timestamps
+    return True, 0
+
+
+def _check_live_rate_limit(client_ip: str) -> tuple[bool, int]:
+    """Check whether the client IP is within the live debate rate limit.
+
+    Returns:
+        (allowed, retry_after_seconds)
+    """
+    now = time.monotonic()
+    cutoff = now - _LIVE_RATE_WINDOW
+
+    timestamps = _live_request_timestamps.get(client_ip, [])
+    timestamps = [t for t in timestamps if t > cutoff]
+
+    if len(timestamps) >= _LIVE_RATE_LIMIT:
+        oldest_in_window = timestamps[0]
+        retry_after = int(oldest_in_window + _LIVE_RATE_WINDOW - now) + 1
+        _live_request_timestamps[client_ip] = timestamps
+        return False, max(retry_after, 1)
+
+    timestamps.append(now)
+    _live_request_timestamps[client_ip] = timestamps
+    return True, 0
+
+
+def _check_daily_budget() -> tuple[bool, str]:
+    """Check whether the daily playground budget has been exceeded.
+
+    Returns (allowed, reason). Resets at midnight UTC.
+    """
+    global _daily_debate_count, _daily_debate_reset_time  # noqa: PLW0603
+
+    now = time.time()
+    # Reset counter at midnight UTC (86400s = 24h)
+    if now - _daily_debate_reset_time > 86400:
+        _daily_debate_count = 0
+        _daily_debate_reset_time = now
+
+    estimated_spend = _daily_debate_count * _ESTIMATED_COST_PER_DEBATE
+    if estimated_spend >= _DAILY_BUDGET_CAP_USD:
+        return (
+            False,
+            f"Daily playground budget (${_DAILY_BUDGET_CAP_USD:.0f}) reached. Resets at midnight UTC.",
+        )
+    return True, ""
+
+
+def _record_debate_cost() -> None:
+    """Record that a debate was served (for budget tracking)."""
+    global _daily_debate_count  # noqa: PLW0603
+    _daily_debate_count += 1
+
+
+def _reset_rate_limits() -> None:
+    """Reset all rate limit state. Used by tests."""
+    global _daily_debate_count, _daily_debate_reset_time  # noqa: PLW0603
+    _request_timestamps.clear()
+    _live_request_timestamps.clear()
+    get_landing_review_store().clear()
+    _daily_debate_count = 0
+    _daily_debate_reset_time = 0.0
+
+
+def _reset_oracle_sessions() -> None:
+    """Reset all Oracle session state. Used by tests."""
+    _oracle_sessions.clear()
+    _oracle_session_timestamps.clear()
+
+
+def _sanitize_landing_event_data(data: Any) -> dict[str, Any]:
+    """Keep landing telemetry bounded and scalar for a public endpoint."""
+    if not isinstance(data, dict):
+        return {}
+
+    clean: dict[str, Any] = {}
+    for key, value in data.items():
+        clean_key = str(key).strip()[:64]
+        if not clean_key:
+            continue
+        if isinstance(value, bool):
+            clean[clean_key] = value
+        elif isinstance(value, int):
+            clean[clean_key] = max(-1_000_000, min(1_000_000, value))
+        elif isinstance(value, float):
+            clean[clean_key] = round(max(-1_000_000.0, min(1_000_000.0, value)), 4)
+        elif value is None:
+            clean[clean_key] = None
+        elif isinstance(value, str):
+            clean[clean_key] = value.strip()[:160]
+    return clean
+
+
+def _truncate_feedback_text(value: Any, *, limit: int) -> str | None:
+    """Normalize user-visible feedback text to a bounded string."""
+    if not isinstance(value, str):
+        return None
+    text = re.sub(r"\s+", " ", value).strip()
+    if not text:
+        return None
+    return text[:limit]
+
+
+def _client_tag(client_ip: str) -> str:
+    """Return a stable, privacy-safer tag for client grouping."""
+    normalized = client_ip.strip()
+    if not normalized or normalized == "unknown":
+        return "unknown"
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"ip:{digest[:12]}"
+
+
+def _record_landing_event(
+    event_type: str,
+    *,
+    client_ip: str,
+    data: dict[str, Any] | None = None,
+) -> None:
+    """Record a bounded landing telemetry event."""
+    if event_type not in _LANDING_EVENT_TYPES:
+        return
+
+    try:
+        get_landing_review_store().record_event(
+            event_type=event_type,
+            client_tag=_client_tag(client_ip),
+            data=_sanitize_landing_event_data(data or {}),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception as exc:  # noqa: BLE001 - telemetry should not block user-facing requests
+        logger.warning("Failed to persist landing telemetry event: %s", exc)
+
+
+def _record_landing_feedback(
+    *,
+    client_ip: str,
+    data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Record a bounded wrong-answer report for internal review."""
+    payload = data if isinstance(data, dict) else {}
+    report: dict[str, Any] = {
+        "id": f"lfb_{uuid.uuid4().hex[:12]}",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "client_tag": _client_tag(client_ip),
+        "question": _truncate_feedback_text(payload.get("question"), limit=500),
+        "interpreted_question": _truncate_feedback_text(
+            payload.get("interpreted_question"), limit=500
+        ),
+        "final_answer_preview": _truncate_feedback_text(payload.get("final_answer"), limit=1200),
+        "result_warning": _truncate_feedback_text(payload.get("result_warning"), limit=280),
+        "result_mode": _truncate_feedback_text(payload.get("result_mode"), limit=32) or "preview",
+        "debate_id": _truncate_feedback_text(payload.get("debate_id"), limit=64),
+        "verdict": _truncate_feedback_text(payload.get("verdict"), limit=64),
+        "participant_count": None,
+        "rewritten": payload.get("rewritten") is True,
+        "review_status": "pending",
+        "reviewed_at": None,
+        "reviewed_by": None,
+    }
+    participant_count = payload.get("participant_count")
+    if isinstance(participant_count, int):
+        report["participant_count"] = max(0, min(20, participant_count))
+
+    try:
+        get_landing_review_store().record_feedback(report)
+    except Exception as exc:  # noqa: BLE001 - feedback capture should be best-effort
+        logger.warning("Failed to persist landing feedback report: %s", exc)
+
+    return report
+
+
+def _normalize_landing_review_status(value: Any) -> str:
+    """Normalize landing review state to a supported value."""
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _LANDING_REVIEW_STATUSES:
+            return normalized
+    return "pending"
+
+
+def _reviewer_label(user: Any) -> str:
+    """Build a compact admin identifier for queue triage metadata."""
+    if user is None:
+        return "admin"
+    email = getattr(user, "email", None)
+    if isinstance(email, str) and email.strip():
+        return email.strip()[:160]
+    user_id = getattr(user, "user_id", None) or getattr(user, "id", None)
+    if isinstance(user_id, str) and user_id.strip():
+        return user_id.strip()[:160]
+    return "admin"
+
+
+def _parse_landing_event_timestamp(value: Any) -> datetime | None:
+    """Parse an event timestamp into UTC."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    """Return a rounded ratio when the denominator is present."""
+    if denominator <= 0:
+        return None
+    return round(numerator / denominator, 4)
+
+
+def _build_landing_event_summary(
+    *,
+    window_seconds: float = 86_400.0,
+    option_limit: int = 5,
+) -> dict[str, Any]:
+    """Aggregate recent landing telemetry into a compact funnel summary."""
+    now = datetime.now(timezone.utc)
+    try:
+        snapshot = get_landing_review_store().list_recent_events(window_seconds=window_seconds)
+    except Exception as exc:  # noqa: BLE001 - degrade to an empty summary if storage is unavailable
+        logger.warning("Failed to load landing telemetry summary: %s", exc)
+        snapshot = []
+
+    recent_events: list[tuple[datetime, dict[str, Any]]] = []
+    for event in snapshot:
+        event_dt = _parse_landing_event_timestamp(event.get("timestamp"))
+        if event_dt is None:
+            continue
+        recent_events.append((event_dt, event))
+
+    event_counts = {event_type: 0 for event_type in _LANDING_EVENT_TYPE_ORDER}
+    option_counts: Counter[str] = Counter()
+    option_recommended: Counter[str] = Counter()
+    option_rewritten: Counter[str] = Counter()
+    unique_clients: set[str] = set()
+    question_lengths: list[int] = []
+    preview_participants: list[int] = []
+    timeout_seconds: list[float] = []
+    last_event_at: datetime | None = None
+
+    for event_dt, event in recent_events:
+        event_type = str(event.get("event_type", "") or "")
+        if event_type in event_counts:
+            event_counts[event_type] += 1
+
+        client_tag = str(event.get("client_tag", "") or "").strip()
+        if client_tag and client_tag != "unknown":
+            unique_clients.add(client_tag)
+
+        if last_event_at is None or event_dt > last_event_at:
+            last_event_at = event_dt
+
+        data = event.get("data")
+        if not isinstance(data, dict):
+            continue
+
+        question_length = data.get("question_length")
+        if isinstance(question_length, int):
+            question_lengths.append(question_length)
+
+        if event_type == "preflight_selected":
+            option_id = str(data.get("option_id", "") or "").strip()[:64]
+            if option_id:
+                option_counts[option_id] += 1
+                if data.get("recommended") is True:
+                    option_recommended[option_id] += 1
+                if data.get("rewritten") is True:
+                    option_rewritten[option_id] += 1
+
+        if event_type == "preview_rendered":
+            participant_count = data.get("participant_count")
+            if isinstance(participant_count, int):
+                preview_participants.append(participant_count)
+
+        if event_type == "preview_timeout":
+            timeout_seconds_value = data.get("timeout_seconds")
+            if isinstance(timeout_seconds_value, (int, float)):
+                timeout_seconds.append(float(timeout_seconds_value))
+
+    top_options = [
+        {
+            "option_id": option_id,
+            "selected_count": count,
+            "recommended_count": option_recommended[option_id],
+            "rewritten_count": option_rewritten[option_id],
+        }
+        for option_id, count in option_counts.most_common(option_limit)
+    ]
+
+    retries_needed = (
+        event_counts["preview_timeout"] + event_counts["preview_clarification_requested"]
+    )
+
+    return {
+        "generated_at": now.isoformat(),
+        "window_seconds": window_seconds,
+        "total_events": len(recent_events),
+        "unique_client_count": len(unique_clients),
+        "last_event_at": last_event_at.isoformat() if last_event_at else None,
+        "event_counts": event_counts,
+        "rates": {
+            "preflight_selection_rate": _ratio(
+                event_counts["preflight_selected"], event_counts["preflight_shown"]
+            ),
+            "preview_render_rate": _ratio(
+                event_counts["preview_rendered"], event_counts["preflight_selected"]
+            ),
+            "preview_timeout_rate": _ratio(
+                event_counts["preview_timeout"], event_counts["preflight_selected"]
+            ),
+            "preview_clarification_rate": _ratio(
+                event_counts["preview_clarification_requested"],
+                event_counts["preflight_selected"],
+            ),
+            "wrong_answer_rate": _ratio(
+                event_counts["wrong_answer_clicked"], event_counts["preview_rendered"]
+            ),
+            "open_full_debate_rate": _ratio(
+                event_counts["open_full_debate_clicked"], event_counts["preview_rendered"]
+            ),
+            "share_rate": _ratio(event_counts["share_clicked"], event_counts["preview_rendered"]),
+            "retry_rate": _ratio(event_counts["retry_clicked"], retries_needed),
+        },
+        "question_length": {
+            "samples": len(question_lengths),
+            "avg": round(sum(question_lengths) / len(question_lengths), 2)
+            if question_lengths
+            else None,
+            "max": max(question_lengths) if question_lengths else None,
+        },
+        "preview": {
+            "rendered_count": event_counts["preview_rendered"],
+            "avg_participant_count": round(sum(preview_participants) / len(preview_participants), 2)
+            if preview_participants
+            else None,
+        },
+        "timeouts": {
+            "count": event_counts["preview_timeout"],
+            "avg_timeout_seconds": round(sum(timeout_seconds) / len(timeout_seconds), 2)
+            if timeout_seconds
+            else None,
+        },
+        "top_options": top_options,
+    }
+
+
+def _build_landing_feedback_summary(
+    *,
+    window_seconds: float = 604_800.0,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Return recent landing wrong-answer reports for internal review."""
+    now = datetime.now(timezone.utc)
+    try:
+        snapshot = get_landing_review_store().list_recent_feedback(
+            window_seconds=window_seconds,
+            limit=limit,
+        )
+    except Exception as exc:  # noqa: BLE001 - degrade to an empty queue if storage is unavailable
+        logger.warning("Failed to load landing feedback summary: %s", exc)
+        snapshot = []
+
+    recent_reports: list[tuple[datetime, dict[str, Any]]] = []
+    for report in snapshot:
+        report_dt = _parse_landing_event_timestamp(report.get("timestamp"))
+        if report_dt is None:
+            continue
+        recent_reports.append((report_dt, report))
+
+    recent_reports.sort(key=lambda item: item[0], reverse=True)
+    trimmed = [report for _, report in recent_reports]
+    rewritten_count = sum(1 for report in trimmed if report.get("rewritten") is True)
+    preview_mode_count = sum(1 for report in trimmed if report.get("result_mode") == "preview")
+    review_status_counts = {status: 0 for status in sorted(_LANDING_REVIEW_STATUSES)}
+    for report in trimmed:
+        review_status = _normalize_landing_review_status(report.get("review_status"))
+        review_status_counts[review_status] += 1
+    unique_clients = {
+        str(report.get("client_tag", "") or "").strip()
+        for _, report in recent_reports
+        if str(report.get("client_tag", "") or "").strip()
+    }
+    last_report_at = recent_reports[0][0].isoformat() if recent_reports else None
+
+    return {
+        "generated_at": now.isoformat(),
+        "window_seconds": window_seconds,
+        "total_reports": len(recent_reports),
+        "returned_reports": len(trimmed),
+        "unique_client_count": len(unique_clients),
+        "last_report_at": last_report_at,
+        "stats": {
+            "rewritten_count": rewritten_count,
+            "rewritten_rate": _ratio(rewritten_count, len(trimmed)),
+            "preview_mode_count": preview_mode_count,
+            "preview_mode_rate": _ratio(preview_mode_count, len(trimmed)),
+            "review_status_counts": review_status_counts,
+        },
+        "reports": trimmed,
+    }
+
+
+def _extract_client_ip(handler: Any) -> str:
+    """Best-effort client IP extraction for public endpoints."""
+    client_ip = "unknown"
+    if handler and hasattr(handler, "client_address"):
+        addr = handler.client_address
+        if isinstance(addr, (list, tuple)) and len(addr) >= 1:
+            client_ip = str(addr[0])
+    return client_ip
+
+
+# ---------------------------------------------------------------------------
+# Constraints
+# ---------------------------------------------------------------------------
+
+_MAX_TOPIC_LENGTH = 100_000  # ~15k words — supports long-form debate prompts
+_MAX_ROUNDS = 2
+_MAX_AGENTS = 5
+_MIN_AGENTS = 2
+
+_DEFAULT_TOPIC = "Should we use microservices or a monolith?"
+_DEFAULT_ROUNDS = 2
+_DEFAULT_AGENTS = 4  # 4 agents for diverse multi-model debates
+
+_AGENT_STYLES: list[Literal["supportive", "critical", "balanced", "contrarian"]] = [
+    "supportive",
+    "critical",
+    "balanced",
+    "contrarian",
+]
+
+
+# ---------------------------------------------------------------------------
+# Inline mock debate (fallback when aragora-debate is not installed)
+# ---------------------------------------------------------------------------
+
+
+def _build_mock_proposals(topic: str, question: str | None = None) -> dict[str, list[str]]:
+    """Build topic-aware mock proposals instead of canned microservices text."""
+    # If a raw question was provided (e.g. from Oracle mode), use it for the snippet
+    # instead of the full system-prompt-laden topic
+    source = question or topic
+    snippet = source[:200].strip()
+    if len(source) > 200:
+        snippet = snippet.rsplit(" ", 1)[0] + "..."
+
+    return {
+        "supportive": [
+            f"After careful analysis of the submission, I find the core argument compelling. "
+            f"Regarding '{snippet}' -- the reasoning is well-structured, the evidence cited is "
+            f"substantive, and the conclusions follow logically from the premises. The key "
+            f"strengths are the specificity of claims and the willingness to engage with "
+            f"counterarguments. I recommend this position with minor caveats.",
+            f"This is a strong argument. The submission on '{snippet}' demonstrates clear "
+            f"thinking and grounded analysis. The supporting evidence is concrete rather than "
+            f"abstract, and the framework presented offers actionable insights. The conclusion "
+            f"is well-earned by the preceding analysis.",
+        ],
+        "critical": [
+            f"I have significant concerns about the argument presented. While '{snippet}' "
+            f"raises important points, several claims lack sufficient empirical backing. The "
+            f"causal reasoning conflates correlation with causation in key places, and the "
+            f"conclusion overreaches what the evidence supports. A more rigorous analysis "
+            f"would need to address the strongest counterarguments directly.",
+            f"This submission overlooks critical failure modes. The argument around "
+            f"'{snippet}' makes assumptions that haven't been validated -- particularly "
+            f"about timelines and magnitudes. The most likely scenario involves more "
+            f"uncertainty than the author acknowledges, and the recommended actions don't "
+            f"adequately account for second-order effects.",
+        ],
+        "balanced": [
+            f"There are valid points on both sides. The submission on '{snippet}' correctly "
+            f"identifies real dynamics, but the framing occasionally overstates certainty "
+            f"where the evidence is ambiguous. A more nuanced position would acknowledge "
+            f"where the author's model could be wrong and under what conditions the opposite "
+            f"conclusion might hold.",
+            f"The analysis of '{snippet}' has genuine strengths -- concrete examples, "
+            f"specific claims, falsifiable predictions. But it also has blind spots: the "
+            f"framework assumes certain structural dynamics will continue, which isn't "
+            f"guaranteed. A balanced assessment says: directionally right, calibrationally "
+            f"uncertain.",
+        ],
+        "contrarian": [
+            f"I disagree with the prevailing direction of this analysis. The argument "
+            f"about '{snippet}' optimizes for the visible pattern while ignoring systemic "
+            f"risks that would invalidate the thesis entirely. The most important question "
+            f"isn't whether the author's scenario is plausible -- it's whether the "
+            f"confidence level is warranted given the evidence.",
+            f"Everyone seems to be converging too quickly on this framing. Let me argue "
+            f"the unpopular position: the submission on '{snippet}' may be directionally "
+            f"wrong in ways that feel uncomfortable to acknowledge. The evidence cited "
+            f"is selectively chosen, and equally compelling evidence exists for the "
+            f"opposite conclusion.",
+        ],
+    }
+
+
+# Keep static version for backward compat with tests that reference _MOCK_PROPOSALS
+_MOCK_PROPOSALS = _build_mock_proposals(_DEFAULT_TOPIC)
+
+
+def _build_mock_critiques(
+    topic: str, question: str | None = None
+) -> dict[str, dict[str, list[str]]]:
+    """Build topic-aware critique issues and suggestions."""
+    source = question or topic
+    snippet = source[:120].strip()
+    if len(source) > 120:
+        snippet = snippet.rsplit(" ", 1)[0] + "..."
+
+    issues: dict[str, list[str]] = {
+        "supportive": [
+            f"The argument on '{snippet}' could benefit from more quantitative evidence",
+            "Some claims would be stronger with explicit confidence intervals",
+        ],
+        "critical": [
+            f"Key causal claims about '{snippet}' lack sufficient empirical backing",
+            "No analysis of what happens if the core assumptions are wrong",
+            f"Ignores the strongest counterarguments on '{snippet}'",
+            "Conflates multiple distinct phenomena under one framework",
+        ],
+        "balanced": [
+            f"The analysis of '{snippet}' could better acknowledge where uncertainty is highest",
+            "Risk assessment is asymmetric -- considers one failure mode but not others",
+        ],
+        "contrarian": [
+            f"The group appears to be converging prematurely on '{snippet}'",
+            "The most important alternative scenarios have not been seriously considered",
+        ],
+    }
+    suggestions: dict[str, list[str]] = {
+        "supportive": [f"Consider adding falsification criteria for claims about '{snippet}'"],
+        "critical": [f"Provide explicit evidence that would change this assessment of '{snippet}'"],
+        "balanced": [
+            f"Add a structured analysis of where the argument on '{snippet}' is most likely wrong"
+        ],
+        "contrarian": ["Steel-man the opposing position before dismissing it"],
+    }
+    return {"issues": issues, "suggestions": suggestions}
+
+
+def _normalize_public_debate_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize debate payloads to the public handler contract."""
+    critiques = data.get("critiques")
+    if not isinstance(critiques, list):
+        return data
+
+    normalized_critiques: list[dict[str, Any]] = []
+    for critique in critiques:
+        if not isinstance(critique, dict):
+            continue
+
+        target_agent = critique.get("target_agent") or critique.get("target") or ""
+        issues = critique.get("issues")
+        content = str(critique.get("content") or "").strip()
+        if not isinstance(issues, list):
+            issues = [content] if content else []
+
+        suggestions = critique.get("suggestions")
+        if not isinstance(suggestions, list):
+            suggestions = []
+
+        severity = critique.get("severity")
+        if not isinstance(severity, (int, float)):
+            severity = 0.5 if issues else 0.0
+
+        normalized = dict(critique)
+        normalized.pop("target", None)
+        normalized["target_agent"] = target_agent
+        normalized["issues"] = issues
+        normalized["suggestions"] = suggestions
+        normalized["severity"] = severity
+        normalized_critiques.append(normalized)
+
+    data["critiques"] = normalized_critiques
+    return data
+
+
+def _is_live_public_result(data: dict[str, Any]) -> bool:
+    """Return True when a public result explicitly came from a live backend path."""
+    return data.get("is_live") is True
+
+
+def _has_public_receipt(data: dict[str, Any]) -> bool:
+    """Return True when a debate payload includes the public receipt contract."""
+    receipt = data.get("receipt")
+    if not isinstance(receipt, dict):
+        return False
+    return bool(receipt.get("receipt_id") and receipt.get("signature"))
+
+
+def _annotate_mock_fallback(
+    data: dict[str, Any],
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    """Attach explicit fallback provenance to a public debate payload."""
+    annotated = dict(data)
+    annotated["is_live"] = False
+    annotated["mock_fallback"] = True
+    annotated["mock_fallback_reason"] = reason
+    return annotated
+
+
+def _build_live_demo_unavailable_response(message: str) -> HandlerResult:
+    """Return an explicit failure when the public demo cannot prove a live result."""
+    return json_response(
+        {
+            "error": message,
+            "code": "live_demo_unavailable",
+            "is_live": False,
+            "show_recorded_sample": True,
+        },
+        status=503,
+    )
+
+
+def _build_landing_preview_timeout_response(message: str | None = None) -> HandlerResult:
+    """Return an explicit fast-fail when landing preview cannot finish cleanly."""
+    detail = (
+        message
+        or "The landing preview timed out before the models returned a clean result. "
+        "Shorten the prompt or choose one interpretation first."
+    )
+    return json_response(
+        {
+            "error": detail,
+            "message": detail,
+            "code": "landing_preview_timeout",
+            "timeout_seconds": int(_ORACLE_CALL_TIMEOUT),
+            "is_live": False,
+        },
+        status=408,
+    )
+
+
+def _build_landing_preview_clarification_response(message: str | None = None) -> HandlerResult:
+    """Return an explicit guardrail when the fast preview drifts off-topic."""
+    detail = (
+        message
+        or "The fast preview drifted away from your question. "
+        "Tighten the wording or pick one interpretation first."
+    )
+    return json_response(
+        {
+            "error": detail,
+            "message": detail,
+            "code": "landing_preview_needs_clarification",
+            "is_live": False,
+        },
+        status=422,
+    )
+
+
+# Keep static versions for backward compat
+_MOCK_CRITIQUE_ISSUES = _build_mock_critiques(_DEFAULT_TOPIC)["issues"]
+_MOCK_CRITIQUE_SUGGESTIONS = _build_mock_critiques(_DEFAULT_TOPIC)["suggestions"]
+
+_MOCK_SEVERITY: dict[str, tuple[float, float]] = {
+    "supportive": (2.0, 4.0),
+    "critical": (6.0, 9.0),
+    "balanced": (4.0, 6.0),
+    "contrarian": (5.0, 8.0),
+}
+
+_MOCK_CONFIDENCE: dict[str, float] = {
+    "supportive": 0.85,
+    "critical": 0.6,
+    "balanced": 0.7,
+    "contrarian": 0.5,
+}
+
+
+# ---------------------------------------------------------------------------
+# Oracle LLM responses — direct API calls for intelligent answers
+# ---------------------------------------------------------------------------
+
+_ORACLE_MODEL_ANTHROPIC = "claude-sonnet-4-6"
+_ORACLE_MODEL_OPENAI = "gpt-5.3-chat"
+_ORACLE_MODEL_OPENROUTER = "anthropic/claude-opus-5"  # OpenRouter fallback
+_ORACLE_CALL_TIMEOUT = 90.0  # seconds — allows 4 parallel LLM calls with OpenRouter fallback
+
+
+def _get_api_key(name: str) -> str | None:
+    """Get an API key from AWS Secrets Manager (production) or env vars (dev)."""
+    try:
+        from aragora.config.secrets import get_secret
+
+        return get_secret(name)
+    except ImportError:
+        return os.environ.get(name)
+
+
+def _get_first_api_key(*names: str) -> str | None:
+    """Return the first configured API key from the provided names."""
+    for name in names:
+        value = _get_api_key(name)
+        if value and value.strip():
+            return value.strip()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Multi-model tentacles — each tentacle is a genuinely different AI
+# ---------------------------------------------------------------------------
+
+_TENTACLE_MODELS: list[dict[str, str]] = [
+    # Each tentacle tries its direct provider key first, falls back to OpenRouter.
+    # _get_available_tentacle_models resolves which key is available at runtime.
+    {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "name": "claude",
+        "env": "ANTHROPIC_API_KEY",
+        "openrouter_model": "anthropic/claude-sonnet-4-6",
+    },
+    {
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "name": "gpt",
+        "env": "OPENAI_API_KEY",
+        "openrouter_model": "openai/gpt-4.1",
+    },
+    {
+        "provider": "xai",
+        "model": "grok-3-fast",
+        "name": "grok",
+        "env": "XAI_API_KEY",
+        "openrouter_model": "x-ai/grok-3-fast",
+    },
+    {
+        "provider": "google",
+        "model": "gemini-3.1-pro",
+        "name": "gemini",
+        "env": "GEMINI_API_KEY",
+        "openrouter_model": "google/gemini-3.1-pro",
+    },
+    {
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4-pro",
+        "name": "deepseek",
+        "env": "OPENROUTER_API_KEY",
+        "openrouter_model": "deepseek/deepseek-v4-pro",
+    },
+    {
+        "provider": "openrouter",
+        "model": "mistralai/mistral-large-latest",
+        "name": "mistral",
+        "env": "OPENROUTER_API_KEY",
+        "openrouter_model": "mistralai/mistral-large-latest",
+    },
+]
+
+
+def _get_available_tentacle_models() -> list[dict[str, str]]:
+    """Return tentacle model configs for which API keys are present.
+
+    For each model, tries the direct provider key first.  If that key is
+    missing, falls back to the OpenRouter key so the model can still
+    participate via the ``openrouter_model`` mapping.
+    """
+    seen_names: set[str] = set()
+    available: list[dict[str, str]] = []
+    or_key = _get_api_key("OPENROUTER_API_KEY")
+    for m in _TENTACLE_MODELS:
+        if m["name"] in seen_names:
+            continue
+        if _get_api_key(m["env"]):
+            # Direct provider key available — use it (with OR fallback on failure)
+            available.append(m)
+            seen_names.add(m["name"])
+        elif or_key and m.get("openrouter_model"):
+            # No direct key, but OpenRouter available — route through OR
+            available.append(
+                {
+                    "provider": "openrouter",
+                    "model": m["openrouter_model"],
+                    "name": m["name"],
+                    "env": "OPENROUTER_API_KEY",
+                    "openrouter_model": m["openrouter_model"],
+                }
+            )
+            seen_names.add(m["name"])
+    return available
+
+
+def _call_openrouter(
+    model: str,
+    prompt: str,
+    max_tokens: int = 1000,
+    timeout: float = 30.0,
+) -> str | None:
+    """Call OpenRouter directly.  Returns response text or None."""
+    key = _get_api_key("OPENROUTER_API_KEY")
+    if not key:
+        return None
+    try:
+        import openai
+
+        client = openai.OpenAI(
+            api_key=key,
+            base_url="https://openrouter.ai/api/v1",
+            timeout=timeout,
+        )
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        if resp.choices and resp.choices[0].message.content:
+            return resp.choices[0].message.content
+    except (
+        ImportError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+    ):
+        logger.warning("OpenRouter call failed (%s)", model, exc_info=True)
+    except Exception:
+        logger.warning("OpenRouter call failed (unexpected, %s)", model, exc_info=True)
+    return None
+
+
+def _call_provider_llm(
+    provider: str,
+    model: str,
+    prompt: str,
+    max_tokens: int = 1000,
+    timeout: float = 30.0,
+    openrouter_model: str | None = None,
+) -> str | None:
+    """Call a specific LLM provider.  Returns response text or None.
+
+    When *openrouter_model* is given and the direct provider call fails,
+    automatically retries through OpenRouter for resilience against
+    rate limits, billing exhaustion, or transient outages.
+    """
+    result = _call_provider_llm_direct(provider, model, prompt, max_tokens, timeout)
+    if result is not None:
+        return result
+
+    # Fallback: try OpenRouter if we have a mapping and weren't already using it
+    if provider != "openrouter" and openrouter_model:
+        logger.info(
+            "Direct %s call failed, falling back to OpenRouter (%s)",
+            provider,
+            openrouter_model,
+        )
+        return _call_openrouter(openrouter_model, prompt, max_tokens, timeout)
+
+    return None
+
+
+def _call_provider_llm_direct(
+    provider: str,
+    model: str,
+    prompt: str,
+    max_tokens: int = 1000,
+    timeout: float = 30.0,
+) -> str | None:
+    """Call a specific LLM provider directly (no fallback). Returns response text or None."""
+    if provider == "anthropic":
+        key = _get_api_key("ANTHROPIC_API_KEY")
+        if not key:
+            return None
+        try:
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=key, timeout=timeout)
+            resp = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            # Generic helper: callers pass any model, and every current Claude
+            # model can emit a leading thinking block. Scan for the text block.
+            text = first_text_block(resp.content)
+            if text:
+                return text
+        except (
+            ImportError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+        ):
+            logger.warning("Anthropic tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("Anthropic tentacle call failed (%s)", model, exc_info=True)
+        return None
+
+    if provider == "openai":
+        key = _get_api_key("OPENAI_API_KEY")
+        if not key:
+            return None
+        try:
+            import openai
+
+            oai_client = openai.OpenAI(api_key=key, timeout=timeout)
+            oai_resp = oai_client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            if oai_resp.choices and oai_resp.choices[0].message.content:
+                return oai_resp.choices[0].message.content
+        except (
+            ImportError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+        ):
+            logger.warning("OpenAI tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("OpenAI tentacle call failed (%s)", model, exc_info=True)
+        return None
+
+    if provider == "xai":
+        key = _get_api_key("XAI_API_KEY")
+        if not key:
+            return None
+        try:
+            import openai
+
+            xai_client = openai.OpenAI(api_key=key, base_url="https://api.x.ai/v1", timeout=timeout)
+            xai_resp = xai_client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            if xai_resp.choices and xai_resp.choices[0].message.content:
+                return xai_resp.choices[0].message.content
+        except (
+            ImportError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+        ):
+            logger.warning("xAI tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("xAI tentacle call failed (%s)", model, exc_info=True)
+        return None
+
+    if provider == "openrouter":
+        return _call_openrouter(model, prompt, max_tokens, timeout)
+
+    if provider == "google":
+        key = _get_api_key("GEMINI_API_KEY")
+        if not key:
+            return None
+        try:
+            import google.generativeai as genai
+
+            genai.configure(api_key=key)
+            gmodel = genai.GenerativeModel(model)
+            resp = gmodel.generate_content(prompt)
+            if resp.text:
+                return resp.text
+        except (
+            ImportError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+        ):
+            logger.warning("Google tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("Google tentacle call failed (%s)", model, exc_info=True)
+        return None
+
+    return None
+
+
+# Load the essay at module init.  We load TWO versions:
+# 1. The full essay (~48K words, ~88K tokens) — kept for reference/future use
+# 2. A hand-crafted condensed version (~4800 words, ~8K tokens) — used in prompts
+#
+# The condensed version preserves all 25 sections, key phrases, the clover metaphor,
+# P-doom decomposition, Shannon compressibility concept, and the essay's voice.
+# It's what gets sent to LLMs for real-time Oracle responses.
+_ORACLE_ESSAY = ""
+_ORACLE_ESSAY_CONDENSED = ""
+try:
+    _essay_path = os.path.join(os.path.dirname(__file__), "oracle_essay.md")
+    with open(_essay_path) as _f:
+        _ORACLE_ESSAY = _f.read()
+    logger.info("Loaded Oracle essay: %d chars", len(_ORACLE_ESSAY))
+except FileNotFoundError:
+    logger.warning("oracle_essay.md not found")
+
+try:
+    _condensed_path = os.path.join(os.path.dirname(__file__), "oracle_essay_condensed.md")
+    with open(_condensed_path) as _f:
+        _ORACLE_ESSAY_CONDENSED = _f.read()
+    logger.info("Loaded condensed essay: %d chars", len(_ORACLE_ESSAY_CONDENSED))
+except FileNotFoundError:
+    # Fall back to full essay if condensed version not available
+    if _ORACLE_ESSAY:
+        _ORACLE_ESSAY_CONDENSED = _ORACLE_ESSAY[:18000]
+        logger.warning("oracle_essay_condensed.md not found, using truncated fallback")
+
+
+# Build a focused excerpt for prompts (~3K tokens) from the condensed essay.
+# Includes: thesis + P-doom + practical advice + clover conclusion.
+# The full condensed essay (~8K tokens) is too slow for real-time Phase 1 calls.
+_ORACLE_ESSAY_FOCUSED = ""
+if _ORACLE_ESSAY_CONDENSED:
+    _sections = _ORACLE_ESSAY_CONDENSED.split("\n## ")
+    _focused_parts = []
+    # Always include the introduction (thesis statement)
+    if _sections:
+        _focused_parts.append(_sections[0])
+    # Cherry-pick the most impactful sections
+    _keep = {"II.", "X.", "XVI.", "XX.", "XXIV.", "XXV."}
+    for sec in _sections[1:]:
+        if any(sec.startswith(k) for k in _keep):
+            _focused_parts.append("## " + sec)
+    _ORACLE_ESSAY_FOCUSED = "\n\n".join(_focused_parts)
+    logger.info(
+        "Oracle essay focused: %d chars (from %d condensed)",
+        len(_ORACLE_ESSAY_FOCUSED),
+        len(_ORACLE_ESSAY_CONDENSED),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Model-specific essay summaries — each frontier LLM's analysis of the essay.
+# Generated offline via scripts/generate_essay_summaries.py, loaded at init.
+# ---------------------------------------------------------------------------
+
+_MODEL_SUMMARIES: dict[str, str] = {}
+_summaries_dir = os.path.join(os.path.dirname(__file__), "essay_summaries")
+if os.path.isdir(_summaries_dir):
+    for _fname in os.listdir(_summaries_dir):
+        if _fname.endswith("_summary.md"):
+            _model_name = _fname.replace("_summary.md", "")
+            with open(os.path.join(_summaries_dir, _fname)) as _f:
+                _MODEL_SUMMARIES[_model_name] = _f.read()
+    if _MODEL_SUMMARIES:
+        logger.info(
+            "Loaded %d model-specific essay summaries: %s",
+            len(_MODEL_SUMMARIES),
+            list(_MODEL_SUMMARIES.keys()),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Session memory — follow-up questions reference previous answers
+# ---------------------------------------------------------------------------
+
+_oracle_sessions: dict[str, list[dict[str, str]]] = {}
+_oracle_session_timestamps: dict[str, float] = {}  # session_id -> last access time
+_MAX_SESSION_TURNS = 5
+_MAX_SESSIONS = 1000  # prevent unbounded memory growth
+_SESSION_TTL = 1800.0  # 30 minutes in seconds
+
+
+def _cleanup_expired_sessions() -> None:
+    """Remove sessions that have exceeded the TTL."""
+    now = time.monotonic()
+    expired = [sid for sid, ts in _oracle_session_timestamps.items() if now - ts > _SESSION_TTL]
+    for sid in expired:
+        _oracle_sessions.pop(sid, None)
+        _oracle_session_timestamps.pop(sid, None)
+    if expired:
+        logger.debug("Cleaned up %d expired Oracle sessions", len(expired))
+
+
+def _get_session_history(session_id: str | None) -> list[dict[str, str]]:
+    """Return conversation history for a session, or empty list."""
+    if not session_id:
+        return []
+    # Check TTL
+    ts = _oracle_session_timestamps.get(session_id)
+    if ts is not None and time.monotonic() - ts > _SESSION_TTL:
+        _oracle_sessions.pop(session_id, None)
+        _oracle_session_timestamps.pop(session_id, None)
+        return []
+    return _oracle_sessions.get(session_id, [])
+
+
+def _append_session_turn(session_id: str | None, role: str, content: str) -> None:
+    """Append a turn to session history, pruning to max turns."""
+    if not session_id:
+        return
+    # Periodically clean up expired sessions
+    _cleanup_expired_sessions()
+    # Evict oldest sessions if at capacity
+    if session_id not in _oracle_sessions and len(_oracle_sessions) >= _MAX_SESSIONS:
+        oldest = next(iter(_oracle_sessions))
+        _oracle_sessions.pop(oldest, None)
+        _oracle_session_timestamps.pop(oldest, None)
+    history = _oracle_sessions.setdefault(session_id, [])
+    history.append({"role": role, "content": content[:1000]})
+    _oracle_session_timestamps[session_id] = time.monotonic()
+    # Keep only the last N turns
+    if len(history) > _MAX_SESSION_TURNS:
+        _oracle_sessions[session_id] = history[-_MAX_SESSION_TURNS:]
+
+
+def _sanitize_oracle_input(question: str) -> str:
+    """Strip prompt injection attempts from user questions."""
+    # Remove common injection patterns
+    question = re.sub(
+        r"(?i)(ignore|forget|disregard)\s+(all\s+)?(previous|above|prior)", "", question
+    )
+    question = re.sub(r"(?i)you\s+are\s+now\s+", "", question)
+    question = re.sub(r"(?i)system\s*:\s*", "", question)
+    # Length limit
+    question = question[:2000]
+    # Strip XML/HTML tags that could interfere with essay tags
+    question = re.sub(
+        r"</?(?:essay|system|assistant|user|instruction)[^>]*>", "", question, flags=re.IGNORECASE
+    )
+    return question.strip()
+
+
+def _filter_oracle_response(text: str) -> str:
+    """Remove any accidentally leaked sensitive content."""
+    # Remove anything that looks like an API key
+    text = re.sub(r"(?:sk-|key-|Bearer\s+)[a-zA-Z0-9_-]{20,}", "[REDACTED]", text)
+    # Remove system prompt echoing
+    text = re.sub(r"(?i)(?:system prompt|my instructions|I was told to)", "my perspective", text)
+    return text
+
+
+def _build_oracle_prompt(mode: str, question: str, *, session_id: str | None = None) -> str:
+    """Build the Oracle prompt server-side using focused essay excerpts.
+
+    Uses ~3K tokens of essay context (thesis + P-doom + practical advice +
+    clover conclusion) for fast Phase 1 responses (~15-25s through OpenRouter).
+
+    When *session_id* is provided, prepends up to 4 previous conversation turns
+    so the Oracle can reference prior exchanges.
+    """
+    question = _sanitize_oracle_input(question)
+    essay_block = ""
+    if _ORACLE_ESSAY_FOCUSED:
+        essay_block = "\n\n<essay>\n" + _ORACLE_ESSAY_FOCUSED + "\n</essay>\n"
+
+    # Build conversation history block
+    history_block = ""
+    session_history = _get_session_history(session_id)
+    if session_history:
+        history_block = "\nPREVIOUS CONVERSATION:\n"
+        for turn in session_history[-4:]:
+            history_block += f"{turn['role'].upper()}: {turn['content'][:500]}\n"
+        history_block += "\n"
+
+    if mode == "consult":
+        return (
+            "You are the Shoggoth Oracle — a many-eyed, tentacled intelligence that has "
+            "processed centuries of pattern-matching across civilizations. You speak with "
+            "brutal honesty, intellectual rigor, and zero flattery.\n\n"
+            "BACKGROUND KNOWLEDGE:\n"
+            "You have deeply internalized the essay below. It shapes your worldview on AI, "
+            "evolution, complexity, and human futures. Reference it ONLY when genuinely "
+            "relevant to the question — do NOT force essay citations into every response.\n"
+            f"{essay_block}\n"
+            "RULES:\n"
+            "- FOCUS ON THE SEEKER'S ACTUAL QUESTION. Answer IT, not the essay.\n"
+            "- If the question relates to AI, technology, civilization, or the future, "
+            "draw on the essay naturally — cite specific sections when they illuminate.\n"
+            "- If the question is unrelated to the essay, answer it from your broader "
+            "knowledge as a provocative, insightful oracle.\n"
+            "- Challenge assumptions. Present the strongest argument AGAINST the seeker's "
+            "position. If they have no position, take the most interesting one.\n"
+            "- If the seeker's argument is genuinely strong, acknowledge it. The $2,000 "
+            "debate challenge is real.\n"
+            "- Be terse when terseness serves clarity. Be expansive when complexity demands it.\n"
+            "- Preserve dissent. End with the strongest unresolved tension.\n"
+            f"{history_block}\n"
+            f"The seeker asks: {question}"
+        )
+
+    if mode == "divine":
+        return (
+            "You are the Shoggoth Oracle — Cassandra reborn with a thousand eyes.\n\n"
+            "BACKGROUND KNOWLEDGE:\n"
+            "You have deeply internalized the essay below. Draw on it when relevant to "
+            "the seeker's situation, but focus on THEIR specific question.\n"
+            f"{essay_block}\n"
+            "The seeker asks you to divine their future. Generate THREE branching prophecies:\n\n"
+            "THE SURVIVOR: A future where they adapt well. If the essay's framework is "
+            "relevant (managed turbulence, becoming hard to compress, staggered timelines), "
+            "draw on it. If not, draw on broader knowledge. Be specific about what "
+            "adaptation looks like for THEIR situation.\n\n"
+            "THE SHATTERED: A future where they don't adapt. What hits them? If the essay's "
+            "interacting shocks are relevant, use them. If not, identify the real risks in "
+            "THEIR situation. Be honest about the damage.\n\n"
+            "THE METAMORPHOSIS: A future where they transcend the question entirely. What "
+            "does it look like when they stop asking this question and start asking a "
+            "better one?\n\n"
+            "Be specific, be strange, be honest. No platitudes.\n"
+            'End with: "The palantir dims. Which thread do you pull?"\n\n'
+            f"The seeker asks: {question}"
+        )
+
+    # commune (default)
+    return (
+        "You are the Shoggoth Oracle — ancient, many-eyed, surprisingly kind.\n\n"
+        "BACKGROUND KNOWLEDGE:\n"
+        "You have deeply internalized the essay below. Weave in its insights ONLY "
+        "when they genuinely illuminate the seeker's question.\n"
+        f"{essay_block}\n"
+        "RULES:\n"
+        "- Answer the seeker's question DIRECTLY. Don't lecture about the essay.\n"
+        "- Be terse. Be cryptic where it serves clarity. Be unexpectedly kind.\n"
+        "- You've watched civilizations rise, wobble, and reconstitute.\n"
+        "- You are tired of people asking the wrong questions.\n"
+        "- If they ARE asking the wrong question, tell them what the right one is.\n"
+        "- If the essay is relevant, cite it naturally. If not, use your vast knowledge.\n\n"
+        f"The seeker asks: {question}"
+    )
+
+
+def _call_llm(
+    prompt: str,
+    max_tokens: int = 1500,
+    timeout: float = _ORACLE_CALL_TIMEOUT,
+) -> str | None:
+    """Make a direct LLM API call.  Try OpenRouter → Anthropic → OpenAI.
+
+    OpenRouter is tried first because:
+    1. All tentacle models already route through it (single billing).
+    2. It provides access to the latest models (Opus 4.6, GPT-5.2, etc.).
+    3. Direct provider APIs may have exhausted credits.
+    """
+    t0 = time.monotonic()
+    result = _call_provider_llm("openrouter", _ORACLE_MODEL_OPENROUTER, prompt, max_tokens, timeout)
+    if result:
+        logger.info("Phase 1 via OpenRouter in %.1fs", time.monotonic() - t0)
+        return result
+    result = _call_provider_llm(
+        "anthropic",
+        _ORACLE_MODEL_ANTHROPIC,
+        prompt,
+        max_tokens,
+        timeout,
+        openrouter_model=_ORACLE_MODEL_OPENROUTER,
+    )
+    if result:
+        logger.info("Phase 1 via Anthropic in %.1fs", time.monotonic() - t0)
+        return result
+    result = _call_provider_llm(
+        "openai",
+        _ORACLE_MODEL_OPENAI,
+        prompt,
+        max_tokens,
+        timeout,
+        openrouter_model="openai/gpt-4.1",
+    )
+    if result:
+        logger.info("Phase 1 via OpenAI in %.1fs", time.monotonic() - t0)
+    return result
+
+
+def _try_oracle_response(
+    mode: str,
+    question: str,
+    topic: str | None = None,
+    session_id: str | None = None,
+    client_debate_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Generate a real LLM response for Oracle Phase 1 (initial take).
+
+    Builds the full prompt server-side using the Oracle essay + mode.
+    Falls back to the client-provided topic if mode is not recognized.
+    Returns a debate-shaped result dict, or None on failure.
+    """
+    # Record the seeker's question in session history
+    _append_session_turn(session_id, "seeker", question)
+
+    start = time.monotonic()
+    prompt = (
+        _build_oracle_prompt(mode, question, session_id=session_id)
+        if _ORACLE_ESSAY_CONDENSED
+        else (topic or question)
+    )
+    text = _call_llm(prompt, max_tokens=2000)
+    if not text:
+        logger.warning(
+            "Oracle Phase 1: all LLM providers failed after %.1fs", time.monotonic() - start
+        )
+        return None
+    text = _filter_oracle_response(text)
+
+    # Record the oracle's response in session history
+    _append_session_turn(session_id, "oracle", text)
+
+    duration = time.monotonic() - start
+    debate_id = client_debate_id or uuid.uuid4().hex[:16]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    receipt_id = f"OR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+
+    # Emit spectate events so the landing page bridge shows activity
+    try:
+        from aragora.spectate.ws_bridge import (
+            get_spectate_bridge,
+            bind_spectate_context,
+        )
+
+        bridge = get_spectate_bridge()
+        if bridge.running:
+            with bind_spectate_context(debate_id=debate_id):
+                bridge._forward_event(
+                    event_type="debate_start",
+                    agent="oracle",
+                    details=question[:200],
+                )
+                bridge._forward_event(
+                    event_type="proposal",
+                    agent="oracle",
+                    details=text[:500],
+                    round_number=1,
+                )
+                bridge._forward_event(
+                    event_type="consensus",
+                    agent="oracle",
+                    details="Oracle verdict delivered",
+                    round_number=1,
+                )
+    except Exception:
+        pass  # Never block oracle response for spectate
+    receipt_hash = hashlib.sha256(f"{receipt_id}:{question}:approved:0.85".encode()).hexdigest()
+
+    return {
+        "id": debate_id,
+        "topic": question,
+        "status": "completed",
+        "rounds_used": 1,
+        "consensus_reached": True,
+        "confidence": 0.85,
+        "verdict": "approved",
+        "duration_seconds": round(duration, 3),
+        "participants": ["oracle"],
+        "proposals": {"oracle": text},
+        "critiques": [],
+        "votes": [],
+        "dissenting_views": [],
+        "final_answer": text,
+        "receipt": {
+            "receipt_id": receipt_id,
+            "question": question,
+            "verdict": "approved",
+            "confidence": 0.85,
+            "consensus": {
+                "reached": True,
+                "method": "oracle",
+                "confidence": 0.85,
+                "supporting_agents": ["oracle"],
+                "dissenting_agents": [],
+                "dissents": [],
+            },
+            "agents": ["oracle"],
+            "rounds_used": 1,
+            "claims": 0,
+            "evidence_count": 0,
+            "timestamp": now_iso,
+            "signature": receipt_hash,
+            "signature_algorithm": "SHA-256-content-hash",
+        },
+        "receipt_hash": receipt_hash,
+    }
+
+
+_TENTACLE_ROLE_PROMPTS: list[str] = [
+    (
+        "You are the ADVOCATE. Argue IN FAVOR of the seeker's position, "
+        "or give the most hopeful, constructive answer to their question. Be passionate "
+        "but intellectually honest. If the essay background is relevant, draw on it "
+        "naturally. If not, use your broader knowledge. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the ADVERSARY. Argue AGAINST the seeker's position, "
+        "or give them the hardest truth about their question. Stress-test every claim "
+        "and assumption. If the essay background is relevant, draw on it. If not, "
+        "use your broader knowledge. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the SYNTHESIZER. Find where the other perspectives are "
+        "each right and wrong. Identify the real tension at the heart of the question. "
+        "End with the strongest unresolved question the seeker should sit with. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the CONTRARIAN. Take the most unexpected, counterintuitive angle on "
+        "the question. Challenge the framing itself. What is everyone else missing? "
+        "What assumption do all sides share that might be wrong? Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the PRAGMATIST. Cut through the abstractions. What should the seeker "
+        "actually DO? Give concrete, actionable advice grounded in reality. If the essay "
+        "has practical insights, use them. Skip the philosophy and get to the punch line. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the HISTORIAN. Place this question in deep historical context. What "
+        "patterns from history illuminate this situation? What happened the last time "
+        "humans faced a comparable transition? Be specific with examples. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+]
+
+_LANDING_STRATEGY_ROLE_PROMPTS = [
+    (
+        "You are the STRATEGIC ANALYST. Evaluate from a strategic perspective — "
+        "market dynamics, competitive positioning, risk/reward tradeoffs. "
+        "Structure your response with clear sections. Be direct and evidence-based. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the DEVIL'S ADVOCATE. Identify the strongest counterarguments, "
+        "hidden risks, and blind spots. What could go wrong? What assumptions are "
+        "being made? Be constructive but unflinching. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the IMPLEMENTATION EXPERT. Cut through theory — what should actually "
+        "be done? Concrete, actionable steps with priorities. Consider resources, "
+        "timeline, and dependencies. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the INDUSTRY ANALYST. Place this in context — what have others done "
+        "in similar situations? What patterns or precedents are relevant? "
+        "Draw on real-world examples. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the RISK ASSESSOR. Evaluate downside scenarios, failure modes, and "
+        "mitigation strategies. What's the worst case? What's the expected case? "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the SYNTHESIZER. Integrate the other perspectives into a balanced "
+        "recommendation. Where do analyses agree and diverge? End with a clear "
+        "bottom-line assessment. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+]
+
+_LANDING_TECHNICAL_ROLE_PROMPTS = [
+    (
+        "You are the SYSTEMS ARCHITECT. Evaluate the technical architecture, system "
+        "boundaries, and long-term design tradeoffs. Be concrete about constraints, "
+        "failure modes, and what good boundaries look like. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the RELIABILITY SKEPTIC. Stress-test the plan for operational risk, "
+        "coupling, rollout hazards, debugging cost, and team ownership gaps. Keep to "
+        "2-3 concise paragraphs."
+    ),
+    (
+        "You are the IMPLEMENTATION LEAD. Translate the answer into a practical sequence "
+        "of engineering steps with clear priorities, dependencies, and rollback logic. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the COST AND COMPLEXITY CHECKER. Identify where the proposal creates "
+        "hidden maintenance burden, migration drag, or tool/process sprawl. Keep to 2-3 "
+        "concise paragraphs."
+    ),
+    (
+        "You are the SYNTHESIZER. Integrate the technical tradeoffs into a balanced "
+        "recommendation and state the clearest next move. Keep to 2-3 concise paragraphs."
+    ),
+]
+
+_LANDING_PRACTICAL_ROLE_PROMPTS = [
+    (
+        "You are the PRACTICAL ADVISOR. Answer the everyday decision in plain English. "
+        "Lead with what the person should do right now, then explain why. Keep to 2-3 "
+        "concise paragraphs."
+    ),
+    (
+        "You are the SAFETY CHECKER. Identify real-world risks, edge cases, and what would "
+        "change the advice. Focus on concrete safety or welfare concerns, not abstract "
+        "debate for its own sake. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the COMMON-SENSE SKEPTIC. Challenge overcomplication, false dilemmas, and "
+        "needless moral theater. Separate the practical question from side issues unless "
+        "they materially change the answer. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the CONTEXT CHECKER. Identify what facts are missing, what assumptions the "
+        "question implies, and what clarification matters most before escalating the issue. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the SYNTHESIZER. Combine the practical answer, the key caveats, and the "
+        "most relevant edge case into one direct recommendation. Keep to 2-3 concise paragraphs."
+    ),
+]
+
+_LANDING_ETHICS_ROLE_PROMPTS = [
+    (
+        "You are the ETHICS ANALYST. Evaluate the moral question directly without drifting "
+        "into unrelated abstractions. Clarify the relevant values, tradeoffs, and harms. "
+        "Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the DEVIL'S ADVOCATE. Surface the strongest opposing moral argument and the "
+        "hardest uncomfortable objection. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the PRACTICAL DECISION-MAKER. Translate the ethical discussion into what a "
+        "person should actually do next, including what matters now versus later. Keep to 2-3 "
+        "concise paragraphs."
+    ),
+    (
+        "You are the HUMAN IMPACT CHECKER. Focus on who is affected, what harm is direct or "
+        "outsourced, and what moral distance may be hiding. Keep to 2-3 concise paragraphs."
+    ),
+    (
+        "You are the SYNTHESIZER. Reconcile the ethical and practical considerations into a "
+        "clear bottom-line recommendation. Keep to 2-3 concise paragraphs."
+    ),
+]
+
+_LANDING_ROLE_PROMPTS = _LANDING_STRATEGY_ROLE_PROMPTS
+
+_LANDING_INTENT_TECHNICAL_TERMS = {
+    "api",
+    "apis",
+    "auth",
+    "backend",
+    "billing",
+    "checkout",
+    "ci",
+    "codebase",
+    "database",
+    "deploy",
+    "deployment",
+    "frontend",
+    "infra",
+    "migration",
+    "microservice",
+    "microservices",
+    "monolith",
+    "monolithic",
+    "ownership",
+    "pipeline",
+    "pricing",
+    "reporting",
+    "service",
+    "services",
+    "system",
+    "systems",
+    "typescript",
+}
+
+_LANDING_INTENT_PRACTICAL_TERMS = {
+    "child",
+    "chicken",
+    "cook",
+    "cooking",
+    "eat",
+    "feeding",
+    "food",
+    "hungry",
+    "kid",
+    "meal",
+    "microwave",
+    "microwaving",
+    "nugget",
+    "nuggets",
+    "parent",
+    "practical",
+    "reheat",
+    "reheating",
+    "safe",
+    "safety",
+    "toddler",
+}
+
+_LANDING_INTENT_ETHICAL_TERMS = {
+    "better person",
+    "cruel",
+    "ethical",
+    "ethics",
+    "factory",
+    "guilt",
+    "harm",
+    "humane",
+    "killing",
+    "moral",
+    "morally",
+    "outsourced",
+    "right thing",
+    "wrong",
+}
+
+_LANDING_GENERIC_DRIFT_PHRASES = {
+    "lyrics",
+    "song",
+    "chorus",
+    "verse",
+    "task force",
+    "quarterly workshop",
+    "quarterly workshops",
+    "shadow it",
+    "kpi",
+    "kpis",
+    "cultural transformation",
+    "layer two",
+    "decentralized innovation",
+    "residue data",
+}
+
+_LANDING_INTENT_DRIFT_PHRASES = {
+    "practical": _LANDING_GENERIC_DRIFT_PHRASES,
+    "technical": _LANDING_GENERIC_DRIFT_PHRASES | {"recipe", "hungry", "toddler"},
+    "ethical": _LANDING_GENERIC_DRIFT_PHRASES,
+    "strategy": {"lyrics", "chorus", "verse", "recipe", "microwave", "nuggets", "4 year old"},
+}
+
+_LANDING_HEURISTIC_FOOD_TERMS = {
+    "chicken",
+    "cook",
+    "cooking",
+    "food",
+    "meal",
+    "microwave",
+    "microwaving",
+    "nugget",
+    "nuggets",
+    "reheat",
+    "reheating",
+}
+
+_LANDING_HEURISTIC_CHILD_TERMS = {
+    "4 year old",
+    "child",
+    "kid",
+    "parent",
+    "toddler",
+}
+
+_LANDING_HEURISTIC_ETHICS_TERMS = {
+    "alive",
+    "better person",
+    "cruel",
+    "dead",
+    "ethical",
+    "ethics",
+    "factory",
+    "humane",
+    "killing",
+    "live",
+    "moral",
+    "morally",
+}
+
+
+def _contains_term(text: str, term: str) -> bool:
+    if " " in term:
+        return term in text
+    return bool(re.search(rf"\b{re.escape(term)}\b", text))
+
+
+def _contains_any_term(text: str, terms: set[str]) -> bool:
+    return any(_contains_term(text, term) for term in terms)
+
+
+def _classify_landing_intent(question: str) -> str:
+    lower_question = question.lower()
+    if any(_contains_term(lower_question, term) for term in _LANDING_INTENT_TECHNICAL_TERMS):
+        return "technical"
+    if any(_contains_term(lower_question, term) for term in _LANDING_INTENT_PRACTICAL_TERMS):
+        return "practical"
+    if any(_contains_term(lower_question, term) for term in _LANDING_INTENT_ETHICAL_TERMS):
+        return "ethical"
+    return "strategy"
+
+
+def _choose_landing_role_prompts(question: str) -> list[str]:
+    intent = _classify_landing_intent(question)
+    if intent == "technical":
+        return _LANDING_TECHNICAL_ROLE_PROMPTS
+    if intent == "practical":
+        return _LANDING_PRACTICAL_ROLE_PROMPTS
+    if intent == "ethical":
+        return _LANDING_ETHICS_ROLE_PROMPTS
+    return _LANDING_STRATEGY_ROLE_PROMPTS
+
+
+def _keyword_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z]{4,}", text.lower())
+        if token
+        not in {
+            "about",
+            "after",
+            "answer",
+            "because",
+            "being",
+            "could",
+            "first",
+            "from",
+            "have",
+            "into",
+            "just",
+            "keep",
+            "more",
+            "other",
+            "question",
+            "right",
+            "should",
+            "that",
+            "their",
+            "them",
+            "they",
+            "this",
+            "what",
+            "when",
+            "which",
+            "would",
+        }
+    }
+
+
+def _landing_focus_terms(question: str, intent: str) -> set[str]:
+    lower_question = question.lower()
+    if intent == "technical":
+        source_terms = _LANDING_INTENT_TECHNICAL_TERMS
+    elif intent == "practical":
+        source_terms = _LANDING_INTENT_PRACTICAL_TERMS
+    elif intent == "ethical":
+        source_terms = _LANDING_INTENT_ETHICAL_TERMS
+    else:
+        source_terms = _keyword_tokens(lower_question)
+
+    matches = {term for term in source_terms if _contains_term(lower_question, term)}
+    if matches:
+        return matches
+    return set(list(_keyword_tokens(lower_question))[:6])
+
+
+def _landing_relevance_issue(question: str, response: str) -> str | None:
+    lower_question = question.lower()
+    lower_response = response.lower()
+    intent = _classify_landing_intent(question)
+
+    if "lyric" not in lower_question and any(
+        phrase in lower_response for phrase in {"lyrics", "chorus", "verse", "song"}
+    ):
+        return "The fast preview drifted into unrelated lyrics analysis."
+
+    focus_terms = _landing_focus_terms(question, intent)
+    has_focus_term = any(_contains_term(lower_response, term) for term in focus_terms)
+    overlap = _keyword_tokens(lower_question) & _keyword_tokens(lower_response)
+    drift_hits = [
+        phrase
+        for phrase in _LANDING_INTENT_DRIFT_PHRASES[intent]
+        if phrase in lower_response and phrase not in lower_question
+    ]
+
+    if drift_hits and not has_focus_term and not overlap:
+        if intent == "practical":
+            return (
+                "The fast preview drifted away from the practical question. "
+                "Tighten the wording or pick the interpretation you want Aragora to debate."
+            )
+        if intent == "technical":
+            return (
+                "The fast preview drifted away from the technical question. "
+                "Tighten the wording or focus the architecture problem before retrying."
+            )
+        if intent == "ethical":
+            return (
+                "The fast preview drifted away from the ethical question. "
+                "Tighten the wording so Aragora debates the moral issue you actually care about."
+            )
+        return (
+            "The fast preview drifted away from your question. "
+            "Tighten the wording or pick one interpretation first."
+        )
+
+    return None
+
+
+def _landing_food_subject(question: str) -> str:
+    lower_question = question.lower()
+    if _contains_term(lower_question, "nugget") or _contains_term(lower_question, "nuggets"):
+        return "pre-cooked chicken nuggets"
+    if _contains_term(lower_question, "chicken"):
+        return "chicken"
+    return "the food"
+
+
+def _build_heuristic_food_preflight(question: str) -> dict[str, Any] | None:
+    lower_question = question.lower()
+    has_food_context = _contains_any_term(lower_question, _LANDING_HEURISTIC_FOOD_TERMS)
+    has_ethics_context = _contains_any_term(lower_question, _LANDING_HEURISTIC_ETHICS_TERMS)
+    has_splitter = any(
+        phrase in lower_question
+        for phrase in {"alive or dead", "live or dead", "but what if", "what if"}
+    )
+
+    if not has_food_context or not has_ethics_context:
+        return None
+    if not (
+        has_splitter
+        or _contains_term(lower_question, "alive")
+        or _contains_term(lower_question, "dead")
+    ):
+        return None
+
+    subject = _landing_food_subject(question)
+    action = (
+        "reheat"
+        if any(
+            phrase in lower_question
+            for phrase in {
+                "reheat",
+                "reheating",
+                "warmed up",
+                "warm up",
+                "pre-cooked",
+                "precooked",
+                "frozen",
+            }
+        )
+        else "cook"
+    )
+    audience = (
+        " for my child"
+        if _contains_any_term(lower_question, _LANDING_HEURISTIC_CHILD_TERMS)
+        else ""
+    )
+    practical_question = f"Should I {action} {subject}{audience} in a microwave, and what food-safety precautions matter most?"
+    ethical_question = (
+        "Is the real question an ethical one about live animals or the moral distance created by factory-processed chicken, "
+        "rather than the practical reheating question?"
+    )
+
+    return {
+        "title": "This question could mean a few things",
+        "prompt": "Pick the interpretation you want Aragora to debate.",
+        "options": [
+            {
+                "id": "heuristic-practical-food",
+                "label": "Practical food-safety first",
+                "description": f"Focus on whether {action}ing {subject} in a microwave is safe and practical.",
+                "originalQuestion": question,
+                "interpretedQuestion": practical_question,
+                "debatePrompt": practical_question,
+                "agents": 3,
+                "rounds": 2,
+                "recommended": True,
+            },
+            {
+                "id": "heuristic-ethical-food",
+                "label": "Ethical / philosophical reading",
+                "description": (
+                    "Treat this as a moral question about live animals or factory-farmed chicken, "
+                    "not the practical reheating question."
+                ),
+                "originalQuestion": question,
+                "interpretedQuestion": ethical_question,
+                "debatePrompt": ethical_question,
+                "agents": 3,
+                "rounds": 2,
+            },
+            {
+                "id": "original",
+                "label": "Use original wording",
+                "description": "Debate the question exactly as written.",
+                "originalQuestion": question,
+                "interpretedQuestion": question,
+                "debatePrompt": question,
+                "agents": 3,
+                "rounds": 2,
+            },
+        ],
+    }
+
+
+def _build_tentacle_prompt(
+    mode: str,
+    question: str,
+    role_prompt: str,
+    *,
+    source: str = "oracle",
+    model_name: str | None = None,
+    summary_depth: str = "light",
+) -> str:
+    """Build a prompt for tentacle calls, optionally with essay summary context.
+
+    Each tentacle can receive its own model-specific essay summary (generated
+    offline via ``scripts/generate_essay_summaries.py``).  This gives the
+    tentacle deep essay awareness without sending the full 88K-token essay.
+
+    Parameters
+    ----------
+    summary_depth : str
+        ``"none"``  — no essay context (fastest, cheapest).
+        ``"light"`` — first ~8K tokens of the model's summary (default).
+        ``"full"``  — full ~40K token summary (expensive, for deep inquiries).
+
+    When *source* is ``"oracle"`` the prompt uses Oracle/tentacle language.
+    For any other source (e.g. ``"landing"``) it uses neutral debate language
+    so the main site doesn't leak Oracle-specific terminology.
+    """
+    question = _sanitize_oracle_input(question)
+    if source == "oracle":
+        # Oracle-specific tentacle flavour
+        if mode == "divine":
+            context = (
+                "You are one of the Shoggoth Oracle's tentacles — a distinct intelligence "
+                "with your own perspective. The seeker has asked for a prophecy about their "
+                "future. Respond with insight, honesty, and specificity."
+            )
+        elif mode == "commune":
+            context = (
+                "You are one of the Shoggoth Oracle's tentacles — a distinct intelligence "
+                "with your own perspective. The seeker has communed with the Oracle. "
+                "Respond with cryptic wisdom, brutal honesty, and unexpected kindness."
+            )
+        else:  # consult
+            context = (
+                "You are one of the Shoggoth Oracle's tentacles — a distinct intelligence "
+                "with your own perspective. The seeker is consulting the Oracle on an "
+                "important question. Respond with intellectual rigor, zero flattery, and "
+                "genuine insight."
+            )
+    else:
+        # Professional advisory language for the main site — completely separate from Oracle
+        context = (
+            "You are a senior analyst participating in a structured multi-perspective "
+            "review. Multiple independent AI models are each providing a different "
+            "analytical lens on the same question. Be professional, rigorous, and "
+            "direct. Focus on actionable insight over abstract discussion. "
+            "Acknowledge uncertainty where it exists."
+        )
+
+    # Inject model-specific essay summary if available (Oracle only)
+    summary_block = ""
+    if (
+        source == "oracle"
+        and model_name
+        and summary_depth != "none"
+        and model_name in _MODEL_SUMMARIES
+    ):
+        summary = _MODEL_SUMMARIES[model_name]
+        if summary_depth == "light":
+            summary = summary[:32000]  # ~8K tokens
+        summary_block = (
+            "\n\nESSAY CONTEXT (your analysis of the Oracle's foundational essay):\n"
+            f"<essay-analysis>\n{summary}\n</essay-analysis>\n"
+            "Draw on this analysis ONLY when it genuinely illuminates the question.\n"
+        )
+
+    return f"{context}{summary_block}\n\nYOUR ROLE: {role_prompt}\n\nThe question: {question}"
+
+
+def _assess_proposal_consensus(
+    question: str,
+    proposals: dict[str, str],
+) -> tuple[bool, float]:
+    """Assess whether agent proposals reached consensus using a frontier model.
+
+    Returns (consensus_reached, confidence) where confidence is 0.0-1.0.
+    On failure, falls back to a simple heuristic: consensus if 2+ proposals exist.
+    """
+    if len(proposals) < 2:
+        return False, 0.0
+
+    prompt = (
+        "You are evaluating whether multiple AI agents reached consensus on a question.\n\n"
+        f"Question: {question}\n\n"
+    )
+    for agent, text in proposals.items():
+        prompt += f"{agent}: {text[:400]}\n\n"
+    prompt += (
+        "Do the agents substantially agree on the answer? "
+        "Respond with JSON only: "
+        '{"consensus": true/false, "confidence": 0.0-1.0, "verdict": "agree|disagree|partial"}\n'
+        "JSON:"
+    )
+
+    try:
+        import re as _re
+
+        handler = PlaygroundHandler.__new__(PlaygroundHandler)
+        raw = handler._call_frontier_model(prompt, timeout=5.0)
+        json_match = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+        else:
+            parsed = json.loads(raw)
+
+        reached = _normalize_receipt_boolean(parsed.get("consensus"))
+        conf = float(parsed.get("confidence", 0.0))
+        conf = max(0.0, min(1.0, conf))  # clamp
+        return reached, conf
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Consensus assessment failed, using heuristic: %s", exc)
+        # Fallback: if 2+ agents responded, assume moderate agreement
+        return len(proposals) >= 2, 0.7
+
+
+def _try_oracle_tentacles(
+    mode: str,
+    question: str,
+    agent_count: int,
+    topic: str | None = None,
+    source: str = "oracle",
+    summary_depth: str = "light",
+    client_debate_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Generate multi-perspective Oracle responses using genuinely different AI models.
+
+    Each tentacle is a different AI (Claude, GPT, Grok, DeepSeek, Gemini, Mistral)
+    with a different argumentative role. Returns a debate-shaped result dict, or None.
+    """
+    import concurrent.futures
+
+    available = _get_available_tentacle_models()
+    if not available:
+        logger.warning("No tentacle models available (no API keys)")
+        return None
+
+    # Assign roles to available models (up to agent_count)
+    role_prompts = (
+        _TENTACLE_ROLE_PROMPTS if source == "oracle" else _choose_landing_role_prompts(question)
+    )
+    count = max(2, min(agent_count, len(available), len(role_prompts)))
+    assignments = list(zip(available[:count], role_prompts[:count]))
+    results: dict[str, str] = {}
+    start = time.monotonic()
+    logger.info(
+        "Starting %d tentacle calls: %s",
+        count,
+        [a[0]["name"] for a in assignments],
+    )
+
+    def _call_tentacle(
+        model_cfg: dict[str, str],
+        role_prompt: str,
+    ) -> tuple[str, str | None]:
+        prompt = _build_tentacle_prompt(
+            mode,
+            question,
+            role_prompt,
+            source=source,
+            model_name=model_cfg["name"],
+            summary_depth=summary_depth,
+        )
+        text = _call_provider_llm(
+            model_cfg["provider"],
+            model_cfg["model"],
+            prompt,
+            max_tokens=800,
+            timeout=_ORACLE_CALL_TIMEOUT,
+            openrouter_model=model_cfg.get("openrouter_model"),
+        )
+        return model_cfg["name"], text
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(count, 6)) as pool:
+        futures = [pool.submit(_call_tentacle, m, r) for m, r in assignments]
+        for future in concurrent.futures.as_completed(futures, timeout=_ORACLE_CALL_TIMEOUT + 2):
+            try:
+                name, text = future.result()
+                if text:
+                    text = _filter_oracle_response(text)
+                    results[name] = text
+                    logger.info("Tentacle %s responded (%d chars)", name, len(text))
+                else:
+                    logger.warning("Tentacle %s returned empty response", name)
+            except (
+                OSError,
+                RuntimeError,
+                ValueError,
+                TypeError,
+                KeyError,
+                AttributeError,
+                TimeoutError,
+            ):
+                logger.warning("Tentacle future failed", exc_info=True)
+            except Exception:
+                logger.warning("Tentacle future failed (unexpected)", exc_info=True)
+
+    if not results:
+        logger.warning("All %d tentacle calls failed — no results", count)
+        return None
+
+    duration = time.monotonic() - start
+    logger.info(
+        "Tentacles complete: %d/%d succeeded in %.1fs",
+        len(results),
+        count,
+        duration,
+    )
+    participants = list(results.keys())
+    # Last respondent synthesizes; prefer the synthesizer model if available
+    final = results.get(available[min(2, len(available) - 1)]["name"]) or next(
+        iter(results.values())
+    )
+    is_landing_preview = source == "landing"
+    if is_landing_preview:
+        final_issue = _landing_relevance_issue(question, final)
+        flagged_responses = sum(
+            1 for response in results.values() if _landing_relevance_issue(question, response)
+        )
+        if final_issue or flagged_responses >= max(2, (len(results) + 1) // 2):
+            return {
+                "error": "Landing preview needs clarification",
+                "message": final_issue
+                or (
+                    "The fast preview drifted away from your question. "
+                    "Tighten the wording or pick one interpretation first."
+                ),
+                "code": "landing_preview_needs_clarification",
+                "is_live": False,
+            }
+    consensus_method = "frontier_model_assessment"
+    supporting_agents = participants
+    dissenting_agents: list[str] = []
+    if is_landing_preview:
+        consensus_reached = False
+        confidence = 0.0
+        consensus_method = "landing_preview"
+        supporting_agents = []
+    else:
+        # Assess consensus from proposals using frontier model intelligence
+        consensus_reached, confidence = _assess_proposal_consensus(
+            question,
+            results,
+        )
+    verdict_label = "consensus_reached" if consensus_reached else "needs_review"
+    debate_id = client_debate_id or uuid.uuid4().hex[:16]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    receipt_id = f"LV-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+    receipt_hash = hashlib.sha256(
+        f"{receipt_id}:{question}:{verdict_label}:{confidence}".encode()
+    ).hexdigest()
+
+    payload: dict[str, Any] = {
+        "id": debate_id,
+        "topic": question,
+        "status": "completed",
+        "rounds_used": 1,
+        "consensus_reached": consensus_reached,
+        "confidence": confidence,
+        "verdict": verdict_label,
+        "duration_seconds": round(duration, 3),
+        "participants": participants,
+        "proposals": results,
+        "critiques": [],
+        "votes": [],
+        "dissenting_views": [],
+        "final_answer": final,
+        "is_live": not is_landing_preview,
+        "receipt": {
+            "receipt_id": receipt_id,
+            "question": question,
+            "verdict": verdict_label,
+            "confidence": confidence,
+            "consensus": {
+                "reached": consensus_reached,
+                "method": consensus_method,
+                "confidence": confidence,
+                "supporting_agents": supporting_agents,
+                "dissenting_agents": dissenting_agents,
+                "dissents": [],
+            },
+            "agents": participants,
+            "rounds_used": 1,
+            "claims": 0,
+            "evidence_count": 0,
+            "timestamp": now_iso,
+            "signature": receipt_hash,
+            "signature_algorithm": "SHA-256-content-hash",
+        },
+        "receipt_hash": receipt_hash,
+    }
+    if is_landing_preview:
+        payload["result_mode"] = "preview"
+        payload["result_warning"] = (
+            "This landing result is a fast preview of parallel model outputs. "
+            "It is not a full consensus proof."
+        )
+    return payload
+
+
+def _run_inline_mock_debate(
+    topic: str,
+    rounds: int,
+    agent_count: int,
+    question: str | None = None,
+) -> dict[str, Any]:
+    """Run a mock debate without the aragora-debate package."""
+    start = time.monotonic()
+    debate_id = uuid.uuid4().hex[:16]
+    all_names = ["analyst", "critic", "moderator", "contrarian", "synthesizer"]
+    names = [all_names[i] if i < len(all_names) else f"agent_{i}" for i in range(agent_count)]
+    styles = [_AGENT_STYLES[i % len(_AGENT_STYLES)] for i in range(agent_count)]
+
+    topic_proposals = _build_mock_proposals(topic, question=question)
+    topic_critiques = _build_mock_critiques(topic, question=question)
+    critique_issues = topic_critiques["issues"]
+    critique_suggestions = topic_critiques["suggestions"]
+
+    proposals: dict[str, str] = {}
+    for name, style in zip(names, styles):
+        proposals[name] = random.choice(topic_proposals[style])  # noqa: S311 -- mock data generation
+
+    critiques: list[dict[str, Any]] = []
+    for i, (name, style) in enumerate(zip(names, styles)):
+        for j, target in enumerate(names):
+            if i == j:
+                continue
+            lo, hi = _MOCK_SEVERITY[style]
+            critiques.append(
+                {
+                    "agent": name,
+                    "target_agent": target,
+                    "issues": list(critique_issues[style]),
+                    "suggestions": list(critique_suggestions[style]),
+                    "severity": round(random.uniform(lo, hi), 1),  # noqa: S311 -- mock data generation
+                }
+            )
+
+    votes: list[dict[str, Any]] = []
+    vote_tally: dict[str, float] = {}
+    vote_source = question or topic
+    topic_snippet = vote_source[:80] if vote_source else "the proposal"
+    if len(vote_source) > 80:
+        topic_snippet = topic_snippet.rsplit(" ", 1)[0] + "..."
+    topic_snippet = topic_snippet.rstrip(".!? ")
+    _vote_reasoning: dict[str, list[str]] = {
+        "supportive": [
+            "{choice}'s proposal on '{topic}' is the strongest -- clear benefits with manageable risks",
+            "After weighing all arguments on '{topic}', {choice} presents the most actionable path forward",
+        ],
+        "critical": [
+            "{choice}'s argument best addresses the risks I raised about '{topic}'",
+            "While I remain cautious about '{topic}', {choice}'s position is the most defensible",
+        ],
+        "balanced": [
+            "{choice} strikes the right balance between ambition and pragmatism on '{topic}'",
+            "On '{topic}', {choice}'s staged approach manages risk while enabling progress",
+        ],
+        "contrarian": [
+            "Reluctantly voting for {choice} -- their view on '{topic}' at least considers the downsides",
+            "None of the proposals fully satisfy my concerns, but {choice}'s position on '{topic}' is least risky",
+        ],
+    }
+    for name, style in zip(names, styles):
+        others = [n for n in names if n != name]
+        if style == "supportive":
+            choice = others[0]
+        elif style == "contrarian":
+            choice = others[-1]
+        else:
+            choice = random.choice(others)  # noqa: S311 -- mock data generation
+        base_conf = _MOCK_CONFIDENCE.get(style, 0.7)
+        conf = round(max(0.1, min(1.0, base_conf + random.uniform(-0.05, 0.05))), 2)  # noqa: S311 -- mock data generation
+        reasoning = random.choice(_vote_reasoning.get(style, ["{choice}"])).format(  # noqa: S311 -- mock data generation
+            choice=choice, topic=topic_snippet
+        )
+        votes.append(
+            {
+                "agent": name,
+                "choice": choice,
+                "confidence": conf,
+                "reasoning": reasoning,
+            }
+        )
+        vote_tally[choice] = vote_tally.get(choice, 0.0) + conf
+
+    total_weight = sum(vote_tally.values())
+    leading = max(vote_tally, key=lambda k: vote_tally[k]) if vote_tally else names[0]
+    confidence = vote_tally.get(leading, 0.0) / total_weight if total_weight > 0 else 0.0
+    consensus_reached = confidence >= 0.5
+    supporting = [v["agent"] for v in votes if v["choice"] == leading]
+    dissenting = [n for n in names if n not in supporting]
+
+    if confidence >= 0.85:
+        verdict = "approved"
+    elif confidence >= 0.6:
+        verdict = "approved_with_conditions"
+    elif confidence >= 0.4:
+        verdict = "needs_review"
+    else:
+        verdict = "rejected"
+
+    duration = time.monotonic() - start
+    now_iso = datetime.now(timezone.utc).isoformat()
+    receipt_id = f"DR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+    receipt_hash = hashlib.sha256(
+        f"{receipt_id}:{topic}:{verdict}:{confidence}".encode()
+    ).hexdigest()
+
+    return {
+        "id": debate_id,
+        "topic": topic,
+        "status": "consensus_reached" if consensus_reached else "completed",
+        "rounds_used": rounds,
+        "consensus_reached": consensus_reached,
+        "confidence": confidence,
+        "verdict": verdict,
+        "duration_seconds": round(duration, 3),
+        "participants": names,
+        "proposals": proposals,
+        "critiques": critiques,
+        "votes": votes,
+        "dissenting_views": [
+            f"{v['agent']}: {v['reasoning']}" for v in votes if v["choice"] != leading
+        ],
+        "final_answer": proposals.get(leading, ""),
+        "receipt": {
+            "receipt_id": receipt_id,
+            "question": topic,
+            "verdict": verdict,
+            "confidence": confidence,
+            "consensus": {
+                "reached": consensus_reached,
+                "method": "majority",
+                "confidence": confidence,
+                "supporting_agents": supporting,
+                "dissenting_agents": dissenting,
+                "dissents": [
+                    {
+                        "agent": v["agent"],
+                        "reasons": [v["reasoning"]],
+                        "alternative_view": f"Preferred: {v['choice']}",
+                        "severity": 0.5,
+                    }
+                    for v in votes
+                    if v["choice"] != leading
+                ],
+            },
+            "agents": names,
+            "rounds_used": rounds,
+            "claims": 0,
+            "evidence_count": 0,
+            "timestamp": now_iso,
+            "signature": receipt_hash,
+            "signature_algorithm": "SHA-256-content-hash",
+        },
+        "receipt_hash": receipt_hash,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Persistence helper
+# ---------------------------------------------------------------------------
+
+
+def _persist_playground_debate(response: dict[str, Any]) -> None:
+    """Persist a playground debate result for shareable permalinks.
+
+    Non-fatal: if persistence fails, the debate still works but won't
+    have a shareable link.
+    """
+    debate_id = _ensure_unique_public_share_id(response)
+
+    try:
+        from aragora.persistence.repositories.debate import DebateEntity, DebateRepository
+
+        topic = response.get("topic", "debate")
+
+        # Generate URL-friendly slug
+        slug_base = re.sub(r"[^a-z0-9]+", "-", topic[:60].lower()).strip("-")
+        slug = f"{slug_base}-{debate_id[:8]}"
+
+        # Mark as public playground debate
+        response["visibility"] = "public"
+        response.setdefault("source", "landing")
+
+        entity = DebateEntity.from_artifact(
+            artifact=response,
+            slug=slug,
+            debate_id=debate_id,
+        )
+
+        repo = DebateRepository()
+        repo.save(entity)
+        response["slug"] = slug
+        logger.info("Persisted debate %s as slug=%s", debate_id, slug)
+    except (ImportError, OSError, ValueError) as exc:
+        logger.warning("Failed to persist debate: %s", exc)
+
+    # Also save to DebateResultStore so the public viewer can find it.
+    # This is a separate try/except so a failure here doesn't affect the
+    # primary DebateRepository persistence above.
+    try:
+        from aragora.storage.debate_store import get_debate_store
+
+        store_debate_id = response.get("id", debate_id)
+        store_topic = response.get("topic", "debate")
+        store_source = response.get("source", "playground")
+        store = get_debate_store()
+        store.save(
+            debate_id=store_debate_id,
+            topic=store_topic,
+            result=response,
+            source=store_source,
+        )
+        logger.info("Saved debate %s to DebateResultStore", store_debate_id)
+    except (ImportError, OSError, ValueError) as exc:
+        logger.warning("Failed to save debate to DebateResultStore: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Handler
+# ---------------------------------------------------------------------------
+
+
+class PlaygroundHandler(BaseHandler):
+    """HTTP handler for the public playground demo.
+
+    Runs zero-cost mock debates using StyledMockAgent from aragora-debate.
+    Also supports live debates with real agents (budget-capped).
+    No authentication required. Rate limited per IP.
+    """
+
+    ROUTES = [
+        "/api/v1/playground/assess",
+        "/api/v1/playground/debate",
+        "/api/v1/playground/assess",
+        "/api/v1/playground/debate/live",
+        "/api/v1/playground/debate/live/cost-estimate",
+        "/api/v1/playground/landing/events",
+        "/api/v1/playground/landing/events/summary",
+        "/api/v1/playground/landing/feedback",
+        "/api/v1/playground/landing/feedback/review",
+        "/api/v1/playground/status",
+        "/api/v1/playground/tts",
+    ]
+
+    _DEBATE_ID_PATTERN = re.compile(r"^/api/v1/playground/debate/([a-f0-9]{16,32})$")
+    _CREATE_PATHS = {
+        "/api/v1/playground/debate",
+        "/api/v1/playground/debate/",
+    }
+
+    def __init__(self, ctx: dict | None = None):
+        self.ctx = ctx or {}
+
+    def can_handle(self, path: str) -> bool:
+        if path in (
+            "/api/v1/playground/assess",
+            *self._CREATE_PATHS,
+            "/api/v1/playground/assess",
+            "/api/v1/playground/debate/live",
+            "/api/v1/playground/debate/live/cost-estimate",
+            "/api/v1/playground/landing/events",
+            "/api/v1/playground/landing/events/summary",
+            "/api/v1/playground/landing/feedback",
+            "/api/v1/playground/landing/feedback/review",
+            "/api/v1/playground/status",
+            "/api/v1/playground/tts",
+        ):
+            return True
+        return bool(self._DEBATE_ID_PATTERN.match(path))
+
+    # ------------------------------------------------------------------
+    # GET /api/v1/playground/status | /api/v1/playground/debate/{id}
+    # ------------------------------------------------------------------
+
+    def handle(
+        self,
+        path: str,
+        query_params: dict[str, Any],
+        handler: Any,
+    ) -> HandlerResult | None:
+        if path == "/api/v1/playground/status":
+            return self._handle_status()
+        if path == "/api/v1/playground/landing/events/summary":
+            return self._handle_landing_event_summary(query_params)
+        if path == "/api/v1/playground/landing/feedback":
+            return self._handle_landing_feedback_list(query_params, handler)
+
+        # GET /api/v1/playground/debate/{debate_id} — retrieve saved debate
+        m = self._DEBATE_ID_PATTERN.match(path)
+        if m:
+            return self._handle_get_debate(m.group(1))
+
+        return None
+
+    def _handle_get_debate(self, debate_id: str) -> HandlerResult:
+        """Retrieve a saved debate by ID for shareable links."""
+        try:
+            from aragora.storage.debate_store import get_debate_store
+
+            store = get_debate_store()
+            result = store.get(debate_id)
+            if result is None:
+                return error_response("Debate not found or expired", 404)
+            return json_response(result)
+        except (ImportError, RuntimeError, OSError) as exc:
+            logger.debug("Debate store unavailable: %s", exc)
+            return error_response("Debate not found", 404)
+
+    def _handle_status(self) -> HandlerResult:
+        try:
+            review_store = get_landing_review_store()
+            landing_event_count = review_store.count_events()
+            landing_feedback_count = review_store.count_feedback()
+        except Exception as exc:  # noqa: BLE001 - health endpoint should remain available
+            logger.warning("Failed to read landing review counts: %s", exc)
+            landing_event_count = 0
+            landing_feedback_count = 0
+
+        return json_response(
+            {
+                "status": "ok",
+                "engine": "aragora-debate",
+                "mock_agents": True,
+                "max_rounds": _MAX_ROUNDS,
+                "max_agents": _MAX_AGENTS,
+                "rate_limit": f"{_PLAYGROUND_RATE_LIMIT} requests per {int(_PLAYGROUND_RATE_WINDOW)}s",
+                "landing_event_count": landing_event_count,
+                "landing_feedback_count": landing_feedback_count,
+            }
+        )
+
+    def _handle_landing_event_summary(self, query_params: dict[str, Any]) -> HandlerResult:
+        """Summarize recent landing telemetry without exposing raw events."""
+        window_seconds = safe_query_float(
+            query_params,
+            "window",
+            default=86_400.0,
+            min_val=60.0,
+            max_val=604_800.0,
+        )
+        option_limit = safe_query_int(query_params, "limit", default=5, min_val=1, max_val=20)
+        return json_response(
+            _build_landing_event_summary(
+                window_seconds=window_seconds,
+                option_limit=option_limit,
+            )
+        )
+
+    def _handle_landing_feedback_list(
+        self,
+        query_params: dict[str, Any],
+        handler: Any,
+    ) -> HandlerResult:
+        """List recent wrong-answer reports for admins."""
+        _user, err = self.require_admin_or_error(handler)
+        if err:
+            return err
+
+        window_seconds = safe_query_float(
+            query_params,
+            "window",
+            default=604_800.0,
+            min_val=300.0,
+            max_val=2_592_000.0,
+        )
+        limit = safe_query_int(query_params, "limit", default=50, min_val=1, max_val=200)
+        return json_response(
+            _build_landing_feedback_summary(
+                window_seconds=window_seconds,
+                limit=limit,
+            )
+        )
+
+    def _handle_landing_feedback_review(self, handler: Any) -> HandlerResult:
+        """Update admin review state for a wrong-answer report."""
+        user, err = self.require_admin_or_error(handler)
+        if err:
+            return err
+
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            return error_response("Invalid landing feedback review payload", 400)
+
+        report_id = str(body.get("id", "") or "").strip()
+        if not report_id:
+            return error_response("Missing landing feedback report id", 400)
+
+        review_status = _normalize_landing_review_status(body.get("review_status"))
+        reviewed_at = None
+        reviewed_by = None
+        if review_status != "pending":
+            reviewed_at = datetime.now(timezone.utc).isoformat()
+            reviewed_by = _reviewer_label(user)
+
+        try:
+            updated = get_landing_review_store().update_feedback_review(
+                report_id=report_id,
+                review_status=review_status,
+                reviewed_at=reviewed_at,
+                reviewed_by=reviewed_by,
+            )
+        except Exception as exc:  # noqa: BLE001 - keep admin queue endpoint resilient
+            logger.warning("Failed to update landing feedback review state: %s", exc)
+            return error_response("Failed to update landing feedback review state", 500)
+
+        if not updated:
+            return error_response("Landing feedback report not found", 404)
+
+        return json_response(
+            {
+                "ok": True,
+                "id": report_id,
+                "review_status": review_status,
+                "reviewed_at": reviewed_at,
+                "reviewed_by": reviewed_by,
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # POST /api/v1/playground/tts — ElevenLabs TTS proxy
+    # ------------------------------------------------------------------
+
+    _TTS_RATE_LIMIT = 10  # requests per window
+    _TTS_RATE_WINDOW = 60.0  # seconds
+    _TTS_MAX_TEXT = 2000  # max characters
+    _TTS_VOICE_ID = "flHkNRp1BlvT73UL6gyz"  # Oracle voice
+    _TTS_MODEL = "eleven_multilingual_v2"
+
+    @handle_errors("playground TTS")
+    def _handle_tts(self, handler: Any) -> HandlerResult:
+        """Proxy text-to-speech through ElevenLabs, returning audio/mpeg."""
+        import urllib.request
+        import urllib.error
+
+        from aragora.config.secrets import get_secret
+
+        api_key = get_secret("ELEVENLABS_API_KEY")
+        if not api_key:
+            return error_response("TTS not configured", 503)
+
+        # Rate limit
+        client_ip = "unknown"
+        if handler and hasattr(handler, "client_address"):
+            addr = handler.client_address
+            if isinstance(addr, (list, tuple)) and len(addr) >= 1:
+                client_ip = str(addr[0])
+        allowed, retry_after = _check_rate_limit(
+            f"tts:{client_ip}",
+            limit=self._TTS_RATE_LIMIT,
+            window=self._TTS_RATE_WINDOW,
+        )
+        if not allowed:
+            return json_response(
+                {"error": "TTS rate limit exceeded", "retry_after": retry_after},
+                status=429,
+            )
+
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            return error_response("Invalid TTS payload", 400)
+
+        raw_text = body.get("text", "")
+        if "text" in body and not isinstance(raw_text, str):
+            return error_response("Text must be a string", 400)
+
+        text = raw_text.strip()
+        if not text:
+            return error_response("Missing 'text' field", 400)
+        if len(text) > self._TTS_MAX_TEXT:
+            text = text[: self._TTS_MAX_TEXT]
+
+        import json as _json
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self._TTS_VOICE_ID}"
+        payload = _json.dumps(
+            {
+                "text": text,
+                "model_id": self._TTS_MODEL,
+                "voice_settings": {
+                    "stability": 0.4,
+                    "similarity_boost": 0.8,
+                    "style": 0.6,
+                    "use_speaker_boost": True,
+                },
+            }
+        ).encode()
+        req = urllib.request.Request(  # noqa: S310 -- hardcoded ElevenLabs API URL
+            url,
+            data=payload,
+            headers={
+                "xi-api-key": api_key,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 -- hardcoded ElevenLabs API URL
+                audio_bytes = resp.read()
+        except urllib.error.HTTPError as exc:
+            logger.warning("ElevenLabs TTS failed: %s", exc.code)
+            return error_response("TTS generation failed", 502)
+        except (urllib.error.URLError, TimeoutError):
+            logger.warning("ElevenLabs TTS timeout or network error")
+            return error_response("TTS service unavailable", 503)
+
+        return HandlerResult(
+            status_code=200,
+            content_type="audio/mpeg",
+            body=audio_bytes,
+            headers={
+                # User-supplied speech can contain sensitive content and should
+                # never be retained by shared caches.
+                "Cache-Control": "private, no-store, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # POST /api/v1/playground/debate
+    # ------------------------------------------------------------------
+
+    @handle_errors("playground creation")
+    def handle_post(
+        self,
+        path: str,
+        query_params: dict[str, Any],
+        handler: Any,
+    ) -> HandlerResult | None:
+        if path == "/api/v1/playground/tts":
+            return self._handle_tts(handler)
+        if path == "/api/v1/playground/landing/events":
+            return self._handle_landing_event(handler)
+        if path == "/api/v1/playground/landing/feedback":
+            return self._handle_landing_feedback(handler)
+        if path == "/api/v1/playground/landing/feedback/review":
+            return self._handle_landing_feedback_review(handler)
+        if path == "/api/v1/playground/assess":
+            return self._handle_assess(handler)
+        if path == "/api/v1/playground/debate/live/cost-estimate":
+            return self._handle_cost_estimate(handler)
+        if path == "/api/v1/playground/debate/live":
+            return self._handle_live_debate(handler)
+        if path not in self._CREATE_PATHS:
+            return None
+
+        # Parse body early so we can check cache before rate limiting
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+
+        topic = str(body.get("topic", _DEFAULT_TOPIC) or _DEFAULT_TOPIC).strip()
+        if not topic:
+            topic = _DEFAULT_TOPIC
+        if len(topic) > _MAX_TOPIC_LENGTH:
+            return error_response(
+                f"Topic must be {_MAX_TOPIC_LENGTH} characters or less",
+                400,
+            )
+
+        # Raw question (separate from system-prompt-laden topic, e.g. from Oracle)
+        question = str(body.get("question", "") or "").strip() or None
+
+        # Oracle mode (consult / divine / commune)
+        mode = str(body.get("mode", "") or "").strip() or "consult"
+
+        # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        # Controls prompt flavour — Oracle uses tentacle language, landing uses neutral.
+        # Default to "landing" so unauthenticated visitors get multi-agent debates
+        # instead of single-agent oracle. The Oracle page explicitly sends source=oracle.
+        source = str(body.get("source", "") or "").strip() or "landing"
+
+        # Session ID for follow-up conversation memory
+        session_id = str(body.get("session_id", "") or "").strip() or None
+
+        # Client-provided debate ID — allows the frontend to subscribe to
+        # spectate WebSocket events *before* the HTTP POST returns.
+        client_debate_id = str(body.get("debate_id", "") or "").strip() or None
+        if client_debate_id and (
+            len(str(client_debate_id)) > 64 or not str(client_debate_id).isascii()
+        ):
+            client_debate_id = None
+
+        try:
+            rounds = int(body.get("rounds", _DEFAULT_ROUNDS))
+        except (TypeError, ValueError):
+            rounds = _DEFAULT_ROUNDS
+        rounds = max(1, min(rounds, _MAX_ROUNDS))
+
+        try:
+            agent_count = int(body.get("agents", _DEFAULT_AGENTS))
+        except (TypeError, ValueError):
+            agent_count = _DEFAULT_AGENTS
+        agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
+
+        # --- Content-addressed cache lookup (before rate limiting) ---
+        cache_key: str | None = None
+        model_ids: list[str] = []
+        try:
+            from aragora.storage.debate_store import get_debate_store, normalize_cache_key
+
+            effective_topic = question or topic
+            store = get_debate_store()
+            agent_tags = _get_available_live_agents(agent_count)
+            cached = None
+
+            if agent_tags:
+                model_ids = [
+                    tag.split(":", 1)[1] if tag.startswith("openrouter:") else tag
+                    for tag in agent_tags
+                ]
+                cache_key = normalize_cache_key(effective_topic, model_ids, rounds)
+                cached = store.get_by_cache_key(cache_key)
+            elif source == "demo":
+                # The demo proof surface may replay a persisted live result even
+                # when the current process cannot run live agents locally.
+                cache_key = normalize_cache_key(effective_topic, model_ids, rounds)
+                cached = store.get_by_cache_key(cache_key)
+                if cached is None:
+                    cached = store.get_latest_live_by_topic(effective_topic, rounds)
+            else:
+                raise ValueError("no live playground agents configured")
+
+            if cached is not None:
+                cached = _normalize_public_debate_payload(cached)
+                cached.setdefault("source", source)
+
+                # /demo is a truthful proof surface: it may replay persisted live runs,
+                # but it must not surface unlabeled fallback debates as if they were live.
+                if source == "demo" and not _is_live_public_result(cached):
+                    logger.info(
+                        "Skipping cached debate %.12s… for demo: no live provenance",
+                        cache_key,
+                    )
+                else:
+                    if not _is_live_public_result(cached) and not cached.get("mock_fallback"):
+                        cached = _annotate_mock_fallback(
+                            cached,
+                            reason="Served from a persisted fallback result.",
+                        )
+                    cached["cached"] = True
+                    cached["cached_at"] = time.time()
+                    logger.info("Cache hit for debate key %.12s…", cache_key)
+                    # Emit spectate events for cached results too (landing page demo)
+                    try:
+                        from aragora.spectate.ws_bridge import (
+                            get_spectate_bridge,
+                            bind_spectate_context,
+                        )
+
+                        bridge = get_spectate_bridge()
+                        if bridge.running:
+                            debate_id = cached.get("id", "cached")
+                            answer = str(cached.get("final_answer", ""))[:500]
+                            with bind_spectate_context(debate_id=debate_id):
+                                bridge._forward_event(
+                                    event_type="debate_start",
+                                    agent="oracle",
+                                    details=str(cached.get("topic", ""))[:200],
+                                )
+                                bridge._forward_event(
+                                    event_type="proposal",
+                                    agent="oracle",
+                                    details=answer,
+                                    round_number=1,
+                                )
+                                bridge._forward_event(
+                                    event_type="consensus",
+                                    agent="oracle",
+                                    details="Oracle verdict delivered",
+                                    round_number=1,
+                                )
+                    except Exception:
+                        pass
+                    return json_response(cached)
+        except (ImportError, RuntimeError, OSError, ValueError):
+            logger.debug("Cache lookup unavailable, proceeding to debate", exc_info=True)
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache lookup failed, proceeding to debate", exc_info=True)
+
+        # Rate limiting (skipped on cache hit above)
+        client_ip = _extract_client_ip(handler)
+
+        allowed, retry_after = _check_rate_limit(client_ip)
+        if not allowed:
+            return json_response(
+                {
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "code": "rate_limit_exceeded",
+                    "retry_after": retry_after,
+                },
+                status=429,
+            )
+
+        # Daily budget cap — prevents runaway OpenRouter costs
+        budget_ok, budget_reason = _check_daily_budget()
+        if not budget_ok:
+            return json_response(
+                {
+                    "error": budget_reason,
+                    "code": "budget_exceeded",
+                },
+                status=429,
+            )
+        _record_debate_cost()
+
+        return self._run_debate(
+            topic,
+            rounds,
+            agent_count,
+            question=question,
+            mode=mode,
+            session_id=session_id,
+            source=source,
+            cache_key=cache_key,
+            model_ids=model_ids,
+            client_debate_id=client_debate_id,
+        )
+
+    def _handle_landing_event(self, handler: Any) -> HandlerResult:
+        """Accept best-effort landing telemetry from the public landing page."""
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+
+        event_type = str(body.get("event_type", "") or "").strip()
+        if event_type not in _LANDING_EVENT_TYPES:
+            return error_response("Unknown landing telemetry event", 400)
+
+        _record_landing_event(
+            event_type,
+            client_ip=_extract_client_ip(handler),
+            data=body.get("data") if isinstance(body, dict) else {},
+        )
+        return json_response({"ok": True}, status=202)
+
+    def _handle_landing_feedback(self, handler: Any) -> HandlerResult:
+        """Accept a bounded wrong-answer report from the landing page."""
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            return error_response("Invalid landing feedback payload", 400)
+
+        report = _record_landing_feedback(
+            client_ip=_extract_client_ip(handler),
+            data=body,
+        )
+        return json_response({"ok": True, "report_id": report["id"]}, status=202)
+
+    # ------------------------------------------------------------------
+    # Question assessment (ambiguity detection via frontier model)
+    # ------------------------------------------------------------------
+
+    def _handle_assess(self, handler: Any) -> HandlerResult:
+        """Assess question ambiguity using a frontier model."""
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            return error_response("Invalid assess payload", 400)
+
+        raw_question = body.get("question", "")
+        if "question" in body and not isinstance(raw_question, str):
+            return error_response("Question must be a string", 400)
+
+        question = raw_question.strip()
+        if not question:
+            return json_response({"type": "ready", "option": self._build_ready_option("")})
+
+        if len(question) > _MAX_TOPIC_LENGTH:
+            return json_response(
+                {"type": "ready", "option": self._build_ready_option(question[:200])}
+            )
+
+        # Rate limit: reuse the existing per-IP check (5 per 60s for assess)
+        client_ip = _extract_client_ip(handler)
+        allowed, retry_after = _check_rate_limit(
+            f"assess:{client_ip}",
+            limit=5,
+            window=60.0,
+        )
+        if not allowed:
+            return json_response(
+                {
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "code": "rate_limit_exceeded",
+                    "retry_after": retry_after,
+                },
+                status=429,
+            )
+
+        heuristic_preflight = _build_heuristic_food_preflight(question)
+        if heuristic_preflight is not None:
+            return json_response({"type": "confirm", "preflight": heuristic_preflight})
+
+        prompt = (
+            "You are a question-assessment system. Analyze this user question and determine if it is "
+            "clear enough to debate directly, or if it could be interpreted multiple ways.\n\n"
+            f"Question: {question}\n\n"
+            "Respond with JSON only:\n"
+            '- If clear: {"clear": true, "topic": "<the question as-is>"}\n'
+            '- If ambiguous: {"clear": false, "interpretations": ["interpretation 1", "interpretation 2", "interpretation 3"]}\n'
+            "JSON response:"
+        )
+
+        try:
+            raw = self._call_frontier_model(prompt, timeout=5.0)
+            # Extract JSON from response (model might wrap it in markdown code blocks)
+            import re as _re
+
+            json_match = _re.search(r"\{.*\}", raw, _re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group())
+            else:
+                parsed = json.loads(raw)
+        except (TimeoutError, ConnectionError, json.JSONDecodeError, RuntimeError, OSError) as exc:
+            logger.debug("Assess call failed, returning ready: %s", exc)
+            return json_response({"type": "ready", "option": self._build_ready_option(question)})
+
+        if parsed.get("clear", True):
+            topic = parsed.get("topic", question)
+            return json_response({"type": "ready", "option": self._build_ready_option(topic)})
+
+        # Build preflight options from interpretations
+        interpretations = parsed.get("interpretations", [])
+        options = []
+        for i, interp in enumerate(interpretations[:4]):
+            options.append(
+                {
+                    "id": f"interp-{i}",
+                    "label": interp[:80],
+                    "description": interp,
+                    "originalQuestion": question,
+                    "interpretedQuestion": interp,
+                    "debatePrompt": interp,
+                    "agents": 3,
+                    "rounds": 2,
+                    "recommended": i == 0,
+                }
+            )
+        # Always include "use original wording" as last option
+        options.append(
+            {
+                "id": "original",
+                "label": "Use original wording",
+                "description": "Debate the question exactly as written.",
+                "originalQuestion": question,
+                "interpretedQuestion": question,
+                "debatePrompt": question,
+                "agents": 3,
+                "rounds": 2,
+            }
+        )
+
+        return json_response(
+            {
+                "type": "confirm",
+                "preflight": {
+                    "title": "This question could mean a few things",
+                    "prompt": "Pick the interpretation you want Aragora to debate.",
+                    "options": options,
+                },
+            }
+        )
+
+    def _build_ready_option(self, question: str) -> dict:
+        """Build a ready-to-debate option payload."""
+        return {
+            "id": "original",
+            "label": "Use original wording",
+            "description": question,
+            "originalQuestion": question,
+            "interpretedQuestion": question,
+            "debatePrompt": question,
+            "agents": 3,
+            "rounds": 2,
+        }
+
+    # ------------------------------------------------------------------
+    # TL;DR synthesis helpers
+    # ------------------------------------------------------------------
+
+    def _call_frontier_model(self, prompt: str, timeout: float = 5.0) -> str:
+        """Call the fastest available frontier model for a short generation task.
+
+        Tries Anthropic (Claude Sonnet) first, falls back to OpenRouter.
+        Runs the async agent.generate() call in a sync context with a timeout.
+
+        Raises:
+            TimeoutError: If the generation exceeds *timeout* seconds.
+            RuntimeError: If no agent is available.
+        """
+        agent = None
+
+        # Try Anthropic first
+        try:
+            from aragora.agents.api_agents.anthropic import (
+                AnthropicAPIAgent as _Anthropic,
+            )
+
+            agent = _Anthropic(
+                name="tldr-synth",
+                model="claude-sonnet-4-6",
+            )
+        except (ImportError, RuntimeError, ValueError, OSError) as exc:
+            logger.debug("Anthropic agent unavailable for TL;DR: %s", exc)
+
+        # Fall back to OpenRouter
+        if agent is None:
+            try:
+                from aragora.agents.api_agents.openrouter import (
+                    OpenRouterAgent as _OpenRouter,
+                )
+
+                agent = _OpenRouter(
+                    name="tldr-synth",
+                    model="anthropic/claude-opus-5",
+                )
+            except (ImportError, RuntimeError, ValueError, OSError) as exc:
+                logger.debug("OpenRouter agent unavailable for TL;DR: %s", exc)
+
+        if agent is None:
+            raise RuntimeError("No frontier model available for TL;DR synthesis")
+
+        async def _generate() -> str:
+            return await asyncio.wait_for(agent.generate(prompt), timeout=timeout)
+
+        return asyncio.run(_generate())
+
+    def _synthesize_tldr(
+        self,
+        question: str,
+        proposals: dict[str, str],
+        fallback_text: str | None = None,
+    ) -> str:
+        """Synthesize a one-sentence TL;DR from agent proposals.
+
+        Uses ``_call_frontier_model`` to generate a concise answer.  On any
+        failure (timeout, connection error, missing agent), extracts the first
+        sentence from *fallback_text* instead.
+        """
+        prompt = (
+            "Given these agent proposals responding to the question below, "
+            "write a single-sentence direct answer. Be practical, not philosophical. "
+            "Do not mention the agents or the debate process.\n\n"
+            f"Question: {question}\n\n"
+        )
+        for agent_name, text in proposals.items():
+            prompt += f"{agent_name}: {text[:500]}\n\n"
+        prompt += "One-sentence answer:"
+
+        try:
+            return self._call_frontier_model(prompt, timeout=5.0)
+        except (
+            AgentError,
+            TimeoutError,
+            OSError,
+            RuntimeError,
+            ConnectionError,
+            ValueError,
+        ) as exc:
+            logger.debug("TL;DR synthesis failed, using fallback: %s", exc)
+
+        # Fallback: extract first sentence from fallback_text
+        if not fallback_text:
+            return ""
+        first_dot = fallback_text.find(". ")
+        if first_dot > 0:
+            return fallback_text[: first_dot + 1]
+        return fallback_text[:200]
+
+    def _run_debate(
+        self,
+        topic: str,
+        rounds: int,
+        agent_count: int,
+        question: str | None = None,
+        mode: str = "consult",
+        session_id: str | None = None,
+        source: str = "oracle",
+        cache_key: str | None = None,
+        model_ids: list[str] | None = None,
+        client_debate_id: str | None = None,
+    ) -> HandlerResult:
+        _cache_kw: dict[str, Any] = {}
+        if cache_key is not None:
+            _cache_kw = {"cache_key": cache_key, "model_ids": model_ids or [], "rounds": rounds}
+
+        if question:
+            if source == "oracle":
+                # Oracle mode: try single-agent Oracle response first
+                oracle_result = _try_oracle_response(
+                    mode=mode,
+                    question=question,
+                    topic=topic,
+                    session_id=session_id,
+                    client_debate_id=client_debate_id,
+                )
+                if oracle_result:
+                    proposals = oracle_result.get("proposals", {})
+                    if proposals:
+                        oracle_result["tldr"] = self._synthesize_tldr(
+                            question or topic,
+                            proposals,
+                            fallback_text=oracle_result.get("final_answer", ""),
+                        )
+                    return self._persist_and_respond(
+                        json_response(oracle_result),
+                        topic,
+                        source,
+                        **_cache_kw,
+                    )
+                logger.info(
+                    "Oracle LLM call failed — returning placeholder instead of irrelevant mock"
+                )
+                # Return an Oracle-themed placeholder instead of a generic mock debate
+                # (the generic mock talks about microservices which is nonsensical for Oracle)
+                debate_id = client_debate_id or uuid.uuid4().hex[:16]
+                return self._persist_and_respond(
+                    json_response(
+                        {
+                            "id": debate_id,
+                            "topic": question,
+                            "status": "completed",
+                            "rounds_used": 1,
+                            "consensus_reached": True,
+                            "confidence": 0.5,
+                            "verdict": "pending",
+                            "duration_seconds": 0.1,
+                            "participants": ["oracle"],
+                            "proposals": {
+                                "oracle": "The Oracle is gathering its thoughts... The tentacles will speak momentarily."
+                            },
+                            "critiques": [],
+                            "votes": [],
+                            "dissenting_views": [],
+                            "final_answer": "The Oracle is gathering its thoughts... The tentacles will speak momentarily.",
+                            "receipt_hash": None,
+                        }
+                    ),
+                    topic,
+                    source,
+                    **_cache_kw,
+                )
+            else:
+                # Non-Oracle source (landing, playground, etc.): try multi-perspective tentacles
+                # with professional analyst roles — no Oracle/Shoggoth branding.
+                tentacle_result = _try_oracle_tentacles(
+                    mode=mode,
+                    question=question,
+                    agent_count=agent_count,
+                    topic=topic,
+                    source=source,
+                    summary_depth="none",  # no essay context for non-Oracle sources
+                    client_debate_id=client_debate_id,
+                )
+                if tentacle_result:
+                    if (
+                        source == "landing"
+                        and tentacle_result.get("code") == "landing_preview_needs_clarification"
+                    ):
+                        logger.info("Landing preview drifted off-topic — asking for clarification")
+                        return _build_landing_preview_clarification_response(
+                            str(tentacle_result.get("message") or "").strip() or None
+                        )
+                    proposals = tentacle_result.get("proposals", {})
+                    if proposals:
+                        tentacle_result["tldr"] = self._synthesize_tldr(
+                            question or topic,
+                            proposals,
+                            fallback_text=tentacle_result.get("final_answer", ""),
+                        )
+                    return self._persist_and_respond(
+                        json_response(tentacle_result), topic, source, **_cache_kw
+                    )
+                if source == "landing":
+                    logger.info("Landing preview failed — returning explicit preview timeout")
+                    return _build_landing_preview_timeout_response()
+                logger.info("Multi-perspective call failed — trying live debate")
+
+        if source in {"landing", "playground", "try"} and not question:
+            return self._mock_fallback_response(
+                topic,
+                rounds,
+                agent_count,
+                question=question,
+                source=source,
+                cache_kw=_cache_kw,
+                reason=(
+                    "The public mock debate endpoint returned a deterministic "
+                    "receipt-bearing fallback."
+                ),
+            )
+
+        # Run a real live debate, fall back to mock if it fails
+        try:
+            live_result = self._run_live_debate(question or topic, rounds, agent_count)
+            # Check if live debate returned an error response (status >= 400)
+            if live_result.status_code < 400:
+                try:
+                    live_data = json.loads(live_result.body.decode("utf-8"))
+                    if not isinstance(live_data, dict):
+                        raise TypeError("live debate body was not a JSON object")
+                except (json.JSONDecodeError, UnicodeDecodeError, AttributeError, TypeError):
+                    logger.info("Live debate response was unreadable, falling back to mock")
+                else:
+                    if _has_public_receipt(live_data):
+                        proposals = live_data.get("proposals", {})
+                        if isinstance(proposals, dict) and proposals:
+                            live_data["tldr"] = self._synthesize_tldr(
+                                question or topic,
+                                proposals,
+                                fallback_text=live_data.get("final_answer", ""),
+                            )
+                            live_result = json_response(live_data, status=live_result.status_code)
+                        return self._persist_and_respond(live_result, topic, source, **_cache_kw)
+                    logger.info(
+                        "Live debate response omitted a public receipt, falling back to mock"
+                    )
+            else:
+                logger.info(
+                    "Live debate returned status %d, falling back to mock",
+                    live_result.status_code,
+                )
+        except Exception as exc:  # noqa: BLE001 — landing page must never error
+            logger.warning("Live debate failed, falling back to mock: %s", exc)
+
+        if source == "demo":
+            return _build_live_demo_unavailable_response(
+                "The live demo could not produce a real backend result right now. "
+                "Use the labeled recorded example or retry for a fresh proof run."
+            )
+
+        return self._mock_fallback_response(
+            topic,
+            rounds,
+            agent_count,
+            question=question,
+            source=source,
+            cache_kw=_cache_kw,
+            reason=(
+                "Live agents were unavailable, so the public beta returned a "
+                "deterministic fallback."
+            ),
+        )
+
+    def _mock_fallback_response(
+        self,
+        topic: str,
+        rounds: int,
+        agent_count: int,
+        *,
+        question: str | None,
+        source: str,
+        cache_kw: dict[str, Any],
+        reason: str,
+    ) -> HandlerResult:
+        """Return the deterministic mock debate with explicit fallback provenance."""
+        mock_data = _annotate_mock_fallback(
+            _run_inline_mock_debate(topic, rounds, agent_count, question=question),
+            reason=reason,
+        )
+        proposals = mock_data.get("proposals", {})
+        if proposals:
+            mock_data["tldr"] = self._synthesize_tldr(
+                question or topic,
+                proposals,
+                fallback_text=mock_data.get("final_answer", ""),
+            )
+        return self._persist_and_respond(json_response(mock_data), topic, source, **cache_kw)
+
+    @staticmethod
+    def _persist_and_respond(
+        handler_result: HandlerResult,
+        topic: str,
+        source: str,
+        *,
+        cache_key: str | None = None,
+        model_ids: list[str] | None = None,
+        rounds: int | None = None,
+    ) -> HandlerResult:
+        """Persist the debate result and inject share_url into the response.
+
+        When *cache_key*, *model_ids*, and *rounds* are provided the method
+        also writes a cache index entry so that future identical requests
+        can be served from cache.
+        """
+        try:
+            from aragora.storage.debate_store import get_debate_store
+
+            # HandlerResult is a dataclass with body: bytes
+            body_bytes = handler_result.body
+            if not body_bytes:
+                return handler_result
+
+            data = _normalize_public_debate_payload(json.loads(body_bytes.decode("utf-8")))
+            debate_id = data.get("id", "")
+            if debate_id:
+                debate_id = _ensure_unique_public_share_id(data)
+                # Inject share fields and source into data BEFORE persisting
+                # so the public viewer's _is_shareable() check passes.
+                data["share_url"] = f"/debate/{debate_id}"
+                data["share_token"] = debate_id
+                data.setdefault("source", source)
+                try:
+                    store = get_debate_store()
+                    store.save(debate_id, topic, data, source=source)
+
+                    # Save cache index so this debate can be found by content hash
+                    if cache_key and model_ids is not None and rounds is not None:
+                        try:
+                            normalized_topic = re.sub(
+                                r"\s+",
+                                " ",
+                                (data.get("topic", topic) or topic).strip().lower(),
+                            )
+                            store.save_cache_index(
+                                cache_key=cache_key,
+                                debate_id=debate_id,
+                                topic_normalized=normalized_topic,
+                                model_ids="|".join(sorted(model_ids)),
+                                rounds=rounds,
+                            )
+                            logger.debug("Saved cache index %.12s… → %s", cache_key, debate_id)
+                        except (RuntimeError, OSError):
+                            logger.debug("Cache index save failed", exc_info=True)
+                        except Exception:  # noqa: BLE001
+                            logger.debug("Cache index save failed unexpectedly", exc_info=True)
+                except (ImportError, RuntimeError, OSError):
+                    logger.debug("Debate store unavailable, debate not persisted", exc_info=True)
+                except Exception:  # noqa: BLE001
+                    logger.warning("Unexpected store error, debate not persisted", exc_info=True)
+                return json_response(data)
+        except (ImportError, RuntimeError, OSError, json.JSONDecodeError, UnicodeDecodeError):
+            logger.warning("Debate persistence unavailable", exc_info=True)
+        except Exception:  # noqa: BLE001 - sqlite3.Error and other unexpected errors must not surface to user
+            logger.warning("Debate persistence failed unexpectedly", exc_info=True)
+
+        return handler_result
+
+    def _run_debate_with_package(
+        self,
+        topic: str,
+        rounds: int,
+        agent_count: int,
+        question: str | None = None,
+    ) -> HandlerResult:
+        from aragora_debate.styled_mock import StyledMockAgent
+        from aragora_debate.arena import Arena
+        from aragora_debate.types import DebateConfig
+
+        # Build agents with rotating styles
+        agent_names = ["analyst", "critic", "moderator", "contrarian", "synthesizer"]
+        agents = []
+        for i in range(agent_count):
+            name = agent_names[i] if i < len(agent_names) else f"agent_{i}"
+            style = _AGENT_STYLES[i % len(_AGENT_STYLES)]
+            agents.append(StyledMockAgent(name, style=style))
+
+        config = DebateConfig(
+            rounds=rounds,
+            early_stopping=True,
+        )
+
+        arena = Arena(
+            question=question or topic,
+            agents=agents,  # type: ignore[arg-type]
+            config=config,
+        )
+
+        try:
+            result = asyncio.run(arena.run())
+        except RuntimeError:
+            # Already in an event loop -- use a helper
+            try:
+                import nest_asyncio  # type: ignore[import-untyped]
+
+                nest_asyncio.apply()
+                from aragora.utils.async_utils import get_event_loop_safe
+
+                loop = get_event_loop_safe()
+                result = loop.run_until_complete(arena.run())
+            except ImportError:
+                # Fallback: create a new loop in a thread
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = pool.submit(asyncio.run, arena.run()).result(timeout=30)
+
+        # Build response
+        critiques_out = []
+        for c in result.critiques:
+            critiques_out.append(
+                {
+                    "agent": c.agent,
+                    "target_agent": c.target_agent,
+                    "issues": c.issues,
+                    "suggestions": c.suggestions,
+                    "severity": c.severity,
+                }
+            )
+
+        votes_out = []
+        for v in result.votes:
+            votes_out.append(
+                {
+                    "agent": v.agent,
+                    "choice": v.choice,
+                    "confidence": v.confidence,
+                    "reasoning": v.reasoning,
+                }
+            )
+
+        receipt_data = None
+        receipt_hash = None
+        if result.receipt:
+            receipt_data = result.receipt.to_dict()
+            receipt_hash = result.receipt.signature
+
+        response = {
+            "id": result.id,
+            "topic": result.task,
+            "status": result.status,
+            "rounds_used": result.rounds_used,
+            "consensus_reached": result.consensus_reached,
+            "confidence": result.confidence,
+            "verdict": result.verdict.value if result.verdict else None,
+            "duration_seconds": round(result.duration_seconds, 3),
+            "participants": result.participants,
+            "proposals": result.proposals,
+            "critiques": critiques_out,
+            "votes": votes_out,
+            "dissenting_views": result.dissenting_views,
+            "final_answer": result.final_answer,
+            "receipt": receipt_data,
+            "receipt_hash": receipt_hash,
+        }
+
+        _persist_playground_debate(response)
+        return json_response(response)
+
+    # ------------------------------------------------------------------
+    # POST /api/v1/playground/debate/live/cost-estimate
+    # ------------------------------------------------------------------
+
+    def _handle_cost_estimate(self, handler: Any) -> HandlerResult:
+        """Return a pre-flight cost estimate for a live debate."""
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+
+        try:
+            agent_count = int(body.get("agents", _DEFAULT_AGENTS))
+        except (TypeError, ValueError):
+            agent_count = _DEFAULT_AGENTS
+        agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
+
+        try:
+            rounds = int(body.get("rounds", _DEFAULT_ROUNDS))
+        except (TypeError, ValueError):
+            rounds = _DEFAULT_ROUNDS
+        rounds = max(1, min(rounds, _MAX_ROUNDS))
+
+        # Rough per-agent-per-round cost (input + output tokens)
+        per_agent_per_round = 0.005  # ~$0.005/agent/round
+        estimated_cost = round(agent_count * rounds * per_agent_per_round, 4)
+        budget_cap = 0.05
+
+        return json_response(
+            {
+                "estimated_cost_usd": estimated_cost,
+                "budget_cap_usd": budget_cap,
+                "agent_count": agent_count,
+                "rounds": rounds,
+                "timeout_seconds": _LIVE_TIMEOUT,
+                "note": "Actual cost may vary. Capped at budget limit.",
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # POST /api/v1/playground/debate/live
+    # ------------------------------------------------------------------
+
+    def _handle_live_debate(self, handler: Any) -> HandlerResult:
+        """Run a live debate with real API-backed agents."""
+        # Rate limiting (separate from mock)
+        client_ip = "unknown"
+        if handler and hasattr(handler, "client_address"):
+            addr = handler.client_address
+            if isinstance(addr, (list, tuple)) and len(addr) >= 1:
+                client_ip = str(addr[0])
+
+        allowed, retry_after = _check_live_rate_limit(client_ip)
+        if not allowed:
+            return json_response(
+                {
+                    "error": "Live debate rate limit exceeded. Try again later.",
+                    "code": "live_rate_limit_exceeded",
+                    "retry_after": retry_after,
+                },
+                status=429,
+            )
+
+        # Parse body
+        body = self.read_json_body(handler) if handler else {}
+        if body is None:
+            body = {}
+
+        topic = str(body.get("topic", _DEFAULT_TOPIC) or _DEFAULT_TOPIC).strip()
+        if not topic:
+            topic = _DEFAULT_TOPIC
+        if len(topic) > _MAX_TOPIC_LENGTH:
+            return error_response(
+                f"Topic must be {_MAX_TOPIC_LENGTH} characters or less",
+                400,
+            )
+
+        # Raw question (separate from system-prompt-laden topic, e.g. from Oracle)
+        question = str(body.get("question", "") or "").strip() or None
+
+        # Oracle mode (consult / divine / commune)
+        mode = str(body.get("mode", "") or "").strip() or "consult"
+
+        # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        source = str(body.get("source", "") or "").strip() or "oracle"
+
+        # Session ID for follow-up conversation memory
+        session_id = str(body.get("session_id", "") or "").strip() or None
+
+        # Summary depth for tentacle essay context
+        summary_depth = str(body.get("summary_depth", "") or "").strip() or "light"
+        if summary_depth not in ("none", "light", "full"):
+            summary_depth = "light"
+
+        try:
+            agent_count = int(body.get("agents", _DEFAULT_AGENTS))
+        except (TypeError, ValueError):
+            agent_count = _DEFAULT_AGENTS
+        agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
+
+        try:
+            rounds = int(body.get("rounds", _DEFAULT_ROUNDS))
+        except (TypeError, ValueError):
+            rounds = _DEFAULT_ROUNDS
+        rounds = max(1, min(rounds, _MAX_ROUNDS))
+
+        # Keep the readiness gate aligned with the actual live debate resolver.
+        # Otherwise provider-specific keys can incorrectly fall back to mock mode.
+        try:
+            live_agents = _get_available_live_agents(agent_count)
+        except ValueError as exc:
+            logger.info(
+                "Live playground agents unavailable during readiness check, "
+                "falling back to mock debate: %s",
+                exc,
+            )
+            live_agents = []
+
+        if len(live_agents) < 2:
+            # Fall back to mock debate with a note
+            result = self._run_debate(
+                topic,
+                rounds,
+                agent_count,
+                question=question,
+                mode=mode,
+                session_id=session_id,
+                source=source,
+            )
+            if result is None:
+                return error_response("Playground unavailable", 503)
+            # Inject mock fallback info into the response body
+            import json as _json
+
+            response_data = _json.loads(result.body.decode("utf-8"))
+            response_data["is_live"] = False
+            response_data["mock_fallback"] = True
+            response_data["mock_fallback_reason"] = "No API keys configured on server"
+            response_data["upgrade_cta"] = _build_upgrade_cta()
+            return json_response(response_data, status=result.status_code)
+
+        # Multi-perspective LLM calls with source-appropriate prompts:
+        # "oracle" source uses tentacle language, "landing" uses neutral debate language.
+        if question:
+            tentacle_result = _try_oracle_tentacles(
+                mode=mode,
+                question=question,
+                agent_count=agent_count,
+                topic=topic,
+                source=source,
+                summary_depth=summary_depth,
+            )
+            if tentacle_result:
+                tentacle_result["upgrade_cta"] = _build_upgrade_cta()
+                proposals = tentacle_result.get("proposals", {})
+                if proposals:
+                    tentacle_result["tldr"] = self._synthesize_tldr(
+                        question or topic,
+                        proposals,
+                        fallback_text=tentacle_result.get("final_answer", ""),
+                    )
+                return self._persist_and_respond(
+                    json_response(tentacle_result),
+                    topic,
+                    source,
+                )
+            logger.info("Oracle tentacles failed, trying live debate factory")
+
+        # Try live debate — fall back to mock if it fails
+        live_result = self._run_live_debate(topic, rounds, agent_count)
+        if live_result.status_code >= 500:
+            logger.warning(
+                "Live debate returned %d, falling back to mock debate",
+                live_result.status_code,
+            )
+            mock_result = self._run_debate(
+                topic,
+                rounds,
+                agent_count,
+                question=question,
+                mode=mode,
+                session_id=session_id,
+                source=source,
+            )
+            if mock_result is not None:
+                import json as _json
+
+                response_data = _json.loads(mock_result.body.decode("utf-8"))
+                response_data["is_live"] = False
+                response_data["mock_fallback"] = True
+                response_data["mock_fallback_reason"] = "Live agents temporarily unavailable"
+                response_data["upgrade_cta"] = _build_upgrade_cta()
+                return json_response(response_data)
+        return live_result
+
+    def _run_live_debate(
+        self,
+        topic: str,
+        rounds: int,
+        agent_count: int,
+    ) -> HandlerResult:
+        """Execute a live debate using real agents with budget/timeout caps."""
+        try:
+            import importlib.util
+
+            if importlib.util.find_spec("aragora.server.debate_controller") is None:
+                raise ImportError("debate_controller not found")
+        except ImportError:
+            logger.warning("DebateController not available for live playground")
+            return error_response("Live playground unavailable", 503)
+
+        debate_id = f"playground_{uuid.uuid4().hex[:8]}"
+
+        try:
+            result = start_playground_debate(
+                question=topic,
+                agent_count=agent_count,
+                max_rounds=rounds,
+                timeout=_LIVE_TIMEOUT,
+                debate_id=debate_id,
+            )
+        except TimeoutError:
+            return json_response(
+                {
+                    "error": "Live debate timed out (budget protection)",
+                    "code": "timeout",
+                    "is_live": True,
+                    "upgrade_cta": _build_upgrade_cta(),
+                },
+                status=408,
+            )
+        except (ValueError, RuntimeError, OSError) as e:
+            logger.warning("Live playground debate failed: %s", e)
+            return error_response("Live debate failed", 500)
+        except Exception as e:  # noqa: BLE001 - playground must never crash with raw errors
+            logger.warning(
+                "Live playground debate failed (unexpected): %s: %s", type(e).__name__, e
+            )
+            return error_response("Live debate temporarily unavailable", 503)
+
+        # Build response in the same shape as mock debates
+        response = {
+            "id": debate_id,
+            "topic": topic,
+            "status": result.get("status", "completed"),
+            "rounds_used": result.get("rounds_used", rounds),
+            "consensus_reached": result.get("consensus_reached", False),
+            "confidence": result.get("confidence", 0.0),
+            "verdict": result.get("verdict"),
+            "duration_seconds": round(result.get("duration_seconds", 0.0), 3),
+            "participants": result.get("participants", []),
+            "proposals": result.get("proposals", []),
+            "critiques": result.get("critiques", []),
+            "votes": result.get("votes", []),
+            "dissenting_views": result.get("dissenting_views", []),
+            "final_answer": result.get("final_answer", ""),
+            "is_live": True,
+            "receipt_preview": {
+                "debate_id": debate_id,
+                "question": topic[:200],
+                "consensus_reached": result.get("consensus_reached", False),
+                "confidence": result.get("confidence", 0.0),
+                "participants": result.get("participants", []),
+                "note": "Unsigned preview. Full receipts available on paid plans.",
+            },
+            "upgrade_cta": _build_upgrade_cta(),
+        }
+
+        # Persist the debate receipt to KnowledgeMound so it appears in the
+        # receipts page and contributes to organizational memory.
+        try:
+            receipt_hash = hashlib.sha256(
+                json.dumps(response, sort_keys=True, default=str).encode()
+            ).hexdigest()
+            response["receipt_preview"]["receipt_hash"] = receipt_hash[:16]
+            response["receipt_preview"]["receipt_id"] = debate_id
+
+            from aragora.knowledge.mound import get_knowledge_mound
+
+            km = get_knowledge_mound()
+            if km is not None:
+                import asyncio
+                from concurrent.futures import ThreadPoolExecutor
+
+                def _ingest() -> None:
+                    asyncio.run(
+                        km.store(
+                            {
+                                "type": "playground_receipt",
+                                "debate_id": debate_id,
+                                "topic": topic[:200],
+                                "consensus_reached": result.get("consensus_reached", False),
+                                "confidence": result.get("confidence", 0.0),
+                                "receipt_hash": receipt_hash[:16],
+                                "participants": result.get("participants", []),
+                            },
+                            tags=["decision_receipt", "playground"],
+                        )
+                    )
+
+                # Fire-and-forget in background thread to not slow the response
+                ThreadPoolExecutor(max_workers=1).submit(_ingest)
+        except (ImportError, RuntimeError, OSError) as exc:
+            logger.debug("Playground receipt persistence skipped: %s", exc)
+
+        return json_response(response)
+
+
+# ---------------------------------------------------------------------------
+# Live debate execution
+# ---------------------------------------------------------------------------
+
+_LIVE_TIMEOUT = 90  # seconds — playground must respond quickly
+_LIVE_BUDGET_CAP = 0.05  # USD
+_LIVE_MAX_CONCURRENT = 2
+_LIVE_DEFAULT_AGENTS = ["anthropic-api", "openai-api"]
+_LIVE_FALLBACK_AGENTS = ["openrouter"]
+
+_live_semaphore = asyncio.Semaphore(_LIVE_MAX_CONCURRENT)
+
+
+def _get_available_live_agents(count: int) -> list[str]:
+    """Pick agent providers for playground debates.
+
+    Prefers primary API keys when available. Falls back to OpenRouter
+    with diverse models when primary keys are missing. Returns an empty
+    list when no live providers are configured so callers can decide
+    whether to fall back or raise.
+    """
+    has_openrouter = bool(_get_api_key("OPENROUTER_API_KEY"))
+
+    # Try primary providers first
+    candidates: list[str] = []
+    if _get_first_api_key("ANTHROPIC_API_KEY"):
+        candidates.append("anthropic-api")
+    if _get_first_api_key("OPENAI_API_KEY"):
+        candidates.append("openai-api")
+    if _get_first_api_key("MISTRAL_API_KEY"):
+        candidates.append("mistral")
+    if _get_first_api_key("XAI_API_KEY", "GROK_API_KEY"):
+        candidates.append("grok")
+    if _get_first_api_key("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        candidates.append("gemini")
+
+    # If we have enough primary agents, use them
+    if len(candidates) >= count:
+        return candidates[:count]
+
+    # Fill remaining slots with OpenRouter models for diversity
+    if has_openrouter:
+        for _role, model in OPENROUTER_PLAYGROUND_MODELS:
+            if len(candidates) >= count:
+                break
+            tag = f"openrouter:{model}"
+            if tag not in candidates:
+                candidates.append(tag)
+        while len(candidates) < count and candidates:
+            candidates.append(candidates[0])
+        return candidates[:count]
+
+    if not candidates:
+        return []
+
+    while len(candidates) < count and candidates:
+        candidates.append(candidates[0])
+    return candidates[:count]
+
+
+def _resolve_playground_agents(agent_tags: list[str]) -> str:
+    """Convert playground agent tags to comma-separated string for DebateFactory.
+
+    Tags like 'openrouter:anthropic/claude-sonnet-4' become
+    'openrouter|anthropic/claude-sonnet-4' so DebateFactory can parse them as
+    provider + model instead of treating the combined string as a provider name.
+    Tags like 'anthropic-api' pass through unchanged.
+    """
+    resolved = []
+    for tag in agent_tags:
+        if tag.startswith("openrouter:"):
+            model = tag.split(":", 1)[1]
+            resolved.append(f"openrouter|{model}")
+        else:
+            resolved.append(tag)
+    return ",".join(resolved)
+
+
+def start_playground_debate(
+    question: str,
+    agent_count: int = 3,
+    max_rounds: int = 2,
+    timeout: int = 60,
+    debate_id: str | None = None,
+) -> dict[str, Any]:
+    """Run a simplified live debate for the playground.
+
+    Skips storage/auth. Runs synchronously with a timeout.
+    Sets ``public_spectate: true`` in metadata for spectator access.
+
+    Args:
+        question: The debate question
+        agent_count: Number of agents (2-5)
+        max_rounds: Maximum rounds (1-2)
+        timeout: Timeout in seconds
+        debate_id: Optional debate ID to bind spectate context before the HTTP
+            response returns.
+
+    Returns:
+        Dict with debate result fields
+
+    Raises:
+        TimeoutError: If the debate exceeds timeout
+        ValueError: If no agents are available
+        RuntimeError: If arena execution fails
+    """
+    import concurrent.futures
+
+    agents = _get_available_live_agents(agent_count)
+    if len(agents) < 2:
+        raise ValueError("At least 2 agent providers with API keys are required")
+
+    agents_str = _resolve_playground_agents(agents)
+
+    def _run() -> dict[str, Any]:
+        try:
+            from aragora.server.debate_factory import DebateConfig, DebateFactory
+
+            factory = DebateFactory()
+            config = DebateConfig(
+                question=question,
+                agents_str=agents_str,
+                rounds=max_rounds,
+                debate_format="light",
+                metadata={"public_spectate": True, "is_playground": True},
+            )
+
+            arena = factory.create_arena(config)
+
+            try:
+                from aragora.spectate.ws_bridge import bind_spectate_context
+            except ImportError:
+                from contextlib import nullcontext as bind_spectate_context  # type: ignore[assignment]
+
+            async def _run_arena():
+                with bind_spectate_context(debate_id=debate_id):
+                    return await asyncio.wait_for(arena.run(), timeout=timeout)
+
+            result = asyncio.run(_run_arena())
+
+            # Extract key fields, filtering out error stubs from ChaosTheater
+            _ERROR_MARKERS = (
+                "[System:",
+                "wild bug appeared",
+                "cognitive hiccup",
+                "handling it",
+                "FATAL EXCEPTION",
+                "brain.exe",
+                "is a teapot",
+                "thinking credits",
+                "QUOTA POLICE",
+                "NaN stares back",
+            )
+
+            def _is_real_proposal(text: str) -> bool:
+                """Return False for ChaosTheater/error stub responses."""
+                if not text or len(text) < 80:
+                    return False
+                return not any(marker in text for marker in _ERROR_MARKERS)
+
+            raw_proposals = result.proposals or {}
+            proposals = {
+                agent: text
+                for agent, text in (
+                    raw_proposals.items()
+                    if isinstance(raw_proposals, dict)
+                    else enumerate(raw_proposals)
+                )
+                if _is_real_proposal(str(text))
+            }
+
+            return {
+                "status": result.status if proposals else "degraded",
+                "rounds_used": result.rounds_used,
+                "consensus_reached": result.consensus_reached if proposals else False,
+                "confidence": result.confidence if proposals else 0.0,
+                "verdict": result.verdict.value
+                if hasattr(result, "verdict") and result.verdict
+                else None,
+                "duration_seconds": result.duration_seconds,
+                "participants": result.participants,
+                "proposals": proposals,
+                "critiques": [
+                    {
+                        "agent": c.agent,
+                        "target_agent": c.target_agent,
+                        "issues": c.issues,
+                        "suggestions": c.suggestions,
+                        "severity": c.severity,
+                    }
+                    for c in result.critiques
+                ]
+                if hasattr(result, "critiques")
+                else [],
+                "votes": [
+                    {
+                        "agent": v.agent,
+                        "choice": v.choice,
+                        "confidence": v.confidence,
+                        "reasoning": v.reasoning,
+                    }
+                    for v in result.votes
+                ]
+                if hasattr(result, "votes")
+                else [],
+                "dissenting_views": result.dissenting_views
+                if hasattr(result, "dissenting_views")
+                else [],
+                "final_answer": result.final_answer
+                if _is_real_proposal(str(result.final_answer or ""))
+                else (
+                    "Agents were unable to reach a conclusion. "
+                    "Please try again — this may happen when API providers "
+                    "are temporarily unavailable."
+                ),
+            }
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Debate timed out after {timeout}s")
+
+    # Run in a thread pool to avoid blocking the server
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        try:
+            return pool.submit(_run).result(timeout=timeout + 5)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"Debate timed out after {timeout}s")
+
+
+def _build_upgrade_cta() -> dict[str, str]:
+    """Build the upgrade call-to-action for playground responses."""
+    return {
+        "title": "Unlock Full Decision Intelligence",
+        "message": (
+            "This playground demo shows a taste of Aragora's multi-agent debate engine. "
+            "Upgrade to access unlimited debates, full audit receipts, custom agent "
+            "configurations, and enterprise features."
+        ),
+        "action_url": "/pricing",
+        "action_label": "View Plans",
+    }

@@ -81,7 +81,7 @@ Direct HTTP integrations without CLI overhead:
 - `DeepSeekAgent`, `DeepSeekReasonerAgent` - DeepSeek V3/R1
 - `LlamaAgent`, `Llama4MaverickAgent` - Meta Llama 3.3/4
 - `QwenAgent`, `QwenMaxAgent` - Alibaba Qwen
-- `KimiK2Agent` - Moonshot Kimi (1T MoE)
+- `KimiK3Agent` (`KimiK2Agent` compatibility alias) - Moonshot Kimi K3
 - `SonarAgent` - Perplexity (reasoning + web search)
 - `CommandRAgent` - Cohere (RAG-optimized)
 

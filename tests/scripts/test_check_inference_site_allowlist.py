@@ -30,7 +30,10 @@ def test_repository_manifest_matches_current_tree() -> None:
     assert result.policy_consumers == (
         "aragora/agents/api_agents/openai.py",
         "aragora/agents/transports/claude_vibeproxy.py",
+        "aragora/swarm/quorum_evidence.py",
         "scripts/consult_claude.py",
+        "scripts/prepare_claude_code_vibeproxy_review.py",
+        "scripts/vibeproxy_burnin_recorder.py",
     )
     assert [
         (site["path"], site["anchor"])
@@ -40,6 +43,8 @@ def test_repository_manifest_matches_current_tree() -> None:
         ("aragora/agents/api_agents/openai.py", "OpenAIAPIAgent.generate"),
         ("aragora/agents/transports/claude_vibeproxy.py", "run_claude_vibeproxy"),
         ("scripts/consult_claude.py", "_run_vibeproxy"),
+        ("scripts/vibeproxy_burnin_recorder.py", "run_inference"),
+        ("scripts/vibeproxy_burnin_recorder.py", "run_inference"),
     ]
 
 
@@ -62,6 +67,33 @@ def _template(root: Path) -> dict[str, Any]:
 
 def _empty_manifest(root: Path) -> Path:
     return _write_manifest(root, {"schema_version": 1, "transport_policy_consumers": [], "sites": []})  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "relative",
+    ["aragora/swarm/quorum_evidence.py", "scripts/prepare_claude_code_vibeproxy_review.py"],
+)
+def test_review_policy_consumer_requires_explicit_registration(
+    tmp_path: Path, relative: str
+) -> None:
+    _write_source(
+        tmp_path,
+        relative,
+        "from aragora.agents.transports.vibeproxy import ModelTransportPolicy\n"
+        "policy = ModelTransportPolicy.from_env()\n",
+    )
+    payload = _template(tmp_path)
+    assert payload["transport_policy_consumers"] == [relative]
+    assert payload["sites"] == []
+    assert checker.check_allowlist(tmp_path, _write_manifest(tmp_path, payload)).ok
+
+    payload["transport_policy_consumers"] = []
+    missing = checker.check_allowlist(tmp_path, _write_manifest(tmp_path, payload))
+    assert not missing.ok
+    assert missing.policy_consumers == (relative,)
+    assert len(missing.policy_errors) == 1
+    assert "transport policy consumers differ" in missing.policy_errors[0]
+    assert missing.manifest_errors == ()
 
 
 def test_discovery_groups_by_stable_symbol_anchor(tmp_path: Path) -> None:
@@ -424,7 +456,7 @@ def test_discovery_finds_urls_methods_and_transport_policy_calls(tmp_path: Path)
 ANTHROPIC = "https://api.anthropic.com/v1/messages"
 OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 def consult(policy: MTP):
-    other.anthropic_message(model="fake"); assigned = MTP.from_env(); assigned.client.anthropic_message(model="claude"); return policy.generate_anthropic(model="claude", messages=[])
+    other.anthropic_message(model="fake"); assigned = MTP.from_env(); assigned.client.anthropic_message(model="claude"); assigned.client.openai_catalog_alias_request(model="gpt"); return policy.generate_anthropic(model="claude", messages=[])
 """,
     )
     # fmt: off
@@ -435,7 +467,7 @@ def consult(policy: MTP):
     assert {(site.provider, site.protocol) for site in discovery.sites if site.path.endswith("run.tsx")} >= {("anthropic", "messages"), ("gemini", "generate-content"), ("openai-compatible", "chat"), ("openai-compatible", "embeddings"), ("openai-compatible", "responses")}
     assert next(site for site in discovery.sites if site.provider == "openai-compatible" and site.protocol == "responses").detectors == {"inference-method": 1}
     # fmt: on
-    assert sum(site.detectors.get("transport-policy-call", 0) for site in discovery.sites) == 2
+    assert sum(site.detectors.get("transport-policy-call", 0) for site in discovery.sites) == 3
     payload = _template(tmp_path)
     assert {site["classification"] for site in payload["sites"]} == {"direct-only"}
     payload["sites"][0]["classification"] = "proxy-eligible"

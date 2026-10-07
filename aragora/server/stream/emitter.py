@@ -16,7 +16,7 @@ from typing import Any
 from collections.abc import Callable
 
 from aragora.config import MAX_EVENT_QUEUE_SIZE
-from aragora.server.stream.events import (
+from aragora.events.types import (
     AudienceMessage,
     StreamEvent,
     StreamEventType,
@@ -364,6 +364,47 @@ class SyncEventEmitter:
                 sub(event)
             except (TypeError, ValueError, RuntimeError, AttributeError) as e:
                 logger.warning("[stream] Subscriber callback error: %s", e)
+
+    def emit_sync(
+        self,
+        event_type: str | StreamEventType,
+        debate_id: str = "",
+        correlation_id: str | None = None,
+        **data: Any,
+    ) -> None:
+        """Adapt legacy keyword-style emissions to the stream event schema.
+
+        Debate and memory components historically accepted an emitter with
+        ``emit_sync(event_type=..., debate_id=..., **data)``. The WebSocket
+        stream emitter instead exposed only ``emit(StreamEvent(...))``, so
+        passing it into those components raised ``AttributeError`` on live
+        intervention paths. Keep the compatibility conversion at this boundary
+        so callers do not need to know which emitter implementation they were
+        given.
+        """
+        if isinstance(event_type, StreamEventType):
+            stream_type = event_type
+        else:
+            try:
+                stream_type = StreamEventType(event_type)
+            except ValueError:
+                logger.warning("[stream] Unknown event type %r; event dropped", event_type)
+                return
+
+        raw_round = data.get("round", data.get("round_num", 0))
+        round_num = raw_round if isinstance(raw_round, int) else 0
+        raw_agent = data.get("agent", "")
+        agent = raw_agent if isinstance(raw_agent, str) else ""
+        self.emit(
+            StreamEvent(
+                type=stream_type,
+                data=dict(data),
+                round=round_num,
+                agent=agent,
+                loop_id=debate_id,
+                correlation_id=correlation_id or "",
+            )
+        )
 
     def subscribe(self, callback: Callable[[StreamEvent], None]) -> None:
         """Add synchronous subscriber for immediate event handling."""

@@ -49,7 +49,7 @@ class ClassificationConfig:
 
     # Use LLM for enhanced classification
     use_llm: bool = False
-    llm_model: str = "claude-opus-4-8"
+    llm_model: str = "claude-opus-5"
 
     # Custom indicators
     custom_indicators: list[SensitivityIndicator] = field(default_factory=list)

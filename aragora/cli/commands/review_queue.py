@@ -36,8 +36,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+from aragora.cli.commands import review_queue_render as _render
 from aragora.cli.commands import review_queue_unstable as unstable
 from aragora.cli.commands import review_queue_rest_fallback as rest_fallback
+
+# Renderers extracted to review_queue_render.py (#8553 LOC-ceiling extraction);
+# re-exported under their historical names for call sites and tests.
+_render_packet = _render.render_packet
+_render_merge_authorization_packet = _render.render_merge_authorization_packet
+_render_active_auto_handle_alerts = _render.render_active_auto_handle_alerts
 from aragora.cli.commands.review_queue_parsers import (
     add_observe_outcomes_parser,
     add_record_settlement_parser,
@@ -134,6 +141,8 @@ CANONICAL_MODEL_FAMILIES: tuple[str, ...] = (
     "yi",
     "glm",
     "minimax",
+    "tencent",
+    "bytedance",
     "hermes",
 )
 # Western-frontier families (Tier 1-2 single-signal bar must be one of these).
@@ -142,9 +151,13 @@ CANONICAL_MODEL_FAMILIES: tuple[str, ...] = (
 # (quorum_evidence) reference the *same* frozenset object and cannot drift —
 # replacing the prior test-only parity guard (claude #8507 P2).
 from aragora.swarm.quorum_evidence import (  # noqa: E402
+    ADVISORY_ONLY_FAMILIES as ADVISORY_ONLY_FAMILIES,
+    PROXY_GROUNDING_DISCLOSURE as PROXY_GROUNDING_DISCLOSURE,
+    PROXY_TRANSPORT_HARNESS_MARKERS as PROXY_TRANSPORT_HARNESS_MARKERS,
     WESTERN_FAMILIES as WESTERN_FAMILIES,
     WESTERN_FRONTIER_FAMILIES as WESTERN_FRONTIER_FAMILIES,
     advisory_dissent_settle_enabled as advisory_dissent_settle_enabled,
+    canonical_family as canonical_family,
     severity_gated_dissent_enabled as severity_gated_dissent_enabled,
     tier_quorum_rule as tier_quorum_rule,
     tiered_merge_gate_enabled as tiered_merge_gate_enabled,
@@ -153,7 +166,10 @@ from aragora.swarm.quorum_evidence import (  # noqa: E402
 DIRECT_MODEL_FAMILY_MARKERS: dict[str, tuple[str, ...]] = {
     "claude": ("claude", "anthropic"),
     "openai": ("openai",),
-    "gemini": ("gemini", "google"),
+    # "antigravity" is the agy-CLI Gemini surface: a review that self-labels
+    # with only that name must still resolve to the gemini family, or it is
+    # dropped instead of preserved as an advisory view (#9363 round-6 [P3]).
+    "gemini": ("gemini", "google", "antigravity"),
     "grok": ("grok", "xai"),
     "mistral": ("mistral", "codestral"),
     "deepseek": ("deepseek",),
@@ -162,6 +178,8 @@ DIRECT_MODEL_FAMILY_MARKERS: dict[str, tuple[str, ...]] = {
     "yi": ("yi", "yi-large"),
     "glm": ("glm", "zhipu", "z-ai"),
     "minimax": ("minimax",),
+    "tencent": ("tencent", "hy3", "hunyuan"),
+    "bytedance": ("bytedance", "bytedance-seed", "doubao", "seed-2.0"),
     "hermes": ("hermes", "nous hermes"),
 }
 ROUTER_SURFACE_REVIEWERS: frozenset[str] = frozenset(("factory", "codex", "tesla", "harvey"))
@@ -171,6 +189,7 @@ IDENTITY_COUNT_BLOCKERS: frozenset[str] = frozenset(
         "unknown_model_family",
         "heading_model_family_conflict",
         "unknown_surface_reviewer",
+        "proxy_transport_grounding_undisclosed",
     )
 )
 
@@ -241,7 +260,7 @@ CONTRACT_DRIFT_AUTHORITY_POLICY_VERSION = 1
 CONTRACT_DRIFT_AUTHORITY_TIER = 4
 # fmt: off
 CONTRACT_DRIFT_AUTHORITY_PREFIXES: tuple[str, ...] = ("scripts/check_contract_drift_ratchet.py", "scripts/generate_contract_drift_inventory.py", "scripts/baselines/contract_drift_inventory.json", "scripts/sdk_path_normalize.py", "scripts/baselines/internal_route_prefixes.json", "scripts/baselines/contract_drift_program.json", "scripts/check_sdk_parity.py", "scripts/validate_openapi_routes.py")
-CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (".github/actions/pr-scope-classifier/action.yml", ".github/actions/setup-python-safe/action.yml", "aragora/__init__.py", "aragora/__main__.py", "aragora/__version__.py", "aragora/cli/__init__.py", "aragora/cli/_mission_parser.py", "aragora/cli/api_keys.py", "aragora/cli/commands/__init__.py", "aragora/cli/commands/review_queue_comment_verdicts.py", "aragora/cli/commands/review_queue_parsers.py", "aragora/cli/commands/review_queue_rest_fallback.py", "aragora/cli/commands/review_queue_transport.py", "aragora/cli/commands/review_queue_unstable.py", "aragora/cli/doctor.py", "aragora/cli/main.py", "aragora/compliance/__init__.py", "aragora/compliance/artifact_generator.py", "aragora/compliance/data_classification.py", "aragora/compliance/eu_ai_act.py", "aragora/compliance/framework.py", "aragora/compliance/monitor.py", "aragora/compliance/phi_detectors.py", "aragora/config/__init__.py", "aragora/config/distributed.py", "aragora/config/env_helpers.py", "aragora/config/feature_flags.py", "aragora/config/provider_readiness.py", "aragora/config/secrets.py", "aragora/config/settings.py", "aragora/config/stability.py", "aragora/config/timeouts.py", "aragora/config/validator.py", "aragora/connectors/__init__.py", "aragora/connectors/exceptions.py", "aragora/exceptions.py", "aragora/modes/__init__.py", "aragora/modes/base.py", "aragora/modes/builtin/__init__.py", "aragora/modes/builtin/architect.py", "aragora/modes/builtin/coder.py", "aragora/modes/builtin/debugger.py", "aragora/modes/builtin/epistemic_hygiene.py", "aragora/modes/builtin/orchestrator.py", "aragora/modes/builtin/reviewer.py", "aragora/modes/custom.py", "aragora/modes/handoff.py", "aragora/modes/tool_groups.py", "aragora/server/__init__.py", "aragora/server/startup/__init__.py", "aragora/server/startup/background.py", "aragora/server/startup/billing.py", "aragora/server/startup/control_plane.py", "aragora/server/startup/database.py", "aragora/server/startup/dr_drilling.py", "aragora/server/startup/event_subscribers.py", "aragora/server/startup/health_check.py", "aragora/server/startup/knowledge_mound.py", "aragora/server/startup/observability.py", "aragora/server/startup/parallel.py", "aragora/server/startup/redis.py", "aragora/server/startup/security.py", "aragora/server/startup/validation.py", "aragora/server/startup/validation_runner.py", "aragora/server/startup/workers.py", "aragora/swarm/__init__.py", "aragora/swarm/github_app_auth.py", "aragora/swarm/merge_quorum_io.py", "aragora/swarm/merge_quorum_reconcile.py", "scripts/__init__.py", "scripts/add_openapi_descriptions.py", "scripts/add_openapi_operation_ids.py", "scripts/add_openapi_param_descriptions.py", "scripts/audit_openapi_docs.py", "scripts/audit_test_skips.py", "scripts/capability_gap_report.py", "scripts/check_capability_matrix_sync.py", "scripts/check_cross_sdk_parity.py", "scripts/check_pentest_findings.py", "scripts/check_portability.py", "scripts/check_sdk_namespace_parity.py", "scripts/check_test_dependencies.py", "scripts/check_version_alignment.py", "scripts/ci_install_project.sh", "scripts/classification_scan.py", "scripts/contract_drift_report.py", "scripts/export_openapi.py", "scripts/generate_api_docs.py", "scripts/generate_capability_matrix.py", "scripts/generate_contract_drift_backlog.py", "scripts/generate_contract_drift_issue_plan.py", "scripts/generate_openapi.py", "scripts/generate_python_sdk_types.py", "scripts/generate_sdk_types.py", "scripts/gh_app_env.py", "scripts/guard_repo_clean.py", "scripts/pre_release_check.py", "scripts/reconcile_status_docs.py", "scripts/run_pip_audit_gate.py", "scripts/smoke_test.py", "scripts/tier4_merge_train.py", "scripts/verify_sdk_contracts.py")
+CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (".github/actions/pr-scope-classifier/action.yml", ".github/actions/setup-python-safe/action.yml", "aragora/__init__.py", "aragora/__main__.py", "aragora/__version__.py", "aragora/cli/__init__.py", "aragora/cli/_mission_parser.py", "aragora/cli/api_keys.py", "aragora/cli/commands/__init__.py", "aragora/cli/commands/review_queue_comment_verdicts.py", "aragora/cli/commands/review_queue_parsers.py", "aragora/cli/commands/review_queue_render.py", "aragora/cli/commands/review_queue_rest_fallback.py", "aragora/cli/commands/review_queue_transport.py", "aragora/cli/commands/review_queue_unstable.py", "aragora/cli/doctor.py", "aragora/cli/main.py", "aragora/compliance/__init__.py", "aragora/compliance/artifact_generator.py", "aragora/compliance/data_classification.py", "aragora/compliance/eu_ai_act.py", "aragora/compliance/framework.py", "aragora/compliance/monitor.py", "aragora/compliance/phi_detectors.py", "aragora/config/__init__.py", "aragora/config/distributed.py", "aragora/config/env_helpers.py", "aragora/config/feature_flags.py", "aragora/config/provider_readiness.py", "aragora/config/secrets.py", "aragora/config/settings.py", "aragora/config/stability.py", "aragora/config/timeouts.py", "aragora/config/validator.py", "aragora/connectors/__init__.py", "aragora/connectors/exceptions.py", "aragora/exceptions.py", "aragora/modes/__init__.py", "aragora/modes/base.py", "aragora/modes/builtin/__init__.py", "aragora/modes/builtin/architect.py", "aragora/modes/builtin/coder.py", "aragora/modes/builtin/debugger.py", "aragora/modes/builtin/epistemic_hygiene.py", "aragora/modes/builtin/orchestrator.py", "aragora/modes/builtin/reviewer.py", "aragora/modes/custom.py", "aragora/modes/handoff.py", "aragora/modes/tool_groups.py", "aragora/server/__init__.py", "aragora/server/startup/__init__.py", "aragora/server/startup/background.py", "aragora/server/startup/billing.py", "aragora/server/startup/control_plane.py", "aragora/server/startup/database.py", "aragora/server/startup/dr_drilling.py", "aragora/server/startup/event_subscribers.py", "aragora/server/startup/health_check.py", "aragora/server/startup/knowledge_mound.py", "aragora/server/startup/observability.py", "aragora/server/startup/parallel.py", "aragora/server/startup/redis.py", "aragora/server/startup/security.py", "aragora/server/startup/validation.py", "aragora/server/startup/validation_runner.py", "aragora/server/startup/workers.py", "aragora/swarm/__init__.py", "aragora/swarm/github_app_auth.py", "aragora/swarm/merge_quorum_io.py", "aragora/swarm/merge_quorum_reconcile.py", "scripts/__init__.py", "scripts/add_openapi_descriptions.py", "scripts/add_openapi_operation_ids.py", "scripts/add_openapi_param_descriptions.py", "scripts/audit_openapi_docs.py", "scripts/audit_test_skips.py", "scripts/build_contract_drift_historical_backfill.py", "scripts/capability_gap_report.py", "scripts/check_capability_matrix_sync.py", "scripts/check_cross_sdk_parity.py", "scripts/check_pentest_findings.py", "scripts/check_portability.py", "scripts/check_sdk_namespace_parity.py", "scripts/check_test_dependencies.py", "scripts/check_version_alignment.py", "scripts/ci_install_project.sh", "scripts/classification_scan.py", "scripts/contract_drift_report.py", "scripts/export_openapi.py", "scripts/generate_api_docs.py", "scripts/generate_capability_matrix.py", "scripts/generate_contract_drift_backlog.py", "scripts/generate_contract_drift_issue_plan.py", "scripts/generate_openapi.py", "scripts/generate_python_sdk_types.py", "scripts/generate_sdk_types.py", "scripts/gh_app_env.py", "scripts/guard_repo_clean.py", "scripts/openapi_release_envelope.py", "scripts/pre_release_check.py", "scripts/reconcile_status_docs.py", "scripts/run_pip_audit_gate.py", "scripts/smoke_test.py", "scripts/tier4_merge_train.py", "scripts/verify_sdk_contracts.py")
 TIER_4_PREFIXES: tuple[str, ...] = (
     ".github/workflows/",
     "deploy/",
@@ -2570,7 +2589,17 @@ def _build_packet(
             check_surfaces=check_surfaces,
         )
     required_pr_check_gate_satisfied = False
-    if not settlement_state_block and not checks_unavailable and (has_failures or has_pending):
+    non_required_non_green_count = 0
+    self_check_excluded = any(
+        _is_current_merge_quorum_self_check(check)
+        for check in _latest_status_check_rollup(pr.get("statusCheckRollup") or [])
+        if isinstance(check, dict)
+    )
+    if (
+        not settlement_state_block
+        and not checks_unavailable
+        and (has_failures or has_pending or self_check_excluded)
+    ):
         required_surface = _fetch_required_pr_check_surface(number, repo_override)
         required_pr_checks = [
             item for item in required_surface.get("checks") or [] if isinstance(item, dict)
@@ -2656,6 +2685,9 @@ def _build_packet(
             required_checks=required_pr_checks if required_available else None,
         )
         check_surfaces["pr_rollup"].update(rollup_required_diagnostics)
+        non_required_non_green_count = rollup_required_diagnostics.get(
+            "non_required_non_green_count", 0
+        )
 
         gate_blocked_reason = ""
         if not required_available:
@@ -2725,8 +2757,12 @@ def _build_packet(
                 "summary": checks_summary,
             }
             check_surfaces["diagnosis"] = (
-                "The PR check rollup includes non-required non-green checks, "
-                "but GitHub reports every branch-protection required check green; "
+                (
+                    "The PR check rollup includes non-required non-green checks, but "
+                    if non_required_non_green_count
+                    else ""
+                )
+                + "GitHub reports every effective branch-protection required check green; "
                 "merge-packet uses the required PR checks gate."
             )
             check_surfaces["remediation_prompt"] = (
@@ -2744,8 +2780,12 @@ def _build_packet(
                 "summary": checks_summary,
             }
             check_surfaces["diagnosis"] = (
-                "The PR check rollup includes non-required non-green checks, "
-                "and GitHub reports every non-quorum branch-protection required "
+                (
+                    "The PR check rollup includes non-required non-green checks, and "
+                    if non_required_non_green_count
+                    else ""
+                )
+                + "GitHub reports every non-quorum branch-protection required "
                 "check green; merge-packet leaves aragora-merge-quorum to the "
                 "model quorum evidence gate."
             )
@@ -2755,8 +2795,7 @@ def _build_packet(
             )
         elif gate_blocked_reason:
             check_surfaces["diagnosis"] = (
-                "The PR check rollup is non-green and merge-packet did not select "
-                f"the required PR checks gate: {gate_blocked_reason}"
+                f"merge-packet did not select the required PR checks gate: {gate_blocked_reason}"
             )
             check_surfaces["remediation_prompt"] = (
                 "Keep the PR blocked or authorize a bounded check-surface repair; "
@@ -2830,7 +2869,11 @@ def _build_packet(
     if has_failures:
         risk_flags.append(f"checks failing ({checks_summary})")
     required_pr_check_surface = check_surfaces.get("required_pr_checks") or {}
-    if required_pr_check_gate_satisfied and required_pr_check_surface:
+    if (
+        required_pr_check_gate_satisfied
+        and required_pr_check_surface
+        and non_required_non_green_count
+    ):
         risk_flags.append(
             "non-required PR checks are non-green; "
             "effective gate uses branch-protection required checks"
@@ -2871,9 +2914,11 @@ def _build_packet(
     else:
         recommendation = "approve_candidate"
         if required_pr_check_gate_satisfied:
-            recommendation_reason = (
-                "branch-protection required checks green; non-required PR checks are non-green"
-            )
+            recommendation_reason = "branch-protection required checks green"
+            if non_required_non_green_count:
+                recommendation_reason += "; non-required PR checks are non-green"
+        elif required_pr_check_surface.get("gate_blocked_reason"):
+            recommendation_reason = required_pr_check_surface["gate_blocked_reason"]
         elif direct_check_fallback_satisfied and direct_summary.get("non_green_count", 0):
             recommendation_reason = (
                 "branch-protection required contexts green via direct check-run fallback; "
@@ -3055,6 +3100,20 @@ def _build_merge_authorization_packet(
                 model_quorum_admin_squash_allowed and not admin_squash_gate_blockers
             ),
             "model_quorum_admin_squash_allowed": model_quorum_admin_squash_allowed,
+            # Non-admin-lane eligibility is the model-level verdict itself
+            # (model-quorum satisfied + all effective REQUIRED contexts green +
+            # zero unresolved dissent + tier settlement recorded where
+            # required). It is deliberately independent of admin-squash-lane
+            # live-gate state: it stays True in blocked_by_live_gate shapes,
+            # under an operator-review-required label hold, and when
+            # mergeStateStatus is unavailable. Those holds remain visible and
+            # controlling via the sibling operator_review_required /
+            # admin_squash_allowed / admin_squash_gate_blockers keys; a
+            # label-ANDed variant would read False for every parked draft at
+            # packet time, which is exactly when settlement Decisions consume
+            # it. Decisions cite this field for the model-level verdict and
+            # must still honor the sibling hold keys.
+            "non_admin_merge_eligible": model_quorum_admin_squash_allowed,
             "admin_squash_gate_blockers": admin_squash_gate_blockers,
             "merge_state_status": packet.merge_state_status,
             "unstable_non_required_contexts_ignored": (
@@ -3178,14 +3237,28 @@ def _explicit_merged_pr_merge_packet_entry(
         "status": "already_merged",
         "verdict": "already_merged_noop",
         "admin_squash_allowed": False,
+        "non_admin_merge_eligible": False,
         "requires_human_risk_settlement": False,
         "unresolved_dissent": False,
         "reviewer_signals": [],
         "dogfood_evidence": [],
         "counted_reviewer_ids": [],
         "counted_model_families": [],
+        # tier/tier_name/counted_* above are noop placeholders — this entry
+        # deliberately skips quorum hydration, so zero values here are not
+        # computed results. Authoritative post-merge tier/families live in the
+        # merged head's quorum collector JSON artifact.
+        "noop_placeholder_fields": [
+            "tier",
+            "tier_name",
+            "counted_reviewer_ids",
+            "counted_model_families",
+        ],
         "reasons": [
             "PR is already merged; merge-packet readiness is obsolete",
+            "tier=0 and empty counted_* values are noop placeholders, not "
+            "computed results; authoritative tier/families live in the "
+            "collector JSON artifact for the merged head",
         ],
     }
 
@@ -3248,6 +3321,14 @@ def _advisory_settle_review_signals(
         body = str(comment.get("body", "") or "")
         if not _is_recognized_model_review(body):
             continue
+        identity = _resolve_model_review_identity(body)
+        # Advisory-only families (roster record: "gemini dissent is NOT to be
+        # counted anywhere") never count for OR against: skipped BEFORE the
+        # blocking scan and the heard/dissent accounting, so an advisory-only
+        # [P0]/[P1] cannot veto advisory_settle and an advisory-only review
+        # cannot establish a heard family. The comment stays visible on the PR.
+        if canonical_family(identity.model_family or "") in ADVISORY_ONLY_FAMILIES:
+            continue
         # Permissive, fail-closed blocking scan (any recognized grounded review).
         if _has_blocking_finding_or_label(body):
             has_blocking = True
@@ -3258,7 +3339,6 @@ def _advisory_settle_review_signals(
         )
         if _is_github_actions_author(author):
             continue
-        identity = _resolve_model_review_identity(body)
         if any(problem in IDENTITY_COUNT_BLOCKERS for problem in identity.identity_problems):
             continue
         if strict_author:
@@ -3327,8 +3407,14 @@ def _build_model_review_quorum(
     # so a PR with many recognized comments cannot flood the merge packet's
     # advisory_views field or its `reasons` notes (claude #8574 P3).
     del advisory_views[5:]
+    # Protocol-payload dissent is filtered for advisory-only families the same
+    # way the comments path is: a {"agent": "gemini", ...} view arriving via a
+    # merge-protocol payload or a stale prepared artifact must not block either
+    # (#9363 round-4 [P2]).
     dissenting_views = [
-        view for view in (protocol.get("dissenting_views") or []) if isinstance(view, dict)
+        view
+        for view in (protocol.get("dissenting_views") or [])
+        if isinstance(view, dict) and not _view_is_advisory_only(view)
     ]
     dissenting_views.extend(comment_dissenting_views)
     blocking_workflow_reasons = _blocking_workflow_state_reasons(pr)
@@ -3364,8 +3450,14 @@ def _build_model_review_quorum(
     # counted toward signal_count (claude #8507 P2). Pinned by
     # test_western_frontier_signal_set_is_subset_of_counted.
     counted_reviewer_signal_ids = _counted_model_reviewer_ids(reviewer_signals, [])
+    # Advisory-only families cannot satisfy the required adversarial-dogfood leg
+    # (roster record: never FOR): a gemini-attributed dogfood item stays visible
+    # in dogfood_evidence for the audit trail but does not satisfy the Tier 1+
+    # requirement (#9363 round-4 [P2]).
     has_required_dogfood = not requirement["requires_adversarial_dogfood"] or any(
-        _known_model_reviewer_id(item) for item in dogfood_evidence
+        (reviewer_id := _known_model_reviewer_id(item))
+        and canonical_family(reviewer_id) not in ADVISORY_ONLY_FAMILIES
+        for item in dogfood_evidence
     )
     # The WF requirement must be met by a model-review signal, not by dogfood-only
     # metadata. Dogfood remains separately required for Tier 1+.
@@ -3606,11 +3698,14 @@ def _build_model_review_quorum(
         severity = advisory.get("highest_severity")
         # ``highest_severity`` is None both for a [P2]/[P3]-only CR and for a
         # finding-free CR, so don't assert "[P2]/[P3] only" — report the accurate
-        # invariant (no blocking [P0]/[P1] finding) in the audit packet.
+        # invariant (no blocking [P0]/[P1] finding) in the audit packet. An
+        # advisory-only family's view can carry a [P0]/[P1]; name the roster
+        # demotion, not the severity gate, as the reason it does not block.
         sev_note = severity if severity else "no blocking [P0]/[P1] finding"
-        reasons.append(
-            f"advisory finding from {family}: {sev_note} — not blocking (severity-gated dissent)"
+        cause = (
+            "advisory-only family" if _view_is_advisory_only(advisory) else "severity-gated dissent"
         )
+        reasons.append(f"advisory finding from {family}: {sev_note} — not blocking ({cause})")
     if advisory_settle_eligible:
         reasons.append(
             "advisory-dissent settle: only the model-quorum check is failing, a "
@@ -4141,7 +4236,13 @@ def _counted_model_reviewer_ids(
     reviewer_ids: set[str] = set()
     for item in [*reviewer_signals, *dogfood_evidence]:
         reviewer_id = _known_model_reviewer_id(item)
-        if reviewer_id:
+        # Advisory-only families never count at ANY tier (roster record), so
+        # they must not appear in counted ids either: emitted merge packets
+        # (`counted_reviewer_ids` / `counted_model_families`) and evidence-lint
+        # `would_count` are consumed by downstream automation that treats
+        # membership as "counts toward quorum" (#9363 openai [P2]x2). Their
+        # reviews stay visible as reviewer_signals / advisory_views.
+        if reviewer_id and canonical_family(reviewer_id) not in ADVISORY_ONLY_FAMILIES:
             reviewer_ids.add(reviewer_id)
     return sorted(reviewer_ids)
 
@@ -4343,7 +4444,7 @@ def _normalize_model_reviewer_id(value: str) -> str:
         ("claude", ("claude", "anthropic")),
         ("openai", ("openai", "gpt")),
         ("grok", ("grok", "xai")),
-        ("gemini", ("gemini", "google")),
+        ("gemini", ("gemini", "google", "antigravity")),
         ("mistral", ("mistral", "codestral")),
         ("deepseek", ("deepseek",)),
         ("qwen", ("qwen",)),
@@ -4351,6 +4452,8 @@ def _normalize_model_reviewer_id(value: str) -> str:
         ("yi", ("yi",)),
         ("glm", ("glm", "zhipu", "z-ai")),
         ("minimax", ("minimax",)),
+        ("tencent", ("tencent", "hy3", "hunyuan")),
+        ("bytedance", ("bytedance", "bytedance-seed", "doubao", "seed-2.0")),
         ("hermes", ("hermes", "nous hermes")),
     )
     for normalized, markers in known_markers:
@@ -4371,6 +4474,12 @@ def _normalize_model_family(value: str) -> str:
         "moonshot": "kimi",
         "zhipu": "glm",
         "z-ai": "glm",
+        "hy3": "tencent",
+        "hunyuan": "tencent",
+        "seed": "bytedance",
+        "seed-2.0": "bytedance",
+        "doubao": "bytedance",
+        "bytedance-seed": "bytedance",
         "nous-hermes": "hermes",
         "nous hermes": "hermes",
         # OpenAI-family CLI/product names so a disclosed "Model family: codex"
@@ -4395,7 +4504,7 @@ def _normalize_model_family(value: str) -> str:
 
     # Agents commonly disclose the family with a trailing parenthetical detail,
     # e.g. ``openai (gpt-5.5, codex exec --sandbox read-only)`` or
-    # ``claude (opus-4.8)``. The parenthetical is descriptive metadata, not part
+    # ``claude (opus-5)``. The parenthetical is descriptive metadata, not part
     # of the canonical family token, so a literal lookup of the whole string used
     # to fail and de-count an otherwise-valid reviewer.
     #
@@ -4485,6 +4594,54 @@ def _structured_identity_metadata(text: str, heading_index: int | None) -> dict[
     return metadata
 
 
+def _proxy_transport_grounding_problem(text: str, heading_index: int | None) -> str:
+    """Transport-aware counting check for proxy-transported review bodies.
+
+    Any body whose reviewer/harness disclosure names a proxy transport must
+    ALSO carry the exact canonical grounding disclosure to count; otherwise it
+    is an undisclosed proxy body (e.g. hand-posted collector output the
+    in-process demotion never saw) and fails closed. Scans the same
+    fence-aware post-heading window as :func:`_structured_identity_metadata`;
+    quoted (``> ``-prefixed) lines never match.
+    """
+    lines = str(text).splitlines()
+    start = heading_index + 1 if heading_index is not None else 0
+    proxy_transport = False
+    grounding_disclosed = False
+    in_fence = False
+    fence_marker = ""
+    for line in lines[start : start + 25]:
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            marker = stripped[:3]
+            if not in_fence:
+                in_fence = True
+                fence_marker = marker
+            elif marker == fence_marker:
+                in_fence = False
+                fence_marker = ""
+            continue
+        if in_fence:
+            continue
+        if stripped.startswith("#"):
+            break
+        label, sep, value = stripped.partition(":")
+        if not sep:
+            continue
+        normalized_label = label.strip().strip("*").lower()
+        normalized_value = value.strip().strip("*").strip()
+        if normalized_label in {"reviewer", "reviewer harness"}:
+            lower_value = normalized_value.lower()
+            if any(marker in lower_value for marker in PROXY_TRANSPORT_HARNESS_MARKERS):
+                proxy_transport = True
+        elif normalized_label == "transport grounding":
+            if normalized_value == PROXY_GROUNDING_DISCLOSURE:
+                grounding_disclosed = True
+    if proxy_transport and not grounding_disclosed:
+        return "proxy_transport_grounding_undisclosed"
+    return ""
+
+
 def _resolve_model_review_identity(text: str) -> ModelReviewIdentity:
     candidate, heading_index = _first_heading_candidate(text)
     surface = _infer_surface_reviewer_from_candidate(candidate)
@@ -4519,6 +4676,10 @@ def _resolve_model_review_identity(text: str) -> ModelReviewIdentity:
 
     if not receipt_artifact:
         problems.append("missing_receipt_artifact")
+
+    proxy_problem = _proxy_transport_grounding_problem(text, heading_index)
+    if proxy_problem:
+        problems.append(proxy_problem)
 
     return ModelReviewIdentity(
         surface_reviewer_id=surface,
@@ -4743,6 +4904,16 @@ def _dissenting_views_from_comments(
             identity = _resolve_dogfood_identity(body)
         if identity.surface_reviewer_id == "unknown_model_reviewer":
             continue
+        # Advisory-only families (roster record) never promote blocking dissent
+        # at any tier — but the review must not vanish from the merge packet:
+        # record it as an advisory view (advisory visibility preserved even for
+        # a [P0]/[P1]-backed CHANGES-REQUESTED; #9363 round-4 [P3]).
+        if canonical_family(identity.model_family or "") in ADVISORY_ONLY_FAMILIES:
+            if advisory_views is not None:
+                advisory = _build_advisory_view(comment, body)
+                if advisory is not None:
+                    advisory_views.append(advisory)
+            continue
         author_payload = comment.get("author")
         github_author = ""
         if isinstance(author_payload, dict):
@@ -4760,10 +4931,29 @@ def _dissenting_views_from_comments(
     return dissent[:5]
 
 
+def _view_is_advisory_only(view: dict[str, Any]) -> bool:
+    """Whether a dissenting/advisory view is attributed to an advisory-only family.
+
+    Checks both the ``model_family`` packet field and the ``agent`` field
+    (which protocol payloads may format as ``"family:role"``), canonicalizing
+    via :func:`canonical_family` so raw alias/provider ids (e.g. ``"google"``)
+    cannot dodge the exclusion.
+    """
+    for key in ("model_family", "agent"):
+        raw = str(view.get(key, "") or "")
+        if not raw:
+            continue
+        if canonical_family(raw.split(":", 1)[0]) in ADVISORY_ONLY_FAMILIES:
+            return True
+    return False
+
+
 def _build_advisory_view(comment: dict[str, Any], body: str) -> dict[str, Any] | None:
     """Build the advisory (non-blocking, non-counting) record for a CHANGES-REQUESTED
     comment that, under the severity gate, carries only ``[P2]``/``[P3]`` (or no)
-    findings. Returns ``None`` if the reviewer identity is unrecognized.
+    findings — or that comes from an advisory-only family (in which case it may
+    carry any severity, including ``[P0]``/``[P1]``). Returns ``None`` if the
+    reviewer identity is unrecognized.
     """
     # The comment WOULD have blocked under the strict (flag-OFF) regime: it is a
     # genuine negative verdict, just not backed by a real [P0]/[P1] finding or a
@@ -4784,7 +4974,8 @@ def _build_advisory_view(comment: dict[str, Any], body: str) -> dict[str, Any] |
         "agent": identity.model_family or identity.surface_reviewer_id,
         "position": "advisory_changes_requested",
         "blocking": False,
-        "highest_severity": severity,  # None for finding-free, never P0/P1 here
+        # None for finding-free; P0/P1 possible only for advisory-only families.
+        "highest_severity": severity,
         "reason": _first_nonempty_line(body)[:240],
         "source": "pr_comment",
         "github_author": github_author,
@@ -5586,188 +5777,6 @@ def _render_table(items: list[QueueItem]) -> None:
     )
 
 
-def _render_packet(packet: ReviewPacket) -> None:
-    print(f"# Advisory review packet — PR #{packet.pr_number}")
-    print(f"# {packet.title}")
-    print(f"# {packet.url}")
-    print()
-    print(f"head SHA:        {packet.head_sha}")
-    print(f"base SHA:        {packet.base_sha}")
-    print(f"packet SHA:      {packet.packet_sha}")
-    print(f"author:          {packet.author}")
-    print(f"draft:           {packet.is_draft}")
-    print(f"queue bucket:    {packet.queue_bucket}")
-    print(
-        f"diff:            +{packet.additions}/-{packet.deletions} "
-        f"across {packet.changed_files} files"
-    )
-    print(f"checks:          {packet.checks_summary}")
-    if packet.check_surfaces:
-        rollup = packet.check_surfaces.get("pr_rollup") or {}
-        direct = packet.check_surfaces.get("direct_commit_check_runs") or {}
-        required = packet.check_surfaces.get("required_pr_checks") or {}
-        print(
-            "check surfaces:  "
-            f"pr_rollup_available={str(bool(rollup.get('available'))).lower()} "
-            f"pr_rollup_count={rollup.get('count')}"
-        )
-        if required:
-            gate_selected = str(bool(required.get("gate_selected"))).lower()
-            print(
-                "                 "
-                f"required_pr_checks={required.get('total', 0)} "
-                f"summary={required.get('summary')} "
-                f"gate_selected={gate_selected}"
-            )
-            gate_blocked_reason = str(required.get("gate_blocked_reason") or "").strip()
-            if gate_blocked_reason:
-                print(f"                 required_gate_blocker: {gate_blocked_reason}")
-        non_required_rollup_sample = rollup.get("non_required_non_green_sample") or []
-        if non_required_rollup_sample:
-            print(
-                "                 "
-                "non_required_non_green_rollup="
-                + ", ".join(str(item) for item in non_required_rollup_sample[:3])
-            )
-        optional_noise_sample = rollup.get("optional_runner_capacity_noise_sample") or []
-        if optional_noise_sample:
-            print(
-                "                 "
-                "optional_runner_capacity_noise="
-                + ", ".join(str(item) for item in optional_noise_sample[:3])
-            )
-        long_queued_shadow_sample = (
-            rollup.get("long_queued_self_hosted_shadow_without_runner_metadata_sample") or []
-        )
-        if long_queued_shadow_sample:
-            print(
-                "                 "
-                "long_queued_self_hosted_shadow_without_runner_metadata="
-                + ", ".join(str(item) for item in long_queued_shadow_sample[:3])
-            )
-        if direct:
-            print(
-                "                 "
-                f"direct_commit_check_runs={direct.get('total', 0)} "
-                f"successful_required={len(direct.get('successful_required_contexts') or [])}"
-            )
-        diagnosis = str(packet.check_surfaces.get("diagnosis") or "").strip()
-        if diagnosis:
-            print(f"                 diagnosis: {diagnosis}")
-        remediation = str(packet.check_surfaces.get("remediation_prompt") or "").strip()
-        if remediation:
-            print(f"                 remediation: {remediation}")
-    print()
-    if packet.touched_subsystems:
-        print("touched subsystems:")
-        for sub in packet.touched_subsystems:
-            print(f"  - {sub}")
-        print()
-    if packet.high_risk_paths_touched:
-        print("HIGH-RISK PATHS TOUCHED:")
-        for path in packet.high_risk_paths_touched:
-            print(f"  - {path}")
-        print()
-    if packet.validation:
-        print("validation:")
-        for line in packet.validation:
-            print(f"  - {line}")
-        print()
-    if packet.risk_flags:
-        print("risk flags:")
-        for flag in packet.risk_flags:
-            print(f"  - {flag}")
-        print()
-    print(f"machine recommendation: {packet.machine_recommendation}")
-    print(f"  reason: {packet.machine_recommendation_reason}")
-    if packet.protocol:
-        protocol = packet.protocol
-        binding = protocol.get("binding") or {}
-        cost_estimate = protocol.get("cost_estimate") or {}
-        print()
-        print("protocol:")
-        print(
-            f"  {protocol.get('protocol_version', 'unknown')} [{protocol.get('status', 'unknown')}]"
-        )
-        print(
-            f"  binding: {binding.get('repo', '')} "
-            f"PR #{binding.get('pr_number', packet.pr_number)} "
-            f"{binding.get('base_sha', packet.base_sha)}..{binding.get('head_sha', packet.head_sha)}"
-        )
-        print(
-            f"  confidence: {protocol.get('confidence', 0):.2f} "
-            f"({protocol.get('confidence_basis', 'unknown')})"
-        )
-        print(f"  dissent: {protocol.get('dissent_summary', '')}")
-        availability_summary = protocol.get("availability_summary") or {}
-        if availability_summary:
-            print(
-                "  availability: "
-                f"{availability_summary.get('resolved_slots', 0)}/"
-                f"{availability_summary.get('total_slots', 0)} slots resolved"
-            )
-            unresolved_slots = availability_summary.get("unresolved_slots") or []
-            if unresolved_slots:
-                unresolved = ", ".join(str(slot) for slot in unresolved_slots)
-                print(f"    unresolved: {unresolved}")
-            opt_in_slots = availability_summary.get("opt_in_slots") or []
-            if opt_in_slots:
-                opt_in = ", ".join(str(slot) for slot in opt_in_slots)
-                print(f"    opt-in: {opt_in}")
-        print(
-            f"  cost estimate: ${cost_estimate.get('low', 0):.2f}"
-            f"-${cost_estimate.get('high', 0):.2f}"
-        )
-        top_findings = protocol.get("top_findings") or []
-        if top_findings:
-            print("  top findings:")
-            for finding in top_findings[:3]:
-                if not isinstance(finding, dict):
-                    continue
-                severity = str(finding.get("severity", "")).strip()
-                summary = str(finding.get("summary", "")).strip()
-                print(f"    - [{severity}] {summary}")
-        provider_slots = protocol.get("provider_slots") or []
-        if provider_slots:
-            print("  provider slots:")
-            for slot in provider_slots:
-                if not isinstance(slot, dict):
-                    continue
-                selected = slot.get("selected_provider") or "unresolved"
-                print(
-                    f"    - {slot.get('slot_id')}: {selected} "
-                    f"({slot.get('family')}/{slot.get('lens')})"
-                )
-    if packet.model_review_quorum:
-        quorum = packet.model_review_quorum
-        print()
-        print("model review quorum:")
-        print(f"  tier: Tier {quorum.get('tier')} ({quorum.get('tier_name', 'unknown')})")
-        print(f"  status: {quorum.get('status', 'unknown')}")
-        print(f"  verdict: {quorum.get('verdict', 'unknown')}")
-        print(f"  admin squash allowed: {quorum.get('admin_squash_allowed', False)}")
-        print(
-            "  human risk settlement required: "
-            f"{quorum.get('requires_human_risk_settlement', False)}"
-        )
-        print(
-            "  signals: "
-            f"{len(quorum.get('counted_reviewer_ids') or [])}/"
-            f"{quorum.get('required_model_signals', 0)}"
-        )
-        if quorum.get("counted_reviewer_ids"):
-            print(f"  counted reviewers: {', '.join(quorum.get('counted_reviewer_ids') or [])}")
-        if quorum.get("unresolved_dissent"):
-            print("  unresolved dissent: true")
-        for reason in quorum.get("reasons") or []:
-            print(f"    - {reason}")
-    print()
-    print(f"generated at: {packet.generated_at}")
-    _render_active_auto_handle_alerts()
-    print()
-    print(f"-- {packet.settlement_note}")
-
-
 def _render_session_packet(
     packet: ReviewPacket,
     *,
@@ -5811,80 +5820,6 @@ def _render_recorded_settlement_result(result: RecordedSettlementResult) -> None
     print(f"  receipt sha:  {result.receipt_sha256}")
     print(f"  idempotent:   {str(result.idempotent).lower()}")
     print(f"  written:      {str(result.written).lower()}")
-
-
-def _render_merge_authorization_packet(packet: dict[str, Any]) -> None:
-    queue = packet.get("queue_pressure") or {}
-    print("# Merge authorization packet")
-    print(f"generated at: {packet.get('generated_at', '')}")
-    print(
-        "queue pressure: "
-        f"{queue.get('current_open_prs', 0)} open / cap {queue.get('cap', MODEL_REVIEW_QUEUE_CAP)} "
-        f"(active={queue.get('active', False)})"
-    )
-    if queue.get("active"):
-        print(
-            "new implementation PRs: frozen; only review/dogfood/fix-existing/spec-only work allowed"
-        )
-    print()
-    print("authorization sentence:")
-    print(packet.get("authorization_sentence", ""))
-    print()
-
-    admin_order = packet.get("admin_squash_order") or []
-    human_required = packet.get("human_risk_settlement_required") or []
-    not_ready = packet.get("not_ready") or []
-    print(f"admin squash order: {', '.join(f'#{n}' for n in admin_order) or '(none)'}")
-    print(
-        f"human risk settlement required: {', '.join(f'#{n}' for n in human_required) or '(none)'}"
-    )
-    print(f"not ready: {', '.join(f'#{n}' for n in not_ready) or '(none)'}")
-    print()
-
-    for entry in packet.get("entries") or []:
-        if not isinstance(entry, dict):
-            continue
-        print(
-            f"#{entry.get('pr_number')} | Tier {entry.get('tier')} | "
-            f"{entry.get('status')} | {entry.get('verdict')}"
-        )
-        print(f"  {entry.get('title', '')}")
-        print(f"  head: {entry.get('head_sha', '')}")
-        print(f"  checks: {entry.get('checks_summary', '')}")
-        surfaces = entry.get("check_surfaces") or {}
-        if isinstance(surfaces, dict) and surfaces:
-            rollup = surfaces.get("pr_rollup") or {}
-            direct = surfaces.get("direct_commit_check_runs") or {}
-            print(
-                "  check surfaces: "
-                f"pr_rollup_available={str(bool(rollup.get('available'))).lower()} "
-                f"pr_rollup_count={rollup.get('count')}"
-            )
-            if direct:
-                print(
-                    "  direct checks: "
-                    f"total={direct.get('total', 0)}, "
-                    f"successful_required={len(direct.get('successful_required_contexts') or [])}, "
-                    f"non_green={direct.get('non_green_count', 0)}"
-                )
-            remediation = str(surfaces.get("remediation_prompt") or "").strip()
-            if remediation:
-                print(f"  remediation: {remediation}")
-        print(
-            "  evidence: "
-            f"{len(entry.get('reviewer_signals') or [])} reviewer signal(s), "
-            f"{len(entry.get('dogfood_evidence') or [])} dogfood note(s), "
-            f"{len(entry.get('counted_reviewer_ids') or [])} counted reviewer(s)"
-        )
-        unstable.render_verified_cancellations(entry)
-        gate_blockers = entry.get("admin_squash_gate_blockers") or []
-        if gate_blockers:
-            print("  admin squash live-gate blockers:")
-            for blocker in gate_blockers:
-                print(f"    - {blocker}")
-        for reason in entry.get("reasons") or []:
-            print(f"  - {reason}")
-        print()
 
 
 def _render_evidence_lint(result: dict[str, Any]) -> None:
@@ -5976,25 +5911,3 @@ def _fmt_rate(value: float | None) -> str:
     if value is None:
         return "n/a"
     return f"{value:.4f} ({value:.2%})"
-
-
-def _render_active_auto_handle_alerts() -> None:
-    try:
-        alerts = AutoHandleCalibrationStore().list_active_alerts(limit=3)
-    except (OSError, RuntimeError, sqlite3.Error, ValueError, TypeError) as exc:
-        print(f"warning: auto-handle calibration unavailable: {exc}", file=sys.stderr)
-        return
-    if not alerts:
-        return
-    print()
-    print("ACTIVE AUTO-HANDLE DRIFT ALERTS:")
-    for alert in alerts:
-        current_rate = (
-            f"{alert.current_success_rate:.1%}"
-            if alert.current_success_rate is not None
-            else "unknown"
-        )
-        print(
-            f"  - {alert.auto_handle_path}: {alert.decision_class} "
-            f"(success={current_rate}, action={alert.remediation_action})"
-        )

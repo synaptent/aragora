@@ -9,7 +9,8 @@ Exposes:
 - DIC-17: follow-up-issue bridge for load-bearing cruxes and
   sharply-losing claims (:class:`FollowupProposal`,
   :func:`propose_followup_for_crux`, :func:`propose_followup_for_cruxset`,
-  :func:`propose_followup_for_failed_claim`)
+  :func:`propose_followup_for_failed_claim`,
+  :func:`propose_followup_for_repair_spec` — DIC-22→DIC-17 bridge)
 - DIC-18: organizational truth map report (:class:`OrgTruthMapReport`,
   :func:`build_truth_map`, :func:`build_truth_map_from_manifests`)
 - DIC-20: epistemic decay monitor (:class:`DecaySignal`,
@@ -106,8 +107,10 @@ from .gauntlet_crux_bridge import (
 from .decay_monitor import (
     DecayReason,
     DecaySignal,
+    EpistemicDecayBatchReport,
     compute_decay_impact_set,
     evaluate_unit,
+    evaluate_units,
 )
 from .world_event import (
     WorldEventKind,
@@ -138,6 +141,7 @@ from .followup import (
     propose_followup_for_crux,
     propose_followup_for_cruxset,
     propose_followup_for_failed_claim,
+    propose_followup_for_repair_spec,
 )
 from .quarantine_policy import (
     QuarantineDecision,
@@ -284,8 +288,10 @@ __all__ = [
     "enable_epistemic_followup",
     "enable_repair_pipeline",
     "epistemic_followup_enabled",
+    "EpistemicDecayBatchReport",
     "compute_decay_impact_set",
     "evaluate_unit",
+    "evaluate_units",
     "WorldEventKind",
     "WorldStateEvent",
     "claims_affected_by_event",
@@ -297,6 +303,7 @@ __all__ = [
     "propose_followup_for_crux",
     "propose_followup_for_cruxset",
     "propose_followup_for_failed_claim",
+    "propose_followup_for_repair_spec",
     "propose_repair",
     "quarantine_policy_enabled",
     "repair_pipeline_enabled",

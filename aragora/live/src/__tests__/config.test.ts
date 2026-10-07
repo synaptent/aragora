@@ -123,3 +123,42 @@ describe('config apiFetch runtime backend selection', () => {
     );
   });
 });
+
+describe('config local dev is unaffected by the localhost-baked fallback', () => {
+  // jsdom serves these from http://localhost/, matching a developer running the
+  // container locally: the baked localhost values are correct there and must be
+  // honoured verbatim rather than rewritten to an api.<host> derivation.
+  const originalApiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const originalWsUrl = process.env.NEXT_PUBLIC_WS_URL;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    process.env.NEXT_PUBLIC_API_URL = 'http://localhost:8080';
+    process.env.NEXT_PUBLIC_WS_URL = 'ws://localhost:8765/ws';
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  afterAll(() => {
+    if (originalApiUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_API_URL;
+    } else {
+      process.env.NEXT_PUBLIC_API_URL = originalApiUrl;
+    }
+    if (originalWsUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_WS_URL;
+    } else {
+      process.env.NEXT_PUBLIC_WS_URL = originalWsUrl;
+    }
+  });
+
+  it('keeps the baked localhost endpoints when served from localhost', async () => {
+    const config = await import('../config');
+
+    expect(config.API_BASE_URL).toBe('http://localhost:8080');
+    expect(config.WS_URL).toBe('ws://localhost:8765/ws');
+  });
+});

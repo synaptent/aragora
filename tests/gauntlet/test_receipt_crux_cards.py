@@ -100,6 +100,77 @@ class TestReceiptCruxesField:
         )
         assert receipt.cruxes is None
 
+    def test_pre_stamp_crux_receipt_still_verifies(self) -> None:
+        """#9414 shipped crux binding BEFORE the 1.2 stamp existed: persisted
+        receipts carry cruxes + schema_version 1.1 with a hash computed
+        WITHOUT schema_version. The version binding is gated on the 1.2 stamp
+        so those audit receipts must keep verifying."""
+        receipt = DecisionReceipt.from_debate_result(
+            _debate_result(metadata={"crux_cards": _sample_cards()})
+        )
+        data = receipt.to_dict()
+        data["schema_version"] = "1.1"
+        pre_stamp_material = json.dumps(
+            {
+                "receipt_id": data["receipt_id"],
+                "gauntlet_id": data["gauntlet_id"],
+                "input_hash": data["input_hash"],
+                "risk_summary": data["risk_summary"],
+                "verdict": data["verdict"],
+                "confidence": data["confidence"],
+                "cruxes": data["cruxes"],
+            },
+            sort_keys=True,
+        )
+        data["artifact_hash"] = hashlib.sha256(pre_stamp_material.encode()).hexdigest()
+        assert DecisionReceipt.from_dict(data).verify_integrity() is True
+
+    def test_schema_downgrade_breaks_integrity(self) -> None:
+        """schema_version is bound into the hash for crux receipts: a
+        1.2 -> 1.1 downgrade must fail verification instead of silently
+        defeating the version signal."""
+        receipt = DecisionReceipt.from_debate_result(
+            _debate_result(metadata={"crux_cards": _sample_cards()})
+        )
+        assert receipt.verify_integrity() is True
+        downgraded = receipt.to_dict()
+        downgraded["schema_version"] = "1.1"
+        assert DecisionReceipt.from_dict(downgraded).verify_integrity() is False
+
+    def test_schema_version_bumps_exactly_when_cruxes_attach(self) -> None:
+        """Cruxes bind into artifact_hash, so carrying them must bump the
+        schema version (1.1 -> 1.2) — older verifiers get a version signal
+        instead of a spurious tampering report. Flag-off stays at 1.1."""
+        without = DecisionReceipt.from_debate_result(_debate_result())
+        with_cards = DecisionReceipt.from_debate_result(
+            _debate_result(metadata={"crux_cards": _sample_cards()})
+        )
+        empty = DecisionReceipt.from_debate_result(
+            _debate_result(metadata={"crux_cards": {"items": []}})
+        )
+        assert without.schema_version == "1.1"
+        assert with_cards.schema_version == "1.2"
+        assert empty.schema_version == "1.1"
+
+    def test_crux_block_is_copied_not_aliased(self) -> None:
+        """The receipt must not hold a live reference to result metadata at
+        any depth: mutating the source block — including a nested item dict —
+        after receipt creation cannot change the hashed audit content."""
+        metadata = {"crux_cards": _sample_cards()}
+        receipt = DecisionReceipt.from_debate_result(_debate_result(metadata=metadata))
+        assert receipt.cruxes is not metadata["crux_cards"]
+        assert receipt.cruxes["items"] is not metadata["crux_cards"]["items"]
+        assert receipt.cruxes == metadata["crux_cards"]
+        metadata["crux_cards"]["detector"] = "tampered"
+        metadata["crux_cards"]["items"][0]["statement"] = "tampered nested item"
+        metadata["crux_cards"]["items"][0]["contesting_agents"].append("tampered-agent")
+        assert receipt.cruxes["detector"] == "belief_network"
+        assert receipt.cruxes["items"][0]["statement"] == (
+            "The latency budget holds under burst load"
+        )
+        assert receipt.cruxes["items"][0]["contesting_agents"] == ["agent-beta"]
+        assert receipt.verify_integrity() is True
+
     def test_integrity_hash_binds_cruxes(self) -> None:
         """Crux cards are audit content: the artifact hash binds them when
         present (tampering breaks verify_integrity), while pre-crux receipts

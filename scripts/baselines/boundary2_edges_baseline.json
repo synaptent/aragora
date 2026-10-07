@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "boundary": {"id": 2, "name": "receipts+verifier"},
+  "map": "scripts/ci/boundary_maps/receipts_verifier.json",
+  "frozen_from_ref": "31c243aa7f3b06ffdfe857b3a5dfa2118d913f75",
+  "violations": [
+    "import aragora.gauntlet.odr_export -> aragora.ranking.calibration_report",
+    "import aragora.gauntlet.receipt -> aragora.gauntlet.receipt_exporters",
+    "import aragora.gauntlet.receipt_models -> aragora.compliance.artifact_generator",
+    "import aragora.gauntlet.receipt_models -> aragora.debate.crux_mode",
+    "import aragora.gauntlet.receipt_models -> aragora.debate.provider_diversity",
+    "import aragora.gauntlet.receipt_models -> aragora.gauntlet.receipt_exporters",
+    "import aragora.gauntlet.receipt_models -> aragora.gauntlet.result",
+    "import aragora.gauntlet.receipt_models -> aragora.gauntlet.signing",
+    "import aragora.receipts -> aragora.export.decision_receipt",
+    "import aragora.receipts.provenance -> aragora.gauntlet.signing",
+    "import aragora.receipts.provenance -> aragora.pipeline.receipt_store_facade"
+  ]
+}

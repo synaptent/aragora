@@ -287,6 +287,16 @@ class TestArgumentParser:
         assert args.offline is True
         assert args.receipt == "aragora-demo-receipt.json"
 
+    def test_real_parser_accepts_ask_crux_cards(self):
+        """--crux-cards must stay wired on the real ask parser (default off)."""
+        parser = cli_parser.build_parser()
+
+        args = parser.parse_args(["ask", "Task", "--crux-cards"])
+        assert args.crux_cards is True
+
+        args = parser.parse_args(["ask", "Task"])
+        assert args.crux_cards is False
+
     def test_parse_serve_command(self, parser):
         """Should parse serve command with defaults."""
         args = parser.parse_args(["serve"])

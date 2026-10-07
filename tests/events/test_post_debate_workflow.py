@@ -11,6 +11,8 @@ acceptance test) lives in ``tests/workflow/test_event_subscribers.py``.
 
 Tests cover:
 - Outcome classification (high/low confidence, no consensus, timeout)
+- The DEBATE_END payload-to-outcome contract (status/cancelled/error fields,
+  minimal completions without consensus fields)
 - Workflow template mapping and triggering
 - Custom workflow map overrides
 - Stats tracking (events_processed, workflows_triggered, errors)
@@ -303,7 +305,7 @@ class TestPostDebateWorkflowSubscriber:
         assert mock_trigger.call_args[0][1]["domain"] == "general"
 
     def test_empty_event_data(self):
-        """Should handle empty event data without crashing."""
+        """Empty data carries no consensus signal, so it is not escalated."""
         sub = PostDebateWorkflowSubscriber()
         event = make_debate_end_event({})
 
@@ -312,9 +314,9 @@ class TestPostDebateWorkflowSubscriber:
         ) as mock_trigger:
             sub.handle_debate_end(event)
 
-        # Empty data defaults: consensus_reached=False, timed_out=False -> no_consensus
-        mock_trigger.assert_called_once()
-        assert mock_trigger.call_args[0][1]["outcome"] == "no_consensus"
+        mock_trigger.assert_not_called()
+        assert sub.classify_outcome({}) == "completed"
+        assert sub.stats == {"events_processed": 1, "workflows_triggered": 0, "errors": 0}
 
     def test_no_workflow_template_for_unmapped_outcome(self):
         """No workflow should trigger when outcome key has no mapping."""
@@ -374,6 +376,179 @@ class TestPostDebateWorkflowSubscriber:
             sub.handle_debate_end(event)
 
         assert mock_trigger.call_args[0][1]["outcome"] == "consensus_low_confidence"
+
+
+class TestDebateEndOutcomeContract:
+    """The payload-to-outcome contract for canonical DEBATE_END payloads.
+
+    Precedence is timeout, cancellation, error, then consensus. Consensus
+    outcomes require an explicit ``consensus_reached`` value; a payload without
+    one is an ordinary completion. Cancelled, error and completed outcomes have
+    no default template, so they never build a workflow definition.
+    """
+
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            pytest.param({"debate_id": "d", "status": "timeout"}, "timeout", id="status-timeout"),
+            pytest.param({"debate_id": "d", "timed_out": True}, "timeout", id="timed-out-flag"),
+            pytest.param(
+                {"debate_id": "d", "status": "cancelled"}, "cancelled", id="status-cancelled"
+            ),
+            pytest.param({"cancelled": True, "reason": "x"}, "cancelled", id="cancelled-flag"),
+            pytest.param({"debate_id": "d", "status": "error"}, "error", id="status-error"),
+            pytest.param({"debate_id": "d", "rounds": 0, "error": "boom"}, "error", id="error"),
+            pytest.param({"debate_id": "d"}, "completed", id="minimal-completion"),
+            pytest.param({"duration": 1.0, "rounds": 3}, "completed", id="hook-completion"),
+            pytest.param(
+                {"details": "Complete in 1.0s", "metric": 0.9, "event_source": "spectator"},
+                "completed",
+                id="spectator-completion",
+            ),
+            pytest.param(
+                {"debate_id": "d", "consensus_reached": None, "confidence": 0.9},
+                "completed",
+                id="consensus-none",
+            ),
+            pytest.param(
+                {"debate_id": "d", "confidence": 0.95},
+                "completed",
+                id="confidence-without-consensus",
+            ),
+            pytest.param(
+                {"debate_id": "d", "consensus_reached": False},
+                "no_consensus",
+                id="explicit-no-consensus",
+            ),
+            pytest.param(
+                {
+                    "debate_id": "d",
+                    "status": "completed",
+                    "consensus_reached": True,
+                    "confidence": 0.9,
+                },
+                "consensus_high_confidence",
+                id="status-completed-with-consensus",
+            ),
+            pytest.param(
+                {
+                    "debate_id": "d",
+                    "status": "unknown",
+                    "consensus_reached": True,
+                    "confidence": 0.1,
+                },
+                "consensus_low_confidence",
+                id="unknown-status-falls-through",
+            ),
+            pytest.param(
+                {"debate_id": "d", "status": " Cancelled "},
+                "cancelled",
+                id="status-normalized",
+            ),
+            pytest.param(
+                {"debate_id": "d", "error": None, "consensus_reached": False},
+                "no_consensus",
+                id="null-error-ignored",
+            ),
+        ],
+    )
+    def test_classify_outcome(self, data, expected):
+        assert PostDebateWorkflowSubscriber().classify_outcome(data) == expected
+
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            pytest.param(
+                {"timed_out": True, "cancelled": True}, "timeout", id="timeout-over-cancelled"
+            ),
+            pytest.param(
+                {"status": "cancelled", "error": "boom"}, "cancelled", id="cancelled-over-error"
+            ),
+            pytest.param(
+                {"cancelled": True, "consensus_reached": True, "confidence": 0.99},
+                "cancelled",
+                id="cancelled-over-consensus",
+            ),
+            pytest.param(
+                {"error": "boom", "consensus_reached": True, "confidence": 0.99},
+                "error",
+                id="error-over-consensus",
+            ),
+        ],
+    )
+    def test_terminal_status_precedence(self, data, expected):
+        assert PostDebateWorkflowSubscriber().classify_outcome(data) == expected
+
+    def test_status_timeout_triggers_retry(self):
+        sub = PostDebateWorkflowSubscriber()
+        event = make_debate_end_event(
+            {"debate_id": "d-timeout", "status": "timeout", "reason": "stuck", "duration": 700.0}
+        )
+
+        with patch(
+            "aragora.workflow.event_subscribers.PostDebateWorkflowSubscriber._trigger_workflow"
+        ) as mock_trigger:
+            sub.handle_debate_end(event)
+
+        mock_trigger.assert_called_once()
+        assert mock_trigger.call_args[0][0] == "post_debate_retry"
+        context = mock_trigger.call_args[0][1]
+        assert context["outcome"] == "timeout"
+        assert context["debate_id"] == "d-timeout"
+        assert context["consensus_reached"] is False
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            pytest.param({"debate_id": "d", "status": "cancelled"}, id="status-cancelled"),
+            pytest.param({"cancelled": True, "reason": "User requested"}, id="cancelled-flag"),
+            pytest.param({"debate_id": "d", "error": "boom"}, id="error"),
+            pytest.param({"debate_id": "d"}, id="minimal-completion"),
+        ],
+    )
+    def test_unmapped_outcomes_build_no_workflow(self, data):
+        sub = PostDebateWorkflowSubscriber()
+
+        with patch(
+            "aragora.workflow.event_subscribers.PostDebateWorkflowSubscriber._trigger_workflow"
+        ) as mock_trigger:
+            sub.handle_debate_end(make_debate_end_event(data))
+
+        mock_trigger.assert_not_called()
+        assert sub.stats == {"events_processed": 1, "workflows_triggered": 0, "errors": 0}
+
+    def test_custom_map_can_route_unmapped_outcomes(self):
+        sub = PostDebateWorkflowSubscriber(workflow_map={"cancelled": "post_debate_cleanup"})
+
+        with patch(
+            "aragora.workflow.event_subscribers.PostDebateWorkflowSubscriber._trigger_workflow"
+        ) as mock_trigger:
+            sub.handle_debate_end(make_debate_end_event({"debate_id": "d", "status": "cancelled"}))
+
+        mock_trigger.assert_called_once()
+        assert mock_trigger.call_args[0][0] == "post_debate_cleanup"
+        assert mock_trigger.call_args[0][1]["outcome"] == "cancelled"
+
+    def test_outcome_vocabulary(self):
+        from aragora.workflow.event_subscribers import DEBATE_END_OUTCOMES
+
+        assert DEBATE_END_OUTCOMES == frozenset(
+            {
+                "consensus_high_confidence",
+                "consensus_low_confidence",
+                "no_consensus",
+                "timeout",
+                "cancelled",
+                "error",
+                "completed",
+            }
+        )
+        assert set(OUTCOME_WORKFLOW_MAP) <= DEBATE_END_OUTCOMES
+        assert DEBATE_END_OUTCOMES - set(OUTCOME_WORKFLOW_MAP) == {
+            "cancelled",
+            "error",
+            "completed",
+        }
 
 
 class TestGetPostDebateSubscriber:

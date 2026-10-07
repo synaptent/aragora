@@ -224,6 +224,32 @@ SLO_LATENCY_HISTOGRAM: Any = None
 SLO_VIOLATION_MARGIN: Any = None  # How much over the threshold
 
 
+def _slo_metrics_ready() -> bool:
+    """Return whether the lazy-init flag and metric objects are coherent."""
+    return _initialized and all(
+        metric is not None
+        for metric in (
+            SLO_CHECKS_TOTAL,
+            SLO_VIOLATIONS_TOTAL,
+            SLO_LATENCY_HISTOGRAM,
+            SLO_VIOLATION_MARGIN,
+        )
+    )
+
+
+def _init_noop_metrics() -> None:
+    """Initialize the complete SLO metric set with no-op collectors."""
+    global _initialized
+    global SLO_CHECKS_TOTAL, SLO_VIOLATIONS_TOTAL
+    global SLO_LATENCY_HISTOGRAM, SLO_VIOLATION_MARGIN
+
+    SLO_CHECKS_TOTAL = NoOpMetric()
+    SLO_VIOLATIONS_TOTAL = NoOpMetric()
+    SLO_LATENCY_HISTOGRAM = NoOpMetric()
+    SLO_VIOLATION_MARGIN = NoOpMetric()
+    _initialized = True
+
+
 def init_slo_metrics() -> bool:
     """Initialize SLO Prometheus metrics lazily.
 
@@ -234,17 +260,15 @@ def init_slo_metrics() -> bool:
     global SLO_CHECKS_TOTAL, SLO_VIOLATIONS_TOTAL
     global SLO_LATENCY_HISTOGRAM, SLO_VIOLATION_MARGIN
 
-    if _initialized:
+    if _slo_metrics_ready():
         return True
+    if _initialized:
+        logger.warning("SLO metric state was incomplete; reinitializing all metric objects")
+        _initialized = False
 
     config = get_metrics_config()
     if not config.enabled:
-        # Use NoOp metrics
-        SLO_CHECKS_TOTAL = NoOpMetric()
-        SLO_VIOLATIONS_TOTAL = NoOpMetric()
-        SLO_LATENCY_HISTOGRAM = NoOpMetric()
-        SLO_VIOLATION_MARGIN = NoOpMetric()
-        _initialized = True
+        _init_noop_metrics()
         return False
 
     try:
@@ -282,11 +306,7 @@ def init_slo_metrics() -> bool:
 
     except (ImportError, ValueError):
         logger.warning("prometheus-client not installed, SLO metrics disabled")
-        SLO_CHECKS_TOTAL = NoOpMetric()
-        SLO_VIOLATIONS_TOTAL = NoOpMetric()
-        SLO_LATENCY_HISTOGRAM = NoOpMetric()
-        SLO_VIOLATION_MARGIN = NoOpMetric()
-        _initialized = True
+        _init_noop_metrics()
         return False
 
 
@@ -302,8 +322,7 @@ def record_slo_check(
         passed: Whether the check passed
         percentile: SLO percentile checked (p50, p90, p99)
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     result = "pass" if passed else "fail"
     SLO_CHECKS_TOTAL.labels(
@@ -336,8 +355,7 @@ def record_slo_violation(
     Returns:
         The calculated severity level
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # Auto-calculate severity based on how much threshold was exceeded
     if severity is None:
@@ -385,8 +403,7 @@ def record_operation_latency(operation: str, latency_ms: float) -> None:
         operation: Operation name
         latency_ms: Latency in milliseconds
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     SLO_LATENCY_HISTOGRAM.labels(operation=operation).observe(latency_ms)
 
@@ -410,8 +427,7 @@ def check_and_record_slo(
     """
     from aragora.config.performance_slos import check_latency_slo, get_slo_config
 
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # Record latency in histogram
     record_operation_latency(operation, latency_ms)
@@ -457,8 +473,7 @@ def track_operation_slo(
             result = await mound.query(...)
             ctx["result_count"] = len(result.items)
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     ctx: dict = {}
     start_time = time.perf_counter()
@@ -483,8 +498,7 @@ def get_slo_metrics_summary() -> dict:
     Returns:
         Dict with metric summaries
     """
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # This would need prometheus_client inspection which varies
     # Return basic status for now
@@ -724,8 +738,7 @@ def check_and_record_slo_with_recovery(
     """
     from aragora.config.performance_slos import check_latency_slo, get_slo_config
 
-    if not _initialized:
-        init_slo_metrics()
+    init_slo_metrics()
 
     # Record latency in histogram
     record_operation_latency(operation, latency_ms)

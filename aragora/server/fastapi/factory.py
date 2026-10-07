@@ -102,7 +102,7 @@ def _build_server_context(nomic_dir: Path | None = None) -> dict[str, Any]:
 
     This provides the same context as the legacy server for handler compatibility.
     """
-    from aragora.server.storage import DebateStorage
+    from aragora.storage.debate_storage import DebateStorage
 
     ctx: dict[str, Any] = {}
 
@@ -233,6 +233,12 @@ async def lifespan(app: FastAPI):
     from aragora.server.startup.event_subscribers import register_webhook_store
 
     register_webhook_store()
+    try:
+        from aragora.server.decision_routes import register_decision_routes
+
+        register_decision_routes()
+    except ImportError as e:
+        logger.warning("Decision router hooks not registered: %s", e)
 
     # Initialize shared PostgreSQL pool on the running event loop before
     # any stores attempt backend selection.

@@ -324,7 +324,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.18.0"
 
       # npm audit: fail on high/critical vulnerabilities in frontend deps
       # Low/moderate vulnerabilities are logged as warnings but do not block.
@@ -385,7 +385,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.18.0"
 
       - name: Install frontend dependencies
         working-directory: aragora/live

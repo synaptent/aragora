@@ -79,7 +79,7 @@ def _resolve_openai_base_url() -> str:
 
 @AgentRegistry.register(
     "openai-api",
-    default_model="gpt-5.5",
+    default_model="gpt-5.6-sol",
     default_name="openai-api",
     agent_type="API",
     env_vars="OPENAI_API_KEY",
@@ -102,13 +102,14 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
     # OPENAI_API_KEY never blocks a debate. Distinct OpenRouter model IDs
     # are kept only where the Pro tier is explicitly requested.
     OPENROUTER_MODEL_MAP = {
+        "gpt-5.6-sol": "openai/gpt-5.6-sol",
         "gpt-5.5": "openai/gpt-5.5",
-        "gpt-5.4": "openai/gpt-5.5",
-        "gpt-5.4-pro": "openai/gpt-5.5",
-        "gpt-5.3": "openai/gpt-5.5",
-        "gpt-5.3-chat-latest": "openai/gpt-5.5",
-        "gpt-5.3-codex": "openai/gpt-5.5",
-        "gpt-4.1": "openai/gpt-5.5",
+        "gpt-5.4": "openai/gpt-5.6-sol",
+        "gpt-5.4-pro": "openai/gpt-5.6-sol",
+        "gpt-5.3": "openai/gpt-5.6-sol",
+        "gpt-5.3-chat-latest": "openai/gpt-5.6-sol",
+        "gpt-5.3-codex": "openai/gpt-5.6-sol",
+        "gpt-4.1": "openai/gpt-5.6-sol",
         "gpt-4.1-mini": "openai/gpt-5.5",
         "gpt-4.1-nano": "openai/gpt-5.5",
         "gpt-4o": "openai/gpt-5.5",
@@ -126,7 +127,7 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
     def __init__(
         self,
         name: str = "openai-api",
-        model: str = "gpt-5.5",
+        model: str = "gpt-5.6-sol",
         role: AgentRole = "proposer",
         timeout: int = 120,
         api_key: str | None = None,

@@ -8,9 +8,12 @@ Pricing is per 1M tokens (consistent with aragora.billing.usage).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,35 @@ _HAND_ROWS: dict[str, ProviderPricing] = {
         output_cost_per_1k=0.00042,
         context_window=64_000,
     ),
+    # OpenRouter catalog snapshot 2026-07-09; per-token rates converted to per 1K.
+    "glm-5.2": ProviderPricing(
+        provider_name="zhipu",
+        model_name="glm-5.2",
+        input_cost_per_1k=0.00054,
+        output_cost_per_1k=0.00176,
+        context_window=1_048_576,
+    ),
+    "minimax-m3": ProviderPricing(
+        provider_name="minimax",
+        model_name="minimax-m3",
+        input_cost_per_1k=0.0003,
+        output_cost_per_1k=0.0012,
+        context_window=1_048_576,
+    ),
+    "hy3": ProviderPricing(
+        provider_name="tencent",
+        model_name="hy3",
+        input_cost_per_1k=0.00014,
+        output_cost_per_1k=0.00058,
+        context_window=262_144,
+    ),
+    "seed-2.0-lite": ProviderPricing(
+        provider_name="bytedance",
+        model_name="seed-2.0-lite",
+        input_cost_per_1k=0.00025,
+        output_cost_per_1k=0.002,
+        context_window=262_144,
+    ),
     "mistral-large": ProviderPricing(
         provider_name="mistral",
         model_name="mistral-large",
@@ -119,6 +151,57 @@ _HAND_ROWS: dict[str, ProviderPricing] = {
         output_cost_per_1k=0.003,
         context_window=1_000_000,
         supports_streaming=True,
+    ),
+    # Canonical model_pins ids not yet in aragora.models.CATALOG (#9069 pin
+    # parity): every *_DIRECT / *_VIA_OPENROUTER pin must price non-zero.
+    # Move these into the catalog when the models gain enforcement there.
+    # https://ai.google.dev/gemini-api/docs/pricing (2026-07-09)
+    "gemini-3.1-pro": ProviderPricing(
+        provider_name="google",
+        model_name="gemini-3.1-pro",
+        input_cost_per_1k=0.002,
+        output_cost_per_1k=0.012,
+        context_window=1_048_576,
+    ),
+    # Gemini CLI agent default id (see cli_agents.py); same rate card.
+    "gemini-3.1-pro-preview": ProviderPricing(
+        provider_name="google",
+        model_name="gemini-3.1-pro-preview",
+        input_cost_per_1k=0.002,
+        output_cost_per_1k=0.012,
+        context_window=1_048_576,
+    ),
+    # https://openrouter.ai/google/gemini-3.1-pro-preview (2026-07-09)
+    "google/gemini-3.1-pro-preview": ProviderPricing(
+        provider_name="openrouter",
+        model_name="google/gemini-3.1-pro-preview",
+        input_cost_per_1k=0.002,
+        output_cost_per_1k=0.012,
+        context_window=1_048_576,
+    ),
+    # https://docs.mistral.ai/models/model-cards/mistral-large-3-25-12 (2026-07-09)
+    "mistral-large-2512": ProviderPricing(
+        provider_name="mistral",
+        model_name="mistral-large-2512",
+        input_cost_per_1k=0.0005,
+        output_cost_per_1k=0.0015,
+        context_window=262_144,
+    ),
+    # https://openrouter.ai/mistralai/mistral-large-2512 (2026-07-09)
+    "mistralai/mistral-large-2512": ProviderPricing(
+        provider_name="openrouter",
+        model_name="mistralai/mistral-large-2512",
+        input_cost_per_1k=0.0005,
+        output_cost_per_1k=0.0015,
+        context_window=262_144,
+    ),
+    # https://docs.x.ai/developers/models/grok-4.3 (2026-07-09; current alias rate)
+    "grok-4-latest": ProviderPricing(
+        provider_name="xai",
+        model_name="grok-4-latest",
+        input_cost_per_1k=0.00125,
+        output_cost_per_1k=0.0025,
+        context_window=1_000_000,
     ),
 }
 
@@ -295,14 +378,21 @@ def get_estimated_cost(
         NOT projected into the enumerated table. Returns 0.0 only when the
         model is unknown to both the table and the catalog.
     """
+    # Catalog specs win for cataloged ids: rates_for() is tier-aware
+    # (documented long-context pricing, e.g. xAI bills 2x when the prompt
+    # reaches 200k tokens), which flat table rows cannot express. Below the
+    # threshold this is behavior-identical to the projected table row.
+    spec = by_any_id(provider)
+    if spec is not None:
+        rate_in, rate_out = spec.rates_for(input_tokens)
+        return (input_tokens / 1_000_000.0) * rate_in + (output_tokens / 1_000_000.0) * rate_out
+
     pricing = current_pricing_table().get(provider)
     if pricing is None:
-        spec = by_any_id(provider)
-        if spec is None:
-            return 0.0
-        return (input_tokens / 1_000_000.0) * spec.input_per_mtok + (
-            output_tokens / 1_000_000.0
-        ) * spec.output_per_mtok
+        # Silent 0.0 was the original #9069 bug: cost dashboards read
+        # "free" where they should read "unpriced model".
+        logger.warning("No pricing entry for model %s; returning 0.0", provider)
+        return 0.0
 
     input_cost = (input_tokens / 1000.0) * pricing.input_cost_per_1k
     output_cost = (output_tokens / 1000.0) * pricing.output_cost_per_1k

@@ -93,6 +93,11 @@ def _cleanup() -> None:
         mod = sys.modules.get(mod_name)
         if mod and hasattr(mod, "_initialized"):
             mod._initialized = False
+            if mod_name == "aragora.observability.metrics.slo":
+                mod.SLO_CHECKS_TOTAL = None
+                mod.SLO_VIOLATIONS_TOTAL = None
+                mod.SLO_LATENCY_HISTOGRAM = None
+                mod.SLO_VIOLATION_MARGIN = None
 
     try:
         from aragora.observability.server_metrics import ACTIVE_DEBATES

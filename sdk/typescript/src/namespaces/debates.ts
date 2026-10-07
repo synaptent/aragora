@@ -90,19 +90,6 @@ export interface DebateHealthStatus {
 }
 
 /**
- * Health detail for a specific debate
- */
-export interface DebateHealthDetail {
-  debate_id: string;
-  status: 'healthy' | 'stuck' | 'stalled' | 'completed';
-  stuck_since_round: number | null;
-  current_round: number;
-  last_activity: string;
-  agents_active: string[];
-  recommendations: string[];
-}
-
-/**
  * Debate filter options
  */
 export interface DebateFilters {
@@ -157,20 +144,6 @@ export interface DebateStatistics {
 }
 
 /**
- * Agent performance statistics
- */
-export interface DebateAgentStatistics {
-  agents: Array<{
-    name: string;
-    debates_participated: number;
-    win_rate: number;
-    avg_quality_score: number;
-    consensus_contribution: number;
-  }>;
-  period: string;
-}
-
-/**
  * Consensus analytics
  */
 export interface ConsensusAnalytics {
@@ -207,22 +180,6 @@ export interface BatchExportResult {
 }
 
 /**
- * Batch operation results
- */
-export interface BatchResults {
-  batch_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  total_jobs: number;
-  completed_jobs: number;
-  failed_jobs: number;
-  debates: Array<{
-    debate_id: string;
-    status: 'success' | 'failed' | 'pending';
-    error?: string;
-  }>;
-}
-
-/**
  * Debate comparison result
  */
 export interface DebateComparison {
@@ -234,34 +191,6 @@ export interface DebateComparison {
     positions: Record<string, string>;
   }>;
   consensus_alignment: number;
-}
-
-/**
- * Argument quality analysis
- */
-export interface ArgumentQualityAnalysis {
-  debate_id: string;
-  overall_score: number;
-  by_agent: Array<{
-    name: string;
-    quality_score: number;
-    evidence_usage: number;
-    logical_consistency: number;
-    engagement_quality: number;
-  }>;
-  recommendations: string[];
-}
-
-/**
- * Debate note
- */
-export interface DebateNote {
-  note_id: string;
-  debate_id: string;
-  content: string;
-  author: string;
-  created_at: string;
-  updated_at: string;
 }
 
 /**
@@ -643,16 +572,21 @@ export class DebatesAPI {
   /**
    * Add evidence to a debate.
    *
+   * @deprecated The server has no POST /api/v1/debates/{id}/evidence endpoint.
+   * This call is a silent no-op that LOOKS successful: the route index resolves
+   * the versioned path to ExplainabilityHandler (its can_handle claims the
+   * `/evidence` suffix), whose base-class handle_post stub returns None, so
+   * dispatch falls through to its GET handle() and returns 200 with the
+   * evidence *chain* — nothing is stored and no evidence_id is returned. (The
+   * unversioned /api/debates/{id}/evidence would instead hit DebatesHandler's
+   * "/evidence" suffix route, _get_evidence — read-only either way.) Use
+   * {@link injectEvidence} (POST /api/v1/debates/{id}/inject-evidence, the
+   * documented endpoint) instead.
+   *
    * @param debateId - The debate ID
    * @param evidence - Evidence content
    * @param source - Optional source of the evidence
    * @param metadata - Optional additional metadata
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.addEvidence('debate-123', 'Studies show...', 'research-paper');
-   * console.log(`Evidence added: ${result.evidence_id}`);
-   * ```
    */
   async addEvidence(
     debateId: string,
@@ -663,6 +597,43 @@ export class DebatesAPI {
     return this.client.request('POST', `/api/v1/debates/${debateId}/evidence`, {
       body: { evidence, source, metadata },
     });
+  }
+
+  /**
+   * Inject evidence into a running debate (with optional source citation).
+   *
+   * Matches the documented server contract for
+   * POST /api/v1/debates/{id}/inject-evidence
+   * ({ evidence, source? } -> { success, debate_id, intervention }).
+   *
+   * @param debateId - The debate ID
+   * @param evidence - Evidence content (required, non-empty)
+   * @param source - Optional source citation
+   *
+   * @example
+   * ```typescript
+   * const result = await client.debates.injectEvidence(
+   *   'debate-123',
+   *   'Studies show...',
+   *   'research-paper'
+   * );
+   * console.log(`Injected: ${result.success}`);
+   * ```
+   */
+  async injectEvidence(
+    debateId: string,
+    evidence: string,
+    source?: string
+  ): Promise<{
+    success: boolean;
+    debate_id: string;
+    intervention: Record<string, unknown>;
+  }> {
+    return this.client.request(
+      'POST',
+      `/api/v1/debates/${encodeURIComponent(debateId)}/inject-evidence`,
+      { body: source !== undefined ? { evidence, source } : { evidence } }
+    );
   }
 
   /**
@@ -1869,23 +1840,6 @@ export class DebatesAPI {
     return this.client.request('GET', '/api/v1/debates/health');
   }
 
-  /**
-   * Get health status for a specific debate.
-   *
-   * @param debateId - The debate ID
-   *
-   * @example
-   * ```typescript
-   * const health = await client.debates.getHealth('debate-123');
-   * if (health.status === 'stuck') {
-   *   console.log(`Debate stuck since round ${health.stuck_since_round}`);
-   * }
-   * ```
-   */
-  async getHealth(debateId: string): Promise<DebateHealthDetail> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/health`);
-  }
-
   // ===========================================================================
   // Advanced Query & Filtering
   // ===========================================================================
@@ -2063,47 +2017,28 @@ export class DebatesAPI {
   }
 
   /**
-   * Get per-agent debate statistics using the compatibility route.
+   * Get per-agent debate statistics.
+   *
+   * Targets the versioned GET /api/v1/debates/stats/agents: DebateStatsHandler
+   * only registers the versioned literals, so the unversioned form is claimed
+   * by DebatesHandler's /api/debates prefix and 404s via its slug lookup.
    */
   async getStatsAgents(limit: number = 20): Promise<Record<string, unknown>> {
-    return this.client.request('GET', '/api/debates/stats/agents', {
+    return this.client.request('GET', '/api/v1/debates/stats/agents', {
       params: { limit },
-    });
-  }
-
-  /**
-   * Get agent performance statistics across debates.
-   *
-   * @param options - Filter options
-   *
-   * @example
-   * ```typescript
-   * const agentStats = await client.debates.getAgentStatistics({ period: '30d' });
-   * for (const agent of agentStats.agents) {
-   *   console.log(`${agent.name}: ${agent.win_rate}% win rate`);
-   * }
-   * ```
-   */
-  async getAgentStatistics(options?: {
-    period?: string;
-    agents?: string[];
-  }): Promise<DebateAgentStatistics> {
-    return this.client.request('GET', '/api/v1/debates/statistics/agents', {
-      params: options as Record<string, unknown>,
     });
   }
 
   /**
    * Get consensus analytics for debates.
    *
-   * @param period - Time period for analytics
+   * @deprecated Not served: /api/v1/debates/analytics/consensus is declared in
+   * DebatesHandler.ROUTES but never dispatched — the request falls through to
+   * the slug lookup and returns 404. Use the documented
+   * GET /api/analytics/consensus-quality or
+   * GET /api/v1/analytics/debates/overview endpoints instead.
    *
-   * @example
-   * ```typescript
-   * const consensus = await client.debates.getConsensusAnalytics('30d');
-   * console.log(`Consensus reached in ${consensus.reached_count}/${consensus.total_debates}`);
-   * console.log(`Average confidence: ${consensus.avg_confidence}`);
-   * ```
+   * @param period - Time period for analytics
    */
   async getConsensusAnalytics(period: string = '30d'): Promise<ConsensusAnalytics> {
     return this.client.request('GET', '/api/v1/debates/analytics/consensus', {
@@ -2114,15 +2049,12 @@ export class DebatesAPI {
   /**
    * Get topic trends in debates.
    *
-   * @param options - Filter options
+   * @deprecated Not served: /api/v1/debates/analytics/trends is declared in
+   * DebatesHandler.ROUTES but never dispatched — the request falls through to
+   * the slug lookup and returns 404. Use the documented
+   * GET /api/v1/analytics/debates/trends endpoint instead.
    *
-   * @example
-   * ```typescript
-   * const trends = await client.debates.getTopicTrends({ period: '7d', limit: 10 });
-   * for (const topic of trends.topics) {
-   *   console.log(`${topic.name}: ${topic.count} debates, ${topic.velocity} trend`);
-   * }
-   * ```
+   * @param options - Filter options
    */
   async getTopicTrends(options?: {
     period?: string;
@@ -2186,65 +2118,6 @@ export class DebatesAPI {
   }
 
   // ===========================================================================
-  // Batch Operations (Extended)
-  // ===========================================================================
-
-  /**
-   * Cancel a batch job.
-   *
-   * @param batchId - The batch ID to cancel
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.cancelBatch('batch-123');
-   * if (result.success) {
-   *   console.log(`Batch cancelled: ${result.cancelled_jobs} jobs stopped`);
-   * }
-   * ```
-   */
-  async cancelBatch(batchId: string): Promise<{ success: boolean; cancelled_jobs: number }> {
-    return this.client.request('POST', `/api/v1/debates/batch/${batchId}/cancel`);
-  }
-
-  /**
-   * Retry failed jobs in a batch.
-   *
-   * @param batchId - The batch ID
-   * @param options - Retry options
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.retryBatch('batch-123', { onlyFailed: true });
-   * console.log(`Retrying ${result.retried_count} jobs`);
-   * ```
-   */
-  async retryBatch(
-    batchId: string,
-    options?: { onlyFailed?: boolean }
-  ): Promise<{ success: boolean; retried_count: number }> {
-    return this.client.request('POST', `/api/v1/debates/batch/${batchId}/retry`, {
-      body: options,
-    });
-  }
-
-  /**
-   * Get detailed results from a completed batch.
-   *
-   * @param batchId - The batch ID
-   *
-   * @example
-   * ```typescript
-   * const results = await client.debates.getBatchResults('batch-123');
-   * for (const result of results.debates) {
-   *   console.log(`${result.debate_id}: ${result.status}`);
-   * }
-   * ```
-   */
-  async getBatchResults(batchId: string): Promise<BatchResults> {
-    return this.client.request('GET', `/api/v1/debates/batch/${batchId}/results`);
-  }
-
-  // ===========================================================================
   // Comparison & Analysis
   // ===========================================================================
 
@@ -2265,47 +2138,6 @@ export class DebatesAPI {
     return this.client.request('POST', '/api/v1/debates/compare', {
       body: { debate_ids: debateIds },
     });
-  }
-
-  /**
-   * Get similar debates to a given debate.
-   *
-   * @param debateId - The debate ID to find similar debates for
-   * @param limit - Maximum number of similar debates to return
-   *
-   * @example
-   * ```typescript
-   * const similar = await client.debates.findSimilar('debate-123', 5);
-   * for (const debate of similar.debates) {
-   *   console.log(`${debate.debate_id}: ${debate.similarity_score}`);
-   * }
-   * ```
-   */
-  async findSimilar(
-    debateId: string,
-    limit: number = 10
-  ): Promise<{ debates: Array<{ debate_id: string; similarity_score: number; task: string }> }> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/similar`, {
-      params: { limit },
-    });
-  }
-
-  /**
-   * Analyze argument quality in a debate.
-   *
-   * @param debateId - The debate ID
-   *
-   * @example
-   * ```typescript
-   * const quality = await client.debates.analyzeArgumentQuality('debate-123');
-   * console.log(`Overall quality: ${quality.overall_score}`);
-   * for (const agent of quality.by_agent) {
-   *   console.log(`${agent.name}: ${agent.quality_score}`);
-   * }
-   * ```
-   */
-  async analyzeArgumentQuality(debateId: string): Promise<ArgumentQualityAnalysis> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/quality`);
   }
 
   // ===========================================================================
@@ -2332,13 +2164,12 @@ export class DebatesAPI {
   /**
    * List archived debates.
    *
-   * @param options - Pagination options
+   * @deprecated Not served: /api/v1/debates/archived is declared in
+   * DebatesHandler.ROUTES but never dispatched — the request falls through to
+   * the slug lookup and returns 404. There is no server endpoint that lists
+   * archived debates; use {@link list} for active debates.
    *
-   * @example
-   * ```typescript
-   * const archived = await client.debates.listArchived({ limit: 50 });
-   * console.log(`${archived.total} debates in archive`);
-   * ```
+   * @param options - Pagination options
    */
   async listArchived(options?: {
     limit?: number;
@@ -2349,77 +2180,9 @@ export class DebatesAPI {
     });
   }
 
-  /**
-   * Restore an archived debate.
-   *
-   * @param debateId - The debate ID to restore
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.restore('debate-123');
-   * if (result.success) {
-   *   console.log('Debate restored successfully');
-   * }
-   * ```
-   */
-  async restore(debateId: string): Promise<{ success: boolean }> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/restore`);
-  }
-
-  /**
-   * Permanently delete a debate (requires archive first).
-   *
-   * @param debateId - The debate ID to delete permanently
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.deletePermanently('debate-123');
-   * if (result.success) {
-   *   console.log('Debate permanently deleted');
-   * }
-   * ```
-   */
-  async deletePermanently(debateId: string): Promise<{ success: boolean }> {
-    return this.client.request('DELETE', `/api/v1/debates/${debateId}/permanent`);
-  }
-
   // ===========================================================================
   // Tags & Metadata
   // ===========================================================================
-
-  /**
-   * Add tags to a debate.
-   *
-   * @param debateId - The debate ID
-   * @param tags - Array of tags to add
-   *
-   * @example
-   * ```typescript
-   * await client.debates.addTags('debate-123', ['important', 'review']);
-   * ```
-   */
-  async addTags(debateId: string, tags: string[]): Promise<{ success: boolean; tags: string[] }> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/tags`, {
-      body: { tags },
-    });
-  }
-
-  /**
-   * Remove tags from a debate.
-   *
-   * @param debateId - The debate ID
-   * @param tags - Array of tags to remove
-   *
-   * @example
-   * ```typescript
-   * await client.debates.removeTags('debate-123', ['review']);
-   * ```
-   */
-  async removeTags(debateId: string, tags: string[]): Promise<{ success: boolean; tags: string[] }> {
-    return this.client.request('DELETE', `/api/v1/debates/${debateId}/tags`, {
-      body: { tags },
-    });
-  }
 
   /**
    * List debates by tag.
@@ -2447,16 +2210,13 @@ export class DebatesAPI {
   /**
    * Update metadata for a debate.
    *
+   * @deprecated Not served: no handler dispatches
+   * PATCH /api/v1/debates/{id}/metadata — the request falls through to
+   * DebatesHandler's slug lookup and returns 404. Use {@link update}
+   * (documented PATCH /api/v1/debates/{id} with a `metadata` field) instead.
+   *
    * @param debateId - The debate ID
    * @param metadata - Metadata to merge with existing metadata
-   *
-   * @example
-   * ```typescript
-   * await client.debates.updateMetadata('debate-123', {
-   *   priority: 'high',
-   *   reviewer: 'john@example.com',
-   * });
-   * ```
    */
   async updateMetadata(
     debateId: string,
@@ -2465,67 +2225,6 @@ export class DebatesAPI {
     return this.client.request('PATCH', `/api/v1/debates/${debateId}/metadata`, {
       body: { metadata },
     });
-  }
-
-  // ===========================================================================
-  // Notes & Comments
-  // ===========================================================================
-
-  /**
-   * Add a note to a debate.
-   *
-   * @param debateId - The debate ID
-   * @param note - The note content
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.addNote('debate-123', 'Needs further review');
-   * console.log(`Note added: ${result.note_id}`);
-   * ```
-   */
-  async addNote(
-    debateId: string,
-    note: string
-  ): Promise<{ note_id: string; success: boolean }> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/notes`, {
-      body: { note },
-    });
-  }
-
-  /**
-   * Get notes for a debate.
-   *
-   * @param debateId - The debate ID
-   *
-   * @example
-   * ```typescript
-   * const notes = await client.debates.getNotes('debate-123');
-   * for (const note of notes) {
-   *   console.log(`${note.created_at}: ${note.content}`);
-   * }
-   * ```
-   */
-  async getNotes(debateId: string): Promise<DebateNote[]> {
-    const response = await this.client.request<{ notes: DebateNote[] }>(
-      'GET',
-      `/api/v1/debates/${debateId}/notes`
-    );
-    return response.notes;
-  }
-
-  /**
-   * Delete a note from a debate.
-   *
-   * @param debateId - The debate ID
-   * @param noteId - The note ID to delete
-   *
-   * @example
-   * ```typescript
-   * await client.debates.deleteNote('debate-123', 'note-456');
-   * ```
-   */
-  async deleteNote(debateId: string, noteId: string): Promise<{ success: boolean }> {
-    return this.client.request('DELETE', `/api/v1/debates/${debateId}/notes/${noteId}`);
   }
 
   // ===========================================================================
@@ -2763,6 +2462,15 @@ export class DebatesAPI {
 
   /**
    * Get public spectate status for a shared debate.
+   *
+   * @deprecated Currently unreachable: DebateShareHandler implements
+   * GET /api/v1/debates/{id}/spectate/public, but no route-index entry
+   * reaches it for this path (literal ROUTES match exactly, ahead of the
+   * prefix scan, and no prefix candidate claims the spectate suffix), so
+   * both the versioned and unversioned forms fall through to DebatesHandler's
+   * /api/debates prefix, which has no spectate branch and returns 404 from
+   * its slug lookup. Wire-or-remove candidate for the operator; use
+   * {@link getPublicDebate} for publicly shared debates.
    */
   async getPublicSpectate(debateId: string): Promise<Record<string, unknown>> {
     return this.client.request(
@@ -3231,18 +2939,16 @@ export class DebatesAPI {
    * Returns reasoning chains, key crux points, unresolved disagreements,
    * and intervention data for a debate.
    *
-   * @param debateId - The debate ID
+   * @deprecated Currently unreachable: DebateInterventionHandler
+   * (aragora/server/handlers/debate_intervention.py) implements
+   * GET /api/v1/debates/{id}/reasoning and is registered, but it declares no
+   * literal ROUTES or route prefix the route index can consume (its
+   * DYNAMIC_ROUTES regex is never consulted), so no prefix candidate claims
+   * the versioned path and it falls through to DebatesHandler (no reasoning
+   * branch), which returns 404 from its slug lookup. Wire-or-remove candidate
+   * for the operator; no documented alternative today.
    *
-   * @example
-   * ```typescript
-   * const reasoning = await client.debates.getReasoning('debate-123');
-   * for (const agent of reasoning.agents) {
-   *   console.log(`${agent.name}: confidence ${agent.confidence}`);
-   * }
-   * for (const crux of reasoning.cruxes) {
-   *   console.log(`Crux: ${crux.claim} (confidence: ${crux.confidence})`);
-   * }
-   * ```
+   * @param debateId - The debate ID
    */
   async getReasoning(debateId: string): Promise<{
     data: {
@@ -3263,46 +2969,5 @@ export class DebatesAPI {
     };
   }> {
     return this.client.request('GET', `/api/v1/debates/${encodeURIComponent(debateId)}/reasoning`);
-  }
-  /**
-   * Get per-agent performance statistics for a specific debate.
-   *
-   * @param debateId - The debate to retrieve agent statistics for
-   * @returns Per-agent statistics keyed by agent name
-   *
-   * @example
-   * ```typescript
-   * const stats = await client.debates.getDebateAgentStatistics('debate-123');
-   * for (const [agent, data] of Object.entries(stats.agents)) {
-   *   console.log(`${agent}: score=${data.contribution_score}`);
-   * }
-   * ```
-   */
-  async getDebateAgentStatistics(debateId: string): Promise<{
-    debate_id: string;
-    agents: Record<string, {
-      contribution_score?: number;
-      argument_count?: number;
-      consensus_alignment?: number;
-      win_rate?: number;
-      avg_confidence?: number;
-    }>;
-  }> {
-    return this.client.request('GET', `/api/v1/debates/${encodeURIComponent(debateId)}/agent-statistics`);
-  }
-
-  /**
-   * Make a debate permanent (prevent automatic cleanup or archiving).
-   *
-   * @param debateId - The debate to mark as permanent
-   *
-   * @example
-   * ```typescript
-   * const result = await client.debates.makePermanent('debate-123');
-   * console.log(`Debate is now permanent: ${result.is_permanent}`);
-   * ```
-   */
-  async makePermanent(debateId: string): Promise<{ success: boolean; is_permanent: boolean; debate_id: string }> {
-    return this.client.request('POST', `/api/v1/debates/${encodeURIComponent(debateId)}/make-permanent`);
   }
 }

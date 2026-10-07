@@ -140,7 +140,7 @@ class QuotaFallbackMixin:
 
     # Override these in subclasses for provider-specific model mappings
     OPENROUTER_MODEL_MAP: dict[str, str] = {}
-    DEFAULT_FALLBACK_MODEL: str = "anthropic/claude-opus-4.8"
+    DEFAULT_FALLBACK_MODEL: str = "anthropic/claude-opus-5"
 
     # Instance-level cached fallback agent (set by _get_cached_fallback_agent)
     _fallback_agent: OpenRouterAgent | None = None
@@ -474,6 +474,7 @@ class QuotaFallbackMixin:
         Returns None if the required agent class cannot be imported.
         """
         try:
+            agent: Any
             if provider_key == "openrouter":
                 from .api_agents import OpenRouterAgent
 
@@ -503,9 +504,9 @@ class QuotaFallbackMixin:
                     enable_fallback=False,
                 )
             elif provider_key == "gemini":
-                from .api_agents.gemini import GeminiAPIAgent
+                from .api_agents.gemini import GeminiAgent
 
-                agent = GeminiAPIAgent(
+                agent = GeminiAgent(
                     name=f"{name}_fallback_gemini",
                     role=role,
                     timeout=timeout,
@@ -523,9 +524,9 @@ class QuotaFallbackMixin:
                     enable_fallback=False,
                 )
             elif provider_key == "grok":
-                from .api_agents.grok import GrokAPIAgent
+                from .api_agents.grok import GrokAgent
 
-                agent = GrokAPIAgent(
+                agent = GrokAgent(
                     name=f"{name}_fallback_grok",
                     role=role,
                     timeout=timeout,

@@ -8,10 +8,16 @@ Provides methods for audience suggestions:
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class AudienceAPI:
@@ -27,11 +33,32 @@ class AudienceAPI:
         self._client = client
 
     def get_suggestions(self, debate_id: str) -> dict[str, Any]:
-        """Get audience suggestions for a debate."""
+        """Get audience suggestions for a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/audience/suggestions is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use list_suggestions(debate_id) --
+        the documented GET /api/v1/audience/suggestions contract.
+        """
+        _warn_deprecated(
+            "audience.get_suggestions() targets an unserved route (404 via "
+            "slug fallback); use list_suggestions(debate_id)."
+        )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/audience/suggestions")
 
     def submit_suggestion(self, debate_id: str, suggestion: dict[str, Any]) -> dict[str, Any]:
-        """Submit an audience suggestion for a debate."""
+        """Submit an audience suggestion for a debate.
+
+        DEPRECATED: POST /api/v1/debates/{id}/audience/suggestions is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use create_suggestion(debate_id,
+        suggestion) -- the POST /api/v1/audience/suggestions contract.
+        """
+        _warn_deprecated(
+            "audience.submit_suggestion() targets an unserved route (404 "
+            "via slug fallback); use create_suggestion(debate_id, "
+            "suggestion)."
+        )
         return self._client.request(
             "POST", f"/api/v1/debates/{debate_id}/audience/suggestions", json=suggestion
         )
@@ -70,13 +97,34 @@ class AsyncAudienceAPI:
         self._client = client
 
     async def get_suggestions(self, debate_id: str) -> dict[str, Any]:
-        """Get audience suggestions for a debate."""
+        """Get audience suggestions for a debate.
+
+        DEPRECATED: GET /api/v1/debates/{id}/audience/suggestions is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use list_suggestions(debate_id) --
+        the documented GET /api/v1/audience/suggestions contract.
+        """
+        _warn_deprecated(
+            "audience.get_suggestions() targets an unserved route (404 via "
+            "slug fallback); use list_suggestions(debate_id)."
+        )
         return await self._client.request(
             "GET", f"/api/v1/debates/{debate_id}/audience/suggestions"
         )
 
     async def submit_suggestion(self, debate_id: str, suggestion: dict[str, Any]) -> dict[str, Any]:
-        """Submit an audience suggestion for a debate."""
+        """Submit an audience suggestion for a debate.
+
+        DEPRECATED: POST /api/v1/debates/{id}/audience/suggestions is not
+        dispatched by any server handler; the request falls into the debate
+        slug lookup and returns 404. Use create_suggestion(debate_id,
+        suggestion) -- the POST /api/v1/audience/suggestions contract.
+        """
+        _warn_deprecated(
+            "audience.submit_suggestion() targets an unserved route (404 "
+            "via slug fallback); use create_suggestion(debate_id, "
+            "suggestion)."
+        )
         return await self._client.request(
             "POST", f"/api/v1/debates/{debate_id}/audience/suggestions", json=suggestion
         )

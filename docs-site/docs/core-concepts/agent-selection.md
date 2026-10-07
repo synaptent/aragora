@@ -29,8 +29,8 @@ Perspective coverage note: Mistral adds an EU lens, and Chinese models like Deep
 | `deepseek` | deepseek/deepseek-v4-pro | Code, math, reasoning | $ |
 | `deepseek-r1` | deepseek/deepseek-v4-pro | DeepSeek V4 Pro compatibility alias | $ |
 | `mistral` | mistralai/mistral-large-2411 | Fast, high-quality reasoning | $$ |
-| `qwen` | qwen/qwen3-max | Multilingual, code | $ |
-| `qwen-max` | qwen/qwen3-max | Flagship reasoning | $$ |
+| `qwen` | qwen/qwen3.8-max | Multilingual, code | $ |
+| `qwen-max` | qwen/qwen3.8-max | Flagship reasoning | $$ |
 | `llama` | meta-llama/llama-3.3-70b-instruct | General, open weights | $ |
 | `yi` | 01-ai/yi-large | Chinese/English | $ |
 

@@ -18,10 +18,10 @@ from urllib.parse import unquote
 GITHUB_REPO = "synaptent/aragora"
 # Files allowed to reference archived snapshots as redirects or archive policy indexes.
 ARCHIVE_REFERENCE_WHITELIST = {
-    "docs/ARAGORA_BUSINESS_SUMMARY.md": "redirect stub to the archived business snapshot",
-    "docs/OMNIVOROUS_ROADMAP.md": "redirect stub to the archived roadmap snapshot",
-    "docs/STRATEGY_INDEX.md": "canonical map from retired docs to live replacements",
+    "docs/strategy/STRATEGY_INDEX.md": "canonical map from retired docs to live replacements",
     "docs/archive/README.md": "archive policy and inventory",
+    "docs/status/COMMERCIAL_POSITIONING.md": "redirect stub to the archived commercial-positioning snapshot",
+    "docs/compliance/EU_AI_ACT_WALKTHROUGH_2026-06.md": "redirect stub to the archived EU AI Act walkthrough snapshot",
     "docs/reference/ROOT_ALLOWLIST.md": "root-clutter inventory documents archived former-root files",
 }
 # Files/patterns where metric numbers are intentionally historical, local-suite scoped,
@@ -33,15 +33,16 @@ METRIC_DRIFT_WHITELIST = {
     "docs/STATUS.md": "top-level status log preserves historical count snapshots", "docs/COORDINATION.md": "coordination log preserves closed issue-era measurements", "docs/assessments/**": "dated assessments preserve point-in-time metric claims",
     "docs/debate/**": "debate transcripts preserve prompt-time metric claims", "docs/research/**": "research notes cite exploratory subsystem-local counts", "docs/observability/**": "observability docs cite live suite measurements",
     "docs/workflow/**": "workflow docs cite older local validation counts", "docs/governance/subsystem-ledger.md": "subsystem ledger is explicitly module-local", "docs/PACKAGING.md": "packaging guide cites package-local tests and adapter surfaces",
-    "docs/PYTHON_SDK_CONSOLIDATION.md": "SDK consolidation guide cites namespace-local modules", "docs/STRANDED_FEATURES_AUDIT.md": "audit entries cite feature-local test counts",
     "docs/strategy/POSITIONING_AND_MESSAGING.md": "positioning guide quotes '43 agent types' as an anti-pattern to avoid, not a factual claim",
     "docs/outreach/DESIGN_PARTNER_QUALIFICATION.md": "qualifies '43 agent types' as anti-pattern messaging, not a factual claim",
-    "docs/STRATEGIC_ANALYSIS.md": "point-in-time (March 2026) documentation-drift snapshot; historical counts preserved for the audit narrative",
 }
 LINK_RE = re.compile(r"(?<!!)\[[^\]\n]+\]\(([^)\n]+)\)")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 HTML_ID_RE = re.compile(r"""<a\s+[^>]*id=["']([^"']+)["']""", re.IGNORECASE)
+# Adjacency limit: the kind word must directly follow the number, so qualified claims such as
+# "226,025 automated tests" or "47 registered adapters" are never checked. Allowing a qualifier
+# word also brings existing drifted claims into scope, so widen it only together with refreshing them.
 METRIC_RE = re.compile(r"\b(\d+(?:,\d+)*)(\+)?\s+(tests|adapters|agent types|API operations|modules)\b", re.IGNORECASE)
 CODE_RE = re.compile(r"\b([A-Z]{2,4})-(\d{2})(?:\.\.(\d{2}))?\b")
 TRACKED_ISSUE_CODE_PREFIXES = ("DIC-", "TW-")
@@ -178,7 +179,7 @@ def extract_links(path: Path) -> list[tuple[int, str, str]]:
             links.append((line_no, target, match.group(0)))
     return links
 def parse_strategy_index(root: Path) -> dict[str, StrategyTarget]:
-    index = root / "docs" / "STRATEGY_INDEX.md"
+    index = root / "docs" / "strategy" / "STRATEGY_INDEX.md"
     if not index.exists():
         return {}
     mapping: dict[str, StrategyTarget] = {}

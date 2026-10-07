@@ -139,6 +139,43 @@ at 0%.
 - **Founder:** demo distribution decision (Crucible-orphan outreach), pentest
   kickoff, monthly budget re-tune.
 
+**AMENDMENT 2026-07-28 — founder decision: the demo ships Variant B.**
+
+"signed dissent-preserving receipts" above was written assuming production
+signing. The production Ed25519 key lives in AWS Secrets Manager in the
+suspended account (#9391), and the operator has stated reinstatement cannot be
+resolved on the required timeline, so a production-signed demo receipt is not
+reachable before Aug 9.
+
+The founder has decided the W4 demo ships **Variant B** — the same contingency
+the W3 bundle already uses: a real receipt signed with a locally generated
+Ed25519 key, verifiable offline by the public `aragora-verify` package, carrying
+an explicit dated statement that the local key is not the pinned production
+identity and that production signing is blocked on #9391.
+
+What this does and does not claim:
+
+- **Proven:** the mechanism end-to-end — question → adversarial debate →
+  dissent-preserving receipt with attributed cruxes → third-party offline
+  verification, under 10 minutes. None of that depends on which key signed it,
+  and it is the whole of the Crucible-orphan pitch.
+- **Not proven:** issuer authenticity. A local key says the bytes are intact,
+  not that Aragora vouched for them. The demo must not imply otherwise.
+- **Upgrade path:** on reinstatement, re-sign the same ODR bytes with the
+  production key. Signatures are detached, so the content digest does not
+  change and the published artifact stays valid.
+
+Rationale for deciding now rather than waiting: the alternative is contingent on
+an event outside the team's control before a hard external date (Crucible
+shuts down Aug 31), and the W3 bundle already established that a
+locally-signed artifact with an honest gap statement is acceptable external
+proof.
+
+**Still gating W4 independently of this decision:** the trailing-week product
+share must reach ≥40% (measured 28% on 2026-07-28, down from 33% earlier that
+day as merge-tooling and crux-internals fixes landed as substrate), and the W3
+bundle must be published, which needs the founder's earned-claim review.
+
 ## 3. Kill-switch metrics (weekly, from `.aragora/throughput/ledger.jsonl`)
 
 1. **Product share of merges (7-day):** ≥40% ramping to ≥50%. Trip: <20% two

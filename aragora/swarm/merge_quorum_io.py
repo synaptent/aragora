@@ -15,7 +15,9 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 from aragora.swarm import github_app_auth
 from aragora.swarm.merge_quorum_reconcile import (
@@ -29,7 +31,18 @@ QUORUM_CHECK_NAME = "aragora-merge-quorum"
 QUORUM_WORKFLOW_FILE = "aragora-merge-quorum.yml"
 HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"
 _SHADOW_MARKERS = ("shadow", "advisory")
-_FAILED_CONCLUSIONS = {"FAILURE", "TIMED_OUT", "ERROR", "STARTUP_FAILURE"}
+_FAILED_CONCLUSIONS = {
+    "ACTION_REQUIRED",
+    "CANCELLED",
+    "ERROR",
+    "FAILURE",
+    "STALE",
+    "STARTUP_FAILURE",
+    "TIMED_OUT",
+}
+_SUCCESS_CONCLUSIONS = {"NEUTRAL", "SKIPPED", "SUCCESS"}
+_REST_PAGE_SIZE = 100
+_REST_MAX_PAGES = 100
 _MERGE_PACKET_TIMEOUT = 120
 _EVIDENCE_LINT_TIMEOUT = 90
 _GH_TIMEOUT = 60
@@ -83,12 +96,22 @@ def _read_env() -> dict[str, str]:
 
 
 def run(
-    args: list[str], *, env: dict[str, str] | None = None, timeout: int | None = _GH_TIMEOUT
+    args: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    timeout: int | None = _GH_TIMEOUT,
+    input_text: str | None = None,
 ) -> subprocess.CompletedProcess:
     # Default to a bounded timeout so no bare call can hang the reconciler;
     # callers that need longer (model-review CLIs) pass an explicit timeout.
     return subprocess.run(
-        args, capture_output=True, text=True, check=False, env=env, timeout=timeout
+        args,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+        timeout=timeout,
+        input=input_text,
     )
 
 
@@ -136,8 +159,373 @@ def list_open_prs(repo: str, *, limit: int, author: str | None) -> list[int]:
     return numbers
 
 
-def fetch_pr_context(repo: str, pr: int) -> dict[str, Any]:
-    """Head SHA, head committedDate, quorum conclusion, and real-failure flag."""
+def _check_state(check: dict[str, Any]) -> tuple[str, str, bool | None]:
+    """Normalize a GraphQL status/check row for settlement-stability checks."""
+    name = str(check.get("name") or check.get("context") or "").strip()
+    conclusion = str(check.get("conclusion") or check.get("state") or "").upper()
+    is_required = check.get("isRequired")
+    return name, conclusion, is_required if isinstance(is_required, bool) else None
+
+
+def _check_attempt_timestamp(check: dict[str, Any]) -> datetime | None:
+    """Return the best attempt-ordering timestamp, or ``None`` if unprovable."""
+    for key in (
+        "startedAt",
+        "started_at",
+        "completedAt",
+        "completed_at",
+        "updatedAt",
+        "updated_at",
+    ):
+        raw = check.get(key)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        try:
+            parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else None
+    return None
+
+
+def _latest_check_attempts(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Select the uniquely newest row per check name; ambiguity becomes pending."""
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    selected: list[dict[str, Any]] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            continue
+        name = str(check.get("name") or check.get("context") or "").strip()
+        if not name:
+            selected.append(check)
+            continue
+        grouped.setdefault(name, []).append(check)
+    for name, attempts in grouped.items():
+        if len(attempts) == 1:
+            selected.append(attempts[0])
+            continue
+        timestamps = [_check_attempt_timestamp(attempt) for attempt in attempts]
+        if any(timestamp is None for timestamp in timestamps):
+            newest: list[dict[str, Any]] = []
+        else:
+            latest = max(timestamp for timestamp in timestamps if timestamp is not None)
+            newest = [
+                attempt for attempt, timestamp in zip(attempts, timestamps) if timestamp == latest
+            ]
+        if len(newest) == 1:
+            selected.append(newest[0])
+            continue
+        disclosed = [attempt.get("isRequired") for attempt in attempts]
+        is_required = (
+            True if True in disclosed else False if all(v is False for v in disclosed) else None
+        )
+        selected.append({"name": name, "conclusion": "", "isRequired": is_required})
+    return selected
+
+
+def _summarize_checks(
+    checks: list[dict[str, Any]],
+    *,
+    required_names: set[str] | None = None,
+) -> tuple[str, bool, bool]:
+    """Return quorum conclusion plus non-quorum required failure/pending flags.
+
+    ``required_names=None`` means GitHub could not disclose the required-check
+    set. In that case every non-shadow failure or pending row is treated as
+    required. This can delay evidence publication, but can never promote an
+    unstable head during a degraded API incident.
+    """
+    real_failure = False
+    real_pending = False
+    quorum_conclusion = ""
+    seen_names: set[str] = set()
+    for check in _latest_check_attempts(checks):
+        name, conclusion, disclosed_required = _check_state(check)
+        if name:
+            seen_names.add(name)
+        if name == QUORUM_CHECK_NAME:
+            quorum_conclusion = conclusion
+            continue
+        if disclosed_required is not None:
+            required = disclosed_required
+        elif required_names is not None:
+            required = name in required_names
+        else:
+            required = not _looks_like_shadow(name)
+        if not required:
+            continue
+        if conclusion in _FAILED_CONCLUSIONS:
+            real_failure = True
+        elif conclusion not in _SUCCESS_CONCLUSIONS:
+            real_pending = True
+    if required_names is not None:
+        missing_required = required_names - seen_names - {QUORUM_CHECK_NAME}
+        if missing_required:
+            real_pending = True
+    return quorum_conclusion, real_failure, real_pending
+
+
+def _mergeable_from_rest(data: dict[str, Any]) -> str:
+    mergeable = data.get("mergeable")
+    if mergeable is True:
+        return "MERGEABLE"
+    if mergeable is False and str(data.get("mergeable_state") or "").lower() == "dirty":
+        return "CONFLICTING"
+    return "UNKNOWN"
+
+
+def _merge_state_from_rest(data: dict[str, Any]) -> str:
+    state = str(data.get("mergeable_state") or "").strip().lower()
+    mapping = {
+        "behind": "BEHIND",
+        "blocked": "BLOCKED",
+        "clean": "CLEAN",
+        "dirty": "DIRTY",
+        "draft": "DRAFT",
+        "has_hooks": "HAS_HOOKS",
+        "unstable": "UNSTABLE",
+        "unknown": "UNKNOWN",
+    }
+    if state in mapping:
+        return mapping[state]
+    if data.get("mergeable") is True:
+        return "CLEAN"
+    if data.get("mergeable") is False:
+        return "CONFLICTING"
+    return "UNKNOWN"
+
+
+def _with_page(endpoint: str, page: int) -> str:
+    separator = "&" if "?" in endpoint else "?"
+    return f"{endpoint}{separator}page={page}"
+
+
+def _rest_list(endpoint: str, *, env: dict[str, str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for page in range(1, _REST_MAX_PAGES + 1):
+        payload = run_json(["gh", "api", "--method", "GET", _with_page(endpoint, page)], env=env)
+        if not isinstance(payload, list):
+            raise RuntimeError(f"REST endpoint returned a non-list payload: {endpoint}")
+        rows.extend(row for row in payload if isinstance(row, dict))
+        if len(payload) < _REST_PAGE_SIZE:
+            break
+    return rows
+
+
+def _rest_check_runs(endpoint: str, *, env: dict[str, str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for page in range(1, _REST_MAX_PAGES + 1):
+        payload = run_json(["gh", "api", "--method", "GET", _with_page(endpoint, page)], env=env)
+        page_rows = payload.get("check_runs") if isinstance(payload, dict) else None
+        if not isinstance(page_rows, list):
+            raise RuntimeError(f"REST endpoint returned no check-runs list: {endpoint}")
+        rows.extend(row for row in page_rows if isinstance(row, dict))
+        if len(page_rows) < _REST_PAGE_SIZE:
+            break
+    return rows
+
+
+def _applied_branch_rules(repo: str, base_ref: str, *, env: dict[str, str]) -> list[dict[str, Any]]:
+    """Fetch every applied branch rule, rejecting incomplete pagination or schema."""
+    endpoint = f"repos/{repo}/rules/branches/{quote(base_ref, safe='')}?per_page={_REST_PAGE_SIZE}"
+    rows: list[dict[str, Any]] = []
+    for page in range(1, _REST_MAX_PAGES + 1):
+        payload = run_json(["gh", "api", "--method", "GET", _with_page(endpoint, page)], env=env)
+        if not isinstance(payload, list) or any(not isinstance(row, dict) for row in payload):
+            raise RuntimeError("applied branch rules returned an invalid payload")
+        rows.extend(payload)
+        if len(payload) < _REST_PAGE_SIZE:
+            return rows
+    raise RuntimeError("applied branch rules exceeded the pagination limit")
+
+
+def _required_context(value: Any, source: str) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise RuntimeError(f"{source} contained an invalid context")
+    return value
+
+
+def _classic_required_check_names(payload: Any) -> set[str]:
+    """Normalize classic branch-protection requirements without coercing bad data."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("classic required checks returned a non-object payload")
+    contexts = payload.get("contexts")
+    checks = payload.get("checks")
+    if not isinstance(contexts, list) or not isinstance(checks, list):
+        raise RuntimeError("classic required checks omitted contexts or checks")
+    names: set[str] = set()
+    for context in contexts:
+        names.add(_required_context(context, "classic required checks"))
+    for check in checks:
+        if not isinstance(check, dict):
+            raise RuntimeError("classic required checks contained a non-object check")
+        names.add(_required_context(check.get("context"), "classic required checks"))
+    return names
+
+
+def _ruleset_required_check_names(rules: list[dict[str, Any]]) -> set[str]:
+    """Normalize required contexts from a complete applied-rules response."""
+    names: set[str] = set()
+    for rule in rules:
+        rule_type = rule.get("type")
+        if not isinstance(rule_type, str) or not rule_type or rule_type != rule_type.strip():
+            raise RuntimeError("applied branch rules contained an invalid rule type")
+        if rule_type != "required_status_checks":
+            continue
+        parameters = rule.get("parameters")
+        if not isinstance(parameters, dict):
+            raise RuntimeError("required_status_checks rule omitted parameters")
+        requirements = parameters.get("required_status_checks")
+        if not isinstance(requirements, list):
+            raise RuntimeError("required_status_checks rule omitted its requirements")
+        for requirement in requirements:
+            if not isinstance(requirement, dict):
+                raise RuntimeError("required_status_checks contained a non-object requirement")
+            context = requirement.get("context")
+            name = requirement.get("name")
+            if context is not None and name is not None and context != name:
+                raise RuntimeError("required_status_checks contained conflicting context names")
+            names.add(
+                _required_context(
+                    context if context is not None else name,
+                    "required_status_checks",
+                )
+            )
+    return names
+
+
+def _required_check_names(repo: str, base_ref: str, *, env: dict[str, str]) -> set[str] | None:
+    if not base_ref:
+        return None
+    ambient_env = aragora_env()
+    candidates = [env]
+    if env.get("GH_TOKEN") != ambient_env.get("GH_TOKEN"):
+        candidates.append(ambient_env)
+    for candidate_env in candidates:
+        try:
+            classic_payload = run_json(
+                [
+                    "gh",
+                    "api",
+                    "--method",
+                    "GET",
+                    f"repos/{repo}/branches/{quote(base_ref, safe='')}/protection/required_status_checks",
+                ],
+                env=candidate_env,
+            )
+            rules = _applied_branch_rules(repo, base_ref, env=candidate_env)
+            names = _classic_required_check_names(classic_payload)
+            names.update(_ruleset_required_check_names(rules))
+        except RuntimeError:
+            continue
+        return names
+    return None
+
+
+def _fetch_required_pr_checks(repo: str, pr: int, *, env: dict[str, str]) -> list[dict[str, Any]]:
+    """Fetch GitHub's canonical required-check surface for a pull request."""
+    args = [
+        "gh",
+        "pr",
+        "checks",
+        str(pr),
+        "--repo",
+        repo,
+        "--required",
+        "--json",
+        "name,state,bucket",
+    ]
+    try:
+        proc = run(args, env=env)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"required-check query timed out for {repo}#{pr}") from exc
+    try:
+        payload = json.loads(proc.stdout or "")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"required-check query failed ({proc.returncode}) for {repo}#{pr}: "
+            f"{(proc.stderr or '').strip()[:200]}"
+        ) from exc
+    if not isinstance(payload, list):
+        raise RuntimeError(f"required-check query returned a non-list payload for {repo}#{pr}")
+    return [
+        {
+            "name": row.get("name"),
+            "conclusion": row.get("state") or row.get("bucket"),
+            "isRequired": True,
+        }
+        for row in payload
+        if isinstance(row, dict)
+    ]
+
+
+def _fetch_pr_context_rest(repo: str, pr: int, *, env: dict[str, str]) -> dict[str, Any]:
+    data = run_json(["gh", "api", "--method", "GET", f"repos/{repo}/pulls/{pr}"], env=env)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"REST pull request payload was not an object for {repo}#{pr}")
+    raw_head = data.get("head")
+    raw_base = data.get("base")
+    head: dict[str, Any] = raw_head if isinstance(raw_head, dict) else {}
+    base: dict[str, Any] = raw_base if isinstance(raw_base, dict) else {}
+    head_sha = str(head.get("sha") or "").strip()
+    if not head_sha:
+        raise RuntimeError(f"REST pull request payload omitted head SHA for {repo}#{pr}")
+    commit = run_json(["gh", "api", "--method", "GET", f"repos/{repo}/commits/{head_sha}"], env=env)
+    commit_payload = commit.get("commit") if isinstance(commit, dict) else {}
+    committer = commit_payload.get("committer") if isinstance(commit_payload, dict) else {}
+    head_committed_at = str((committer.get("date") if isinstance(committer, dict) else "") or "")
+    check_runs = _rest_check_runs(
+        f"repos/{repo}/commits/{head_sha}/check-runs?per_page={_REST_PAGE_SIZE}", env=env
+    )
+    statuses = _rest_list(
+        f"repos/{repo}/commits/{head_sha}/statuses?per_page={_REST_PAGE_SIZE}", env=env
+    )
+    checks: list[dict[str, Any]] = []
+    for check in check_runs:
+        if not isinstance(check, dict):
+            continue
+        name = str(check.get("name") or "").strip()
+        if name:
+            checks.append(
+                {
+                    "name": name,
+                    "conclusion": check.get("conclusion") or check.get("status"),
+                    "started_at": check.get("started_at"),
+                    "completed_at": check.get("completed_at"),
+                    "updated_at": check.get("updated_at"),
+                },
+            )
+    for status in statuses:
+        context = str(status.get("context") or "").strip()
+        if context:
+            checks.append(
+                {
+                    "context": context,
+                    "state": status.get("state"),
+                    "updated_at": status.get("updated_at"),
+                }
+            )
+    required_names = _required_check_names(repo, str(base.get("ref") or ""), env=env)
+    quorum_conclusion, real_failure, real_pending = _summarize_checks(
+        checks, required_names=required_names
+    )
+    pr_state = "MERGED" if data.get("merged_at") else str(data.get("state") or "").upper()
+    return {
+        "head_sha": head_sha,
+        "head_committed_at": head_committed_at,
+        "quorum_conclusion": quorum_conclusion,
+        "has_real_required_failure": real_failure,
+        "has_real_required_pending": real_pending,
+        "is_draft": bool(data.get("draft")),
+        "pr_state": pr_state,
+        "mergeable": _mergeable_from_rest(data),
+        "merge_state_status": _merge_state_from_rest(data),
+        "context_source": "rest",
+        "required_checks_disclosed": required_names is not None,
+    }
+
+
+def _fetch_pr_context_graphql(repo: str, pr: int, *, env: dict[str, str]) -> dict[str, Any]:
     data = run_json(
         [
             "gh",
@@ -147,10 +535,12 @@ def fetch_pr_context(repo: str, pr: int) -> dict[str, Any]:
             "--repo",
             repo,
             "--json",
-            "headRefOid,commits,statusCheckRollup",
+            "headRefOid,commits,statusCheckRollup,isDraft,state,mergeable,mergeStateStatus",
         ],
-        env=_read_env(),
+        env=env,
     )
+    if not isinstance(data, dict):
+        raise RuntimeError(f"GraphQL pull request payload was not an object for {repo}#{pr}")
     head_sha = str(data.get("headRefOid") or "").strip()
     commits = data.get("commits") or []
     head_committed_at = ""
@@ -162,37 +552,63 @@ def fetch_pr_context(repo: str, pr: int) -> dict[str, Any]:
         # The head may be beyond the returned commit slice; fetch its date
         # directly rather than guessing from the last listed commit.
         try:
-            commit = (
-                run_json(["gh", "api", f"repos/{repo}/commits/{head_sha}"], env=_read_env()) or {}
-            )
+            commit = run_json(["gh", "api", f"repos/{repo}/commits/{head_sha}"], env=env) or {}
         except RuntimeError:
             commit = {}
         committer = (commit.get("commit") or {}).get("committer") or {}
         head_committed_at = str(committer.get("date") or "")
 
-    real_failure = False
-    quorum_conclusion = ""
-    for check in data.get("statusCheckRollup") or []:
-        if not isinstance(check, dict):
-            continue
-        name = str(check.get("name") or check.get("context") or "")
-        conclusion = str(check.get("conclusion") or check.get("state") or "").upper()
-        if name == QUORUM_CHECK_NAME:
-            quorum_conclusion = conclusion
-            continue
-        if conclusion not in _FAILED_CONCLUSIONS:
-            continue
-        is_required = check.get("isRequired")
-        if is_required is True:
-            real_failure = True
-        elif is_required is None and not _looks_like_shadow(name):
-            real_failure = True
+    required_checks = _fetch_required_pr_checks(repo, pr, env=env)
+    _, real_failure, real_pending = _summarize_checks(required_checks)
+    quorum_conclusion, _, _ = _summarize_checks(data.get("statusCheckRollup") or [])
+    if not quorum_conclusion:
+        quorum_conclusion, _, _ = _summarize_checks(required_checks)
     return {
         "head_sha": head_sha,
         "head_committed_at": head_committed_at,
         "quorum_conclusion": quorum_conclusion,
         "has_real_required_failure": real_failure,
+        "has_real_required_pending": real_pending,
+        "is_draft": bool(data.get("isDraft")),
+        "pr_state": str(data.get("state") or "").upper(),
+        "mergeable": str(data.get("mergeable") or "").upper(),
+        "merge_state_status": str(data.get("mergeStateStatus") or "").upper(),
+        "context_source": "graphql",
+        "required_checks_disclosed": True,
     }
+
+
+def fetch_pr_context(repo: str, pr: int) -> dict[str, Any]:
+    """Fetch exact-head settlement context, preferring GraphQL then REST.
+
+    REST is a resilience path for GitHub GraphQL incidents, not a relaxation:
+    if branch protection cannot disclose required contexts, every non-shadow
+    failure or pending check is conservatively treated as required.
+    """
+    env = _read_env()
+    try:
+        return _fetch_pr_context_graphql(repo, pr, env=env)
+    except RuntimeError as graphql_error:
+        rest_errors: list[str] = []
+        rest_envs = [env]
+        ambient_env = aragora_env()
+        if env.get("GH_TOKEN") != ambient_env.get("GH_TOKEN"):
+            rest_envs.append(ambient_env)
+        context: dict[str, Any] | None = None
+        for rest_env in rest_envs:
+            try:
+                context = _fetch_pr_context_rest(repo, pr, env=rest_env)
+                break
+            except RuntimeError as rest_error:
+                rest_errors.append(str(rest_error))
+        if context is None:
+            joined_rest_errors = "; ".join(rest_errors)
+            raise RuntimeError(
+                f"could not fetch PR context via GraphQL ({graphql_error}) "
+                f"or REST ({joined_rest_errors})"
+            ) from graphql_error
+        context["graphql_error"] = str(graphql_error)[:500]
+        return context
 
 
 def fetch_latest_quorum_run(repo: str, head_sha: str) -> QuorumRun | None:
@@ -347,6 +763,53 @@ def fetch_quorum_run_packet_classification(
     return parse_ci_packet_classification(proc.stdout, pr_number=pr, head_sha=head_sha)
 
 
+# Hard identity problems that stop one reviewer-signal item from counting.
+# Mirrors ``review_queue.IDENTITY_COUNT_BLOCKERS`` — the swarm layer cannot
+# import the CLI module (upward layer edge, and a circular import via
+# quorum_evidence), so the five blocker strings are duplicated here and pinned
+# against the CLI set by
+# tests/swarm/test_merge_quorum_reconcile.py::TestSignalFamiliesFromLint.
+_SIGNAL_IDENTITY_BLOCKERS: frozenset[str] = frozenset(
+    (
+        "missing_model_family_disclosure",
+        "unknown_model_family",
+        "heading_model_family_conflict",
+        "unknown_surface_reviewer",
+        "proxy_transport_grounding_undisclosed",
+    )
+)
+
+
+def _signal_families_from_lint(lint: dict[str, Any]) -> tuple[str, ...]:
+    """Counted families backed by GENUINE model-review signal items.
+
+    Derives ``EvidenceComment.reviewer_signals`` provenance from the lint's
+    ``reviewer_signals`` list ONLY — never ``dogfood_evidence`` — mirroring the
+    live gate's signal-only western-frontier derivation (review_queue computes
+    ``has_western_frontier_signal`` from reviewer signals with an EMPTY dogfood
+    list). Families are intersected with ``counted_reviewer_ids`` so the result
+    is always a subset of the counted families (advisory-only exclusions carry
+    over), and items with hard identity blockers never contribute, keeping this
+    at-most-as-permissive as the gate.
+    """
+    counted = {
+        str(rid).strip().lower()
+        for rid in (lint.get("counted_reviewer_ids") or [])
+        if str(rid).strip()
+    }
+    families: set[str] = set()
+    for item in lint.get("reviewer_signals") or []:
+        if not isinstance(item, dict):
+            continue
+        problems = {str(problem) for problem in (item.get("identity_problems") or [])}
+        if problems & _SIGNAL_IDENTITY_BLOCKERS:
+            continue
+        family = str(item.get("model_family") or "").strip().lower()
+        if family and family in counted:
+            families.add(family)
+    return tuple(sorted(families))
+
+
 def fetch_evidence_comments(
     repo: str, pr: int, head_sha: str, head_committed_at: str
 ) -> list[EvidenceComment]:
@@ -371,6 +834,7 @@ def fetch_evidence_comments(
                 would_count=bool(lint.get("would_count")),
                 reviewer_id=str(counted[0]) if counted else "",
                 is_dogfood=bool(lint.get("dogfood_evidence")),
+                reviewer_signals=_signal_families_from_lint(lint),
             )
         )
     return results

@@ -19,6 +19,7 @@ from aragora.core import Agent, DebateResult
 from aragora.debate.safety import resolve_prompt_evolution
 from aragora.memory.store import CritiqueStore
 from aragora.storage.base_store import SQLiteStore
+from aragora.models.compat import first_text_block
 
 if TYPE_CHECKING:
     from aragora.gauntlet.result import Vulnerability
@@ -553,7 +554,7 @@ Return ONLY the refined prompt, no explanations."""
                             "content-type": "application/json",
                         },
                         json={
-                            "model": "claude-opus-4-8",
+                            "model": "claude-opus-5",
                             "max_tokens": 2048,
                             "messages": [{"role": "user", "content": refinement_prompt}],
                         },
@@ -561,7 +562,15 @@ Return ONLY the refined prompt, no explanations."""
                     if response.status_code == 200:
                         try:
                             data = response.json()
-                            return data["content"][0]["text"].strip()
+                            # Opus 5 thinks by default: content[0] is a
+                            # thinking block, so scan for the text block.
+                            refined = first_text_block(data.get("content")).strip()
+                            if refined:
+                                return refined
+                            # Absent text is the same failure the old
+                            # content[0] KeyError signalled: warn, don't
+                            # return an empty refinement.
+                            logger.warning("Anthropic response carried no text block")
                         except (
                             json.JSONDecodeError,
                             KeyError,

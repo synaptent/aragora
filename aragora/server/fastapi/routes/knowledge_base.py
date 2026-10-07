@@ -49,7 +49,7 @@ from pydantic import BaseModel, Field
 from aragora.rbac.models import AuthorizationContext
 
 from ..dependencies.auth import require_authenticated, require_permission
-from ..middleware.error_handling import NotFoundError
+from ..middleware.error_handling import APIError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +455,17 @@ async def _call_store(store: Any, method_name: str, *args: Any, **kwargs: Any) -
     return result
 
 
+def _caller_org(auth: AuthorizationContext) -> str:
+    """The organization fact writes bind to: only the verified auth context."""
+    if not auth.org_id:
+        raise APIError(
+            "Creating knowledge facts requires an organization",
+            status_code=403,
+            code="knowledge_org_required",
+        )
+    return auth.org_id
+
+
 # =============================================================================
 # Fact CRUD Endpoints
 # =============================================================================
@@ -540,6 +551,7 @@ async def create_fact(
     Adds a fact to the knowledge base with the given statement, confidence,
     topics, and metadata. Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         fact = await _call_store(
             store,
@@ -551,6 +563,7 @@ async def create_fact(
             confidence=body.confidence,
             topics=body.topics,
             metadata=body.metadata,
+            org_id=org_id,
         )
         return _fact_to_detail(fact)
     except HTTPException:
@@ -1031,6 +1044,7 @@ async def import_knowledge_base(
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     imported = 0
     skipped = 0
     errors = 0
@@ -1047,7 +1061,7 @@ async def import_knowledge_base(
             # Check for existing fact by ID if merge strategy requires it
             fact_id = fact_data.get("id")
             if fact_id and body.merge_strategy == "skip_existing":
-                existing = await _call_store(store, "get_fact", fact_id)
+                existing = await _call_store(store, "get_fact", fact_id, org_id=org_id)
                 if existing:
                     skipped += 1
                     continue
@@ -1062,6 +1076,7 @@ async def import_knowledge_base(
                 confidence=fact_data.get("confidence", 0.5),
                 topics=fact_data.get("topics", []),
                 metadata=fact_data.get("metadata", {}),
+                org_id=org_id,
             )
             imported += 1
 

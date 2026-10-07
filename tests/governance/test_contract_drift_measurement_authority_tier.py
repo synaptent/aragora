@@ -9,12 +9,16 @@ to skip a maintained exact-name governance test.
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
+import sys
+from types import ModuleType
 from pathlib import Path
 
 import pytest
 
 from aragora.cli.commands import review_queue
+from scripts import generate_contract_drift_inventory
 from scripts import tier4_merge_train
 
 
@@ -237,6 +241,10 @@ def test_classifier_and_merge_train_constants_match() -> None:
         tier4_merge_train.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
         == review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
     )
+    successor_builder = "scripts/build_contract_drift_historical_backfill.py"
+    assert successor_builder in review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert review_queue._classify_model_review_tier([successor_builder])[0] == 4
+    assert tier4_merge_train.matches_serialized_path(successor_builder) == successor_builder
 
 
 @pytest.mark.parametrize("path", EXPECTED_AUTHORITY_PREFIXES)
@@ -303,6 +311,159 @@ def test_executable_authority_dependencies_are_tier4(path: str) -> None:
     assert tier == 4, path
     assert tier4_merge_train.matches_serialized_path(path) == path
     assert path not in review_queue.CONTRACT_DRIFT_AUTHORITY_PREFIXES
+
+
+def test_quorum_evidence_module_imports_do_not_resolve_below_tier4(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    tree = _git_text(repo_root, "write-tree").strip()
+    commit_env = {
+        **os.environ,
+        "GIT_AUTHOR_EMAIL": "cdg-test@example.invalid",
+        "GIT_AUTHOR_NAME": "cdg-test",
+        "GIT_COMMITTER_EMAIL": "cdg-test@example.invalid",
+        "GIT_COMMITTER_NAME": "cdg-test",
+    }
+    ref = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "commit-tree",
+            tree,
+            "-p",
+            _git_text(repo_root, "rev-parse", "HEAD").strip(),
+        ],
+        input="temporary complete authority closure fixture\n",
+        capture_output=True,
+        check=True,
+        text=True,
+        env=commit_env,
+    ).stdout.strip()
+    monkeypatch.setattr(
+        generate_contract_drift_inventory,
+        "_resolve_full_commit",
+        lambda _repo_root, candidate: candidate,
+    )
+    manifest_scratch = tmp_path / "manifest-scratch"
+    manifest_scratch.mkdir()
+    manifest = generate_contract_drift_inventory.build_authority_manifest(
+        repo_root,
+        ref,
+        scratch_root=manifest_scratch,
+    )
+    closure = {item["path"]: item for item in manifest["repo_files"]}
+    extraction_root = tmp_path / "exact-ref"
+    generate_contract_drift_inventory._extract_exact_ref(
+        repo_root,
+        ref,
+        extraction_root,
+    )
+    module_imports = sorted(
+        {
+            (source_path, imported_path)
+            for source_path in closure
+            if Path(source_path).suffix == ".py"
+            for imported_path, _kind in generate_contract_drift_inventory._python_import_edges(
+                extraction_root,
+                source_path,
+                include_function_bodies=False,
+            )
+            if imported_path != source_path
+        }
+    )
+
+    missing_from_closure = [
+        (source_path, imported_path)
+        for source_path, imported_path in module_imports
+        if imported_path not in closure
+    ]
+    assert missing_from_closure == []
+    below_tier4 = [
+        (source_path, imported_path)
+        for source_path, imported_path in module_imports
+        if closure[imported_path]["tier"] != 4
+        or closure[imported_path]["matched_rule"]
+        != closure[imported_path]["merge_train_matched_rule"]
+    ]
+    assert below_tier4 == []
+
+
+def _install_fake_claude_vibeproxy_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[list[tuple[str, dict[str, object]]], object]:
+    calls: list[tuple[str, dict[str, object]]] = []
+    result = object()
+    transport = ModuleType("aragora.agents.transports.claude_vibeproxy")
+
+    def fake_run(prompt: str, **kwargs: object) -> object:
+        calls.append((prompt, kwargs))
+        return result
+
+    setattr(transport, "run_claude_vibeproxy", fake_run)
+    monkeypatch.setitem(
+        sys.modules,
+        "aragora.agents.transports.claude_vibeproxy",
+        transport,
+    )
+    return calls, result
+
+
+def test_quorum_evidence_lazy_delegate_omits_unset_model_keyword(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aragora.swarm import quorum_evidence
+
+    calls, expected_result = _install_fake_claude_vibeproxy_transport(monkeypatch)
+    policy = object()
+
+    result = quorum_evidence.run_claude_vibeproxy(
+        "review prompt",
+        reviewer_timeout=17.5,
+        policy=policy,
+    )
+
+    assert result is expected_result
+    assert calls == [
+        (
+            "review prompt",
+            {
+                "reviewer_timeout": 17.5,
+                "policy": policy,
+            },
+        )
+    ]
+
+
+def test_quorum_evidence_lazy_delegate_forwards_explicit_model_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aragora.swarm import quorum_evidence
+
+    calls, expected_result = _install_fake_claude_vibeproxy_transport(monkeypatch)
+    policy = object()
+    explicit_model = "claude-opus-4-8/custom:exact"
+
+    result = quorum_evidence.run_claude_vibeproxy(
+        "review prompt",
+        reviewer_timeout=23.25,
+        model=explicit_model,
+        policy=policy,
+    )
+
+    assert result is expected_result
+    assert calls == [
+        (
+            "review prompt",
+            {
+                "reviewer_timeout": 23.25,
+                "model": explicit_model,
+                "policy": policy,
+            },
+        )
+    ]
 
 
 @pytest.mark.parametrize("path", UNRELATED_SIBLING_PATHS)

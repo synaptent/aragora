@@ -366,23 +366,6 @@ describe('AgentsAPI', () => {
       );
       expect(result.accuracy_rate).toBe(0.85);
     });
-
-    it('should trigger agent calibration', async () => {
-      const mockResult = { agent: 'claude', score: 0.91 };
-      mockClient.request.mockResolvedValueOnce(mockResult);
-
-      const result = await agentsApi.calibrate('claude', {
-        domains: ['software'],
-        sampleSize: 100,
-      });
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'POST',
-        '/api/v1/agents/claude/calibrate',
-        { body: { domains: ['software'], sample_size: 100 } }
-      );
-      expect(result.score).toBe(0.91);
-    });
   });
 
   // ===========================================================================
@@ -839,31 +822,6 @@ describe('AgentsAPI', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should enable an agent', async () => {
-      mockClient.request.mockResolvedValueOnce({ success: true, agent: 'claude', enabled: true });
-
-      const result = await agentsApi.enable('claude');
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'POST',
-        '/api/v1/agents/claude/enable'
-      );
-      expect(result.enabled).toBe(true);
-    });
-
-    it('should disable an agent with reason', async () => {
-      mockClient.request.mockResolvedValueOnce({ success: true, agent: 'claude', enabled: false });
-
-      const result = await agentsApi.disable('claude', 'Maintenance');
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'POST',
-        '/api/v1/agents/claude/disable',
-        { body: { reason: 'Maintenance' } }
-      );
-      expect(result.enabled).toBe(false);
-    });
-
     it('should send agent heartbeat', async () => {
       mockClient.request.mockResolvedValueOnce({ acknowledged: true, timestamp: '2024-01-01T00:00:00Z' });
 
@@ -879,80 +837,10 @@ describe('AgentsAPI', () => {
   });
 
   // ===========================================================================
-  // Quota Management
+  // Recent Data
   // ===========================================================================
 
-  describe('Quota Management', () => {
-    it('should get agent quota', async () => {
-      const mockQuota = {
-        agent: 'claude',
-        debates_limit: 100,
-        debates_used: 45,
-        tokens_limit: 1000000,
-        tokens_used: 450000,
-        reset_at: '2024-02-01T00:00:00Z',
-      };
-      mockClient.request.mockResolvedValueOnce(mockQuota);
-
-      const result = await agentsApi.getQuota('claude');
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'GET',
-        '/api/v1/agents/claude/quota'
-      );
-      expect(result.debates_limit).toBe(100);
-    });
-
-    it('should set agent quota', async () => {
-      const mockUpdated = {
-        agent: 'claude',
-        debates_limit: 200,
-        tokens_limit: 2000000,
-        updated_at: '2024-01-01T00:00:00Z',
-      };
-      mockClient.request.mockResolvedValueOnce(mockUpdated);
-
-      const result = await agentsApi.setQuota('claude', {
-        debatesLimit: 200,
-        tokensLimit: 2000000,
-      });
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'PUT',
-        '/api/v1/agents/claude/quota',
-        {
-          body: {
-            debates_limit: 200,
-            tokens_limit: 2000000,
-          },
-        }
-      );
-      expect(result.debates_limit).toBe(200);
-    });
-  });
-
-  // ===========================================================================
-  // Statistics and Recent Data
-  // ===========================================================================
-
-  describe('Statistics and Recent Data', () => {
-    it('should get agent stats', async () => {
-      const mockStats = {
-        total_agents: 15,
-        active_agents: 12,
-        average_elo: 1450,
-      };
-      mockClient.request.mockResolvedValueOnce(mockStats);
-
-      const result = await agentsApi.getStats();
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'GET',
-        '/api/v1/agents/stats'
-      );
-      expect(result).toHaveProperty('total_agents');
-    });
-
+  describe('Recent Data', () => {
     it('should get recent matches', async () => {
       const mockMatches = {
         matches: [{ id: 'm1', agents: ['claude', 'gpt-4'] }],

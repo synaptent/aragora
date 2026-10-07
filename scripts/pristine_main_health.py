@@ -21,7 +21,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -32,14 +31,15 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from aragora.nomic.throughput import LedgerRecord, ThroughputLedger  # noqa: E402
+from aragora.swarm.merge_halt import DEFAULT_HALT_FILE  # noqa: E402
 
 DEFAULT_PRISTINE_DIR = Path.home() / ".aragora" / "pristine-main"
-DEFAULT_HALT_FILE = _REPO_ROOT / ".aragora" / "merge_executor.halt"
 OWNER_MARKER_PURPOSE = "aragora.pristine_main_health"
 EVIDENCE_TAIL_LINES = 15
 EVIDENCE_TAIL_CHARS = 4_000
 INFRA_ERROR_EXIT = 2
 SUITE_TERMINATION_GRACE_SECONDS = 30.0
+LOCKED_DEV_RUN = ("uv", "run", "--locked", "--extra", "dev", "--extra", "test")
 
 # Suite commands run INSIDE the pristine worktree. "required" mirrors the
 # steps of `make ci-required` — NOT the make target itself — with ONE swap for
@@ -141,6 +141,12 @@ def _run(cmd: list[str], *, cwd: Path, timeout: int) -> subprocess.CompletedProc
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
 
+def _locked_dev_command(cmd: list[str]) -> list[str]:
+    """Run suite tools from the checkout's locked development environment."""
+    normalized = ["python", *cmd[1:]] if cmd and cmd[0] == sys.executable else cmd
+    return [*LOCKED_DEV_RUN, *normalized]
+
+
 def _run_suite(
     cmd: list[str],
     *,
@@ -234,6 +240,7 @@ def _format_process_failure(cmd: list[str], proc: subprocess.CompletedProcess) -
 _INFRA_OUTPUT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?m)^make(\[\d+\])?: .*(command not found|No such file or directory)"),
     re.compile(r"(?m)command not found"),
+    re.compile(r"(?m)^error: Failed to spawn: .+"),
     # check_mypy_baseline.py could not produce a verdict (mypy crashed, output
     # unparsable, baseline file missing) — inconclusive, exactly like a timeout.
     re.compile(r"(?m)^MYPY_BASELINE_INFRA: .*"),
@@ -259,8 +266,8 @@ def _infra_failure_signature(proc: subprocess.CompletedProcess) -> str | None:
 
 
 def _check_test_runtime(repo: Path) -> str | None:
-    """Return bounded evidence when this interpreter cannot run pytest."""
-    cmd = [sys.executable, "-c", "import pytest"]
+    """Return bounded evidence when the locked development runtime cannot run pytest."""
+    cmd = _locked_dev_command(["python", "-c", "import pytest"])
     try:
         proc = _run(cmd, cwd=repo, timeout=60)
     except subprocess.TimeoutExpired as exc:
@@ -273,42 +280,9 @@ def _check_test_runtime(repo: Path) -> str | None:
     return None
 
 
-def _version_tuple(value: str) -> tuple[int, int, int]:
-    parts = [int(part) for part in value.split(".")]
-    padded = (parts + [0, 0])[:3]
-    return padded[0], padded[1], padded[2]
-
-
-def _required_mypy_requirement(pristine: Path) -> tuple[str, tuple[int, int, int]]:
-    """Read the declared mypy spec and floor from the dev dependency group."""
-    pyproject = pristine / "pyproject.toml"
-    text = pyproject.read_text(encoding="utf-8")
-    dev_match = re.search(r"(?ms)^\s*dev\s*=\s*\[(?P<body>.*?)^\s*\]", text)
-    if dev_match is None:
-        raise ValueError(f"dev dependency group missing from {pyproject}")
-
-    dependency_match = re.search(
-        r"(?m)^\s*[\"']mypy(?P<specifier>\s*[<>=!~][^\"']*)[\"']\s*,?\s*(?:#.*)?$",
-        dev_match.group("body"),
-    )
-    if dependency_match is None:
-        raise ValueError(f"mypy dependency missing from {pyproject}")
-
-    specifier = dependency_match.group("specifier").strip()
-    floor_match = re.search(r"(?:^|,)\s*>=\s*(?P<floor>\d+(?:\.\d+){1,2})(?:\s*,|$)", specifier)
-    if floor_match is None:
-        raise ValueError(f"mypy dependency has no >= floor in {pyproject}: {specifier}")
-    return specifier, _version_tuple(floor_match.group("floor"))
-
-
 def _check_required_toolchain(pristine: Path) -> str | None:
-    """Return bounded evidence when PATH mypy cannot satisfy the declared floor."""
-    specifier, floor = _required_mypy_requirement(pristine)
-    mypy_path = shutil.which("mypy")
-    if mypy_path is None:
-        return f"required-suite mypy missing from PATH; required mypy{specifier}"
-
-    cmd = [mypy_path, "--version"]
+    """Return bounded evidence when locked mypy cannot start."""
+    cmd = _locked_dev_command(["mypy", "--version"])
     try:
         proc = _run(cmd, cwd=pristine, timeout=60)
     except subprocess.TimeoutExpired as exc:
@@ -323,14 +297,7 @@ def _check_required_toolchain(pristine: Path) -> str | None:
     version_match = re.search(r"\bmypy\s+(?P<version>\d+(?:\.\d+){1,2})\b", output, re.IGNORECASE)
     if version_match is None:
         evidence = _format_stream_evidence(stdout=proc.stdout, stderr=proc.stderr)
-        return f"could not parse PATH mypy version at {mypy_path}; required mypy{specifier}\n{evidence}"
-
-    found_text = version_match.group("version")
-    if _version_tuple(found_text) < floor:
-        return (
-            f"PATH mypy below required floor: found {found_text} at {mypy_path}; "
-            f"required mypy{specifier} from {pristine / 'pyproject.toml'}"
-        )
+        return f"could not parse locked mypy version from {' '.join(cmd)}\n{evidence}"
     return None
 
 
@@ -489,11 +456,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    runtime_error = _check_test_runtime(args.repo_root)
+    sha = refresh_pristine_worktree(args.repo_root, args.pristine_dir)
+    print(f"pristine origin/main at {sha[:12]} in {args.pristine_dir}")
+
+    runtime_error = _check_test_runtime(args.pristine_dir)
     if runtime_error:
         _record_health(
             args.repo_root,
-            sha=None,
+            sha=sha,
             suite=args.suite,
             status="infra_error",
             failures=[],
@@ -503,9 +473,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {runtime_error}", file=sys.stderr)
         print("halt marker NOT written (infrastructure failure)", file=sys.stderr)
         return INFRA_ERROR_EXIT
-
-    sha = refresh_pristine_worktree(args.repo_root, args.pristine_dir)
-    print(f"pristine origin/main at {sha[:12]} in {args.pristine_dir}")
 
     failures: list[str] = []
     infra_errors: list[str] = []
@@ -523,23 +490,28 @@ def main(argv: list[str] | None = None) -> int:
 
     commands = [] if failures or infra_errors else SUITES[args.suite]
     for cmd in commands:
-        print(f"running: {' '.join(cmd)}")
+        locked_cmd = _locked_dev_command(cmd)
+        print(f"running: {' '.join(locked_cmd)}")
         try:
-            proc = _run_suite(cmd, cwd=args.pristine_dir, timeout=args.timeout_minutes * 60)
+            proc = _run_suite(
+                locked_cmd,
+                cwd=args.pristine_dir,
+                timeout=args.timeout_minutes * 60,
+            )
         except subprocess.TimeoutExpired as exc:
             evidence = _format_stream_evidence(stdout=exc.stdout, stderr=exc.stderr)
             infra_errors.append(
-                f"TIMEOUT after {args.timeout_minutes:g}m: {' '.join(cmd)}\n{evidence}"
+                f"TIMEOUT after {args.timeout_minutes:g}m: {' '.join(locked_cmd)}\n{evidence}"
             )
             break
         except OSError as exc:
             infra_errors.append(
-                f"command launch failed: {' '.join(cmd)}\n{type(exc).__name__}: {exc}"
+                f"command launch failed: {' '.join(locked_cmd)}\n{type(exc).__name__}: {exc}"
             )
             break
         if proc.returncode < 0:
             infra_errors.append(
-                f"suite terminated by signal {-proc.returncode}: {' '.join(cmd)}\n"
+                f"suite terminated by signal {-proc.returncode}: {' '.join(locked_cmd)}\n"
                 f"{_format_stream_evidence(stdout=proc.stdout, stderr=proc.stderr)}"
             )
         elif proc.returncode != 0:
@@ -547,10 +519,10 @@ def main(argv: list[str] | None = None) -> int:
             if signature:
                 infra_errors.append(
                     f"runner environment failure ({signature}): "
-                    f"{_format_process_failure(cmd, proc)}"
+                    f"{_format_process_failure(locked_cmd, proc)}"
                 )
             else:
-                failures.append(_format_process_failure(cmd, proc))
+                failures.append(_format_process_failure(locked_cmd, proc))
 
     status = "infra_error" if infra_errors else "main_red" if failures else "green"
     green = status == "green"

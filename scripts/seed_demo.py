@@ -247,7 +247,7 @@ def seed_elo(clear: bool) -> int:
 # -- Seed debates (DebateStorage) -------------------------------------------
 def seed_debates(clear: bool) -> int:
     try:
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
     except ImportError:
         logger.warning("DebateStorage not importable, skipping")
         return 0
@@ -616,7 +616,7 @@ def seed_analytics(clear: bool) -> int:
 
     agent_names = [a[0] for a in AGENTS]
     providers = {
-        "claude-opus": ("anthropic", "claude-opus-4-8"),
+        "claude-opus": ("anthropic", "claude-opus-5"),
         "gpt-4o": ("openai", "gpt-4o"),
         "gemini-pro": ("google", "gemini-2.5-pro"),
         "mistral-large": ("mistral", "mistral-large-latest"),
@@ -697,7 +697,7 @@ def check_data() -> dict[str, int]:
         return len(EloSystem().list_agents())
 
     def _debates():
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         with DebateStorage().connection() as c:
             return c.execute(

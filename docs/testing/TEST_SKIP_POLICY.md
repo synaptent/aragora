@@ -6,7 +6,9 @@ This document defines the policy for using `@pytest.mark.skip` markers in the Ar
 
 Skip markers are essential for maintaining a green CI pipeline while allowing tests that depend on optional components. However, excessive or stale skips reduce test coverage confidence.
 
-**Current baseline:** ~370 skip markers (tracked in `tests/.skip_baseline`)
+**Current baseline:** 86 skip markers (tracked in `tests/.skip_baseline`)
+
+> Provenance: re-measured 2026-08-19 via `python3 scripts/audit_test_skips.py --count-only` on main `6955ab420e` (baseline settled at 86 by PR #9795).
 
 ## Categories
 
@@ -63,8 +65,10 @@ The `skip-audit` job in `.github/workflows/test.yml`:
 
 1. Counts current skip markers
 2. Compares against baseline (`tests/.skip_baseline`)
-3. **Warns** if count increases by 1-5
-4. **Fails** if count increases by >5
+3. **Fails** iff the count exceeds the baseline by more than 2 (`THRESHOLD=2`; there is no larger warn-then-fail band)
+4. **Warns** (annotation only; the job still passes) if the count increases by 1-2, and emits a notice suggesting a baseline update when the count decreases
+
+> Provenance: reauthenticated 2026-08-21 from the live `skip-audit` job in `.github/workflows/test.yml` on main `605a6f6131` (`THRESHOLD=2`, fails iff `CURRENT - BASELINE > 2`; the job is skipped on draft PRs).
 
 ### Updating the Baseline
 
@@ -106,17 +110,17 @@ Target: Maintain skip count within 10% of baseline.
 
 ## Current Distribution
 
-As of 2026-02:
+As of 2026-08-19:
 
 | Category | Count | Status |
 |----------|-------|--------|
-| optional_dependency | ~173 | Valid (environment-based) |
-| missing_feature | ~130 | Valid (roadmap items) |
-| integration_dependency | ~26 | Valid (external services) |
-| uncategorized | ~16 | Needs review |
-| known_bug | ~11 | Actionable tech debt |
-| platform_specific | ~10 | Valid (OS compatibility) |
-| performance | ~3 | Valid (resource limits) |
+| optional_dependency | 9 | Valid (environment-based) |
+| missing_feature | 17 | Valid (roadmap items) |
+| integration_dependency | 29 | Valid (external services) |
+| uncategorized | 20 | Needs review |
+| known_bug | 1 | Actionable tech debt |
+| platform_specific | 6 | Valid (OS compatibility) |
+| performance | 4 | Valid (resource limits) |
 
 ## Related Files
 

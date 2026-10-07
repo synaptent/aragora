@@ -71,6 +71,9 @@
           "type": "integer",
           "minimum": 1
         },
+        "truth_status": {
+          "$ref": "#/$defs/truth_status"
+        },
         "verification": {
           "$ref": "#/$defs/verification"
         },
@@ -85,6 +88,35 @@
           }
         }
       },
+      "additionalProperties": false
+    },
+    "truth_status": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["live", "unsupported", "aspirational"]
+        },
+        "last_verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"state": {"const": "live"}},
+            "required": ["state"]
+          },
+          "then": {
+            "required": ["last_verified_at"]
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "evidence": {

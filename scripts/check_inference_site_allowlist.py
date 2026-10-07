@@ -519,7 +519,7 @@ class _InferenceVisitor(ast.NodeVisitor):
                 break
         if any(chain.startswith(f"{receiver}.") and chain.endswith(("generate_anthropic", "anthropic_message")) for receiver in self.policy_receivers):  # fmt: skip
             self._record("anthropic", "messages", "transport-policy-call")
-        if any(chain.startswith(f"{receiver}.") and chain.endswith("openai_request") for receiver in self.policy_receivers):  # fmt: skip
+        if any(chain.startswith(f"{receiver}.") and chain.endswith(("openai_request", "openai_catalog_alias_request")) for receiver in self.policy_receivers):  # fmt: skip
             self._record("openai-compatible", "chat", "transport-policy-call")
         self.generic_visit(node)
 

@@ -151,6 +151,7 @@ class StreamEventType(Enum):
     # Trickster/hollow consensus events
     HOLLOW_CONSENSUS = "hollow_consensus"  # Hollow consensus detected
     TRICKSTER_INTERVENTION = "trickster_intervention"  # Trickster challenge injected
+    DEBATE_EARLY_TERMINATED = "debate_early_terminated"  # Debate stopped before max rounds
 
     # Human intervention breakpoint events
     BREAKPOINT = "breakpoint"  # Human intervention breakpoint triggered

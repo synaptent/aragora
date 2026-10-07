@@ -685,7 +685,7 @@ class WebSocketBroadcaster:
         Returns:
             Reordered list with TOKEN_DELTA events grouped by (agent, task_id)
         """
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         result: list[StreamEvent] = []
         # Key by (agent, task_id) to distinguish concurrent outputs from same agent

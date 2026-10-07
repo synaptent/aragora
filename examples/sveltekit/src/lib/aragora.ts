@@ -18,6 +18,7 @@ export function getBrowserClient(): AragoraClient {
   if (!browserClient) {
     browserClient = createClient({
       baseUrl: env.PUBLIC_ARAGORA_API_URL || 'http://localhost:8080',
+      wsUrl: env.PUBLIC_ARAGORA_WS_URL || undefined,
     });
   }
 

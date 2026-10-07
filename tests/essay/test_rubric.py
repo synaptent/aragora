@@ -13,6 +13,7 @@ import yaml
 from aragora.essay.rubric import (
     EssayScore,
     _DEFAULT_WEIGHTS,
+    _normalize_score,
     load_rubric,
     parse_score_response,
 )
@@ -221,3 +222,25 @@ def test_parse_score_response_returns_empty_on_garbage():
     score = parse_score_response("This is not JSON at all!")
     assert score.overall == 0.0
     assert score.thesis_clarity == 0.0
+
+
+# ---------------------------------------------------------------------------
+# 10. Huge model-emitted integers must not raise OverflowError
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_score_huge_int_returns_zero():
+    """An arbitrary-precision int coerces to 0.0 instead of raising OverflowError."""
+    assert _normalize_score(10**400) == 0.0
+
+
+def test_normalize_score_huge_negative_int_returns_zero():
+    assert _normalize_score(-(10**400)) == 0.0
+
+
+def test_parse_score_response_handles_huge_int_score():
+    """A huge int in model JSON survives the full parse path as 0.0."""
+    text = json.dumps({"thesis_clarity": 10**400, "originality": 0.3})
+    score = parse_score_response(text)
+    assert score.thesis_clarity == 0.0
+    assert score.originality == 0.3

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -76,6 +78,66 @@ class TestNomicContextBuilder:
         assert index.total_lines > 0
 
     @pytest.mark.asyncio
+    async def test_build_index_falls_back_without_git_binary(self, sample_tree, monkeypatch):
+        monkeypatch.setenv("PATH", "")
+
+        index = await NomicContextBuilder(aragora_path=sample_tree).build_index()
+
+        assert index.get_file("aragora/core.py") is not None
+
+    @pytest.mark.asyncio
+    async def test_build_index_falls_back_for_unborn_repository(self, tmp_path):
+        subprocess.run(["git", "-C", str(tmp_path), "init"], check=True, capture_output=True)
+        (tmp_path / "source.py").write_text("value = 1\n", encoding="utf-8")
+
+        index = await NomicContextBuilder(aragora_path=tmp_path).build_index()
+
+        assert index.get_file("source.py") is not None
+
+    @pytest.mark.asyncio
+    async def test_build_index_falls_back_for_untracked_directory_in_outer_repository(
+        self, tmp_path
+    ):
+        subprocess.run(["git", "-C", str(tmp_path), "init"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "user.email", "index@example.test"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "user.name", "Index Test"],
+            check=True,
+        )
+        (tmp_path / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(tmp_path), "add", "tracked.txt"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "initial"], check=True)
+        target = tmp_path / "untracked-target"
+        target.mkdir()
+        (target / "source.py").write_text("value = 1\n", encoding="utf-8")
+
+        index = await NomicContextBuilder(aragora_path=target).build_index()
+
+        assert index.get_file("source.py") is not None
+
+    @pytest.mark.asyncio
+    async def test_build_index_handles_non_ascii_tracked_paths(self, tmp_path):
+        subprocess.run(["git", "-C", str(tmp_path), "init"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "user.email", "index@example.test"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "user.name", "Index Test"],
+            check=True,
+        )
+        (tmp_path / "café.py").write_text("value = 1\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "initial"], check=True)
+
+        index = await NomicContextBuilder(aragora_path=tmp_path).build_index()
+
+        assert index.get_file("café.py") is not None
+
+    @pytest.mark.asyncio
     async def test_build_index_skips_tests(self, sample_tree):
         """Default: test files are excluded (directory named 'test')."""
         # The builder filters on "test" in path.parts (exact match)
@@ -120,6 +182,18 @@ class TestNomicContextBuilder:
         index = await builder.build_index()
         assert index.total_files == 0
         assert index.total_bytes == 0
+
+    @pytest.mark.asyncio
+    async def test_build_debate_context_empty_root_returns_empty(self, tmp_path):
+        builder = NomicContextBuilder(aragora_path=tmp_path, full_corpus=False)
+        context = await builder.build_debate_context()
+        assert context == ""
+
+    @pytest.mark.asyncio
+    async def test_build_debate_context_nonexistent_root_returns_empty(self, tmp_path):
+        builder = NomicContextBuilder(aragora_path=tmp_path / "does-not-exist", full_corpus=False)
+        context = await builder.build_debate_context()
+        assert context == ""
 
     @pytest.mark.asyncio
     async def test_knowledge_mound_integration(self, sample_tree):

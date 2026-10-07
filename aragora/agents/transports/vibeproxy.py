@@ -68,6 +68,13 @@ class OpenAIProtocol(str, Enum):
 class VibeProxyCatalog:
     models: frozenset[str]
     fetched_at: float
+    model_owners: frozenset[tuple[str, str]] = frozenset()
+
+    def owner_for(self, model: str) -> str | None:
+        """Return the sanitized provider owner disclosed for a catalog alias."""
+
+        owners = {owner for candidate, owner in self.model_owners if candidate == model}
+        return next(iter(owners)) if len(owners) == 1 else None
 
 
 @dataclass(frozen=True)
@@ -105,6 +112,7 @@ _CATALOG_CACHE: dict[tuple[str, bytes], VibeProxyCatalog] = {}
 _CATALOG_LOCK = threading.Lock()
 _ADVERTISED_ROUTE = re.compile(r"^(?:GET|POST|PUT|PATCH|DELETE) /[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$")
 _VERSION_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
+_MODEL_OWNER_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _VERSION_HEADERS = (
     "x-cpa-version",
     "x-cpa-home-version",
@@ -354,7 +362,20 @@ class VibeProxyClient:
         )
         if not models:
             raise VibeProxyResponseError("VibeProxy model catalog is empty")
-        catalog = VibeProxyCatalog(models=models, fetched_at=now)
+        model_owners = frozenset(
+            (item["id"].strip(), item["owned_by"].strip().lower())
+            for item in entries
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and item["id"].strip() in models
+            and isinstance(item.get("owned_by"), str)
+            and _MODEL_OWNER_VALUE.fullmatch(item["owned_by"].strip())
+        )
+        catalog = VibeProxyCatalog(
+            models=models,
+            fetched_at=now,
+            model_owners=model_owners,
+        )
         with _CATALOG_LOCK:
             _CATALOG_CACHE[self._catalog_cache_key] = catalog
         return catalog
@@ -453,6 +474,50 @@ class VibeProxyClient:
         if body.get("model") != model:
             raise VibeProxyUnavailableError(
                 "VibeProxy response model did not match the requested model"
+            )
+        return body
+
+    def openai_catalog_alias_request(
+        self,
+        *,
+        protocol: OpenAIProtocol,
+        model: str,
+        catalog: VibeProxyCatalog,
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> dict[str, Any]:
+        """Send one non-countable alias probe bound to catalog owner disclosure.
+
+        Unlike :meth:`openai_request`, this diagnostic path permits the response
+        model identifier to differ from the requested catalog alias. It returns
+        only after the alias is still present with the exact sanitized
+        ``owned_by`` value in the caller's catalog snapshot. The burn-in recorder then
+        verifies the observed response identity and records both identifiers.
+        """
+
+        if payload.get("model") != model:
+            raise VibeProxyConfigurationError("OpenAI payload model must match the catalog alias")
+        owner = catalog.owner_for(model) if model in catalog.models else None
+        if owner is None or not _MODEL_OWNER_VALUE.fullmatch(owner):
+            raise VibeProxyConfigurationError("catalog owner disclosure is invalid")
+        path = {
+            OpenAIProtocol.CHAT: "/chat/completions",
+            OpenAIProtocol.RESPONSES: "/responses",
+        }[protocol]
+        body = self._request(path, timeout=timeout, payload=payload)
+        response_model = body.get("model")
+        if not isinstance(response_model, str) or not response_model.strip():
+            raise VibeProxyResponseError("VibeProxy alias response omitted its model identity")
+        response_owner = (
+            catalog.owner_for(response_model) if response_model in catalog.models else None
+        )
+        if response_owner is None or not _MODEL_OWNER_VALUE.fullmatch(response_owner):
+            raise VibeProxyUnavailableError(
+                "VibeProxy response model catalog owner disclosure is invalid"
+            )
+        if response_owner != owner:
+            raise VibeProxyUnavailableError(
+                "VibeProxy response model owner did not match the requested alias owner"
             )
         return body
 

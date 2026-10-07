@@ -18,10 +18,12 @@ from aragora.cli.commands.review_queue import (
     LARGE_DIFF_THRESHOLD,
     MODEL_REVIEW_QUEUE_CAP,
     PARKED_LABELS,
+    PROXY_GROUNDING_DISCLOSURE,
     QueueItem,
     ReviewPacket,
     _build_merge_authorization_packet,
     _build_model_review_quorum,
+    _lint_evidence_comment,
     _build_packet,
     _build_queue,
     _classify_pr,
@@ -115,6 +117,272 @@ def _make_pr(
         "files": [{"path": p} for p in (files or [])],
         "body": body,
     }
+
+
+@pytest.fixture
+def in_job_advisory_inputs(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], list]:
+    """Mock GitHub inputs, not a live CI execution, for packet-level reachability."""
+    from aragora.cli.commands import review_queue as rq
+
+    head = "a" * 40
+    for flag in (
+        "TIERED_MERGE_GATE",
+        "SEVERITY_GATED_DISSENT",
+        "ADVISORY_DISSENT_SETTLE",
+        "OPERATOR_ADVISORY_SETTLEMENT",
+    ):
+        monkeypatch.setenv(f"ARAGORA_ENABLE_{flag}", "1")
+    monkeypatch.setenv("ARAGORA_SETTLEMENT_CREATOR", "scarmani")
+    monkeypatch.setenv("ARAGORA_TRUSTED_EVIDENCE_POSTERS", "scarmani")
+    monkeypatch.setenv("GITHUB_WORKFLOW", "Aragora Merge Quorum")
+    monkeypatch.setenv("GITHUB_JOB", "merge-quorum")
+    monkeypatch.setenv("GITHUB_RUN_ID", "26288586838")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "synaptent/aragora")
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    quorum_row = {
+        "name": "aragora-merge-quorum",
+        "workflowName": "Aragora Merge Quorum",
+        "status": "IN_PROGRESS",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/synaptent/aragora/actions/runs/26288586838/job/1",
+    }
+    green_rows = [
+        {"name": name, "status": "COMPLETED", "conclusion": "SUCCESS"}
+        for name in (
+            "lint",
+            "typecheck",
+            "sdk-parity",
+            "Generate & Validate",
+            "TypeScript SDK Type Check",
+        )
+    ]
+    pr = _make_pr(
+        number=6283,
+        files=["aragora/server/handlers/x.py"],
+        checks=[
+            quorum_row,
+            *green_rows,
+            {"context": "aragora/human-settlement", "state": "SUCCESS"},
+        ],
+    )
+    pr["headRefOid"] = head
+    pr["commits"] = [{"commit": {"committedDate": "2026-07-10T23:00:00Z"}}]
+    pr["comments"] = [
+        {
+            "author": {"login": "scarmani"},
+            "createdAt": "2026-07-11T00:00:00Z",
+            "body": (
+                f"## {family} independent model review\n**Model family:** {family}\n"
+                f"Current head: {head}\nVerdict: CHANGES-REQUESTED\n"
+                "- [P2] A non-blocking advisory."
+            ),
+        }
+        for family in ("claude", "openai")
+    ] + [
+        {
+            "author": {"login": "scarmani"},
+            "body": f"Tier-4 Human Settlement Authorization\n{head}\n"
+            "admin_squash_merge\nhuman-risk settlement",
+        }
+    ]
+    required = [
+        {**row, "bucket": "pending" if row is quorum_row else "pass"}
+        for row in [quorum_row, *green_rows]
+    ]
+    monkeypatch.setattr(rq, "_gh_json", lambda args: pr)
+    monkeypatch.setattr(
+        rq,
+        "_fetch_required_pr_check_surface",
+        lambda *_args: {"available": True, "checks": required},
+    )
+    monkeypatch.setattr(rq, "_human_settlement_status_creator_verified", lambda **_kw: (True, "ok"))
+    monkeypatch.setattr(rq, "_has_successful_status_context", lambda *_args, **_kw: True)
+    return pr, required
+
+
+def test_build_packet_in_job_all_green_rollup_populates_required_surface_and_fires_valve(
+    in_job_advisory_inputs, tmp_path: Path
+) -> None:
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    assert packet.check_surfaces["required_pr_checks"]["advisory_settle_surface_clear"] is True
+    assert packet.model_review_quorum["status"] == "satisfied"
+    assert packet.model_review_quorum["verdict"] == "operator_advisory_settlement"
+
+
+def test_build_packet_same_pending_quorum_without_job_keeps_valve_blocked(
+    in_job_advisory_inputs, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("GITHUB_JOB")
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    assert packet.check_surfaces["required_pr_checks"]["advisory_settle_surface_clear"] is False
+    assert packet.model_review_quorum["verdict"] == "not_ready_for_settlement"
+
+
+def test_build_packet_in_job_non_quorum_required_failure_keeps_valve_blocked(
+    in_job_advisory_inputs, tmp_path: Path
+) -> None:
+    pr, required = in_job_advisory_inputs
+    pr["statusCheckRollup"][1]["conclusion"] = "FAILURE"
+    required[1].update(bucket="fail", conclusion="FAILURE")
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    assert packet.check_surfaces["required_pr_checks"]["advisory_settle_surface_clear"] is False
+    assert packet.model_review_quorum["verdict"] == "not_ready_for_settlement"
+
+
+@pytest.fixture(
+    params=[
+        "green",
+        "low_risk",
+        "unavailable",
+        "quorum_fail",
+        "quorum_pending",
+        "required_fail",
+        "required_pending",
+        "optional_fail",
+        "optional_pending",
+    ]
+)
+def reporting_case(request, in_job_advisory_inputs, monkeypatch, tmp_path):
+    """Unit evidence: mocked in-job env/settlement, never live CI or authorization."""
+    from aragora.cli.commands import review_queue as rq
+
+    case = request.param
+    pr, required = in_job_advisory_inputs
+    if case == "low_risk":
+        pr["files"] = [{"path": "docs/example.md"}]
+    if case == "unavailable":
+        monkeypatch.setattr(
+            rq,
+            "_fetch_required_pr_check_surface",
+            lambda *_args: {
+                "available": False,
+                "checks": [],
+                "error": "required surface transport unavailable",
+            },
+        )
+    if case.startswith("quorum_"):
+        # Required quorum rows are all excluded in-job. Exercise the external
+        # quorum-only branch without changing that detector or using the CLI flag.
+        monkeypatch.delenv("GITHUB_JOB")
+        row, required_row = pr["statusCheckRollup"][0], required[0]
+    elif case.startswith("required_"):
+        row, required_row = pr["statusCheckRollup"][1], required[1]
+    elif case.startswith("optional_"):
+        row, required_row = {"name": "optional-audit"}, {}
+        pr["statusCheckRollup"].append(row)
+    if case.endswith(("_fail", "_pending")):
+        pending = case.endswith("_pending")
+        row.update(
+            status="IN_PROGRESS" if pending else "COMPLETED",
+            conclusion="" if pending else "FAILURE",
+        )
+        required_row.update(row, bucket="pending" if pending else "fail")
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    return case, packet, pr, required
+
+
+def test_required_check_reporting_preserves_gate_results(reporting_case) -> None:
+    """Pin pre-cure machine outcomes independently of the reporting assertions."""
+    case, packet, pr, required_rows = reporting_case
+    required = packet.check_surfaces["required_pr_checks"]
+    quorum = packet.model_review_quorum
+    blocked = case in {"required_fail", "required_pending", "quorum_pending"}
+    unavailable = case == "unavailable"
+    expected_verdict = (
+        "not_ready_for_settlement"
+        if blocked
+        else "collect_model_quorum_before_merge"
+        if unavailable
+        else "advisory_settle"
+        if case == "low_risk"
+        else "operator_advisory_settlement"
+    )
+    assert quorum["verdict"] == expected_verdict
+    assert quorum["status"] == (
+        "repair_or_wait" if blocked else "needs_model_review_quorum" if unavailable else "satisfied"
+    )
+    assert quorum["admin_squash_allowed"] is (not blocked and not unavailable)
+    assert quorum["tier"] == (0 if case == "low_risk" else 3)
+    assert required["advisory_settle_surface_clear"] is (not blocked and not unavailable)
+    assert required["gate_selected"] is (not blocked and not unavailable)
+    assert required["quorum_only_failure"] is (case == "quorum_fail")
+    assert required["effective_total"] == (
+        0 if unavailable else 6 if case.startswith("quorum_") else 5
+    )
+    assert required["ignored_current_merge_quorum_self_check_count"] == (
+        0 if unavailable or case.startswith("quorum_") else 1
+    )
+    assert required["ignored_by_ignore_own_quorum_flag_count"] == 0
+    assert packet.machine_recommendation == (
+        "repair_first"
+        if case in {"quorum_fail", "required_fail"}
+        else "needs_human_attention"
+        if blocked
+        else "approve_candidate"
+    )
+    assert packet.check_surfaces.get("effective_gate", {}).get("source") == (
+        "required_pr_checks" if not blocked and not unavailable else None
+    )
+    # The raw rows stay pending even though the existing detector excludes the
+    # current self row from both summaries and non-green diagnostic counts.
+    assert sum(row["bucket"] == "pending" for row in required_rows) == (
+        0 if case == "quorum_fail" else 2 if case == "required_pending" else 1
+    )
+    assert pr["statusCheckRollup"][0]["status"] == (
+        "COMPLETED" if case == "quorum_fail" else "IN_PROGRESS"
+    )
+
+
+def test_required_check_reporting_is_truthful(reporting_case) -> None:
+    case, packet, _pr, _required_rows = reporting_case
+    surfaces = packet.check_surfaces
+    rollup, required = surfaces["pr_rollup"], surfaces["required_pr_checks"]
+    diagnosis = surfaces["diagnosis"]
+    reason = packet.machine_recommendation_reason
+    optional = case.startswith("optional_")
+    assert ("non-required PR checks are non-green" in " ".join(packet.risk_flags)) is optional
+    assert ("non-required non-green checks" in diagnosis) is optional
+    assert ("non-required PR checks are non-green" in reason) is optional
+    assert rollup["pending_count"] == int(
+        case in {"quorum_pending", "required_pending", "optional_pending"}
+    )
+    assert rollup["failing_or_cancelled_count"] == int(case.endswith("_fail"))
+    assert rollup["non_green_count"] == int(case.startswith(("quorum_", "required_", "optional_")))
+    if case == "unavailable":
+        assert required["available"] is False
+        assert required["error"] == "required surface transport unavailable"
+        assert "required PR checks surface is unavailable" in required["gate_blocked_reason"]
+        assert "required PR checks surface is unavailable" in diagnosis
+        assert "unavailable" in reason
+        assert "rollup is non-green" not in diagnosis
+        assert "required checks green" not in reason
+        assert "non_required_non_green_count" not in rollup
+    else:
+        assert required["available"] is True
+        assert rollup["non_required_non_green_count"] == int(optional)
+        assert rollup["non_required_non_green_sample"] == (["optional-audit"] if optional else [])
+    if case in {"green", "low_risk", "optional_fail", "optional_pending"}:
+        assert required["summary"] == "5/5 required green"
+        assert required["gate_blocked_reason"] == ""
+        assert required["failing_or_cancelled"] == required["pending"] == []
+        assert "required check" in diagnosis and "green" in diagnosis
+        assert "branch-protection required checks green" in reason
+    elif case.startswith(("required_", "quorum_")):
+        pending = case.endswith("_pending")
+        name = "lint" if case.startswith("required_") else "aragora-merge-quorum"
+        count = 5 if name == "lint" else 6
+        assert required["summary"] == f"1 {'pending' if pending else 'failing'} / {count} required"
+        assert required["pending"] == ([name] if pending else [])
+        assert required["failing_or_cancelled"] == ([] if pending else [name])
+        assert any(name in sample for sample in rollup["non_green_sample"])
+        if case == "quorum_fail":
+            assert required["gate_blocked_reason"] == ""
+            assert "aragora-merge-quorum" in diagnosis
+        else:
+            assert ("pending" if pending else "failing") in required["gate_blocked_reason"]
+            assert required["gate_blocked_reason"] in diagnosis
+    if case in {"green", "low_risk", "unavailable"}:
+        assert rollup["summary"] == "6/6 green"
 
 
 def _make_reviewer_output(
@@ -1690,7 +1958,10 @@ class TestModelReviewQuorum:
         assert quorum["status"] == "satisfied"
         assert quorum["verdict"] == "admin_squash_allowed"
         assert quorum["admin_squash_allowed"] is True
-        assert set(quorum["counted_reviewer_ids"]) == {"claude", "gemini", "openai"}
+        # gemini is advisory-only (roster record): its review may be present but
+        # it never appears in counted ids (#9363 openai [P2] — packet consumers
+        # read counted_model_families as "counts toward quorum").
+        assert set(quorum["counted_reviewer_ids"]) == {"claude", "openai"}
 
     def test_single_western_frontier_signal_satisfies_tier_two_quorum(self) -> None:
         # Tiered gate: Tier 2 settles on ONE western-frontier (openai/codex) signal
@@ -1871,6 +2142,272 @@ class TestModelReviewQuorum:
         assert quorum["unresolved_dissent"] is True
         assert quorum["status"] == "unresolved_dissent"
         assert quorum["admin_squash_allowed"] is False
+
+    def test_advisory_only_dogfood_does_not_satisfy_required_leg(self) -> None:
+        # #9363 round-4 [P2]: a gemini-attributed dogfood item must not satisfy
+        # the required adversarial-dogfood leg at Tier 1+ (roster record:
+        # advisory-only families never count FOR).
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        pr = _make_pr(files=["aragora/cli/commands/swarm.py"])
+        pr["headRefOid"] = head
+        pr["comments"] = [
+            {
+                "author": {"login": "an0mium"},
+                "body": f"## Grok independent model review\nCurrent head: {head}\nVerdict: approve.",
+            },
+            {
+                "author": {"login": "an0mium"},
+                "body": (
+                    f"## Claude independent model review\nCurrent head: {head}\nVerdict: approve."
+                ),
+            },
+            _family_dogfood_comment("gemini"),
+        ]
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=["aragora/cli/commands/swarm.py"],
+            protocol={"status": "metadata_heuristic"},
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+        )
+        assert quorum["status"] == "needs_model_review_quorum"
+        assert quorum["admin_squash_allowed"] is False
+        assert "focused adversarial dogfood evidence is required" in quorum["reasons"]
+        # Contrast: the same dogfood item from a counting (Chinese-routed at
+        # Tier 2) family satisfies the leg.
+        pr["comments"][-1] = _family_dogfood_comment("deepseek")
+        satisfied = _build_model_review_quorum(
+            pr=pr,
+            files=["aragora/cli/commands/swarm.py"],
+            protocol={"status": "metadata_heuristic"},
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+        )
+        assert satisfied["status"] == "satisfied"
+
+    def test_advisory_only_protocol_payload_dissent_does_not_block(self) -> None:
+        # #9363 round-4 [P2]: a {"agent": "gemini", ...} dissenting view arriving
+        # via the merge-protocol payload (or a stale prepared artifact) must not
+        # block — only the comments path was filtered before.
+        protocol = _executed_protocol()
+        protocol["dissenting_views"] = [
+            {
+                "agent": "gemini:maintainability",
+                "position": "request_changes",
+                "reason": "[P1] fabricated blocking claim",
+            },
+            # Live protocol payloads use the AgentRegistry name ("gemini-cli"),
+            # which must canonicalize to the same advisory-only family
+            # (#9363 round-5 [P2]).
+            {
+                "agent": "gemini-cli:maintainability",
+                "position": "request_changes",
+                "reason": "[P1] fabricated blocking claim",
+            },
+        ]
+        pr = _make_pr(files=["aragora/cli/commands/swarm.py"])
+        pr["comments"] = [_dogfood_comment()]
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=["aragora/cli/commands/swarm.py"],
+            protocol=protocol,
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+        )
+        assert quorum["unresolved_dissent"] is False
+        assert quorum["dissenting_views"] == []
+        assert quorum["status"] == "satisfied"
+
+    def test_advisory_only_blocking_severity_review_recorded_as_advisory_view(self) -> None:
+        # #9363 round-4 [P3]: a [P1]-backed gemini CHANGES-REQUESTED never blocks
+        # but must not vanish from the merge packet — it is preserved as an
+        # advisory view.
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        pr = _make_pr(files=["aragora/cli/commands/swarm.py"])
+        pr["headRefOid"] = head
+        pr["comments"] = [
+            _codex_openai_review_comment(
+                body=f"Current head: {head}\nVerdict: approve.\nFocused adversarial dogfood passed."
+            ),
+            {
+                "author": {"login": "an0mium"},
+                "body": f"## Grok independent model review\nCurrent head: {head}\nVerdict: approve.",
+            },
+            {
+                "author": {"login": "an0mium"},
+                "body": (
+                    "## Gemini independent model review\n"
+                    f"Current head: {head}\n"
+                    "Verdict: CHANGES-REQUESTED\n"
+                    "[P1] fabricated blocking claim."
+                ),
+            },
+        ]
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=["aragora/cli/commands/swarm.py"],
+            protocol={"status": "metadata_heuristic"},
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+        )
+        assert quorum["unresolved_dissent"] is False
+        assert quorum["dissenting_views"] == []
+        assert quorum["status"] == "satisfied"
+        advisory_agents = [str(view.get("agent", "")) for view in quorum["advisory_views"]]
+        assert "gemini" in advisory_agents
+        gemini_view = quorum["advisory_views"][advisory_agents.index("gemini")]
+        assert gemini_view["blocking"] is False
+        assert gemini_view["highest_severity"] == "P1"
+        assert any(
+            "advisory finding from gemini" in reason and "advisory-only family" in reason
+            for reason in quorum["reasons"]
+        )
+
+    def test_advisory_only_family_excluded_from_emitted_counted_ids(self) -> None:
+        # #9363 round-5 openai [P2]: the packet's counted_reviewer_ids /
+        # counted_model_families are consumed by downstream automation as
+        # "counts toward quorum" — an advisory-only family must not appear
+        # there even when its review is grounded and positive. The review
+        # itself stays visible in reviewer_signals.
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        pr = _make_pr(files=["aragora/cli/commands/swarm.py"])
+        pr["headRefOid"] = head
+        pr["comments"] = [
+            _codex_openai_review_comment(
+                body=f"Current head: {head}\nVerdict: approve.\nFocused adversarial dogfood passed."
+            ),
+            {
+                "author": {"login": "an0mium"},
+                "body": (
+                    f"## Gemini independent model review\nCurrent head: {head}\nVerdict: approve."
+                ),
+            },
+        ]
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=["aragora/cli/commands/swarm.py"],
+            protocol={"status": "metadata_heuristic"},
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+        )
+        assert "gemini" not in quorum["counted_reviewer_ids"]
+        assert "gemini" not in quorum["counted_model_families"]
+        signal_families = {
+            str(signal.get("reviewer_id", "")) for signal in quorum["reviewer_signals"]
+        }
+        assert "gemini" in signal_families
+
+    def test_evidence_lint_advisory_only_family_would_not_count(self) -> None:
+        # #9363 round-5 openai [P2]: a grounded gemini PASS must lint as
+        # would_count=False with the no-counted-family problems, matching the
+        # "never count" roster contract, so prepared-evidence tooling cannot
+        # treat gemini as a countable family.
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        result = _lint_evidence_comment(
+            pr="9363",
+            head_sha=head,
+            head_committed_at="2026-07-23T00:00:00Z",
+            body=(
+                "## Gemini independent model review\n"
+                f"Current head: {head}\n"
+                "PR: #9363.\n"
+                "Verdict: approve.\n"
+                "Focused adversarial dogfood passed."
+            ),
+            author="an0mium",
+            source="test",
+        )
+        assert result["would_count"] is False
+        assert result["counted_model_families"] == []
+        assert "no_counted_model_family" in result["problems"]
+
+    @staticmethod
+    def _proxy_lint_body(head: str, *, disclosure: str) -> str:
+        return (
+            "## Claude independent model review\n\n"
+            "Reviewer: claude (anthropic) — independent adversarial model review via "
+            "local VibeProxy Anthropic Messages transport (model: claude-opus-5), "
+            "grounded on the exact PR head.\n"
+            f"Head: {head[:7]} ({head}).\n"
+            "PR: #9505.\n"
+            "Model family: claude\n"
+            f"{disclosure}"
+            "\nVerdict: PASS\nNo findings.\n\ndogfood: yes\n"
+        )
+
+    @pytest.mark.parametrize(
+        "disclosure",
+        [
+            "",  # hand-posted proxy body with no disclosure at all
+            # Non-canonical grounding value: the exact line is required.
+            "Reviewer harness: local VibeProxy Anthropic Messages transport\n"
+            "Transport grounding: trust me\n",
+        ],
+    )
+    def test_evidence_lint_rejects_proxy_body_without_exact_disclosure(
+        self, disclosure: str
+    ) -> None:
+        # In-process demotion cannot protect against re-posting composed text
+        # by hand; the lint must fail these closed on its own.
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        result = _lint_evidence_comment(
+            pr="9505",
+            head_sha=head,
+            head_committed_at="2026-08-15T00:00:00Z",
+            body=self._proxy_lint_body(head, disclosure=disclosure),
+            author="an0mium",
+            source="test",
+        )
+        assert result["would_count"] is False
+        assert "proxy_transport_grounding_undisclosed" in result["problems"]
+
+    def test_evidence_lint_counts_disclosed_proxy_transport_body(self) -> None:
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        disclosure = (
+            "Reviewer harness: local VibeProxy Anthropic Messages transport\n"
+            f"Transport grounding: {PROXY_GROUNDING_DISCLOSURE}\n"
+        )
+        result = _lint_evidence_comment(
+            pr="9505",
+            head_sha=head,
+            head_committed_at="2026-08-15T00:00:00Z",
+            body=self._proxy_lint_body(head, disclosure=disclosure),
+            author="an0mium",
+            source="test",
+        )
+        assert "proxy_transport_grounding_undisclosed" not in result["problems"]
+        assert result["would_count"] is True
+        assert result["counted_model_families"] == ["claude"]
+
+    def test_evidence_lint_ignores_vibeproxy_mention_in_findings(self) -> None:
+        # Transport classification keys on the reviewer/harness disclosure lines,
+        # not on prose: a grounded CLI review DISCUSSING VibeProxy still counts.
+        head = "cd87c5a1b2db34f04167906553502db3ede9525e"
+        result = _lint_evidence_comment(
+            pr="9505",
+            head_sha=head,
+            head_committed_at="2026-08-15T00:00:00Z",
+            body=(
+                "## Claude independent model review\n\n"
+                "Reviewer: claude (anthropic) — independent adversarial model review "
+                "via claude CLI, grounded on the exact PR head.\n"
+                f"Head: {head[:7]} ({head}).\n"
+                "PR: #9505.\n"
+                "Model family: claude\n"
+                "\nVerdict: PASS\n"
+                "- [P3] the VibeProxy fallback comment could cite the policy doc\n"
+                "\ndogfood: yes\n"
+            ),
+            author="an0mium",
+            source="test",
+        )
+        assert "proxy_transport_grounding_undisclosed" not in result["problems"]
+        assert result["would_count"] is True
 
     def test_severity_gated_explicit_p2_blocker_still_blocks(
         self,
@@ -2950,6 +3487,27 @@ class TestModelReviewQuorum:
         assert pin["trusted_creator"] == "scarmani"
         assert any("settlement-creator pin" in reason for reason in quorum["reasons"])
 
+    def test_protected_squash_settlement_does_not_authorize_admin_consumers(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        pr["comments"][-1]["body"] = (
+            "Tier-4 Human Settlement Authorization\n"
+            f"Exact head: {pr['headRefOid']}\n"
+            "Authorized action: protected_squash_merge\n"
+            "Human-risk settlement: I accept the Tier 4 risk for this PR."
+        )
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [self._settlement_status("scarmani")],
+            pr=pr,
+            files=files,
+        )
+        assert quorum["admin_squash_allowed"] is False
+        assert quorum["status"] == "human_preapproval_required"
+        assert quorum["counted_model_families"] == ["claude", "openai"]
+
     def test_settlement_creator_an0mium_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The #8169 precedent gap: an automation-capable login posting the
         status must NOT count, even though every other condition holds."""
@@ -3872,6 +4430,39 @@ class TestParentheticalModelFamily:
         # Multi-word alias with a trailing parenthetical still resolves.
         assert _normalize_model_family("nous hermes (8x7b)") == "hermes"
 
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("zhipu", "glm"),
+            ("z-ai", "glm"),
+            ("hy3", "tencent"),
+            ("hunyuan", "tencent"),
+            ("seed", "bytedance"),
+            ("seed-2.0", "bytedance"),
+            ("seed-2.0 (doubao)", "bytedance"),
+            ("doubao", "bytedance"),
+            ("bytedance-seed", "bytedance"),
+        ],
+    )
+    def test_chinese_family_aliases_normalize(self, value: str, expected: str) -> None:
+        from aragora.cli.commands.review_queue import _normalize_model_family
+
+        assert _normalize_model_family(value) == expected
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("z-ai/glm-5.2", "glm"),
+            ("minimax/minimax-m3", "minimax"),
+            ("tencent/hy3", "tencent"),
+            ("bytedance-seed/seed-2.0-lite", "bytedance"),
+        ],
+    )
+    def test_chinese_reviewer_ids_normalize(self, value: str, expected: str) -> None:
+        from aragora.cli.commands.review_queue import _normalize_model_reviewer_id
+
+        assert _normalize_model_reviewer_id(value) == expected
+
     def test_unknown_leading_token_still_unknown(self) -> None:
         from aragora.cli.commands.review_queue import _normalize_model_family
 
@@ -4035,7 +4626,9 @@ class TestGhTimeouts:
         def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
             captured["args"] = args
             captured["kwargs"] = kwargs
-            raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
+            # float() narrows the Any from kwargs for TimeoutExpired's typed
+            # parameter; _gh_json always passes a numeric timeout.
+            raise subprocess.TimeoutExpired(cmd=args[0], timeout=float(kwargs["timeout"]))
 
         monkeypatch.setattr("aragora.cli.commands.review_queue_transport.subprocess.run", fake_run)
 
@@ -6470,9 +7063,8 @@ class TestBuildQueueAndPacket:
         assert entry["machine_recommendation"] == "settled_noop"
         assert entry["admin_squash_allowed"] is False
         assert entry["requires_human_risk_settlement"] is False
-        assert entry["reasons"] == [
-            "PR is already merged; merge-packet readiness is obsolete",
-        ]
+        assert entry["reasons"][0] == "PR is already merged; merge-packet readiness is obsolete"
+        assert any("noop placeholders" in reason for reason in entry["reasons"])
         assert packet["admin_squash_order"] == []
         assert packet["human_risk_settlement_required"] == []
         assert packet["not_ready"] == []
@@ -7208,7 +7800,12 @@ class TestCommandDispatch:
         assert ns.action == "admin_squash_merge"
         assert ns.reason == "operator authorized exact-head merge"
         assert ns.apply_post_merge_lane_audit is True
-        assert ns.json_output is True
+        # The main CLI routes record-settlement through the shared helper
+        # registration, so --json maps to the helper's dest ("json"); the
+        # dispatch handler accepts either dest.
+        assert ns.json is True
+        assert ns.post_github_status is False
+        assert ns.github_status_context == "aragora/human-settlement"
 
     def test_top_level_parser_registers_evidence_lint(self) -> None:
         from aragora.cli.parser import build_parser

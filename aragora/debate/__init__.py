@@ -11,15 +11,15 @@ from aragora.debate.model_combinations import (
     parse_model_combinations,
 )
 from aragora.debate.orchestrator import Arena
-from aragora.debate.protocol import (
+from aragora.debate.protocol_resolver import resolve_default_protocol
+from aragora.protocols.debate import (
     ARAGORA_AI_LIGHT_PROTOCOL,
     ARAGORA_AI_PROTOCOL,
-    CircuitBreaker,
     DebateProtocol,
     RoundPhase,
-    resolve_default_protocol,
     user_vote_multiplier,
 )
+from aragora.resilience import CircuitBreaker
 
 __all__ = [
     "ARAGORA_AI_LIGHT_PROTOCOL",

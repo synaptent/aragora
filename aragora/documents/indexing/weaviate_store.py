@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, cast
 from collections.abc import Callable
@@ -33,10 +34,14 @@ from aragora.documents.models import DocumentChunk
 logger = logging.getLogger(__name__)
 
 try:
-    import weaviate
-    from weaviate.classes.config import Configure, Property, DataType
-    from weaviate.classes.query import MetadataQuery, Filter
-    from weaviate.classes.data import DataObject  # noqa: F401
+    # weaviate's package __init__ calls a bare warnings.simplefilter("default")
+    # (and its transitive imports register more filters), globally rewriting the
+    # ambient warning policy; the scoped guard confines that to this import.
+    with warnings.catch_warnings():
+        import weaviate
+        from weaviate.classes.config import Configure, Property, DataType
+        from weaviate.classes.query import MetadataQuery, Filter
+        from weaviate.classes.data import DataObject  # noqa: F401
 
     WEAVIATE_AVAILABLE = True
 except ImportError:

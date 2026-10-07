@@ -311,3 +311,107 @@ def test_tier4_settle_commands_no_app_token_prefixes_merge_only():
     # only the irreversible merge-apply step carries the override
     assert not cmds[0].startswith("ARAGORA_DISABLE_GITHUB_APP_TOKEN=1")
     assert not cmds[1].startswith("ARAGORA_DISABLE_GITHUB_APP_TOKEN=1")
+
+
+# The gap these close: `problems` carries only countability codes
+# ("blocking_or_negative_verdict", "no_counted_model_family"), never the reason a
+# reviewer dissented. Diagnosing a dissent used to require a second full reviewer
+# run (~15 min). Verbatim bodies below are the real reviews from PR #9571.
+
+_OPENAI_9571_BODY = """## OpenAI independent model review
+Reviewer: openai (openai) — independent adversarial model review.
+Head: ad5b61c (ad5b61c6853c810fa1112084e8b4697369a233be).
+Model family: openai
+Verdict: CHANGES-REQUESTED
+- [P1] `aragora/swarm/auto_merge_green.py:_rollup_recency` - Recency sorts by \
+`completedAt` before `startedAt`, so a current in-progress rerun always ranks older \
+than a stale completed `SUCCESS`.
+- [P2] `aragora/swarm/auto_merge_green.py:_reduce_rollup_states` - Equal/unknown \
+recency only prefers states in `_FAILING_CHECK_STATES`.
+dogfood: yes
+"""
+
+_CLAUDE_9571_BODY = """## Claude independent model review
+Model family: claude
+Verdict: CHANGES-REQUESTED
+- **[P2]** `aragora/swarm/auto_merge_green.py` — the recency key sorts `completedAt` \
+first, so a rerun still executing ranks below any completed row.
+- **[P3]** `aragora/swarm/auto_merge_green.py` — `_reduce_rollup_states` tests state \
+without case normalization.
+"""
+
+
+def test_summarize_collect_surfaces_reviewer_findings():
+    """A dissent must be diagnosable from the summary alone."""
+    summary = summarize_collect(
+        {
+            "tier": 2,
+            "items": [
+                {"family": "openai", "verdict": "changes_requested", "body": _OPENAI_9571_BODY},
+                {"family": "claude", "verdict": "changes_requested", "body": _CLAUDE_9571_BODY},
+            ],
+        }
+    )
+    openai_findings = summary["items"][0]["findings"]
+    claude_findings = summary["items"][1]["findings"]
+
+    assert len(openai_findings) == 2
+    assert any("_rollup_recency" in f for f in openai_findings)
+    # Markdown-bolded markers (**[P2]**) must parse too — claude emits that form.
+    assert len(claude_findings) == 2
+    assert any("case normalization" in f for f in claude_findings)
+    # The full body stays available for the rare case findings do not explain it.
+    assert summary["items"][0]["body"] == _OPENAI_9571_BODY
+
+
+def test_summarize_collect_reports_all_severities_not_just_blocking():
+    """A [P2]/[P3]-only dissent is the common case a human needs to read.
+
+    ``highest_blocking_severity`` is deliberately P0/P1-only; the diagnostic view
+    must not inherit that filter or it reproduces the gap.
+    """
+    body = "Verdict: CHANGES-REQUESTED\n- [P3] nit: rename this helper\n"
+    summary = summarize_collect({"tier": 2, "items": [{"family": "claude", "body": body}]})
+    assert summary["items"][0]["findings"] == ["[P3] nit: rename this helper"]
+
+
+def test_summarize_collect_ignores_quoted_and_no_finding_lines():
+    """Fenced examples and explicit non-findings must not read as live findings.
+
+    Reviewers quote the gate syntax when reviewing parser changes; the gate's own
+    line splitter already ignores those, and the diagnostic view must agree with it.
+    """
+    body = (
+        "Verdict: PASS\n"
+        "- [P2] None\n"
+        "Example of what would block:\n"
+        "```\n"
+        "- [P1] a fenced example finding\n"
+        "```\n"
+    )
+    summary = summarize_collect({"tier": 2, "items": [{"family": "claude", "body": body}]})
+    assert summary["items"][0]["findings"] == []
+
+
+def test_summarize_collect_tolerates_missing_body():
+    """Older payloads (and error envelopes) carry no body — must not crash."""
+    summary = summarize_collect({"tier": 2, "items": [{"family": "claude", "verdict": "pass"}]})
+    assert summary["items"][0]["findings"] == []
+    assert summary["items"][0]["body"] == ""
+
+
+def test_findings_normalise_markdown_bold_markers():
+    """A bolded bullet must not leak a stray '**' into the rendered finding.
+
+    `_strip_decoration` removes the leading '- **' but leaves the closing '**'
+    attached to the marker, so echoing the raw line printed '[P2]** ...'.
+    """
+    body = "Verdict: CHANGES-REQUESTED\n- **[P2]** `mod.py` — missing case normalization\n"
+    summary = summarize_collect({"tier": 2, "items": [{"family": "claude", "body": body}]})
+    assert summary["items"][0]["findings"] == ["[P2] `mod.py` — missing case normalization"]
+
+
+def test_findings_severity_tag_is_uppercased():
+    body = "Verdict: CHANGES-REQUESTED\n- [p1] lowercase marker\n"
+    summary = summarize_collect({"tier": 2, "items": [{"family": "openai", "body": body}]})
+    assert summary["items"][0]["findings"] == ["[P1] lowercase marker"]

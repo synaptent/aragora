@@ -231,14 +231,16 @@ class CLIAgent(CritiqueMixin, Agent):
     # Map CLI agent models to OpenRouter model identifiers
     OPENROUTER_MODEL_MAP: dict[str, str] = {
         # Claude models
-        "claude": "anthropic/claude-opus-4.8",  # Default claude CLI
-        "claude-opus-4-8": "anthropic/claude-opus-4.8",
-        "claude-opus-4-7": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-6": "anthropic/claude-opus-4.8",
-        "claude-opus-4-5-20251101": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-20250514": "anthropic/claude-opus-4.8",
-        "claude-3-opus-20240229": "anthropic/claude-opus-4.8",
-        "claude-3-sonnet-20240229": "anthropic/claude-opus-4.8",
+        "claude": "anthropic/claude-opus-5",  # Default claude CLI
+        "claude-fable-5": "anthropic/claude-fable-5",
+        "claude-opus-5": "anthropic/claude-opus-5",
+        "claude-opus-4-8": "anthropic/claude-opus-5",
+        "claude-opus-4-7": "anthropic/claude-opus-5",
+        "claude-sonnet-4-6": "anthropic/claude-opus-5",
+        "claude-opus-4-5-20251101": "anthropic/claude-opus-5",
+        "claude-sonnet-4-20250514": "anthropic/claude-opus-5",
+        "claude-3-opus-20240229": "anthropic/claude-opus-5",
+        "claude-3-sonnet-20240229": "anthropic/claude-opus-5",
         # OpenAI/Codex models
         "gpt-5.5": "openai/gpt-5.5",
         "gpt-5.4": "openai/gpt-5.5",
@@ -262,10 +264,10 @@ class CLIAgent(CritiqueMixin, Agent):
         "gemini-1.5-pro": "google/gemini-pro-1.5",
         # Grok models
         "grok-4-1-fast": "x-ai/grok-4.1-fast",
-        "grok-4-latest": "x-ai/grok-4",
-        "grok-4": "x-ai/grok-4",
-        "grok-3": "x-ai/grok-4",
-        "grok-2": "x-ai/grok-4",
+        "grok-4-latest": "x-ai/grok-4.5",
+        "grok-4": "x-ai/grok-4.5",
+        "grok-3": "x-ai/grok-4.5",
+        "grok-2": "x-ai/grok-4.5",
         # Deepseek models
         "deepseek-coder": "deepseek/deepseek-v4-pro",
         "deepseek-v3": "deepseek/deepseek-v4-pro",
@@ -306,6 +308,7 @@ class CLIAgent(CritiqueMixin, Agent):
 
         # Use provided circuit breaker, global registry, or disable
         # Global registry ensures consistent state across agent instances
+        self._circuit_breaker: BaseCircuitBreaker | None
         if circuit_breaker is not None:
             self._circuit_breaker = circuit_breaker
         elif enable_circuit_breaker:
@@ -359,7 +362,7 @@ class CLIAgent(CritiqueMixin, Agent):
                     else:
                         openrouter_model = self.model
                 else:
-                    openrouter_model = "anthropic/claude-opus-4.8"  # Default fallback model
+                    openrouter_model = "anthropic/claude-opus-5"  # Default fallback model
 
             self._fallback_agent = OpenRouterAgent(
                 name=f"{self.name}_fallback",
@@ -823,7 +826,7 @@ Be constructive but thorough. Identify both technical and conceptual issues."""
 
 @AgentRegistry.register(
     "claude",
-    default_model="claude-opus-4-8",
+    default_model="claude-fable-5",
     agent_type="CLI",
     requires="claude CLI (npm install -g @anthropic-ai/claude-code)",
 )
@@ -843,7 +846,13 @@ class ClaudeAgent(CLIAgent):
         command unchanged when no pool/profile is available.
         """
         full_prompt = self._build_full_prompt(prompt, context)
-        command, used_profile = build_claude_command(["claude", "--print", "-p", "-"])
+        # Pin the CLI to the registered model: without --model the CLI runs
+        # whatever the active profile defaults to, and receipts would claim
+        # self.model while a different model answered.
+        base_command = ["claude", "--print"]
+        if self.model:
+            base_command += ["--model", self.model]
+        command, used_profile = build_claude_command([*base_command, "-p", "-"])
         # Pass prompt via stdin to avoid shell argument length limits.
         return await self._generate_with_fallback(
             command,

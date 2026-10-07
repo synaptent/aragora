@@ -40,6 +40,7 @@ from aragora.swarm.auto_merge_green import (
     first_error_line,
     merge_eligible,
 )
+from aragora.swarm.merge_halt import evaluate_merge_halt
 
 _VIEW_FIELDS = "number,headRefOid,isDraft,mergeable,mergeStateStatus,statusCheckRollup"
 
@@ -137,20 +138,27 @@ def fetch_packet_entry(repo: str, pr: int, *, timeout: int = 120) -> dict[str, A
 
 
 def _cheaply_promising(view: dict[str, Any]) -> bool:
-    """True if the cheap gh signals justify an (expensive) merge-packet fetch."""
+    """True if the cheap gh signals justify an authoritative packet fetch.
+
+    Rollups can retain multiple historical quorum rows in arbitrary order. Any
+    success is enough to spend the packet lookup; the packet remains the gate.
+    """
     if view.get("isDraft") or view.get("mergeable") != "MERGEABLE":
         return False
-    for item in view.get("statusCheckRollup") or []:
-        if not isinstance(item, dict):
-            continue
-        name = item.get("name") or item.get("context")
-        if name == QUORUM_CHECK:
-            return (item.get("conclusion") or item.get("state") or item.get("status")) == "SUCCESS"
-    return False
+    return any(
+        str(item.get("conclusion") or item.get("state") or item.get("status") or "").upper()
+        == "SUCCESS"
+        for item in view.get("statusCheckRollup") or []
+        if isinstance(item, dict) and (item.get("name") or item.get("context")) == QUORUM_CHECK
+    )
 
 
 def _make_merge_fn(repo: str):
     def merge_fn(pr: int, head: str) -> tuple[bool, str]:
+        # #9216: merge_executor also merges through this function.
+        halt = evaluate_merge_halt(pr, head)
+        if not halt.allowed:
+            return (False, halt.reason)
         try:
             out = subprocess.run(
                 [
