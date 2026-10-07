@@ -270,11 +270,9 @@ runs:
         # Action-level metadata and extracted counts from JSON output
         echo "review_log_path=./aragora-artifacts/review.log" >> $GITHUB_OUTPUT
 
+        echo "review_status=failed" >> "$GITHUB_OUTPUT"
         python3 "$GITHUB_ACTION_PATH/scripts/extract_review_counts.py" \
           ./aragora-artifacts/review.json >> "$GITHUB_OUTPUT"
-        if [ "$REVIEW_EXIT" -ne 0 ]; then
-          echo "review_status=failed" >> "$GITHUB_OUTPUT"
-        fi
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
@@ -374,6 +372,7 @@ runs:
         # Append a receipt summary to the PR comment if both exist.
         RECEIPT=./aragora-artifacts/decision-receipt.odr.json
         if [ "$RECEIPT_OK" = "true" ] && [ -f "$RECEIPT" ] && [ -f ./aragora-artifacts/comment.md ]; then
+          cp ./aragora-artifacts/comment.md ./aragora-artifacts/comment.pending.md || receipt_failed "could not stage receipt summary"
           VERDICT=$("$RECEIPT_PY" -c "import json;print(json.load(open('$RECEIPT'))['claim'].get('verdict',''))" 2>>"$LOG")
           RID=$("$RECEIPT_PY" -c "import json;print(json.load(open('$RECEIPT')).get('receipt_id',''))" 2>>"$LOG")
           KID=$("$RECEIPT_PY" -c "import json;s=json.load(open('$RECEIPT')).get('signatures') or [];print(s[0].get('key_id','') if s else '')" 2>>"$LOG")
@@ -390,9 +389,9 @@ runs:
               echo "- Independently verifiable: \`pip install aragora-verify && aragora-verify decision-receipt.odr.json\` (unsigned: pass \`odr-signing-key\` to sign receipts)"
             fi
             echo "- The full portable receipt is attached as a build artifact."
-          } >> ./aragora-artifacts/comment.md
+          } >> ./aragora-artifacts/comment.pending.md
           # Keep manifest hashes current after attaching the separately collected receipt.
-          python3 -c 'import hashlib,json,pathlib; p=pathlib.Path("aragora-artifacts"); m=json.loads((p/"bundle.json").read_text()); m["files"]["comment.md"]=hashlib.sha256((p/"comment.md").read_bytes()).hexdigest(); m["files"]["decision-receipt.odr.json"]=hashlib.sha256((p/"decision-receipt.odr.json").read_bytes()).hexdigest(); (p/"bundle.json").write_text(json.dumps(m,indent=2)+"\n")' || receipt_failed "could not update bundle manifest"
+          python3 -c 'import hashlib,json,pathlib; p=pathlib.Path("aragora-artifacts"); m=json.loads((p/"bundle.json").read_text()); m["files"]["comment.md"]=hashlib.sha256((p/"comment.pending.md").read_bytes()).hexdigest(); m["files"]["decision-receipt.odr.json"]=hashlib.sha256((p/"decision-receipt.odr.json").read_bytes()).hexdigest(); (p/"bundle.json").write_text(json.dumps(m,indent=2)+"\n"); (p/"comment.pending.md").replace(p/"comment.md")' || receipt_failed "could not update bundle manifest"
         fi
         exit 0
       env:
@@ -409,7 +408,7 @@ runs:
         AWS_REGION: ${{ inputs.aws-region }}
 
     - name: Post PR comment
-      if: always() && inputs.post-comment == 'true' && steps.review.outputs.review_generated == 'true'
+      if: always() && inputs.post-comment == 'true' && steps.review.outputs.review_generated == 'true' && (inputs.emit-receipt != 'true' || steps.receipt.outputs.receipt_verified == 'true')
       shell: bash
       run: |
         CURRENT=$(gh pr view "$PR" --repo "$REPO" --json headRefOid,baseRefOid --jq '[.headRefOid,.baseRefOid] | join(" ")')

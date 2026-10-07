@@ -1172,6 +1172,8 @@ def _cmd_review(args: argparse.Namespace, bundle: ReviewBundle | None = None) ->
         if available != DEFAULT_REVIEW_AGENTS:
             print(f"Note: Using available agents: {available}", file=sys.stderr)
             agents_str = available
+    if bundle:
+        bundle.context["effective_agents"] = _parse_review_agents(agents_str)
 
     # Run review debate
     print(f"Running AI code review ({agents_str}, {args.rounds} rounds)...", file=sys.stderr)

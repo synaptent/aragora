@@ -100,14 +100,16 @@ def test_quorum_and_failure_gates_remain_separate():
     assert 'pip install "$GITHUB_ACTION_PATH"' in step("Install Aragora")["run"]
 
 
-def test_receipt_attachment_refreshes_manifest_hashes(tmp_path):
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_receipt_attachment_refreshes_manifest_hashes(tmp_path, corrupt):
     import hashlib
 
     directory = tmp_path / "aragora-artifacts"
     directory.mkdir()
-    (directory / "comment.md").write_text("review plus separate receipt summary")
+    (directory / "comment.md").write_text("original review")
+    (directory / "comment.pending.md").write_text("review plus separate receipt summary")
     (directory / "decision-receipt.odr.json").write_text("{}")
-    (directory / "bundle.json").write_text('{"files": {"comment.md": "old"}}')
+    (directory / "bundle.json").write_text("bad" if corrupt else '{"files": {"comment.md": "old"}}')
     command = next(
         line.strip()
         for line in step("Emit decision receipt")["run"].splitlines()
@@ -116,6 +118,10 @@ def test_receipt_attachment_refreshes_manifest_hashes(tmp_path):
     result = subprocess.run(
         ["bash", "-e", "-c", command], cwd=tmp_path, capture_output=True, text=True
     )
+    if corrupt:
+        assert result.returncode != 0
+        assert (directory / "comment.md").read_text() == "original review"
+        return
     assert result.returncode == 0, result.stderr
     for name, digest in json.loads((directory / "bundle.json").read_text())["files"].items():
         assert hashlib.sha256((directory / name).read_bytes()).hexdigest() == digest

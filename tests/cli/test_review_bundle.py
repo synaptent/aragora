@@ -156,6 +156,17 @@ def test_bundle_requires_directory_without_calling_provider(execution):
     run.assert_not_called()
 
 
+def test_default_agent_fallback_is_disclosed_not_missing(execution, monkeypatch):
+    args, result, _, _ = execution
+    args.agents = review.DEFAULT_REVIEW_AGENTS
+    monkeypatch.setattr(review, "get_available_agents", lambda: "anthropic-api")
+    result.messages = result.messages[:1]
+    assert review.cmd_review(args) == 0
+    manifest = read_bundle(args)[1]
+    assert manifest["effective_agents"] == ["anthropic-api"]
+    assert manifest["missing_agents"] == []
+
+
 def test_bundle_does_not_publish_without_head_checked_action(execution):
     args, _, _, run = execution
     args.post_comment = True

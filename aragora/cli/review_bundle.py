@@ -26,7 +26,7 @@ class ReviewBundle:
             "demo": bool(getattr(args, "demo", False)),
         }
         parts = urlparse(self.context["pr_url"] or "").path.strip("/").split("/")
-        if len(parts) == 4 and parts[2] == "pull" and parts[3].isdigit():
+        if len(parts) >= 4 and parts[2] == "pull" and parts[3].isdigit():
             self.context.update(repository="/".join(parts[:2]), pr_number=int(parts[3]))
         self.reasons: list[str] = []
         self.findings: dict[str, Any] | None = None
@@ -54,7 +54,7 @@ class ReviewBundle:
             }
             missing = [
                 agent
-                for agent in self.context["requested_agents"]
+                for agent in self.context.get("effective_agents", self.context["requested_agents"])
                 if not any(name == agent or name.startswith(agent + "_") for name in observed)
             ]
             self.context.update(
@@ -133,7 +133,9 @@ class ReviewBundle:
                 manifest["files"][name] = hashlib.sha256(payload).hexdigest()
         except (OSError, ValueError, TypeError, KeyError):
             manifest.update(
-                status="failed", limitations=[*self.reasons, "Artifact rendering failed."]
+                status="failed",
+                exit_code=3,
+                limitations=[*self.reasons, "Artifact rendering failed."],
             )
             raise
         finally:
