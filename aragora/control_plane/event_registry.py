@@ -9,8 +9,10 @@ from aragora.events.agent_registry_hooks import register_agent_registry_factory
 from aragora.events.registry import (
     register_notification_event_contributor as register_events_contributor,
 )
+from aragora.events.task_events import register_default_task_event_dispatcher_provider
 
 if TYPE_CHECKING:
+    from aragora.control_plane.notifications import NotificationDispatcher
     from aragora.control_plane.registry import AgentRegistry
 
 
@@ -25,13 +27,30 @@ def register_notification_event_contributor() -> bool:
     return True
 
 
-# Imports at call time so it resolves the current module attribute: callers and
-# tests patch ``aragora.control_plane.registry.AgentRegistry`` after registration.
+# Both factories import at call time so they resolve the current module
+# attribute: callers and tests patch ``aragora.control_plane.registry.AgentRegistry``
+# and ``notifications.get_default_notification_dispatcher`` after registration.
+def default_task_event_dispatcher() -> NotificationDispatcher | None:
+    """Return the control plane's default notification dispatcher, if configured."""
+    from aragora.control_plane.notifications import get_default_notification_dispatcher
+
+    return get_default_notification_dispatcher()
+
+
 def new_agent_registry() -> AgentRegistry:
     """Create a control-plane agent registry for event handlers."""
     from aragora.control_plane.registry import AgentRegistry
 
     return AgentRegistry()
+
+
+def register_task_event_dispatcher() -> bool:
+    """Make the default notification dispatcher the fallback for task events.
+
+    Returns:
+        True when newly registered, False when it was already registered.
+    """
+    return register_default_task_event_dispatcher_provider(default_task_event_dispatcher)
 
 
 def register_event_agent_registry() -> bool:
@@ -44,8 +63,10 @@ def register_event_agent_registry() -> bool:
 
 
 __all__ = [
+    "default_task_event_dispatcher",
     "get_notification_event_names",
     "new_agent_registry",
     "register_event_agent_registry",
     "register_notification_event_contributor",
+    "register_task_event_dispatcher",
 ]
