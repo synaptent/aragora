@@ -27,6 +27,7 @@ from aragora.server.handlers.openapi_decorator import api_endpoint
 from aragora.server.handlers.utils.decorators import has_permission as _has_permission
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.validation.query_params import safe_query_int
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class TaskHandlerMixin:
         """
         return getattr(self, "ctx", {}).get("control_plane_coordinator")
 
-    def _require_coordinator(self) -> tuple[Any | None, HandlerResult | None]:
+    def _require_coordinator(self) -> tuple[Any, HandlerResult | None]:
         """Return coordinator and None, or None and error response if not initialized."""
         coord = self._get_coordinator()
         if not coord:
@@ -905,8 +906,13 @@ class TaskHandlerMixin:
         summary="Get deliberation result",
         tags=["Control Plane"],
     )
-    def _handle_get_deliberation(self, request_id: str, handler: Any) -> HandlerResult:
-        """Get a deliberation result by request ID."""
+    def _handle_get_deliberation(
+        self, request_id: str, handler: Any, scope: OrgScope
+    ) -> HandlerResult:
+        """Get a deliberation result the caller's org owns.
+
+        Another org's result and one with no recorded owner answer like a missing one.
+        """
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
@@ -916,12 +922,12 @@ class TaskHandlerMixin:
         ):
             return error_response("Permission denied", 403)
 
-        from aragora.core.decision_results import get_decision_result
+        from aragora.core.decision_results import get_decision_result_for_org
 
-        result = get_decision_result(request_id)
-        if result:
-            return json_response(result)
-        return error_response("Deliberation not found", 404)
+        result = get_decision_result_for_org(request_id, scope.org_id)
+        if result is None:
+            return record_not_found("Deliberation")
+        return json_response(result)
 
     @api_endpoint(
         method="GET",
@@ -929,8 +935,10 @@ class TaskHandlerMixin:
         summary="Get deliberation status",
         tags=["Control Plane"],
     )
-    def _handle_get_deliberation_status(self, request_id: str, handler: Any) -> HandlerResult:
-        """Get deliberation status for polling."""
+    def _handle_get_deliberation_status(
+        self, request_id: str, handler: Any, scope: OrgScope
+    ) -> HandlerResult:
+        """Get the polling status of a deliberation the caller's org owns (404 otherwise)."""
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
@@ -940,9 +948,12 @@ class TaskHandlerMixin:
         ):
             return error_response("Permission denied", 403)
 
-        from aragora.core.decision_results import get_decision_status
+        from aragora.core.decision_results import get_decision_status_for_org
 
-        return json_response(get_decision_status(request_id))
+        status = get_decision_status_for_org(request_id, scope.org_id)
+        if status is None:
+            return record_not_found("Deliberation")
+        return json_response(status)
 
     @api_endpoint(
         method="POST",

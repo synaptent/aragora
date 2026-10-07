@@ -680,6 +680,7 @@ CONTROL_PLANE_ENDPOINTS = {
                 "200": _ok_response("Decisionmaking status", "DeliberationStatus"),
                 "401": STANDARD_ERRORS["401"],
                 "403": STANDARD_ERRORS["403"],
+                "404": STANDARD_ERRORS["404"],
                 "500": STANDARD_ERRORS["500"],
             },
         }

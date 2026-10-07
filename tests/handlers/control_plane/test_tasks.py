@@ -28,6 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aragora.server.handlers.control_plane import ControlPlaneHandler
+from aragora.tenancy.record_scope import OrgScope
 
 
 # ============================================================================
@@ -1372,34 +1373,39 @@ class TestTaskHistory:
 # ============================================================================
 
 
+SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
+NOT_FOUND_BODY = {"error": "Deliberation not found", "code": "not_found"}
+
+
 class TestGetDeliberation:
     """Tests for _handle_get_deliberation."""
 
     def test_get_deliberation_found(self, handler, mock_http_handler):
         mock_result = {"request_id": "req-001", "status": "completed", "answer": "yes"}
         with patch(
-            "aragora.core.decision_results.get_decision_result",
+            "aragora.core.decision_results.get_decision_result_for_org",
             return_value=mock_result,
-        ):
-            result = handler._handle_get_deliberation("req-001", mock_http_handler)
+        ) as mock_get:
+            result = handler._handle_get_deliberation("req-001", mock_http_handler, SCOPE)
         assert _status(result) == 200
         assert _body(result)["request_id"] == "req-001"
+        mock_get.assert_called_once_with("req-001", "test-org-001")
 
     def test_get_deliberation_not_found(self, handler, mock_http_handler):
         with patch(
-            "aragora.core.decision_results.get_decision_result",
+            "aragora.core.decision_results.get_decision_result_for_org",
             return_value=None,
         ):
-            result = handler._handle_get_deliberation("nonexistent", mock_http_handler)
+            result = handler._handle_get_deliberation("nonexistent", mock_http_handler, SCOPE)
         assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
 
-    def test_get_deliberation_empty_result(self, handler, mock_http_handler):
-        """Empty dict is truthy, should return 200."""
+    def test_get_deliberation_pending_result(self, handler, mock_http_handler):
         with patch(
-            "aragora.core.decision_results.get_decision_result",
+            "aragora.core.decision_results.get_decision_result_for_org",
             return_value={"status": "pending"},
         ):
-            result = handler._handle_get_deliberation("req-002", mock_http_handler)
+            result = handler._handle_get_deliberation("req-002", mock_http_handler, SCOPE)
         assert _status(result) == 200
 
 
@@ -1412,33 +1418,34 @@ class TestGetDeliberationStatus:
     """Tests for _handle_get_deliberation_status."""
 
     def test_get_deliberation_status_success(self, handler, mock_http_handler):
-        mock_status = {"request_id": "req-001", "status": "running", "progress": 0.5}
+        mock_status = {"request_id": "req-001", "status": "running", "completed_at": None}
         with patch(
-            "aragora.core.decision_results.get_decision_status",
+            "aragora.core.decision_results.get_decision_status_for_org",
             return_value=mock_status,
-        ):
-            result = handler._handle_get_deliberation_status("req-001", mock_http_handler)
+        ) as mock_get:
+            result = handler._handle_get_deliberation_status("req-001", mock_http_handler, SCOPE)
         assert _status(result) == 200
         assert _body(result)["status"] == "running"
+        mock_get.assert_called_once_with("req-001", "test-org-001")
 
     def test_get_deliberation_status_completed(self, handler, mock_http_handler):
         mock_status = {"request_id": "req-001", "status": "completed"}
         with patch(
-            "aragora.core.decision_results.get_decision_status",
+            "aragora.core.decision_results.get_decision_status_for_org",
             return_value=mock_status,
         ):
-            result = handler._handle_get_deliberation_status("req-001", mock_http_handler)
+            result = handler._handle_get_deliberation_status("req-001", mock_http_handler, SCOPE)
         assert _status(result) == 200
         assert _body(result)["status"] == "completed"
 
-    def test_get_deliberation_status_not_started(self, handler, mock_http_handler):
-        mock_status = {"request_id": "req-new", "status": "not_found"}
+    def test_get_deliberation_status_missing_is_404(self, handler, mock_http_handler):
         with patch(
-            "aragora.core.decision_results.get_decision_status",
-            return_value=mock_status,
+            "aragora.core.decision_results.get_decision_status_for_org",
+            return_value=None,
         ):
-            result = handler._handle_get_deliberation_status("req-new", mock_http_handler)
-        assert _status(result) == 200
+            result = handler._handle_get_deliberation_status("req-new", mock_http_handler, SCOPE)
+        assert _status(result) == 404
+        assert _body(result) == NOT_FOUND_BODY
 
 
 # ============================================================================
@@ -1752,19 +1759,21 @@ class TestRouting:
         result = handler.handle("/api/control-plane/queue/metrics", {}, mock_http_handler)
         assert _status(result) == 200
 
-    def test_route_get_deliberation(self, handler, mock_http_handler):
+    def test_route_get_deliberation(self, handler, mock_http_handler, org_scoped_request_user):
         mock_result = {"request_id": "r1", "status": "done"}
         with patch(
-            "aragora.core.decision_results.get_decision_result",
+            "aragora.core.decision_results.get_decision_result_for_org",
             return_value=mock_result,
         ):
             result = handler.handle("/api/control-plane/deliberations/r1", {}, mock_http_handler)
         assert _status(result) == 200
 
-    def test_route_get_deliberation_status(self, handler, mock_http_handler):
+    def test_route_get_deliberation_status(
+        self, handler, mock_http_handler, org_scoped_request_user
+    ):
         mock_status = {"request_id": "r1", "status": "running"}
         with patch(
-            "aragora.core.decision_results.get_decision_status",
+            "aragora.core.decision_results.get_decision_status_for_org",
             return_value=mock_status,
         ):
             result = handler.handle(

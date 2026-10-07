@@ -26,6 +26,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aragora.server.handlers.control_plane import ControlPlaneHandler
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="org-1", user_id="user-1", role="admin")
 
 
 # ===========================================================================
@@ -1141,10 +1144,10 @@ class TestDeliberations:
         http_handler = make_mock_handler()
 
         with patch(
-            "aragora.core.decision_results.get_decision_result",
+            "aragora.core.decision_results.get_decision_result_for_org",
             return_value=None,
         ):
-            result = authed_handler._handle_get_deliberation("unknown-id", http_handler)
+            result = authed_handler._handle_get_deliberation("unknown-id", http_handler, SCOPE)
 
         assert get_status(result) == 404
 
@@ -1155,10 +1158,10 @@ class TestDeliberations:
         mock_result = {"answer": "42", "confidence": 0.95}
 
         with patch(
-            "aragora.core.decision_results.get_decision_result",
+            "aragora.core.decision_results.get_decision_result_for_org",
             return_value=mock_result,
         ):
-            result = authed_handler._handle_get_deliberation("req-123", http_handler)
+            result = authed_handler._handle_get_deliberation("req-123", http_handler, SCOPE)
 
         assert get_status(result) == 200
         body = get_body(result)
@@ -1170,10 +1173,10 @@ class TestDeliberations:
         http_handler = make_mock_handler()
 
         with patch(
-            "aragora.core.decision_results.get_decision_status",
+            "aragora.core.decision_results.get_decision_status_for_org",
             return_value={"status": "running", "progress": 0.5},
         ):
-            result = authed_handler._handle_get_deliberation_status("req-123", http_handler)
+            result = authed_handler._handle_get_deliberation_status("req-123", http_handler, SCOPE)
 
         assert get_status(result) == 200
         body = get_body(result)

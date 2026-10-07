@@ -56,6 +56,7 @@ from aragora.server.handlers.base import (
 from aragora.server.handlers.utils.rate_limit import rate_limit, user_rate_limit
 from aragora.server.handlers.utils.decorators import has_permission
 from aragora.observability.metrics import track_handler
+from aragora.tenancy.record_scope import OrgScope, require_org_scope
 
 from .agents import AgentHandlerMixin
 from aragora.server.handlers.utils.decorators import handle_errors
@@ -216,6 +217,16 @@ class ControlPlaneHandler(
     @track_handler("control-plane/main", method="GET")
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Handle GET requests."""
+        path = self._normalize_path(path)
+
+        # Deliberation results belong to an org: a caller without one gets the
+        # scope denial (401 / 403 org_required) before any permission check.
+        scope: OrgScope | None = None
+        if path.startswith("/api/control-plane/deliberations/"):
+            scope, scope_err = require_org_scope(handler)
+            if scope is None:
+                return scope_err
+
         # Auth and permission check
         user, err = self.require_auth_or_error(handler)
         if err:
@@ -224,16 +235,14 @@ class ControlPlaneHandler(
         if perm_err:
             return perm_err
 
-        path = self._normalize_path(path)
-
         # /api/control-plane/deliberations/:id[/status]
-        if path.startswith("/api/control-plane/deliberations/"):
+        if scope is not None:
             parts = path.split("/")
             if len(parts) >= 5:
                 request_id = parts[4]
                 if len(parts) >= 6 and parts[5] == "status":
-                    return self._handle_get_deliberation_status(request_id, handler)
-                return self._handle_get_deliberation(request_id, handler)
+                    return self._handle_get_deliberation_status(request_id, handler, scope)
+                return self._handle_get_deliberation(request_id, handler, scope)
 
         # /api/control-plane/agents
         if path == "/api/control-plane/agents":

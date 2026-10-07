@@ -68,6 +68,39 @@ def get_decision_result(request_id: str) -> dict[str, Any] | None:
     return None if fallback is None else without_stored_request(fallback)
 
 
+def get_decision_result_for_org(request_id: str, org_id: str) -> dict[str, Any] | None:
+    """Like :func:`get_decision_result`, but only when ``org_id`` owns the result.
+
+    A missing result, another org's and one with no recorded owner all give None.
+    """
+    if not org_id:
+        return None
+    store = _get_result_store()
+    if store:
+        try:
+            result = store.get_for_org(request_id, org_id)
+            if result:
+                return without_stored_request(result)
+        except (OSError, RuntimeError, KeyError) as e:
+            logger.warning("Failed to retrieve from store: %s", e)
+    fallback = _decision_results_fallback.get(request_id)
+    if fallback is None or fallback.get("org_id") != org_id:
+        return None
+    return without_stored_request(fallback)
+
+
+def get_decision_status_for_org(request_id: str, org_id: str) -> dict[str, Any] | None:
+    """Polling status of a result ``org_id`` owns; None when missing, foreign or ownerless."""
+    result = get_decision_result_for_org(request_id, org_id)
+    if result is None:
+        return None
+    return {
+        "request_id": request_id,
+        "status": result.get("status", "unknown"),
+        "completed_at": result.get("completed_at"),
+    }
+
+
 def get_decision_status(request_id: str) -> dict[str, Any]:
     """Get decision status for polling with fallback."""
     store = _get_result_store()
@@ -93,6 +126,8 @@ def get_decision_status(request_id: str) -> dict[str, Any]:
 __all__ = [
     "save_decision_result",
     "get_decision_result",
+    "get_decision_result_for_org",
     "get_decision_status",
+    "get_decision_status_for_org",
     "without_stored_request",
 ]

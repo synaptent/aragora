@@ -25,6 +25,9 @@ from aragora.server.handlers.base import (
     error_response,
     json_response,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+SCOPE = OrgScope(org_id="org-1", user_id="user-1", role="admin")
 
 
 def _body(result) -> dict:
@@ -511,11 +514,11 @@ class TestDeliberation:
             "sys.modules",
             {
                 "aragora.core.decision_results": MagicMock(
-                    get_decision_result=MagicMock(return_value=None),
+                    get_decision_result_for_org=MagicMock(return_value=None),
                 ),
             },
         ):
-            result = handler._handle_get_deliberation("req_nonexistent", MagicMock())
+            result = handler._handle_get_deliberation("req_nonexistent", MagicMock(), SCOPE)
             assert result.status_code == 404
 
     def test_get_deliberation_status(self):
@@ -526,9 +529,9 @@ class TestDeliberation:
             "sys.modules",
             {
                 "aragora.core.decision_results": MagicMock(
-                    get_decision_status=MagicMock(return_value=mock_status),
+                    get_decision_status_for_org=MagicMock(return_value=mock_status),
                 ),
             },
         ):
-            result = handler._handle_get_deliberation_status("req_001", MagicMock())
+            result = handler._handle_get_deliberation_status("req_001", MagicMock(), SCOPE)
             assert result.status_code == 200
