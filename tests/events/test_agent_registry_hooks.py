@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 import textwrap
@@ -38,6 +39,37 @@ def test_factory_registration_is_idempotent() -> None:
     assert hooks.create_agent_registry() is created[-1]
     assert hooks.create_agent_registry() is created[-1]
     assert len(created) == 2
+
+
+def test_replacing_the_factory_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    def first() -> object:
+        return object()
+
+    def second() -> object:
+        return object()
+
+    with caplog.at_level(logging.DEBUG, logger=hooks.__name__):
+        hooks.register_agent_registry_factory(first)
+        assert not caplog.records
+        assert hooks.register_agent_registry_factory(second) is True
+
+    assert [r.levelno for r in caplog.records] == [logging.DEBUG]
+    assert "Replacing" in caplog.records[0].getMessage()
+
+
+def test_genesis_sync_without_factory_logs_the_skip(caplog: pytest.LogCaptureFixture) -> None:
+    from aragora.events.cross_subscribers import manager
+    from aragora.events.types import StreamEvent, StreamEventType
+
+    event = StreamEvent(
+        type=StreamEventType.AGENT_BIRTH,
+        data={"event_type": "birth", "agent_id": "agent_unsynced"},
+    )
+    with caplog.at_level(logging.DEBUG, logger=manager.__name__):
+        manager.CrossSubscriberManager()._handle_genesis_to_control_plane(event)
+
+    skipped = [r.getMessage() for r in caplog.records if "skipped" in r.getMessage()]
+    assert skipped and "agent_unsynced" in skipped[0]
 
 
 def test_control_plane_init_registers_the_factory_once() -> None:

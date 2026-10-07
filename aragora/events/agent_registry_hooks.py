@@ -7,8 +7,11 @@ agent-registry factory here when it is imported.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 class EventAgentRegistry(Protocol):
@@ -48,6 +51,8 @@ def register_agent_registry_factory(factory: AgentRegistryFactory) -> bool:
     global _factory
     if _factory is factory:
         return False
+    if _factory is not None:
+        logger.debug("Replacing agent registry factory %r with %r", _factory, factory)
     _factory = factory
     return True
 
