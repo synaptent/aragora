@@ -82,7 +82,7 @@ KnowledgeSource: Any = None
 MOUND_AVAILABLE: bool = False
 
 try:
-    from aragora.knowledge.mound import (
+    from aragora.knowledge.mound import (  # type: ignore[no-redef]
         KnowledgeMound,  # type: ignore[no-redef]
         MoundConfig,  # type: ignore[no-redef]
         IngestionRequest,  # type: ignore[no-redef]
@@ -100,7 +100,7 @@ logger = logging.getLogger(__name__)
 UnstructuredParser: Any = None
 UNSTRUCTURED_AVAILABLE: bool = False
 try:
-    from aragora.documents.ingestion import (
+    from aragora.documents.ingestion import (  # type: ignore[no-redef]
         UnstructuredParser,
         UNSTRUCTURED_AVAILABLE,
     )

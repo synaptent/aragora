@@ -131,7 +131,7 @@ class DocumentHandler(BaseHandler):
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._get_document(doc_id)
+            return self._get_document(doc_id)  # type: ignore[arg-type]
 
         return None
 
@@ -169,7 +169,7 @@ class DocumentHandler(BaseHandler):
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._delete_document(doc_id)
+            return self._delete_document(doc_id)  # type: ignore[arg-type]
         return None
 
     @require_permission("documents:delete")
