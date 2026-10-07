@@ -407,5 +407,5 @@ export_query_count = Counter(
 
 - [Gmail API Batch Requests](https://developers.google.com/gmail/api/guides/batch)
 - [SQLAlchemy Eager Loading](https://docs.sqlalchemy.org/en/14/orm/loading_relationships.html)
-- `docs/TECHNICAL_DEBT.md` - Related debt items
+- `docs/status/TECHNICAL_DEBT.md` - Related debt items
 - `docs/architecture/primitive-consolidation.md` - Query consolidation patterns

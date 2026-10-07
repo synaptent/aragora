@@ -30,8 +30,8 @@ EXCLUDED_PATHS = {
     "auth/sso_handlers.py",
     "_oauth/oidc.py",
     # OAuth callbacks - verified via state/signatures, not RBAC
-    "_oauth_impl.py",
-    "oauth_wizard.py",
+    "oauth/_oauth_impl.py",
+    "oauth/oauth_wizard.py",
     # Webhooks - verified via signatures/tokens, not RBAC
     "webhook_management.py",
     "features/email_webhooks.py",
@@ -50,7 +50,7 @@ EXCLUDED_PATHS = {
     "social/tts_helper.py",
     # Store implementations (internal, not endpoints)
     "auth/store.py",
-    "explainability_store.py",
+    "decisions/explainability_store.py",
     "features/marketplace/store.py",
     "openclaw/store.py",
 }

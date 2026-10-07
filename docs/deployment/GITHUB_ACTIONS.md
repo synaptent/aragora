@@ -6,7 +6,7 @@ Integrate Aragora's AI code review and security auditing into your CI/CD pipelin
 > (`aragora-review-template.yml`) runs the raw `aragora review` CLI on a job with
 > `runs-on: aragora` -- a custom runner label your infrastructure must provide --
 > and does not emit a Decision Receipt. Most external adopters instead want the
-> **[GitHub Action Setup Guide](../GITHUB_ACTION_SETUP.md)**, the canonical doc
+> **[GitHub Action Setup Guide](../guides/GITHUB_ACTION_SETUP.md)**, the canonical doc
 > for the packaged `uses: synaptent/aragora@<sha>` Action: it runs on stock
 > `ubuntu-latest`, needs no custom runner, and supports `emit-receipt`.
 

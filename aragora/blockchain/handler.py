@@ -81,8 +81,8 @@ class ERC8004Handler:
     ) -> dict[str, Any]:
         """Return the current blockchain / chain configuration."""
         # Import from the server handler module so that test patches on
-        # ``aragora.server.handlers.erc8004.get_chain_config`` are honoured.
-        from aragora.server.handlers import erc8004 as _erc
+        # ``aragora.server.handlers.integrations.erc8004.get_chain_config`` are honoured.
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         config = _erc.get_chain_config()
         return {
@@ -102,7 +102,7 @@ class ERC8004Handler:
         """Get a single agent identity by token ID."""
         token_id = _validate_token_id(params.get("token_id", ""))
 
-        from aragora.server.handlers import erc8004 as _erc
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         connector = _erc.ERC8004Connector()
         result = connector.fetch(f"identity:{self.ctx.get('chain_id', 1)}:{token_id}")
@@ -125,7 +125,7 @@ class ERC8004Handler:
         """Get reputation data for an agent."""
         token_id = _validate_token_id(params.get("token_id", ""))
 
-        from aragora.server.handlers import erc8004 as _erc
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         connector = _erc.ERC8004Connector()
         result = connector.fetch(f"reputation:{self.ctx.get('chain_id', 1)}:{token_id}")
@@ -144,7 +144,7 @@ class ERC8004Handler:
         """Get validation records for an agent."""
         token_id = _validate_token_id(params.get("token_id", ""))
 
-        from aragora.server.handlers import erc8004 as _erc
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         connector = _erc.ERC8004Connector()
         result = connector.fetch(f"validation:{self.ctx.get('chain_id', 1)}:{token_id}")
@@ -161,7 +161,7 @@ class ERC8004Handler:
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Trigger a manual sync between blockchain and Knowledge Mound."""
-        from aragora.server.handlers import erc8004 as _erc
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         adapter = _erc.ERC8004Adapter()
         result = await adapter.sync_to_km()
@@ -176,7 +176,7 @@ class ERC8004Handler:
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Return health status of the blockchain connector."""
-        from aragora.server.handlers import erc8004 as _erc
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         connector = _erc.ERC8004Connector()
         health = connector.health_check()
@@ -197,7 +197,7 @@ class ERC8004Handler:
         if owner is not None:
             _validate_eth_address(owner)
 
-        from aragora.server.handlers import erc8004 as _erc
+        from aragora.server.handlers.integrations import erc8004 as _erc
 
         connector = _erc.ERC8004Connector()
 

@@ -11,9 +11,14 @@ Design rules (mirroring the emitter's "never fabricate" contract):
 - **Pure and side-effect-free.** It copies fields off the outcome; it makes no
   network calls and mutates nothing. The Action / settlement layer decides what
   to do with the receipt.
-- **No invented clearance.** The verdict and quorum reflect only posted,
-  supportive evidence when no reviewer dissent is present. Prepared evidence
-  must remain merge-blocking in the portable receipt.
+- **No invented clearance.** By default (``decision_basis="posted"``) the
+  verdict and quorum reflect only posted, supportive evidence when no reviewer
+  dissent is present, so prepared evidence stays merge-blocking in the portable
+  receipt. A caller that never posts evidence by design (the GitHub Action)
+  passes ``decision_basis="reviews"``: the decision is then reached when the
+  counted, supportive reviewer verdicts satisfy the tier's quorum rule with no
+  dissent, and the basis is recorded in the signed mechanism so a verifier can
+  see what "reached" means.
 - **Internally consistent quorum.** Posted supporting and dissenting families
   are carried into ``consensus_proof``; ``odr_export`` records all reviewers as
   participants, so the verifier's quorum-consistency check holds
@@ -26,33 +31,164 @@ Design rules (mirroring the emitter's "never fabricate" contract):
 from __future__ import annotations
 
 import hashlib
+import logging
+from copy import deepcopy
+from typing import Any
 
+from aragora.cli.commands.review_queue_comment_verdicts import extract_finding_lines
 from aragora.gauntlet.receipt_models import (
     AgentResponseRecord,
     ConsensusProof,
     DecisionReceipt,
 )
-from aragora.swarm.quorum_evidence import FAMILY_PROVIDERS, CollectOutcome, tier_quorum_rule
+from aragora.swarm.quorum_evidence import (
+    FAMILY_PROVIDERS,
+    CollectOutcome,
+    collect_outcome_from_dict,
+    tier_quorum_rule,
+)
 
-__all__ = ["collect_outcome_to_decision_receipt"]
+__all__ = ["DECISION_BASES", "collect_outcome_to_decision_receipt"]
+
+#: "posted": reached only when supportive evidence was posted (merge-quorum default).
+#: "reviews": reached when the reviewer verdicts themselves satisfy the tier rule.
+DECISION_BASES = ("posted", "reviews")
+
+logger = logging.getLogger(__name__)
+
+# The gate reader accepts any "[Pn]" digit; the ODR severity enum is closed at P3.
+_ODR_SEVERITIES = frozenset({"P0", "P1", "P2", "P3"})
 
 
-def collect_outcome_to_decision_receipt(outcome: CollectOutcome) -> DecisionReceipt:
+def _odr_content(
+    outcome: CollectOutcome, raw: dict[str, Any], decision_basis: str = "posted"
+) -> dict[str, Any]:
+    rule = tier_quorum_rule(outcome.tier, tiered_gate=outcome.tiered_gate)
+    verdicts, findings = [], []
+    for item in outcome.items:
+        if not item.family.strip():
+            continue
+        rows: list[dict[str, Any]] = []
+        for line in extract_finding_lines(item.body):
+            severity = line[1:3]
+            if severity not in _ODR_SEVERITIES:
+                logger.warning(
+                    "omitting %s finding with severity %s outside the ODR profile (P0-P3)",
+                    item.family,
+                    severity,
+                )
+                continue
+            rows.append(
+                {
+                    "issuer": item.family,
+                    "severity": severity,
+                    "blocking": severity in ("P0", "P1"),
+                    "text": line[4:].strip(),
+                }
+            )
+        findings.extend(rows)
+        verdicts.append(
+            {
+                "issuer": item.family,
+                "verdict": item.verdict,
+                "model_family": FAMILY_PROVIDERS.get(item.family, item.family),
+                "model_id": "undisclosed",
+                "head_sha": outcome.head_sha,
+                "counted": item.would_count,
+                "grounded": item.grounded,
+                "blocking": item.dissenting,
+            }
+        )
+    observations = [
+        {"kind": "failure", "family": failure.family, "detail": failure.error or ""}
+        for failure in outcome.failures
+    ]
+    observations.extend(
+        {"kind": "timeout", "family": family, "detail": "reviewer exceeded collection deadline"}
+        for family in raw.get("timed_out_families", outcome.timed_out_families)
+    )
+    dissent: dict[str, Any] = {
+        "findings": findings,
+        "blocking": any(f["blocking"] for f in findings),
+    }
+    if findings:
+        dissent["severity_max"] = min(f["severity"] for f in findings)
+    content: dict[str, Any] = {
+        "verdicts": verdicts,
+        "dissent": dissent,
+        "observations": observations,
+        "rule": {
+            "required_signals": rule.required_signals,
+            "requires_western_frontier": rule.requires_western_frontier,
+            "western_only_counted": rule.western_only_counted,
+            "counted_families": sorted(rule.counted_families(outcome.counting_families)),
+        },
+        "mechanism": {
+            "type": "merge-quorum",
+            "policy_version": raw["policy_version"],
+            "tier": outcome.tier,
+            "tiered_gate": outcome.tiered_gate,
+            "action": outcome.action,
+            "action_reason": outcome.action_reason,
+        },
+    }
+    if outcome.items and len({item.severity_gated for item in outcome.items}) == 1:
+        content["mechanism"]["severity_gated"] = outcome.items[0].severity_gated
+    if decision_basis != "posted":
+        # Recorded only when it differs from the default, so posted-basis receipts
+        # (and the committed vectors) keep their exact bytes.
+        content["mechanism"]["decision_basis"] = decision_basis
+    if outcome.adjudication is not None:
+        adjudication = deepcopy(outcome.adjudication)
+        if "verdict" in adjudication:
+            adjudication["verdict"] = adjudication["verdict"].removeprefix("adjudicated_")
+        policy = dict(adjudication.get("policy", {}))
+        for key in ("groundedness_bar", "advisory_severity_policy"):
+            if key in adjudication:
+                policy[key] = adjudication.pop(key)
+        content["adjudication"] = {**adjudication, "policy": policy}
+    return content
+
+
+def collect_outcome_to_decision_receipt(
+    outcome: CollectOutcome | dict[str, Any],
+    *,
+    decision_basis: str = "posted",
+) -> DecisionReceipt:
     """Map a merge-quorum :class:`CollectOutcome` onto a :class:`DecisionReceipt`.
 
     The returned receipt is ready for ``decision_receipt_to_odr`` and carries the
     PR's provenance (repo, number, head SHA, tier) under ``settlement_metadata``.
+    ``decision_basis`` selects what "reached" means (see :data:`DECISION_BASES`).
     """
+    if decision_basis not in DECISION_BASES:
+        raise ValueError(
+            f"decision_basis must be one of {', '.join(DECISION_BASES)}; got {decision_basis!r}"
+        )
+    raw = outcome if isinstance(outcome, dict) else outcome.to_dict()
+    if isinstance(outcome, dict):
+        outcome = collect_outcome_from_dict(outcome)
+    raw = {**outcome.to_dict(), **raw}
     supportive = list(outcome.supportive_families)
     dissenting = list(outcome.dissenting_families)
     counting = list(outcome.counting_families)
     posted = {str(family).strip() for family in outcome.posted if str(family).strip()}
     posted_supportive = [family for family in supportive if family in posted]
-    posted_quorum = bool(posted) and tier_quorum_rule(
-        outcome.tier,
-        tiered_gate=outcome.tiered_gate,
-    ).is_satisfied_by(posted_supportive)
-    reached = outcome.action == "post" and posted_quorum and not dissenting
+    rule = tier_quorum_rule(outcome.tier, tiered_gate=outcome.tiered_gate)
+    if decision_basis == "reviews":
+        supporting_agents = supportive
+        reached = rule.is_satisfied_by(supportive) and not dissenting
+        verdict_reasoning = (
+            f"decided on reviewer verdicts (decision_basis=reviews): supportive "
+            f"{sorted(supportive)}, dissenting {sorted(dissenting)}, quorum rule "
+            f"{'satisfied' if rule.is_satisfied_by(supportive) else 'not satisfied'}; "
+            f"evidence action={outcome.action}: {outcome.action_reason}"
+        )
+    else:
+        posted_quorum = bool(posted) and rule.is_satisfied_by(posted_supportive)
+        supporting_agents = posted_supportive
+        reached = outcome.action == "post" and posted_quorum and not dissenting
+        verdict_reasoning = outcome.action_reason
 
     confidence = (len(supportive) / len(counting)) if counting else 0.0
     verdict = "PASS" if reached else "CHANGES_REQUESTED"
@@ -91,12 +227,12 @@ def collect_outcome_to_decision_receipt(outcome: CollectOutcome) -> DecisionRece
         verdict=verdict,
         confidence=confidence,
         robustness_score=confidence,
-        verdict_reasoning=outcome.action_reason,
+        verdict_reasoning=verdict_reasoning,
         dissenting_views=dissenting_views,
         consensus_proof=ConsensusProof(
             reached=reached,
             confidence=confidence,
-            supporting_agents=posted_supportive,
+            supporting_agents=supporting_agents,
             dissenting_agents=dissenting,
             method="merge-quorum",
         ),
@@ -108,5 +244,8 @@ def collect_outcome_to_decision_receipt(outcome: CollectOutcome) -> DecisionRece
             "tier": outcome.tier,
             "action": outcome.action,
             "tiered_gate": outcome.tiered_gate,
+            **({"base_sha": raw["base_sha"]} if "base_sha" in raw else {}),
+            **({"decision_basis": decision_basis} if decision_basis != "posted" else {}),
+            "odr": _odr_content(outcome, raw, decision_basis),
         },
     )

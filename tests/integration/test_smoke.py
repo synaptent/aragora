@@ -110,7 +110,7 @@ class TestServerImport:
 
     def test_debate_storage_importable(self):
         """DebateStorage is importable from the server package."""
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         assert DebateStorage is not None
 

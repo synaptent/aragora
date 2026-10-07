@@ -17,13 +17,63 @@ MEMORY_HANDLER_DIR = (
     Path(__file__).parent.parent.parent.parent.parent / "aragora" / "server" / "handlers" / "memory"
 )
 
+# These relocated handlers retain their existing entrypoint-level RBAC contracts.
+# The package-native handlers below still require SecureHandler and memory:*.
+RELOCATED_HANDLERS = {
+    "checkpoints.py": ("CheckpointHandler", {"handle": "checkpoints:read"}),
+    "consensus.py": (
+        "ConsensusHandler",
+        {"handle": "consensus:write", "handle_post": "consensus:write"},
+    ),
+    "memory_unified.py": (
+        "MemoryUnifiedHandler",
+        {"handle_get": "memory:read", "handle_post": "memory:write"},
+    ),
+}
+
+
+def _native_handler_files() -> list[Path]:
+    return [
+        path
+        for path in MEMORY_HANDLER_DIR.glob("*.py")
+        if not path.name.startswith("_") and path.name not in RELOCATED_HANDLERS
+    ]
+
+
+@pytest.mark.parametrize("filename", RELOCATED_HANDLERS)
+def test_relocated_handlers_retain_entrypoint_permissions(filename: str) -> None:
+    """Moving a handler must not remove its existing permission checks."""
+    class_name, permissions = RELOCATED_HANDLERS[filename]
+    tree = ast.parse((MEMORY_HANDLER_DIR / filename).read_text())
+    handler = next(
+        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name
+    )
+    assert any(isinstance(base, ast.Name) and base.id == "BaseHandler" for base in handler.bases)
+    methods = {
+        node.name: node
+        for node in handler.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    for method, permission in permissions.items():
+        calls = [node for node in ast.walk(methods[method]) if isinstance(node, ast.Call)]
+        assert any(
+            (
+                isinstance(call.func, ast.Name)
+                and call.func.id == "require_permission"
+                or isinstance(call.func, ast.Attribute)
+                and call.func.attr == "require_permission_or_error"
+            )
+            and any(isinstance(arg, ast.Constant) and arg.value == permission for arg in call.args)
+            for call in calls
+        ), f"{class_name}.{method} must retain {permission}"
+
 
 class TestMemoryHandlerRBACCoverage:
     """Verify all memory handlers have RBAC protection."""
 
     def test_all_handlers_extend_secure_handler(self) -> None:
         """All memory handlers should extend SecureHandler."""
-        for py_file in MEMORY_HANDLER_DIR.glob("*.py"):
+        for py_file in _native_handler_files():
             if py_file.name.startswith("_") or py_file.name == "__init__.py":
                 continue
 
@@ -47,7 +97,7 @@ class TestMemoryHandlerRBACCoverage:
 
     def test_handlers_import_require_permission(self) -> None:
         """All memory handlers should import require_permission decorator."""
-        for py_file in MEMORY_HANDLER_DIR.glob("*.py"):
+        for py_file in _native_handler_files():
             if py_file.name.startswith("_") or py_file.name == "__init__.py":
                 continue
 
@@ -59,7 +109,7 @@ class TestMemoryHandlerRBACCoverage:
 
     def test_handlers_define_permission_constants(self) -> None:
         """All memory handlers should define permission constants."""
-        for py_file in MEMORY_HANDLER_DIR.glob("*.py"):
+        for py_file in _native_handler_files():
             if py_file.name.startswith("_") or py_file.name == "__init__.py":
                 continue
 
@@ -74,7 +124,7 @@ class TestMemoryHandlerRBACCoverage:
         """Endpoint methods that access data should have @require_permission."""
         endpoint_prefixes = ("get_", "retrieve_", "list_", "search_")
 
-        for py_file in MEMORY_HANDLER_DIR.glob("*.py"):
+        for py_file in _native_handler_files():
             if py_file.name.startswith("_") or py_file.name == "__init__.py":
                 continue
 
@@ -117,7 +167,7 @@ class TestMemoryPermissionConsistency:
 
     def test_memory_read_permission_consistent(self) -> None:
         """memory:read permission should be used consistently."""
-        for py_file in MEMORY_HANDLER_DIR.glob("*.py"):
+        for py_file in _native_handler_files():
             if py_file.name.startswith("_") or py_file.name == "__init__.py":
                 continue
 
@@ -142,7 +192,7 @@ class TestMemoryPermissionConsistency:
             "/cleanup",  # Cleanup endpoint
         ]
 
-        for py_file in MEMORY_HANDLER_DIR.glob("*.py"):
+        for py_file in _native_handler_files():
             if py_file.name.startswith("_") or py_file.name == "__init__.py":
                 continue
 

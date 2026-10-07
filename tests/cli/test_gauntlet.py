@@ -9,7 +9,8 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -548,3 +549,129 @@ class TestCmdGauntlet:
         assert exc_info.value.code == 2
         captured = capsys.readouterr()
         assert "NEEDS REVIEW" in captured.out
+
+
+class TestGauntletExitContract:
+    """The public command must not turn invalid or incomplete results into success."""
+
+    @pytest.fixture(params=["api", "local"])
+    def run_result(self, request, tmp_path):
+        """Run either real command path with deterministic execution results only."""
+        mode = request.param
+        input_file = tmp_path / "spec.md"
+        input_file.write_text("# A deterministic specification")
+        parser = argparse.ArgumentParser()
+        create_gauntlet_parser(parser.add_subparsers())
+        args = parser.parse_args(["gauntlet", str(input_file), f"--{mode}"])
+
+        def run(result, local_result=None):
+            if mode == "local" and local_result is not None:
+                result = local_result
+            with (
+                patch("aragora.cli.gauntlet._run_gauntlet_api", return_value=result) as api_run,
+                patch(
+                    "aragora.agents.base.create_agent",
+                    return_value=SimpleNamespace(name="fake_agent"),
+                ),
+                patch("aragora.gauntlet.GauntletOrchestrator") as orchestrator,
+            ):
+                orchestrator.return_value.run = AsyncMock(return_value=result)
+                try:
+                    args.func(args)
+                except SystemExit as exc:
+                    code = exc.code
+                else:
+                    code = 0
+                assert api_run.call_count == (1 if mode == "api" else 0)
+                assert orchestrator.return_value.run.await_count == (1 if mode == "local" else 0)
+                return code
+
+        return run
+
+    @staticmethod
+    def result(**fields):
+        return SimpleNamespace(findings=[], summary=lambda: "Deterministic result", **fields)
+
+    @pytest.mark.parametrize(
+        ("verdict", "expected"),
+        [
+            ("pass", 0),
+            ("approved", 0),
+            ("conditional", 2),
+            ("approved_with_conditions", 2),
+            ("needs_review", 2),
+            ("fail", 1),
+            ("rejected", 1),
+        ],
+    )
+    @pytest.mark.parametrize("representation", ["lower", "upper", "enum"])
+    def test_verdict_aliases(self, run_result, verdict, expected, representation):
+        from aragora.gauntlet.types import Verdict
+
+        if representation == "upper":
+            verdict = verdict.upper()
+        elif representation == "enum":
+            verdict = Verdict(verdict)
+        assert run_result(self.result(verdict=verdict)) == expected
+
+    @pytest.mark.parametrize("verdict", [None, "", "mystery", "APPROVED-ish", 0, [], {}])
+    def test_invalid_verdict_never_succeeds(self, run_result, verdict):
+        assert run_result(self.result(verdict=verdict)) == 1
+
+    def test_missing_verdict_never_succeeds(self, run_result):
+        assert run_result(self.result()) == 1
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            "failed",
+            "cancelled",
+            "canceled",
+            "pending",
+            "running",
+            "incomplete",
+            "",
+            "unknown",
+            0,
+            [],
+        ],
+    )
+    @pytest.mark.parametrize("verdict", ["APPROVED", "NEEDS_REVIEW"])
+    def test_noncompleted_status_overrides_verdict(self, run_result, status, verdict):
+        assert run_result(self.result(verdict=verdict, status=status)) == 1
+
+    @pytest.mark.parametrize("status", [None, "completed", "COMPLETED"])
+    def test_legacy_or_completed_status_preserves_approval(self, run_result, status):
+        from aragora.client.models import GauntletVerdict
+
+        assert run_result(self.result(verdict=GauntletVerdict.APPROVED, status=status)) == 0
+
+    @pytest.mark.parametrize(
+        ("verdict", "expected"),
+        [("approved", 0), ("rejected", 1), ("needs_review", 2), ("approved_with_conditions", 2)],
+    )
+    def test_real_local_result_and_server_receipt_agree(self, run_result, verdict, expected):
+        from aragora.client.models import GauntletReceipt
+        from aragora.gauntlet import DecisionReceipt
+        from aragora.gauntlet.orchestrator import GauntletResult
+        from aragora.gauntlet.types import InputType, Verdict
+
+        result = GauntletResult(
+            gauntlet_id="exit-contract",
+            input_type=InputType.SPEC,
+            input_summary="Deterministic specification",
+            verdict=Verdict(verdict),
+            confidence=0.9,
+            risk_score=0.1,
+            robustness_score=0.9,
+            coverage_score=1.0,
+        )
+        receipt = DecisionReceipt.from_mode_result(result, input_hash="abc")
+        # The server returns this uppercase verdict without a completion-status field.
+        payload = receipt.to_dict()
+        assert payload["verdict"] == verdict.upper()
+        assert "status" not in payload
+        api_receipt = GauntletReceipt.model_validate(payload)
+        # Supply the real local summary/result to local mode, and the real typed receipt
+        # fields to API mode, without changing either producer's schema.
+        assert run_result(api_receipt, result) == expected

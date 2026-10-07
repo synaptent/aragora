@@ -134,7 +134,7 @@ def _emit_telemetry(telemetry: AgentTelemetry) -> None:
 def _default_prometheus_collector(telemetry: AgentTelemetry) -> None:
     """Default collector that records to Prometheus metrics."""
     try:
-        from aragora.server.prometheus import (
+        from aragora.observability.prometheus import (
             record_agent_failure,
             record_agent_generation,
         )

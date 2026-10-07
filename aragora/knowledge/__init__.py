@@ -37,7 +37,12 @@ from aragora.knowledge.types import (
     ValidationStatus,
     VerificationResult,
 )
-from aragora.knowledge.fact_store import FactStore, InMemoryFactStore
+from aragora.knowledge.fact_store import (
+    FactStore,
+    InMemoryFactStore,
+    OrgScopeRequiredError,
+    ScopedFactStore,
+)
 from aragora.knowledge.embeddings import (
     ChunkMatch,
     EmbeddingConfig,
@@ -115,6 +120,8 @@ __all__ = [
     # Stores
     "FactStore",
     "InMemoryFactStore",
+    "OrgScopeRequiredError",
+    "ScopedFactStore",
     # Embeddings
     "ChunkMatch",
     "EmbeddingConfig",

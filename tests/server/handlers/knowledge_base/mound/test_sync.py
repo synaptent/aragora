@@ -93,7 +93,7 @@ class SyncHandler(SyncOperationsMixin):
 
     def __init__(self, mound: MockKnowledgeMound | None = None):
         self._mound = mound
-        self.ctx = {}
+        self.ctx: dict[str, Any] = {}
 
     def _get_mound(self):
         return self._mound
@@ -268,6 +268,7 @@ class TestSyncConsensus:
 # =============================================================================
 
 
+@pytest.mark.xfail(strict=True, reason="fact sync closed until mound is org-scoped")
 class TestSyncFacts:
     """Tests for sync facts endpoint."""
 

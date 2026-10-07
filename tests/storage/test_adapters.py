@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from aragora.export.artifact import DebateArtifact
 from aragora.export.storage_adapter import DebateStorageAdapter
-from aragora.server.storage import DebateMetadata
+from aragora.storage.debate_storage import DebateMetadata
 
 
 def _metadata(*, slug: str = "debate-slug", debate_id: str = "debate-123") -> DebateMetadata:

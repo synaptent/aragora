@@ -40,6 +40,7 @@ from aragora.swarm.auto_merge_green import (
     first_error_line,
     merge_eligible,
 )
+from aragora.swarm.merge_halt import evaluate_merge_halt
 
 _VIEW_FIELDS = "number,headRefOid,isDraft,mergeable,mergeStateStatus,statusCheckRollup"
 
@@ -154,6 +155,10 @@ def _cheaply_promising(view: dict[str, Any]) -> bool:
 
 def _make_merge_fn(repo: str):
     def merge_fn(pr: int, head: str) -> tuple[bool, str]:
+        # #9216: merge_executor also merges through this function.
+        halt = evaluate_merge_halt(pr, head)
+        if not halt.allowed:
+            return (False, halt.reason)
         try:
             out = subprocess.run(
                 [

@@ -178,6 +178,20 @@ jobs:
     name: contract-drift-program-trajectory
     if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || !inputs.historical_backfill)
     runs-on: ubuntu-latest
+    # INFORMATIONAL while the Receipt-First paydown (#9966 row 10) catches up
+    # to the date-driven target: the strict --mode program check fails on
+    # every push to main (398 active units on 2026-09-06, 288 on 2026-09-14,
+    # vs a target of 75 and shrinking), so the red workflow run carried no
+    # information. JOB-level continue-on-error only decouples the WORKFLOW
+    # RUN conclusion: this job's own check still concludes failure when the
+    # analyzer exits non-zero (the live-state verifier requires that
+    # truthful red), the analyzer step stays unconditioned and strict, and
+    # the trajectory artifact still uploads. Never move this key to the
+    # analyzer step: a step-level continue-on-error would turn the job green
+    # and mask the analyzer. Re-tighten (remove this key) in the same PR that
+    # brings total_items at or below max_open_items on main.
+    # Operator decision 2026-09-07; policy tests pin this exact shape.
+    continue-on-error: true
     env: {SOURCE_SHA: "${{ github.event_name == 'push' && github.event.after || github.sha }}"}
     steps:
       - uses: actions/checkout@v4

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 from aragora.connectors.model_base import ConnectorDataclass
 from aragora.resilience import CircuitBreaker
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 
 class PlaidEnvironment(str, Enum):

@@ -41,7 +41,7 @@ async def test_lifecycle_alerting_and_export_share_canonical_state() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        from aragora.server.metrics import ACTIVE_DEBATES as legacy_active_debates
+        from aragora.observability.server_metrics import ACTIVE_DEBATES as legacy_active_debates
 
     assert debate_metrics.ACTIVE_DEBATES is CANONICAL_ACTIVE_DEBATES
     assert public_metrics.ACTIVE_DEBATES is CANONICAL_ACTIVE_DEBATES
