@@ -20,6 +20,8 @@ from typing import Any, Protocol
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.validation import validate_debate_id
+from aragora.tenancy.debate_access import DebateWrite, authorize_debate_write
+from aragora.tenancy.record_scope import scope_denial_first
 
 from ..base import (
     BaseHandler,
@@ -149,12 +151,14 @@ class DebateInterventionsHandler(BaseHandler):
     # ------------------------------------------------------------------
 
     @handle_errors("debate interventions")
+    @scope_denial_first
     @require_permission("debates:read")
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route GET requests.
 
         Gated by debates:read like every sibling debate read (evidence,
-        checkpoints, analysis): the intervention log contains intervener
+        checkpoints, analysis), and readable by the debate's own org only,
+        even for a public debate: the intervention log contains intervener
         user_ids and nudge/challenge/injected-evidence text.
         """
         normalized = _strip_version_prefix(path)
@@ -167,6 +171,7 @@ class DebateInterventionsHandler(BaseHandler):
     # ------------------------------------------------------------------
 
     @handle_errors("debate interventions")
+    @scope_denial_first
     @require_permission("debates:update")
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
@@ -206,18 +211,17 @@ class DebateInterventionsHandler(BaseHandler):
     )
     @handle_errors("pause debate")
     def _pause_debate(self, path: str, handler: Any) -> HandlerResult:
-        debate_id, err = _extract_debate_id_from_path(path)
-        if err or debate_id is None:
-            return error_response(err or "Invalid path", 400)
+        write, denial = self._authorize_write(path, handler)
+        if write is None:
+            return denial
+        debate_id = write.debate_id
 
         manager, refusal = self._acquire_live_manager(debate_id, handler)
         if refusal is not None:
             return refusal
 
-        user_id = self._extract_user_id(handler)
-
         try:
-            entry = manager.pause(user_id=user_id)
+            entry = manager.pause(user_id=write.scope.user_id)
         except ValueError as exc:
             return error_response(str(exc), 400)
 
@@ -245,18 +249,17 @@ class DebateInterventionsHandler(BaseHandler):
     )
     @handle_errors("resume debate")
     def _resume_debate(self, path: str, handler: Any) -> HandlerResult:
-        debate_id, err = _extract_debate_id_from_path(path)
-        if err or debate_id is None:
-            return error_response(err or "Invalid path", 400)
+        write, denial = self._authorize_write(path, handler)
+        if write is None:
+            return denial
+        debate_id = write.debate_id
 
         manager, refusal = self._acquire_live_manager(debate_id, handler)
         if refusal is not None:
             return refusal
 
-        user_id = self._extract_user_id(handler)
-
         try:
-            entry = manager.resume(user_id=user_id)
+            entry = manager.resume(user_id=write.scope.user_id)
         except ValueError as exc:
             return error_response(str(exc), 400)
 
@@ -284,9 +287,10 @@ class DebateInterventionsHandler(BaseHandler):
     )
     @handle_errors("nudge debate")
     def _nudge_debate(self, path: str, handler: Any) -> HandlerResult:
-        debate_id, err = _extract_debate_id_from_path(path)
-        if err or debate_id is None:
-            return error_response(err or "Invalid path", 400)
+        write, denial = self._authorize_write(path, handler)
+        if write is None:
+            return denial
+        debate_id = write.debate_id
 
         body = self.read_json_body(handler)
         if body is None:
@@ -297,7 +301,6 @@ class DebateInterventionsHandler(BaseHandler):
             return error_response("Missing required field: message", 400)
 
         target_agent = body.get("target_agent")
-        user_id = self._extract_user_id(handler)
 
         manager, refusal = self._acquire_live_manager(debate_id, handler)
         if refusal is not None:
@@ -306,7 +309,7 @@ class DebateInterventionsHandler(BaseHandler):
         try:
             entry = manager.nudge(
                 message=message,
-                user_id=user_id,
+                user_id=write.scope.user_id,
                 target_agent=target_agent,
             )
         except ValueError as exc:
@@ -335,9 +338,10 @@ class DebateInterventionsHandler(BaseHandler):
     )
     @handle_errors("challenge debate")
     def _challenge_debate(self, path: str, handler: Any) -> HandlerResult:
-        debate_id, err = _extract_debate_id_from_path(path)
-        if err or debate_id is None:
-            return error_response(err or "Invalid path", 400)
+        write, denial = self._authorize_write(path, handler)
+        if write is None:
+            return denial
+        debate_id = write.debate_id
 
         body = self.read_json_body(handler)
         if body is None:
@@ -347,8 +351,6 @@ class DebateInterventionsHandler(BaseHandler):
         if not challenge_text:
             return error_response("Missing required field: challenge", 400)
 
-        user_id = self._extract_user_id(handler)
-
         manager, refusal = self._acquire_live_manager(debate_id, handler)
         if refusal is not None:
             return refusal
@@ -356,7 +358,7 @@ class DebateInterventionsHandler(BaseHandler):
         try:
             entry = manager.challenge(
                 challenge_text=challenge_text,
-                user_id=user_id,
+                user_id=write.scope.user_id,
             )
         except ValueError as exc:
             return error_response(str(exc), 400)
@@ -384,9 +386,10 @@ class DebateInterventionsHandler(BaseHandler):
     )
     @handle_errors("inject evidence")
     def _inject_evidence(self, path: str, handler: Any) -> HandlerResult:
-        debate_id, err = _extract_debate_id_from_path(path)
-        if err or debate_id is None:
-            return error_response(err or "Invalid path", 400)
+        write, denial = self._authorize_write(path, handler)
+        if write is None:
+            return denial
+        debate_id = write.debate_id
 
         body = self.read_json_body(handler)
         if body is None:
@@ -397,7 +400,6 @@ class DebateInterventionsHandler(BaseHandler):
             return error_response("Missing required field: evidence", 400)
 
         source = body.get("source")
-        user_id = self._extract_user_id(handler)
 
         manager, refusal = self._acquire_live_manager(debate_id, handler)
         if refusal is not None:
@@ -407,7 +409,7 @@ class DebateInterventionsHandler(BaseHandler):
             entry = manager.inject_evidence(
                 evidence=evidence,
                 source=source,
-                user_id=user_id,
+                user_id=write.scope.user_id,
             )
         except ValueError as exc:
             return error_response(str(exc), 400)
@@ -434,9 +436,10 @@ class DebateInterventionsHandler(BaseHandler):
     )
     @handle_errors("get intervention log")
     def _get_intervention_log(self, path: str, handler: Any) -> HandlerResult:
-        debate_id, err = _extract_debate_id_from_path(path)
-        if err or debate_id is None:
-            return error_response(err or "Invalid path", 400)
+        write, denial = self._authorize_write(path, handler)
+        if write is None:
+            return denial
+        debate_id = write.debate_id
 
         from aragora.debate.intervention import get_intervention_manager
 
@@ -580,15 +583,18 @@ class DebateInterventionsHandler(BaseHandler):
             manager.restore_paused()
         return manager, None
 
-    def _extract_user_id(self, handler: Any) -> str | None:
-        """Extract user ID from the request handler, if available."""
-        try:
-            user = self.get_current_user(handler)
-            if user:
-                return getattr(user, "user_id", None)
-        except (AttributeError, TypeError, ValueError):
-            pass
-        return None
+    def _authorize_write(
+        self, path: str, handler: Any
+    ) -> tuple[DebateWrite, None] | tuple[None, HandlerResult]:
+        """The caller's write on the debate in ``path`` when its org owns it.
+
+        Answered before anything is read or created for the debate, so other
+        orgs, anonymous callers and unknown ids cannot mint intervention state.
+        """
+        debate_id, err = _extract_debate_id_from_path(path)
+        if err or debate_id is None:
+            return None, error_response(err or "Invalid path", 400)
+        return authorize_debate_write(handler, self.get_storage(), debate_id)
 
 
 __all__ = [

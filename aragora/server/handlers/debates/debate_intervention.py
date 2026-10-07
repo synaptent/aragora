@@ -35,6 +35,7 @@ from ..base import (
     handle_errors,
 )
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.debate_access import authorize_debate_read, authorize_debate_write
 from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Rate limiter: interventions are low-volume but sensitive (30 requests/min)
@@ -64,8 +65,8 @@ class DebateInterventionHandler(BaseHandler):
     DEBATE_ACTION_PATTERN = re.compile(r"^/api/v1/debates/([a-zA-Z0-9_-]+)/(intervene|reasoning)$")
 
     def __init__(self, storage: Any = None):
-        """Initialize with optional storage backend."""
-        super().__init__(storage)
+        """Initialize with the server context (the registry passes it positionally)."""
+        super().__init__(storage if storage is not None else {})
         self._queue: Any = None
         self._queue_loaded = False
 
@@ -113,7 +114,10 @@ class DebateInterventionHandler(BaseHandler):
             return error_response(err, 400)
 
         if action == "reasoning":
-            return self._get_reasoning_summary(debate_id)
+            readable_id, denial = authorize_debate_read(handler, self.get_storage(), debate_id)
+            if readable_id is None:
+                return denial
+            return self._get_reasoning_summary(readable_id)
 
         if action == "intervene":
             # POST only for intervene
@@ -156,17 +160,23 @@ class DebateInterventionHandler(BaseHandler):
             return error_response(err, 400)
 
         if action == "intervene":
-            return self._submit_intervention(debate_id, body, handler)
+            # require_permission lets anonymous callers through when auth is
+            # disabled, so the owner-org check here is what guards the queue.
+            write, denial = authorize_debate_write(handler, self.get_storage(), debate_id)
+            if write is None:
+                return denial
+            return self._submit_intervention(write.debate_id, body, write.scope.user_id)
 
         return None
 
-    def _submit_intervention(self, debate_id: str, body: Any, handler: Any) -> HandlerResult:
+    def _submit_intervention(self, debate_id: str, body: Any, user_id: str) -> HandlerResult:
         """Submit a mid-debate intervention.
 
         Args:
-            debate_id: ID of the target debate
+            debate_id: ID of the target debate, already authorized for the caller
             body: Request body with type, content, and optional apply_at_round
-            handler: HTTP request handler for auth context
+            user_id: The signed-in caller the intervention is attributed to; a
+                ``user_id`` in the body is ignored
 
         Returns:
             JSON response with intervention details
@@ -216,23 +226,6 @@ class DebateInterventionHandler(BaseHandler):
             metadata = {}
         elif not isinstance(metadata, dict):
             return error_response("Field 'metadata' must be an object", 400)
-
-        # Extract user info from auth context if available
-        user_id = body.get("user_id", "")
-        if user_id is None:
-            user_id = ""
-        elif not isinstance(user_id, str):
-            return error_response("Field 'user_id' must be a string", 400)
-
-        if not user_id:
-            try:
-                from aragora.billing.jwt_auth import extract_user_from_request
-
-                auth_ctx = extract_user_from_request(handler)
-                if hasattr(auth_ctx, "user_id"):
-                    user_id = auth_ctx.user_id or ""
-            except (ImportError, AttributeError, TypeError, RuntimeError):
-                pass
 
         try:
             intervention = self.queue.queue_intervention(
