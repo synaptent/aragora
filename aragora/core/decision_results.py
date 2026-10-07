@@ -41,17 +41,31 @@ def save_decision_result(request_id: str, data: dict[str, Any]) -> None:
     _decision_results_fallback[request_id] = data
 
 
+def without_stored_request(record: dict[str, Any]) -> dict[str, Any]:
+    """``record`` as API responses show it, without ``result["request"]``.
+
+    The decision handler keeps the caller's request there so that a retry can
+    replay it. It can hold delivery targets such as webhook URLs and email
+    addresses, so only the retry path may read it. ``record`` is not changed.
+    """
+    result = record.get("result")
+    if not isinstance(result, dict) or "request" not in result:
+        return record
+    return {**record, "result": {k: v for k, v in result.items() if k != "request"}}
+
+
 def get_decision_result(request_id: str) -> dict[str, Any] | None:
-    """Get a decision result from persistent store with fallback."""
+    """Get a decision result from persistent store with fallback, for a response."""
     store = _get_result_store()
     if store:
         try:
             result = store.get(request_id)
             if result:
-                return result
+                return without_stored_request(result)
         except (OSError, RuntimeError, KeyError) as e:
             logger.warning("Failed to retrieve from store: %s", e)
-    return _decision_results_fallback.get(request_id)
+    fallback = _decision_results_fallback.get(request_id)
+    return None if fallback is None else without_stored_request(fallback)
 
 
 def get_decision_status(request_id: str) -> dict[str, Any]:
@@ -80,4 +94,5 @@ __all__ = [
     "save_decision_result",
     "get_decision_result",
     "get_decision_status",
+    "without_stored_request",
 ]

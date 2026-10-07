@@ -138,6 +138,12 @@ def _post(path: str, authorization: str, body: dict[str, Any] | None = None):
     return result.status_code, json.loads(result.body.decode("utf-8"))
 
 
+def _get(path: str, authorization: str):
+    result = DecisionHandler(ctx={}).handle(path, {}, _Request(authorization))
+    assert result is not None
+    return result.status_code, json.loads(result.body.decode("utf-8"))
+
+
 def _on_disk(tmp_path: Path, request_id: str) -> dict[str, Any] | None:
     return DecisionResultStore(db_path=tmp_path / "decision_results.db").get(request_id)
 
@@ -219,6 +225,46 @@ def test_owner_retry_replays_the_stored_request(
     assert saved["result"]["request"]["response_channels"] == CREATE_BODY["response_channels"]
     assert "request_id" not in saved["result"]["request"]
     assert set(saved["result"]["request"]["context"]) == {"tags", "metadata"}
+
+
+@pytest.mark.parametrize("use_fallback", [False, True], ids=["store", "in-memory-fallback"])
+def test_reads_never_return_the_stored_request(store, tmp_path, monkeypatch, use_fallback):
+    if use_fallback:
+
+        class _NoStore:
+            def get(self) -> None:
+                return None
+
+        monkeypatch.setattr(decision_module, "_decision_result_store", _NoStore())
+    owner = _bearer("user-a", ORG_A, "owner")
+    reader = _bearer("user-r", ORG_A, "member")
+    router = _Router(RuntimeError("provider unavailable"), "Rotate keys yearly")
+    _use_router(monkeypatch, router)
+
+    _post("/api/v1/decisions", owner, CREATE_BODY)
+    [original_id] = (
+        list(decision_module._decision_results_fallback)
+        if use_fallback
+        else [_created_id(store, ORG_A)]
+    )
+
+    responses = [
+        _get(f"/api/v1/decisions/{original_id}", reader),
+        _get(f"/api/v1/decisions/{original_id}/status", reader),
+        _get("/api/v1/decisions", reader),
+    ]
+
+    for status, body in responses:
+        assert status == 200, body
+        assert '"request"' not in json.dumps(body)
+        assert "hooks.example.test" not in json.dumps(body)
+    assert responses[0][1]["status"] == "failed"
+    assert responses[0][1]["result"] == {}
+    status, body = _post(f"/api/v1/decisions/{original_id}/retry", owner)
+    assert status == 200, body
+    assert router.requests[-1].response_channels[0].webhook_url == (
+        "https://hooks.example.test/decisions"
+    )
 
 
 def test_retry_of_a_failed_retry_keeps_the_request(store, monkeypatch):

@@ -32,6 +32,7 @@ from aragora.server.handlers.base import (
     json_response,
     handle_errors,
 )
+from aragora.core.decision_results import without_stored_request
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.utils.lazy_stores import LazyStoreFactory
 from aragora.server.validation.query_params import safe_query_int
@@ -382,7 +383,7 @@ class DecisionHandler(BaseHandler):
         """Get a decision result by ID."""
         result = _get_result(request_id, scope.org_id)
         if result:
-            return json_response(result)
+            return json_response(without_stored_request(result))
         return record_not_found("Decision")
 
     def _get_decision_status(self, request_id: str, scope: OrgScope) -> HandlerResult:

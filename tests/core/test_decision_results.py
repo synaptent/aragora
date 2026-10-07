@@ -206,6 +206,38 @@ class TestGetDecisionResult:
             assert result is not None
             assert result["answer"] == "in fallback"
 
+    @pytest.mark.parametrize("use_store", [True, False], ids=["store", "fallback"])
+    def test_get_leaves_out_the_stored_request(self, use_store):
+        """The request kept for a retry, with its delivery targets, is never returned."""
+        import aragora.core.decision_results as module
+
+        record = {
+            "request_id": "dec-1",
+            "status": "failed",
+            "result": {
+                "answer": None,
+                "request": {
+                    "content": "q",
+                    "response_channels": [
+                        {"platform": "webhook", "webhook_url": "https://hooks.example.test/x"}
+                    ],
+                },
+            },
+        }
+        mock_store = MagicMock()
+        mock_store.get.return_value = record
+        if not use_store:
+            module._decision_results_fallback["dec-1"] = record
+
+        with patch(
+            "aragora.core.decision_results._get_result_store",
+            return_value=mock_store if use_store else None,
+        ):
+            result = get_decision_result("dec-1")
+
+        assert result == {"request_id": "dec-1", "status": "failed", "result": {"answer": None}}
+        assert "request" in record["result"]
+
 
 # =============================================================================
 # get_decision_status Tests
