@@ -11,11 +11,17 @@ module; patch or reset it there.
 from __future__ import annotations
 
 from aragora.observability.audit_log import (
+    AUDIT_COLUMNS as AUDIT_COLUMNS,
+    POSTGRES_SCHEMA_STATEMENTS as POSTGRES_SCHEMA_STATEMENTS,
+    POSTGRESQL_AVAILABLE as POSTGRESQL_AVAILABLE,
+    SQLITE_SCHEMA_STATEMENTS as SQLITE_SCHEMA_STATEMENTS,
     AuditCategory,
     AuditEvent,
     AuditLog,
     AuditOutcome,
     AuditQuery,
+    PostgreSQLBackend as PostgreSQLBackend,
+    SQLiteBackend as SQLiteBackend,
     audit_admin_action,
     audit_auth_login,
     audit_data_access,

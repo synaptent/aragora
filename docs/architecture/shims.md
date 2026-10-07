@@ -18,6 +18,12 @@ import-and-call tests at both paths.
 | `aragora.audit.log:audit_data_access` | `aragora.observability.audit_log:audit_data_access` | #10382 | not before M4 seal |
 | `aragora.audit.log:get_audit_log` | `aragora.observability.audit_log:get_audit_log` | #10382 | not before M4 seal |
 | `aragora.audit.log:reset_audit_log` | `aragora.observability.audit_log:reset_audit_log` | #10382 | not before M4 seal |
+| `aragora.audit.log:AUDIT_COLUMNS` | `aragora.observability.audit_log:AUDIT_COLUMNS` | #10382 | not before M4 seal |
+| `aragora.audit.log:POSTGRES_SCHEMA_STATEMENTS` | `aragora.observability.audit_log:POSTGRES_SCHEMA_STATEMENTS` | #10382 | not before M4 seal |
+| `aragora.audit.log:POSTGRESQL_AVAILABLE` | `aragora.observability.audit_log:POSTGRESQL_AVAILABLE` | #10382 | not before M4 seal |
+| `aragora.audit.log:SQLITE_SCHEMA_STATEMENTS` | `aragora.observability.audit_log:SQLITE_SCHEMA_STATEMENTS` | #10382 | not before M4 seal |
+| `aragora.audit.log:PostgreSQLBackend` | `aragora.observability.audit_log:PostgreSQLBackend` | #10382 | not before M4 seal |
+| `aragora.audit.log:SQLiteBackend` | `aragora.observability.audit_log:SQLiteBackend` | #10382 | not before M4 seal |
 | `aragora.audit.persistence:AuditPersistenceBackend` | `aragora.observability.audit_persistence:AuditPersistenceBackend` | #10382 | not before M4 seal |
 | `aragora.audit.persistence:FileBackend` | `aragora.observability.audit_persistence:FileBackend` | #10382 | not before M4 seal |
 | `aragora.audit.persistence:PostgresBackend` | `aragora.observability.audit_persistence:PostgresBackend` | #10382 | not before M4 seal |
@@ -26,6 +32,7 @@ import-and-call tests at both paths.
 | `aragora.audit.persistence.base:PersistenceError` | `aragora.observability.audit_persistence.base:PersistenceError` | #10382 | not before M4 seal |
 | `aragora.audit.persistence.file:FileBackend` | `aragora.observability.audit_persistence.file:FileBackend` | #10382 | not before M4 seal |
 | `aragora.audit.persistence.postgres:PostgresBackend` | `aragora.observability.audit_persistence.postgres:PostgresBackend` | #10382 | not before M4 seal |
+| `aragora.audit.persistence.postgres:POSTGRES_SCHEMA` | `aragora.observability.audit_persistence.postgres:POSTGRES_SCHEMA` | #10382 | not before M4 seal |
 | `aragora.audit.unified:AuditOutcome` | `aragora.observability.unified_audit:AuditOutcome` | #10382 | not before M4 seal |
 | `aragora.audit.unified:AuditSeverity` | `aragora.observability.unified_audit:AuditSeverity` | #10382 | not before M4 seal |
 | `aragora.audit.unified:UnifiedAuditCategory` | `aragora.observability.unified_audit:UnifiedAuditCategory` | #10382 | not before M4 seal |

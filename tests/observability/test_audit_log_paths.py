@@ -55,8 +55,17 @@ PERSISTENCE_NAMES = ("AuditPersistenceBackend", "FileBackend", "PostgresBackend"
 PERSISTENCE_SUBMODULE_NAMES = {
     "base": ("AuditPersistenceBackend", "PersistenceError"),
     "file": ("FileBackend",),
-    "postgres": ("PostgresBackend",),
+    "postgres": ("PostgresBackend", "POSTGRES_SCHEMA"),
 }
+# Public module-level names outside __all__ that old-path callers import directly.
+LOG_EXTRA_NAMES = (
+    "AUDIT_COLUMNS",
+    "POSTGRES_SCHEMA_STATEMENTS",
+    "POSTGRESQL_AVAILABLE",
+    "SQLITE_SCHEMA_STATEMENTS",
+    "PostgreSQLBackend",
+    "SQLiteBackend",
+)
 
 
 @pytest.fixture
@@ -80,7 +89,7 @@ def middleware_hook():
 
 @pytest.mark.parametrize(
     ("old", "new", "name"),
-    [(old_log, new_log, n) for n in LOG_NAMES]
+    [(old_log, new_log, n) for n in LOG_NAMES + LOG_EXTRA_NAMES]
     + [(old_unified, new_unified, n) for n in UNIFIED_NAMES]
     + [(old_persistence, new_persistence, n) for n in PERSISTENCE_NAMES],
     ids=lambda value: value if isinstance(value, str) else value.__name__,

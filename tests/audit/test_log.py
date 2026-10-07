@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aragora.observability.audit_log import (
+from aragora.audit.log import (
     AUDIT_COLUMNS,
     AuditCategory,
     AuditEvent,
