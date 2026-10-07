@@ -19,6 +19,7 @@ from .decision_models import (
     DecisionRequest,
     DecisionResult,
     ResponseChannel,
+    effective_metadata_document_ids,
 )
 
 logger = logging.getLogger(__name__)
@@ -619,12 +620,7 @@ class DecisionRouter:
             explicit_docs: list[str] = []
             if getattr(request, "documents", None):
                 explicit_docs.extend(request.documents)
-            metadata = request.context.metadata or {}
-            metadata_docs = metadata.get("documents") or metadata.get("document_ids") or []
-            if metadata_docs:
-                from aragora.core.decision_models import normalize_document_ids
-
-                explicit_docs.extend(normalize_document_ids(metadata_docs))
+            explicit_docs.extend(effective_metadata_document_ids(request.context.metadata))
             # Ingest attachments into DocumentStore where possible
             attachment_docs = self._ingest_attachments_to_documents(
                 request.attachments,
@@ -1077,13 +1073,7 @@ class DecisionRouter:
                 raise ValueError(f"Workflow not found: {workflow_id}")
 
             documents = list(getattr(request, "documents", []) or [])
-            metadata_docs = (request.context.metadata or {}).get("documents") or (
-                request.context.metadata or {}
-            ).get("document_ids")
-            if metadata_docs:
-                from aragora.core.decision_models import normalize_document_ids
-
-                documents.extend(normalize_document_ids(metadata_docs))
+            documents.extend(effective_metadata_document_ids(request.context.metadata))
             # Execute
             workflow_result = await self._workflow_engine.execute(
                 definition=definition,

@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -78,6 +79,9 @@ _decision_result_store = LazyStoreFactory(
 
 # Fallback in-memory cache (used only if persistent store fails)
 _decision_results_fallback: dict[str, dict[str, Any]] = {}
+# Legacy server requests run on separate threads; the owner check and the write
+# must be one step, or two orgs could both claim a new id.
+_decision_results_fallback_lock = threading.Lock()
 
 _REPLAYED_FIELDS = (
     "content",
@@ -133,14 +137,16 @@ def _save_result(
             logger.warning("Failed to persist result, using fallback: %s", e)
     # Fallback to in-memory, with the same ownership rule as the store.
     owner_org = org_id or data.get("org_id")
-    previous = _decision_results_fallback.get(request_id)
-    if previous is not None and previous.get("org_id") != owner_org:
-        return False
-    if previous is not None:
-        creator = previous.get("created_by")
-    else:
-        creator = created_by or data.get("created_by")
-    _decision_results_fallback[request_id] = {**data, "org_id": owner_org, "created_by": creator}
+    with _decision_results_fallback_lock:
+        previous = _decision_results_fallback.get(request_id)
+        if previous is not None and previous.get("org_id") != owner_org:
+            return False
+        if previous is not None:
+            creator = previous.get("created_by")
+        else:
+            creator = created_by or data.get("created_by")
+        entry = {**data, "org_id": owner_org, "created_by": creator}
+        _decision_results_fallback[request_id] = entry
     return True
 
 
@@ -312,6 +318,17 @@ class DecisionHandler(BaseHandler):
 
         replay = _replay_body(body)
 
+        # Claim the request id for the caller's org before routing, which can
+        # already store attachments: a request_id that belongs to another org
+        # (or to none) is refused, like a missing one, with no side effect.
+        if not _save_result(
+            request.request_id,
+            {"request_id": request.request_id, "status": "pending", "result": {"request": replay}},
+            org_id=scope.org_id,
+            created_by=scope.user_id,
+        ):
+            return record_not_found("Decision")
+
         # Route the decision
         try:
             result = await router.route(request)
@@ -378,6 +395,22 @@ class DecisionHandler(BaseHandler):
                 return record_not_found("Decision")
             logger.warning("Handler error: %s", e)
             return error_response("Decision processing failed", 500)
+
+        except BaseException:
+            # Any other error, or cancellation, must not leave the claim pending:
+            # only failed decisions can be retried.
+            _save_result(
+                request.request_id,
+                {
+                    "request_id": request.request_id,
+                    "status": "failed",
+                    "result": {"request": replay},
+                    "error": "Decision processing failed",
+                },
+                org_id=scope.org_id,
+                created_by=scope.user_id,
+            )
+            raise
 
     def _get_decision(self, request_id: str, scope: OrgScope) -> HandlerResult:
         """Get a decision result by ID."""

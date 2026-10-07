@@ -11,8 +11,10 @@ Tests the decision API endpoints:
 
 import asyncio
 import json
+from contextlib import suppress
 from datetime import datetime, timezone
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -2258,10 +2260,12 @@ class TestOrgOwnership:
             )
 
         assert _status(result) == 200
-        mock_save.assert_called_once()
-        args, kwargs = mock_save.call_args
-        assert args[0] == "dec_created"
-        assert kwargs == {"org_id": ORG, "created_by": USER}
+        calls = mock_save.call_args_list
+        assert [(c.args[0], c.args[1]["status"]) for c in calls] == [
+            ("dec_created", "pending"),
+            ("dec_created", "completed"),
+        ]
+        assert all(c.kwargs == {"org_id": ORG, "created_by": USER} for c in calls)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -2311,6 +2315,7 @@ class TestOrgOwnership:
 
         assert _status(result) == _status(missing) == 404
         assert _body(result) == _body(missing) == NOT_FOUND_BODY
+        mock_router.route.assert_not_awaited()
         assert store.get("dec_taken") == before
         fresh = type(store)(db_path=tmp_path / "decision_results.db").get("dec_taken")
         assert (fresh["result"], fresh["org_id"]) == ({"answer": "owner answer"}, owner)
@@ -2353,6 +2358,155 @@ class TestOrgOwnership:
 
         assert _status(result) == 403
         assert _body(result)["code"] == "org_required"
+
+
+# ---------------------------------------------------------------------------
+# Request id claim before routing, and atomic fallback ownership
+# ---------------------------------------------------------------------------
+
+
+_HANDLER = "aragora.server.handlers.decision"
+_ALLOWED = (MagicMock(), None)
+
+
+async def _post_with_attachment(handler, request_id: str, on_run=None):
+    """POST a decision with an attachment through a real router with spy stores."""
+    from aragora.core.decision import DecisionRouter
+
+    runs: list[str] = []
+
+    class _Arena:
+        def __init__(self, environment, **kwargs):
+            self.task = environment.task
+
+        async def run(self):
+            runs.append(self.task)
+            if on_run:
+                on_run()
+            return SimpleNamespace(final_answer="ok", consensus_reached=True, summary="")
+
+    doc_store = MagicMock()
+    router = DecisionRouter(
+        debate_engine=_Arena,
+        document_store=doc_store,
+        enable_caching=False,
+        enable_deduplication=False,
+    )
+    router._maybe_build_decision_integrity = AsyncMock(return_value=None)
+    body = {
+        "request_id": request_id,
+        "content": "Should we ship the attached plan?",
+        "decision_type": "debate",
+        "config": {"agents": [], "use_knowledge_mound": False},
+        "attachments": [{"filename": "plan.txt", "content": "Ship on Friday."}],
+    }
+    with (
+        patch(f"{_HANDLER}._get_decision_router", return_value=router),
+        patch(f"{_HANDLER}.DecisionHandler.require_permission_or_error", return_value=_ALLOWED),
+    ):
+        result = await handler.handle_post("/api/v1/decisions", {}, _make_http_handler(body))
+    return result, doc_store, runs
+
+
+class TestCreateClaimsRequestIdFirst:
+    """A create claims its request id for the caller's org before anything is routed."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("owner", [OTHER_ORG, None])
+    @pytest.mark.parametrize("store_mode", ["durable", "fallback"])
+    async def test_unowned_request_id_is_refused_before_routing(
+        self, handler, mock_http_handler, tmp_path, store_mode, owner
+    ):
+        import aragora.server.handlers.decision as mod
+
+        if store_mode == "durable":
+            store = _real_store(mod, tmp_path)
+            store.save("dec_taken", {"status": "completed"}, org_id=owner, created_by="owner-user")
+            read = lambda: type(store)(db_path=tmp_path / "decision_results.db").get("dec_taken")
+        else:
+            _seed(_use_fallback_only(), "dec_taken", owner, status="completed")
+            read = lambda: dict(mod._decision_results_fallback["dec_taken"])
+        before = read()
+
+        result, doc_store, runs = await _post_with_attachment(handler, "dec_taken")
+        missing = handler.handle("/api/v1/decisions/dec_missing", {}, mock_http_handler)
+
+        assert _status(result) == _status(missing) == 404
+        assert _body(result) == _body(missing) == NOT_FOUND_BODY
+        doc_store.add.assert_not_called()
+        assert runs == []
+        assert read() == before
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("store_mode", ["durable", "fallback"])
+    async def test_owner_create_is_pending_while_routing_then_completed(
+        self, handler, tmp_path, store_mode
+    ):
+        import aragora.server.handlers.decision as mod
+
+        _real_store(mod, tmp_path) if store_mode == "durable" else _use_fallback_only()
+        seen = []
+
+        def during_routing():
+            for org in (ORG, OTHER_ORG):
+                seen.append((mod._get_result("dec_fresh", org) or {}).get("status"))
+
+        result, doc_store, runs = await _post_with_attachment(handler, "dec_fresh", during_routing)
+
+        assert (_status(result), _body(result)["status"]) == (200, "completed")
+        doc_store.add.assert_called_once()
+        assert len(runs) == 1
+        assert seen == ["pending", None]
+        saved = mod._get_result("dec_fresh", ORG)
+        assert (saved["status"], saved["org_id"], saved["created_by"]) == ("completed", ORG, USER)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [LookupError("boom"), asyncio.CancelledError()],
+        ids=["unexpected-error", "cancelled"],
+    )
+    async def test_routing_error_leaves_the_claim_failed_and_retryable(self, handler, error):
+        mod = _use_fallback_only()
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(side_effect=[error, _MockDecisionResult(success=True)])
+        retry_request = _MockDecisionRequest(request_id="ignored")
+        retry_request.context.metadata = {}
+
+        with (
+            patch(f"{_HANDLER}._get_decision_router", return_value=mock_router),
+            patch(f"{_HANDLER}.DecisionHandler.require_permission_or_error", return_value=_ALLOWED),
+            patch("aragora.core.decision.DecisionRequest") as mock_dr_cls,
+        ):
+            first_request = _MockDecisionRequest(request_id="dec_broken")
+            mock_dr_cls.from_http.side_effect = [first_request, retry_request]
+            with suppress(asyncio.CancelledError):
+                await handler.handle_post(
+                    "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
+                )
+            stored = dict(mod._decision_results_fallback.get("dec_broken") or {})
+            retried = await handler.handle_post(
+                "/api/v1/decisions/dec_broken/retry", {}, _make_http_handler({})
+            )
+
+        assert (stored.get("status"), stored.get("org_id")) == ("failed", ORG)
+        assert _status(retried) == 200
+        assert _body(retried)["retried_from"] == "dec_broken"
+
+
+def test_concurrent_fallback_claims_of_a_new_id_have_one_owner(monkeypatch):
+    """B claims while A is paused between reading and writing: A keeps the id."""
+    from tests.utils.interleave import PausingDict, race
+
+    mod = _use_fallback_only()
+    racy = PausingDict()
+    monkeypatch.setattr(mod, "_decision_results_fallback", racy)
+
+    claim = lambda org: mod._save_result("dec_race", {"status": "pending"}, org_id=org)
+
+    assert race(racy, claim, ORG, OTHER_ORG) == {ORG: True, OTHER_ORG: False}
+    assert racy.writes == [ORG]
+    assert racy["dec_race"]["org_id"] == ORG
 
 
 # ---------------------------------------------------------------------------
