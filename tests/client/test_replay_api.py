@@ -424,6 +424,27 @@ class TestReplayAPIDeleteAsync:
 
 
 # ============================================================================
+# Unserved export route
+# ============================================================================
+
+
+class TestReplayAPIUnservedExportRemoved:
+    """No server route serves GET /api/replays/{replay_id}/export, so the client has no export."""
+
+    @pytest.mark.parametrize("name", ["export", "export_async"])
+    def test_export_methods_absent(self, replay_api: ReplayAPI, name: str):
+        assert not hasattr(ReplayAPI, name)
+        with pytest.raises(AttributeError):
+            getattr(replay_api, name)
+
+    @pytest.mark.parametrize(
+        "name", ["list", "list_async", "get", "get_async", "delete", "delete_async"]
+    )
+    def test_served_methods_remain(self, name: str):
+        assert callable(getattr(ReplayAPI, name))
+
+
+# ============================================================================
 # ReplayAPI.export() Tests
 # ============================================================================
 
