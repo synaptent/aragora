@@ -295,7 +295,7 @@ class TestGetBatchStatus:
         with patch("aragora.server.handlers.debates.batch.validate_path_segment") as mock_validate:
             mock_validate.return_value = (False, "Invalid batch ID format")
 
-            result = batch_mixin._get_batch_status("invalid<>id")
+            result = batch_mixin._get_batch_status("invalid<>id", "org-1")
 
             assert result.status_code == 400
 
@@ -306,7 +306,7 @@ class TestGetBatchStatus:
             with patch("aragora.server.debate_queue.get_debate_queue_sync") as mock_get:
                 mock_get.return_value = None
 
-                result = batch_mixin._get_batch_status("batch_123")
+                result = batch_mixin._get_batch_status("batch_123", "org-1")
 
                 assert result.status_code == 503
                 data = json.loads(result.body)
@@ -321,11 +321,14 @@ class TestGetBatchStatus:
             with patch("aragora.server.debate_queue.get_debate_queue_sync") as mock_get:
                 mock_get.return_value = mock_debate_queue
 
-                result = batch_mixin._get_batch_status("nonexistent_batch")
+                result = batch_mixin._get_batch_status("nonexistent_batch", "org-1")
 
                 assert result.status_code == 404
                 data = json.loads(result.body)
-                assert "not found" in data.get("error", "").lower()
+                assert data == {"error": "Batch not found", "code": "not_found"}
+                mock_debate_queue.get_batch_status.assert_called_once_with(
+                    "nonexistent_batch", org_id="org-1"
+                )
 
     def test_get_status_success(self, batch_mixin, mock_handler, mock_debate_queue):
         """Test successful status retrieval."""
@@ -334,7 +337,7 @@ class TestGetBatchStatus:
             with patch("aragora.server.debate_queue.get_debate_queue_sync") as mock_get:
                 mock_get.return_value = mock_debate_queue
 
-                result = batch_mixin._get_batch_status("batch_123")
+                result = batch_mixin._get_batch_status("batch_123", "org-1")
 
                 assert result.status_code == 200
                 data = json.loads(result.body)
@@ -356,7 +359,7 @@ class TestListBatches:
         with patch("aragora.server.debate_queue.get_debate_queue_sync") as mock_get:
             mock_get.return_value = None
 
-            result = batch_mixin._list_batches(limit=50)
+            result = batch_mixin._list_batches(limit=50, org_id="org-1")
 
             assert result.status_code == 200
             data = json.loads(result.body)
@@ -370,7 +373,9 @@ class TestListBatches:
             with patch("aragora.server.debate_queue.BatchStatus") as mock_status:
                 mock_status.side_effect = ValueError("Invalid status")
 
-                result = batch_mixin._list_batches(limit=50, status_filter="invalid_status")
+                result = batch_mixin._list_batches(
+                    limit=50, status_filter="invalid_status", org_id="org-1"
+                )
 
                 assert result.status_code == 400
                 data = json.loads(result.body)
@@ -381,12 +386,15 @@ class TestListBatches:
         with patch("aragora.server.debate_queue.get_debate_queue_sync") as mock_get:
             mock_get.return_value = mock_debate_queue
 
-            result = batch_mixin._list_batches(limit=50)
+            result = batch_mixin._list_batches(limit=50, org_id="org-1")
 
             assert result.status_code == 200
             data = json.loads(result.body)
             assert len(data["batches"]) == 2
             assert data["count"] == 2
+            mock_debate_queue.list_batches.assert_called_once_with(
+                status=None, limit=50, org_id="org-1"
+            )
 
     def test_list_batches_with_status_filter(self, batch_mixin, mock_handler, mock_debate_queue):
         """Test listing with status filter."""
@@ -399,7 +407,9 @@ class TestListBatches:
             with patch("aragora.server.debate_queue.BatchStatus") as mock_status:
                 mock_status.return_value = "completed"
 
-                result = batch_mixin._list_batches(limit=50, status_filter="completed")
+                result = batch_mixin._list_batches(
+                    limit=50, status_filter="completed", org_id="org-1"
+                )
 
                 assert result.status_code == 200
                 data = json.loads(result.body)

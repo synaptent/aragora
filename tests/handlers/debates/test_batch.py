@@ -123,13 +123,16 @@ class _MockBatchItem:
         return cls(question=question)
 
 
+ORG = "test-org-001"
+
+
 @dataclass
 class _MockUserCtx:
     """Mock user context for quota checking."""
 
     is_authenticated: bool = True
     user_id: str = "test-user-001"
-    org_id: str | None = "test-org-001"
+    org_id: str | None = ORG
     email: str = "test@example.com"
 
 
@@ -774,11 +777,12 @@ class TestGetBatchStatus:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            result = h._get_batch_status("batch_abc123")
+            result = h._get_batch_status("batch_abc123", ORG)
             assert _status(result) == 200
             body = _body(result)
             assert body["batch_id"] == "batch_abc123"
             assert body["status"] == "processing"
+            mock_queue.get_batch_status.assert_called_once_with("batch_abc123", org_id=ORG)
 
     def test_get_batch_status_not_found(self):
         """Unknown batch_id returns 404."""
@@ -790,9 +794,9 @@ class TestGetBatchStatus:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            result = h._get_batch_status("batch_unknown")
+            result = h._get_batch_status("batch_unknown", ORG)
             assert _status(result) == 404
-            assert "not found" in _body(result).get("error", "").lower()
+            assert _body(result) == {"error": "Batch not found", "code": "not_found"}
 
     def test_get_batch_status_queue_not_initialized(self):
         """Queue not initialized returns 503."""
@@ -801,7 +805,7 @@ class TestGetBatchStatus:
             return_value=None,
         ):
             h = _make_handler()
-            result = h._get_batch_status("batch_abc123")
+            result = h._get_batch_status("batch_abc123", ORG)
             assert _status(result) == 503
             assert "not initialized" in _body(result).get("error", "").lower()
 
@@ -809,19 +813,19 @@ class TestGetBatchStatus:
         """Invalid batch ID format returns 400."""
         h = _make_handler()
         # Path traversal attempt
-        result = h._get_batch_status("../../../etc/passwd")
+        result = h._get_batch_status("../../../etc/passwd", ORG)
         assert _status(result) == 400
 
     def test_get_batch_status_empty_batch_id(self):
         """Empty batch ID returns 400."""
         h = _make_handler()
-        result = h._get_batch_status("")
+        result = h._get_batch_status("", ORG)
         assert _status(result) == 400
 
     def test_get_batch_status_special_characters(self):
         """Batch ID with special chars returns 400."""
         h = _make_handler()
-        result = h._get_batch_status("batch<script>alert(1)</script>")
+        result = h._get_batch_status("batch<script>alert(1)</script>", ORG)
         assert _status(result) == 400
 
 
@@ -846,7 +850,7 @@ class TestListBatches:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            result = h._list_batches(limit=50)
+            result = h._list_batches(limit=50, org_id=ORG)
             assert _status(result) == 200
             body = _body(result)
             assert body["count"] == 2
@@ -862,7 +866,7 @@ class TestListBatches:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            result = h._list_batches(limit=50)
+            result = h._list_batches(limit=50, org_id=ORG)
             assert _status(result) == 200
             body = _body(result)
             assert body["count"] == 0
@@ -875,7 +879,7 @@ class TestListBatches:
             return_value=None,
         ):
             h = _make_handler()
-            result = h._list_batches(limit=50)
+            result = h._list_batches(limit=50, org_id=ORG)
             assert _status(result) == 200
             body = _body(result)
             assert body["count"] == 0
@@ -899,7 +903,7 @@ class TestListBatches:
             mock_status_cls.__iter__ = MagicMock(return_value=iter([]))
 
             h = _make_handler()
-            result = h._list_batches(limit=50, status_filter="completed")
+            result = h._list_batches(limit=50, status_filter="completed", org_id=ORG)
             assert _status(result) == 200
 
     def test_list_batches_invalid_status_filter(self):
@@ -911,9 +915,23 @@ class TestListBatches:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            result = h._list_batches(limit=50, status_filter="invalid_status")
+            result = h._list_batches(limit=50, status_filter="invalid_status", org_id=ORG)
             assert _status(result) == 400
             assert "Invalid status" in _body(result).get("error", "")
+
+    def test_list_batches_without_org_is_empty(self):
+        """Without an org there is nothing to list, and the queue is not asked."""
+        mock_queue = MagicMock()
+
+        with patch(
+            "aragora.server.debate_queue.get_debate_queue_sync",
+            return_value=mock_queue,
+        ):
+            h = _make_handler()
+            result = h._list_batches(limit=50, org_id=None)
+            assert _status(result) == 200
+            assert _body(result) == {"batches": [], "count": 0}
+            mock_queue.list_batches.assert_not_called()
 
     def test_list_batches_with_limit(self):
         """Limit parameter is passed through to queue."""
@@ -925,8 +943,8 @@ class TestListBatches:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            h._list_batches(limit=10)
-            mock_queue.list_batches.assert_called_once_with(status=None, limit=10)
+            h._list_batches(limit=10, org_id=ORG)
+            mock_queue.list_batches.assert_called_once_with(status=None, limit=10, org_id=ORG)
 
     def test_list_batches_no_status_filter(self):
         """No status filter passes None to queue."""
@@ -938,8 +956,8 @@ class TestListBatches:
             return_value=mock_queue,
         ):
             h = _make_handler()
-            h._list_batches(limit=50, status_filter=None)
-            mock_queue.list_batches.assert_called_once_with(status=None, limit=50)
+            h._list_batches(limit=50, status_filter=None, org_id=ORG)
+            mock_queue.list_batches.assert_called_once_with(status=None, limit=50, org_id=ORG)
 
 
 # ---------------------------------------------------------------------------

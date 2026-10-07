@@ -17,7 +17,7 @@ from aragora.server.validation.schema import BATCH_SUBMIT_SCHEMA, validate_again
 
 from aragora.rbac.decorators import require_permission
 from aragora.resilience import with_timeout_sync
-from aragora.tenancy.record_scope import require_org_scope
+from aragora.tenancy.record_scope import record_not_found, require_org_scope
 
 from ..base import (
     HandlerResult,
@@ -267,6 +267,7 @@ class BatchOperationsMixin:
             webhook_url=webhook_url,
             webhook_headers=webhook_headers,
             max_parallel=max_parallel,
+            org_id=scope.org_id,
         )
 
         # Submit to queue
@@ -315,7 +316,7 @@ class BatchOperationsMixin:
         """Create a debate executor function for the batch queue."""
         # The controller refuses to start debates it cannot persist, so batch
         # debates need the server's debate storage.
-        storage = self.ctx.get("storage")
+        storage = (getattr(self, "ctx", None) or {}).get("storage")
 
         async def execute_debate(item: BatchItem) -> Any:
             """Execute a single debate from batch."""
@@ -374,10 +375,13 @@ class BatchOperationsMixin:
         },
     )
     @handle_errors("get batch status")
-    def _get_batch_status(self: _DebatesHandlerProtocol, batch_id: str) -> HandlerResult:
-        """Get status of a batch request.
+    def _get_batch_status(
+        self: _DebatesHandlerProtocol, batch_id: str, org_id: str
+    ) -> HandlerResult:
+        """Get status of one of ``org_id``'s batch requests.
 
-        Returns full batch status including all items.
+        Returns full batch status including all items. Another org's batch, one
+        with no recorded org and a missing id get the same 404.
         """
         is_valid, err = validate_path_segment(batch_id, "batch id", SAFE_ID_PATTERN)
         if not is_valid:
@@ -389,17 +393,20 @@ class BatchOperationsMixin:
         if not queue:
             return error_response("Batch queue not initialized", 503)
 
-        status = queue.get_batch_status(batch_id)
+        status = queue.get_batch_status(batch_id, org_id=org_id) if org_id else None
         if not status:
-            return error_response(f"Batch not found: {batch_id}", 404)
+            return record_not_found("Batch")
 
         return json_response(status)
 
     @handle_errors("list batches")
     def _list_batches(
-        self: _DebatesHandlerProtocol, limit: int, status_filter: str | None = None
+        self: _DebatesHandlerProtocol,
+        limit: int,
+        status_filter: str | None = None,
+        org_id: str | None = None,
     ) -> HandlerResult:
-        """List batch requests.
+        """List ``org_id``'s batch requests.
 
         Query params:
             limit: Maximum batches to return (default 50, max 100)
@@ -420,7 +427,9 @@ class BatchOperationsMixin:
                 valid = ", ".join(s.value for s in BatchStatus)
                 return error_response(f"Invalid status '{status_filter}'. Valid: {valid}", 400)
 
-        batches = queue.list_batches(status=status, limit=limit)
+        if not org_id:
+            return json_response({"batches": [], "count": 0})
+        batches = queue.list_batches(status=status, limit=limit, org_id=org_id)
 
         return json_response(
             {

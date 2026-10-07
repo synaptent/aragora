@@ -198,17 +198,23 @@ class DebatesHandler(
             return self._get_queue_status()
 
         # Batch status endpoint (GET /api/debates/batch/{id}/status)
+        # Parts: ['', 'api', 'debates', 'batch', '{id}', 'status']
         if normalized.startswith("/api/debates/batch/") and normalized.endswith("/status"):
             parts = normalized.split("/")
-            if len(parts) >= 5:
-                batch_id = parts[3]  # Index 3 for unversioned paths
-                return self._get_batch_status(batch_id)
+            if len(parts) == 6:
+                scope, scope_error = require_org_scope(handler)
+                if scope is None:
+                    return scope_error
+                return self._get_batch_status(parts[4], scope.org_id)
 
         # List batches (GET /api/debates/batch)
         if normalized in ("/api/debates/batch", "/api/debates/batch/"):
+            scope, scope_error = require_org_scope(handler)
+            if scope is None:
+                return scope_error
             limit = min(get_int_param(query_params, "limit", 50), 100)
             status_filter = query_params.get("status")
-            return self._list_batches(limit, status_filter)
+            return self._list_batches(limit, status_filter, scope.org_id)
 
         # Batch export endpoints
         if normalized.startswith("/api/debates/export/batch"):

@@ -279,23 +279,22 @@ class TestHandleBatchStatusRoute:
     """Tests for batch status endpoint."""
 
     def test_batch_status(self, mock_http_handler):
-        """Batch status endpoint extracts parts[3] from normalized path."""
+        """Batch status endpoint reads the batch id (parts[4]) and the caller's org."""
         handler = _make_handler()
         handler._get_batch_status = MagicMock(
             return_value=MagicMock(status_code=200, body=b'{"batch_id": "b1"}')
         )
         result = handler.handle("/api/debates/batch/b1/status", {}, mock_http_handler)
         assert result is not None
-        # parts = ['', 'api', 'debates', 'batch', 'b1', 'status'], parts[3] = 'batch'
-        handler._get_batch_status.assert_called_with("batch")
+        # parts = ['', 'api', 'debates', 'batch', 'b1', 'status'], parts[4] = 'b1'
+        handler._get_batch_status.assert_called_with("b1", TEST_ORG)
 
     def test_batch_status_v1_path(self, mock_http_handler):
-        """V1 paths normalize to unversioned; parts[3] = 'batch' for /api/debates/batch/xyz/status."""
+        """V1 paths normalize to unversioned; parts[4] = 'xyz' for /api/debates/batch/xyz/status."""
         handler = _make_handler()
         handler._get_batch_status = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle("/api/v1/debates/batch/xyz/status", {}, mock_http_handler)
-        # After normalization: /api/debates/batch/xyz/status -> parts[3] = "batch"
-        handler._get_batch_status.assert_called_with("batch")
+        handler._get_batch_status.assert_called_with("xyz", TEST_ORG)
 
 
 class TestHandleListBatches:
@@ -320,19 +319,19 @@ class TestHandleListBatches:
         handler = _make_handler()
         handler._list_batches = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle("/api/debates/batch", {"limit": "10"}, mock_http_handler)
-        handler._list_batches.assert_called_with(10, None)
+        handler._list_batches.assert_called_with(10, None, TEST_ORG)
 
     def test_list_batches_limit_capped_at_100(self, mock_http_handler):
         handler = _make_handler()
         handler._list_batches = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle("/api/debates/batch", {"limit": "999"}, mock_http_handler)
-        handler._list_batches.assert_called_with(100, None)
+        handler._list_batches.assert_called_with(100, None, TEST_ORG)
 
     def test_list_batches_with_status_filter(self, mock_http_handler):
         handler = _make_handler()
         handler._list_batches = MagicMock(return_value=MagicMock(status_code=200, body=b"{}"))
         result = handler.handle("/api/debates/batch", {"status": "completed"}, mock_http_handler)
-        handler._list_batches.assert_called_with(50, "completed")
+        handler._list_batches.assert_called_with(50, "completed", TEST_ORG)
 
 
 class TestHandleBatchExport:
