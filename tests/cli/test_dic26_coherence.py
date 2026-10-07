@@ -231,9 +231,35 @@ class TestEmitFollowupFlag:
         )
         assert rc == 0
         data = json.loads(capsys.readouterr().out)
-        for proposal_prov in data.get("proposals", []):
-            labels = proposal_prov.get("labels", [])
+        assert data["proposals"]
+        for proposal in data["proposals"]:
+            labels = proposal["labels"]
+            assert labels, "proposal labels must be serialized"
             assert "boss-ready" not in labels, f"boss-ready found in {labels}"
+
+    def test_emit_followup_json_proposals_match_text_fields(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """JSON proposals carry the fields text mode prints, plus body and keys."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        path = str(_write(tmp_path, _CONTRADICTING))
+        assert cmd_coherence_scan(_args(path, emit_followup=True)) == 0
+        text_out = capsys.readouterr().out
+        assert cmd_coherence_scan(_args(path, json_output=True, emit_followup=True)) == 0
+        data = json.loads(capsys.readouterr().out)
+        assert data["proposals"]
+        for proposal in data["proposals"]:
+            assert proposal["source_kind"] == "coherence_issue"
+            assert proposal["source_key"]
+            assert proposal["title"] and proposal["title"][:100] in text_out
+            assert proposal["body"]
+            assert proposal["rationale"]
+            assert ", ".join(proposal["labels"]) in text_out
+            assert proposal["provenance"]["kind"] in proposal["title"]
+            assert proposal["provenance"]["belief_ids"]
+        kinds = {proposal["provenance"]["kind"] for proposal in data["proposals"]}
+        assert "contradiction" in kinds
 
     def test_render_proposals_noop_when_empty(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

@@ -3,15 +3,19 @@ from __future__ import annotations
 from itertools import product
 import json
 import math
+from pathlib import Path
+import re
 
 import pytest
 
+from aragora.evaluation import outcome_backed_analysis
 from aragora.evaluation.outcome_backed_analysis import (
     MIN_ABSOLUTE_BRIER_IMPROVEMENT,
     TIE_EPSILON,
     analyze_scored_conditions,
     exact_paired_sign_flip_p_value,
 )
+from aragora.evaluation.outcome_backed_corpus import SPLIT_COUNTS
 from aragora.evaluation.outcome_backed_scoring import SCORER_CONTRACT_VERSION
 
 
@@ -60,6 +64,12 @@ def _rows(count: int, *, team_brier: float, baseline_brier: float):
     return team, baseline
 
 
+def _holdout_rows(count: int, *, team_brier: float, baseline_brier: float):
+    team = [_score(f"holdout-{index:02d}", brier=team_brier) for index in range(count)]
+    baseline = [_score(f"holdout-{index:02d}", brier=baseline_brier) for index in range(count)]
+    return team, baseline
+
+
 def test_report_is_byte_identical_across_repeated_calls() -> None:
     team, baseline = _rows(16, team_brier=0.2, baseline_brier=0.3)
 
@@ -69,6 +79,7 @@ def test_report_is_byte_identical_across_repeated_calls() -> None:
     assert json.dumps(first, sort_keys=True, separators=(",", ":")) == json.dumps(
         second, sort_keys=True, separators=(",", ":")
     )
+    assert first["phase"] == "development"
 
 
 def test_hand_computed_three_case_summary_and_exact_p_value() -> None:
@@ -161,6 +172,49 @@ def test_fewer_than_sixteen_pairs_is_insufficient_data() -> None:
     assert _analyze(team, baseline).verdict == "insufficient_data"
 
 
+def test_complete_holdout_phase_can_outperform() -> None:
+    team, baseline = _holdout_rows(8, team_brier=0.2, baseline_brier=0.3)
+    holdout_case_ids = {str(row["case_id"]) for row in team}
+
+    report = _analyze(
+        team,
+        baseline,
+        phase="holdout",
+        holdout_case_ids=holdout_case_ids,
+    )
+
+    assert report.phase == "holdout"
+    assert report.n == 8
+    assert report.verdict == "team_outperforms"
+    assert report.to_dict()["thresholds"]["expected_case_count"] == 8
+
+
+def test_partial_holdout_phase_is_insufficient_data() -> None:
+    team, baseline = _holdout_rows(7, team_brier=0.2, baseline_brier=0.3)
+    holdout_case_ids = {f"holdout-{index:02d}" for index in range(8)}
+
+    report = _analyze(
+        team,
+        baseline,
+        phase="holdout",
+        holdout_case_ids=holdout_case_ids,
+    )
+
+    assert report.verdict == "insufficient_data"
+
+
+def test_holdout_phase_rejects_unregistered_case_id() -> None:
+    team, baseline = _holdout_rows(2, team_brier=0.2, baseline_brier=0.3)
+
+    with pytest.raises(ValueError, match="non-holdout case IDs"):
+        _analyze(
+            team,
+            baseline,
+            phase="holdout",
+            holdout_case_ids={"holdout-00"},
+        )
+
+
 def test_exact_sign_flip_matches_independent_brute_force_for_eight_pairs() -> None:
     deltas = (0.07, -0.02, 0.11, 0.04, -0.03, 0.09, 0.01, 0.06)
     observed = abs(math.fsum(deltas) / len(deltas))
@@ -189,3 +243,28 @@ def test_pre_registered_verdicts(
     team, baseline = _rows(16, team_brier=team_brier, baseline_brier=baseline_brier)
 
     assert _analyze(team, baseline).verdict == expected
+
+
+def test_frozen_case_counts_are_literals_not_corpus_aliases() -> None:
+    source = Path(outcome_backed_analysis.__file__).read_text(encoding="utf-8")
+    # Reading the assignment rather than the imported value is the point: an alias such as
+    # SPLIT_COUNTS["development"] would satisfy every equality check below while letting a
+    # corpus edit silently move a threshold that is supposed to be frozen.
+    assigned = dict(
+        re.findall(
+            r"^(DEVELOPMENT_CASE_COUNT|HOLDOUT_CASE_COUNT)\s*(?::[^=\n]+)?=\s*(\d+)\s*$",
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+
+    assert assigned == {"DEVELOPMENT_CASE_COUNT": "16", "HOLDOUT_CASE_COUNT": "8"}
+    assert outcome_backed_analysis.DEVELOPMENT_CASE_COUNT == SPLIT_COUNTS["development"]
+    assert outcome_backed_analysis.HOLDOUT_CASE_COUNT == SPLIT_COUNTS["holdout"]
+
+
+def test_corpus_split_drift_fails_closed() -> None:
+    with pytest.raises(RuntimeError, match="frozen analysis case counts"):
+        outcome_backed_analysis._assert_frozen_case_counts({"development": 12, "holdout": 8})
+
+    outcome_backed_analysis._assert_frozen_case_counts(SPLIT_COUNTS)

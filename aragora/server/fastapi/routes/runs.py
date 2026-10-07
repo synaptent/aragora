@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from aragora.rbac.models import AuthorizationContext
-from aragora.server.handlers.runs import handle_run_detail, handle_runs_list
+from aragora.server.handlers.governance.runs import handle_run_detail, handle_runs_list
 from aragora.server.fastapi.dependencies.auth import require_permission
 
 router = APIRouter(prefix="/api", tags=["Runs"])

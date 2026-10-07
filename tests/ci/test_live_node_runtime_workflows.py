@@ -65,7 +65,10 @@ def _load_workflow(workflow_name: str) -> dict[str, Any]:
 
 def _workflow_triggers(workflow: dict[str, Any]) -> dict[str, Any]:
     """Return triggers despite PyYAML 1.1 parsing bare ``on`` as ``True``."""
-    triggers = workflow.get("on", workflow.get(True))
+    # The ``str``-keyed annotation cannot express the boolean key, so look it up through an
+    # ``Any``-keyed view of the same mapping.
+    keyed_by_any: dict[Any, Any] = workflow
+    triggers = keyed_by_any.get("on", keyed_by_any.get(True))
     assert isinstance(triggers, dict)
     return triggers
 

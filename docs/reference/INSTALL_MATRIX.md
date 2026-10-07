@@ -16,22 +16,20 @@ Each distribution ships its own `pyproject.toml` and its own version number.
 **They are independent — do not assume one tracks another.** Versions below
 are read directly from each package's `pyproject.toml` and cross-checked live
 against the public PyPI index (`curl -s https://pypi.org/pypi/<name>/json`,
-re-verified 2026-07-21):
+re-verified 2026-09-27):
 
 | Distribution | PyPI name | Declared in | Current version | PyPI status (live-checked) |
 |---|---|---|---|---|
-| Root platform | `aragora` | `pyproject.toml` | **2.10.0** | Latest on PyPI = 2.9.0 (2026-07-06); the 2.10.0 build ships when the operator tags `v2.10.0` and dispatches `publish-aragora.yml` |
+| Root platform | `aragora` | `pyproject.toml` | **2.11.1** | Latest on PyPI = 2.11.0 (2026-09-27; the 2.11.1 build ships when the operator tags `v2.11.1` and dispatches `publish-aragora.yml`) |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
-| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.10.0** | Published; latest on PyPI = **2.8.0** (2026-02-25) — the repo's in-tree version has moved to 2.10.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.8.0, not 2.10.0 |
-| Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.1.2** (unreleased) | Latest on PyPI = **0.1.1** (released 2026-07-04T03:28Z); main's 0.1.2 source metadata raises the cryptography floor to `>=48.0.1`, but that stronger published requirement awaits an operator-gated 0.1.2 release |
+| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.11.1** | Published; latest on PyPI = **2.11.0** (2026-09-27) — the repo's in-tree version has moved to 2.11.1 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.11.0, not 2.11.1 |
+| Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.2.0** | Published; latest on PyPI = **0.2.0** (released 2026-09-25T00:08Z). It is the first line that accepts ODR v0.2, the default output since 2.11.0; 0.1.x rejects v0.2 documents at `schema_conformance`. Its published metadata requires `cryptography>=48.0.1` |
 
-<!-- FACT (live-verified 2026-07-21): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
+<!-- FACT (live-verified 2026-09-27): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0, requires_dist cryptography>=48.0.1). Before changing this, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
 
 `aragora-verify` is **live and installable from PyPI today**. The plain install
-currently provides published 0.1.1, while this checkout contains unreleased
-0.1.2. A pristine 2026-07-21 install resolved `cryptography==49.0.0`, but the
-0.1.1 wheel metadata still permits `cryptography>=41.0`; only a later 0.1.2
-publication will make the stronger `>=48.0.1` floor mandatory for PyPI users.
+resolves 0.2.0, the same version as this checkout, and its published metadata
+enforces the `cryptography>=48.0.1` security floor.
 Self-verify the published version anytime with the `curl` command above.
 
 ## Install path per audience
@@ -50,24 +48,20 @@ Python standard library plus `cryptography` (see the
 [Independent Verifier Guide](../specs/INDEPENDENT_VERIFIER_GUIDE.md) for the
 full exit-code contract and disambiguation from the in-tree `aragora verify`).
 
-**PyPI install (floor-pinned, recommended):** 0.1.1 adds the `key_id`-equality
-check that closes a signer-label-tampering gap present in 0.1.0 (a relabeled
-`key_id` on an otherwise-valid signature silently passes verification on
-0.1.0 but correctly fails it on 0.1.1). Until verifier 0.1.2 is published,
-pin both the verifier and cryptography floors so constrained environments get
-the tamper fix and the security floor already present on main:
+**PyPI install (floor-pinned, recommended):** `aragora-verify` 0.2.0 is the
+floor for receipts produced by release 2.11.0 and later, because their default output
+is ODR v0.2 and 0.1.x rejects v0.2 documents at `schema_conformance`. 0.2.0 still
+verifies every v0.1 document, keeps the `key_id`-equality check that 0.1.1 added
+against signer-label tampering, and requires `cryptography>=48.0.1`:
 
-<!-- FACT (live-verified 2026-07-21): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
+<!-- FACT (live-verified 2026-09-27): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0, requires_dist cryptography>=48.0.1). Before changing this, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
 
 ```bash
-pip install -U "aragora-verify>=0.1.1" "cryptography>=48.0.1"
+pip install -U "aragora-verify>=0.2.0"
 ```
 
-**Unpinned verifier (functional, but does not enforce the cryptography
-floor):** PyPI's latest currently resolves to verifier 0.1.1 and a pristine
-2026-07-21 install selected cryptography 49.0.0. Existing constraints may still
-select an older allowed cryptography release, so use the command above for the
-no-trust path:
+**Unpinned verifier:** PyPI's latest resolves to 0.2.0 today. Pin the floor
+anyway if an environment might hold an older 0.1.x constraint:
 
 ```bash
 pip install aragora-verify
@@ -89,7 +83,7 @@ aragora-verify <receipt>.odr.json
 ### SDK — build a Python integration against a running Aragora server
 
 ```bash
-pip install aragora-sdk   # PyPI; currently ships 2.8.0
+pip install aragora-sdk   # PyPI; currently ships 2.11.0
 ```
 
 Use the [public Python SDK quickstart](../SDK_QUICKSTART_PYTHON.md) for examples
@@ -97,14 +91,14 @@ checked against that released wheel. The release-to-tree relationship is:
 
 | Install source | Version represented here | Compatibility check |
 |---|---|---|
-| PyPI (`pip install aragora-sdk`) | 2.8.0 | `python scripts/check_quickstart_surface.py --installed` in a fresh PyPI-only virtual environment |
-| This checkout (`pip install ./sdk/python`) | 2.10.0 | `python scripts/verify_sdk_contracts.py --strict` against the committed OpenAPI specs |
+| PyPI (`pip install aragora-sdk`) | 2.11.0 | `python scripts/check_quickstart_surface.py --installed` in a fresh PyPI-only virtual environment |
+| This checkout (`pip install ./sdk/python`) | 2.11.1 | `python scripts/verify_sdk_contracts.py --strict` against the committed OpenAPI specs |
 
 The public 2.8.0 quickstart intentionally uses only methods present in that
 wheel. Repository-tip references can move ahead under the decoupled release
 cadence and belong on the source-install path below.
 
-Or, to exercise this checkout's in-tree version (2.10.0, not yet released to
+Or, to exercise this checkout's in-tree version (2.11.1, not yet released to
 PyPI):
 
 ```bash

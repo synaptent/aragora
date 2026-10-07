@@ -247,6 +247,32 @@ def test_tw03_rescue_productization_status_matches_latest_report_json() -> None:
         _bullet_value(markdown, "Productization map") == report_payload["productization_map_path"]
     )
 
+    # A publication whose rescue ledger was unavailable asserts no counts at all,
+    # so the rendered surface must stay free of numbers rather than agree with them.
+    # Legacy publications predate `source` entirely and keep the numeric contract.
+    source = report_payload.get("source")
+    if isinstance(source, dict) and source.get("status") != "available":
+        assert report_payload["ok"] is False
+        assert _bullet_value(markdown, "Rescue ledger status") != "available"
+        for label in (
+            "Repeated rescue classes",
+            "Linked repeated classes",
+            "Unlinked repeated classes",
+            "One-off classes",
+            "Below-threshold classes",
+            "Issue drafts remaining",
+        ):
+            assert _bullet_value(markdown, label) == "n/a"
+        assert report_payload["summary"] == {}
+        assert report_payload["repeated_classes"] == []
+        assert report_payload["issue_drafts"] == []
+        return
+
+    if source is None:
+        observed = (report_payload.get("observation_status") or {}).get("raw_inputs")
+        if isinstance(observed, str) and observed != "available":
+            assert "Rescue ledger status: `available`" not in markdown
+
     summary = report_payload["summary"]
     linked_repeated_count = (
         summary["linked_fixture_count"]

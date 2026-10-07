@@ -657,7 +657,7 @@ class TestInfrastructureFailures:
         # Replace metrics functions with silent no-ops to simulate
         # a metrics backend that is offline but not erroring
         with patch(
-            "aragora.server.metrics.track_debate_outcome",
+            "aragora.observability.server_metrics.track_debate_outcome",
             return_value=None,
         ):
             with patch(

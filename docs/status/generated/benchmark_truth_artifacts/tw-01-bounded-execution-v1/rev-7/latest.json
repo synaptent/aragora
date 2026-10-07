@@ -48,10 +48,9 @@
     "status": "complete"
   },
   "failure_class_distribution": {
-    "blocked_not_dispatch_bounded": 5,
-    "rescue_worker_crash": 1
+    "blocked_not_dispatch_bounded": 5
   },
-  "generated_at": "2026-09-01T13:38:18Z",
+  "generated_at": "2026-09-29T13:36:38Z",
   "in_flight_metrics": {
     "in_progress_attempted_count": 5,
     "in_progress_expected_count": 5,
@@ -289,7 +288,7 @@
     },
     {
       "expected_status": "in_progress",
-      "had_rescue": true,
+      "had_rescue": false,
       "issue_closed_at": null,
       "issue_number": 5754,
       "issue_state": "OPEN",
@@ -329,6 +328,35 @@
     }
   ],
   "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
+  "observation_limits": {
+    "issues_without_executed_attempt": [
+      5185,
+      5187,
+      5197,
+      5198,
+      5200,
+      5749,
+      5751,
+      5753,
+      5754,
+      5755
+    ],
+    "non_authoritative_fields": [
+      "failure_class_distribution",
+      "rescue_counts_by_type",
+      "primary_metrics.no_rescue_truth_success_rate",
+      "issues[].had_rescue",
+      "issues[].no_rescue_truth_success"
+    ],
+    "reason": "The rescue event ledger could not be read (`rescue_ledger_missing`), so human interventions on corpus issues were not observed. Corpus issue(s) #5185, #5187, #5197, #5198, #5200, #5749, #5751, #5753, #5754, #5755 have no executed attempt in the metrics window (only pre-resolved, dispatch-skipped or no rows), so their rescue history was not observed. Independent raw-input replay was not performed.",
+    "value_semantics": "Listed fields describe only the observations available to this snapshot. Empty rescue counts and false rescue flags do not establish that no rescue occurred and do not retract rescues recorded in earlier snapshots."
+  },
+  "observation_status": {
+    "elapsed_time": "unmeasured",
+    "raw_input_replay": "unmeasured",
+    "raw_inputs": "available",
+    "rescue_history": "incomplete"
+  },
   "primary_metrics": {
     "merged_only_rate": 0.5,
     "no_rescue_truth_success_rate": 0.5,
@@ -342,8 +370,11 @@
     "proxy_pr_signal_issue_rate": 0.0
   },
   "repo": "synaptent/aragora",
-  "rescue_counts_by_type": {
-    "rescue_worker_crash": 1
+  "rescue_counts_by_type": {},
+  "rescue_ledger": {
+    "error_code": "rescue_ledger_missing",
+    "path": "~/.aragora/rescue_events.jsonl",
+    "status": "unavailable"
   },
   "run_status": "complete"
 }

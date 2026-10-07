@@ -116,6 +116,40 @@ class TestFollowupProposalValidation:
         assert args.count("--label") == 2
         assert "boss-ready" not in args
 
+    def test_to_dict_serializes_every_field(self) -> None:
+        proposal = FollowupProposal(
+            source_kind="coherence_issue",
+            source_key="coherence_abc",
+            title="t",
+            body="b",
+            labels=("epistemic", "coherence"),
+            rationale="r",
+            provenance={"kind": "contradiction", "belief_ids": ["b1", "b2"]},
+        )
+        assert proposal.to_dict() == {
+            "source_kind": "coherence_issue",
+            "source_key": "coherence_abc",
+            "title": "t",
+            "body": "b",
+            "labels": ["epistemic", "coherence"],
+            "rationale": "r",
+            "provenance": {"kind": "contradiction", "belief_ids": ["b1", "b2"]},
+        }
+
+    def test_to_dict_does_not_alias_provenance(self) -> None:
+        proposal = FollowupProposal(
+            source_kind="crux",
+            source_key="k",
+            title="t",
+            body="b",
+            labels=(),
+            rationale="r",
+            provenance={"crux_id": "c1"},
+        )
+        d = proposal.to_dict()
+        d["provenance"]["crux_id"] = "mutated"
+        assert proposal.provenance == {"crux_id": "c1"}
+
 
 class TestCruxProposal:
     def test_below_threshold_returns_none(self) -> None:

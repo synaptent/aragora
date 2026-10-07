@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Advisory checker for chartered architecture removals and exclusions."""
+"""Advisory checker for chartered removals, exclusions, and UNMAPPED growth."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import fnmatch
 import json
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -24,6 +25,7 @@ DRAFT_BINDING_IDS = {
     "CHR-X-007",
 }
 ENFORCED_STATES = {"REMOVED", "EXCLUSION", "PENDING", "EXPIRING", "PARKED"}
+PACKAGE_STATES = {"MAPPED", "UNMAPPED"}
 FROM_IMPORT_RE = re.compile(r"^\s*from\s+([A-Za-z_][\w.]*)\s+import\s+(.+)$")
 PLAIN_IMPORT_RE = re.compile(r"^\s*import\s+(.+)$")
 HUNK_RE = re.compile(r"@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@")
@@ -45,6 +47,7 @@ class AddedLine:
     path: str
     line_no: int | None
     line: str
+    hunk: int = 0
 
 
 @dataclass(frozen=True)
@@ -149,8 +152,12 @@ def _is_top_level_symbol(symbol: str) -> bool:
 
 def _parse_imported_names(imports: str) -> list[str]:
     cleaned = imports.split("#", 1)[0].strip()
-    if cleaned.startswith("(") and cleaned.endswith(")"):
-        cleaned = cleaned[1:-1]
+    # The parens are stripped independently so an opener whose closer was not part of
+    # the diff (an unchanged ``)`` under --unified=0) still yields its names.
+    if cleaned.startswith("("):
+        cleaned = cleaned[1:]
+    if cleaned.endswith(")"):
+        cleaned = cleaned[:-1]
     names: list[str] = []
     for part in cleaned.split(","):
         token = part.strip()
@@ -319,7 +326,12 @@ def parse_diff(diff_text: str) -> list[AddedLine]:
     added: list[AddedLine] = []
     current_path: str | None = None
     current_line: int | None = None
+    hunk = 0
     for raw_line in diff_text.splitlines():
+        if raw_line.startswith("diff --git "):
+            current_path = None
+            current_line = None
+            continue
         if raw_line.startswith("+++ "):
             current_path = _normalize_diff_path(raw_line[4:].split("\t", 1)[0])
             current_line = None
@@ -327,11 +339,12 @@ def parse_diff(diff_text: str) -> list[AddedLine]:
         if raw_line.startswith("@@"):
             match = HUNK_RE.search(raw_line)
             current_line = int(match.group(1)) if match else None
+            hunk += 1
             continue
         if current_path is None:
             continue
         if raw_line.startswith("+") and not raw_line.startswith("+++"):
-            added.append(AddedLine(current_path, current_line, raw_line[1:]))
+            added.append(AddedLine(current_path, current_line, raw_line[1:], hunk))
             if current_line is not None:
                 current_line += 1
         elif raw_line.startswith("-"):
@@ -339,6 +352,105 @@ def parse_diff(diff_text: str) -> list[AddedLine]:
         elif current_line is not None:
             current_line += 1
     return added
+
+
+def _strip_comment(line: str) -> str:
+    return line.split("#", 1)[0].rstrip()
+
+
+def _opens_parenthesized_import(line: str) -> bool:
+    match = FROM_IMPORT_RE.match(_strip_comment(line))
+    if match is None:
+        return False
+    imports = match.group(2)
+    return "(" in imports and ")" not in imports
+
+
+def _is_next_source_line(previous: AddedLine, current: AddedLine) -> bool:
+    return (
+        current.path == previous.path
+        and current.hunk == previous.hunk
+        and previous.line_no is not None
+        and current.line_no == previous.line_no + 1
+    )
+
+
+def reconstruct_multiline_imports(added_lines: list[AddedLine]) -> list[AddedLine]:
+    """Join parenthesized ``from … import (`` statements that span several added lines.
+
+    Only consecutive added source lines of one hunk of one Python file are joined, so
+    neighbouring files, separate hunks or intervening context lines never form one
+    statement. The joined line keeps the opener's path and line number, which is the
+    statement's original source location; comments are dropped per physical line so a
+    trailing ``# noqa`` on the opener cannot hide the names that follow it.
+    """
+    logical: list[AddedLine] = []
+    index = 0
+    while index < len(added_lines):
+        opener = added_lines[index]
+        if not (_is_python_path(opener.path) and _opens_parenthesized_import(opener.line)):
+            logical.append(opener)
+            index += 1
+            continue
+        parts = [_strip_comment(opener.line)]
+        end = index
+        while end + 1 < len(added_lines) and _is_next_source_line(
+            added_lines[end], added_lines[end + 1]
+        ):
+            end += 1
+            piece = _strip_comment(added_lines[end].line).strip()
+            if piece:
+                parts.append(piece)
+            if ")" in piece:
+                break
+        logical.append(AddedLine(opener.path, opener.line_no, " ".join(parts), opener.hunk))
+        index = end + 1
+    return logical
+
+
+def parse_new_files(diff_text: str) -> list[str]:
+    new_files: list[str] = []
+
+    def remember(path: str | None) -> None:
+        if path is not None and path not in new_files:
+            new_files.append(path)
+
+    old_path: str | None = None
+    diff_new_path: str | None = None
+    saw_old_header = False
+    for raw_line in diff_text.splitlines():
+        if raw_line.startswith("diff --git "):
+            old_path = None
+            diff_new_path = None
+            saw_old_header = False
+            try:
+                parts = shlex.split(raw_line)
+            except ValueError:
+                parts = []
+            if len(parts) >= 4:
+                diff_old_path = _normalize_diff_path(parts[2])
+                diff_new_path = _normalize_diff_path(parts[3])
+                if diff_new_path != diff_old_path:
+                    remember(diff_new_path)
+            continue
+        if raw_line.startswith("new file mode "):
+            remember(diff_new_path)
+            continue
+        if raw_line.startswith("--- "):
+            old_path = _normalize_diff_path(raw_line[4:].split("\t", 1)[0])
+            saw_old_header = True
+            continue
+        if raw_line.startswith("+++ ") and saw_old_header:
+            new_path = _normalize_diff_path(raw_line[4:].split("\t", 1)[0])
+            if new_path != old_path:
+                remember(new_path)
+            saw_old_header = False
+            continue
+        for prefix in ("rename to ", "copy to "):
+            if raw_line.startswith(prefix):
+                remember(_normalize_diff_path(raw_line[len(prefix) :]))
+                break
+    return new_files
 
 
 def load_charter_entries(
@@ -379,6 +491,35 @@ def load_charter_entries(
     return entries, authority_by_ref, status
 
 
+def load_package_states(charter_path: Path) -> tuple[dict[str, str], str]:
+    data = yaml.safe_load(charter_path.read_text(encoding="utf-8")) or {}
+    meta = data.get("meta") or {}
+    status = str(meta.get("status") or "DRAFT").upper()
+    raw_package_states = data.get("package_states")
+    if not isinstance(raw_package_states, dict) or not raw_package_states:
+        raise ValueError("charters.yaml must define a non-empty package_states mapping")
+
+    package_states: dict[str, str] = {}
+    for raw_path, raw_state in raw_package_states.items():
+        path = str(raw_path)
+        state = str(raw_state).upper()
+        if not re.fullmatch(r"aragora/[A-Za-z0-9_]+", path):
+            raise ValueError(f"invalid package state path: {path!r}")
+        if state not in PACKAGE_STATES:
+            raise ValueError(f"invalid package state for {path}: {state!r}")
+        package_states[path] = state
+    return package_states, status
+
+
+def _top_level_package(path: str) -> str | None:
+    parts = path.split("/")
+    if len(parts) < 2 or parts[0] != "aragora":
+        return None
+    if len(parts) == 2:
+        return f"aragora/{Path(parts[1]).stem}"
+    return "/".join(parts[:2])
+
+
 def _entry_matches_line(
     entry: CharterEntry,
     added_line: AddedLine,
@@ -405,8 +546,10 @@ def _entry_matches_line(
 
 
 def check_diff(diff_text: str, *, charter_path: Path | str) -> CheckResult:
-    entries, authority_by_ref, _status = load_charter_entries(Path(charter_path))
-    added_lines = parse_diff(diff_text)
+    charter_path = Path(charter_path)
+    entries, authority_by_ref, _status = load_charter_entries(charter_path)
+    package_states, charter_status = load_package_states(charter_path)
+    added_lines = reconstruct_multiline_imports(parse_diff(diff_text))
     aliases_by_path: dict[str, dict[str, set[str]]] = {}
     for added_line in added_lines:
         for alias, module in _plain_import_aliases(added_line.line).items():
@@ -446,6 +589,36 @@ def check_diff(diff_text: str, *, charter_path: Path | str) -> CheckResult:
                     authority_ids=authority_by_ref.get(entry.entry_id, []),
                 )
             )
+    for new_path in parse_new_files(diff_text):
+        if not _is_python_path(new_path):
+            continue
+        package = _top_level_package(new_path)
+        if package is None:
+            continue
+        package_state = package_states.get(package, "UNMAPPED")
+        if package_state != "UNMAPPED":
+            continue
+        entry_id = f"APPENDIX-A:{package}"
+        key = (entry_id, new_path, None, "")
+        if key in seen:
+            continue
+        seen.add(key)
+        if package in package_states:
+            reason = "adds a new Python module under an UNMAPPED package"
+        else:
+            reason = "adds a new Python module under a package absent from Appendix A"
+        violations.append(
+            Violation(
+                binding="BINDING" if charter_status == "RATIFIED" else "PROPOSED",
+                entry_id=entry_id,
+                state="UNMAPPED",
+                path=new_path,
+                line_no=None,
+                line="",
+                reason=reason,
+                authority_ids=[],
+            )
+        )
     binding = [violation for violation in violations if violation.binding == "BINDING"]
     proposed = [violation for violation in violations if violation.binding == "PROPOSED"]
     return CheckResult(

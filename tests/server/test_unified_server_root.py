@@ -372,7 +372,7 @@ class TestUnifiedServerInit:
     def test_with_storage(self, tmp_path):
         """Should initialize with storage."""
         from aragora.server.unified_server import UnifiedServer
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         db_path = tmp_path / "test.db"
         storage = DebateStorage(str(db_path))
