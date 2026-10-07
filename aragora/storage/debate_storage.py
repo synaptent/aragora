@@ -462,6 +462,22 @@ class DebateStorage(SQLiteStore):
             row = conn.execute("SELECT org_id FROM debates WHERE id = ?", (debate_id,)).fetchone()
         return row[0] if row and row[0] else None
 
+    def get_access_info(self, ref: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for the debate with this id, else this slug."""
+        if not ref or len(ref) > 500:
+            return None
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT id, org_id, is_public FROM debates WHERE id = ?", (ref,)
+            ).fetchone()
+            if row is None:
+                row = conn.execute(
+                    "SELECT id, org_id, is_public FROM debates WHERE slug = ?", (ref,)
+                ).fetchone()
+        if row is None:
+            return None
+        return row[0], row[1] or None, bool(row[2])
+
     def list_recent(
         self, limit: int = 20, org_id: str | None = None, offset: int = 0
     ) -> list[DebateMetadata]:

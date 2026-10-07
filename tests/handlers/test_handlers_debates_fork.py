@@ -142,6 +142,8 @@ def mock_storage():
             ],
         },
     }
+    # Every debate id resolves to a private debate of the test user's org.
+    storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 

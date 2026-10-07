@@ -155,6 +155,7 @@ ID_ONLY_METHODS = {
     "_get_meta_critique",
     "_get_graph_stats",
     "_get_followup_suggestions",
+    "_list_debate_forks",
     "_get_rhetorical_observations",
     "_get_trickster_status",
     "_get_positions",

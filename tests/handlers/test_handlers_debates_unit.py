@@ -344,6 +344,7 @@ class TestHandle:
     def setup_method(self) -> None:
         """Set up test fixtures."""
         self.mock_storage = MagicMock()
+        self.mock_storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
         self.handler = DebatesHandler(server_context={"storage": self.mock_storage})
         self.mock_http_handler = _mock_handler_with_auth()
 

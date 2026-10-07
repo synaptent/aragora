@@ -1009,8 +1009,8 @@ class TestDispatchSuffixRoute:
         assert result == "followups-result"
         mock_fn.assert_called_once_with("test-id")
 
-    def test_dispatches_to_forks_with_handler(self, mock_storage):
-        """Dispatches to _list_debate_forks with handler + debate_id."""
+    def test_dispatches_to_forks_with_id_only(self, mock_storage):
+        """_list_debate_forks takes only the debate id."""
         mock_fn = MagicMock(return_value="forks-result")
         handler = _make_routing_handler(
             storage=mock_storage,
@@ -1023,7 +1023,7 @@ class TestDispatchSuffixRoute:
             http_handler,
         )
         assert result == "forks-result"
-        mock_fn.assert_called_once_with(http_handler, "test-id")
+        mock_fn.assert_called_once_with("test-id")
 
     def test_dispatches_to_summary_with_handler(self, mock_storage):
         """Dispatches to _get_summary with handler + debate_id."""

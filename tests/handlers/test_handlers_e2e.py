@@ -93,6 +93,8 @@ def mock_storage():
         "consensus_reached": False,
         "rounds_used": 3,
     }
+    # Every debate id resolves to a private debate of the test user's org.
+    storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 
@@ -1024,6 +1026,7 @@ class TestDebatesHandlerEdgeCases:
     def debates_handler_with_mock(self):
         """Create DebatesHandler with mock storage."""
         storage = Mock()
+        storage.get_access_info.side_effect = lambda ref: (ref, "test-org-001", False)
         ctx = {"storage": storage, "elo_system": None, "nomic_dir": None}
         return DebatesHandler(ctx), storage
 
