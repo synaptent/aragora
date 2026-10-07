@@ -172,6 +172,7 @@ through `aragora.training.specialist_models`).
 | #10325 | `7f6f13fd7b` | Tranche T3: 32 domain names; 12 pairs adopted; `aragora.events -> aragora.rlm` fixed by deleting a dead import; `aragora.agents -> aragora.gauntlet` resolved by reattribution (its only chain, `aragora.agents.specialist_factory` to `aragora.training.specialist_models` to `aragora.gauntlet.config`, is now reported as `aragora.training -> aragora.gauntlet`) | 116 | 48 to 59 |
 | #10331 | `846b967795` | Decision-router inversion, part 1: hooks in `aragora/core/decision_route_hooks.py`; removes `aragora.core` imports of connectors, pipeline and server | 116 | 59 to 56 |
 | #10335 | `ba7ec9c83b` | Decision-router inversion, part 2: keyed route targets for workflow and gauntlet | 116 | 56 to 54 |
+| #10376 | squash merge of #10376 | Tranche T4a: 9 application names; 35 pairs adopted; `aragora.skills -> aragora.cli` fixed by deleting a dead import; `aragora.agents -> aragora.server` and the `debate`, `nomic` and `pipeline` pairs to `aragora.gateway` resolved by reattribution (their only routes ran through `aragora.control_plane.scheduler` and `aragora.stores.canonical`, and now count toward `aragora.control_plane -> aragora.server` and `aragora.stores -> aragora.gateway`) | 125 | 54 to 85 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
 aragora.tenancy`) are fixed by the config-seam PR #10316 (Tier 4), which was prepared and is awaiting
