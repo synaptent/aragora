@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -854,9 +855,10 @@ def test_representative_invocation_stderr_free_of_deprecation_warnings():
 
 
 # Runs check_sdk_parity.main() with the production argv in a fresh interpreter
-# and reports every DeprecationWarning that reaches the top level. Mode
-# "unlisted" empties _LEGACY_WARNING_MODULES first, so each listed module's
-# notice surfaces wherever the handler cascade imports it.
+# and reports every DeprecationWarning that reaches the top level, plus which
+# listed modules the run imported. Mode "unlisted" empties
+# _LEGACY_WARNING_MODULES first, so each listed module's notice surfaces
+# wherever the handler cascade imports it.
 _DEPRECATION_PROBE = """
 import contextlib
 import io
@@ -881,6 +883,7 @@ print(
             "rc": rc,
             "handler_count": handler_count,
             "listed": listed,
+            "imported": [module for module in listed if module in sys.modules],
             "deprecations": [
                 str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
             ],
@@ -920,14 +923,32 @@ def _run_deprecation_probe(mode: str) -> dict[str, Any]:
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    report: dict[str, Any] = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert "Traceback" not in proc.stderr, proc.stderr
+    report_lines = proc.stdout.strip().splitlines()
+    assert report_lines, f"probe printed no report\n{proc.stderr}"
+    report: dict[str, Any] = json.loads(report_lines[-1])
     assert report["rc"] in (0, 1), proc.stderr
     assert report["handler_count"] > 0, "handler cascade did not run; the probe proves nothing"
     return report
 
 
+# Repo shim notices read "<module> is deprecated; ...". Matching the whole module
+# name keeps a submodule's notice (aragora.server.metrics.api) from vouching for
+# its parent package.
+_SHIM_NOTICE = re.compile(r"^(?P<module>aragora(?:\.\w+)+) is deprecated\b")
+
+# Shim notices measured reaching the top level during the run without being
+# listed. Any other shim notice fails the test, so a shim import that becomes
+# reachable from the cascade is listed or migrated instead of leaking.
+_KNOWN_UNLISTED_SHIM_NOTICES = frozenset({"aragora.server.prometheus"})
+
+
+def _shim_notice_modules(messages: list[str]) -> set[str]:
+    return {match.group("module") for message in messages if (match := _SHIM_NOTICE.match(message))}
+
+
 def test_legacy_warning_modules_match_live_import_cascade():
-    """Every listed module must still warn during a run, and stay silent once listed.
+    """Every listed module must still warn during a run, and no other shim notice may leak.
 
     Default filters hide shim notices attributed to non-__main__ modules, so
     the stderr test above passes whatever the list holds. Both runs here force
@@ -935,17 +956,19 @@ def test_legacy_warning_modules_match_live_import_cascade():
     with the list emptied is stale and should be removed from the list.
     """
     unlisted = _run_deprecation_probe("unlisted")
-    listed = unlisted["listed"]
-    stale = [
-        module
-        for module in listed
-        if not any(message.startswith(module) for message in unlisted["deprecations"])
-    ]
+    noticed = _shim_notice_modules(unlisted["deprecations"])
+    stale = [module for module in unlisted["listed"] if module not in noticed]
+    # An imported-but-silent entry was first imported under a scoped warnings
+    # ignore inside the cascade, so it does not reach stderr either.
     assert stale == [], (
         "these _LEGACY_WARNING_MODULES entries no longer warn during the checker run "
-        f"and should be removed: {stale}"
+        f"and should be removed: {stale} "
+        f"(still imported by the run: {[m for m in stale if m in unlisted['imported']]})"
     )
 
     committed = _run_deprecation_probe("committed")
-    leaked = [message for message in committed["deprecations"] if message.startswith(tuple(listed))]
-    assert leaked == [], "\n".join(leaked)
+    leaked = sorted(_shim_notice_modules(committed["deprecations"]) - _KNOWN_UNLISTED_SHIM_NOTICES)
+    assert leaked == [], (
+        "these shim notices reach the top level during the checker run; list the module "
+        f"in _LEGACY_WARNING_MODULES or migrate its importer: {leaked}"
+    )
