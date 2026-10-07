@@ -170,6 +170,12 @@ Homepage = "https://aragora.ai"
 Repository = "https://github.com/synaptent/aragora"
 Issues = "https://github.com/synaptent/aragora/issues"
 
+# Run by aragora/core/decision_route_hooks.py on the first lookup that finds nothing
+# registered, so a caller that only imports aragora.core still reaches the workflow,
+# gauntlet, pipeline, chat connector and audit hooks.
+[project.entry-points."aragora.decision_routes"]
+server = "aragora.server.decision_routes:register_decision_routes"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
@@ -186,11 +192,24 @@ Issues = "https://github.com/synaptent/aragora/issues"
 #     resolves to the starlette 1.x line, so this stays on fastapi 0.x — no
 #     FastAPI 1.x migration required. Aragora's only direct starlette usage is
 #     BaseHTTPMiddleware / Response / StreamingResponse, all stable across 1.x.
+#   * pyjwt >=2.15.0 — fixes PYSEC-2026-4140, PYSEC-2026-4141, PYSEC-2026-4142,
+#     PYSEC-2026-4143, PYSEC-2026-4144, PYSEC-2026-4145, PYSEC-2026-4146,
+#     PYSEC-2026-4147, PYSEC-2026-4148, PYSEC-2026-4149, PYSEC-2026-4150,
+#     PYSEC-2026-4151, PYSEC-2026-4152. Pulled in via supabase-auth. 2.14.0
+#     clears every id except PYSEC-2026-4141, which is fixed only in 2.15.0.
+#   * urllib3 >=2.8.0 — fixes PYSEC-2026-4175, PYSEC-2026-4176,
+#     PYSEC-2026-4177. Pulled in via requests (also id, twine, types-requests).
+#   * virtualenv >=21.7.13 — fixes PYSEC-2026-4011, PYSEC-2026-4012,
+#     PYSEC-2026-4013, PYSEC-2026-4014 (PYSEC-2026-4013 needs 21.7.13). Pulled
+#     in via pre-commit (dev tooling only).
 # -----------------------------------------------------------------------------
 [tool.uv]
 constraint-dependencies = [
     "cryptography>=48.0.1",
+    "pyjwt>=2.15.0",
     "starlette>=1.3.1",
+    "urllib3>=2.8.0",
+    "virtualenv>=21.7.13",
 ]
 
 # uv workspace: the in-repo sub-packages resolve into the single root uv.lock so

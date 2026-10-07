@@ -320,10 +320,13 @@ class TestHelperFunctions:
         assert result.year == 2023
 
     def test_parse_datetime_invalid(self):
-        assert _parse_datetime("not-a-date") is None
+        with pytest.raises(ZendeskError, match="Invalid Zendesk datetime value") as exc_info:
+            _parse_datetime("not-a-date")
+        assert exc_info.value.details == {"value": "not-a-date"}
 
     def test_parse_datetime_malformed(self):
-        assert _parse_datetime("2023/06/15") is None
+        with pytest.raises(ZendeskError, match="Invalid Zendesk datetime value"):
+            _parse_datetime("2023/06/15")
 
     def test_parse_datetime_with_microseconds(self):
         result = _parse_datetime("2023-06-15T10:30:00.123456Z")
@@ -1453,10 +1456,8 @@ class TestEdgeCases:
             _make_response({"ticket": {"id": 1, "status": "open", "requester_id": 1}}),
             _make_response({"comments": []}),
         ]
-        comment = await zendesk_connector.add_ticket_comment(1, "Test comment")
-        # Should return a fallback comment when no comments are returned
-        assert comment.body == "Test comment"
-        assert comment.id == 0
+        with pytest.raises(ZendeskError, match="Ticket 1 comment creation could not be verified"):
+            await zendesk_connector.add_ticket_comment(1, "Test comment")
 
     @pytest.mark.asyncio
     async def test_get_tickets_with_multiple_filters(self, zendesk_connector, mock_httpx_client):

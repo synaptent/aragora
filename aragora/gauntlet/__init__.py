@@ -188,3 +188,8 @@ __all__ = [
 
 # Import stable API module
 from aragora.gauntlet import api
+
+# The core decision router routes gauntlet decisions through this registration.
+from aragora.gauntlet.decision_route import register_decision_route as _register_decision_route
+
+_register_decision_route()

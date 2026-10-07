@@ -170,9 +170,10 @@ class TestInvoicesLogging:
 
         content = invoices_path.read_text()
 
-        # Verify logging statements for date parsing are present
-        assert 'logger.debug("Invalid start_date format' in content
-        assert 'logger.debug("Invalid end_date format' in content
+        # start_date/end_date are no longer silently logged: the shared helper
+        # rejects an invalid value with a 400 that names the parameter.
+        assert "parse_date_range_params(query_params)" in content
+        assert 'logger.debug("Invalid start_date format' not in content
         assert 'logger.debug("Invalid order_date format' in content
         assert 'logger.debug("Invalid expected_delivery format' in content
 
