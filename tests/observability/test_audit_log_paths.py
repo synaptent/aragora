@@ -104,6 +104,24 @@ def test_persistence_submodule_paths_reexport(submodule: str) -> None:
     new = importlib.import_module(f"aragora.observability.audit_persistence.{submodule}")
     for name in PERSISTENCE_SUBMODULE_NAMES[submodule]:
         assert getattr(old, name) is getattr(new, name)
+    # The original modules had no __all__, so a star import exported every listed name.
+    assert sorted(old.__all__) == sorted(PERSISTENCE_SUBMODULE_NAMES[submodule])
+
+
+OLD_PATH_FILES = {
+    "aragora.audit.log": "aragora/audit/log.py",
+    "aragora.audit.unified": "aragora/audit/unified.py",
+    "aragora.audit.persistence.base": "aragora/audit/persistence/base.py",
+    "aragora.audit.persistence.file": "aragora/audit/persistence/file.py",
+    "aragora.audit.persistence.postgres": "aragora/audit/persistence/postgres.py",
+}
+
+
+@pytest.mark.parametrize(("module_name", "relative_path"), sorted(OLD_PATH_FILES.items()))
+def test_old_paths_are_plain_modules(module_name: str, relative_path: str) -> None:
+    assert (REPO_ROOT / relative_path).is_file()
+    assert not (REPO_ROOT / relative_path).with_suffix("").exists()
+    assert not hasattr(importlib.import_module(module_name), "__path__")
 
 
 def test_old_path_all_lists_unchanged() -> None:
@@ -221,10 +239,16 @@ def test_registered_middleware_logger_is_used(middleware_hook) -> None:
     assert new_unified.UnifiedAuditLogger(enable_middleware=False)._get_middleware_logger() is None
 
 
-def test_server_registers_middleware_logger(middleware_hook) -> None:
+def test_server_registers_middleware_logger(middleware_hook, monkeypatch) -> None:
+    from aragora.core import decision_route_hooks
     from aragora.server.decision_routes import register_decision_routes
     from aragora.server.middleware.audit_logger import get_audit_logger
 
+    # register_decision_routes also replaces the decision-router hooks; restore them afterwards.
+    monkeypatch.setattr(decision_route_hooks, "_hooks", dict(decision_route_hooks._hooks))
+    monkeypatch.setattr(
+        decision_route_hooks, "_route_targets", dict(decision_route_hooks._route_targets)
+    )
     new_unified._middleware_logger_factory = None
     register_decision_routes()
     register_decision_routes()

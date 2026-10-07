@@ -19,6 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from aragora.agents.base import BaseDebateAgent
+from aragora.agents.code_scanners import (
+    BUG_DETECTOR,
+    SECURITY_SCANNER,
+    CodeScannerNotRegisteredError,
+    create_code_scanner,
+)
 from aragora.core_types import AgentRole
 
 logger = logging.getLogger(__name__)
@@ -358,10 +364,8 @@ class CodebaseUnderstandingAgent:
         """Lazy-load security scanner."""
         if self._security_scanner is None:
             try:
-                from aragora.audit.security_scanner import SecurityScanner
-
-                self._security_scanner = SecurityScanner()
-            except ImportError:
+                self._security_scanner = create_code_scanner(SECURITY_SCANNER)
+            except (CodeScannerNotRegisteredError, ImportError):
                 logger.warning("SecurityScanner not available")
                 self._security_scanner = None
         return self._security_scanner
@@ -371,10 +375,8 @@ class CodebaseUnderstandingAgent:
         """Lazy-load bug detector."""
         if self._bug_detector is None:
             try:
-                from aragora.audit.bug_detector import BugDetector
-
-                self._bug_detector = BugDetector()
-            except ImportError:
+                self._bug_detector = create_code_scanner(BUG_DETECTOR)
+            except (CodeScannerNotRegisteredError, ImportError):
                 logger.warning("BugDetector not available")
                 self._bug_detector = None
         return self._bug_detector
