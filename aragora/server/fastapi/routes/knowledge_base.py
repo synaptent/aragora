@@ -581,8 +581,6 @@ async def create_fact(
     """
     org_id = _caller_org(auth)
     try:
-        # Each create stores a new fact; store deduplication would instead return an
-        # existing fact with the same statement in the caller's organization and workspace.
         fact = await _call_store(
             store,
             "add_fact",
@@ -594,7 +592,6 @@ async def create_fact(
             topics=body.topics,
             metadata=body.metadata,
             org_id=org_id,
-            deduplicate=False,
         )
         return _fact_to_detail(fact)
     except HTTPException:
@@ -1135,7 +1132,6 @@ async def import_knowledge_base(
                 topics=fact_data.get("topics", []),
                 metadata=fact_data.get("metadata", {}),
                 org_id=org_id,
-                deduplicate=False,
             )
             imported += 1
 

@@ -22,12 +22,11 @@ from aragora.knowledge import InMemoryEmbeddingService, InMemoryFactStore, Simpl
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi.routes import knowledge_base
 
-pytestmark = pytest.mark.no_auto_auth
-
 PREFIX = "/api/v2/knowledge-base"
 ROLES = ("owner", "admin", "member", "analyst", "viewer")
 ORG_A = "org-a"
 ORG_B = "org-b"
+ORG_C = "org-c"
 ORG_A_STATEMENT = "Org A acquisition target is Northwind, closing 2026-11-30"
 ORG_A_WORKSPACE = "ws-org-a"
 ORG_A_METADATA = {"deal_room": "org-a-only"}
@@ -266,22 +265,45 @@ def test_sync_status_stays_open(fastapi_client, seeded, role) -> None:
     }
 
 
-@pytest.mark.asyncio
-async def test_import_body_never_deduplicates_against_stored_facts() -> None:
-    store = InMemoryFactStore()
-    existing = store.add_fact(statement=ORG_A_STATEMENT, workspace_id="default", org_id=ORG_B)
+def test_retried_create_returns_the_same_fact_and_never_another_orgs(
+    fastapi_client, seeded
+) -> None:
+    body = {"statement": ORG_A_STATEMENT, "workspace_id": ORG_A_WORKSPACE}
 
-    result = await knowledge_base.import_knowledge_base(
-        body=knowledge_base.ImportRequest(
-            facts=[{"statement": ORG_A_STATEMENT}],
-            workspace_id="default",
-            merge_strategy="skip_existing",
-        ),
-        auth=AuthorizationContext(user_id="user-org-b-owner", org_id=ORG_B, roles={"owner"}),
-        store=store,
+    def create(org_id: str):
+        return fastapi_client.post(f"{PREFIX}/facts", json=body, headers=_bearer("owner", org_id))
+
+    first, retry, other_org = create(ORG_B), create(ORG_B), create(ORG_C)
+
+    assert (first.status_code, retry.status_code, other_org.status_code) == (201, 201, 201)
+    assert retry.json()["id"] == first.json()["id"]
+    assert first.json()["id"] not in seeded["org_a_ids"]
+    assert other_org.json()["id"] not in {first.json()["id"], *seeded["org_a_ids"]}
+    assert seeded["inner"].get_statistics(org_id=ORG_A)["total_facts"] == 2
+    assert seeded["inner"].get_statistics(org_id=ORG_B)["total_facts"] == 1
+    assert seeded["inner"].get_statistics(org_id=ORG_C)["total_facts"] == 1
+
+
+async def test_retried_import_stores_each_statement_once_per_org() -> None:
+    store = InMemoryFactStore()
+    body = knowledge_base.ImportRequest(
+        facts=[{"statement": ORG_A_STATEMENT}],
+        workspace_id="default",
+        merge_strategy="skip_existing",
     )
 
-    assert result.imported == 1
-    ids = {fact.id for fact in store.list_facts(knowledge_base.FactFilters(limit=10, org_id=ORG_B))}
-    assert existing.id in ids
-    assert len(ids) == 2
+    for org_id in (ORG_B, ORG_B, ORG_C):
+        result = await knowledge_base.import_knowledge_base(
+            body=body,
+            auth=AuthorizationContext(user_id=f"user-{org_id}-owner", org_id=org_id),
+            store=store,
+        )
+        assert result.errors == 0
+
+    def ids(org_id: str) -> set[str]:
+        filters = knowledge_base.FactFilters(limit=10, org_id=org_id)
+        return {fact.id for fact in store.list_facts(filters)}
+
+    assert len(ids(ORG_B)) == 1
+    assert len(ids(ORG_C)) == 1
+    assert ids(ORG_B) != ids(ORG_C)
