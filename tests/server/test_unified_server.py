@@ -305,19 +305,19 @@ class TestHTTPDispatch:
                 return_value=iter([b"event: connected\ndata: {}\n\n"]),
             ) as mock_stream,
             patch(
-                "aragora.server.handlers.spectate_ws._get_optional_user_from_request",
-                return_value=None,
+                "aragora.billing.jwt_auth.extract_user_from_request",
+                return_value=SimpleNamespace(is_authenticated=False),
             ),
         ):
             assert handler._serve_live_spectate_stream({}) is True
 
-        mock_stream.assert_called_once_with({}, allow_private=False, storage=None)
+        mock_stream.assert_called_once_with({}, org_id=None, storage=None)
         assert mock_request_handler.wfile.getvalue() == b"event: connected\ndata: {}\n\n"
         handler.send_response.assert_called_once_with(200)
         handler.send_header.assert_any_call("Content-Type", "text/event-stream")
         handler.send_header.assert_any_call("X-Aragora-Stream-Transport", "sse_live")
 
-    def test_serve_live_spectate_stream_keeps_private_events_for_debate_readers(
+    def test_serve_live_spectate_stream_scopes_events_to_the_callers_org(
         self, mock_request_handler
     ):
         handler = self._make_unified_handler(
@@ -331,17 +331,15 @@ class TestHTTPDispatch:
                 return_value=iter([b"event: connected\ndata: {}\n\n"]),
             ) as mock_stream,
             patch(
-                "aragora.server.handlers.spectate_ws._get_optional_user_from_request",
+                "aragora.billing.jwt_auth.extract_user_from_request",
                 return_value=SimpleNamespace(
-                    permissions=["debates:read"],
-                    roles=[],
-                    role="member",
+                    is_authenticated=True, user_id="u-1", org_id="org-1", role="member"
                 ),
             ),
         ):
             assert handler._serve_live_spectate_stream({}) is True
 
-        mock_stream.assert_called_once_with({}, allow_private=True, storage=None)
+        mock_stream.assert_called_once_with({}, org_id="org-1", storage=None)
 
 
 class TestHTTP404Handling:

@@ -529,7 +529,12 @@ class UnifiedHandler(  # type: ignore[misc]
         if path not in {"/api/v1/spectate/stream", "/api/spectate/stream"}:
             return False
 
-        format_hint = str(query.get("format", "")).lower() if query else ""
+        # The request lifecycle passes parse_qs lists; flatten them like modular dispatch.
+        query = {
+            key: value[0] if isinstance(value, list) and len(value) == 1 else value
+            for key, value in (query or {}).items()
+        }
+        format_hint = str(query.get("format", "")).lower()
         accept = self.headers.get("Accept") or self.headers.get("accept") or ""
         if format_hint != "sse" and "text/event-stream" not in accept:
             return False
@@ -538,11 +543,15 @@ class UnifiedHandler(  # type: ignore[misc]
 
     def _serve_live_spectate_stream(self, query: dict[str, Any]) -> bool:
         """Write a live SSE response for the public spectate stream endpoint."""
-        from aragora.server.handlers.streaming.spectate_ws import (
-            _can_view_live_debates,
-            _get_optional_user_from_request,
-            iter_live_spectate_sse_frames,
-        )
+        import json
+
+        from aragora.server.handlers.streaming import spectate_ws
+
+        storage = getattr(self, "storage", None)
+        visibility = spectate_ws.authorize_spectate_request(self, query, storage=storage)
+        if not isinstance(visibility, spectate_ws.SpectateVisibility):
+            self._send_json(json.loads(visibility.body), status=visibility.status_code)
+            return True
 
         self._response_status = 200
         self.send_response(200)
@@ -559,11 +568,8 @@ class UnifiedHandler(  # type: ignore[misc]
         self._add_trace_headers()
         self.end_headers()
 
-        allow_private = _can_view_live_debates(_get_optional_user_from_request(self))
-        stream = iter_live_spectate_sse_frames(
-            query,
-            allow_private=allow_private,
-            storage=getattr(self, "storage", None),
+        stream = spectate_ws.iter_live_spectate_sse_frames(
+            query, org_id=visibility.org_id, storage=storage
         )
         try:
             for chunk in stream:
