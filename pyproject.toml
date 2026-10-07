@@ -164,6 +164,12 @@ Issues = "https://github.com/synaptent/aragora/issues"
 [project.entry-points."aragora.decision_routes"]
 server = "aragora.server.decision_routes:register_decision_routes"
 
+# Run by aragora/agents/code_scanners.py on the first lookup that finds nothing
+# registered, so a caller that only imports aragora.agents still builds the audit
+# package's security scanner and bug detector.
+[project.entry-points."aragora.code_scanners"]
+audit = "aragora.audit.code_scanners:register_code_scanners"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve

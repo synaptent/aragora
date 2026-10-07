@@ -31,7 +31,7 @@ class TelegramMediaMixin:
         photo: str | bytes,
         caption: str | None = None,
         thread_id: str | None = None,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """Send a photo to a Telegram chat.
@@ -103,7 +103,7 @@ class TelegramMediaMixin:
         width: int | None = None,
         height: int | None = None,
         supports_streaming: bool = True,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """Send a video to a Telegram chat.
@@ -184,7 +184,7 @@ class TelegramMediaMixin:
         animation: str | bytes,
         caption: str | None = None,
         thread_id: str | None = None,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """Send an animation (GIF) to a Telegram chat.

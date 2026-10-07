@@ -529,8 +529,9 @@ def main(argv: list[str] | None = None) -> int:
     corpus_path = args.corpus.resolve()
     metrics_path = resolve_metrics_path(args.metrics)
     corpus = load_corpus(corpus_path)
+    pr_records: list[dict[str, Any]] | None
     if args.pr_records is not None:
-        pr_records: list[dict[str, Any]] | None = _load_pr_records(args.pr_records)
+        pr_records = _load_pr_records(args.pr_records)
         pr_lookup = {
             "status": "provided",
             "reason": _repo_stable_path(args.pr_records),

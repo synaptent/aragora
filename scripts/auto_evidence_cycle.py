@@ -210,8 +210,8 @@ def rejection_reason(entry: dict[str, Any]) -> str | None:
     if str(entry.get("status") or "").strip().lower() != SELECTABLE_STATUS:
         return "wrong_status"
     try:
-        tier = int(entry.get("tier"))
-    except (TypeError, ValueError):
+        tier = int(entry["tier"])
+    except (KeyError, TypeError, ValueError):
         return "unknown_tier"  # fail safe, never auto-postable anyway
     if tier not in AUTO_POSTABLE_TIERS:
         return "wrong_tier"
@@ -251,8 +251,8 @@ def needs_dogfood(entry: dict[str, Any]) -> bool:
     if entry.get("dogfood_evidence"):
         return False
     try:
-        tier = int(entry.get("tier"))
-    except (TypeError, ValueError):
+        tier = int(entry["tier"])
+    except (KeyError, TypeError, ValueError):
         return False
     if tier not in AUTO_POSTABLE_TIERS:
         return False
