@@ -72,8 +72,10 @@ Consumers: 27 test modules import the module. The eight
 `tests/cli/commands/test_review_queue*.py` files hold 11,609 lines. Non-test
 importers include `aragora/cli/main.py`, `aragora/cli/parser.py` (lazily),
 `aragora/review/*`, `aragora/approvals/settlement_inbox.py`,
+`aragora/cli/commands/founder_status.py`, `aragora/triage/event_source.py`,
 `aragora/server/handlers/governance/review_queue.py`,
-`review_queue_conductor.py`, `scripts/tier4_merge_train.py`,
+`review_queue_conductor.py`, `review_queue_render.py`,
+`review_queue_unstable.py`, `scripts/tier4_merge_train.py`,
 `scripts/generate_contract_drift_inventory.py` and
 `scripts/build_disagreement_atlas.py`.
 
@@ -221,7 +223,7 @@ so steps never run in parallel.
 |---|---|---|
 | 0 | This design, then operator preapproval | Tier 0 doc; preapproval recorded by the operator |
 | 1 | Characterization tests only (§6, C-1 to C-4), no production code | `tests/` only, so it classifies Tier 0, but it runs only after preapproval because it is part of the approved plan |
-| 2-9 | One unit per PR, in the order of §4 | Tier 4, exact-head settlement per PR |
+| 2-9 | One unit per PR, in the order of §4 (subdivided if the size decision below requires it) | Tier 4, exact-head settlement per PR |
 | 10 | Shrink `file_size_baseline.json`; optional removal of now-unused facade imports | Tier 4 (touches the facade) |
 | later | §7 policy-module extraction | separate operator approval, then Tier 4 |
 
@@ -240,6 +242,37 @@ Each step PR contains only:
 The PR description includes an AST comparison of every moved function before
 and after the move, with the seam rewrites listed. Any other difference
 disqualifies the PR as a split step.
+
+### PR size and the 800-line cap
+
+Mission PRs are capped at 800 changed lines, as measured by
+`git diff --numstat origin/main...HEAD` with deleted lines counted. A move
+counts twice: once deleted from the facade and once added to the unit. The
+split moves about 4,750 lines (the ranges in §4), which is about 9,500 changed
+lines in total.
+Under the cap, a unit larger than about 380 lines must land over several PRs,
+one cohesive function group per PR. That means at least 12 Tier-4 PRs instead
+of the 8 move steps in §4.
+
+Three single functions exceed the cap on their own:
+
+- `_build_packet`: 551 lines, about 1,100 changed lines
+- `_build_model_review_quorum`: 493 lines, about 990 changed lines
+- `add_review_queue_parser`: 473 lines, about 950 changed lines
+
+Splitting them first would be a restructuring rather than a move, which is
+exactly the kind of change this design excludes. The operator therefore
+decides at preapproval:
+
+- **(a) Pure-move exception (recommended).** A step PR may exceed 800 changed
+  lines only by moved lines. The PR proves this with the AST comparison above,
+  and every other line counts against the cap. The steps in §4 apply as
+  written.
+- **(b) No exception.** Steps are subdivided to fit 800 changed lines. The three
+  functions above stay in the facade, so the facade ends at about 2,800 lines
+  and keeps its entry in the size baseline. The split's goal is then not met.
+
+### Overlap census before each step
 
 Before a step opens, its lane re-runs the open-PR overlap census (§11). A step
 does not start while another open PR touches the lines it moves, unless that
@@ -476,6 +509,7 @@ No data, receipts or settlement formats change, so no migration needs undoing.
 ## 10. Preapproval checklist for the operator
 
 - [ ] Module boundaries and order in §4 and §5
+- [ ] PR size: (a) pure-move exception to the 800-line cap, or (b) no exception (§5)
 - [ ] Seam rule I2 (facade late binding) instead of moving patch targets
 - [ ] Registration rule I3: dependency-tuple entries added in each step PR
 - [ ] Policy-module extraction (§7) kept out of the split and approved separately
