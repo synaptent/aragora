@@ -297,7 +297,7 @@ class CodebaseUnderstandingAgent:
         self._use_rlm_context = os.environ.get("ARAGORA_CODEBASE_CONTEXT_RLM", "1") == "1"
 
         # Specialist agents for debate
-        self._agents = [
+        self._agents: list[CodeAnalystAgent | SecurityReviewerAgent | BugHunterAgent] = [
             CodeAnalystAgent(),
             SecurityReviewerAgent(),
             BugHunterAgent(),
