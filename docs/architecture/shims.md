@@ -72,6 +72,15 @@ import-and-call tests at both paths.
 | `aragora.control_plane.leader:set_regional_leader_election` | `aragora.resilience.leader:set_regional_leader_election` | #10399 | not before M4 seal |
 | `aragora.control_plane.regional_sync:RegionalEvent` | `aragora.resilience.regional_events:RegionalEvent` | #10399 | not before M4 seal |
 | `aragora.control_plane.regional_sync:RegionalEventType` | `aragora.resilience.regional_events:RegionalEventType` | #10399 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_cancelled` | `aragora.events.task_events:emit_task_cancelled` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_claimed` | `aragora.events.task_events:emit_task_claimed` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_completed` | `aragora.events.task_events:emit_task_completed` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_failed` | `aragora.events.task_events:emit_task_failed` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_retried` | `aragora.events.task_events:emit_task_retried` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_submitted` | `aragora.events.task_events:emit_task_submitted` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:emit_task_timeout` | `aragora.events.task_events:emit_task_timeout` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:get_task_event_dispatcher` | `aragora.events.task_events:get_task_event_dispatcher` | #10403 | not before M4 seal |
+| `aragora.control_plane.task_events:set_task_event_dispatcher` | `aragora.events.task_events:set_task_event_dispatcher` | #10403 | not before M4 seal |
 | `aragora.debate.cache.embeddings_lru:EmbeddingCache` | `aragora.shared.embedding_cache:EmbeddingCache` | #10301 | not before M4 seal |
 | `aragora.debate.cache.embeddings_lru:EmbeddingCacheManager` | `aragora.shared.embedding_cache:EmbeddingCacheManager` | #10301 | not before M4 seal |
 | `aragora.debate.cache.embeddings_lru:get_embedding_cache` | `aragora.shared.embedding_cache:get_embedding_cache` | #10301 | not before M4 seal |
