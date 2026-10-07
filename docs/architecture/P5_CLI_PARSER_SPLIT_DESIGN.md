@@ -306,10 +306,17 @@ moved name is the same object as in its module.
 list in order with `option_strings`, `dest`, `default`, `type` name,
 `choices`, `nargs`, `required`, `help`, `metavar`, and for each leaf the
 `func.__name__` from `set_defaults`. Top-level choices are recorded in
-`_choices_actions` order with their aliases. The test pins
-`ARAGORA_API_URL`, `ARAGORA_API_KEY` and `ARAGORA_ASK_TIMEOUT_SECONDS` with
-`monkeypatch.setenv` before importing, so the environment-dependent defaults
-are stable. Each step must keep the dump byte-equal.
+`_choices_actions` order with their aliases. Five defaults are read from the
+environment once, at import: `DEFAULT_API_URL` and `DEFAULT_API_KEY`
+(`parser.py:17-18`) and `DEFAULT_ROUNDS`, `DEFAULT_CONSENSUS` and
+`DEFAULT_AGENTS` (`aragora/config/legacy.py:267-269,318`). An in-process
+`monkeypatch.setenv` does not reach them when an earlier test in the same
+pytest process already imported the module. The test therefore builds the dump
+in a fresh subprocess, as C-4 does, with `ARAGORA_API_URL`, `ARAGORA_API_KEY`,
+`ARAGORA_DEFAULT_ROUNDS`, `ARAGORA_DEFAULT_CONSENSUS`,
+`ARAGORA_DEFAULT_AGENTS` and `ARAGORA_ASK_TIMEOUT_SECONDS` (read when
+`build_parser()` runs) pinned in the child environment. Each step must keep
+the dump byte-equal.
 
 **C-3 Help text.** `format_help()` of the root parser (core and advanced
 sections) and of every top-level command stays byte-identical.
