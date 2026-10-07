@@ -51,7 +51,11 @@ from aragora.pipeline.plan_ownership import (
 from aragora.pipeline.risk_register import RiskLevel, RiskRegister
 from aragora.pipeline.verification_plan import VerificationPlan
 from aragora.implement.types import ImplementPlan
-from aragora.tenancy.membership import MembershipLookupError, OrgMembershipResolver, user_org_ids
+from aragora.tenancy.membership import (
+    MembershipLookupError,
+    OrgMembershipResolver,
+    backfill_org_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +192,9 @@ class PlanStore:
     ``*_for_org`` methods require an org and only ever match rows owned by it;
     the unscoped methods are for internal callers that already hold an id.
     ``org_membership_resolver`` maps a user id to its org ids for the one-time
-    ownership backfill (default: the user store).
+    ownership backfill (default: the registered user store, once authoritative).
+    ``ownership_backfill_pending`` is True while that backfill is deferred;
+    :meth:`migrate_ownership` retries it.
     """
 
     def __init__(
@@ -198,7 +204,8 @@ class PlanStore:
         org_membership_resolver: OrgMembershipResolver | None = None,
     ) -> None:
         self._db_path = db_path or _get_db_path()
-        self._resolve_org_ids = org_membership_resolver or user_org_ids
+        self._resolve_org_ids = org_membership_resolver or backfill_org_ids
+        self.ownership_backfill_pending = False
         self._ensure_dir()
         self._ensure_table()
 
@@ -354,16 +361,31 @@ class PlanStore:
                 conn.execute("ALTER TABLE plans ADD COLUMN implement_plan_json TEXT")
             conn.commit()
             ensure_ownership_columns(conn)
-            try:
-                migrate_plan_store_schema(conn, self._resolve_org_ids)
-            except MembershipLookupError as exc:
-                conn.rollback()
-                logger.warning(
-                    "plans.db ownership backfill deferred until the user store is reachable: %s",
-                    exc,
-                )
+            self._migrate_ownership(conn)
         finally:
             conn.close()
+
+    def migrate_ownership(self) -> bool:
+        """Run the one-time ownership backfill if it is still due; True when it ran."""
+        conn = self._connect()
+        try:
+            return self._migrate_ownership(conn)
+        finally:
+            conn.close()
+
+    def _migrate_ownership(self, conn: sqlite3.Connection) -> bool:
+        try:
+            applied = migrate_plan_store_schema(conn, self._resolve_org_ids)
+        except MembershipLookupError as exc:
+            conn.rollback()
+            self.ownership_backfill_pending = True
+            logger.warning(
+                "plans.db ownership backfill deferred until the user store is reachable: %s",
+                exc,
+            )
+            return False
+        self.ownership_backfill_pending = False
+        return applied
 
     # -------------------------------------------------------------------------
     # CRUD

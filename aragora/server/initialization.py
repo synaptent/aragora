@@ -1109,6 +1109,34 @@ def init_handler_stores(nomic_dir: Path) -> dict:
     return stores
 
 
+def register_startup_user_store(user_store: Any) -> None:
+    """Register the user store from ``init_handler_stores`` for membership lookups.
+
+    It is provisional when it is not PostgreSQL-backed although ``start()``
+    will bring up the shared PostgreSQL pool (shared pool enabled and a
+    non-SQLite backend), because ``upgrade_handler_stores`` then replaces it.
+    """
+    import os
+
+    from aragora.tenancy.membership import register_user_store
+
+    provisional = False
+    try:
+        from aragora.storage.factory import StorageBackend, get_storage_backend
+        from aragora.storage.user_store import PostgresUserStore
+
+        provisional = (
+            not isinstance(user_store, PostgresUserStore)
+            and os.environ.get("ARAGORA_USE_SHARED_POOL", "true").lower() in ("true", "1", "yes")
+            and get_storage_backend() != StorageBackend.SQLITE
+        )
+    except ImportError as e:
+        logger.debug("[init] Storage backend unknown, user store registered as final: %s", e)
+    register_user_store(user_store, provisional=provisional)
+    if provisional:
+        logger.info("[init] Ownership backfills wait for the PostgreSQL user store")
+
+
 # =============================================================================
 # PostgreSQL Store Initialization (Production)
 # =============================================================================
@@ -1340,6 +1368,13 @@ async def upgrade_handler_stores(nomic_dir: Path | None) -> dict[str, str]:
         # Catch-all for unexpected errors (e.g., read-only replicas)
         logger.warning("[upgrade] UserStore upgrade failed: %s: %s", type(e).__name__, e)
         results["user_store"] = "skipped"
+
+    if results["user_store"] == "postgres":
+        from aragora.server.receipt_link_resolver import run_deferred_ownership_backfills
+
+        # In a worker thread the PostgreSQL store's sync lookups can dispatch
+        # to this (then idle) event loop, where the pool lives.
+        await asyncio.to_thread(run_deferred_ownership_backfills)
 
     # Upgrade additional stores (job queue, governance, inbox).
     # Each entry: (name, module_path, class_name, setter_module, setter_func)

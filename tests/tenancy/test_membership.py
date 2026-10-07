@@ -12,6 +12,7 @@ from aragora.storage.user_store.sqlite_store import UserStore
 from aragora.tenancy import membership
 from aragora.tenancy.membership import (
     MembershipLookupError,
+    backfill_org_ids,
     register_user_store,
     user_org_ids,
 )
@@ -86,3 +87,20 @@ def test_no_store_available_is_a_lookup_error(monkeypatch: pytest.MonkeyPatch) -
 
     with pytest.raises(MembershipLookupError):
         user_org_ids("user-1")
+
+
+def test_backfill_lookups_wait_while_the_registered_store_is_provisional(
+    user_store: UserStore,
+) -> None:
+    owner = _user(user_store, "owner@example.com")
+    org = user_store.create_organization("Org A", owner_id=owner)
+
+    register_user_store(user_store, provisional=True)
+
+    assert user_org_ids(owner) == frozenset({org.id})
+    with pytest.raises(MembershipLookupError):
+        backfill_org_ids(owner)
+
+    register_user_store(user_store)
+
+    assert backfill_org_ids(owner) == frozenset({org.id})

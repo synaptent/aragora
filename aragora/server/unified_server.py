@@ -953,6 +953,7 @@ class UnifiedServer:
         from aragora.server.initialization import (
             init_handler_stores,
             initialize_subsystems,
+            register_startup_user_store,
         )
 
         UnifiedHandler.nomic_state_file = nomic_dir / "nomic_state.json"
@@ -1016,9 +1017,7 @@ class UnifiedServer:
         UnifiedHandler.user_store = stores["user_store"]
         UnifiedHandler.usage_tracker = stores["usage_tracker"]
         if stores["user_store"] is not None:
-            from aragora.tenancy.membership import register_user_store
-
-            register_user_store(stores["user_store"])
+            register_startup_user_store(stores["user_store"])
 
         from aragora.server.receipt_link_resolver import install_receipt_link_resolver
 

@@ -45,9 +45,15 @@ class ServerReceiptLinkResolver:
 
     def plan_org_id(self, plan_id: str) -> str | None:
         try:
-            plan = self._plan_store_factory().get(plan_id)
+            store = self._plan_store_factory()
+            # Legacy plans have no org until the plan backfill runs, which would
+            # read as "no owner" and mark their receipts unknown for good.
+            pending = getattr(store, "ownership_backfill_pending", False) is True
+            plan = None if pending else store.get(plan_id)
         except _LOOKUP_ERRORS as exc:
             raise ReceiptLinkLookupError(f"plan lookup failed: {type(exc).__name__}") from exc
+        if pending:
+            raise ReceiptLinkLookupError("the plan ownership backfill has not run yet")
         return getattr(plan, "org_id", None) if plan is not None else None
 
 
@@ -73,4 +79,24 @@ def install_receipt_link_resolver(debate_storage: Any | None) -> bool:
         return False
 
 
-__all__ = ["ServerReceiptLinkResolver", "install_receipt_link_resolver"]
+def run_deferred_ownership_backfills() -> None:
+    """Retry the plan, then the receipt, ownership backfill if either is still due.
+
+    Called once the authoritative user store is registered. Failures are
+    logged and leave the backfills pending.
+    """
+    try:
+        from aragora.pipeline.plan_store import get_plan_store
+        from aragora.storage.receipt_store import get_receipt_store
+
+        get_plan_store().migrate_ownership()
+        get_receipt_store().migrate_ownership()
+    except Exception as exc:  # noqa: BLE001 - runs inside server start(); never block startup
+        logger.warning("[init] Deferred ownership backfills did not run: %s", exc)
+
+
+__all__ = [
+    "ServerReceiptLinkResolver",
+    "install_receipt_link_resolver",
+    "run_deferred_ownership_backfills",
+]

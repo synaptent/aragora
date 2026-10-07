@@ -10,6 +10,11 @@ against), else the process-wide ``get_user_store()`` singleton. "No membership"
 (unknown user, user without an org, org missing from the store) is an empty
 set; "could not check" raises :class:`MembershipLookupError` so callers can
 defer instead of recording a wrong answer.
+
+A store registered as provisional (a startup fallback that a later
+registration replaces) answers :func:`user_org_ids`, but
+:func:`backfill_org_ids` treats it as "could not check": a one-time backfill
+must not finalize against memberships the fallback may not hold.
 """
 
 from __future__ import annotations
@@ -20,16 +25,28 @@ from typing import Any
 OrgMembershipResolver = Callable[[str], frozenset[str]]
 
 _registered_user_store: Any | None = None
+_registered_store_is_provisional = False
 
 
 class MembershipLookupError(RuntimeError):
     """The user store could not be consulted, so membership is undetermined."""
 
 
-def register_user_store(user_store: Any | None) -> None:
+def register_user_store(user_store: Any | None, *, provisional: bool = False) -> None:
     """Make ``user_store`` the default for membership lookups (None clears it)."""
-    global _registered_user_store
+    global _registered_user_store, _registered_store_is_provisional
     _registered_user_store = user_store
+    _registered_store_is_provisional = provisional and user_store is not None
+
+
+def backfill_org_ids(user_id: str) -> frozenset[str]:
+    """:func:`user_org_ids` for one-time ownership backfills.
+
+    Raises :class:`MembershipLookupError` while the registered store is provisional.
+    """
+    if _registered_store_is_provisional:
+        raise MembershipLookupError("the authoritative user store is not registered yet")
+    return user_org_ids(user_id)
 
 
 def user_org_ids(user_id: str, user_store: Any | None = None) -> frozenset[str]:
@@ -66,6 +83,7 @@ def _singleton_user_store() -> Any | None:
 __all__ = [
     "MembershipLookupError",
     "OrgMembershipResolver",
+    "backfill_org_ids",
     "register_user_store",
     "user_org_ids",
 ]
