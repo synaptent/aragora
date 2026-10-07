@@ -7,7 +7,9 @@ import ``aragora.cli`` at any scope.
 
 from __future__ import annotations
 
+import argparse
 import ast
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -67,8 +69,48 @@ async def test_subprocess_review_passes_the_diff_and_parses_json() -> None:
     with patch.object(pr_reviewer.subprocess, "run", return_value=completed) as run:
         assert await skill._run_review("the diff") == ({"issues": [1]}, None)
     args, kwargs = run.call_args
-    assert args[0] == ["aragora", "review", "--format", "json", "--demo"]
+    assert args[0] == ["aragora", "review", "--output-format", "json", "--demo"]
     assert kwargs["input"] == "the diff"
+
+
+@pytest.mark.parametrize("demo", [False, True])
+def test_review_command_is_accepted_by_the_review_cli(demo: bool) -> None:
+    from aragora.cli.review import create_review_parser
+
+    parser = argparse.ArgumentParser(prog="aragora")
+    create_review_parser(parser.add_subparsers(dest="command"))
+    args = parser.parse_args(PRReviewerSkill(demo=demo)._review_command()[1:])
+    assert args.output_format == "json"
+    assert args.demo is demo
+
+
+@pytest.mark.asyncio
+async def test_subprocess_review_parses_pretty_printed_json_after_logs() -> None:
+    skill = PRReviewerSkill()
+    payload = {"critical_issues": ["sql injection"], "agreement_score": 0.5, "summary": "s"}
+    stdout = "Reviewing diff...\n" + json.dumps(payload, indent=2) + "\nReview ID: r1\n"
+    completed = MagicMock(returncode=0, stdout=stdout, stderr="")
+    with patch.object(pr_reviewer.subprocess, "run", return_value=completed):
+        assert await skill._run_review("the diff") == (payload, None)
+
+
+@pytest.mark.asyncio
+async def test_subprocess_review_without_json_returns_raw_output() -> None:
+    skill = PRReviewerSkill()
+    completed = MagicMock(returncode=0, stdout="no json {here\n", stderr="")
+    with patch.object(pr_reviewer.subprocess, "run", return_value=completed):
+        assert await skill._run_review("the diff") == ({"raw_output": "no json {here\n"}, None)
+
+
+@pytest.mark.asyncio
+async def test_subprocess_review_failure_without_stderr_is_still_an_error() -> None:
+    skill = PRReviewerSkill()
+    completed = MagicMock(returncode=2, stdout="", stderr="  ")
+    with patch.object(pr_reviewer.subprocess, "run", return_value=completed):
+        assert await skill._run_review("the diff") == (
+            None,
+            "aragora review exited with code 2",
+        )
 
 
 @pytest.mark.asyncio
