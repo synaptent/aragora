@@ -48,6 +48,13 @@ from aragora.server.handlers.explainability import (
     get_explainability_handler,
 )
 
+# Explainability reads are org-scoped; requests act for the org that owns every debate.
+pytestmark = pytest.mark.usefixtures("explainability_org_member")
+
+TEST_ORG = "test-org-001"
+# Batch jobs answer status and results only for the org that created them.
+OWNED_BY_TEST_ORG = {"_owner_org_id": TEST_ORG}
+
 
 # ============================================================================
 # Helpers
@@ -737,13 +744,14 @@ class TestBatchStatusAndResults:
             "aragora.server.handlers.explainability._get_batch_job",
             return_value=None,
         ):
-            result = handler._handle_batch_status("missing-batch")
+            result = handler._handle_batch_status("missing-batch", TEST_ORG)
 
         assert result.status_code == 404
 
     def test_batch_status_found(self, handler):
         job = BatchJob(
             batch_id="batch-001",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
             status=BatchStatus.PROCESSING,
         )
@@ -752,7 +760,7 @@ class TestBatchStatusAndResults:
             "aragora.server.handlers.explainability._get_batch_job",
             return_value=job,
         ):
-            result = handler._handle_batch_status("batch-001")
+            result = handler._handle_batch_status("batch-001", TEST_ORG)
 
         assert result.status_code == 200
         data = parse_response(result)
@@ -766,13 +774,14 @@ class TestBatchStatusAndResults:
             "aragora.server.handlers.explainability._get_batch_job",
             return_value=None,
         ):
-            result = handler._handle_batch_results("missing", {})
+            result = handler._handle_batch_results("missing", {}, TEST_ORG)
 
         assert result.status_code == 404
 
     def test_batch_results_pending(self, handler):
         job = BatchJob(
             batch_id="batch-001",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1"],
             status=BatchStatus.PENDING,
         )
@@ -780,13 +789,14 @@ class TestBatchStatusAndResults:
             "aragora.server.handlers.explainability._get_batch_job",
             return_value=job,
         ):
-            result = handler._handle_batch_results("batch-001", {})
+            result = handler._handle_batch_results("batch-001", {}, TEST_ORG)
 
         assert result.status_code == 202
 
     def test_batch_results_processing_no_partial(self, handler):
         job = BatchJob(
             batch_id="batch-001",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1"],
             status=BatchStatus.PROCESSING,
         )
@@ -794,7 +804,7 @@ class TestBatchStatusAndResults:
             "aragora.server.handlers.explainability._get_batch_job",
             return_value=job,
         ):
-            result = handler._handle_batch_results("batch-001", {})
+            result = handler._handle_batch_results("batch-001", {}, TEST_ORG)
 
         assert result.status_code == 202
         data = parse_response(result)
@@ -803,6 +813,7 @@ class TestBatchStatusAndResults:
     def test_batch_results_completed_with_pagination(self, handler):
         job = BatchJob(
             batch_id="batch-001",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2", "d3"],
             status=BatchStatus.COMPLETED,
         )
@@ -812,7 +823,9 @@ class TestBatchStatusAndResults:
             "aragora.server.handlers.explainability._get_batch_job",
             return_value=job,
         ):
-            result = handler._handle_batch_results("batch-001", {"offset": "0", "limit": "2"})
+            result = handler._handle_batch_results(
+                "batch-001", {"offset": "0", "limit": "2"}, TEST_ORG
+            )
 
         data = parse_response(result)
         assert len(data["results"]) == 2
@@ -832,6 +845,7 @@ class TestProcessBatch:
     async def test_process_batch_all_success(self, handler, decision):
         job = BatchJob(
             batch_id="batch-test",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
         )
         with patch.object(handler, "_get_or_build_decision", return_value=decision):
@@ -849,6 +863,7 @@ class TestProcessBatch:
     async def test_process_batch_all_not_found(self, handler):
         job = BatchJob(
             batch_id="batch-test",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
         )
         with patch.object(handler, "_get_or_build_decision", return_value=None):
@@ -865,6 +880,7 @@ class TestProcessBatch:
     async def test_process_batch_partial_failure(self, handler, decision):
         job = BatchJob(
             batch_id="batch-test",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
         )
 

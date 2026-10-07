@@ -30,6 +30,13 @@ from aragora.server.handlers.explainability_store import (
 )
 from aragora.server.handlers.base import HandlerResult
 
+# Explainability reads are org-scoped; requests act for the org that owns every debate.
+pytestmark = pytest.mark.usefixtures("explainability_org_member")
+
+TEST_ORG = "test-org-001"
+# Batch jobs answer status and results only for the org that created them.
+OWNED_BY_TEST_ORG = {"_owner_org_id": TEST_ORG}
+
 
 def run_async(coro):
     """Run an async coroutine synchronously."""
@@ -392,12 +399,13 @@ class TestGetBatchStatus:
         # Create a job directly
         job = BatchJob(
             batch_id="batch-test-123",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
             status=BatchStatus.PENDING,
         )
         _save_batch_job(job)
 
-        result = handler._handle_batch_status("batch-test-123")
+        result = handler._handle_batch_status("batch-test-123", TEST_ORG)
         response_body, status = parse_handler_result(result)
 
         assert status == 200
@@ -408,6 +416,7 @@ class TestGetBatchStatus:
     def test_get_status_processing(self, handler, mock_get_request):
         job = BatchJob(
             batch_id="batch-test-456",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2", "d3"],
             status=BatchStatus.PROCESSING,
             processed_count=1,
@@ -415,7 +424,7 @@ class TestGetBatchStatus:
         )
         _save_batch_job(job)
 
-        result = handler._handle_batch_status("batch-test-456")
+        result = handler._handle_batch_status("batch-test-456", TEST_ORG)
         response_body, status = parse_handler_result(result)
 
         assert status == 200
@@ -424,7 +433,7 @@ class TestGetBatchStatus:
         assert response_body["progress_pct"] == 33.3
 
     def test_get_status_not_found(self, handler, mock_get_request):
-        result = handler._handle_batch_status("nonexistent")
+        result = handler._handle_batch_status("nonexistent", TEST_ORG)
         response_body, status = parse_handler_result(result)
 
         assert status == 404
@@ -442,6 +451,7 @@ class TestGetBatchResults:
     def test_get_results_completed(self, handler, mock_get_request):
         job = BatchJob(
             batch_id="batch-results-123",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
             status=BatchStatus.COMPLETED,
             processed_count=2,
@@ -463,7 +473,7 @@ class TestGetBatchResults:
         )
         _save_batch_job(job)
 
-        result = handler._handle_batch_results("batch-results-123", {})
+        result = handler._handle_batch_results("batch-results-123", {}, TEST_ORG)
         response_body, status = parse_handler_result(result)
 
         assert status == 200
@@ -475,12 +485,13 @@ class TestGetBatchResults:
     def test_get_results_pending(self, handler, mock_get_request):
         job = BatchJob(
             batch_id="batch-pending-123",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
             status=BatchStatus.PENDING,
         )
         _save_batch_job(job)
 
-        result = handler._handle_batch_results("batch-pending-123", {})
+        result = handler._handle_batch_results("batch-pending-123", {}, TEST_ORG)
         response_body, status = parse_handler_result(result)
 
         assert status == 202
@@ -489,6 +500,7 @@ class TestGetBatchResults:
     def test_get_results_partial_allowed(self, handler, mock_get_request):
         job = BatchJob(
             batch_id="batch-partial-123",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2", "d3"],
             status=BatchStatus.PROCESSING,
             processed_count=1,
@@ -503,7 +515,9 @@ class TestGetBatchResults:
         )
         _save_batch_job(job)
 
-        result = handler._handle_batch_results("batch-partial-123", {"include_partial": "true"})
+        result = handler._handle_batch_results(
+            "batch-partial-123", {"include_partial": "true"}, TEST_ORG
+        )
         response_body, status = parse_handler_result(result)
 
         assert status == 200
@@ -518,6 +532,7 @@ class TestGetBatchResults:
         ]
         job = BatchJob(
             batch_id="batch-paginated",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=[f"d{i}" for i in range(10)],
             status=BatchStatus.COMPLETED,
             processed_count=10,
@@ -525,7 +540,9 @@ class TestGetBatchResults:
         )
         _save_batch_job(job)
 
-        result = handler._handle_batch_results("batch-paginated", {"limit": "3", "offset": "2"})
+        result = handler._handle_batch_results(
+            "batch-paginated", {"limit": "3", "offset": "2"}, TEST_ORG
+        )
         response_body, status = parse_handler_result(result)
 
         assert status == 200
@@ -535,7 +552,7 @@ class TestGetBatchResults:
         assert response_body["pagination"]["has_more"] is True
 
     def test_get_results_not_found(self, handler, mock_get_request):
-        result = handler._handle_batch_results("nonexistent", {})
+        result = handler._handle_batch_results("nonexistent", {}, TEST_ORG)
         response_body, status = parse_handler_result(result)
 
         assert status == 404
