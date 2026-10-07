@@ -41,7 +41,8 @@ from collections.abc import Callable, Sequence
 from aragora.agents.base import AgentType
 from aragora.config.settings import get_settings
 from aragora.core import Agent, DebateResult, Environment
-from aragora.debate.protocol import DebateProtocol, resolve_default_protocol
+from aragora.debate.protocol_resolver import resolve_default_protocol
+from aragora.protocols.debate import DebateProtocol
 
 # Type alias for consensus modes (must match DebateProtocol.consensus)
 ConsensusMode = Literal[

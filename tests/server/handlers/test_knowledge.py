@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 from aragora.server.handlers.knowledge_base.handler import KnowledgeHandler
 from aragora.server.handlers.base import error_response
 
@@ -27,6 +28,8 @@ from aragora.server.handlers.base import error_response
 
 class MockAuthUser:
     """Mock authenticated user with full knowledge permissions."""
+
+    org_id = "test-org-001"
 
     def __init__(self, user_id: str = "test-user", permissions=None, roles=None):
         self.user_id = user_id
@@ -45,8 +48,8 @@ class MockRestrictedUser:
 
     def __init__(self, user_id: str = "restricted-user"):
         self.user_id = user_id
-        self.permissions = set()
-        self.roles = set()
+        self.permissions: set[str] = set()
+        self.roles: set[str] = set()
 
 
 def _make_http_handler(method: str = "GET", body: dict | None = None) -> MagicMock:
@@ -73,6 +76,9 @@ def handler():
     """Create a KnowledgeHandler with minimal server context."""
     ctx = {"storage": None, "elo_system": None, "nomic_dir": None}
     h = KnowledgeHandler(ctx)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
+    h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
     return h
 
 

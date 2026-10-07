@@ -4,6 +4,7 @@ import pytest
 from datetime import datetime, timezone
 from typing import Any
 
+from aragora.knowledge.fact_store import InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.unified import (
     UnifiedKnowledgeStore,
     UnifiedStoreConfig,
@@ -473,7 +474,7 @@ class TestUnifiedKnowledgeStore:
     @pytest.fixture
     def store(self):
         """Create store for testing."""
-        config = UnifiedStoreConfig()
+        config = UnifiedStoreConfig(fact_store=ScopedFactStore(InMemoryFactStore(), "org-test"))
         return UnifiedKnowledgeStore(config)
 
     @pytest.mark.asyncio
@@ -575,6 +576,7 @@ class TestUnifiedStoreIntegration:
             enable_cross_references=True,
             enable_vector_search=False,  # May not be available
             parallel_queries=True,
+            fact_store=ScopedFactStore(InMemoryFactStore(), "org-test"),
         )
         return UnifiedKnowledgeStore(config)
 

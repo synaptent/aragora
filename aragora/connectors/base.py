@@ -950,6 +950,11 @@ class BaseConnector(ABC):
 
         Returns:
             List of Evidence objects
+
+        Error handling is not uniform across implementations: some connectors
+        raise when the request fails, others log the error and return an empty
+        list. A caller that must tell a failure from "no results" has to check
+        the specific connector.
         """
         raise NotImplementedError("Subclasses must implement search method")
 
@@ -963,6 +968,11 @@ class BaseConnector(ABC):
 
         Returns:
             Evidence object or None if not found
+
+        Error handling is not uniform across implementations: some connectors
+        raise when the request fails, others log the error and return None, so
+        None does not always mean "not found". A caller that must tell the two
+        apart has to check the specific connector.
         """
         raise NotImplementedError("Subclasses must implement fetch method")
 
