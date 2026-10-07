@@ -225,7 +225,7 @@ class UnifiedAuditLogger:
         """Lazy-load compliance audit logger."""
         if self._compliance_logger is None and self._enable_compliance:
             try:
-                from aragora.audit.log import get_audit_log
+                from aragora.observability.audit_log import get_audit_log
 
                 self._compliance_logger = get_audit_log()
             except ImportError:
@@ -266,14 +266,13 @@ class UnifiedAuditLogger:
         return self._immutable_logger
 
     def _get_middleware_logger(self):
-        """Lazy-load middleware audit logger."""
+        """Lazy-load the middleware audit logger registered by the server."""
         if self._middleware_logger is None and self._enable_middleware:
-            try:
-                from aragora.server.middleware.audit_logger import get_audit_logger
-
-                self._middleware_logger = get_audit_logger()
-            except ImportError:
-                logger.debug("Middleware audit logger not available")
+            factory = _middleware_logger_factory
+            if factory is None:
+                logger.debug("Middleware audit logger not registered")
+            else:
+                self._middleware_logger = factory()
         return self._middleware_logger
 
     def log(self, event: UnifiedAuditEvent) -> None:
@@ -331,9 +330,9 @@ class UnifiedAuditLogger:
                     category = cat
                     break
 
-            from aragora.audit.log import AuditCategory as ComplianceCategory
-            from aragora.audit.log import AuditEvent as ComplianceEvent
-            from aragora.audit.log import AuditOutcome as ComplianceOutcome
+            from aragora.observability.audit_log import AuditCategory as ComplianceCategory
+            from aragora.observability.audit_log import AuditEvent as ComplianceEvent
+            from aragora.observability.audit_log import AuditOutcome as ComplianceOutcome
 
             # Map string category to AuditCategory enum
             cat_map = {
@@ -640,6 +639,16 @@ class UnifiedAuditLogger:
 # Global instance
 _unified_logger: UnifiedAuditLogger | None = None
 
+# The HTTP middleware audit logger lives in aragora.server, above this layer, so the
+# server registers its factory at startup instead of this module importing it.
+_middleware_logger_factory: Callable[[], Any] | None = None
+
+
+def register_middleware_audit_logger(factory: Callable[[], Any]) -> None:
+    """Register the factory that returns the HTTP middleware audit logger."""
+    global _middleware_logger_factory
+    _middleware_logger_factory = factory
+
 
 def get_unified_audit_logger() -> UnifiedAuditLogger:
     """Get the global unified audit logger instance."""
@@ -758,4 +767,5 @@ __all__ = [
     "audit_security",
     "audit_debate",
     "audit_action",
+    "register_middleware_audit_logger",
 ]

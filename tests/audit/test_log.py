@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aragora.audit.log import (
+from aragora.observability.audit_log import (
     AUDIT_COLUMNS,
     AuditCategory,
     AuditEvent,
@@ -347,7 +347,7 @@ class TestAuditLogInit:
         """Test creating audit log with default path."""
         reset_audit_log()
         with patch.dict(os.environ, {}, clear=True):
-            with patch("aragora.audit.log.Path") as mock_path:
+            with patch("aragora.observability.audit_log.Path") as mock_path:
                 mock_path.return_value = tmp_path / "audit.db"
                 # We need to patch at the right place
                 log = AuditLog(db_path=tmp_path / "audit.db")
@@ -1019,7 +1019,8 @@ class TestSingletonManagement:
 
         # Mock the production guard to allow SQLite
         monkeypatch.setattr(
-            "aragora.audit.log.require_distributed_store", lambda *args, **kwargs: None
+            "aragora.observability.audit_log.require_distributed_store",
+            lambda *args, **kwargs: None,
         )
 
         with patch.dict(os.environ, {}, clear=True):

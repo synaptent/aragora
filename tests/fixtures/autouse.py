@@ -1432,7 +1432,7 @@ def _reset_lazy_globals_impl():
 
     # Reset unified audit logger singleton
     try:
-        import aragora.audit.unified as _unified_audit
+        import aragora.observability.unified_audit as _unified_audit
 
         _unified_audit._unified_logger = None
     except (ImportError, AttributeError):
@@ -1563,7 +1563,7 @@ def reset_lazy_globals():
     - aragora.observability.slo (3 SLO metric globals + _slo_metrics_initialized)
     - aragora.observability.otel (_initialized, _tracer_provider, _tracers)
     - aragora.events.dispatcher (_event_rate_limiter, _dispatcher)
-    - aragora.audit.unified._unified_logger (UnifiedAuditLogger singleton)
+    - aragora.observability.unified_audit._unified_logger (UnifiedAuditLogger singleton)
     - aragora.server.middleware.approval_gate (_pending_approvals, _last_cleanup_time)
     - aragora.observability.metrics.stores (_initialized flag for Prometheus re-registration)
     - aragora.gauntlet.signing._default_signer (ReceiptSigner singleton)

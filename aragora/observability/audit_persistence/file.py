@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 from .base import AuditPersistenceBackend, PersistenceError
 
 if TYPE_CHECKING:
-    from aragora.audit.log import AuditEvent, AuditQuery
+    from aragora.observability.audit_log import AuditEvent, AuditQuery
 
 logger = logging.getLogger(__name__)
 
@@ -410,7 +410,7 @@ class FileBackend(AuditPersistenceBackend):
 
     def _dict_to_event(self, data: dict[str, Any]) -> AuditEvent:
         """Convert dictionary to AuditEvent."""
-        from aragora.audit.log import AuditCategory, AuditEvent, AuditOutcome
+        from aragora.observability.audit_log import AuditCategory, AuditEvent, AuditOutcome
 
         return AuditEvent(
             id=data.get("id", ""),

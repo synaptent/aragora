@@ -15,7 +15,7 @@ Features:
 - Tamper detection via hash chains
 
 Usage:
-    from aragora.audit.log import AuditLog, AuditEvent, AuditCategory
+    from aragora.observability.audit_log import AuditLog, AuditEvent, AuditCategory
 
     audit = AuditLog()
 
@@ -469,7 +469,7 @@ class AuditLog:
 
         if backend_type == "file":
             try:
-                from aragora.audit.persistence import get_backend as get_audit_backend
+                from aragora.observability.audit_persistence import get_backend as get_audit_backend
 
                 self._persistence_backend = get_audit_backend("file")
                 self._backend_type = "file"
