@@ -1328,7 +1328,10 @@ async def send_receipt_to_channel(
             raise record_not_found_error("Receipt")
 
         from aragora.channels.formatter import format_receipt_for_channel
-        from aragora.server.handlers.decisions.receipts import ReceiptsHandler
+        from aragora.server.handlers.decisions.receipts import (
+            ReceiptsHandler,
+            WorkspaceNotFoundError,
+        )
 
         supported_channels = {"slack", "teams", "email", "discord"}
         if body.channel_type not in supported_channels:
@@ -1347,14 +1350,21 @@ async def send_receipt_to_channel(
         )
 
         handler = ReceiptsHandler(getattr(request.app.state, "context", {}) or {})
-        if body.channel_type == "slack":
-            result = await handler._send_to_slack(formatted, body.channel_id, body.workspace_id)
-        elif body.channel_type == "teams":
-            result = await handler._send_to_teams(formatted, body.channel_id, body.workspace_id)
-        elif body.channel_type == "email":
-            result = await handler._send_to_email(formatted, body.channel_id, body.options)
-        else:
-            result = await handler._send_to_discord(formatted, body.channel_id, body.options)
+        try:
+            if body.channel_type == "slack":
+                result = await handler._send_to_slack(
+                    formatted, body.channel_id, body.workspace_id, org_id=scope.org_id
+                )
+            elif body.channel_type == "teams":
+                result = await handler._send_to_teams(
+                    formatted, body.channel_id, body.workspace_id, org_id=scope.org_id
+                )
+            elif body.channel_type == "email":
+                result = await handler._send_to_email(formatted, body.channel_id, body.options)
+            else:
+                result = await handler._send_to_discord(formatted, body.channel_id, body.options)
+        except WorkspaceNotFoundError:
+            raise record_not_found_error("Workspace") from None
 
         handler._record_delivery_history(
             receipt_id=receipt_id,

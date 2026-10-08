@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -28,6 +29,7 @@ from aragora.billing.auth.context import UserAuthContext
 from aragora.export.decision_receipt import DecisionReceipt
 from aragora.server.handlers.decisions.receipts import ReceiptsHandler
 from aragora.server.handlers.utils.receipt_delivery_history import (
+    DELIVERY_ORG_KEY,
     get_receipt_delivery_history_store,
 )
 from aragora.storage.receipt_store import ReceiptStore
@@ -539,3 +541,107 @@ class TestOwnerKeepsAccess:
         assert result.status_code == 200
         receipts._send_to_slack.assert_awaited_once()
         assert [e["receiptId"] for e in get_receipt_delivery_history_store()] == ["rcpt-a"]
+
+
+WORKSPACE_NOT_FOUND = {"error": "Workspace not found", "code": "not_found"}
+
+
+class _WorkspaceStore:
+    """Workspace store keyed by id; ``org_attr`` names the field holding the owning org."""
+
+    def __init__(self, org_attr: str, owners: dict[str, str | None]) -> None:
+        self._workspaces = {
+            workspace_id: SimpleNamespace(
+                **{org_attr: owner},
+                access_token="xoxb-test",
+                signing_secret="secret",
+                bot_id="bot-1",
+                service_url="https://smba.invalid/",
+            )
+            for workspace_id, owner in owners.items()
+        }
+
+    def get(self, workspace_id: str) -> Any:
+        return self._workspaces.get(workspace_id)
+
+
+@pytest.fixture
+def connector_sends(monkeypatch) -> list[tuple[str, str]]:
+    """Real Slack/Teams send paths over fake workspace stores and recording connectors."""
+    sends: list[tuple[str, str]] = []
+    owners = {"W-A": ORG_A, "W-B": ORG_B, "W-NULL": None}
+
+    def _connector(kind: str):
+        def build(**_kwargs):
+            async def send_message(*, channel_id, **_kw):
+                sends.append((kind, channel_id))
+                return SimpleNamespace(timestamp="1.0", channel_id=channel_id, message_id="m-1")
+
+            return SimpleNamespace(send_message=send_message)
+
+        return build
+
+    monkeypatch.setattr(
+        "aragora.storage.slack_workspace_store.get_slack_workspace_store",
+        lambda: _WorkspaceStore("tenant_id", owners),
+    )
+    monkeypatch.setattr(
+        "aragora.storage.teams_workspace_store.get_teams_workspace_store",
+        lambda: _WorkspaceStore("aragora_tenant_id", owners),
+    )
+    monkeypatch.setattr("aragora.connectors.chat.slack.SlackConnector", _connector("slack"))
+    monkeypatch.setattr("aragora.connectors.chat.teams.TeamsConnector", _connector("teams"))
+    return sends
+
+
+@pytest.fixture
+def real_senders(store, share_store) -> ReceiptsHandler:
+    handler = ReceiptsHandler(MagicMock())
+    handler._store = store
+    handler._share_store = share_store
+    return handler
+
+
+def _delivery_requests(channel_type: str, workspace_id: str) -> list[tuple[str, dict[str, Any]]]:
+    return [
+        (
+            "/api/v2/receipts/rcpt-a/send-to-channel",
+            {"channel_type": channel_type, "channel_id": "C1", "workspace_id": workspace_id},
+        ),
+        (
+            "/api/v1/receipts/rcpt-a/deliver",
+            {"channel": channel_type, "destination": "C1", "workspace_id": workspace_id},
+        ),
+    ]
+
+
+class TestDeliveryWorkspaceOwnership:
+    @pytest.mark.parametrize("channel_type", ["slack", "teams"])
+    @pytest.mark.parametrize("workspace_id", ["W-B", "W-NULL", "W-missing"])
+    @pytest.mark.asyncio
+    async def test_other_org_workspace_answers_like_a_missing_one(
+        self, real_senders, act_as, connector_sends, channel_type, workspace_id
+    ):
+        act_as(USER_A)
+        for path, body in _delivery_requests(channel_type, workspace_id):
+            result = await _call(real_senders, "POST", path, body=body)
+            assert (result.status_code, _json(result)) == (404, WORKSPACE_NOT_FOUND), path
+
+        assert connector_sends == []
+        assert get_receipt_delivery_history_store() == []
+
+    @pytest.mark.parametrize("channel_type", ["slack", "teams"])
+    @pytest.mark.asyncio
+    async def test_own_workspace_is_sent_and_recorded(
+        self, real_senders, act_as, connector_sends, channel_type
+    ):
+        act_as(USER_A)
+        for path, body in _delivery_requests(channel_type, "W-A"):
+            result = await _call(real_senders, "POST", path, body=body)
+            assert result.status_code == 200, (path, result.body[:300])
+
+        assert connector_sends == [(channel_type, "C1"), (channel_type, "C1")]
+        assert [
+            (e["receiptId"], e["workspaceId"], e[DELIVERY_ORG_KEY])
+            for e in get_receipt_delivery_history_store()
+        ] == [("rcpt-a", "W-A", ORG_A), ("rcpt-a", "W-A", ORG_A)]

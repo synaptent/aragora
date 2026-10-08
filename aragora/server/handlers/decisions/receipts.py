@@ -70,6 +70,7 @@ from aragora.server.handlers.utils.lazy_stores import LazyStoreFactory
 from aragora.server.handlers.utils.receipt_delivery_history import (
     DELIVERY_ORG_KEY as _DELIVERY_ORG_KEY,
     get_receipt_delivery_history_store,
+    record_receipt_delivery,
 )
 from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.server.handlers.openapi_decorator import api_endpoint
@@ -103,6 +104,23 @@ def _permission_denied_response(exc: Exception) -> HandlerResult:
     return json_response(
         {"error": f"Permission denied: {exc}", "code": "permission_denied"}, status=403
     )
+
+
+class WorkspaceNotFoundError(LookupError):
+    """The delivery workspace is missing or not owned by the acting org.
+
+    Not a ValueError: callers answer it with the standard not-found response,
+    never as a delivery failure that would reveal the workspace exists.
+    """
+
+
+def _require_owned_workspace(workspace: Any, org_attr: str, org_id: str | None) -> Any:
+    """Return ``workspace`` when ``org_id`` owns it; otherwise raise WorkspaceNotFoundError."""
+    owner = str(getattr(workspace, org_attr, None) or "").strip() if workspace else ""
+    acting_org = str(org_id or "").strip()
+    if not owner or owner != acting_org:
+        raise WorkspaceNotFoundError
+    return workspace
 
 
 def _content_length(headers: dict[str, str] | None) -> int | None:
@@ -1967,41 +1985,16 @@ class ReceiptsHandler(BaseHandler):
         ``org_id`` is the org that owns the receipt; only that org's members
         see the entry in the delivery history.
         """
-        delivery_result = result or {}
-        delivered_at = datetime.now(timezone.utc).isoformat()
-        destination_name = (
-            delivery_result.get("channel_name")
-            or delivery_result.get("channel")
-            or delivery_result.get("email_sent_to")
-            or channel_id
+        record_receipt_delivery(
+            receipt_id=receipt_id,
+            channel_type=channel_type,
+            channel_id=channel_id,
+            workspace_id=workspace_id,
+            status=status,
+            org_id=org_id,
+            result=result,
+            error=error,
         )
-        message_id = delivery_result.get("message_id") or delivery_result.get("message_ts")
-        get_receipt_delivery_history_store().append(
-            {
-                "id": f"delivery-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{secrets.token_hex(4)}",
-                "receiptId": receipt_id,
-                "receipt_id": receipt_id,
-                "channel": channel_type,
-                "channel_type": channel_type,
-                "destination": channel_id,
-                "channel_id": channel_id,
-                "destinationName": destination_name,
-                "destination_name": destination_name,
-                "deliveredAt": delivered_at,
-                "delivered_at": delivered_at,
-                "status": status,
-                "workspaceId": workspace_id,
-                "workspace_id": workspace_id,
-                "messageId": message_id,
-                "message_id": message_id,
-                "errorMessage": error,
-                "error_message": error,
-                _DELIVERY_ORG_KEY: org_id,
-            }
-        )
-        history = get_receipt_delivery_history_store()
-        if len(history) > 1000:
-            del history[:-1000]
 
     @require_permission("receipts:share")
     async def _send_to_channel(
@@ -2044,9 +2037,13 @@ class ReceiptsHandler(BaseHandler):
 
             # Send to the channel based on type
             if channel_type == "slack":
-                result = await self._send_to_slack(formatted, channel_id, workspace_id)
+                result = await self._send_to_slack(
+                    formatted, channel_id, workspace_id, org_id=scope.org_id
+                )
             elif channel_type == "teams":
-                result = await self._send_to_teams(formatted, channel_id, workspace_id)
+                result = await self._send_to_teams(
+                    formatted, channel_id, workspace_id, org_id=scope.org_id
+                )
             elif channel_type == "email":
                 result = await self._send_to_email(formatted, channel_id, options)
             elif channel_type == "discord":
@@ -2077,6 +2074,8 @@ class ReceiptsHandler(BaseHandler):
                 }
             )
 
+        except WorkspaceNotFoundError:
+            return record_not_found("Workspace")
         except ImportError as e:
             self._record_delivery_history(
                 receipt_id=receipt_id,
@@ -2107,17 +2106,23 @@ class ReceiptsHandler(BaseHandler):
         formatted: dict[str, Any],
         channel_id: str,
         workspace_id: str | None,
+        *,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
-        """Send formatted receipt to Slack channel."""
+        """Send formatted receipt to a Slack channel of a workspace ``org_id`` owns.
+
+        Raises WorkspaceNotFoundError when the workspace is missing, unowned or
+        installed by another org.
+        """
         from aragora.storage.slack_workspace_store import get_slack_workspace_store
 
         if not workspace_id:
             raise ValueError("workspace_id is required for Slack")
 
         store = get_slack_workspace_store()
-        workspace = await _call_nonblocking(store, "get", workspace_id)
-        if not workspace:
-            raise ValueError(f"Slack workspace not found: {workspace_id}")
+        workspace = _require_owned_workspace(
+            await _call_nonblocking(store, "get", workspace_id), "tenant_id", org_id
+        )
 
         # Use Slack connector to send
         from aragora.connectors.chat.slack import SlackConnector
@@ -2141,17 +2146,23 @@ class ReceiptsHandler(BaseHandler):
         formatted: dict[str, Any],
         channel_id: str,
         workspace_id: str | None,
+        *,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
-        """Send formatted receipt to Teams channel."""
+        """Send formatted receipt to a Teams channel of a workspace ``org_id`` owns.
+
+        Raises WorkspaceNotFoundError when the workspace is missing, unowned or
+        installed by another org.
+        """
         from aragora.storage.teams_workspace_store import get_teams_workspace_store
 
         if not workspace_id:
             raise ValueError("workspace_id (tenant_id) is required for Teams")
 
         store = get_teams_workspace_store()
-        workspace = await _call_nonblocking(store, "get", workspace_id)
-        if not workspace:
-            raise ValueError(f"Teams workspace not found: {workspace_id}")
+        workspace = _require_owned_workspace(
+            await _call_nonblocking(store, "get", workspace_id), "aragora_tenant_id", org_id
+        )
 
         # Use Teams connector to send
         from aragora.connectors.chat.teams import TeamsConnector

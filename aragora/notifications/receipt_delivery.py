@@ -27,6 +27,18 @@ Usage:
         slack_channel="#compliance",
         webhook_url="https://hooks.example.com/receipts",
     )
+
+    # Background delivery of a stored receipt on behalf of one org
+    await deliver_receipt_for_org(
+        org_id="org-123",
+        receipt_id="rcpt-abc",
+        channels=["slack"],
+        recipients=[],
+    )
+
+``deliver_receipt_for_org`` is the entry point for tasks acting for a tenant:
+it loads the receipt through the org-scoped store read, so another org's or an
+unowned receipt is never sent, and records each delivery against that org.
 """
 
 from __future__ import annotations
@@ -55,6 +67,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "deliver_receipt",
+    "deliver_receipt_for_org",
     "ReceiptDeliveryConfig",
     "ReceiptDeliveryResult",
 ]
@@ -104,6 +117,8 @@ class ReceiptDeliveryResult:
     error: str | None = None
     delivery_id: str | None = None
     delivered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Org that owns the delivered receipt, when delivered on an org's behalf.
+    org_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -115,6 +130,7 @@ class ReceiptDeliveryResult:
             "error": self.error,
             "delivery_id": self.delivery_id,
             "delivered_at": self.delivered_at.isoformat(),
+            "org_id": self.org_id,
         }
 
 
@@ -125,6 +141,8 @@ async def deliver_receipt(
     slack_channel: str | None = None,
     webhook_url: str | None = None,
     config: ReceiptDeliveryConfig | None = None,
+    *,
+    org_id: str | None = None,
 ) -> list[ReceiptDeliveryResult]:
     """
     Deliver a decision receipt to specified channels and recipients.
@@ -136,6 +154,7 @@ async def deliver_receipt(
         slack_channel: Slack channel for posting (optional)
         webhook_url: Webhook URL for delivery (optional)
         config: Delivery configuration (uses defaults if not provided)
+        org_id: Org that owns the receipt; stamped on notifications and results
 
     Returns:
         List of ReceiptDeliveryResult for each delivery attempt
@@ -153,7 +172,7 @@ async def deliver_receipt(
 
         elif channel_lower == "slack":
             target = slack_channel or os.environ.get("SLACK_DEFAULT_CHANNEL", "#receipts")
-            result = await _deliver_via_slack(receipt, target, config)
+            result = await _deliver_via_slack(receipt, target, config, org_id=org_id)
             results.append(result)
 
         elif channel_lower == "webhook":
@@ -183,7 +202,105 @@ async def deliver_receipt(
                 )
             )
 
+    for result in results:
+        result.org_id = org_id
     return results
+
+
+async def deliver_receipt_for_org(
+    org_id: str | None,
+    receipt_id: str,
+    channels: list[str],
+    recipients: list[str],
+    *,
+    slack_channel: str | None = None,
+    webhook_url: str | None = None,
+    config: ReceiptDeliveryConfig | None = None,
+    store: Any = None,
+) -> list[ReceiptDeliveryResult]:
+    """Deliver a stored receipt that ``org_id`` owns, recording each delivery for that org.
+
+    The receipt is read with the org-scoped store lookup at run time. When the
+    org is blank, or the receipt is missing, unowned or owned by another org,
+    nothing is sent, nothing is recorded and an empty list is returned.
+
+    Args:
+        org_id: Org the task acts for
+        receipt_id: Id of the stored receipt to deliver
+        channels: List of channels ("email", "slack", "webhook")
+        recipients: List of email addresses or user IDs
+        slack_channel: Slack channel for posting (optional)
+        webhook_url: Webhook URL for delivery (optional)
+        config: Delivery configuration (uses defaults if not provided)
+        store: Receipt store (defaults to the server receipt store)
+    """
+    acting_org = str(org_id or "").strip()
+    if not acting_org or not receipt_id:
+        logger.warning("Receipt delivery skipped: no org or receipt id given")
+        return []
+
+    if store is None:
+        from aragora.storage.receipt_store import get_receipt_store
+
+        store = get_receipt_store()
+    stored = store.get_for_org(receipt_id, acting_org)
+    if stored is None:
+        logger.info("Receipt delivery skipped: receipt not found for the acting org")
+        return []
+
+    receipt = _decision_receipt_from_stored(stored)
+    if receipt is None:
+        return []
+
+    results = await deliver_receipt(
+        receipt,
+        channels,
+        recipients,
+        slack_channel=slack_channel,
+        webhook_url=webhook_url,
+        config=config,
+        org_id=acting_org,
+    )
+    _record_deliveries(results, acting_org)
+    return results
+
+
+def _decision_receipt_from_stored(stored: Any) -> DecisionReceipt | None:
+    """Rebuild the gauntlet receipt for a stored row, pinned to the row's receipt id."""
+    from aragora.gauntlet.receipt import DecisionReceipt
+
+    data = dict(stored.data or {})
+    data["receipt_id"] = stored.receipt_id
+    try:
+        return DecisionReceipt.from_dict(data)
+    except (TypeError, ValueError, KeyError):
+        # Older payloads may carry nested records the current dataclasses
+        # reject; the delivery formats do not need them.
+        for key in ("consensus_proof", "provenance_chain", "agent_responses"):
+            data.pop(key, None)
+    try:
+        return DecisionReceipt.from_dict(data)
+    except (TypeError, ValueError, KeyError) as exc:
+        logger.warning(
+            "Receipt %s cannot be delivered: unreadable payload (%s)", stored.receipt_id, exc
+        )
+        return None
+
+
+def _record_deliveries(results: list[ReceiptDeliveryResult], org_id: str) -> None:
+    from aragora.server.handlers.utils.receipt_delivery_history import record_receipt_delivery
+
+    for result in results:
+        record_receipt_delivery(
+            receipt_id=result.receipt_id,
+            channel_type=result.channel,
+            channel_id=result.recipient,
+            workspace_id=None,
+            status="success" if result.success else "failed",
+            org_id=org_id,
+            result={"message_id": result.delivery_id},
+            error=result.error,
+        )
 
 
 async def _deliver_via_email(
@@ -370,6 +487,8 @@ async def _deliver_via_slack(
     receipt: DecisionReceipt,
     channel: str,
     config: ReceiptDeliveryConfig,
+    *,
+    org_id: str | None = None,
 ) -> ReceiptDeliveryResult:
     """Deliver receipt via Slack with rich Block Kit message."""
     try:
@@ -402,6 +521,7 @@ async def _deliver_via_slack(
             priority=NotificationPriority.NORMAL,
             resource_type="receipt",
             resource_id=receipt.receipt_id,
+            org_id=org_id,
             metadata={
                 "verdict": receipt.verdict,
                 "confidence": receipt.confidence,
