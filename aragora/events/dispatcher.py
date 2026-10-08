@@ -582,10 +582,15 @@ class WebhookDispatcher:
     ) -> None:
         """Deliver webhook in background thread."""
         # Import metrics (lazy to avoid circular imports)
+        record_webhook_delivery: Callable[..., None] | None
         try:
-            from aragora.observability.metrics.webhook import record_webhook_delivery
+            from aragora.observability.metrics.webhook import (
+                record_webhook_delivery as _record_webhook_delivery,
+            )
         except ImportError:
             record_webhook_delivery = None
+        else:
+            record_webhook_delivery = _record_webhook_delivery
 
         event_type = payload.get("event", "unknown")
         result = dispatch_webhook_with_retry(webhook, payload)
