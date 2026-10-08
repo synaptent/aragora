@@ -81,6 +81,8 @@ const USER_KEY = 'aragora_user';
 const ACTIVE_ORG_KEY = 'aragora_active_org';
 const USER_ORGS_KEY = 'aragora_user_orgs';
 
+const LOGOUT_REQUEST_TIMEOUT_MS = 5_000;
+
 function getStoredTokens(): Tokens | null {
   if (typeof window === 'undefined') return null;
   const stored = localStorage.getItem(TOKENS_KEY);
@@ -349,6 +351,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const data = await response.json();
+        // A logout or rejected refresh may have ended this session meanwhile;
+        // storing it again would sign the user back in.
+        if (getStoredTokens()?.access_token !== tokens.access_token) return;
         const validatedUser = data.user || user;
         const validatedOrg = data.organization ?? activeOrg;
         const validatedOrgs = data.organizations || userOrgs;
@@ -504,17 +509,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      if (state.tokens?.access_token) {
-        await fetch(`${API_BASE}/api/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${state.tokens.access_token}`,
-          },
-        });
+    if (state.tokens?.access_token) {
+      const controller = new AbortController();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      // Racing the timer too ends the wait even if the request ignores the abort.
+      const timedOut = new Promise<void>((resolve) => {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+          resolve();
+        }, LOGOUT_REQUEST_TIMEOUT_MS);
+      });
+      try {
+        await Promise.race([
+          fetch(`${API_BASE}/api/auth/logout`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.tokens.access_token}`,
+            },
+            signal: controller.signal,
+          }),
+          timedOut,
+        ]);
+      } catch {
+        // Ignore logout errors
+      } finally {
+        clearTimeout(timeoutId);
       }
-    } catch {
-      // Ignore logout errors
     }
 
     clearAuth();
@@ -533,7 +553,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hardNavigate('/auth/login');
   }, [state.tokens?.access_token]);
 
-  const refreshToken = useCallback(async () => {
+  const requestTokenRefresh = useCallback(async (): Promise<boolean> => {
     const tokens = getStoredTokens();
     if (!tokens?.refresh_token) return false;
 
@@ -560,6 +580,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.dispatchEvent(new CustomEvent('auth:session-expired', {
             detail: { reason: 'refresh_rejected' },
           }));
+          // Same reason as logout: pages still hold data fetched for the ended session.
+          hardNavigate('/auth/login');
         } else {
           logger.warn(`[AuthContext] Token refresh failed with ${response.status}, keeping session`);
         }
@@ -584,6 +606,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, []);
+
+  const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
+
+  // The server revokes a refresh token when it is used, so a second concurrent
+  // request with the same token would be rejected and end the session that the
+  // first request just renewed. Concurrent callers share one request instead.
+  const refreshToken = useCallback((): Promise<boolean> => {
+    if (!refreshInFlightRef.current) {
+      refreshInFlightRef.current = requestTokenRefresh().finally(() => {
+        refreshInFlightRef.current = null;
+      });
+    }
+    return refreshInFlightRef.current;
+  }, [requestTokenRefresh]);
 
   // Set tokens from OAuth callback - fetches user profile from API
   const setTokens = useCallback(async (accessToken: string, refreshTokenValue: string, signal?: AbortSignal, expiresIn?: number) => {
