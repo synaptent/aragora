@@ -20,6 +20,18 @@ from .decision_models import (
     DecisionResult,
     ResponseChannel,
 )
+from .decision_route_hooks import (
+    ROUTE_GAUNTLET,
+    ROUTE_WORKFLOW,
+    DecisionAuditSink,
+    DecisionRouteNotRegisteredError,
+    get_decision_audit_sink,
+    get_decision_integrity_builder,
+    get_registered_routes,
+    get_route_target,
+    get_tts_bridge_factory,
+    register_route_target,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,91 +120,23 @@ def _import_metrics():
     _metrics_imported = True
 
 
-# Lazy import for audit logging
-_audit_imported = False
-_audit_log_decision_started = None
-_audit_log_decision_completed = None
+_warned_once: set[str] = set()
 
 
-def _import_audit():
-    """Lazy import audit utilities."""
-    global _audit_imported, _audit_log_decision_started, _audit_log_decision_completed
-    if _audit_imported:
-        return
+def _warn_once(key: str, message: str, *args: Any) -> None:
+    # Hooks are resolved on every routed decision; one warning per process is enough.
+    if key not in _warned_once:
+        _warned_once.add(key)
+        logger.warning(message, *args)
+
+
+def _resolve_audit_sink() -> DecisionAuditSink | None:
+    """Return the registered audit sink, or None; routing proceeds without an audit trail."""
     try:
-        from aragora.audit.unified import (
-            get_unified_audit_logger,
-            UnifiedAuditEvent,
-            UnifiedAuditCategory,
-            AuditOutcome,
-            AuditSeverity,
-        )
-
-        _logger = get_unified_audit_logger()
-
-        def log_decision_started(
-            request_id: str,
-            decision_type: str,
-            source: str,
-            user_id: str | None = None,
-            workspace_id: str | None = None,
-            content_preview: str | None = None,
-        ) -> None:
-            """Log decision request started."""
-            _logger.log(
-                UnifiedAuditEvent(
-                    category=UnifiedAuditCategory.DEBATE_STARTED,
-                    action=f"Decision {decision_type} started",
-                    actor_id=user_id,
-                    resource_type="decision",
-                    resource_id=request_id,
-                    workspace_id=workspace_id,
-                    details={
-                        "decision_type": decision_type,
-                        "source": source,
-                        "content_preview": (content_preview or "")[:200],
-                    },
-                )
-            )
-
-        def log_decision_completed(
-            request_id: str,
-            decision_type: str,
-            success: bool,
-            consensus_reached: bool,
-            confidence: float,
-            duration_seconds: float,
-            user_id: str | None = None,
-            workspace_id: str | None = None,
-            error: str | None = None,
-        ) -> None:
-            """Log decision request completed."""
-            _logger.log(
-                UnifiedAuditEvent(
-                    category=UnifiedAuditCategory.DEBATE_COMPLETED,
-                    action=f"Decision {decision_type} completed",
-                    outcome=AuditOutcome.SUCCESS if success else AuditOutcome.FAILURE,
-                    severity=AuditSeverity.INFO if success else AuditSeverity.WARNING,
-                    actor_id=user_id,
-                    resource_type="decision",
-                    resource_id=request_id,
-                    workspace_id=workspace_id,
-                    details={
-                        "decision_type": decision_type,
-                        "consensus_reached": consensus_reached,
-                        "confidence": confidence,
-                        "duration_seconds": duration_seconds,
-                        "error": error,
-                    },
-                )
-            )
-
-        global _audit_log_decision_started, _audit_log_decision_completed
-        _audit_log_decision_started = log_decision_started
-        _audit_log_decision_completed = log_decision_completed
-    except ImportError:
-        pass
-    _audit_imported = True
+        return get_decision_audit_sink()
+    except DecisionRouteNotRegisteredError as e:
+        _warn_once("audit_sink", "Routing decisions without an audit trail: %s", e)
+        return None
 
 
 # =============================================================================
@@ -249,6 +193,24 @@ class DecisionRouter:
         self._enable_deduplication = enable_deduplication
         self._cache_ttl_seconds = cache_ttl_seconds
 
+    @property
+    def workflow_engine(self) -> Any | None:
+        """Workflow engine for workflow decisions; the workflow route creates one if unset."""
+        return self._workflow_engine
+
+    @workflow_engine.setter
+    def workflow_engine(self, engine: Any | None) -> None:
+        self._workflow_engine = engine
+
+    @property
+    def gauntlet_engine(self) -> Any | None:
+        """Gauntlet engine for gauntlet decisions; the gauntlet route creates one if unset."""
+        return self._gauntlet_engine
+
+    @gauntlet_engine.setter
+    def gauntlet_engine(self, engine: Any | None) -> None:
+        self._gauntlet_engine = engine
+
     def register_response_handler(
         self,
         platform: str,
@@ -274,7 +236,7 @@ class DecisionRouter:
         _import_tracing()
         _import_cache()
         _import_metrics()
-        _import_audit()
+        audit_sink = _resolve_audit_sink()
 
         logger.info(
             "Routing decision request %s (type=%s, source=%s)",
@@ -341,9 +303,9 @@ class DecisionRouter:
             )
 
         # Log audit trail: decision started
-        if _audit_log_decision_started:
+        if audit_sink is not None:
             try:
-                _audit_log_decision_started(
+                audit_sink.log_decision_started(
                     request_id=request.request_id,
                     decision_type=request.decision_type.value,
                     source=request.source.value,
@@ -467,9 +429,9 @@ class DecisionRouter:
                 )
 
             # Log audit trail: decision completed (success)
-            if _audit_log_decision_completed:
+            if audit_sink is not None:
                 try:
-                    _audit_log_decision_completed(
+                    audit_sink.log_decision_completed(
                         request_id=request.request_id,
                         decision_type=request.decision_type.value,
                         success=result.success,
@@ -535,9 +497,9 @@ class DecisionRouter:
                 )
 
             # Log audit trail: decision completed (error)
-            if _audit_log_decision_completed:
+            if audit_sink is not None:
                 try:
-                    _audit_log_decision_completed(
+                    audit_sink.log_decision_completed(
                         request_id=request.request_id,
                         decision_type=request.decision_type.value,
                         success=False,
@@ -551,6 +513,11 @@ class DecisionRouter:
                 except (OSError, RuntimeError, TypeError, ValueError) as audit_err:
                     logger.debug("Audit log (error) failed: %s", audit_err)
 
+            # Only the registry error's own text is returned: it names what to load, while
+            # other exception messages can carry internal details.
+            error_message = f"Decision routing failed: {error_type}"
+            if isinstance(e, DecisionRouteNotRegisteredError):
+                error_message = f"{error_message}: {e}"
             error_result = DecisionResult(
                 request_id=request.request_id,
                 decision_type=request.decision_type,
@@ -558,7 +525,7 @@ class DecisionRouter:
                 confidence=0.0,
                 consensus_reached=False,
                 success=False,
-                error=f"Decision routing failed: {type(e).__name__}",
+                error=error_message,
                 duration_seconds=error_duration,
             )
 
@@ -600,6 +567,11 @@ class DecisionRouter:
                 from aragora.debate import Arena
 
                 self._debate_engine = Arena
+
+            if getattr(request.config, "decision_integrity", None):
+                # An explicitly requested integrity package cannot be built without a
+                # registered builder, so fail before the debate runs rather than after.
+                get_decision_integrity_builder()
 
             # Convert to debate format
             from aragora.agents import get_agents_by_names
@@ -744,11 +716,9 @@ class DecisionRouter:
             notify_origin = bool(cfg_raw.get("notify_origin", False))
 
         try:
-            from aragora.pipeline.decision_integrity_utils import (
-                build_decision_integrity_payload,
-            )
-        except (ImportError, AttributeError) as exc:
-            logger.debug("Decision integrity utilities unavailable: %s", exc)
+            build_decision_integrity_payload = get_decision_integrity_builder()
+        except DecisionRouteNotRegisteredError as exc:
+            _warn_once("integrity_builder", "Decision integrity package not built: %s", exc)
             return None
 
         return await build_decision_integrity_payload(
@@ -1049,68 +1019,8 @@ class DecisionRouter:
                 logger.debug("Trace span error: %s", e)
 
         try:
-            if self._workflow_engine is None:
-                from aragora.workflow.engine import get_workflow_engine
-
-                self._workflow_engine = get_workflow_engine()
-
-            # Get or create workflow definition
-            workflow_id = request.config.workflow_id
-            if not workflow_id:
-                raise ValueError("Workflow ID required for workflow decision type")
-
-            if span:
-                span.set_attribute("workflow.id", workflow_id)
-
-            # Load workflow definition from workflow store
-            import inspect
-            from aragora.workflow.persistent_store import get_workflow_store
-
-            workflow_store = get_workflow_store()
-            definition_result = workflow_store.get_workflow(workflow_id)
-            # Handle both sync and async get_workflow implementations
-            if inspect.iscoroutine(definition_result):
-                definition = await definition_result
-            else:
-                definition = definition_result
-            if not definition:
-                raise ValueError(f"Workflow not found: {workflow_id}")
-
-            documents = list(getattr(request, "documents", []) or [])
-            metadata_docs = (request.context.metadata or {}).get("documents") or (
-                request.context.metadata or {}
-            ).get("document_ids")
-            if metadata_docs:
-                from aragora.core.decision_models import normalize_document_ids
-
-                documents.extend(normalize_document_ids(metadata_docs))
-            # Execute
-            workflow_result = await self._workflow_engine.execute(
-                definition=definition,
-                inputs={
-                    "content": request.content,
-                    "documents": documents,
-                    "attachments": request.attachments or [],
-                    "evidence": request.evidence or [],
-                    **request.config.workflow_inputs,
-                },
-            )
-
-            if span:
-                span.set_attribute("workflow.success", workflow_result.success)
-
-            # Extract answer from workflow final_output
-            outputs = workflow_result.final_output if workflow_result.final_output else {}
-            answer = outputs.get("answer") or outputs.get("result") or ""
-
-            return DecisionResult(
-                request_id=request.request_id,
-                decision_type=DecisionType.WORKFLOW,
-                answer=str(answer),
-                confidence=0.9 if workflow_result.success else 0.0,
-                consensus_reached=workflow_result.success,
-                workflow_result=workflow_result,
-            )
+            # Registered by the workflow package init (route_workflow_decision).
+            return await get_route_target(ROUTE_WORKFLOW)(self, request, span)
         finally:
             if span_ctx:
                 try:
@@ -1130,48 +1040,8 @@ class DecisionRouter:
                 logger.debug("Trace span error: %s", e)
 
         try:
-            from aragora.gauntlet.orchestrator import (
-                GauntletOrchestrator,
-                GauntletConfig as OrchestratorConfig,
-                Verdict,
-            )
-            from aragora.agents import get_agents_by_names
-
-            if self._gauntlet_engine is None:
-                agents = get_agents_by_names(request.config.agents) if request.config.agents else []
-                self._gauntlet_engine = GauntletOrchestrator(agents=agents)
-
-            config = OrchestratorConfig(
-                input_content=request.content,
-                enable_redteam=request.config.enable_adversarial,
-                enable_verification=request.config.enable_formal_verification,
-                max_duration_seconds=request.config.timeout_seconds,
-            )
-
-            if span:
-                span.set_attribute("gauntlet.adversarial", request.config.enable_adversarial)
-                span.set_attribute(
-                    "gauntlet.formal_verification", request.config.enable_formal_verification
-                )
-
-            gauntlet_result = await self._gauntlet_engine.run(config=config)
-
-            # Derive passed status from verdict
-            passed = gauntlet_result.verdict in (Verdict.PASS, Verdict.APPROVED)
-            verdict_summary = gauntlet_result.verdict.value if gauntlet_result.verdict else ""
-
-            if span:
-                span.set_attribute("gauntlet.passed", passed)
-                span.set_attribute("gauntlet.confidence", gauntlet_result.confidence)
-
-            return DecisionResult(
-                request_id=request.request_id,
-                decision_type=DecisionType.GAUNTLET,
-                answer=verdict_summary,
-                confidence=gauntlet_result.confidence,
-                consensus_reached=passed,
-                gauntlet_result=gauntlet_result,
-            )
+            # Registered by the gauntlet package init (route_gauntlet_decision).
+            return await get_route_target(ROUTE_GAUNTLET)(self, request, span)
         finally:
             if span_ctx:
                 try:
@@ -1316,12 +1186,10 @@ class DecisionRouter:
             return None
 
         try:
-            from aragora.connectors.chat.tts_bridge import get_tts_bridge
-
-            self._tts_bridge = get_tts_bridge()
+            self._tts_bridge = get_tts_bridge_factory()()
             logger.info("TTS bridge initialized for voice responses")
             return self._tts_bridge
-        except ImportError as e:
+        except (DecisionRouteNotRegisteredError, ImportError) as e:
             logger.warning("TTS bridge not available: %s", e)
             return None
         except (RuntimeError, OSError, AttributeError) as e:
@@ -1463,7 +1331,10 @@ def reset_decision_router() -> None:
 
 
 __all__ = [
+    "DecisionRouteNotRegisteredError",
     "DecisionRouter",
     "get_decision_router",
+    "get_registered_routes",
+    "register_route_target",
     "reset_decision_router",
 ]

@@ -68,7 +68,7 @@ class ExponentialBackoff:
             delay = min(self.base_delay * (2**self.failure_count), self.max_delay)
             jitter_amount = delay * self.jitter
             final_delay: float = delay + random.uniform(0, jitter_amount)  # noqa: S311 -- retry jitter
-            logger.info(f"backoff_failure count={self.failure_count} delay={final_delay:.1f}s")
+            logger.info("backoff_failure count=%s delay=%.1fs", self.failure_count, final_delay)
             return final_delay
 
     def reset(self) -> None:

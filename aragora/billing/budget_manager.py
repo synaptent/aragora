@@ -566,7 +566,7 @@ class BudgetManager:
         conn.commit()
 
         logger.info(
-            f"Created budget {budget_id} for org {org_id}: ${amount_usd:.2f}/{period.value}"
+            "Created budget %s for org %s: $%.2f/%s", budget_id, org_id, amount_usd, period.value
         )
         return budget
 

@@ -96,8 +96,10 @@ class ShutdownSequence:
 
         elapsed = time.time() - start_time
         logger.info(
-            f"Graceful shutdown completed in {elapsed:.1f}s "
-            f"({len(self._completed)} succeeded, {len(self._failed)} failed)"
+            "Graceful shutdown completed in %.1fs (%s succeeded, %s failed)",
+            elapsed,
+            len(self._completed),
+            len(self._failed),
         )
 
         return {

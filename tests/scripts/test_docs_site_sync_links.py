@@ -760,7 +760,7 @@ DOCS_REFERENCE_PRE_EXISTING_MIRROR: dict[str, str] = {
 
 # docs/reference/*.md files that are deliberately excluded from the
 # docs-site mirror. PRICING_TIERS.md contains stale commercial terms that
-# conflict with the public docs/PRICING.md surface. Keep it repository-visible
+# conflict with the public docs/strategy/PRICING.md surface. Keep it repository-visible
 # for reconciliation without publishing a second customer-facing promise.
 DOCS_REFERENCE_MIRROR_ALLOWLIST: frozenset[str] = frozenset(
     {

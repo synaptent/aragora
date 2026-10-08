@@ -194,6 +194,11 @@ __all__ = [
     "reset_workflow_store",
 ]
 
+# The core decision router routes workflow decisions through this registration.
+from aragora.workflow.decision_route import register_decision_route as _register_decision_route
+
+_register_decision_route()
+
 
 # ---------------------------------------------------------------------------
 # Golden API collision guard (issue #8780)

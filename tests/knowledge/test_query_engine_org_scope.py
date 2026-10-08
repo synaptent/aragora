@@ -8,8 +8,9 @@ import pytest
 
 from aragora.knowledge import FactStore, InMemoryFactStore
 from aragora.knowledge.embeddings import ChunkMatch
-from aragora.knowledge.fact_store import ScopedFactStore
+from aragora.knowledge.fact_store import OrgScopeRequiredError, ScopedFactStore
 from aragora.knowledge.query_engine import DatasetQueryEngine, QueryOptions, SimpleQueryEngine
+from tests.knowledge._legacy_rows import seed_unassigned
 
 
 class _Agent:
@@ -51,7 +52,7 @@ def seeded(request, tmp_path):
     foreign = ScopedFactStore(store, "org_b").add_fact(
         "Renewal notice is due in thirty days", "default", confidence=0.9
     )
-    unassigned = store.add_fact("Renewal notice is due in sixty days", "default", confidence=0.9)
+    unassigned = seed_unassigned(store, "Renewal notice is due in sixty days")
     return store, own, foreign, unassigned
 
 
@@ -78,7 +79,8 @@ async def test_simple_engine_org_id_on_raw_store(seeded):
     engine = SimpleQueryEngine(store, _embedding_service())
 
     assert [f.id for f in await engine.get_facts(ALL, "default", org_id="org_a")] == [own.id]
-    assert len(await engine.get_facts(ALL, "default")) == 3
+    with pytest.raises(OrgScopeRequiredError):
+        await engine.get_facts(ALL, "default")
     result = await engine.query(ALL, "default", org_id="org_a")
     assert [f.id for f in result.facts] == [own.id]
     assert engine.add_fact("Added with an org", "default", org_id="org_a").org_id == "org_a"
@@ -124,6 +126,6 @@ async def test_dataset_engine_verify_stays_in_org(seeded, scope_by):
     for other in (foreign, unassigned):
         with pytest.raises(ValueError, match="Fact not found"):
             await engine.verify_fact(other.id, **kwargs)
-        assert store.get_fact(other.id).validation_status.value == "unverified"
+    assert store.get_fact(foreign.id, org_id="org_b").validation_status.value == "unverified"
     verified = await engine.verify_fact(own.id, **kwargs)
     assert verified.validation_status.value == "majority_agreed"

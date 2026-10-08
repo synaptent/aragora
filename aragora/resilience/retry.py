@@ -762,8 +762,12 @@ def with_retry(
                     delay = config.calculate_delay(attempt)
                     provider_name = config.provider_name or func.__name__
                     logger.debug(
-                        f"Retry {attempt + 1}/{config.max_retries} for {provider_name} "
-                        f"after {delay:.2f}s: {e}"
+                        "Retry %s/%s for %s after %.2fs: %s",
+                        attempt + 1,
+                        config.max_retries,
+                        provider_name,
+                        delay,
+                        e,
                     )
 
                     if config.on_retry:
@@ -864,8 +868,12 @@ def with_retry_sync(
                     delay = config.calculate_delay(attempt)
                     provider_name = config.provider_name or func.__name__
                     logger.debug(
-                        f"Retry {attempt + 1}/{config.max_retries} for {provider_name} "
-                        f"after {delay:.2f}s: {e}"
+                        "Retry %s/%s for %s after %.2fs: %s",
+                        attempt + 1,
+                        config.max_retries,
+                        provider_name,
+                        delay,
+                        e,
                     )
 
                     if config.on_retry:
