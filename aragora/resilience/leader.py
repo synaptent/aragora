@@ -686,7 +686,7 @@ class RegionalLeaderElection(LeaderElection):
             return
 
         try:
-            from aragora.control_plane.regional_sync import RegionalEventType
+            from aragora.resilience.regional_events import RegionalEventType
 
             # Subscribe to leader elected events
             self._event_bus.subscribe(
@@ -783,7 +783,7 @@ class RegionalLeaderElection(LeaderElection):
             return
 
         try:
-            from aragora.control_plane.regional_sync import (
+            from aragora.resilience.regional_events import (
                 RegionalEvent,
                 RegionalEventType,
             )

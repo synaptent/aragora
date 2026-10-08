@@ -187,6 +187,7 @@ _SEAMS = {
     "aragora.exceptions -> aragora.connectors.exceptions",
     "aragora.exceptions -> aragora.server.handlers.exceptions",
     "aragora.utils.redis_cache -> aragora.caching.redis",
+    "aragora.exceptions -> aragora.control_plane.exceptions",
 }
 
 

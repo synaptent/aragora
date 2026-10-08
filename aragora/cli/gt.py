@@ -344,7 +344,7 @@ def cmd_bead_list(args: argparse.Namespace) -> int:
             if not convoy:
                 print(f"Convoy not found: {args.convoy}")
                 return 1
-            convoy_map = {bead_id: convoy.id for bead_id in convoy.bead_ids}
+            convoy_map = dict.fromkeys(convoy.bead_ids, convoy.id)
             beads = [b for b in beads if b.id in convoy_map]
         else:
             try:

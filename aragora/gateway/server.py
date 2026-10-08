@@ -930,7 +930,7 @@ class LocalGateway:
         await self.stop_http()
 
         elapsed = time.time() - start_time
-        logger.info(f"Graceful shutdown completed in {elapsed:.1f}s")
+        logger.info("Graceful shutdown completed in %.1fs", elapsed)
 
         return {
             "status": "shutdown_complete",

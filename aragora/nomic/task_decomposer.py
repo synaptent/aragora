@@ -2520,8 +2520,9 @@ class TaskDecomposer:
             subtasks = self._create_generic_phases(goal)
 
         logger.info(
-            f"debate_decomposition_completed subtasks={len(subtasks)} "
-            f"confidence={result.confidence:.2f}"
+            "debate_decomposition_completed subtasks=%s confidence=%.2f",
+            len(subtasks),
+            result.confidence,
         )
 
         return TaskDecomposition(
@@ -2572,8 +2573,9 @@ class TaskDecomposer:
                 subtasks = self._parse_debate_subtasks(result.final_answer)
                 if subtasks:
                     logger.info(
-                        f"debate_primary_succeeded subtasks={len(subtasks)} "
-                        f"confidence={result.confidence:.2f}"
+                        "debate_primary_succeeded subtasks=%s confidence=%.2f",
+                        len(subtasks),
+                        result.confidence,
                     )
                     return result
                 else:
@@ -2676,8 +2678,9 @@ class TaskDecomposer:
                 subtasks = self._parse_debate_subtasks(fallback_result.final_answer)
                 if subtasks:
                     logger.info(
-                        f"debate_fallback_succeeded subtasks={len(subtasks)} "
-                        f"confidence={fallback_result.confidence:.2f}"
+                        "debate_fallback_succeeded subtasks=%s confidence=%.2f",
+                        len(subtasks),
+                        fallback_result.confidence,
                     )
                     return fallback_result
 

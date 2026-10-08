@@ -99,7 +99,7 @@ class ReliabilityScheduler:
         donor_pool = sum(shares[a] - min_share for a in donors)
         if donor_pool <= 0:
             equal = 1.0 / len(agents)
-            return {agent: equal for agent in agents}
+            return dict.fromkeys(agents, equal)
 
         for agent in donors:
             available = shares[agent] - min_share

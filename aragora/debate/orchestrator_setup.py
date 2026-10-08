@@ -352,7 +352,7 @@ def init_cost_tracking(arena: Arena) -> None:
                 from aragora.billing.cost_tracker import Budget
 
                 tracker.set_budget(Budget(per_debate_limit_usd=_Decimal(str(budget_limit))))
-                logger.info(f"[cost_tracking] Budget limit set: ${budget_limit:.2f}")
+                logger.info("[cost_tracking] Budget limit set: $%.2f", budget_limit)
             except (AttributeError, TypeError, ImportError):
                 pass  # Budget/set_budget may not exist yet
 
@@ -627,8 +627,9 @@ async def translate_conclusions(
                 if translation_result.confidence > 0.5:
                     result.translations[target_code] = translation_result.translated_text
                     logger.debug(
-                        f"Translated conclusion to {target_lang.name_english} "
-                        f"(confidence: {translation_result.confidence:.2f})"
+                        "Translated conclusion to %s (confidence: %.2f)",
+                        target_lang.name_english,
+                        translation_result.confidence,
                     )
             except (ConnectionError, OSError, ValueError, TypeError) as e:
                 logger.warning("Translation to %s failed: %s", target_code, e)

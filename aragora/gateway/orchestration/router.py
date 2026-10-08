@@ -231,8 +231,11 @@ class TaskRouter:
         )
 
         logger.info(
-            f"Routed task {task.task_id} to {selected} "
-            f"(strategy={strategy.value}, score={scores[selected]:.3f})"
+            "Routed task %s to %s (strategy=%s, score=%.3f)",
+            task.task_id,
+            selected,
+            strategy.value,
+            scores[selected],
         )
 
         return decision

@@ -97,6 +97,8 @@ test = [
     # Manager backend); without it the curated CI scope fails at collection.
     "boto3>=1.34,<2.0",
     "build>=1.5.0,<2.0",
+    # Backends for the cold-cache installed-CLI receipt fixture.
+    "hatchling>=1.30.1,<2.0",
     "pydantic>=2.13.4,<3.0",
     "pydantic-settings>=2.14.2,<3.0",
     "PyYAML>=6.0.3,<7.0",
@@ -107,7 +109,10 @@ test = [
     "pytest-rerunfailures>=16.1,<17.0",
     "pytest-timeout>=2.4.0,<3.0",
     "pytest-xdist>=3.8.0,<4.0",
+    "setuptools>=83.0.0,<84.0",
     "twine>=6.2.0,<8.0",
+    "uv>=0.11.19,<0.12",
+    "wheel>=0.46.0,<1.0",
 ]
 gateway = [
     "fastapi>=0.139.0,<1.0",
@@ -175,6 +180,23 @@ Issues = "https://github.com/synaptent/aragora/issues"
 # gauntlet, pipeline, chat connector and audit hooks.
 [project.entry-points."aragora.decision_routes"]
 server = "aragora.server.decision_routes:register_decision_routes"
+
+# Run by aragora/agents/code_scanners.py on the first lookup that finds nothing
+# registered, so a caller that only imports aragora.agents still builds the audit
+# package's security scanner and bug detector.
+[project.entry-points."aragora.code_scanners"]
+audit = "aragora.audit.code_scanners:register_code_scanners"
+
+# Run by aragora/events/debate_completion.py on the first debate_completed emit, so a
+# process that only runs debates still records them in the debate analytics store.
+[project.entry-points."aragora.debate_completed_subscribers"]
+analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
+
+# Run by aragora/debate/workspace_stores.py on the first lookup that finds nothing
+# registered, so the debate engine records beads in the canonical workspace stores
+# without importing aragora.stores.
+[project.entry-points."aragora.workspace_stores"]
+stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
 
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate

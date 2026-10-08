@@ -303,8 +303,10 @@ def dispatch_webhook(
             duration_ms = (time.time() - start_time) * 1000
 
             logger.debug(
-                f"Webhook delivered to {webhook.url}: "
-                f"status={status_code}, duration={duration_ms:.1f}ms"
+                "Webhook delivered to %s: status=%s, duration=%.1fms",
+                webhook.url,
+                status_code,
+                duration_ms,
             )
 
             return True, status_code, None
@@ -465,8 +467,11 @@ def _dispatch_with_retry_impl(
                 span.add_event("retry", {"attempt": attempt + 1, "delay_seconds": delay})
 
             logger.info(
-                f"Retrying webhook {webhook.id} in {delay:.1f}s "
-                f"(attempt {attempt + 1}/{max_retries})"
+                "Retrying webhook %s in %.1fs (attempt %s/%s)",
+                webhook.id,
+                delay,
+                attempt + 1,
+                max_retries,
             )
             time.sleep(delay)
             delay = min(delay * 2, max_delay)  # Exponential backoff
@@ -577,10 +582,15 @@ class WebhookDispatcher:
     ) -> None:
         """Deliver webhook in background thread."""
         # Import metrics (lazy to avoid circular imports)
+        record_webhook_delivery: Callable[..., None] | None
         try:
-            from aragora.observability.metrics.webhook import record_webhook_delivery
+            from aragora.observability.metrics.webhook import (
+                record_webhook_delivery as _record_webhook_delivery,
+            )
         except ImportError:
             record_webhook_delivery = None
+        else:
+            record_webhook_delivery = _record_webhook_delivery
 
         event_type = payload.get("event", "unknown")
         result = dispatch_webhook_with_retry(webhook, payload)
