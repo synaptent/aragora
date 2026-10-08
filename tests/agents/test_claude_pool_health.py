@@ -103,6 +103,38 @@ def test_probe_reason_and_legacy_availability(text, code, timeout, reason):
     assert is_healthy(classify_probe(text, returncode=code, timed_out=timeout)) == (reason == "ok")
 
 
+@pytest.mark.parametrize("code", [0, 1])
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        (
+            "Claude usage limit reached. Your limit will reset at 5pm (America/Chicago).",
+            "quota_exhausted",
+        ),
+        ("Claude AI usage limit reached|1791460000", "quota_exhausted"),
+        ("Usage limit reached", "quota_exhausted"),
+        (
+            "Your credit balance is too low to access the Anthropic API.",
+            "quota_exhausted",
+        ),
+        ("Credit balance is too low", "quota_exhausted"),
+        ("You are out of usage credits", "quota_exhausted"),
+        ("Out of usage credits", "quota_exhausted"),
+        ("Purchase more credits to continue", "quota_exhausted"),
+        ("Please run /login", "auth_missing"),
+    ],
+)
+def test_unprefixed_credential_walls_are_unhealthy(text, code, reason):
+    assert health.classify_probe_reason(text, returncode=code) == reason
+    assert not is_healthy(classify_probe(text, returncode=code))
+
+
+def test_line_start_prose_about_walls_stays_ok():
+    text = "The usage limit reached message and /login hints are documented."
+    assert health.classify_probe_reason(text, returncode=0) == "ok"
+    assert is_healthy(classify_probe(text, returncode=0))
+
+
 @pytest.mark.parametrize(
     ("payload", "reason"),
     [

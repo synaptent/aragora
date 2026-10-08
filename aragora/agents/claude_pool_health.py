@@ -35,6 +35,7 @@ _AUTH_FAILURE_MARKERS = (
 _NOT_CONFIGURED_MARKERS = (
     "no such file",
     "not logged in",
+    "please run /login",
     "no credentials",
     "claude_profile.sh not found",
 )
@@ -46,9 +47,11 @@ _REASON_PATTERNS = (
     ("auth_expired", "|".join(_AUTH_FAILURE_MARKERS)),
     (
         "quota_exhausted",
-        r"you['’]re out of usage credits|\b429\b|rate[ _-]?limit|"
-        r"quota (?:exceeded|exhausted)|insufficient credits|"
-        r"(?:you(?: have|['’]ve)? )?hit your (?:usage|session) limit|credit balance is too low",
+        r"(?:you(?:['’]re| are) )?out of usage credits|\b429\b|rate[ _-]?limit|"
+        r"quota (?:exceeded|exhausted)|insufficient credits|purchase more credits|"
+        r"(?:claude(?: ai)? )?usage limit (?:reached|exceeded)|"
+        r"(?:you(?: have|['’]ve)? )?hit your (?:usage|session) limit|"
+        r"(?:your )?credit balance is too low",
     ),
     ("transport_timeout", r"(?:request |connection )?(?:timed? out|timeout)"),
     ("service_unavailable", r"\b50[0234]\b|service unavailable|overloaded|internal server error"),
