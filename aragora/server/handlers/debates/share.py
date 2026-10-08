@@ -27,8 +27,12 @@ from aragora.server.handlers.base import (
     json_response,
     handle_errors,
 )
-from aragora.tenancy.debate_access import authorize_debate_write, note_public_revoked
-from aragora.tenancy.record_scope import scope_denial_first
+from aragora.tenancy.debate_access import (
+    authorize_debate_read,
+    authorize_debate_write,
+    note_public_revoked,
+)
+from aragora.tenancy.record_scope import record_not_found, scope_denial_first
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +257,13 @@ class DebateShareHandler(BaseHandler):
             if not debate_id:
                 return error_response("Missing debate ID", 400)
             return self._handle_public_spectate(debate_id)
+        if len(parts) == 6 and parts[5] == "share":
+            # Share state has no read route; give the read gate's answer, then
+            # the missing-debate 404 (the registry turns None into a 500).
+            debate_id, access_error = authorize_debate_read(handler, self._get_storage(), parts[4])
+            if debate_id is None:
+                return access_error
+            return record_not_found("Debate")
         return None
 
     def _handle_public_spectate(self, debate_id: str) -> HandlerResult:

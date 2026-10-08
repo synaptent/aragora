@@ -334,11 +334,14 @@ class TestPublicSpectate:
         body = _body(result)
         assert body["active_viewers"] == 0
 
-    def test_handle_returns_none_for_share_path(self):
-        """handle() only dispatches to spectate/public, not to /share."""
+    def test_handle_answers_get_on_share_path_without_share_state(self):
+        """GET /share has no route: handle() answers (the registry turns None into
+        a 500) with a refusal or the not-found 404, and never with share state."""
         h = DebateShareHandler()
         result = h.handle("/api/v1/debates/test/share", {}, _make_http_handler())
-        assert result is None
+        assert result is not None
+        assert _status(result) in (401, 403, 404)
+        assert "public_spectate" not in _body(result)
 
     def test_handle_returns_none_for_unknown_path(self):
         h = DebateShareHandler()

@@ -17,6 +17,7 @@ from aragora.server.handlers.debates.share import (
     is_publicly_shared,
 )
 from tests.server.handlers.debates.write_isolation.support import (
+    ANON,
     DA,
     DA_TASK,
     DB,
@@ -76,6 +77,26 @@ def test_refused_callers_change_nothing(share, storage):
     assert not storage.is_public(DA) and not storage.is_public(DN)
     assert storage.is_public(DP)
     assert not any(is_publicly_shared(d) for d in (DA, DB, DN, DX))
+
+
+def test_get_on_the_share_path_answers_the_read_gate_then_not_found(share, storage):
+    """No route serves GET .../share: callers get the read gate's answer, then
+    the missing-debate 404 (the owner too), never a 500 and never share state."""
+    for user, debate_id, status in REFUSALS:
+        result = share(user, "GET", debate_id)
+        if debate_id == DP:
+            # A public debate passes the read gate for anyone.
+            status = 404
+        assert result is not None and result.status_code == status, (debate_id, user.user_id)
+        if status == 404:
+            assert body_of(result) == NOT_FOUND
+    for user in (USER_A, ANON):
+        result = share(user, "GET", DP)
+        assert (result.status_code, body_of(result)) == (404, NOT_FOUND), user.user_id
+    owner = share(USER_A, "GET", DA)
+    assert (owner.status_code, body_of(owner)) == (404, NOT_FOUND)
+    assert DA_TASK not in text_of(owner)
+    assert not storage.is_public(DA) and storage.is_public(DP)
 
 
 def test_share_permission_key_is_registered_and_held_by_owner():
@@ -139,3 +160,19 @@ class TestThroughTheServer:
             assert status == 401, (method, debate_id)
         assert storage.get_debate(DA)["task"] == DA_TASK
         assert storage.is_public(DP) and not storage.is_public(DA)
+
+    def test_get_on_the_share_path_is_never_a_500(self, server):
+        from tests.server.rbac_dispatch import dispatch, jwt
+
+        callers = {
+            "A": (jwt("user-a", ORG_A, "owner"), {DA: 404, DP: 404, DX: 404}),
+            "B": (jwt("user-b", ORG_B, "owner"), {DA: 404, DP: 404, DX: 404}),
+            "anonymous": (None, {DA: 401, DP: 404}),
+        }
+        for who, (token, expected) in callers.items():
+            for debate_id, want in expected.items():
+                path = f"/api/v1/debates/{debate_id}/share"
+                status, payload = dispatch(server, "GET", path, token)
+                assert status == want, (who, path, status, payload)
+                if want == 404:
+                    assert payload == NOT_FOUND, (who, path)
