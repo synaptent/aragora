@@ -3,6 +3,11 @@ SQLite-backed store for canvas pipeline results.
 
 Persists pipeline state (ideas, goals, actions, orchestration stages)
 so that pipelines survive server restarts and can be queried historically.
+
+Each row carries ``org_id``, ``created_by`` and ``ownership_source``. The owner
+is written when a row is first inserted and never changed by a later save of
+the same id. Rows saved before these columns existed are marked ``unknown``
+with a NULL ``org_id``; a NULL ``org_id`` is visible to no org.
 """
 
 from __future__ import annotations
@@ -18,12 +23,30 @@ from aragora.storage.schema import safe_add_column
 
 logger = logging.getLogger(__name__)
 
+OWNERSHIP_CREATED = "created"
+OWNERSHIP_UNKNOWN = "unknown"
+
+
+def _add_ownership_columns(conn: Any) -> None:
+    safe_add_column(conn, "pipeline_results", "org_id", "TEXT")
+    safe_add_column(conn, "pipeline_results", "created_by", "TEXT")
+    safe_add_column(conn, "pipeline_results", "ownership_source", "TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_org_created "
+        "ON pipeline_results(org_id, created_at DESC)"
+    )
+    conn.execute(
+        "UPDATE pipeline_results SET ownership_source = ? "
+        "WHERE org_id IS NULL AND ownership_source IS NULL",
+        (OWNERSHIP_UNKNOWN,),
+    )
+
 
 class PipelineResultStore(SQLiteStore):
     """Persistent storage for idea-to-execution pipeline results."""
 
     SCHEMA_NAME = "pipeline_results"
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     INITIAL_SCHEMA = """
         CREATE TABLE IF NOT EXISTS pipeline_results (
@@ -65,14 +88,30 @@ class PipelineResultStore(SQLiteStore):
             ),
             description="Persist canonical execution metadata",
         )
+        manager.register_migration(
+            from_version=2,
+            to_version=3,
+            function=cast(Any, _add_ownership_columns),
+            description="Record the owning org of each pipeline",
+        )
 
-    def save(self, pipeline_id: str, result_dict: dict[str, Any]) -> None:
+    def save(
+        self,
+        pipeline_id: str,
+        result_dict: dict[str, Any],
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> None:
         """Save or update a pipeline result.
 
         Args:
             pipeline_id: Unique pipeline identifier
             result_dict: PipelineResult.to_dict() output
+            org_id: Owning org, recorded only when the row is first inserted
+            created_by: Creating user, recorded only when the row is first inserted
         """
+        owner_org = org_id if isinstance(org_id, str) and org_id else None
         now = time.time()
         stage_status = result_dict.get("stage_status", {})
 
@@ -94,8 +133,9 @@ class PipelineResultStore(SQLiteStore):
                     id, status, stage_status_json,
                     ideas_json, goals_json, actions_json, orchestration_json,
                     transitions_json, provenance_count, integrity_hash,
-                    receipt_json, execution_json, duration, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    receipt_json, execution_json, duration, created_at, updated_at,
+                    org_id, created_by, ownership_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     status = excluded.status,
                     stage_status_json = excluded.stage_status_json,
@@ -131,8 +171,37 @@ class PipelineResultStore(SQLiteStore):
                     result_dict.get("duration", 0.0),
                     now,
                     now,
+                    owner_org,
+                    created_by if owner_org else None,
+                    OWNERSHIP_CREATED if owner_org else None,
                 ),
             )
+
+    def get_owner_org(self, pipeline_id: str) -> str | None:
+        """The org that owns the pipeline, or None if it is missing or has no owner."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT org_id FROM pipeline_results WHERE id = ?",
+                (pipeline_id,),
+            ).fetchone()
+        # By name: the shared connection may carry sqlite3.Row or _dict_factory rows.
+        owner = row["org_id"] if row else None
+        return owner if isinstance(owner, str) and owner else None
+
+    def list_for_org(
+        self,
+        org_id: str,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Like :meth:`list_pipelines`, limited to pipelines owned by ``org_id``.
+
+        An empty ``org_id`` matches nothing.
+        """
+        if not isinstance(org_id, str) or not org_id:
+            return []
+        return self._list(org_id=org_id, status=status, limit=limit, offset=offset)
 
     def get(self, pipeline_id: str) -> dict[str, Any] | None:
         """Get a pipeline result by ID.
@@ -161,9 +230,22 @@ class PipelineResultStore(SQLiteStore):
 
         Returns summary info (not full stage data) for efficiency.
         """
+        return self._list(org_id=None, status=status, limit=limit, offset=offset)
+
+    def _list(
+        self,
+        *,
+        org_id: str | None,
+        status: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
         conditions: list[str] = []
         params: list[Any] = []
 
+        if org_id is not None:
+            conditions.append("org_id = ?")
+            params.append(org_id)
         if status:
             conditions.append("status = ?")
             params.append(status)

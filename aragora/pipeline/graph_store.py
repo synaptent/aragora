@@ -11,6 +11,12 @@ Usage:
     graph = store.get(graph_id)
     store.add_node(graph_id, node)
     chain = store.get_provenance_chain(graph_id, node_id)
+
+Each graph row carries ``org_id``, ``created_by`` and ``ownership_source``.
+The owner is written when the graph is first inserted and never changed by a
+later write of the same id. Graphs stored before these columns existed are
+marked ``unknown`` with a NULL ``org_id``; a NULL ``org_id`` is visible to no
+org.
 """
 
 from __future__ import annotations
@@ -41,6 +47,9 @@ _STAGE_SORT_ORDER: dict[PipelineStage, int] = {
     PipelineStage.ACTIONS: 3,
     PipelineStage.ORCHESTRATION: 4,
 }
+
+OWNERSHIP_CREATED = "created"
+OWNERSHIP_UNKNOWN = "unknown"
 
 
 def _get_db_path() -> str:
@@ -129,17 +138,41 @@ class GraphStore:
             }
             if "execution_status" not in node_columns:
                 conn.execute("ALTER TABLE nodes ADD COLUMN execution_status TEXT")
+            graph_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(graphs)").fetchall()
+            }
+            if "ownership_source" not in graph_columns:
+                for column in ("org_id", "created_by", "ownership_source"):
+                    if column not in graph_columns:
+                        conn.execute(f"ALTER TABLE graphs ADD COLUMN {column} TEXT")
+                conn.execute(
+                    "UPDATE graphs SET ownership_source = ? WHERE org_id IS NULL",
+                    (OWNERSHIP_UNKNOWN,),
+                )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_graphs_org_updated ON graphs(org_id, updated_at)"
+            )
             conn.commit()
         finally:
             conn.close()
 
     # -- CRUD ---------------------------------------------------------------
 
-    def create(self, graph: UniversalGraph) -> str:
-        """Insert or replace a graph snapshot. Returns graph ID."""
+    def create(
+        self,
+        graph: UniversalGraph,
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> str:
+        """Insert or replace a graph snapshot. Returns graph ID.
+
+        ``org_id`` and ``created_by`` are recorded only when the graph is first
+        inserted; replacing an existing graph keeps its owner.
+        """
         conn = self._connect()
         try:
-            self._upsert_graph(conn, graph)
+            self._upsert_graph(conn, graph, org_id=org_id, created_by=created_by)
             conn.execute("DELETE FROM nodes WHERE graph_id = ?", (graph.id,))
             for node in graph.nodes.values():
                 self._insert_node(conn, graph.id, node)
@@ -160,6 +193,26 @@ class GraphStore:
         finally:
             conn.close()
 
+    def get_owner_org(self, graph_id: str) -> str | None:
+        """The org that owns the graph, or None if it is missing or has no owner."""
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT org_id FROM graphs WHERE id = ?", (graph_id,)).fetchone()
+        finally:
+            conn.close()
+        if row is None or not isinstance(row["org_id"], str) or not row["org_id"]:
+            return None
+        return str(row["org_id"])
+
+    def node_graph_id(self, node_id: str) -> str | None:
+        """The id of the graph that holds ``node_id``, or None if no graph does."""
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT graph_id FROM nodes WHERE id = ?", (node_id,)).fetchone()
+        finally:
+            conn.close()
+        return str(row["graph_id"]) if row is not None else None
+
     def get_dag_snapshot(self, graph_id: str) -> Any | None:
         """Retrieve a normalized DAG snapshot for visualization."""
         graph = self.get(graph_id)
@@ -172,10 +225,18 @@ class GraphStore:
         owner_id: str | None = None,
         workspace_id: str | None = None,
         limit: int = 50,
+        *,
+        org_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List graph summaries (without loading all nodes)."""
+        """List graph summaries (without loading all nodes).
+
+        ``org_id`` limits the list to graphs owned by that org.
+        """
         clauses: list[str] = []
         params: list[Any] = []
+        if org_id is not None:
+            clauses.append("g.org_id = ?")
+            params.append(org_id)
         if owner_id is not None:
             clauses.append("owner_id = ?")
             params.append(owner_id)
@@ -239,9 +300,16 @@ class GraphStore:
     # -- Node operations ----------------------------------------------------
 
     def add_node(self, graph_id: str, node: UniversalNode) -> None:
-        """Add a single node to an existing graph."""
+        """Add a single node to an existing graph.
+
+        Raises ValueError when ``node.id`` already belongs to another graph:
+        node ids are unique across graphs, so writing it would move that node.
+        """
         conn = self._connect()
         try:
+            row = conn.execute("SELECT graph_id FROM nodes WHERE id = ?", (node.id,)).fetchone()
+            if row is not None and row["graph_id"] != graph_id:
+                raise ValueError("Node id is already in use")
             self._insert_node(conn, graph_id, node)
             conn.commit()
         finally:
@@ -335,13 +403,21 @@ class GraphStore:
     # -- Helpers ------------------------------------------------------------
 
     @staticmethod
-    def _upsert_graph(conn: sqlite3.Connection, graph: UniversalGraph) -> None:
+    def _upsert_graph(
+        conn: sqlite3.Connection,
+        graph: UniversalGraph,
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> None:
+        owner_org = org_id if isinstance(org_id, str) and org_id else None
         conn.execute(
             """
             INSERT INTO graphs
                 (id, name, owner_id, workspace_id, edges_json,
-                 transitions_json, metadata_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 transitions_json, metadata_json, created_at, updated_at,
+                 org_id, created_by, ownership_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
                 owner_id=excluded.owner_id,
@@ -362,6 +438,9 @@ class GraphStore:
                 json.dumps(graph.metadata),
                 graph.created_at,
                 graph.updated_at,
+                owner_org,
+                created_by if owner_org else None,
+                OWNERSHIP_CREATED if owner_org else None,
             ),
         )
 
