@@ -1,11 +1,10 @@
 """Characterization corpus for the review_queue module split (C-1 to C-4).
 
-Step 1 of ``docs/architecture/P5_REVIEW_QUEUE_SPLIT_DESIGN.md``: the public
-surface, gate outputs and CLI help recorded under
-``review_queue_characterization/`` must stay byte-equal while code moves out
-of ``aragora/cli/commands/review_queue.py``. Every input is a mocked GitHub
-payload. Rewriting a golden file is a behavior change that needs its own
-reviewed PR; ``REVIEW_QUEUE_CHARACTERIZATION_REGEN=1`` only produces that diff.
+Step 1 of ``docs/architecture/P5_REVIEW_QUEUE_SPLIT_DESIGN.md``: the public surface, gate
+outputs and CLI help recorded under ``review_queue_characterization/`` must stay byte-equal
+while code moves out of ``aragora/cli/commands/review_queue.py``. Every input is a mocked
+GitHub payload. Rewriting a golden file is a behavior change that needs its own reviewed PR;
+``REVIEW_QUEUE_CHARACTERIZATION_REGEN=1`` only produces that diff.
 """
 
 from __future__ import annotations
@@ -36,18 +35,14 @@ HELP_PYTHON = (3, 11)
 # Unit modules named by the design's target table (section 4).
 UNIT_MODULES = "models render parsers checks settlement evidence packet quorum".split()
 DESIGN_SEAMS = set(
-    """
-    _gh_json _fetch_required_pr_check_surface _build_packet _build_queue
+    """_gh_json _fetch_required_pr_check_surface _build_packet _build_queue
     _explicit_merged_pr_merge_packet_entry _build_merge_authorization_packet
     _trusted_settlement_creator _human_settlement_status_creator_verified
-    _record_external_settlement _require_clean_worktree _has_successful_status_context
-    """.split()
+    _record_external_settlement _require_clean_worktree _has_successful_status_context""".split()
 )
 REPORTING_CASES = tuple(
-    """
-    green low_risk unavailable quorum_fail quorum_pending
-    required_fail required_pending optional_fail optional_pending
-    """.split()
+    """green low_risk unavailable quorum_fail quorum_pending
+    required_fail required_pending optional_fail optional_pending""".split()
 )
 REQUIRED = ("lint", "typecheck", "sdk-parity", "Generate & Validate", "TypeScript SDK Type Check")
 VOLATILE_KEYS = {"generated_at", "packet_sha"}
@@ -149,12 +144,8 @@ def _in_job(
     mp: pytest.MonkeyPatch,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[list[str]]]:
     """Same inputs as ``in_job_advisory_inputs`` in test_review_queue.py, plus a call log."""
-    for flag in (
-        "TIERED_MERGE_GATE",
-        "SEVERITY_GATED_DISSENT",
-        "ADVISORY_DISSENT_SETTLE",
-        "OPERATOR_ADVISORY_SETTLEMENT",
-    ):
+    for flag in """TIERED_MERGE_GATE SEVERITY_GATED_DISSENT ADVISORY_DISSENT_SETTLE
+    OPERATOR_ADVISORY_SETTLEMENT""".split():
         mp.setenv(f"ARAGORA_ENABLE_{flag}", "1")
     for key, value in {
         "ARAGORA_SETTLEMENT_CREATOR": "scarmani",
@@ -317,12 +308,10 @@ def _routed_gh(routes: dict[str, Any], calls: list[list[str]]) -> Callable[[list
 
 def _direct_check_run_routes() -> dict[str, Any]:
     pr = _pr(number=7465, files=[{"path": "docs/status/open.md"}], statusCheckRollup=[])
+    grok = "## Grok independent model review\nVerdict: approve."
     pr["comments"] = [
         {"author": {"login": "an0mium"}, "body": "## Claude focused dogfood\npass"},
-        {
-            "author": {"login": "an0mium"},
-            "body": "## Grok independent model review\nVerdict: approve.",
-        },
+        {"author": {"login": "an0mium"}, "body": grok},
     ]
     runs = [
         {"name": "lint", "status": "completed", "conclusion": "success"},
@@ -398,12 +387,11 @@ PACKET_CASES = (*REPORTING_CASES, *STATE_CASES, *BOUNDARY_CASES, *FALLBACK_CASES
 
 def _packet_for(case: str, mp: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Any, list[list[str]]]:
     if case in FALLBACK_CASES:
-        routes = (
-            _direct_check_run_routes() if case.startswith("direct") else _rest_fallback_routes()
-        )
+        direct = case.startswith("direct")
+        routes = _direct_check_run_routes() if direct else _rest_fallback_routes()
         calls: list[list[str]] = []
         mp.setattr(rq, "_gh_json", _routed_gh(routes, calls))
-        number = "7465" if case.startswith("direct") else "7466"
+        number = "7465" if direct else "7466"
         return rq._build_packet(number, repo_override=REPO, review_queue_root=tmp_path), calls
     pr, required, calls = _in_job(mp)
     if case in REPORTING_CASES:
@@ -433,10 +421,8 @@ def test_merge_authorization_packet_corpus(
     packet = rq._build_merge_authorization_packet(
         pr_refs=["6283"], limit=1, repo_override=REPO, review_queue_root=tmp_path
     )
-    record = {"packet": packet, "gh_calls": calls}
-    _assert_matches_golden(
-        "behavior_corpus.json", f"merge_auth/{case}", _normalize(record, tmp_path)
-    )
+    record = _normalize({"packet": packet, "gh_calls": calls}, tmp_path)
+    _assert_matches_golden("behavior_corpus.json", f"merge_auth/{case}", record)
 
 
 QUORUM_CASES: dict[str, dict[str, Any]] = {
@@ -487,14 +473,9 @@ def _classification_inputs() -> dict[str, list[str]]:
         "tier2_roots": list(rq.TIER_2_PREFIXES),
         "samples": [
             "",
-            "docs/example.md",
-            "tests/cli/commands/test_example.py",
-            "aragora/example.py",
-            "aragora/server/handlers/x.py",
-            "scripts/example.py",
-            "sdk/python/aragora_sdk/client.py",
-            "README.md",
-            "pyproject.toml",
+            *"""docs/example.md tests/cli/commands/test_example.py aragora/example.py
+            aragora/server/handlers/x.py scripts/example.py sdk/python/aragora_sdk/client.py
+            README.md pyproject.toml""".split(),
         ],
     }
 
@@ -566,8 +547,6 @@ def test_section8_advisory_behaviors_stay_frozen(
 
 
 # --- C-1 public surface -----------------------------------------------------
-
-
 def _fresh_public_names() -> list[str]:
     """Names from a fresh facade import; attributes other tests attach in-process do not count."""
     probe = "import json, aragora.cli.commands.review_queue as m; print(json.dumps(dir(m)))"
@@ -599,8 +578,6 @@ def test_public_surface_matches_the_recorded_names() -> None:
 
 
 # --- C-3 monkeypatch seams --------------------------------------------------
-
-
 def _seam_census() -> set[str]:
     """Design section 11 census: string patch targets plus setattr targets on the CLI facade."""
     string_target = re.compile(rb"aragora\.cli\.commands\.review_queue\.([A-Za-z_]+)")
@@ -695,8 +672,6 @@ def test_seam_checker_flags_bindings_and_direct_calls() -> None:
 
 
 # --- C-4 CLI surface --------------------------------------------------------
-
-
 def _subparsers(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
     for action in parser._actions:
         if isinstance(action, argparse._SubParsersAction):
