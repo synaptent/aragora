@@ -15,7 +15,8 @@ Two safety invariants (enforced in :mod:`aragora.swarm.quorum_evidence`):
 
 Defaults to a dry run (prepares + lints, prints, posts nothing). ``--never-post``
 (or ``ARAGORA_EVIDENCE_NEVER_POST=1``) is a hard prepare-only control on top of
-that: it forces prepare at every tier and conflicts loudly with ``--apply``.
+that: it forces prepare at every tier and conflicts loudly with ``--apply`` and
+``--post-advisory-summary``.
 ``--post-advisory-summary`` separately opts into a non-counting summary comment,
 including on draft and Tier 3-4 PRs; it does not opt into evidence posting.
 
@@ -74,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         CollectPreflightTransportError,
         _render_outcome,
         collect_outcome_from_dict,
+        never_post_enabled,
         run_collect_cli,
     )
 
@@ -103,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Hard prepare-only control: force action=prepare at every tier and never "
             "post (also enabled via ARAGORA_EVIDENCE_NEVER_POST=1). Conflicts with "
-            "--apply."
+            "--apply and --post-advisory-summary."
         ),
     )
     parser.add_argument(
@@ -146,6 +148,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "--never-post conflicts with --apply: the never-post control forbids "
             "posting at any tier"
+        )
+    if args.post_advisory_summary and (args.never_post or never_post_enabled()):
+        parser.error(
+            "--post-advisory-summary conflicts with the never-post control (--never-post or "
+            "ARAGORA_EVIDENCE_NEVER_POST=1): the summary is a GitHub comment"
         )
     if (args.claude_review_checkout is None) != (args.claude_review_expected_head is None):
         parser.error("--claude-review-checkout and --claude-review-expected-head go together")

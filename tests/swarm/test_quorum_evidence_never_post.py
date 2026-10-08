@@ -10,8 +10,8 @@ It has three surfaces:
 * the ``ARAGORA_EVIDENCE_NEVER_POST`` environment variable, which also covers
   the ``review-queue collect-evidence`` path without any CLI change.
 
-Combining the control with ``--apply`` is a loud error rather than a silent
-override, and the default behavior without the control stays byte-identical
+Combining the control with ``--apply`` or ``--post-advisory-summary`` is a loud
+error rather than a silent override, and the default behavior without the control stays byte-identical
 to the pre-control decision matrix.
 """
 
@@ -456,3 +456,64 @@ def test_cli_apply_conflicts_with_never_post_flag(monkeypatch, capsys) -> None:
     err = capsys.readouterr().err
     assert "--never-post" in err
     assert "conflicts with --apply" in err
+
+
+# --- the advisory summary comment is a post too ------------------------------
+
+
+@pytest.mark.parametrize("surface", ["flag", "env"])
+def test_cli_never_post_control_blocks_advisory_summary_comment(
+    monkeypatch, capsys, surface
+) -> None:
+    from aragora.swarm import advisory_dissent as adv
+
+    module = _load_script(monkeypatch)
+    calls: list[str] = []
+    outcome = CollectOutcome(
+        repo="o/r",
+        pr=1,
+        head_sha=HEAD,
+        head_committed_at=COMMITTED,
+        tier=4,
+        action="prepare",
+        action_reason="never-post control active; preparing evidence only at every tier",
+        items=[
+            EvidenceItem(
+                family="claude",
+                body="- [P3] Minor",
+                verdict="pass",
+                would_count=True,
+                severity_gated=True,
+            )
+        ],
+    ).to_dict()
+
+    def fake_collect(**kwargs):
+        calls.append("collect")
+        kwargs["printer"](json.dumps(outcome))
+        return 0
+
+    def fake_gh(args, **kwargs):
+        calls.append(" ".join(args))
+        if "--method" in args:
+            return type("R", (), {"returncode": 0, "stdout": '{"html_url": "u"}'})()
+        return type("R", (), {"returncode": 0, "stdout": "[[]]"})()
+
+    monkeypatch.setattr(qe, "run_collect_cli", fake_collect)
+    monkeypatch.setattr(adv.merge_quorum_io, "aragora_env", lambda: {})
+    monkeypatch.setattr(adv.merge_quorum_io, "_read_env", lambda: {})
+    monkeypatch.setattr(adv.merge_quorum_io, "run", fake_gh)
+    argv = ["--repo", "o/r", "--pr", "1", "--post-advisory-summary", "--json"]
+    if surface == "flag":
+        argv.append("--never-post")
+    else:
+        monkeypatch.setenv(NEVER_POST_ENV, "1")
+
+    with pytest.raises(SystemExit) as excinfo:
+        module.main(argv)
+
+    assert calls == [], "no collection and no GitHub call may run on a conflicting invocation"
+    assert excinfo.value.code == 2
+    err = capsys.readouterr().err
+    assert "--post-advisory-summary" in err
+    assert NEVER_POST_ENV in err
