@@ -351,6 +351,57 @@ async def test_put_saves_own_and_creates_for_the_callers_org(handler, store) -> 
     assert store.get_owner_org(PA) == "org-a"
 
 
+@pytest.mark.asyncio
+async def test_put_create_loses_to_a_pipeline_created_after_admission(
+    handler, store, monkeypatch
+) -> None:
+    """B's create-via-PUT is admitted for a free id, then A creates that id
+    before B's save: B gets the shared 404 and A's pipeline is unchanged."""
+    raced = "pipe-raced"
+    a_content = {
+        "pipeline_id": raced,
+        "stage_status": {"ideas": "complete"},
+        "ideas": {"nodes": [{"id": "idea-1", "data": {"label": "A raced idea"}}]},
+    }
+    read_body = CanvasPipelineHandler._get_request_body
+
+    def body_read_after_a_creates(request: Any) -> dict[str, Any]:
+        store.save(raced, a_content, org_id="org-a", created_by="user-a")
+        return read_body(request)
+
+    monkeypatch.setattr(
+        CanvasPipelineHandler, "_get_request_body", staticmethod(body_read_after_a_creates)
+    )
+    stages = {"stages": {"ideas": {"nodes": [{"id": "evil", "label": "B"}], "edges": []}}}
+    before = store.get(PA)
+
+    raced_put = await _put(handler, USER_B, f"{BASE}/{raced}", stages)
+    foreign_put = await _put(handler, USER_B, f"{BASE}/{PA}", stages)
+
+    assert raced_put.status_code == 404
+    assert _json(raced_put) == _json(foreign_put)
+    assert "A raced idea" not in raced_put.body.decode()
+    assert store.get(raced)["ideas"] == a_content["ideas"]
+    assert store.get(raced)["stage_status"] == {"ideas": "complete"}
+    assert store.get_owner_org(raced) == "org-a"
+    assert store.get(PA) == before
+
+
+@pytest.mark.asyncio
+async def test_put_save_refuses_a_pipeline_that_changed_hands(handler, store) -> None:
+    """The save itself checks the owner, whatever the caller saw before."""
+    scope_b = SimpleNamespace(org_id="org-b", user_id="user-b")
+    stages = {"stages": {"goals": {"nodes": [{"id": "g-evil"}], "edges": []}}}
+    before = store.get(PA)
+
+    result = await handler.handle_save_pipeline(PA, stages, scope=scope_b)
+
+    assert result.status_code == 404
+    assert "A secret idea" not in result.body.decode()
+    assert store.get(PA) == before
+    assert store.get_owner_org(PA) == "org-a"
+
+
 # ---------------------------------------------------------------------------
 # Records created through the routes carry the creator's org
 # ---------------------------------------------------------------------------
@@ -474,6 +525,40 @@ async def test_execute_queues_the_plan_for_the_owner_org(handler, store) -> None
     assert queue.call_args.kwargs["org_id"] == "org-a"
     assert queue.call_args.kwargs["created_by"] == "user-a"
     assert graph_store.list.call_args.kwargs["org_id"] == "org-a"
+
+
+@pytest.mark.asyncio
+async def test_execute_reads_receipt_provenance_for_the_owner_org(handler, store) -> None:
+    _save_executable(store)
+    graph_store = MagicMock()
+    graph_store.list.return_value = []
+    launch = {
+        "execution_id": "exec-2",
+        "correlation_id": "corr-2",
+        "execution_mode": "workflow",
+        "run_id": "run-2",
+    }
+    outcome = MagicMock(success=True, receipt_id="rcpt-2")
+    outcome.to_dict.return_value = {"success": True}
+
+    with (
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store),
+        patch("aragora.pipeline.canonical_execution.queue_plan_execution", return_value=launch),
+        patch(
+            "aragora.pipeline.canonical_execution.execute_queued_plan",
+            new=AsyncMock(return_value=(outcome, {}, {})),
+        ),
+        patch(
+            "aragora.pipeline.receipt_generator.generate_pipeline_receipt",
+            new=AsyncMock(return_value={"receipt_id": "pipe-rcpt"}),
+        ) as receipt,
+    ):
+        result = await _post(handler, USER_A, f"{BASE}/{PA}/execute", {})
+        await module._pipeline_tasks["exec-2"]
+
+    assert result.status_code == 202
+    assert receipt.call_args.args[0] == PA
+    assert receipt.call_args.kwargs["org_id"] == "org-a"
 
 
 @pytest.mark.asyncio

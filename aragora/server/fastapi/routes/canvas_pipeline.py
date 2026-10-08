@@ -1028,6 +1028,7 @@ async def execute_pipeline(
                             "correlation_id": launch["correlation_id"],
                             "status": "completed" if outcome.success else "failed",
                         },
+                        org_id=caller.scope.org_id,
                     )
                 except (ImportError, RuntimeError, ValueError, TypeError, OSError) as exc:
                     logger.debug("Pipeline provenance receipt generation skipped: %s", exc)
@@ -1344,7 +1345,9 @@ async def get_pipeline_receipt(
     try:
         from aragora.pipeline.receipt_generator import generate_pipeline_receipt
 
-        receipt = await generate_pipeline_receipt(pipeline_id, data_dict)
+        receipt = await generate_pipeline_receipt(
+            pipeline_id, data_dict, org_id=caller.scope.org_id
+        )
         receipt_dict = receipt.to_dict() if hasattr(receipt, "to_dict") else receipt
         return PipelineReceiptResponse(
             pipeline_id=pipeline_id,

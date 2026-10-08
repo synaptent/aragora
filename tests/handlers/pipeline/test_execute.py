@@ -932,6 +932,35 @@ class TestExecutePipeline:
         assert _executions["pipe-123"]["failed_subtasks"] == 0
 
     @pytest.mark.asyncio
+    async def test_receipt_provenance_is_read_for_the_executing_org(self):
+        h = _make_handler()
+        _executions["pipe-123"] = {"pipeline_id": "pipe-123", "status": "started", "org_id": ORG}
+
+        with (
+            patch(
+                "aragora.pipeline.canonical_execution.build_decision_plan_from_orchestration",
+                return_value=(_mock_plan(), [MagicMock()]),
+            ),
+            patch(
+                "aragora.pipeline.canonical_execution.queue_plan_execution",
+                return_value=_mock_launch(),
+            ),
+            patch(
+                "aragora.pipeline.canonical_execution.execute_queued_plan",
+                new=AsyncMock(return_value=(_mock_outcome(), {}, {})),
+            ),
+            patch(
+                "aragora.pipeline.receipt_generator.generate_pipeline_receipt",
+                new_callable=AsyncMock,
+                return_value={"receipt_id": "pipe-rcpt"},
+            ) as mock_receipt,
+        ):
+            await h._execute_pipeline("pipe-123", "cycle-1", [MagicMock()], None, False)
+
+        assert mock_receipt.call_args.args[0] == "pipe-123"
+        assert mock_receipt.call_args.kwargs["org_id"] == ORG
+
+    @pytest.mark.asyncio
     async def test_execution_failure_zero_subtasks(self):
         h = _make_handler()
         _executions["pipe-123"] = {"pipeline_id": "pipe-123", "status": "started"}
