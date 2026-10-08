@@ -208,3 +208,126 @@ I explicitly lift the current-head park for this head.
         pytest.fail(f"naive and aware timestamps should be comparable: {exc}")
 
     assert record["blocked"] is False
+
+
+def test_untrusted_author_park_does_not_block() -> None:
+    comments = [
+        _comment(
+            f"""## Current-head repeat-blocker park
+
+Exact head: `{HEAD_X}`
+
+Do not merge this PR on this head.
+""",
+            created_at="2026-07-08T05:20:08Z",
+            author_association="NONE",
+        )
+    ]
+
+    record = current_head_park_record(comments, head_sha=HEAD_X)
+
+    assert record["blocked"] is False
+
+
+@pytest.mark.parametrize("association", ["OWNER", "MEMBER", "COLLABORATOR"])
+def test_maintainer_park_blocks(association: str) -> None:
+    comments = [
+        _comment(
+            f"""## Current-head evidence blocker
+
+Exact head: `{HEAD_X}`
+
+Do not merge this PR on this head.
+""",
+            created_at="2026-07-08T05:07:24Z",
+            author_association=association,
+        )
+    ]
+
+    record = current_head_park_record(comments, head_sha=HEAD_X)
+
+    assert record["blocked"] is True
+    assert record["park_marker"] == "Current-head evidence blocker"
+
+
+def test_park_marker_in_prose_does_not_block() -> None:
+    comments = [
+        _comment(
+            f"""## Conductor status digest
+
+Current head: `{HEAD_X}`
+
+The earlier Current-head evidence blocker on this PR was resolved by the repair.
+""",
+            created_at="2026-07-08T05:20:08Z",
+            author_association="MEMBER",
+        )
+    ]
+
+    record = current_head_park_record(comments, head_sha=HEAD_X)
+
+    assert record["blocked"] is False
+
+
+def test_trusted_lift_that_names_the_park_in_prose_clears_it() -> None:
+    comments = [
+        _comment(
+            f"""## Current-head repeat-blocker park
+
+Exact head: `{HEAD_X}`
+
+Do not merge this PR on this head.
+""",
+            created_at="2026-07-08T05:20:08Z",
+        ),
+        _comment(
+            f"""## Current-head park lift
+
+Exact head: `{HEAD_X}`
+
+I lift the Current-head repeat-blocker park for this head.
+""",
+            created_at="2026-07-08T05:30:00Z",
+        ),
+    ]
+
+    record = current_head_park_record(comments, head_sha=HEAD_X)
+
+    assert record["blocked"] is False
+    assert record["lifted_by"]["created_at"] == "2026-07-08T05:30:00Z"
+
+
+def test_prose_mention_after_lift_does_not_reblock() -> None:
+    comments = [
+        _comment(
+            f"""## Current-head evidence blocker
+
+Exact head: `{HEAD_X}`
+
+Do not merge this PR on this head.
+""",
+            created_at="2026-07-08T05:20:08Z",
+        ),
+        _comment(
+            f"""## Current-head park lift
+
+Exact head: `{HEAD_X}`
+
+I explicitly lift the current-head park for this head.
+""",
+            created_at="2026-07-08T05:30:00Z",
+        ),
+        _comment(
+            f"""Status digest. Current head: `{HEAD_X}`.
+
+The earlier Current-head evidence blocker was lifted by the operator.
+""",
+            created_at="2026-07-08T05:40:00Z",
+            author_association="MEMBER",
+        ),
+    ]
+
+    record = current_head_park_record(comments, head_sha=HEAD_X)
+
+    assert record["blocked"] is False
+    assert record["lifted_by"]["created_at"] == "2026-07-08T05:30:00Z"

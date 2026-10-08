@@ -15,6 +15,9 @@ PARK_LIFT_RECORD_MARKERS: tuple[str, ...] = (
     "Current-head park lift",
     "Current-head park override",
 )
+# A park only adds a merge block, so any maintainer may post one; a lift removes
+# a block, so it keeps the narrower owner-only trust.
+TRUSTED_PARK_AUTHOR_ASSOCIATIONS: frozenset[str] = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 TRUSTED_LIFT_AUTHOR_ASSOCIATIONS: frozenset[str] = frozenset({"OWNER"})
 
 _HEAD_RE = re.compile(r"(?im)\b(?:exact\s+head|current\s+head|head)\s*[:=]\s*`?([0-9a-f]{40})`?")
@@ -23,9 +26,11 @@ _HEAD_RE = re.compile(r"(?im)\b(?:exact\s+head|current\s+head|head)\s*[:=]\s*`?(
 def current_head_park_record(comments: list[Any], *, head_sha: str) -> dict[str, Any]:
     """Return the standing exact-head park record, if one is still authoritative.
 
-    Park records are repo-visible PR comments that explicitly cite the current
-    head. Later supportive evidence on the same head is not a lift; only a later
-    explicit operator lift or override comment for that same head clears it.
+    Park records are repo-visible PR comments from a trusted maintainer whose
+    marker stands on its own heading line and that explicitly cite the current
+    head; prose that merely mentions a marker is not a park. Later supportive
+    evidence on the same head is not a lift; only a later explicit operator lift
+    or override comment for that same head clears it.
     """
     head = str(head_sha or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{40}", head):
@@ -114,14 +119,6 @@ def _body_mentions_head(body: str, head_sha: str) -> bool:
     return any(match.group(1).lower() == head_sha for match in _HEAD_RE.finditer(body))
 
 
-def _park_marker(body: str) -> str:
-    folded = body.casefold()
-    for marker in PARK_RECORD_MARKERS:
-        if marker.casefold() in folded:
-            return marker
-    return ""
-
-
 def _structured_marker(body: str, markers: tuple[str, ...]) -> str:
     marker_map = {marker.casefold(): marker for marker in markers}
     for raw_line in body.splitlines():
@@ -136,7 +133,9 @@ def _structured_marker(body: str, markers: tuple[str, ...]) -> str:
 
 def _park_record(comment: Any, head_sha: str) -> dict[str, Any] | None:
     body = _comment_body(comment)
-    marker = _park_marker(body)
+    if not body or _author_association(comment) not in TRUSTED_PARK_AUTHOR_ASSOCIATIONS:
+        return None
+    marker = _structured_marker(body, PARK_RECORD_MARKERS)
     if not marker:
         return None
     return {
@@ -149,7 +148,7 @@ def _park_record(comment: Any, head_sha: str) -> dict[str, Any] | None:
 
 def _lift_record(comment: Any, head_sha: str) -> dict[str, Any] | None:
     body = _comment_body(comment)
-    if not body or not _trusted_lift_author(comment):
+    if not body or _author_association(comment) not in TRUSTED_LIFT_AUTHOR_ASSOCIATIONS:
         return None
     marker = _structured_marker(body, PARK_LIFT_RECORD_MARKERS)
     if not marker:
@@ -162,12 +161,11 @@ def _lift_record(comment: Any, head_sha: str) -> dict[str, Any] | None:
     }
 
 
-def _trusted_lift_author(comment: Any) -> bool:
+def _author_association(comment: Any) -> str:
     if not isinstance(comment, dict):
-        return False
-    association = (
+        return ""
+    return (
         str(comment.get("authorAssociation") or comment.get("author_association") or "")
         .strip()
         .upper()
     )
-    return association in TRUSTED_LIFT_AUTHOR_ASSOCIATIONS
