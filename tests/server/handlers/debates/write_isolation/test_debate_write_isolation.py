@@ -24,9 +24,15 @@ from tests.server.handlers.debates.write_isolation.support import (
     REFUSALS,
     USER_A,
     USER_B,
+    USER_NO_ORG,
     body_of,
     text_of,
 )
+from tests.server.rbac_dispatch import STATIC_TOKEN
+
+# POST suffixes under /api/v1/debates/{id}/ that no handler serves.
+UNSERVED_POST_SUFFIXES = ("intervene", "checkpoint", "checkpoint/pause", "bridge")
+INTERVENTION = {"type": "redirect", "content": "Probe intervention"}
 
 
 class TestPerDebatePostRoutes:
@@ -110,6 +116,21 @@ class TestPerDebatePostRoutes:
 
         owner = send(USER_A, "POST", "/api/v1/debates/deb-running-a/cancel")
         assert owner.status_code == 200, text_of(owner)
+
+    @pytest.mark.parametrize("suffix", UNSERVED_POST_SUFFIXES)
+    def test_unserved_suffixes_answer_the_write_gate_then_404(self, send, suffix):
+        cases = REFUSALS + (
+            (ANON, DP, 401),
+            (USER_NO_ORG, DP, 403),
+            (USER_A, DA, 404),
+            (USER_A, DP, 404),
+        )
+        for user, debate_id, status in cases:
+            for prefix in ("/api/v1/debates", "/api/debates"):
+                result = send(user, "POST", f"{prefix}/{debate_id}/{suffix}", INTERVENTION)
+                assert result.status_code == status, (suffix, debate_id, user.user_id)
+                if status == 404:
+                    assert body_of(result) == NOT_FOUND, (suffix, debate_id)
 
 
 class TestPatchAndDelete:
@@ -209,6 +230,35 @@ class TestThroughTheServer:
         status, payload = dispatch(server, "DELETE", f"/api/v1/debates/{DA}", token_a)
         assert status == 200, payload
         assert storage.get_debate(DA) is None
+
+    def test_unserved_post_suffixes_of_a_public_debate(self, server):
+        from aragora.debate.intervention import get_intervention_queue
+        from tests.server.rbac_dispatch import ORG_REQUIRED_BODY, dispatch, jwt
+
+        callers = (
+            (None, 401, None),
+            (jwt("user-no-org", None, "owner"), 403, ORG_REQUIRED_BODY),
+            (jwt("user-b", "org-b", "owner"), 404, NOT_FOUND),
+            (jwt("user-a", ORG_A, "owner"), 404, NOT_FOUND),
+        )
+        for suffix in UNSERVED_POST_SUFFIXES:
+            for debate_id in (DP, DA):
+                path = f"/api/v1/debates/{debate_id}/{suffix}"
+                for token, status, expected in callers:
+                    got, payload = dispatch(server, "POST", path, token, body=INTERVENTION)
+                    assert got == status, (path, payload)
+                    assert expected is None or payload == expected, path
+        assert get_intervention_queue().get_debate_interventions(DP) == []
+
+    @pytest.mark.parametrize("server", [STATIC_TOKEN], indirect=True)
+    def test_unserved_post_suffixes_with_the_api_token_set(self, server):
+        from tests.server.rbac_dispatch import ORG_REQUIRED_BODY, dispatch
+
+        for suffix in UNSERVED_POST_SUFFIXES:
+            path = f"/api/v1/debates/{DP}/{suffix}"
+            assert dispatch(server, "POST", path, body=INTERVENTION)[0] == 401, path
+            status, payload = dispatch(server, "POST", path, f"Bearer {STATIC_TOKEN}")
+            assert (status, payload) == (403, ORG_REQUIRED_BODY), path
 
 
 def test_storage_save_debate_updates_the_stored_artifact_only(storage):

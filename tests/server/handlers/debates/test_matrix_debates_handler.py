@@ -452,7 +452,7 @@ class TestStorageErrors:
 
     @pytest.mark.asyncio
     async def test_no_storage_configured(self, handler, mock_http_handler, mock_auth_context):
-        """Should return 503 when storage not configured."""
+        """Without storage only matrix runs of this process are found; others get 404."""
         mock_http_handler.storage = None
 
         with patch.object(handler, "get_auth_context", new_callable=AsyncMock) as mock_auth:
@@ -463,8 +463,8 @@ class TestStorageErrors:
                 )
                 body, status = parse_result(result)
 
-        assert status == 503
-        assert "Storage not configured" in body.get("error", "")
+        assert status == 404
+        assert body.get("error") == "Matrix debate not found"
 
     @pytest.mark.asyncio
     async def test_storage_exception(self, handler, mock_http_handler, mock_auth_context):

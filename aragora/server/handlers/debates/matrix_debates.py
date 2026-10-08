@@ -14,6 +14,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import OrderedDict
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from aragora.config import DEFAULT_ROUNDS
@@ -67,6 +69,7 @@ class MatrixRunnerProtocol(Protocol):
 
 from ..base import (
     HandlerResult,
+    MaybeAsyncHandlerResult,
     error_response,
     handle_errors,
     json_response,
@@ -93,6 +96,20 @@ DEFAULT_SELECTION_STRATEGY = "consensus_confidence_completion"
 
 # Rate limiter for matrix debates (5 requests per minute - parallel debates are expensive)
 _matrix_limiter = RateLimiter(requests_per_minute=5)
+
+# No store persists matrix runs, so the GET routes read the runs this process
+# created (with their org) from here; they are lost on restart.
+_MATRIX_DEBATE_CACHE_LIMIT = 100
+_matrix_debate_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
+
+
+def _matrix_response(payload: dict[str, Any]) -> HandlerResult:
+    """Remember a finished matrix run for the GET routes and return it."""
+    _matrix_debate_cache[payload["matrix_id"]] = deepcopy(payload)
+    _matrix_debate_cache.move_to_end(payload["matrix_id"])
+    while len(_matrix_debate_cache) > _MATRIX_DEBATE_CACHE_LIMIT:
+        _matrix_debate_cache.popitem(last=False)
+    return json_response(payload)
 
 
 class MatrixDebatesHandler(SecureHandler):
@@ -126,6 +143,12 @@ class MatrixDebatesHandler(SecureHandler):
         return normalized.startswith("/api/debates/matrix") or normalized.startswith(
             "/api/matrix-debates"
         )
+
+    def handle(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> MaybeAsyncHandlerResult:
+        """Route GET requests through the async handler."""
+        return self.handle_get(handler, path, query_params)
 
     @api_endpoint(
         method="GET",
@@ -468,7 +491,7 @@ class MatrixDebatesHandler(SecureHandler):
             results = await runner.run_all(max_rounds=max_rounds)
 
             # Build response
-            return json_response(
+            return _matrix_response(
                 {
                     "matrix_id": matrix_id,
                     "task": task,
@@ -883,7 +906,7 @@ class MatrixDebatesHandler(SecureHandler):
                 include_best_result=select_best_result,
             )
 
-            return json_response(
+            return _matrix_response(
                 {
                     "matrix_id": matrix_id,
                     "task": task,
@@ -962,16 +985,20 @@ class MatrixDebatesHandler(SecureHandler):
     async def _load_visible_matrix(
         self, handler: Any, matrix_id: str, scope: OrgScope
     ) -> tuple[Any, HandlerResult | None]:
-        """Load a matrix debate of the caller's org: ``(matrix, None)`` or ``(None, error)``."""
-        storage = getattr(handler, "storage", None)
-        if not storage:
-            return None, error_response("Storage not configured", 503)
+        """Load a matrix debate of the caller's org: ``(matrix, None)`` or ``(None, error)``.
 
-        try:
-            matrix = await storage.get_matrix_debate(matrix_id)
-        except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
-            logger.error("Failed to get matrix debate %s: %s", matrix_id, e)
-            return None, error_response("Failed to retrieve matrix debate", 500)
+        Reads storage when it has a matrix getter, else the runs this process created.
+        """
+        matrix: Any = None
+        getter = getattr(getattr(handler, "storage", None), "get_matrix_debate", None)
+        if callable(getter):
+            try:
+                matrix = await getter(matrix_id)
+            except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
+                logger.error("Failed to get matrix debate %s: %s", matrix_id, e)
+                return None, error_response("Failed to retrieve matrix debate", 500)
+        if not matrix and matrix_id in _matrix_debate_cache:
+            matrix = deepcopy(_matrix_debate_cache[matrix_id])
 
         if isinstance(matrix, dict):
             org_id = matrix.get("org_id")
@@ -1007,13 +1034,16 @@ class MatrixDebatesHandler(SecureHandler):
     )
     async def _get_scenarios(self, handler: Any, matrix_id: str, scope: OrgScope) -> HandlerResult:
         """Get all scenario results for a matrix debate."""
-        _matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
+        matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
         if error is not None:
             return error
 
-        storage: Any = getattr(handler, "storage", None)
+        getter = getattr(getattr(handler, "storage", None), "get_matrix_scenarios", None)
         try:
-            scenarios = await storage.get_matrix_scenarios(matrix_id)
+            if callable(getter):
+                scenarios = await getter(matrix_id)
+            else:
+                scenarios = matrix.get("results", [])
             return json_response({"matrix_id": matrix_id, "scenarios": scenarios})
         except (KeyError, ValueError, OSError, TypeError, AttributeError) as e:
             logger.error("Failed to get scenarios for %s: %s", matrix_id, e)
@@ -1038,13 +1068,19 @@ class MatrixDebatesHandler(SecureHandler):
         self, handler: Any, matrix_id: str, scope: OrgScope
     ) -> HandlerResult:
         """Get conclusions for a matrix debate."""
-        _matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
+        matrix, error = await self._load_visible_matrix(handler, matrix_id, scope)
         if error is not None:
             return error
 
-        storage: Any = getattr(handler, "storage", None)
+        getter = getattr(getattr(handler, "storage", None), "get_matrix_conclusions", None)
         try:
-            conclusions = await storage.get_matrix_conclusions(matrix_id)
+            if callable(getter):
+                conclusions = await getter(matrix_id)
+            else:
+                conclusions = {
+                    "universal": matrix.get("universal_conclusions", []),
+                    "conditional": matrix.get("conditional_conclusions", []),
+                }
             return json_response(
                 {
                     "matrix_id": matrix_id,

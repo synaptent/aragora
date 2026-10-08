@@ -117,7 +117,10 @@ class DebateInterventionHandler(BaseHandler):
             readable_id, denial = authorize_debate_read(handler, self.get_storage(), debate_id)
             if readable_id is None:
                 return denial
-            return self._get_reasoning_summary(readable_id)
+            # Queued interventions carry their author and private steering, so
+            # readers of a public debate outside its org get the summary without them.
+            owner, _ = authorize_debate_write(handler, self.get_storage(), readable_id)
+            return self._get_reasoning_summary(readable_id, include_interventions=owner is not None)
 
         if action == "intervene":
             # POST only for intervene
@@ -255,7 +258,9 @@ class DebateInterventionHandler(BaseHandler):
             logger.exception("Failed to queue intervention: %s", e)
             return error_response(safe_error_message(e, "queue intervention"), 500)
 
-    def _get_reasoning_summary(self, debate_id: str) -> HandlerResult:
+    def _get_reasoning_summary(
+        self, debate_id: str, include_interventions: bool = False
+    ) -> HandlerResult:
         """Get per-agent reasoning chains, key cruxes, and unresolved disagreements.
 
         Combines data from multiple sources:
@@ -265,6 +270,8 @@ class DebateInterventionHandler(BaseHandler):
 
         Args:
             debate_id: ID of the debate
+            include_interventions: Whether to include the intervention queue;
+                only for callers of the org that owns the debate
 
         Returns:
             JSON response with reasoning summary
@@ -278,7 +285,7 @@ class DebateInterventionHandler(BaseHandler):
         }
 
         # Intervention data
-        if self.queue:
+        if include_interventions and self.queue:
             try:
                 summary["interventions"] = self.queue.get_reasoning_summary(debate_id)
             except (AttributeError, RuntimeError, TypeError) as e:

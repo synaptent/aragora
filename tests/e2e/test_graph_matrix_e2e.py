@@ -1591,14 +1591,14 @@ class TestMatrixDebateHandlerE2E:
         assert result.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_returns_503_without_storage(self, matrix_handler, mock_http_handler):
-        """GET returns 503 when storage is not available."""
+    async def test_get_returns_404_without_storage(self, matrix_handler, mock_http_handler):
+        """GET of an unknown id returns 404 when storage is not available."""
         mock_http_handler.storage = None
 
         result = await matrix_handler.handle_get(
             mock_http_handler, "/api/v1/debates/matrix/some-id", {}
         )
-        assert result.status_code == 503
+        assert result.status_code == 404
 
     def test_helper_build_comparison_matrix(self, matrix_handler):
         """Helper method builds correct comparison statistics."""

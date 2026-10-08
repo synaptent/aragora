@@ -11,6 +11,7 @@ debate runs or any record is read.
 from __future__ import annotations
 
 import inspect
+from collections import OrderedDict
 from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any
@@ -44,6 +45,7 @@ def _no_matrix_limiter(monkeypatch):
     monkeypatch.setattr(
         matrix_debates, "_matrix_limiter", SimpleNamespace(is_allowed=lambda k: True)
     )
+    monkeypatch.setattr(matrix_debates, "_matrix_debate_cache", OrderedDict())
 
 
 @pytest.fixture
@@ -149,10 +151,39 @@ class TestMatrixDebates:
             assert result.status_code == 200, (path, text_of(result))
         assert storage.reads == [("scenarios", MA), ("conclusions", MA)]
 
-        no_storage = await matrix(USER_A, "GET", f"/api/v1/debates/matrix/{MA}")
-        assert no_storage.status_code == 503
+        for storage in (None, object()):
+            unstored = await matrix(USER_A, "GET", f"/api/v1/debates/matrix/{MA}", storage=storage)
+            assert (unstored.status_code, body_of(unstored)) == (404, MATRIX_NOT_FOUND)
         anonymous = await matrix(ANON, "GET", f"/api/v1/debates/matrix/{MA}")
         assert anonymous.status_code == 401
+
+    async def test_a_created_matrix_is_read_back_by_its_org_only(self, matrix, arenas):
+        created = await matrix(USER_A, "POST", "/api/v1/debates/matrix", _matrix_bodies()[0])
+        assert created.status_code == 200, text_of(created)
+        matrix_id = body_of(created)["matrix_id"]
+
+        for path in _matrix_get_paths(matrix_id):
+            owner = await matrix(USER_A, "GET", path, storage=object())
+            assert owner.status_code == 200, (path, text_of(owner))
+            assert matrix_id in text_of(owner)
+            other = await matrix(USER_B, "GET", path, storage=object())
+            assert (other.status_code, body_of(other)) == (404, MATRIX_NOT_FOUND), path
+
+        scenarios = await matrix(USER_A, "GET", f"/api/v1/matrix-debates/{matrix_id}/scenarios")
+        assert [s["scenario_name"] for s in body_of(scenarios)["scenarios"]] == ["s1", "s2"]
+        conclusions = await matrix(USER_A, "GET", f"/api/v1/matrix-debates/{matrix_id}/conclusions")
+        assert body_of(conclusions)["universal_conclusions"] == ["All scenarios reached consensus"]
+
+    async def test_the_matrix_cache_is_bounded(self, matrix, arenas, monkeypatch):
+        monkeypatch.setattr(matrix_debates, "_MATRIX_DEBATE_CACHE_LIMIT", 2)
+        ids = []
+        for _ in range(3):
+            created = await matrix(USER_A, "POST", "/api/v1/debates/matrix", _matrix_bodies()[0])
+            ids.append(body_of(created)["matrix_id"])
+
+        assert list(matrix_debates._matrix_debate_cache) == ids[1:]
+        evicted = await matrix(USER_A, "GET", f"/api/v1/matrix-debates/{ids[0]}")
+        assert (evicted.status_code, body_of(evicted)) == (404, MATRIX_NOT_FOUND)
 
     async def test_every_matrix_arena_carries_the_creator_as_receipt_owner(self, matrix, arenas):
         for body in _matrix_bodies():
@@ -191,10 +222,32 @@ class TestMatrixDebates:
 class TestThroughTheServer:
     """The real dispatch path: route index, auth gates and RBAC, with real JWTs.
 
-    Only matrix creation is exercised here: the matrix GET routes resolve to
-    ``DebatesHandler`` or to ``MatrixDebatesHandler.handle``, which serves no
-    GET route.
+    ``/api/v1/debates/matrix/{id}`` resolves to ``DebatesHandler``; the matrix
+    GET routes are served under ``/api/v1/matrix-debates/``.
     """
+
+    def test_a_created_matrix_is_read_back_by_its_org_only(self, server, arenas):
+        from tests.server.rbac_dispatch import ORG_REQUIRED_BODY, dispatch, jwt
+
+        token_a = jwt("user-a", ORG_A, "owner")
+        status, created = dispatch(
+            server, "POST", "/api/v1/matrix-debates", token_a, body=_matrix_bodies()[0]
+        )
+        assert status == 200, created
+        matrix_id = created["matrix_id"]
+
+        for suffix in ("", "/scenarios", "/conclusions"):
+            path = f"/api/v1/matrix-debates/{matrix_id}{suffix}"
+            status, payload = dispatch(server, "GET", path, token_a)
+            assert (status, payload["matrix_id"]) == (200, matrix_id), path
+            for token, expected in (
+                (jwt("user-b", "org-b", "owner"), (404, MATRIX_NOT_FOUND)),
+                (jwt("user-no-org", None, "owner"), (403, ORG_REQUIRED_BODY)),
+            ):
+                assert dispatch(server, "GET", path, token) == expected, path
+            assert dispatch(server, "GET", path)[0] == 401, path
+            missing = f"/api/v1/matrix-debates/{MX}{suffix}"
+            assert dispatch(server, "GET", missing, token_a) == (404, MATRIX_NOT_FOUND)
 
     @pytest.mark.parametrize("server", [None, SERVER_TOKEN], indirect=True)
     def test_anonymous_create_gets_401(self, server, arenas):
@@ -205,6 +258,7 @@ class TestThroughTheServer:
         )
         assert status == 401
         assert arenas == []
+        assert dispatch(server, "GET", f"/api/v1/matrix-debates/{MX}")[0] == 401
 
     @pytest.mark.parametrize("server", [SERVER_TOKEN], indirect=True)
     def test_static_token_has_no_org(self, server, arenas):

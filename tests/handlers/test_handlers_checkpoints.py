@@ -273,7 +273,9 @@ class TestListCheckpoints:
 
         assert result is not None
         assert result.status_code == 200
-        mock_checkpoint_manager.store.list_checkpoints.assert_called_with(debate_id="debate-123")
+        mock_checkpoint_manager.store.list_checkpoints.assert_called_with(
+            debate_id="debate-123", limit=5000
+        )
 
     @pytest.mark.asyncio
     async def test_list_checkpoints_with_status_filter(

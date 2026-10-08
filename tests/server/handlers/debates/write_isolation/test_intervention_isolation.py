@@ -7,7 +7,8 @@
 ``DebatesHandler``, which refuses them the same way). Another org's debate (public or not), a debate
 with no recorded org and a missing id get the 404 of a missing debate, and no
 intervention state is created, changed or queued. The reasoning summary is
-readable like the debate itself: public debates by anyone, others by their org.
+readable like the debate itself: public debates by anyone, others by their org;
+its queued interventions only by the debate's org.
 """
 
 from __future__ import annotations
@@ -201,6 +202,26 @@ class TestReasoning:
         for user in (ANON, USER_B, USER_NO_ORG, USER_A):
             result = act(user, "GET", DP, "reasoning")
             assert result.status_code == 200, (user.user_id, text_of(result))
+
+    def test_only_the_owner_org_sees_queued_interventions_of_a_public_debate(self, act):
+        get_intervention_queue().queue_intervention(
+            debate_id=DP,
+            intervention_type="redirect",
+            content="Private steer of org A",
+            user_id="user-a",
+            metadata={"note": "internal"},
+        )
+
+        for user in (ANON, USER_B, USER_NO_ORG):
+            result = act(user, "GET", DP, "reasoning")
+            assert result.status_code == 200, (user.user_id, text_of(result))
+            assert body_of(result)["data"]["interventions"] == {}
+            for secret in ("Private steer of org A", "user-a", "internal"):
+                assert secret not in text_of(result), (user.user_id, secret)
+
+        owner = body_of(act(USER_A, "GET", DP, "reasoning"))["data"]["interventions"]
+        assert owner["total_interventions"] == 1
+        assert owner["interventions"][0]["content"] == "Private steer of org A"
 
 
 @pytest.mark.no_auto_auth

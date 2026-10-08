@@ -599,15 +599,15 @@ class TestMatrixDebateGetEndpoints:
         assert result.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_debate_returns_503_without_storage(self, matrix_handler, mock_http_handler):
-        """Returns 503 when storage is not configured."""
+    async def test_get_debate_returns_404_without_storage(self, matrix_handler, mock_http_handler):
+        """An id this process did not create is not found when storage is not configured."""
         mock_http_handler.storage = None
         result = await matrix_handler.handle_get(
             mock_http_handler, "/api/v1/debates/matrix/test-123", {}
         )
-        assert result.status_code == 503
+        assert result.status_code == 404
         data = json.loads(result.body)
-        assert "storage" in data.get("error", "").lower()
+        assert data.get("error") == "Matrix debate not found"
 
     @pytest.mark.asyncio
     async def test_get_debate_returns_404_when_not_found(self, matrix_handler, mock_http_handler):
@@ -637,15 +637,15 @@ class TestMatrixDebateGetEndpoints:
         assert data["id"] == "test-123"
 
     @pytest.mark.asyncio
-    async def test_get_scenarios_returns_503_without_storage(
+    async def test_get_scenarios_returns_404_without_storage(
         self, matrix_handler, mock_http_handler
     ):
-        """Returns 503 when storage is not configured for scenarios."""
+        """Scenarios of an unknown id are not found when storage is not configured."""
         mock_http_handler.storage = None
         result = await matrix_handler.handle_get(
             mock_http_handler, "/api/v1/debates/matrix/test-123/scenarios", {}
         )
-        assert result.status_code == 503
+        assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_get_scenarios_returns_scenario_data(self, matrix_handler, mock_http_handler):
@@ -665,15 +665,15 @@ class TestMatrixDebateGetEndpoints:
         assert len(data["scenarios"]) == 2
 
     @pytest.mark.asyncio
-    async def test_get_conclusions_returns_503_without_storage(
+    async def test_get_conclusions_returns_404_without_storage(
         self, matrix_handler, mock_http_handler
     ):
-        """Returns 503 when storage is not configured for conclusions."""
+        """Conclusions of an unknown id are not found when storage is not configured."""
         mock_http_handler.storage = None
         result = await matrix_handler.handle_get(
             mock_http_handler, "/api/v1/debates/matrix/test-123/conclusions", {}
         )
-        assert result.status_code == 503
+        assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_get_conclusions_returns_conclusion_data(self, matrix_handler, mock_http_handler):
