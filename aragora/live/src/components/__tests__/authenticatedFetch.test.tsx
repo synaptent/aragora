@@ -104,6 +104,15 @@ describe('gauntlet and receipt components send the session token', () => {
     await waitFor(() => expect(authHeaderOf(mockFetch, `${API}/api/leaderboard-view?limit=5`)).toBe(bearer));
   });
 
+  it('GauntletPanel and GauntletDashboard load results from a same-origin API base', async () => {
+    render(<GauntletPanel apiBase="" />);
+    render(<GauntletDashboard apiBase="" />);
+
+    await waitFor(() => expect(authHeaderOf(mockFetch, '/api/gauntlet/results?limit=20')).toBe(bearer));
+    await waitFor(() => expect(authHeaderOf(mockFetch, '/api/gauntlet/results?limit=50')).toBe(bearer));
+    expect(screen.queryByText(/Invalid URL/)).not.toBeInTheDocument();
+  });
+
   it('GauntletPanel loads results and expanded details with the token', async () => {
     render(<GauntletPanel apiBase={API} />);
 

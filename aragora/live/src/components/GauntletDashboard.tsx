@@ -39,13 +39,13 @@ export function GauntletDashboard({
         headers['Authorization'] = `Bearer ${authToken}`;
       }
 
-      const url = new URL(`${apiBase}/api/gauntlet/results`);
-      url.searchParams.set('limit', '50');
+      // apiBase may be '' (same-origin proxy), so build the query without new URL().
+      const params = new URLSearchParams({ limit: '50' });
       if (verdictFilter) {
-        url.searchParams.set('verdict', verdictFilter);
+        params.set('verdict', verdictFilter);
       }
 
-      const response = await fetchWithAuth(url.toString(), { headers });
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/results?${params}`, { headers });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

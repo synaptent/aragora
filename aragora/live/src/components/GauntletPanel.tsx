@@ -53,13 +53,13 @@ export function GauntletPanel({ apiBase }: GauntletPanelProps) {
   const fetchResults = useCallback(async () => {
     try {
       setLoading(true);
-      const url = new URL(`${apiBase}/api/gauntlet/results`);
-      url.searchParams.set('limit', '20');
+      // apiBase may be '' (same-origin proxy), so build the query without new URL().
+      const params = new URLSearchParams({ limit: '20' });
       if (selectedVerdict) {
-        url.searchParams.set('verdict', selectedVerdict);
+        params.set('verdict', selectedVerdict);
       }
 
-      const response = await fetchWithAuth(url.toString());
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/results?${params}`);
       if (!response.ok) throw new Error('Failed to fetch gauntlet results');
 
       const data = await response.json();
