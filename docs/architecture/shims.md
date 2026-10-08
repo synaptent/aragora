@@ -105,6 +105,7 @@ import-and-call tests at both paths.
 | `aragora.debate.tracing:trace_phase` | `aragora.observability.debate_tracing:trace_phase` | #10307 | not before M4 seal |
 | `aragora.debate.tracing:trace_round` | `aragora.observability.debate_tracing:trace_round` | #10307 | not before M4 seal |
 | `aragora.debate.tracing:with_debate_context` | `aragora.observability.debate_tracing:with_debate_context` | #10307 | not before M4 seal |
+| `aragora.golden:debate` | `aragora.debate.api:debate` | #10444 | not before M4 seal |
 | `aragora.services:EmbeddingCacheService` | `aragora.embeddings.service_markers:EmbeddingCacheService` | #10406 | not before M4 seal |
 | `aragora.services:EmbeddingProviderService` | `aragora.embeddings.service_markers:EmbeddingProviderService` | #10406 | not before M4 seal |
 | `aragora.services.metering_models:ApiCallRecord` | `aragora.billing.metering_models:ApiCallRecord` | #10406 | not before M4 seal |
