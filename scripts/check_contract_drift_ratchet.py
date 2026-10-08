@@ -38,7 +38,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import re
 import stat
@@ -46,7 +45,7 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, cast
 
@@ -83,6 +82,18 @@ CANONICAL_SERIALIZATION = (
 )
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+# Stable release-attestation identity plane (contract review-history entry 30).
+# The 2026-08-01 double-run exercise against the real backfill release proved
+# gh 2.96.0 `release verify`/`verify-asset` JSON is byte-stable across runs and
+# demonstrated these live-verified stable identity fields. A digest computed
+# over the verification output bytes can never be embedded in payload.json:
+# the outputs embed payload.json's own SHA-256 (release attestations cover all
+# asset digests), so payload-embedded equality is an unsolvable SHA-256 fixed
+# point. The capsule attestation claim therefore binds these stable fields, and
+# the subject digest set is validated live against the exact asset bytes.
+RELEASE_ATTESTATION_PREDICATE_TYPE = "https://in-toto.io/attestation/release/v0.2"
+RELEASE_ATTESTATION_SIGNER_SAN_REGEXP = r"^https://dotcom\.releases\.github\.com$"
 
 COHORT_ARTIFACT: dict[str, Any] = {
     "byte_length": 1_692_125,
@@ -160,6 +171,18 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset(
         "show",
         "show-ref",
         "status",
+    }
+)
+# Inline `-c` bypasses the GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM scrub in
+# _run_read_only, and config keys such as core.fsmonitor, diff.external, or
+# core.pager execute arbitrary commands even under read-only subcommands, so
+# only the exact key=value literals used by this script's call sites pass.
+_READ_ONLY_GIT_CONFIG_LITERALS = frozenset(
+    {
+        "diff.algorithm=myers",
+        "diff.context=3",
+        "diff.mnemonicPrefix=false",
+        "diff.noprefix=false",
     }
 )
 _FORBIDDEN_CALLER_FIELDS = frozenset(
@@ -409,6 +432,18 @@ def _git_subcommand(argv: list[str]) -> str:
         if item == "-C":
             index += 2
             continue
+        if item == "-c":
+            if index + 1 >= len(argv):
+                return ""
+            if argv[index + 1] not in _READ_ONLY_GIT_CONFIG_LITERALS:
+                raise ValueError(f"unsupported git -c configuration rejected: {argv[index + 1]}")
+            index += 2
+            continue
+        if item == "--config-env" or item.startswith("--config-env="):
+            # Environment-sourced equivalent of -c: it can set any config key
+            # (including command-executing ones) and would otherwise fall
+            # through the generic option skip, bypassing the -c allowlist.
+            raise ValueError(f"unsupported git --config-env rejected: {item}")
         if item.startswith("--git-dir=") or item.startswith("--work-tree="):
             index += 1
             continue
@@ -496,8 +531,17 @@ def _run_read_only(
     log_operation: bool = True,
 ) -> subprocess.CompletedProcess[bytes]:
     _guard_subprocess_argv(argv)
-    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
     executable = Path(argv[0]).name
+    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+    if executable == "git":
+        env.update(
+            {
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_NO_REPLACE_OBJECTS": "1",
+                "LC_ALL": "C",
+            }
+        )
     try:
         if executable == "git":
             proc = subprocess.run(["git", *argv[1:]], capture_output=True, env=env, check=False)
@@ -1608,6 +1652,95 @@ def _parse_http_response(raw: bytes) -> tuple[dict[str, str], bytes]:
     return headers, body
 
 
+# Counters GitHub embeds in repository objects tick on activity unrelated to
+# the governed content: issue open/close, pushes to any branch, stars, forks,
+# watchers, and size recomputation. They appear at the top level of
+# `repos/{owner}/{repo}` and nested as `base.repo` / `head.repo` inside pull
+# request bodies, so a multi-minute run observes them moving while every
+# governed field stays put. Only these fields leave the identity plane; main
+# movement stays independently bound through the raw `branches/{branch}` body.
+_VOLATILE_REPOSITORY_FIELDS = (
+    "forks",
+    "forks_count",
+    "network_count",
+    "open_issues",
+    "open_issues_count",
+    "pushed_at",
+    "size",
+    "stargazers_count",
+    "subscribers_count",
+    "updated_at",
+    "watchers",
+    "watchers_count",
+)
+_REPOSITORY_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+$")
+_PULL_REQUEST_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+/pulls/[0-9]+$")
+_RELEASE_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+/releases/[0-9]+$")
+_RELEASE_LISTING_ENDPOINT_RE = re.compile(
+    r"^repos/[^/?]+/[^/?]+/releases\?per_page=[0-9]+&page=[0-9]+$"
+)
+
+
+def _without_volatile_repository_fields(repository: Any) -> Any:
+    if not isinstance(repository, dict):
+        return repository
+    return {
+        key: value for key, value in repository.items() if key not in _VOLATILE_REPOSITORY_FIELDS
+    }
+
+
+def _without_asset_download_counts(release: Any) -> Any:
+    if not isinstance(release, dict) or not isinstance(release.get("assets"), list):
+        return release
+    normalized = dict(release)
+    normalized["assets"] = [
+        {key: value for key, value in asset.items() if key != "download_count"}
+        if isinstance(asset, dict)
+        else asset
+        for asset in release["assets"]
+    ]
+    return normalized
+
+
+def _normalize_volatile_counters(endpoint: str, payload: Any) -> tuple[Any, list[str] | None]:
+    """Return the identity-plane view of a GitHub body plus the excluded fields.
+
+    Endpoints outside the four classified shapes keep the raw-body plane
+    (``None``): their weak ETag and exact bytes still bind. The verifier's own
+    paired octet-stream asset downloads bump ``assets[].download_count`` inside
+    the release body it captured beforehand, so release bodies and the
+    paginated release listing are classified alongside repository and pull
+    request objects. The excluded list is the declared policy for the endpoint
+    class, not the fields that happened to be present.
+    """
+    if _REPOSITORY_ENDPOINT_RE.match(endpoint):
+        return _without_volatile_repository_fields(payload), list(_VOLATILE_REPOSITORY_FIELDS)
+    if _PULL_REQUEST_ENDPOINT_RE.match(endpoint):
+        normalized = payload
+        if isinstance(payload, dict):
+            normalized = dict(payload)
+            for side in ("base", "head"):
+                reference = payload.get(side)
+                if isinstance(reference, dict) and isinstance(reference.get("repo"), dict):
+                    normalized[side] = {
+                        **reference,
+                        "repo": _without_volatile_repository_fields(reference["repo"]),
+                    }
+        return normalized, [
+            f"{side}.repo.{field}"
+            for side in ("base", "head")
+            for field in _VOLATILE_REPOSITORY_FIELDS
+        ]
+    if _RELEASE_ENDPOINT_RE.match(endpoint):
+        return _without_asset_download_counts(payload), ["assets[].download_count"]
+    if _RELEASE_LISTING_ENDPOINT_RE.match(endpoint):
+        normalized = payload
+        if isinstance(payload, list):
+            normalized = [_without_asset_download_counts(item) for item in payload]
+        return normalized, ["[].assets[].download_count"]
+    return payload, None
+
+
 def _gh_api_get(
     endpoint: str,
     *,
@@ -1631,12 +1764,24 @@ def _gh_api_get(
         payload = json.loads(body, object_pairs_hook=_duplicate_key_object)
     except (json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"GitHub response for {endpoint} is malformed: {exc}") from exc
+    normalized, excluded_fields = _normalize_volatile_counters(endpoint, payload)
+    if excluded_fields is None:
+        identity_bytes = body
+        etag = headers.get("etag")
+    else:
+        # GitHub's weak ETag is derived from the raw body, so it moves with
+        # the excluded counters and cannot stay in the identity plane.
+        identity_bytes = _canonical_json_bytes(normalized)
+        etag = None
     identity = {
-        "byte_length": len(body),
-        "etag": headers.get("etag"),
-        "sha256": _sha256_bytes(body),
-        "updated_at": payload.get("updated_at") if isinstance(payload, dict) else None,
+        "byte_length": len(identity_bytes),
+        "etag": etag,
+        "link": headers.get("link"),
+        "sha256": _sha256_bytes(identity_bytes),
+        "updated_at": normalized.get("updated_at") if isinstance(normalized, dict) else None,
     }
+    if excluded_fields is not None:
+        identity["excluded_volatile_fields"] = excluded_fields
     _append_operation(
         operation_log,
         kind="remote_resource",
@@ -1645,6 +1790,8 @@ def _gh_api_get(
         raw=body,
         response_identity=identity,
     )
+    if excluded_fields is not None:
+        operation_log[-1]["raw_etag"] = headers.get("etag")
     if preserve_raw:
         raw_response = body.decode("utf-8", errors="strict")
         operation_log[-1]["raw_response"] = raw_response
@@ -1676,7 +1823,9 @@ def _gh_api_get_stable(
         operation_log[-2]["movement_observed"] = moved
         operation_log[-1]["movement_observed"] = moved
         if not moved:
-            if before_payload != after_payload:
+            before_view, _excluded = _normalize_volatile_counters(endpoint, before_payload)
+            after_view, _excluded = _normalize_volatile_counters(endpoint, after_payload)
+            if before_view != after_view:
                 raise ValueError(
                     f"authenticated GitHub resource contradicted stable identity: {endpoint}"
                 )
@@ -1755,6 +1904,25 @@ def _gh_api_get_raw_stable(
     raise BoundaryBlocked(f"authenticated GitHub asset moved concurrently: {endpoint}")
 
 
+def _link_header_advertises_next(link_header: Any) -> bool:
+    """Report whether an RFC 8288 Link header advertises another page.
+
+    GitHub omits rel="next" on the terminal page of a paginated collection,
+    so a short page that still advertises rel="next" is a truncated
+    enumeration, not an exhausted one. Absent Link identity stays exhausted:
+    single-page collections carry no Link header at all.
+    """
+    if link_header is None:
+        return False
+    if not isinstance(link_header, str):
+        raise ValueError("authenticated GitHub pagination Link header is malformed")
+    for segment in link_header.split(","):
+        for param in segment.split(";")[1:]:
+            if param.strip().lower() in {'rel="next"', "rel=next"}:
+                return True
+    return False
+
+
 def _gh_api_paginated(
     endpoint: str,
     *,
@@ -1777,6 +1945,11 @@ def _gh_api_paginated(
         identities[page_endpoint] = identity
         records.extend(payload)
         if len(payload) < 100:
+            if _link_header_advertises_next(identity.get("link")):
+                raise ValueError(
+                    "authenticated GitHub pagination ended before an advertised "
+                    f"next page: {page_endpoint}"
+                )
             break
         page += 1
         if page > 10_000:
@@ -1839,6 +2012,64 @@ def _require_attestation_source_digest(argv: list[str], *, end_sha: str) -> None
     positions = [index for index, value in enumerate(argv) if value == "--source-digest"]
     if len(positions) != 1 or positions[0] + 1 >= len(argv) or argv[positions[0] + 1] != end_sha:
         raise ValueError("gh attestation verify source digest is missing or mismatched")
+
+
+def _validate_release_attestation_identity(
+    payload: Any,
+    *,
+    github_repository: str,
+    asset_sha256s: dict[str, str],
+    resource: str,
+) -> None:
+    """Bind a gh release verify/verify-asset result to the stable identity plane.
+
+    The demonstrated stable fields (contract review-history entry 30) are the
+    GitHub release-attestation signer SAN regexp, the release predicateType,
+    the attesting repository, and the statement subject digest set, which must
+    cover exactly the three capsule asset names with the SHA-256 of the exact
+    downloaded asset bytes. Wrong signer, wrong predicateType, wrong
+    repository, and missing, mismatched, or duplicated subject digests
+    (including post-attestation asset tampering) all fail closed.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError(f"{resource} verification payload is malformed")
+    result = payload.get("verificationResult")
+    if not isinstance(result, dict):
+        raise ValueError(f"{resource} verification result is malformed")
+    identity = result.get("verifiedIdentity")
+    san = identity.get("subjectAlternativeName") if isinstance(identity, dict) else None
+    if not isinstance(san, dict) or san.get("regexp") != RELEASE_ATTESTATION_SIGNER_SAN_REGEXP:
+        raise ValueError(
+            f"{resource} signer identity contradicts the GitHub release-attestation signer"
+        )
+    statement = result.get("statement")
+    if not isinstance(statement, dict):
+        raise ValueError(f"{resource} attestation statement is malformed")
+    if statement.get("predicateType") != RELEASE_ATTESTATION_PREDICATE_TYPE:
+        raise ValueError(f"{resource} predicateType contradicts the release attestation")
+    predicate = statement.get("predicate")
+    if not isinstance(predicate, dict) or predicate.get("repository") != github_repository:
+        raise ValueError(f"{resource} attestation repository contradicts the boundary repository")
+    subjects = statement.get("subject")
+    if not isinstance(subjects, list) or not all(isinstance(item, dict) for item in subjects):
+        raise ValueError(f"{resource} attestation subject set is malformed")
+    observed: dict[str, str] = {}
+    seen_names: set[str] = set()
+    for item in subjects:
+        name = item.get("name")
+        if not isinstance(name, str):
+            continue
+        if name in seen_names:
+            raise ValueError(f"{resource} attestation subject set duplicates {name}")
+        seen_names.add(name)
+        digest = item.get("digest")
+        sha = digest.get("sha256") if isinstance(digest, dict) else None
+        if isinstance(sha, str):
+            observed[name] = sha
+    if observed != asset_sha256s:
+        raise ValueError(
+            f"{resource} attestation subject digest set does not cover the exact asset bytes"
+        )
 
 
 _RULE_SUITE_REQUIRED_FIELDS = (
@@ -2063,6 +2294,7 @@ def _collect_live_evidence(
     boundary: str,
     start_sha: str,
     end_sha: str,
+    repo_root: Path,
     scratch_root: Path,
     operation_log: list[dict[str, Any]],
 ) -> tuple[
@@ -2167,14 +2399,19 @@ def _collect_live_evidence(
         operation_log=operation_log,
     )
     endpoint_identities.update(release_page_identities)
+    # GitHub rejects bare 40/64-hex tag names (pre-receive HTTP 422), so the
+    # ratified capsule convention is the fixed-prefix tag `cdg-<boundary>-
+    # <end_sha>` whose tag ref must independently resolve to exactly the
+    # boundary end SHA (contract review-history entry 29).
+    expected_tag = f"cdg-{boundary}-{end_sha}"
     exact = [
         release
         for release in releases
-        if isinstance(release, dict) and release.get("tag_name") == end_sha
+        if isinstance(release, dict) and release.get("tag_name") == expected_tag
     ]
     if not exact:
         raise BoundaryBlocked(
-            f"immutable release capsule for {boundary} at exact tag {end_sha} "
+            f"immutable release capsule for {boundary} at exact tag {expected_tag} "
             "is authenticated and unavailable"
         )
     if len(exact) != 1:
@@ -2190,12 +2427,43 @@ def _collect_live_evidence(
     endpoint_identities[release_endpoint] = release_identity
     if (
         not isinstance(release, dict)
-        or release.get("tag_name") != end_sha
+        or release.get("tag_name") != expected_tag
         or release.get("draft") is not False
         or release.get("prerelease") is not False
         or release.get("immutable") is not True
     ):
         raise ValueError("exact-SHA release is not a published immutable capsule")
+    tag_ref_endpoint = f"repos/{github_repository}/git/ref/tags/{expected_tag}"
+    tag_ref, tag_ref_identity = _gh_api_get_stable(
+        tag_ref_endpoint,
+        operation_log=operation_log,
+    )
+    endpoint_identities[tag_ref_endpoint] = tag_ref_identity
+    if (
+        not isinstance(tag_ref, dict)
+        or tag_ref.get("ref") != f"refs/tags/{expected_tag}"
+        or not isinstance(tag_ref.get("object"), dict)
+    ):
+        raise ValueError("immutable release capsule tag ref is malformed")
+    tag_target = cast(dict[str, Any], tag_ref["object"])
+    if tag_target.get("type") == "tag":
+        annotated_sha = tag_target.get("sha")
+        if not isinstance(annotated_sha, str) or FULL_SHA_RE.fullmatch(annotated_sha) is None:
+            raise ValueError("immutable release capsule annotated tag SHA is malformed")
+        annotated_endpoint = f"repos/{github_repository}/git/tags/{annotated_sha}"
+        annotated, annotated_identity = _gh_api_get_stable(
+            annotated_endpoint,
+            operation_log=operation_log,
+        )
+        endpoint_identities[annotated_endpoint] = annotated_identity
+        if not isinstance(annotated, dict) or not isinstance(annotated.get("object"), dict):
+            raise ValueError("immutable release capsule annotated tag is malformed")
+        tag_target = cast(dict[str, Any], annotated["object"])
+    if tag_target.get("type") != "commit" or tag_target.get("sha") != end_sha:
+        raise ValueError(
+            f"immutable release capsule tag {expected_tag} does not resolve to the exact "
+            "boundary end SHA"
+        )
     assets = release.get("assets")
     if not isinstance(assets, list) or not all(isinstance(item, dict) for item in assets):
         raise ValueError("immutable release capsule asset list is malformed")
@@ -2362,16 +2630,23 @@ def _collect_live_evidence(
             + ", ".join(missing)
         )
 
+    asset_sha256s = {name: _sha256_bytes(asset_bytes[name]) for name in expected_asset_names}
     release_verification, release_verification_identity = _run_live_verification(
-        ["gh", "release", "verify", end_sha, "-R", github_repository, "--format", "json"],
+        ["gh", "release", "verify", expected_tag, "-R", github_repository, "--format", "json"],
         operation_log=operation_log,
         resource="release-attestation",
     )
     if not release_verification:
         raise ValueError("GitHub release verification returned no attestations")
+    _validate_release_attestation_identity(
+        release_verification,
+        github_repository=github_repository,
+        asset_sha256s=asset_sha256s,
+        resource="release-attestation",
+    )
     verification_commands: list[tuple[list[str], dict[str, Any], str]] = [
         (
-            ["gh", "release", "verify", end_sha, "-R", github_repository, "--format", "json"],
+            ["gh", "release", "verify", expected_tag, "-R", github_repository, "--format", "json"],
             release_verification_identity,
             "release-attestation",
         )
@@ -2396,12 +2671,12 @@ def _collect_live_evidence(
             "byte_length": len(asset_bytes[name]),
             "sha256": _sha256_bytes(asset_bytes[name]),
         }
-        _asset_verification, identity = _run_live_verification(
+        asset_verification, identity = _run_live_verification(
             [
                 "gh",
                 "release",
                 "verify-asset",
-                end_sha,
+                expected_tag,
                 str(local_path),
                 "-R",
                 github_repository,
@@ -2411,13 +2686,19 @@ def _collect_live_evidence(
             operation_log=operation_log,
             resource=f"release-asset-attestation:{name}",
         )
+        _validate_release_attestation_identity(
+            asset_verification,
+            github_repository=github_repository,
+            asset_sha256s=asset_sha256s,
+            resource=f"release-asset-attestation:{name}",
+        )
         verification_commands.append(
             (
                 [
                     "gh",
                     "release",
                     "verify-asset",
-                    end_sha,
+                    expected_tag,
                     str(local_path),
                     "-R",
                     github_repository,
@@ -2509,7 +2790,7 @@ def _collect_live_evidence(
         )
         endpoint_identities[rule_suite_endpoint] = {
             key: rule_suite_identity.get(key)
-            for key in ("byte_length", "etag", "sha256", "updated_at")
+            for key in ("byte_length", "etag", "link", "sha256", "updated_at")
         }
     else:
         _authenticate_persisted_rule_suite_claim(
@@ -2533,22 +2814,36 @@ def _collect_live_evidence(
         raise ValueError("capsule immutable-release claim contradicts repository settings")
 
     capsule = resources["durable_capsule"]
+    # Contract review-history entry 32 (B5): the payload-embedded release
+    # claim binds only publication-time-knowable identity. GitHub allocates
+    # release-asset API IDs at upload from an unpredictable instance-global
+    # counter with no ID-preserving content update, and every asset's bytes
+    # transitively depend on any payload-embedded ID triple, so a claim over
+    # asset_api_ids is unsatisfiable by construction. Instance identity is
+    # carried by release_api_id (assigned at draft creation, before any asset
+    # bytes are final), the fixed-prefix tag_name plus the independent
+    # tag-ref->END_SHA resolution proof (entry 29), exact_full_sha_tag, the
+    # exact asset names with live byte digests, the checksums.txt
+    # cross-binding, and the live attestation subject-digest gate (entry 30).
+    # Live asset IDs remain observed download-routing values in the operation
+    # log; they are never payload claims. The exact dict equality below
+    # rejects a stale-schema payload still carrying asset_api_ids.
     expected_release_claim = {
-        "asset_api_ids": [
-            assets_by_name[name]["id"]
-            for name in ("manifest.json", "payload.json", "checksums.txt")
-        ],
         "asset_names": ["manifest.json", "payload.json", "checksums.txt"],
         "exact_full_sha_tag": end_sha,
         "immutable": True,
         "release_api_id": release_id,
+        "tag_name": expected_tag,
         "verified": True,
     }
-    attestation_digest = _sha256_bytes(
-        _canonical_json_bytes([identity for _argv, identity, _resource in verification_commands])
-    )
+    # Contract review-history entry 30: the payload-embedded attestation claim
+    # binds the demonstrated stable identity fields. A digest over the
+    # verification outputs is unsatisfiable (the outputs embed payload.json's
+    # own SHA-256), so no output-byte digest appears in the claim; the live
+    # subject digest set was already bound to the exact asset bytes above.
     expected_attestation_claim = {
-        "bundle_sha256": attestation_digest,
+        "predicate_type": RELEASE_ATTESTATION_PREDICATE_TYPE,
+        "signer_san_regexp": RELEASE_ATTESTATION_SIGNER_SAN_REGEXP,
         "verified": True,
         "workflow": "actions/attest@v4",
     }
@@ -2560,7 +2855,8 @@ def _collect_live_evidence(
     publication = resources.get("final_seal", {}).get("publication")
     if isinstance(publication, dict) and isinstance(publication.get("fact"), dict):
         expected_publication_fields = {
-            "attestation_bundle_sha256": attestation_digest,
+            "attestation_predicate_type": RELEASE_ATTESTATION_PREDICATE_TYPE,
+            "attestation_signer_san_regexp": RELEASE_ATTESTATION_SIGNER_SAN_REGEXP,
             "release_api_id": release_id,
             "rule_suite_id": rule_suite_id,
         }
@@ -2576,6 +2872,7 @@ def _collect_live_evidence(
         raise ValueError("capsule governed PR or receipt records are malformed")
     receipt_by_pr = {item.get("pr"): item for item in receipts if isinstance(item, dict)}
     authenticated_pr_changes: dict[int, dict[str, int]] = {}
+    authenticated_pr_files: dict[int, list[str]] = {}
     for record in governed:
         if not isinstance(record, dict) or not isinstance(record.get("pr"), int):
             raise ValueError("capsule governed PR record is malformed")
@@ -2619,9 +2916,18 @@ def _collect_live_evidence(
         )
         endpoint_identities.update(file_identities)
         if len(files) != observed_pr.get("changed_files"):
-            raise ValueError(f"authenticated governed PR #{number} file discovery is incomplete")
+            _require_stats_dropout_completeness_witness(
+                repo_root=repo_root,
+                pr=number,
+                observed_pr=observed_pr,
+                files=files,
+                first_parent_sha=record.get("base_sha"),
+                merge_sha=receipt_by_pr.get(number, {}).get("merge_sha"),
+                operation_log=operation_log,
+            )
         if record.get("changed_files_complete") is not True:
             raise ValueError(f"capsule governed PR #{number} denies complete file discovery")
+        authenticated_pr_files[number] = _authenticated_pr_owned_paths(files, pr=number)
         receipt = receipt_by_pr.get(number)
         if not isinstance(receipt, dict):
             raise ValueError(f"capsule governed PR #{number} lacks a first-parent receipt")
@@ -2651,7 +2957,6 @@ def _collect_live_evidence(
             record.get("head_tree_sha") != head_tree
             or receipt.get("head_tree_sha") != head_tree
             or receipt.get("merge_tree_sha") != merge_tree
-            or head_tree != merge_tree
             or not isinstance(merge_parents, list)
             or not merge_parents
             or not isinstance(merge_parents[0], dict)
@@ -2660,6 +2965,20 @@ def _collect_live_evidence(
             raise ValueError(
                 f"authenticated governed PR #{number} lacks first-parent or tree equality"
             )
+        # VAL-CDG-018 squash binding: the semantic delta recomputed from the
+        # squash merge's first parent (immutable local git, pinned rename and
+        # path-byte policies) must exactly equal the authenticated PR
+        # disposition. PR-head tree equality is corroboration only.
+        _require_squash_binding_witness(
+            repo_root=repo_root,
+            pr=number,
+            head_tree_sha=head_tree,
+            merge_tree_sha=merge_tree,
+            first_parent_sha=record["base_sha"],
+            merge_sha=receipt["merge_sha"],
+            owned_paths=authenticated_pr_files[number],
+            operation_log=operation_log,
+        )
 
     live_before_snapshot = {
         "assets": asset_identities,
@@ -2695,6 +3014,7 @@ def _collect_live_evidence(
         {
             "asset_identities": asset_identities,
             "authenticated_pr_changes": authenticated_pr_changes,
+            "authenticated_pr_files": authenticated_pr_files,
             "endpoint_identities": endpoint_identities,
             "expected_rule_suite_ref": expected_rule_suite_ref,
             "github_repository": github_repository,
@@ -3272,7 +3592,8 @@ def _validate_final_seal(
         label="final publication",
     )
     expected_publication = {
-        "attestation_bundle_sha256": capsule["attestation"]["bundle_sha256"],
+        "attestation_predicate_type": capsule["attestation"]["predicate_type"],
+        "attestation_signer_san_regexp": capsule["attestation"]["signer_san_regexp"],
         "boundary_sha": chronology["final_seal"],
         "release_api_id": capsule["release"]["release_api_id"],
         "rule_suite_id": prerequisites["rule_suite"]["id"],
@@ -3394,6 +3715,7 @@ def _validate_external_prerequisites(
 def _validate_durable_capsule(
     resource: dict[str, Any],
     *,
+    boundary: str,
     end_sha: str,
 ) -> dict[str, Any]:
     _require_exact_fields(
@@ -3412,31 +3734,42 @@ def _validate_durable_capsule(
     attestation = resource.get("attestation")
     if not isinstance(release, dict) or not isinstance(attestation, dict):
         raise ValueError("durable release capsule evidence is malformed")
+    # Contract review-history entry 32 (B5): the release claim embeds only
+    # publication-time-knowable identity fields. asset_api_ids is expressly
+    # not part of the claim shape (GitHub assigns asset IDs unpredictably at
+    # upload, after the payload bytes must already be final), so a
+    # stale-schema payload still carrying it fails closed here.
+    _require_exact_fields(
+        release,
+        {
+            "asset_names",
+            "exact_full_sha_tag",
+            "immutable",
+            "release_api_id",
+            "tag_name",
+            "verified",
+        },
+        label="durable release claim",
+    )
     for field in ("immutable", "verified"):
         _require_bool(release.get(field), label=f"durable release {field}")
     if release.get("exact_full_sha_tag") != end_sha:
         raise ValueError("durable release capsule tag is not the exact end SHA")
+    if release.get("tag_name") != f"cdg-{boundary}-{end_sha}":
+        raise ValueError("durable release capsule tag name is not the fixed-prefix capsule tag")
     release_id = release.get("release_api_id")
-    asset_ids = release.get("asset_api_ids")
     asset_names = release.get("asset_names")
     if not isinstance(release_id, int) or release_id <= 0:
         raise ValueError("durable release API ID is malformed")
-    if (
-        not isinstance(asset_ids, list)
-        or len(asset_ids) != 3
-        or len(set(asset_ids)) != 3
-        or not all(isinstance(item, int) and item > 0 for item in asset_ids)
-    ):
-        raise ValueError("durable release asset API IDs are incomplete")
     if asset_names != ["manifest.json", "payload.json", "checksums.txt"]:
         raise ValueError("durable release asset names are incomplete or noncanonical")
     _require_bool(attestation.get("verified"), label="Sigstore attestation")
     if attestation.get("workflow") != "actions/attest@v4":
         raise ValueError("Sigstore attestation workflow identity mismatch")
-    _require_sha256(
-        attestation.get("bundle_sha256"),
-        label="Sigstore attestation bundle digest",
-    )
+    if attestation.get("signer_san_regexp") != RELEASE_ATTESTATION_SIGNER_SAN_REGEXP:
+        raise ValueError("Sigstore attestation signer identity mismatch")
+    if attestation.get("predicate_type") != RELEASE_ATTESTATION_PREDICATE_TYPE:
+        raise ValueError("Sigstore attestation predicate type mismatch")
     return {
         "attestation": attestation,
         "release": release,
@@ -3509,9 +3842,13 @@ def _validate_governed_prs(
             raise ValueError(
                 f"governed PR #{number} authenticated additions/deletions are malformed"
             )
+        # Contract L76 (review-history entry 30): the CDG 800-line cap binds
+        # only the individually enumerated core/extended SDK paydown
+        # implementation PRs (enforced in _validate_sdk_paydown). The governed
+        # census binds every interval PR's authenticated delta without a
+        # generic cap, so non-paydown governed PRs (docs, tests-only closure,
+        # checker rotation, backfill) are admitted uncapped.
         pr_delta = additions + deletions
-        if pr_delta > 800:
-            raise ValueError(f"governed PR #{number} exceeds the 800-line cap")
         validated.append(
             {
                 **record,
@@ -3570,6 +3907,263 @@ def _validate_first_parent_receipts(
     return records
 
 
+def _first_parent_semantic_delta(
+    repo_root: Path,
+    *,
+    first_parent_sha: str,
+    merge_sha: str,
+    pr: int,
+    operation_log: list[dict[str, Any]],
+) -> set[str]:
+    """Recompute the exact squash semantic delta from immutable local git.
+
+    Pinned rename policy: rename detection is disabled (`--no-renames`), so a
+    rename is a removal at the old path plus an addition at the new path and
+    both must be inside the authenticated disposition. Renamed content can
+    never masquerade as an unchanged or foreign path.
+
+    Git emits raw NUL-delimited path bytes. GitHub file dispositions expose
+    filenames as JSON strings transported in UTF-8, so only exact UTF-8 paths
+    can be compared reversibly across both authorities. Non-UTF-8 Git paths
+    fail closed rather than being quoted, normalized, or replacement-decoded.
+    """
+    diff = _run_read_only(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "diff",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            f"{first_parent_sha}^{{tree}}",
+            f"{merge_sha}^{{tree}}",
+        ],
+        operation_log=operation_log,
+        resource=f"squash-semantic-delta:{pr}",
+    )
+    if not diff.stdout:
+        return set()
+    if not diff.stdout.endswith(b"\0"):
+        raise ValueError(
+            f"squash semantic delta for PR #{pr} has unterminated NUL-delimited path output"
+        )
+    raw_paths = diff.stdout[:-1].split(b"\0")
+    if any(not raw_path for raw_path in raw_paths):
+        raise ValueError(f"squash semantic delta for PR #{pr} has an empty path record")
+    paths: list[str] = []
+    for raw_path in raw_paths:
+        try:
+            path = raw_path.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"squash semantic delta for PR #{pr} contains a Git path that cannot "
+                "round-trip through a GitHub UTF-8 filename"
+            ) from exc
+        paths.append(path)
+    delta = set(paths)
+    if len(delta) != len(paths):
+        raise ValueError(f"squash semantic delta for PR #{pr} contains duplicate paths")
+    return delta
+
+
+def _require_squash_binding_witness(
+    *,
+    repo_root: Path,
+    pr: int,
+    head_tree_sha: str,
+    merge_tree_sha: str,
+    first_parent_sha: str,
+    merge_sha: str,
+    owned_paths: list[str] | None,
+    operation_log: list[dict[str, Any]],
+) -> str:
+    """Bind a squash merge to its authenticated PR disposition (VAL-CDG-018).
+
+    The exact semantic delta recomputed from the squash merge's first parent
+    to the squash merge (immutable local git trees, pinned rename policy) must
+    equal the authenticated PR disposition's owned-path delta. Head-tree ==
+    merge-tree equality remains a corroborating witness when present, but it
+    is never sufficient and never replaces exact semantic set equality.
+    """
+    delta = _first_parent_semantic_delta(
+        repo_root,
+        first_parent_sha=first_parent_sha,
+        merge_sha=merge_sha,
+        pr=pr,
+        operation_log=operation_log,
+    )
+    equality = head_tree_sha == merge_tree_sha
+    if owned_paths is None:
+        raise ValueError(
+            f"first-parent receipt for PR #{pr} lacks a squash binding witness: "
+            "no authenticated PR disposition paths are available for exact "
+            "semantic-delta comparison"
+        )
+    owned = set(owned_paths)
+    foreign = sorted(delta - owned)
+    missing = sorted(owned - delta)
+    if foreign or missing:
+        differences = []
+        if foreign:
+            differences.append(f"paths outside the authenticated disposition: {foreign}")
+        if missing:
+            differences.append(f"authenticated paths missing from semantic delta: {missing}")
+        raise ValueError(
+            f"squash semantic delta for PR #{pr} does not equal the authenticated "
+            f"disposition: {'; '.join(differences)}"
+        )
+    witness = "first_parent_semantic_delta"
+    corroborating_witnesses = ["head_tree_equality"] if equality else []
+    _append_operation(
+        operation_log,
+        kind="squash_binding_witness",
+        resource=f"squash-binding:{pr}",
+        identifier=witness,
+        response_identity={
+            "binding_witness": witness,
+            "corroborating_witnesses": corroborating_witnesses,
+        },
+        raw=_canonical_json_bytes(
+            {
+                "corroborating_witnesses": corroborating_witnesses,
+                "first_parent_sha": first_parent_sha,
+                "merge_sha": merge_sha,
+                "owned_paths": sorted(owned),
+                "pr": pr,
+                "semantic_delta": sorted(delta),
+                "binding_witness": witness,
+            }
+        ),
+    )
+    return witness
+
+
+def _authenticated_pr_owned_paths(files: list[dict[str, Any]], *, pr: int) -> list[str]:
+    """Collect the authenticated disposition's owned paths for one PR.
+
+    Renames own both sides: previous_filename is a removal at the old path
+    and filename an addition at the new path, matching the pinned
+    --no-renames policy of the recomputed first-parent semantic delta.
+    """
+    owned_paths: set[str] = set()
+    for item in files:
+        filename = item.get("filename") if isinstance(item, dict) else None
+        if not isinstance(filename, str) or not filename:
+            raise ValueError(f"authenticated governed PR #{pr} file record is malformed")
+        owned_paths.add(filename)
+        previous = item.get("previous_filename")
+        if previous is not None:
+            if not isinstance(previous, str) or not previous:
+                raise ValueError(f"authenticated governed PR #{pr} file record is malformed")
+            owned_paths.add(previous)
+    return sorted(owned_paths)
+
+
+def _require_stats_dropout_completeness_witness(
+    *,
+    repo_root: Path,
+    pr: int,
+    observed_pr: dict[str, Any],
+    files: list[dict[str, Any]],
+    first_parent_sha: Any,
+    merge_sha: Any,
+    operation_log: list[dict[str, Any]],
+) -> None:
+    """Cure ONLY the fully zeroed REST stats dropout, by dual witness.
+
+    GitHub REST permanently reports changed_files=0/additions=0/deletions=0
+    for some very large merged PRs (observed on PR #9850) while the files
+    endpoint still enumerates the true disposition, so the exact
+    len(files) == changed_files completeness witness would fail closed on
+    every boundary interval containing such a merge. Acceptance requires a
+    dual witness:
+
+    - Link-exhausted pagination: _gh_api_paginated fails closed whenever a
+      short page still advertises rel="next", so any enumeration that
+      reaches this witness is exhausted by construction (and a zeroed
+      changed_files mismatch implies the enumeration is nonempty).
+    - Exact equality of the enumerated owned-path set (previous_filename
+      included) with the VAL-CDG-018 first-parent semantic delta recomputed
+      from immutable local git.
+
+    GraphQL changedFiles corroboration is deliberately not consulted: the
+    read-only subprocess guard admits only GET/HEAD gh HTTP requests (the
+    graphql endpoint needs mutating-shaped -f fields), and a remote count
+    witness is strictly dominated by exact local path-set equality.
+
+    Any non-zeroed count mismatch keeps the pre-existing fail-closed raise,
+    so normal-PR witness semantics are unchanged. The zeroed REST
+    additions/deletions still bind verbatim into authenticated_pr_changes
+    as the (zeroed) REST stats of record.
+    """
+    rest_counts = (
+        observed_pr.get("changed_files"),
+        observed_pr.get("additions"),
+        observed_pr.get("deletions"),
+    )
+    if any(isinstance(value, bool) or value != 0 for value in rest_counts):
+        raise ValueError(f"authenticated governed PR #{pr} file discovery is incomplete")
+    if not files:
+        raise ValueError(f"authenticated governed PR #{pr} zeroed-stats file enumeration is empty")
+    enumerated = set(_authenticated_pr_owned_paths(files, pr=pr))
+    if (
+        not isinstance(first_parent_sha, str)
+        or not FULL_SHA_RE.fullmatch(first_parent_sha)
+        or not isinstance(merge_sha, str)
+        or not FULL_SHA_RE.fullmatch(merge_sha)
+    ):
+        raise ValueError(
+            f"authenticated governed PR #{pr} zeroed-stats witness lacks canonical "
+            "first-parent bindings"
+        )
+    delta = _first_parent_semantic_delta(
+        repo_root,
+        first_parent_sha=first_parent_sha,
+        merge_sha=merge_sha,
+        pr=pr,
+        operation_log=operation_log,
+    )
+    foreign = sorted(delta - enumerated)
+    missing = sorted(enumerated - delta)
+    if foreign or missing:
+        differences = []
+        if foreign:
+            differences.append(f"semantic-delta paths outside the enumeration: {foreign}")
+        if missing:
+            differences.append(f"enumerated paths missing from the semantic delta: {missing}")
+        raise ValueError(
+            f"authenticated governed PR #{pr} zeroed-stats enumeration does not equal "
+            f"the recomputed first-parent semantic delta: {'; '.join(differences)}"
+        )
+    binding_witnesses = [
+        "link_exhausted_pagination",
+        "first_parent_semantic_delta_equality",
+    ]
+    _append_operation(
+        operation_log,
+        kind="stats_dropout_witness",
+        resource=f"stats-dropout:{pr}",
+        identifier="zeroed_stats_dual_witness",
+        response_identity={
+            "binding_witnesses": binding_witnesses,
+            "enumerated_path_count": len(enumerated),
+        },
+        raw=_canonical_json_bytes(
+            {
+                "binding_witnesses": binding_witnesses,
+                "enumerated_paths": sorted(enumerated),
+                "first_parent_sha": first_parent_sha,
+                "merge_sha": merge_sha,
+                "pr": pr,
+                "rest_additions": 0,
+                "rest_changed_files": 0,
+                "rest_deletions": 0,
+            }
+        ),
+    )
+
+
 def _reconcile_prs_and_receipts(
     governed_prs: list[dict[str, Any]],
     receipts: list[dict[str, Any]],
@@ -3577,6 +4171,7 @@ def _reconcile_prs_and_receipts(
     repo_root: Path,
     start_sha: str,
     end_sha: str,
+    authenticated_pr_files: dict[int, list[str]],
     operation_log: list[dict[str, Any]],
 ) -> None:
     prs_by_number = {record["pr"]: record for record in governed_prs}
@@ -3644,13 +4239,25 @@ def _reconcile_prs_and_receipts(
             .stdout.decode("ascii")
             .strip()
         )
-        if (
-            merge_tree != receipt["merge_tree_sha"]
-            or receipt["merge_tree_sha"] != receipt["head_tree_sha"]
-        ):
+        if merge_tree != receipt["merge_tree_sha"]:
             raise ValueError(
-                f"first-parent receipt for PR #{receipt['pr']} lacks squash tree equality"
+                f"first-parent receipt for PR #{receipt['pr']} misstates the squash merge "
+                "tree: local git recompute contradicts the claimed merge_tree_sha"
             )
+        # VAL-CDG-018 squash binding: the recomputed first-parent semantic
+        # delta must exactly equal the authenticated PR disposition. The
+        # independently recomputed merge tree may corroborate PR-head tree
+        # equality, but equality alone never binds the squash.
+        _require_squash_binding_witness(
+            repo_root=repo_root,
+            pr=receipt["pr"],
+            head_tree_sha=receipt["head_tree_sha"],
+            merge_tree_sha=merge_tree,
+            first_parent_sha=receipt["base_sha"],
+            merge_sha=receipt["merge_sha"],
+            owned_paths=authenticated_pr_files.get(receipt["pr"]),
+            operation_log=operation_log,
+        )
         prior = receipt["merge_sha"]
     if prior != end_sha:
         raise ValueError("governed PR and receipt coverage does not reach the boundary end SHA")
@@ -3669,6 +4276,7 @@ def _evaluate_boundary_evidence(
     authority: dict[str, Any],
     canonical_artifacts: dict[str, Any],
     authenticated_pr_changes: dict[int, dict[str, int]],
+    authenticated_pr_files: dict[int, list[str]],
     operation_log: list[dict[str, Any]],
 ) -> dict[str, Any]:
     chronology = _validate_boundary_chronology(
@@ -3689,6 +4297,7 @@ def _evaluate_boundary_evidence(
     )
     capsule = _validate_durable_capsule(
         resources["durable_capsule"],
+        boundary=boundary,
         end_sha=end_sha,
     )
     governed_prs = _validate_governed_prs(
@@ -3704,6 +4313,7 @@ def _evaluate_boundary_evidence(
         repo_root=repo_root,
         start_sha=start_sha,
         end_sha=end_sha,
+        authenticated_pr_files=authenticated_pr_files,
         operation_log=operation_log,
     )
     selected = BOUNDARY_NAMES[: BOUNDARY_NAMES.index(boundary) + 1]
@@ -4005,6 +4615,7 @@ def build_boundary_result(
             boundary=boundary,
             start_sha=start_sha,
             end_sha=end_sha,
+            repo_root=repo_root,
             scratch_root=resolved_scratch,
             operation_log=operation_log,
         )
@@ -4021,6 +4632,9 @@ def build_boundary_result(
         authenticated_pr_changes = live_context.get("authenticated_pr_changes")
         if not isinstance(authenticated_pr_changes, dict):
             raise ValueError("authenticated governed PR additions/deletions are unavailable")
+        authenticated_pr_files = live_context.get("authenticated_pr_files", {})
+        if not isinstance(authenticated_pr_files, dict):
+            raise ValueError("authenticated governed PR file dispositions are malformed")
         repository_id = live_context.get("repository_id")
         repository_name = live_context.get("repository_name")
         expected_rule_suite_ref = live_context.get("expected_rule_suite_ref")
@@ -4053,6 +4667,7 @@ def build_boundary_result(
             authority=authority,
             canonical_artifacts=artifacts,
             authenticated_pr_changes=authenticated_pr_changes,
+            authenticated_pr_files=authenticated_pr_files,
             operation_log=operation_log,
         )
         result.update(evaluation)
@@ -4161,6 +4776,558 @@ def build_boundary_result(
     return _finalize_boundary_result(result)
 
 
+# fmt: off
+ACCEPTED_AUTHORITY_SCHEMA = "contract-drift-accepted-authority-v1"
+ACCEPTED_CATEGORIES = tuple(EXPECTED_CATEGORY_COUNTS)
+ANALYZER_BUNDLE_FILES = ("scripts/check_contract_drift_ratchet.py", "scripts/generate_contract_drift_inventory.py", "scripts/baselines/contract_drift_program.json")
+ANALYZER_FLAGS = ("-I", "-S", "-B")
+PAYDOWN_SCHEMA = "contract-drift-paydown-disposition-v1"
+AUTHORITY_FIELDS = frozenset("active_inventory active_inventory_sha256 analyzer_bundle canonical_artifact_bindings canonical_artifacts categories manifest_sha256 publication schema transition".split())
+GENESIS_DISPOSITION = {"as_of": "2026-04-17", "evidence": "canonical-original-cohort-v1", "status": "active"}
+HERMETIC_LAUNCHER = b"import hashlib,os,runpy,sys;p=__file__;assert hashlib.sha256(open(p,'rb').read()).hexdigest()==os.environ['CDG_EXECUTED_LAUNCHER_SHA256'];sys.path.insert(0,sys.argv.pop(1));runpy.run_path(sys.argv.pop(1),run_name='__main__')"
+
+
+def _strict_json_bytes(raw: bytes, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw, object_pairs_hook=_duplicate_key_object)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(f"{label} is not canonical UTF-8 JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    return value
+
+
+def _accepted_failure(error: str, code: str) -> dict[str, Any]:
+    return {"error": error, "error_code": code, "passing": False, "status": "fail"}
+
+
+def _git_json(repo_root: Path, sha: str, path: str) -> dict[str, Any]:
+    return _git_json_at_ref(repo_root, sha, path, operation_log=[])
+
+
+def _repository_relative_path(repo_root: Path, path: Path, *, label: str) -> str:
+    if path.is_absolute():
+        try:
+            relative = path.resolve().relative_to(repo_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"{label} must be inside the repository") from exc
+    else:
+        if not path.parts or ".." in path.parts:
+            raise ValueError(f"{label} must be a safe repository-relative path")
+        relative = path
+    value = relative.as_posix()
+    if value in {"", "."}:
+        raise ValueError(f"{label} must name a repository file")
+    return value
+
+
+def _resolve_accepted_source(repo_root: Path, source_sha: str) -> tuple[str, str]:
+    operation_log: list[dict[str, Any]] = []
+    try:
+        source = _resolve_full_sha(
+            repo_root,
+            source_sha,
+            label="accepted-authority --ref",
+            operation_log=operation_log,
+        )
+    except ValueError as exc:
+        if FULL_SHA_RE.fullmatch(source_sha):
+            raise ValueError(
+                f"accepted-authority --ref is unavailable or is not an exact commit: {source_sha}"
+            ) from exc
+        raise
+    try:
+        proc = _run_read_only(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "rev-parse",
+                "--verify",
+                f"{source}^1^{{commit}}",
+            ],
+            operation_log=operation_log,
+            resource="accepted-authority-tolerance-parent",
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"accepted-authority --ref first parent is unavailable: {source}"
+        ) from exc
+    parent = proc.stdout.decode("ascii").strip()
+    if not FULL_SHA_RE.fullmatch(parent):
+        raise ValueError(
+            f"accepted-authority --ref first parent is malformed: {source}"
+        )
+    return source, parent
+
+
+def _bundle_metadata(authority: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    bundle = authority.get("analyzer_bundle")
+    if not isinstance(bundle, dict) or set(bundle) != {"dependencies", "files", "interpreter_flags", "launcher_sha256", "schema"} or bundle["schema"] != "contract-drift-analyzer-bundle-v1" or bundle["dependencies"] != [] or bundle["interpreter_flags"] != list(ANALYZER_FLAGS) or bundle["launcher_sha256"] != _sha256_bytes(HERMETIC_LAUNCHER):
+        raise ValueError("accepted analyzer bundle execution contract mismatch")
+    files = bundle["files"]
+    if not isinstance(files, list) or len(files) != len(ANALYZER_BUNDLE_FILES) or any(not isinstance(item, dict) or set(item) != {"path", "sha256"} or not isinstance(item["sha256"], str) or not SHA256_RE.fullmatch(item["sha256"]) for item in files) or [item["path"] for item in files] != list(ANALYZER_BUNDLE_FILES):
+        raise ValueError("accepted analyzer bundle file set is not exact")
+    return bundle, cast(list[dict[str, str]], files)
+
+
+def _validate_bundle(authority: dict[str, Any], repo_root: Path, bundle_ref: str | None = None) -> str:
+    bundle, files = _bundle_metadata(authority)
+    authority_root = Path(os.environ.get("CDG_AUTHORITY_ROOT", repo_root)).resolve()
+    for binding in files:
+        if bundle_ref:
+            if not FULL_SHA_RE.fullmatch(bundle_ref):
+                raise ValueError("accepted analyzer bundle ref is not a full SHA")
+            entry = _run_read_only(["git", "-C", str(repo_root), "ls-tree", bundle_ref, "--", binding["path"]], operation_log=[], resource="accepted-bundle-mode").stdout.split()
+            blob = _run_read_only(["git", "-C", str(repo_root), "show", f"{bundle_ref}:{binding['path']}"], operation_log=[], resource="accepted-bundle-blob").stdout
+            invalid = len(entry) != 4 or entry[0] not in {b"100644", b"100755"} or entry[3].decode() != binding["path"] or binding["sha256"] != _sha256_bytes(blob)
+        else:
+            target = authority_root / binding["path"]
+            invalid = target.is_symlink() or not target.is_file() or binding["sha256"] != _sha256_bytes(target.read_bytes())
+        if invalid:
+            raise ValueError(f"accepted analyzer bundle digest mismatch: {binding['path']}")
+    return _sha256_bytes(_canonical_json_bytes(bundle))
+
+
+def _outside_cohort_residue(repo_root: Path, ref: str, original_keys: set[str]) -> set[str]:
+    try:
+        docs = inventory_mod.load_git_docs(repo_root, ref)
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        raise ValueError(f"residue tolerance ref is unavailable: {ref}") from exc
+    return set(inventory_mod.collect_ids(docs)) - original_keys
+
+
+def _live_witnesses(authority: dict[str, Any], *, repo_root: Path, live_ref: str | None, residue_ref: str | None = None) -> list[str]:
+    docs = inventory_mod.load_git_docs(repo_root, live_ref) if live_ref else inventory_mod.load_working_docs(repo_root)
+    duplicate_issues = inventory_mod.find_duplicate_entry_issues(docs)
+    if duplicate_issues:
+        raise ValueError(duplicate_issues[0])
+    live = set(inventory_mod.collect_ids(docs))
+    records = authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    original_keys = {f"{record['source_json_key']}:{inventory_mod.normalize_key(record['exact_historical_literal_record'])}" for record in records}
+    if live_ref and (residue := live - original_keys):
+        if not residue_ref:
+            raise ValueError(f"{len(residue)} live baseline keys outside immutable original cohort lack a residue tolerance ref")
+        tolerated = residue if residue_ref == live_ref else _outside_cohort_residue(repo_root, residue_ref, original_keys)
+        if new_keys := sorted(residue - tolerated):
+            raise ValueError(f"new live baseline keys outside immutable original cohort versus {residue_ref}: {new_keys}")
+    return sorted(record["original_record_id"] for record in records if f"{record['source_json_key']}:{inventory_mod.normalize_key(record['exact_historical_literal_record'])}" in live)
+
+def validate_accepted_authority(authority: dict[str, Any], *, repo_root: Path, live_ref: str | None = None, residue_ref: str | None = None) -> dict[str, Any]:
+    if authority.get("schema") != ACCEPTED_AUTHORITY_SCHEMA or set(authority) != AUTHORITY_FIELDS:
+        raise ValueError("accepted authority schema or fields mismatch")
+    artifacts = authority.get("canonical_artifacts")
+    cohort = artifacts.get("original_cohort") if isinstance(artifacts, dict) else None
+    provenance = artifacts.get("sdk_provenance") if isinstance(artifacts, dict) else None
+    if not isinstance(cohort, dict) or not isinstance(provenance, dict):
+        raise ValueError("accepted authority canonical artifacts are malformed")
+    raw = ((_canonical_json_bytes(cohort, terminal_lf=True), COHORT_ARTIFACT), (_canonical_json_bytes(provenance, terminal_lf=True), PROVENANCE_ARTIFACT))
+    bindings = [{"byte_length": len(value), "path": meta["logical_path"], "sha256": _sha256_bytes(value)} for value, meta in raw]
+    if (
+        any(
+            len(value) != meta["byte_length"] or _sha256_bytes(value) != meta["sha256"]
+            for value, meta in raw
+        )
+        or authority["canonical_artifact_bindings"] != bindings
+        or authority.get("categories") != list(ACCEPTED_CATEGORIES)
+    ):
+        raise ValueError("accepted authority canonical artifact or category binding mismatch")
+    cohort_summary = _validate_original_cohort(cohort)
+    provenance_summary = _validate_sdk_provenance(provenance, cohort_summary)
+    records = {item["original_record_id"]: item for item in cohort["original_records"]}
+    original_ids = set(records)
+    live = _live_witnesses(authority, repo_root=repo_root, live_ref=live_ref, residue_ref=residue_ref)
+    live_digest = _sha256_bytes(_canonical_json_bytes(live))
+    dispositions = authority.get("active_inventory")
+    if not isinstance(dispositions, list) or len(dispositions) != 655:
+        raise ValueError("accepted authority active inventory must contain 655 dispositions")
+    seen: set[str] = set()
+    active: list[str] = []
+    for item in dispositions:
+        fields = {"category", "disposition_history", "original_record_id", "status"}
+        if not isinstance(item, dict) or set(item) != fields:
+            raise ValueError("accepted authority disposition is malformed")
+        original_id, history = item["original_record_id"], item["disposition_history"]
+        if (
+            original_id in seen
+            or original_id not in records
+            or item["category"] != records[original_id]["category"]
+            or not isinstance(history, list)
+            or not history
+            or history[0] != GENESIS_DISPOSITION
+        ):
+            raise ValueError("accepted authority disposition identity or genesis is invalid")
+        seen.add(original_id)
+        if item["status"] == "active" and len(history) == 1:
+            active.append(original_id)
+            continue
+        event = history[1] if len(history) == 2 else {}
+        proof = event.get("evidence") if isinstance(event, dict) else None
+        if isinstance(proof, dict):
+            _validate_fact_digest(proof, schema=PAYDOWN_SCHEMA, label="paydown disposition")
+        fact = proof.get("fact", {}) if isinstance(proof, dict) else {}
+        if (
+            item["status"] != "resolved"
+            or set(event) != {"as_of", "evidence", "status"}
+            or event["status"] != "resolved"
+            or set(fact) != {"active_original_record_ids_sha256", "as_of", "original_record_id"}
+            or fact.get("original_record_id") != original_id
+            or not SHA256_RE.fullmatch(str(fact.get("active_original_record_ids_sha256", "")))
+            or event["as_of"] != fact.get("as_of")
+        ):
+            raise ValueError("accepted resolved disposition lacks authenticated paydown")
+        try:
+            if date.fromisoformat(event["as_of"]) > datetime.now(UTC).date():
+                raise ValueError
+        except (TypeError, ValueError) as exc:
+            raise ValueError("accepted paydown date is invalid") from exc
+    if (
+        seen != original_ids
+        or (set(active) != set(live) and len(active) != len(original_ids))
+        or authority["active_inventory_sha256"]
+        != _sha256_bytes(_canonical_json_bytes(dispositions))
+    ):
+        raise ValueError("accepted inventory differs from live witnesses or its digest")
+    manifest = {key: value for key, value in authority.items() if key != "manifest_sha256"}
+    if authority["manifest_sha256"] != _sha256_bytes(_canonical_json_bytes(manifest)):
+        raise ValueError("accepted authority manifest digest mismatch")
+    return {"active_original_record_ids": sorted(active), "analyzer_bundle_sha256": _validate_bundle(authority, repo_root, live_ref), "live_original_record_ids": live, "operation_projection": cohort_summary["operation_projection"], "original_record_total": cohort_summary["record_count"], "sdk_provenance_record_total": provenance_summary["record_count"]}
+# fmt: on
+
+
+def compare_accepted_authorities(
+    base: dict[str, Any],
+    head: dict[str, Any],
+    *,
+    repo_root: Path,
+    base_ref: str | None = None,
+    head_ref: str | None = None,
+) -> dict[str, Any]:
+    base_summary = validate_accepted_authority(base, repo_root=repo_root, live_ref=base_ref, residue_ref=base_ref)  # fmt: skip
+    head_summary = validate_accepted_authority(head, repo_root=repo_root, live_ref=head_ref, residue_ref=base_ref)  # fmt: skip
+    if (base["canonical_artifacts"], base["analyzer_bundle"]) != (head["canonical_artifacts"], head["analyzer_bundle"]):  # fmt: skip
+        raise ValueError("immutable authority bindings changed")
+    base_rows = {item["original_record_id"]: item for item in base["active_inventory"]}
+    head_rows = {item["original_record_id"]: item for item in head["active_inventory"]}
+    if any(
+        head_rows[item_id]["disposition_history"][: len(item["disposition_history"])]
+        != item["disposition_history"]
+        for item_id, item in base_rows.items()
+    ):
+        raise ValueError("accepted disposition history is not append-only")
+    base_ids = set(base_summary["active_original_record_ids"])
+    head_ids = set(head_summary["active_original_record_ids"])
+    base_live = set(base_summary["live_original_record_ids"])
+    head_live = set(head_summary["live_original_record_ids"])
+    added = sorted(head_live - base_live)
+    removed = sorted(base_ids - head_ids)
+    newly_disposed = sorted(
+        item_id
+        for item_id, item in base_rows.items()
+        if len(head_rows[item_id]["disposition_history"]) > len(item["disposition_history"])
+    )
+    head_live_digest = _sha256_bytes(_canonical_json_bytes(sorted(head_live)))
+    if newly_disposed != removed or (base_live - head_live and not removed) or any(head_rows[item_id]["disposition_history"][-1]["evidence"]["fact"]["active_original_record_ids_sha256"] != head_live_digest for item_id in newly_disposed):  # fmt: skip
+        raise ValueError("active-set removal lacks exact appended paydown evidence")
+    passing = not added
+    return {
+        "added_original_record_ids": added,
+        "analyzer_bundle_sha256": base_summary["analyzer_bundle_sha256"],
+        "authority": {"source": "accepted_authority"},
+        "passing": passing,
+        "removed_original_record_ids": removed,
+        "status": "pass" if passing else "fail",
+    }
+
+
+def build_accepted_result(
+    *,
+    mode: str,
+    repo_root: Path,
+    inventory_path: Path,
+    as_of: str | None = None,
+    source_sha: str | None = None,
+    historical_base_sha: str | None = None,
+    historical_head_sha: str | None = None,
+    historical_merge_sha: str | None = None,
+    historical_first_parent_sha: str | None = None,
+) -> dict[str, Any]:
+    if source_sha is None:
+        return _accepted_failure(
+            "accepted-authority program/receipt modes require an explicit immutable --ref",
+            "accepted_authority_ref_required",
+        )
+    try:
+        source, residue_ref = _resolve_accepted_source(repo_root, source_sha)
+        inventory_rel = _repository_relative_path(
+            repo_root,
+            inventory_path,
+            label="accepted inventory path",
+        )
+    except ValueError as exc:
+        return _accepted_failure(str(exc), "accepted_authority_ref_invalid")
+    try:
+        inventory = _git_json(repo_root, source, inventory_rel)
+    except (OSError, ValueError) as exc:
+        return _accepted_failure(str(exc), "authority_transition_required")
+    authority = inventory.get("accepted_authority")
+    if not isinstance(authority, dict):
+        return _accepted_failure(
+            "resolved base has no accepted authority manifest", "authority_transition_required"
+        )
+    try:
+        summary = validate_accepted_authority(
+            authority,
+            repo_root=repo_root,
+            live_ref=source,
+            residue_ref=residue_ref,
+        )
+    except (OSError, ValueError) as exc:
+        return _accepted_failure(str(exc), "accepted_authority_invalid")
+    if mode == "receipt":
+        historical_values = {
+            "base_sha": historical_base_sha,
+            "first_parent_sha": historical_first_parent_sha,
+            "head_sha": historical_head_sha,
+            "merge_sha": historical_merge_sha,
+        }
+        if any(value is not None for value in historical_values.values()):
+            if not all(value is not None for value in historical_values.values()):
+                return _accepted_failure(
+                    "historical receipt requires base, head, merge, and first-parent SHAs together",
+                    "accepted_authority_historical_pair_incomplete",
+                )
+            try:
+                resolved = {
+                    label: _resolve_full_sha(
+                        repo_root,
+                        cast(str, value),
+                        label=f"historical receipt {label}",
+                        operation_log=[],
+                    )
+                    for label, value in historical_values.items()
+                }
+                first_parent = (
+                    _run_read_only(
+                        [
+                            "git",
+                            "-C",
+                            str(repo_root),
+                            "rev-parse",
+                            f"{resolved['merge_sha']}^1",
+                        ],
+                        operation_log=[],
+                        resource="historical-receipt-first-parent",
+                    )
+                    .stdout.decode("ascii")
+                    .strip()
+                )
+                merge_tree = (
+                    _run_read_only(
+                        [
+                            "git",
+                            "-C",
+                            str(repo_root),
+                            "rev-parse",
+                            f"{resolved['merge_sha']}^{{tree}}",
+                        ],
+                        operation_log=[],
+                        resource="historical-receipt-merge-tree",
+                    )
+                    .stdout.decode("ascii")
+                    .strip()
+                )
+                head_tree = (
+                    _run_read_only(
+                        [
+                            "git",
+                            "-C",
+                            str(repo_root),
+                            "rev-parse",
+                            f"{resolved['head_sha']}^{{tree}}",
+                        ],
+                        operation_log=[],
+                        resource="historical-receipt-head-tree",
+                    )
+                    .stdout.decode("ascii")
+                    .strip()
+                )
+                for ancestor, descendant, label in (
+                    (
+                        resolved["base_sha"],
+                        resolved["head_sha"],
+                        "historical receipt base is not an ancestor of the PR head",
+                    ),
+                    (
+                        resolved["base_sha"],
+                        resolved["first_parent_sha"],
+                        "historical receipt base is not an ancestor of the merge first parent",
+                    ),
+                    (
+                        resolved["base_sha"],
+                        resolved["merge_sha"],
+                        "historical receipt base is not an ancestor of the squash merge",
+                    ),
+                ):
+                    if not _is_ancestor(repo_root, ancestor, descendant, []):
+                        raise ValueError(label)
+                semantic_delta = sorted(
+                    _first_parent_semantic_delta(
+                        repo_root,
+                        first_parent_sha=resolved["first_parent_sha"],
+                        merge_sha=resolved["merge_sha"],
+                        pr=0,
+                        operation_log=[],
+                    )
+                )
+                head_semantic_delta = sorted(
+                    _first_parent_semantic_delta(
+                        repo_root,
+                        first_parent_sha=resolved["base_sha"],
+                        merge_sha=resolved["head_sha"],
+                        pr=0,
+                        operation_log=[],
+                    )
+                )
+                patch_args = [
+                    "git",
+                    "-c",
+                    "diff.noprefix=false",
+                    "-c",
+                    "diff.mnemonicPrefix=false",
+                    "-c",
+                    "diff.algorithm=myers",
+                    "-c",
+                    "diff.context=3",
+                    "-C",
+                    str(repo_root),
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-renames",
+                    "--no-color",
+                    "--no-indent-heuristic",
+                    "--full-index",
+                    "--unified=3",
+                    "--src-prefix=a/",
+                    "--dst-prefix=b/",
+                    "-O/dev/null",
+                ]
+                head_patch = _run_read_only(
+                    [
+                        *patch_args,
+                        f"{resolved['base_sha']}^{{tree}}",
+                        f"{resolved['head_sha']}^{{tree}}",
+                    ],
+                    operation_log=[],
+                    resource="historical-receipt-base-head-patch",
+                ).stdout
+                merge_patch = _run_read_only(
+                    [
+                        *patch_args,
+                        f"{resolved['first_parent_sha']}^{{tree}}",
+                        f"{resolved['merge_sha']}^{{tree}}",
+                    ],
+                    operation_log=[],
+                    resource="historical-receipt-first-parent-merge-patch",
+                ).stdout
+            except ValueError as exc:
+                return _accepted_failure(
+                    str(exc),
+                    "accepted_authority_historical_pair_invalid",
+                )
+            if first_parent != resolved["first_parent_sha"]:
+                return _accepted_failure(
+                    "historical receipt merge first parent contradicts the exact pair",
+                    "accepted_authority_historical_pair_mismatch",
+                )
+            if head_semantic_delta != semantic_delta:
+                return _accepted_failure(
+                    "historical receipt base/head paths differ from first-parent/merge paths",
+                    "accepted_authority_historical_pair_mismatch",
+                )
+            if head_patch != merge_patch:
+                return _accepted_failure(
+                    "historical receipt base/head patch differs from first-parent/merge patch",
+                    "accepted_authority_historical_pair_mismatch",
+                )
+            return {
+                "authority": {
+                    "historical_exact_pair": resolved,
+                    "source": "accepted_authority",
+                },
+                "execution": {
+                    **resolved,
+                    "first_parent_patch_byte_length": len(merge_patch),
+                    "first_parent_patch_sha256": _sha256_bytes(merge_patch),
+                    "head_tree_sha": head_tree,
+                    "merge_tree_sha": merge_tree,
+                    "semantic_delta_paths": semantic_delta,
+                    "source_sha": source,
+                },
+                "passing": True,
+                "source_sha": source,
+                "status": "pass",
+            }
+        try:
+            proc = _run_read_only(
+                ["git", "-C", str(repo_root), "rev-list", "--first-parent", source],
+                operation_log=[],
+                resource="accepted-authority-first-parent-chain",
+            )
+        except ValueError as exc:
+            return _accepted_failure(
+                str(exc),
+                "accepted_authority_receipt_failed",
+            )
+        chain = proc.stdout.decode("ascii").splitlines()
+        passing = bool(chain and chain[0] == source)
+        return {
+            "authority": {"first_parent_chain": chain, "source": "accepted_authority"},
+            "passing": passing,
+            "source_sha": source,
+            "status": "pass" if passing else "fail",
+        }
+    as_of_value = as_of or datetime.now(UTC).date().isoformat()
+    try:
+        as_of_date = date.fromisoformat(as_of_value)
+    except ValueError:
+        return _accepted_failure("as-of must be an ISO UTC date", "invalid_as_of")
+    if as_of_date > datetime.now(UTC).date():
+        return _accepted_failure("live as-of may not be future-dated", "future_as_of")
+    try:
+        program = _parse_program(
+            _git_json(
+                repo_root,
+                source,
+                "scripts/baselines/contract_drift_program.json",
+            ),
+            label="Program baseline",
+        )
+        weeks = max(0, (as_of_date - program["start_date"]).days // 7)
+        target = _target_after_weeks(program["start_total_items"], program["weekly_reduction"], weeks)  # fmt: skip
+    except (OSError, ValueError) as exc:
+        return _accepted_failure(str(exc), "invalid_program")
+    current = len(summary["live_original_record_ids"])
+    passing = current <= target
+    program_result = {
+        "as_of": as_of_value,
+        "effective_weeks": weeks,
+        "source_sha": source,
+        "start_date": program["start_date"].isoformat(),
+        "start_total_items": program["start_total_items"],
+        "weekly_reduction": program["weekly_reduction"],
+    }
+    return {
+        "authority": {"source": "accepted_authority"},
+        "current": {"total_items": current},
+        "passing": passing,
+        "program": program_result,
+        "status": "pass" if passing else "fail",
+        "target": {"max_open_items": target},
+    }
+
+
 def _load_json_strict(path: Path, label: str) -> dict[str, Any]:
     if not path.exists():
         raise ValueError(f"{label} missing: {path}")
@@ -4194,32 +5361,43 @@ def _git_doc(repo_root: Path, ref: str, path: Path) -> dict[str, Any]:
 
 
 def _target_after_weeks(start_total: int, weekly_reduction: float, weeks: int) -> int:
-    # One-shot floored decay. The previous iterative int(round(n * 0.9)) had
-    # fixed points at 1-4 (e.g. round(4 * 0.9) == 4), so small per-batch
-    # clocks would never be required to reach zero and larger ones stalled
-    # at 4. floor(start * factor**weeks) is monotonic to 0.
-    factor = (1.0 - weekly_reduction) ** max(0, weeks)
-    return max(0, math.floor(start_total * factor))
+    if weekly_reduction == 0.1:
+        numerator, denominator = 9, 10
+    elif weekly_reduction == 0.5:  # retained for legacy unit fixtures
+        numerator, denominator = 1, 2
+    else:
+        raise ValueError("weekly reduction must have an exact integer recurrence")
+    # Every UTC week is a distinct integer recurrence step, not deferred one-shot flooring.
+    target = start_total
+    for _ in range(max(0, weeks)):
+        target = numerator * target // denominator
+    return target
 
 
-def _load_program(program_baseline: Path) -> dict[str, Any]:
-    program = _load_json_strict(program_baseline, "Program baseline")
+def _parse_program(program: dict[str, Any], *, label: str) -> dict[str, Any]:
     start_date_raw = program.get("start_date")
     start_total = int(program.get("start_total_items", -1))
     weekly_reduction = float(program.get("weekly_reduction", -1.0))
     grace_weeks = int(program.get("grace_weeks", 0))
     if not start_date_raw:
-        raise ValueError("Program baseline must include 'start_date'")
+        raise ValueError(f"{label} must include 'start_date'")
     if start_total < 0:
-        raise ValueError("Program baseline has invalid 'start_total_items'")
+        raise ValueError(f"{label} has invalid 'start_total_items'")
     if not (0.0 < weekly_reduction < 1.0):
-        raise ValueError("Program baseline 'weekly_reduction' must be between 0 and 1")
+        raise ValueError(f"{label} 'weekly_reduction' must be between 0 and 1")
     return {
         "start_date": date.fromisoformat(start_date_raw),
         "start_total_items": start_total,
         "weekly_reduction": weekly_reduction,
         "grace_weeks": grace_weeks,
     }
+
+
+def _load_program(program_baseline: Path) -> dict[str, Any]:
+    return _parse_program(
+        _load_json_strict(program_baseline, "Program baseline"),
+        label="Program baseline",
+    )
 
 
 def _evaluate_classes(
@@ -4606,11 +5784,78 @@ def _print_text(result: dict[str, Any]) -> None:
     print("PASS" if result["passing"] else "FAIL")
 
 
+def _run_hermetic_pr(
+    *, repo_root: Path, base_ref: str, head_ref: str, inventory_path: Path
+) -> dict[str, Any]:
+    repo_root = repo_root.resolve()
+    operation_log: list[dict[str, Any]] = []
+    base_sha = _resolve_full_sha(repo_root, base_ref, label="base_ref", operation_log=operation_log)
+    head_sha = _resolve_full_sha(repo_root, head_ref, label="head_ref", operation_log=operation_log)
+    rel_inventory = inventory_path.as_posix()
+    if inventory_path.is_absolute() or ".." in inventory_path.parts:
+        raise ValueError("inventory path must be safe and repository-relative")
+    base_doc = _git_json(repo_root, base_sha, rel_inventory)
+    transition = not isinstance(base_doc.get("accepted_authority"), dict)
+    authority_sha = head_sha if transition else base_sha
+    authority_doc = _git_json(repo_root, authority_sha, rel_inventory)
+    authority = authority_doc.get("accepted_authority")
+    if not isinstance(authority, dict):
+        raise ValueError("authority ref has no accepted authority")
+    bundle_metadata, files = _bundle_metadata(authority)
+    with (
+        tempfile.TemporaryDirectory(prefix="cdg-bundle-") as bundle_raw,
+        tempfile.TemporaryDirectory(prefix="cdg-cwd-") as cwd_raw,
+    ):
+        bundle = Path(bundle_raw)
+        for binding in files:
+            relative = binding["path"]
+            raw = subprocess.run(
+                ["git", "-C", str(repo_root), "show", f"{authority_sha}:{relative}"],
+                check=True,
+                capture_output=True,
+            ).stdout
+            if _sha256_bytes(raw) != binding["sha256"]:
+                raise ValueError(f"authority analyzer binding differs from exact ref: {relative}")
+            destination = bundle / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(raw)
+            destination.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        bundle_sha = _sha256_bytes(_canonical_json_bytes(bundle_metadata))
+        checker = bundle / files[0]["path"]
+        launcher = Path(cwd_raw) / "launcher.py"
+        launcher.write_bytes(HERMETIC_LAUNCHER)
+        launcher_sha = _sha256_bytes(launcher.read_bytes())
+        if launcher_sha != bundle_metadata["launcher_sha256"]:
+            raise ValueError("executed launcher differs from accepted launcher binding")
+        env = {
+            "CDG_AUTHORITY_ROOT": str(bundle),
+            "CDG_EXECUTED_LAUNCHER_SHA256": launcher_sha,
+            "CDG_TRUSTED_BUNDLE": bundle_sha,
+            "HOME": cwd_raw,
+            "PATH": "/usr/bin:/bin",
+        }
+        proc = subprocess.run([sys.executable, *ANALYZER_FLAGS, str(launcher), str(checker.parent), str(checker), "--mode", "pr", "--trusted-bundle", bundle_sha, "--base-ref", base_sha, "--head-ref", head_sha, "--repo-root", str(repo_root), "--inventory", rel_inventory, "--json"], cwd=cwd_raw, env=env, capture_output=True, text=True)  # fmt: skip
+        if proc.returncode not in {0, 1}:
+            raise ValueError(f"hermetic analyzer failed: {proc.stderr.strip()}")
+        result = json.loads(proc.stdout)
+        result["execution"] = {
+            "analyzer_sha": authority_sha,
+            "base_bundle_sha256": bundle_sha,
+            "base_sha": base_sha,
+            "dependencies": [],
+            "head_sha": head_sha,
+            "interpreter_flags": list(ANALYZER_FLAGS),
+            "launcher_sha256": launcher_sha,
+            "working_directory": "<empty-temporary-directory>",
+        }
+        return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check contract drift ratchet")
     parser.add_argument(
         "--mode",
-        choices=("program", "pr", "boundary"),
+        choices=("program", "pr", "receipt", "boundary"),
         default="program",
     )
     parser.add_argument(
@@ -4632,6 +5877,29 @@ def main() -> int:
     parser.add_argument(
         "--base-ref", default=None, help="Merge base ref for pr mode (e.g. origin/main)"
     )
+    parser.add_argument("--head-ref", default=None, help="Immutable PR head SHA")
+    parser.add_argument("--ref", default=None, help="Immutable source SHA for main modes")
+    parser.add_argument(
+        "--historical-base-sha",
+        default=None,
+        help="Exact historical PR base SHA for receipt mode",
+    )
+    parser.add_argument(
+        "--historical-head-sha",
+        default=None,
+        help="Exact historical PR head SHA for receipt mode",
+    )
+    parser.add_argument(
+        "--historical-merge-sha",
+        default=None,
+        help="Exact historical squash-merge SHA for receipt mode",
+    )
+    parser.add_argument(
+        "--historical-first-parent-sha",
+        default=None,
+        help="Exact historical merge first-parent SHA for receipt mode",
+    )
+    parser.add_argument("--trusted-bundle", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--repo-root", type=Path, default=Path("."))
     parser.add_argument(
         "--program-baseline",
@@ -4733,6 +6001,94 @@ def main() -> int:
         if result["status"] == "blocked":
             return 3
         return 1
+
+    if args.mode == "pr" and args.head_ref is not None:
+        try:
+            if args.trusted_bundle:
+                if os.environ.get("CDG_TRUSTED_BUNDLE") != args.trusted_bundle:
+                    raise ValueError("trusted bundle identity mismatch")
+                base_doc = _git_json(args.repo_root, args.base_ref, args.inventory.as_posix())
+                head_doc = _git_json(args.repo_root, args.head_ref, args.inventory.as_posix())
+                base_authority = base_doc.get("accepted_authority")
+                head_authority = head_doc.get("accepted_authority")
+                if not isinstance(head_authority, dict):
+                    raise ValueError("head has no accepted authority candidate")
+                if not isinstance(base_authority, dict):
+                    summary = validate_accepted_authority(head_authority, repo_root=args.repo_root, live_ref=args.head_ref, residue_ref=args.base_ref)  # fmt: skip
+                    if len(summary["active_original_record_ids"]) != 655:
+                        raise ValueError("authority transition must install all-active genesis")
+                    result = {
+                        "analyzer_bundle_sha256": summary["analyzer_bundle_sha256"],
+                        "authority": {"source": "accepted_authority"},
+                        "error_code": "authority_transition_required",
+                        "passing": True,
+                        "proposed_transition": summary,
+                        "status": "pass",
+                        "transition": True,
+                    }
+                    executed_authority = head_authority
+                else:
+                    result = compare_accepted_authorities(
+                        base_authority,
+                        head_authority,
+                        repo_root=args.repo_root,
+                        base_ref=args.base_ref,
+                        head_ref=args.head_ref,
+                    )
+                    executed_authority = base_authority
+                if (
+                    result["analyzer_bundle_sha256"] != args.trusted_bundle
+                    or os.environ.get("CDG_EXECUTED_LAUNCHER_SHA256")
+                    != executed_authority["analyzer_bundle"]["launcher_sha256"]
+                ):
+                    raise ValueError("executed launcher or bundle identity mismatch")
+            else:
+                if not args.base_ref:
+                    raise ValueError("--base-ref is required in pr mode")
+                result = _run_hermetic_pr(
+                    repo_root=args.repo_root,
+                    base_ref=args.base_ref,
+                    head_ref=args.head_ref,
+                    inventory_path=args.inventory,
+                )
+        except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+            result = _accepted_failure(str(exc), "pr_authority_failure")
+        print(json.dumps(result, sort_keys=True) if args.json else result)
+        return 0 if result["passing"] else 1
+
+    requested_inventory = (
+        args.inventory if args.inventory.is_absolute() else args.repo_root / args.inventory
+    ).resolve()
+    canonical_inventory = (args.repo_root / inventory_mod.DEFAULT_INVENTORY).resolve()
+    head_has_accepted_authority = False
+    if args.ref is None and args.mode != "receipt" and requested_inventory == canonical_inventory:
+        try:
+            head_inventory = _git_json(
+                args.repo_root,
+                "HEAD",
+                inventory_mod.DEFAULT_INVENTORY,
+            )
+            head_has_accepted_authority = isinstance(
+                head_inventory.get("accepted_authority"),
+                dict,
+            )
+        except (OSError, ValueError):
+            pass
+    accepted_default = args.mode == "receipt" or args.ref is not None or head_has_accepted_authority
+    if accepted_default:
+        result = build_accepted_result(
+            mode=args.mode,
+            repo_root=args.repo_root,
+            inventory_path=args.inventory,
+            as_of=args.as_of,
+            source_sha=args.ref,
+            historical_base_sha=args.historical_base_sha,
+            historical_head_sha=args.historical_head_sha,
+            historical_merge_sha=args.historical_merge_sha,
+            historical_first_parent_sha=args.historical_first_parent_sha,
+        )
+        print(json.dumps(result, sort_keys=True) if args.json else result)
+        return 0 if result["passing"] else 1
 
     try:
         result = build_ratchet_result(

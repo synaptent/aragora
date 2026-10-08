@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import dataclass
 
@@ -87,7 +88,7 @@ class TestRecordDebateTokens:
     async def test_records_agent_tokens(self, mock_meter, mock_agent):
         """Should record token usage for each agent."""
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_debate_tokens(
@@ -116,7 +117,7 @@ class TestRecordDebateTokens:
     async def test_records_api_agent_tokens(self, mock_meter, mock_api_agent):
         """Should handle API-style agents with different token attributes."""
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_debate_tokens(
@@ -133,7 +134,7 @@ class TestRecordDebateTokens:
     async def test_records_multiple_agents(self, mock_meter, mock_agent, mock_api_agent):
         """Should aggregate tokens from multiple agents."""
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_debate_tokens(
@@ -150,7 +151,7 @@ class TestRecordDebateTokens:
     async def test_records_debate_summary(self, mock_meter, mock_agent):
         """Should record debate-level summary."""
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             await record_debate_tokens(
@@ -178,7 +179,7 @@ class TestRecordDebateTokens:
         zero_agent.metrics.total_output_tokens = 0
 
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_debate_tokens(
@@ -198,7 +199,7 @@ class TestRecordDebateTokens:
         mock_meter.record_token_usage.side_effect = RuntimeError("Recording failed")
 
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_debate_tokens(
@@ -211,6 +212,45 @@ class TestRecordDebateTokens:
             assert result["total_tokens"] == 1500
             assert result["agents_recorded"] == 0  # Recording failed
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("attributes", "expected_provider"),
+        [
+            ({"provider": None, "agent_type": None}, "unknown"),
+            ({"provider": "", "agent_type": None}, "unknown"),
+            ({"provider": None}, "unknown"),
+            ({}, "unknown"),
+            ({"provider": None, "agent_type": "openai"}, "openai"),
+            ({"agent_type": "gemini"}, "gemini"),
+            ({"provider": "anthropic", "agent_type": "api"}, "anthropic"),
+        ],
+    )
+    async def test_provider_is_always_a_string(self, mock_meter, attributes, expected_provider):
+        """Missing or None providers are recorded as "unknown"; real identifiers pass through."""
+        agent = SimpleNamespace(
+            name="plain-agent",
+            model="test-model",
+            metrics=None,
+            total_tokens_in=10,
+            total_tokens_out=5,
+            **attributes,
+        )
+
+        with patch(
+            "aragora.billing.usage_metering.get_usage_meter",
+            return_value=mock_meter,
+        ):
+            result = await record_debate_tokens(
+                org_id="org-123",
+                debate_id="debate-456",
+                agents=[agent],
+            )
+
+        assert result["agents_recorded"] == 1
+        provider = mock_meter.record_token_usage.call_args.kwargs["provider"]
+        assert isinstance(provider, str)
+        assert provider == expected_provider
+
 
 class TestRecordAgentTokens:
     """Tests for record_agent_tokens function."""
@@ -219,7 +259,7 @@ class TestRecordAgentTokens:
     async def test_records_tokens(self, mock_meter):
         """Should record agent token usage."""
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_agent_tokens(
@@ -244,7 +284,7 @@ class TestRecordAgentTokens:
         mock_meter.record_token_usage.side_effect = RuntimeError("Service unavailable")
 
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_agent_tokens(
@@ -268,7 +308,7 @@ class TestRecordAPICall:
     async def test_records_api_call(self, mock_meter):
         """Should record API call."""
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_api_call(
@@ -295,7 +335,7 @@ class TestRecordAPICall:
         mock_meter.record_api_call.side_effect = RuntimeError("Database error")
 
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             result = await record_api_call(
@@ -338,7 +378,7 @@ class TestMeteredUsageTracker:
         assert tracker._meter is None
 
         with patch(
-            "aragora.services.usage_metering.get_usage_meter",
+            "aragora.billing.usage_metering.get_usage_meter",
             return_value=mock_meter,
         ):
             meter = tracker._get_meter()

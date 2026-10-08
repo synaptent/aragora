@@ -4,8 +4,9 @@ import asyncio
 import pytest
 import tempfile
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 
+import aragora.storage.approval_request_store as approval_request_store_module
 from aragora.storage.approval_request_store import (
     ApprovalRequestItem,
     InMemoryApprovalRequestStore,
@@ -252,6 +253,185 @@ class TestInMemoryApprovalRequestStore:
         """Test responding to non-existent request."""
         responded = await store.respond("nonexistent-id", "approved", "user-1")
         assert responded is False
+
+
+FROZEN_NOW = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+PLUS_FIVE = timezone(timedelta(hours=5))
+MINUS_FIVE = timezone(timedelta(hours=-5))
+CANONICAL = "2026-03-01T12:30:00+00:00"
+
+SUPPORTED_TIMESTAMP_INPUTS = [
+    pytest.param(CANONICAL, CANONICAL, id="canonical-string"),
+    pytest.param("2026-03-01T12:30:00Z", CANONICAL, id="z-suffix"),
+    pytest.param("2026-03-01T17:30:00+05:00", CANONICAL, id="positive-offset-string"),
+    pytest.param("2026-03-01T07:30:00-05:00", CANONICAL, id="negative-offset-string"),
+    pytest.param(
+        "2026-03-01T12:30:00.250000+00:00",
+        "2026-03-01T12:30:00.250000+00:00",
+        id="microseconds",
+    ),
+    pytest.param("2026-03-01T12:30:00", CANONICAL, id="naive-string-read-as-utc"),
+    pytest.param(datetime(2026, 3, 1, 12, 30, tzinfo=timezone.utc), CANONICAL, id="utc-datetime"),
+    pytest.param(datetime(2026, 3, 1, 17, 30, tzinfo=PLUS_FIVE), CANONICAL, id="offset-datetime"),
+    pytest.param(datetime(2026, 3, 1, 12, 30), CANONICAL, id="naive-datetime-read-as-utc"),
+]
+
+INVALID_TIMESTAMP_INPUTS = [
+    pytest.param("", id="empty-string"),
+    pytest.param("not-a-timestamp", id="garbage"),
+    pytest.param("2026-02-30T12:00:00+00:00", id="impossible-date"),
+    pytest.param("2026-03-01", id="date-only-string"),
+    pytest.param(date(2026, 3, 1), id="date-object"),
+    pytest.param(1772368200, id="epoch-int"),
+    pytest.param(1772368200.5, id="epoch-float"),
+    pytest.param(True, id="bool"),
+    pytest.param([CANONICAL], id="list"),
+    pytest.param("9999-12-31T23:00:00-05:00", id="beyond-utc-range"),
+]
+
+
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return FROZEN_NOW.astimezone(tz) if tz is not None else FROZEN_NOW.replace(tzinfo=None)
+
+
+@pytest.fixture
+def frozen_now(monkeypatch):
+    """Pin the store module's clock so expiry boundaries are exact."""
+    monkeypatch.setattr(approval_request_store_module, "datetime", _FrozenDatetime)
+    return FROZEN_NOW
+
+
+class TestInMemoryApprovalRequestExpiry:
+    """expires_at is stored as canonical UTC text and compared as an instant."""
+
+    @pytest.fixture
+    def store(self):
+        return InMemoryApprovalRequestStore()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("raw", "expected"), SUPPORTED_TIMESTAMP_INPUTS)
+    async def test_save_stores_canonical_utc_expires_at(
+        self, store, sample_request_data, raw, expected
+    ):
+        sample_request_data["expires_at"] = raw
+        await store.save(sample_request_data)
+
+        stored = await store.get(sample_request_data["request_id"])
+        assert stored["expires_at"] == expected
+        assert set(stored) == set(sample_request_data)
+        assert sample_request_data["expires_at"] is raw
+
+    @pytest.mark.asyncio
+    async def test_save_keeps_absent_and_null_expires_at(self, store, sample_request_data):
+        request_id = sample_request_data["request_id"]
+        await store.save(sample_request_data)
+        assert "expires_at" not in await store.get(request_id)
+
+        sample_request_data["expires_at"] = None
+        await store.save(sample_request_data)
+        assert (await store.get(request_id))["expires_at"] is None
+        assert await store.list_expired() == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("raw", INVALID_TIMESTAMP_INPUTS)
+    async def test_save_rejects_invalid_expires_at(self, store, sample_request_data, raw):
+        await store.save(sample_request_data)
+        replacement = {**sample_request_data, "title": "Replacement", "expires_at": raw}
+
+        with pytest.raises(ValueError, match="expires_at"):
+            await store.save(replacement)
+
+        stored = await store.get(sample_request_data["request_id"])
+        assert stored["title"] == sample_request_data["title"]
+        assert "expires_at" not in stored
+
+    @pytest.mark.asyncio
+    async def test_list_expired_compares_instants_across_offsets(
+        self, store, sample_request_data, frozen_now
+    ):
+        cases = {
+            "past-plus-five": (frozen_now - timedelta(minutes=1)).astimezone(PLUS_FIVE).isoformat(),
+            "future-minus-five": (frozen_now + timedelta(minutes=1))
+            .astimezone(MINUS_FIVE)
+            .isoformat(),
+            "past-naive-string": (frozen_now - timedelta(minutes=1))
+            .replace(tzinfo=None)
+            .isoformat(),
+            "past-datetime": frozen_now - timedelta(seconds=1),
+            "future-datetime": (frozen_now + timedelta(hours=1)).astimezone(PLUS_FIVE),
+        }
+        for request_id, expires_at in cases.items():
+            await store.save(
+                {**sample_request_data, "request_id": request_id, "expires_at": expires_at}
+            )
+
+        expired = await store.list_expired()
+
+        assert {r["request_id"] for r in expired} == {
+            "past-plus-five",
+            "past-naive-string",
+            "past-datetime",
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("delta", "is_expired"),
+        [
+            pytest.param(timedelta(microseconds=-1), True, id="just-before-now"),
+            pytest.param(timedelta(0), False, id="exactly-now"),
+            pytest.param(timedelta(microseconds=1), False, id="just-after-now"),
+        ],
+    )
+    async def test_list_expired_boundary_is_strict(
+        self, store, sample_request_data, frozen_now, delta, is_expired
+    ):
+        sample_request_data["expires_at"] = (frozen_now + delta).astimezone(MINUS_FIVE)
+        await store.save(sample_request_data)
+
+        expired = await store.list_expired()
+
+        assert [r["request_id"] for r in expired] == (
+            [sample_request_data["request_id"]] if is_expired else []
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["approved", "rejected", "expired"])
+    async def test_list_expired_only_reports_pending(
+        self, store, sample_request_data, frozen_now, status
+    ):
+        sample_request_data["status"] = status
+        sample_request_data["expires_at"] = frozen_now - timedelta(hours=1)
+        await store.save(sample_request_data)
+
+        assert await store.list_expired() == []
+
+    @pytest.mark.asyncio
+    async def test_respond_keeps_canonical_expires_at(self, store, sample_request_data, frozen_now):
+        request_id = sample_request_data["request_id"]
+        sample_request_data["expires_at"] = (frozen_now - timedelta(hours=1)).astimezone(PLUS_FIVE)
+        await store.save(sample_request_data)
+        assert [r["request_id"] for r in await store.list_expired()] == [request_id]
+
+        await store.respond(request_id, "approved", "reviewer-1")
+
+        stored = await store.get(request_id)
+        assert stored["expires_at"] == (frozen_now - timedelta(hours=1)).isoformat()
+        assert await store.list_expired() == []
+
+    @pytest.mark.asyncio
+    async def test_list_expired_tolerates_edits_that_bypass_save(
+        self, store, sample_request_data, frozen_now
+    ):
+        await store.save({**sample_request_data, "request_id": "edited-to-datetime"})
+        await store.save({**sample_request_data, "request_id": "edited-to-garbage"})
+        (await store.get("edited-to-datetime"))["expires_at"] = frozen_now - timedelta(minutes=5)
+        (await store.get("edited-to-garbage"))["expires_at"] = "garbage"
+
+        expired = await store.list_expired()
+
+        assert [r["request_id"] for r in expired] == ["edited-to-datetime"]
 
 
 class TestSQLiteApprovalRequestStore:

@@ -77,7 +77,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 DEFAULT_REPO = "synaptent/aragora"
-# Western-frontier pair (claude→opus-4.8, openai→gpt-5.5); see
+# Western-frontier pair (claude→opus-5, openai→gpt-5.5); see
 # aragora.swarm.quorum_evidence.DEFAULT_FAMILIES. Override with --families.
 DEFAULT_FAMILIES = ("claude", "openai")
 DEFAULT_ROUTING_RECORDS_DIR = os.path.join(".aragora", "automation-receipts", "routing")
@@ -210,8 +210,8 @@ def rejection_reason(entry: dict[str, Any]) -> str | None:
     if str(entry.get("status") or "").strip().lower() != SELECTABLE_STATUS:
         return "wrong_status"
     try:
-        tier = int(entry.get("tier"))
-    except (TypeError, ValueError):
+        tier = int(entry["tier"])
+    except (KeyError, TypeError, ValueError):
         return "unknown_tier"  # fail safe, never auto-postable anyway
     if tier not in AUTO_POSTABLE_TIERS:
         return "wrong_tier"
@@ -251,8 +251,8 @@ def needs_dogfood(entry: dict[str, Any]) -> bool:
     if entry.get("dogfood_evidence"):
         return False
     try:
-        tier = int(entry.get("tier"))
-    except (TypeError, ValueError):
+        tier = int(entry["tier"])
+    except (KeyError, TypeError, ValueError):
         return False
     if tier not in AUTO_POSTABLE_TIERS:
         return False

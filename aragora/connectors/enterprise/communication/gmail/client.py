@@ -245,7 +245,7 @@ class GmailClientMixin(EnterpriseConnectorMethods):
         Returns:
             True if authentication successful
         """
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         client_id, client_secret = _get_client_credentials()
 
@@ -312,7 +312,7 @@ class GmailClientMixin(EnterpriseConnectorMethods):
 
     async def _refresh_access_token(self) -> str:
         """Refresh the access token using refresh token."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         if not self._refresh_token:
             raise ValueError("No refresh token available")
@@ -366,7 +366,7 @@ class GmailClientMixin(EnterpriseConnectorMethods):
         json_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make a request to Gmail API with circuit breaker protection."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         # Check circuit breaker first
         if not self.check_circuit_breaker():
@@ -425,7 +425,7 @@ class GmailClientMixin(EnterpriseConnectorMethods):
 
     def _get_client(self) -> Any:
         """Get HTTP client context manager for API requests."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         pool = get_http_pool()
         return pool.get_session("google")

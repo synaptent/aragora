@@ -1,0 +1,1 @@
+import hashlib,os,runpy,sys;p=__file__;assert hashlib.sha256(open(p,'rb').read()).hexdigest()==os.environ['CDG_EXECUTED_LAUNCHER_SHA256'];sys.path.insert(0,sys.argv.pop(1));runpy.run_path(sys.argv.pop(1),run_name='__main__')

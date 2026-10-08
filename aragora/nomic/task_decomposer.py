@@ -1560,11 +1560,24 @@ class TaskDecomposer:
         try:
             client = anthropic.Anthropic(api_key=api_key)
             response = client.messages.create(
-                model="claude-opus-4-8",
-                max_tokens=1024,
+                model="claude-opus-5",
+                # Opus 5 runs adaptive thinking by default and max_tokens caps
+                # thinking + response combined, so this budget sits well above the
+                # expected answer length to avoid silent truncation (it is a
+                # ceiling, not a spend commitment).
+                max_tokens=8192,
                 messages=[{"role": "user", "content": prompt}],
             )
-            text = response.content[0].text if response.content else ""
+            # Opus 5 thinks by default, so content[0] is a thinking block, not
+            # text. Scan for the text block instead of indexing blindly.
+            text = next(
+                (
+                    getattr(b, "text", "")
+                    for b in response.content
+                    if getattr(b, "type", None) == "text"
+                ),
+                "",
+            )
             if text:
                 logger.info("LLM subtask extraction succeeded via Anthropic")
                 return text
@@ -1594,8 +1607,10 @@ class TaskDecomposer:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "anthropic/claude-opus-4.8",
-                    "max_tokens": 1024,
+                    "model": "anthropic/claude-opus-5",
+                    # Opus 5 thinks by default; max_tokens covers
+                    # thinking + response, so keep generous headroom.
+                    "max_tokens": 8192,
                     "messages": [{"role": "user", "content": prompt}],
                 },
                 timeout=60.0,
@@ -2458,7 +2473,7 @@ class TaskDecomposer:
             )
             return self.analyze(goal, depth=self.config.max_depth)
         from aragora.core import Environment
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         # Build the debate task - ask agents to decompose the goal
         debate_task = self._build_debate_task(goal, context)
@@ -2505,8 +2520,9 @@ class TaskDecomposer:
             subtasks = self._create_generic_phases(goal)
 
         logger.info(
-            f"debate_decomposition_completed subtasks={len(subtasks)} "
-            f"confidence={result.confidence:.2f}"
+            "debate_decomposition_completed subtasks=%s confidence=%.2f",
+            len(subtasks),
+            result.confidence,
         )
 
         return TaskDecomposition(
@@ -2557,8 +2573,9 @@ class TaskDecomposer:
                 subtasks = self._parse_debate_subtasks(result.final_answer)
                 if subtasks:
                     logger.info(
-                        f"debate_primary_succeeded subtasks={len(subtasks)} "
-                        f"confidence={result.confidence:.2f}"
+                        "debate_primary_succeeded subtasks=%s confidence=%.2f",
+                        len(subtasks),
+                        result.confidence,
                     )
                     return result
                 else:
@@ -2635,7 +2652,7 @@ class TaskDecomposer:
 
             # Rebuild environment and protocol for fresh debate
             from aragora.core import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             fallback_env = Environment(
                 task=self._build_debate_task(goal, context),
@@ -2661,8 +2678,9 @@ class TaskDecomposer:
                 subtasks = self._parse_debate_subtasks(fallback_result.final_answer)
                 if subtasks:
                     logger.info(
-                        f"debate_fallback_succeeded subtasks={len(subtasks)} "
-                        f"confidence={fallback_result.confidence:.2f}"
+                        "debate_fallback_succeeded subtasks=%s confidence=%.2f",
+                        len(subtasks),
+                        fallback_result.confidence,
                     )
                     return fallback_result
 
@@ -2686,7 +2704,7 @@ class TaskDecomposer:
             return [
                 OpenRouterAgent(
                     name="or-claude",
-                    model="anthropic/claude-opus-4.8",
+                    model="anthropic/claude-opus-5",
                     api_key=openrouter_key,
                 ),
                 OpenRouterAgent(
@@ -2803,12 +2821,12 @@ Prioritize by impact: which improvements would provide the most value?"""
                     [
                         AnthropicAPIAgent(
                             name="claude-strategist",
-                            model="claude-opus-4-8",
+                            model="claude-opus-5",
                             api_key=anthropic_key,
                         ),
                         AnthropicAPIAgent(
                             name="claude-architect",
-                            model="claude-opus-4-8",
+                            model="claude-opus-5",
                             api_key=anthropic_key,
                         ),
                     ]
@@ -2839,7 +2857,7 @@ Prioritize by impact: which improvements would provide the most value?"""
                     [
                         OpenRouterAgent(
                             name="or-claude",
-                            model="anthropic/claude-opus-4.8",
+                            model="anthropic/claude-opus-5",
                         ),
                         OpenRouterAgent(
                             name="or-gpt",

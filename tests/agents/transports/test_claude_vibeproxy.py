@@ -21,7 +21,7 @@ from aragora.agents.transports.vibeproxy import (
 
 @dataclass
 class FakeClient:
-    models: frozenset[str] = frozenset({"claude-opus-4-8"})
+    models: frozenset[str] = frozenset({"claude-opus-5"})
     base_url: str = "http://127.0.0.1:8318/v1"
     calls: list[dict[str, object]] = field(default_factory=list)
 
@@ -61,14 +61,14 @@ def test_prefer_mode_runs_exact_model_and_discloses_harness(
     assert result.ok is True
     assert result.required is False
     assert result.text == "Verdict: PASS"
-    assert result.response_model == "claude-opus-4-8"
-    assert result.harness == f"{VIBEPROXY_HARNESS} (model: claude-opus-4-8)"
+    assert result.response_model == "claude-opus-5"
+    assert result.harness == f"{VIBEPROXY_HARNESS} (model: claude-opus-5)"
     assert result.timeout_seconds == 30.0
     # Message leg gets the budget minus the discovery cap (30 - 6), so the two
     # legs sum to at most the attempt budget rather than each drawing the full 30.
     assert client.calls == [
         {
-            "model": "claude-opus-4-8",
+            "model": "claude-opus-5",
             "prompt": "review prompt",
             "timeout": 24.0,
         }
@@ -102,7 +102,7 @@ def test_prefer_mode_allows_direct_fallback_when_model_is_unavailable() -> None:
     assert result.attempted is True
     assert result.required is False
     assert result.ok is False
-    assert result.error == "model not in VibeProxy catalog: claude-opus-4-8"
+    assert result.error == "model not in VibeProxy catalog: claude-opus-5"
 
 
 def test_required_mode_fails_closed_when_model_is_unavailable() -> None:
@@ -116,7 +116,7 @@ def test_required_mode_fails_closed_when_model_is_unavailable() -> None:
     assert result.attempted is True
     assert result.required is True
     assert result.ok is False
-    assert result.error == "model not in VibeProxy catalog: claude-opus-4-8"
+    assert result.error == "model not in VibeProxy catalog: claude-opus-5"
 
 
 def test_unexpected_resolve_failure_is_sanitized_and_allows_prefer_fallback(

@@ -370,6 +370,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/credits/{org_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/admin/credits/{org_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getAdminCreditsByorgid1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/credits/{org_id}/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/admin/credits/{org_id}/adjust
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createAdminCreditsByorgidAdjust1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/credits/{org_id}/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/admin/credits/{org_id}/expiring
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listAdminCreditsByorgidExpiring1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/credits/{org_id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/admin/credits/{org_id}/issue
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createAdminCreditsByorgidIssue1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/credits/{org_id}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/admin/credits/{org_id}/transactions
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listAdminCreditsByorgidTransactions1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/feature-flags": {
         parameters: {
             query?: never;
@@ -3970,48 +4075,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/calibration/curve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get calibration curve
-         * @deprecated
-         * @description Fetch calibration-curve data used to evaluate model or agent confidence quality.
-         */
-        get: operations["listCalibrationCurve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/calibration/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get calibration history
-         * @deprecated
-         * @description List historical calibration measurements and snapshots for supported agents or systems.
-         */
-        get: operations["listCalibrationHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/calibration/leaderboard": {
         parameters: {
             query?: never;
@@ -5310,28 +5373,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/costs/recommendations/{param}/apply": {
+    "/api/costs/recommendations/{recommendation_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Autogenerated placeholder (spec pending)
+         * Get recommendation
          * @deprecated
-         * @description Autogenerated placeholder (spec pending)
+         * @description Get a specific cost optimization recommendation.
          */
-        post: operations["createCostsRecommendationsByparamApply"];
+        get: operations["getCostsRecommendationsByrecommendationid"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/costs/recommendations/{param}/dismiss": {
+    "/api/costs/recommendations/{recommendation_id}/apply": {
         parameters: {
             query?: never;
             header?: never;
@@ -5341,11 +5404,32 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Autogenerated placeholder (spec pending)
+         * Apply recommendation
          * @deprecated
-         * @description Autogenerated placeholder (spec pending)
+         * @description Apply a cost optimization recommendation.
          */
-        post: operations["createCostsRecommendationsByparamDismiss"];
+        post: operations["createCostsRecommendationsByrecommendationidApply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/costs/recommendations/{recommendation_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss recommendation
+         * @deprecated
+         * @description Dismiss a cost optimization recommendation.
+         */
+        post: operations["createCostsRecommendationsByrecommendationidDismiss"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6451,33 +6535,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/devices/apple/shortcuts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Handle Apple Shortcuts request
-         * @deprecated
-         * @description API endpoint for Apple Shortcuts integration.
-         *
-         *     Allows Apple Shortcuts to:
-         *     - Start debates
-         *     - Get debate status
-         *     - Submit votes
-         *     - Get summaries
-         */
-        post: operations["createDevicesAppleShortcuts"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/devices/google/webhook": {
         parameters: {
             query?: never;
@@ -6909,6 +6966,48 @@ export interface paths {
          * @description Remove a connected ecommerce integration and stop future sync activity.
          */
         delete: operations["deleteEcommerceByintegrationid"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/email/daily-digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/email/daily-digest
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listEmailDailyDigest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/email/sender-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/email/sender-profile
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listEmailSenderProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7664,27 +7763,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/gauntlet/receipts/{receipt_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get decision receipt
-         * @deprecated
-         * @description Get a specific decision receipt by ID.
-         */
-        get: operations["getGauntletReceiptsByreceiptid"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/gauntlet/receipts/{receipt_id}/export": {
         parameters: {
             query?: never;
@@ -8343,6 +8421,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inbox/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/inbox/actions
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createInboxActions1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/bulk-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/inbox/bulk-actions
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createInboxBulkActions1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/inbox/command
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listInboxCommand1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/daily-digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/inbox/daily-digest
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listInboxDailyDigest1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/reprioritize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/inbox/reprioritize
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createInboxReprioritize1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/sender-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/inbox/sender-profile
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/inbox_command.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listInboxSenderProfile1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/insights/extract-detailed": {
         parameters: {
             query?: never;
@@ -8574,6 +8778,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/integrations/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/integrations/status
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/features/integrations.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listIntegrationsStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/integrations/teams/callback": {
         parameters: {
             query?: never;
@@ -8694,6 +8919,63 @@ export interface paths {
         get: operations["getIntegrationsTeamsTenantsByparam"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/integrations/{type}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/features/integrations.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getIntegrationsBytype"];
+        /**
+         * PUT /api/integrations/{type}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/features/integrations.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        put: operations["updateIntegrationsBytype"];
+        post?: never;
+        /**
+         * DELETE /api/integrations/{type}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/features/integrations.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        delete: operations["deleteIntegrationsBytype"];
+        options?: never;
+        head?: never;
+        /**
+         * PATCH /api/integrations/{type}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/features/integrations.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        patch: operations["patchIntegrationsBytype"];
+        trace?: never;
+    };
+    "/api/integrations/{type}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/integrations/{type}/test
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/features/integrations.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createIntegrationsBytypeTest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10675,90 +10957,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/patterns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List pattern templates
-         * @deprecated
-         * @description Get list of available workflow pattern templates.
-         */
-        get: operations["listPatterns"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/patterns/hive-mind": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Hive Mind workflow
-         * @deprecated
-         * @description Create a workflow from the Hive Mind pattern template.
-         */
-        post: operations["createPatternsHiveMind"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/patterns/map-reduce": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create MapReduce workflow
-         * @deprecated
-         * @description Create a workflow from the MapReduce pattern template.
-         */
-        post: operations["createPatternsMapReduce"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/patterns/review-cycle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Review Cycle workflow
-         * @deprecated
-         * @description Create a workflow from the Review Cycle pattern template.
-         */
-        post: operations["createPatternsReviewCycle"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/patterns/{pattern_id}": {
         parameters: {
             query?: never;
@@ -10774,6 +10972,278 @@ export interface paths {
         get: operations["getPatternsBypatternid"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/authorize
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsAuthorize1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/capture
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsCapture1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/charge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/charge
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsCharge1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/customer
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsCustomer1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/customer/{customer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/payments/customer/{customer_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getPaymentsCustomerBycustomerid1"];
+        /**
+         * PUT /api/payments/customer/{customer_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        put: operations["updatePaymentsCustomerBycustomerid1"];
+        post?: never;
+        /**
+         * DELETE /api/payments/customer/{customer_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        delete: operations["deletePaymentsCustomerBycustomerid1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/refund
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsRefund1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/subscription
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsSubscription1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/subscription/{subscription_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/payments/subscription/{subscription_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getPaymentsSubscriptionBysubscriptionid1"];
+        /**
+         * PUT /api/payments/subscription/{subscription_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        put: operations["updatePaymentsSubscriptionBysubscriptionid1"];
+        post?: never;
+        /**
+         * DELETE /api/payments/subscription/{subscription_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        delete: operations["deletePaymentsSubscriptionBysubscriptionid1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/transaction/{transaction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/payments/transaction/{transaction_id}
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getPaymentsTransactionBytransactionid1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/void
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsVoid1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/webhook/authnet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/webhook/authnet
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsWebhookAuthnet1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/webhook/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/payments/webhook/stripe
+         * @deprecated
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsWebhookStripe1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11602,27 +12072,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/quotas/request-increase": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request quota increase
-         * @deprecated
-         * @description Submit a quota increase request for review.
-         */
-        post: operations["createQuotasRequestIncrease"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ralph/blockers": {
         parameters: {
             query?: never;
@@ -11804,6 +12253,27 @@ export interface paths {
          * @description Return aggregate status, progress, and throughput metrics for Ralph campaign supervisor runs.
          */
         get: operations["listRalphOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ralph/{param}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Autogenerated placeholder (spec pending)
+         * @deprecated
+         * @description Autogenerated placeholder (spec pending)
+         */
+        get: operations["getRalphByparam"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12055,7 +12525,7 @@ export interface paths {
         /**
          * Get domain reputation scores
          * @deprecated
-         * @description Return domain-level reputation scores or reputation summaries.
+         * @description Return domain-level reputation scores or reputation summaries. Requires the critiques:read permission.
          */
         get: operations["listReputationDomain"];
         put?: never;
@@ -12076,7 +12546,7 @@ export interface paths {
         /**
          * Get reputation history
          * @deprecated
-         * @description List historical reputation events or score snapshots.
+         * @description List historical reputation events or score snapshots. Requires the critiques:read permission.
          */
         get: operations["listReputationHistory"];
         put?: never;
@@ -12176,27 +12646,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/review-queue": {
+    "/api/review-queue/triage-metrics": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Rolling-window triage metrics
+         * @deprecated
+         * @description Returns rolling 7-day and 30-day aggregates for the four Commitment-5 metrics named in docs/THESIS.md: escalation rate, auto-handle override rate, human-override-outcome correlation, and time-per-settlement (median + p95). The response also includes advisory drift detection between the two windows. Metrics that cannot be computed from the current receipt schema are returned as null with an explanation in the window's ``notes`` block. Supports ETag / If-None-Match conditional GETs.
+         */
+        get: operations["listReviewQueueTriageMetrics"];
         put?: never;
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @deprecated
-         * @description Autogenerated placeholder (spec pending)
-         */
-        post: operations["createReviewQueue"];
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @deprecated
-         * @description Autogenerated placeholder (spec pending)
-         */
-        delete: operations["deleteReviewQueue"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13286,27 +13751,6 @@ export interface paths {
          * @description Autogenerated placeholder (spec pending)
          */
         get: operations["listSloStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/slos": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @deprecated
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listSlos"];
         put?: never;
         post?: never;
         delete?: never;
@@ -14522,13 +14966,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Autogenerated placeholder (spec pending)
          * @description Autogenerated placeholder (spec pending)
          */
-        get: operations["listAccountingApInvoicesByinvoiceidPayment"];
-        put?: never;
-        post?: never;
+        post: operations["createAccountingApInvoicesByinvoiceidPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14686,13 +15130,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Autogenerated placeholder (spec pending)
          * @description Autogenerated placeholder (spec pending)
          */
-        get: operations["listAccountingArInvoicesByinvoiceidPayment"];
-        put?: never;
-        post?: never;
+        post: operations["createAccountingArInvoicesByinvoiceidPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14706,13 +15150,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Autogenerated placeholder (spec pending)
          * @description Autogenerated placeholder (spec pending)
          */
-        get: operations["listAccountingArInvoicesByinvoiceidReminder"];
-        put?: never;
-        post?: never;
+        post: operations["createAccountingArInvoicesByinvoiceidReminder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14726,13 +15170,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Autogenerated placeholder (spec pending)
          * @description Autogenerated placeholder (spec pending)
          */
-        get: operations["listAccountingArInvoicesByinvoiceidSend"];
-        put?: never;
-        post?: never;
+        post: operations["createAccountingArInvoicesByinvoiceidSend"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15503,8 +15947,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/accounting/reports
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listAccountingReports"];
         put?: never;
@@ -15587,6 +16031,106 @@ export interface paths {
          * @description Autogenerated placeholder (spec pending)
          */
         get: operations["listAdminCircuitBreakersReset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/credits/{org_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/v1/admin/credits/{org_id}
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getAdminCreditsByorgid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/credits/{org_id}/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/v1/admin/credits/{org_id}/adjust
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createAdminCreditsByorgidAdjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/credits/{org_id}/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/v1/admin/credits/{org_id}/expiring
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listAdminCreditsByorgidExpiring"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/credits/{org_id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/v1/admin/credits/{org_id}/issue
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createAdminCreditsByorgidIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/credits/{org_id}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/v1/admin/credits/{org_id}/transactions
+         * @description Served route registered by aragora/server/handlers/admin/credits.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["listAdminCreditsByorgidTransactions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -19570,8 +20114,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/ap/batch-payments
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listApBatchPayments"];
         put?: never;
@@ -19590,8 +20134,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/ap/cash-flow
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listApCashFlow"];
         put?: never;
@@ -19610,8 +20154,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/ap/discount-opportunities
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listApDiscountOpportunities"];
         put?: never;
@@ -19630,8 +20174,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/ap/invoices
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listApInvoices"];
         put?: never;
@@ -19650,8 +20194,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/ap/optimize
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listApOptimize"];
         put?: never;
@@ -23463,46 +24007,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/calibration/curve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get calibration curve
-         * @description Fetch calibration-curve data used to evaluate model or agent confidence quality.
-         */
-        get: operations["getCalibrationCurve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/calibration/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get calibration history
-         * @description List historical calibration measurements and snapshots for supported agents or systems.
-         */
-        get: operations["getCalibrationHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/calibration/leaderboard": {
         parameters: {
             query?: never;
@@ -24183,26 +24687,6 @@ export interface paths {
          * @description Autogenerated placeholder (spec pending)
          */
         post: operations["createChatGoogleChatWebhook"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/knowledge/channel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        post: operations["createChatKnowledgeChannel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -30487,26 +30971,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/debates/public": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listDebatesPublic"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/debates/public/{param}/og": {
         parameters: {
             query?: never;
@@ -32746,32 +33210,6 @@ export interface paths {
          *     **Signature:** Alexa includes signature headers for request verification.
          */
         post: operations["handleAlexaWebhook"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/devices/apple/shortcuts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Handle Apple Shortcuts request
-         * @description API endpoint for Apple Shortcuts integration.
-         *
-         *     Allows Apple Shortcuts to:
-         *     - Start debates
-         *     - Get debate status
-         *     - Submit votes
-         *     - Get summaries
-         */
-        post: operations["handleAppleShortcuts"];
         delete?: never;
         options?: never;
         head?: never;
@@ -37745,13 +38183,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listGustoConnect"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/gusto/connect
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
+         */
+        post: operations["createGustoConnect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -37765,13 +38203,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listGustoDisconnect"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/gusto/disconnect
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
+         */
+        post: operations["createGustoDisconnect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -37786,8 +38224,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/gusto/employees
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listGustoEmployees"];
         put?: never;
@@ -37806,8 +38244,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/gusto/payrolls
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listGustoPayrolls"];
         put?: never;
@@ -37826,8 +38264,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * GET /api/v1/gusto/status
+         * @description Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.
          */
         get: operations["listGustoStatus"];
         put?: never;
@@ -42371,26 +42809,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/knowledge/mound/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listKnowledgeMoundGraph"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/knowledge/mound/graph/{graph_id}": {
         parameters: {
             query?: never;
@@ -44264,26 +44682,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        post: operations["createMemory"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/memory/analytics": {
         parameters: {
             query?: never;
@@ -44914,26 +45312,6 @@ export interface paths {
          * @description Autogenerated placeholder (spec pending)
          */
         post: operations["createMemorySync"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/memory/tier": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        post: operations["createMemoryTier"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48306,86 +48684,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/patterns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List pattern templates
-         * @description Get list of available workflow pattern templates.
-         */
-        get: operations["listPatterns1"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patterns/hive-mind": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Hive Mind workflow
-         * @description Create a workflow from the Hive Mind pattern template.
-         */
-        post: operations["createPatternsHiveMind1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patterns/map-reduce": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create MapReduce workflow
-         * @description Create a workflow from the MapReduce pattern template.
-         */
-        post: operations["createPatternsMapReduce1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patterns/review-cycle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Review Cycle workflow
-         * @description Create a workflow from the Review Cycle pattern template.
-         */
-        post: operations["createPatternsReviewCycle1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/patterns/{pattern_id}": {
         parameters: {
             query?: never;
@@ -48413,13 +48711,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listPaymentsAuthorize"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/payments/authorize
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsAuthorize"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48433,13 +48731,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listPaymentsCapture"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/payments/capture
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsCapture"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48453,13 +48751,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listPaymentsCharge"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/payments/charge
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsCharge"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48473,14 +48771,42 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listPaymentsCustomer"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/payments/customer
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsCustomer"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/customer/{customer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/v1/payments/customer/{customer_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getPaymentsCustomerBycustomerid"];
+        /**
+         * PUT /api/v1/payments/customer/{customer_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        put: operations["updatePaymentsCustomerBycustomerid"];
+        post?: never;
+        /**
+         * DELETE /api/v1/payments/customer/{customer_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        delete: operations["deletePaymentsCustomerBycustomerid"];
         options?: never;
         head?: never;
         patch?: never;
@@ -48493,13 +48819,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listPaymentsRefund"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/payments/refund
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsRefund"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48513,11 +48839,59 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
+         * POST /api/v1/payments/subscription
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
          */
-        get: operations["listPaymentsSubscription"];
+        post: operations["createPaymentsSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/subscription/{subscription_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/v1/payments/subscription/{subscription_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getPaymentsSubscriptionBysubscriptionid"];
+        /**
+         * PUT /api/v1/payments/subscription/{subscription_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        put: operations["updatePaymentsSubscriptionBysubscriptionid"];
+        post?: never;
+        /**
+         * DELETE /api/v1/payments/subscription/{subscription_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        delete: operations["deletePaymentsSubscriptionBysubscriptionid"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/transaction/{transaction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/v1/payments/transaction/{transaction_id}
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        get: operations["getPaymentsTransactionBytransactionid"];
         put?: never;
         post?: never;
         delete?: never;
@@ -48533,13 +48907,53 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listPaymentsVoid"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * POST /api/v1/payments/void
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsVoid"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/webhook/authnet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/v1/payments/webhook/authnet
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsWebhookAuthnet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/webhook/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/v1/payments/webhook/stripe
+         * @description Served route registered by aragora/server/handlers/payments/plans.py. Auto-generated from wired route registration; detailed contract pending.
+         */
+        post: operations["createPaymentsWebhookStripe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -50730,7 +51144,7 @@ export interface paths {
         put?: never;
         /**
          * Request quota increase
-         * @description Submit a quota increase request for review.
+         * @description Submit a quota increase request for review. Requires the org:billing permission.
          */
         post: operations["createQuotaIncreaseRequest"];
         delete?: never;
@@ -50951,6 +51365,26 @@ export interface paths {
          * @description Return aggregate status, progress, and throughput metrics for Ralph campaign supervisor runs.
          */
         get: operations["getRalphOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ralph/{param}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Autogenerated placeholder (spec pending)
+         * @description Autogenerated placeholder (spec pending)
+         */
+        get: operations["getRalphByparam1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -51883,7 +52317,7 @@ export interface paths {
         };
         /**
          * Get domain reputation scores
-         * @description Return domain-level reputation scores or reputation summaries.
+         * @description Return domain-level reputation scores or reputation summaries. Requires the critiques:read permission.
          */
         get: operations["getReputationDomain"];
         put?: never;
@@ -51903,7 +52337,7 @@ export interface paths {
         };
         /**
          * Get reputation history
-         * @description List historical reputation events or score snapshots.
+         * @description List historical reputation events or score snapshots. Requires the critiques:read permission.
          */
         get: operations["getReputationHistory"];
         put?: never;
@@ -52021,30 +52455,6 @@ export interface paths {
          */
         post: operations["executeRetentionPolicy"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/review-queue": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        post: operations["createReviewQueue1"];
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        delete: operations["deleteReviewQueue1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -53522,26 +53932,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/shared": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        post: operations["createShared"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/shared/{shared_id}": {
         parameters: {
             query?: never;
@@ -53774,26 +54164,6 @@ export interface paths {
          * @description Autogenerated placeholder (spec pending)
          */
         get: operations["listSloStatus1"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/slos": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Autogenerated placeholder (spec pending)
-         * @description Autogenerated placeholder (spec pending)
-         */
-        get: operations["listSlos1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -56400,8 +56770,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Validate claims
-         * @description Validate supplied claims or evidence and return a verification result payload.
+         * Autogenerated placeholder (spec pending)
+         * @description Autogenerated placeholder (spec pending)
          */
         post: operations["createVerificationValidate"];
         delete?: never;
@@ -59416,6 +59786,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/receipts/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify an ODR document
+         * @description Verify an Open Decision Receipt document supplied in the request body. Stateless and public: nothing is persisted and the document does not have to originate from this deployment. Signatures are checked against this deployment's configured ODR signing key, so a document signed by another issuer conforms structurally but reports a failing signature check.
+         */
+        post: operations["verify_odr_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/receipts/{receipt_id}": {
         parameters: {
             query?: never;
@@ -59445,7 +59835,7 @@ export interface paths {
         };
         /**
          * Export receipt
-         * @description Export a receipt in the requested format.
+         * @description Export a receipt in the requested format. format=odr is public; every other format requires receipts:read.
          */
         get: operations["exportReceipt"];
         put?: never;
@@ -59813,27 +60203,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/verification/proofs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List verification proofs
-         * @deprecated
-         * @description Return stored verification proofs and associated metadata for prior verification runs.
-         */
-        get: operations["listVerificationProofs1"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/verification/status": {
         parameters: {
             query?: never;
@@ -59849,27 +60218,6 @@ export interface paths {
         get: operations["listVerificationStatus1"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/verification/validate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Validate claims
-         * @deprecated
-         * @description Validate supplied claims or evidence and return a verification result payload.
-         */
-        post: operations["createVerificationValidate1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -64163,7 +64511,7 @@ export interface components {
          *       "num_agents": 3,
          *       "num_rounds": 9,
          *       "model_types": [
-         *         "claude-opus-4-8",
+         *         "claude-opus-5",
          *         "gpt-4o",
          *         "gemini-pro"
          *       ]
@@ -64183,7 +64531,7 @@ export interface components {
             /**
              * @description Model types to use
              * @example [
-             *       "claude-opus-4-8",
+             *       "claude-opus-5",
              *       "gpt-4o",
              *       "gemini-pro"
              *     ]
@@ -64304,19 +64652,6 @@ export interface operations {
             };
             /** @description Not found - The requested resource does not exist */
             404: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal server error - Unexpected error occurred */
-            500: {
                 headers: {
                     /** @description Unique request identifier for tracing and debugging */
                     "X-Request-ID"?: string;
@@ -65008,6 +65343,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminCreditsByorgid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createAdminCreditsByorgidAdjust1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listAdminCreditsByorgidExpiring1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createAdminCreditsByorgidIssue1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listAdminCreditsByorgidTransactions1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -71609,54 +72067,6 @@ export interface operations {
             };
         };
     };
-    listCalibrationCurve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Calibration curve data */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
-    listCalibrationHistory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Calibration history */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-        };
-    };
     listCalibrationLeaderboard: {
         parameters: {
             query?: {
@@ -74430,56 +74840,79 @@ export interface operations {
             };
         };
     };
-    createCostsRecommendationsByparamApply: {
+    getCostsRecommendationsByrecommendationid: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Path parameter: param */
-                param: string;
+                /** @description Path parameter: recommendation_id */
+                recommendation_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    createCostsRecommendationsByparamDismiss: {
+    createCostsRecommendationsByrecommendationidApply: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Path parameter: param */
-                param: string;
+                /** @description Path parameter: recommendation_id */
+                recommendation_id: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createCostsRecommendationsByrecommendationidDismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: recommendation_id */
+                recommendation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -76743,54 +77176,6 @@ export interface operations {
             };
         };
     };
-    createDevicesAppleShortcuts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    action: "start_debate" | "get_status" | "vote" | "summarize";
-                    params?: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description Shortcuts response */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        result?: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Unauthorized - Authentication required or token invalid */
-            401: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     createDevicesGoogleWebhook: {
         parameters: {
             query?: never;
@@ -77388,6 +77773,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listEmailDailyDigest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listEmailSenderProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
             };
         };
     };
@@ -78545,46 +78970,6 @@ export interface operations {
             };
         };
     };
-    getGauntletReceiptsByreceiptid: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Unique identifier of the receipt */
-                receipt_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Decision receipt details */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DecisionReceipt"];
-                };
-            };
-            /** @description Not found - The requested resource does not exist */
-            404: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     listGauntletReceiptsByreceiptidExport: {
         parameters: {
             query: {
@@ -79450,6 +79835,138 @@ export interface operations {
             };
         };
     };
+    createInboxActions1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createInboxBulkActions1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listInboxCommand1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listInboxDailyDigest1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createInboxReprioritize1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listInboxSenderProfile1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     createInsightsExtractDetailed: {
         parameters: {
             query?: never;
@@ -79943,6 +80460,26 @@ export interface operations {
             };
         };
     };
+    listIntegrationsStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     listIntegrationsTeamsCallback: {
         parameters: {
             query: {
@@ -80170,6 +80707,142 @@ export interface operations {
                         data?: Record<string, never>;
                         success?: boolean;
                     };
+                };
+            };
+        };
+    };
+    getIntegrationsBytype: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: type */
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    updateIntegrationsBytype: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: type */
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteIntegrationsBytype: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: type */
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    patchIntegrationsBytype: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: type */
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createIntegrationsBytypeTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: type */
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -81839,7 +82512,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        total_agents?: number;
+                        avg_elo?: number;
+                        max_elo?: number;
+                        min_elo?: number;
+                        total_matches?: number;
+                    };
                 };
             };
         };
@@ -83886,209 +84565,6 @@ export interface operations {
             };
         };
     };
-    listPatterns: {
-        parameters: {
-            query?: {
-                /** @description Filter by pattern category */
-                category?: string;
-                /** @description Filter by tags (comma-separated) */
-                tags?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of pattern templates */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatternTemplateList"];
-                };
-            };
-        };
-    };
-    createPatternsHiveMind: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Custom workflow name */
-                    name?: string;
-                    /** @description Task to analyze */
-                    task?: string;
-                    /** @description Agent names to include */
-                    agents?: string[];
-                    /**
-                     * @default majority
-                     * @enum {string}
-                     */
-                    consensus_mode?: "majority" | "weighted" | "unanimous";
-                    /** @default 0.7 */
-                    consensus_threshold?: number;
-                    /** @default true */
-                    include_dissent?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Workflow created from Hive Mind pattern */
-            201: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workflow"];
-                };
-            };
-            /** @description Bad request - Invalid input or malformed JSON */
-            400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    createPatternsMapReduce: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Custom workflow name */
-                    name?: string;
-                    /**
-                     * @default chunks
-                     * @enum {string}
-                     */
-                    split_strategy?: "chunks" | "lines" | "sentences" | "paragraphs";
-                    /** @default 4000 */
-                    chunk_size?: number;
-                    /** @description Agent for map phase */
-                    map_agent?: string;
-                    /** @description Agent for reduce phase */
-                    reduce_agent?: string;
-                    /** @description Custom map prompt template */
-                    map_prompt?: string;
-                    /** @description Custom reduce prompt template */
-                    reduce_prompt?: string;
-                    /** @default 5 */
-                    parallel_limit?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Workflow created from MapReduce pattern */
-            201: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workflow"];
-                };
-            };
-            /** @description Bad request - Invalid input or malformed JSON */
-            400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    createPatternsReviewCycle: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Custom workflow name */
-                    name?: string;
-                    /** @description Task to accomplish */
-                    task?: string;
-                    /** @description Agent for drafting phase */
-                    draft_agent?: string;
-                    /** @description Agent for review phase */
-                    review_agent?: string;
-                    /** @default 3 */
-                    max_iterations?: number;
-                    /** @default 0.85 */
-                    convergence_threshold?: number;
-                    /** @description Criteria for review */
-                    review_criteria?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Workflow created from Review Cycle pattern */
-            201: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workflow"];
-                };
-            };
-            /** @description Bad request - Invalid input or malformed JSON */
-            400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getPatternsBypatternid: {
         parameters: {
             query?: never;
@@ -84125,6 +84601,391 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createPaymentsAuthorize1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsCapture1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsCharge1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsCustomer1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPaymentsCustomerBycustomerid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: customer_id */
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    updatePaymentsCustomerBycustomerid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: customer_id */
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deletePaymentsCustomerBycustomerid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: customer_id */
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsRefund1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsSubscription1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPaymentsSubscriptionBysubscriptionid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: subscription_id */
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    updatePaymentsSubscriptionBysubscriptionid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: subscription_id */
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deletePaymentsSubscriptionBysubscriptionid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: subscription_id */
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPaymentsTransactionBytransactionid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: transaction_id */
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsVoid1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsWebhookAuthnet1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsWebhookStripe1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -85931,30 +86792,6 @@ export interface operations {
             };
         };
     };
-    createQuotasRequestIncrease: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Request submitted */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
     listRalphBlockers: {
         parameters: {
             query?: never;
@@ -86655,6 +87492,33 @@ export interface operations {
             };
         };
     };
+    getRalphByparam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: param */
+                param: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Response data */
+                        data?: Record<string, never>;
+                        success?: boolean;
+                    };
+                };
+            };
+        };
+    };
     listRankingStats: {
         parameters: {
             query?: never;
@@ -86969,7 +87833,12 @@ export interface operations {
     };
     listReputationDomain: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Domain token matched against agent names. */
+                domain: string;
+                /** @description Maximum reputations to return. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -86986,14 +87855,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        domain?: string;
+                        reputations?: {
+                            agent?: string;
+                            score?: number;
+                            vote_weight?: number;
+                            proposal_acceptance_rate?: number;
+                            critique_value?: number;
+                            debates_participated?: number;
+                        }[];
+                        count?: number;
+                    };
                 };
             };
         };
     };
     listReputationHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Restrict snapshots to a single agent. */
+                agent?: string;
+                /** @description ISO-8601 lower bound; invalid values are a 400. */
+                start_date?: string;
+                /** @description ISO-8601 upper bound; invalid values are a 400. */
+                end_date?: string;
+                /** @description Maximum snapshots to return. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -87010,7 +87899,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        history?: {
+                            timestamp?: string;
+                            agent?: string;
+                            reputation?: number;
+                            event?: string;
+                        }[];
+                        count?: number;
+                    };
                 };
             };
         };
@@ -87266,7 +88163,7 @@ export interface operations {
             };
         };
     };
-    createReviewQueue: {
+    listReviewQueueTriageMetrics: {
         parameters: {
             query?: never;
             header?: never;
@@ -87275,39 +88172,156 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Rolling-window triage metrics */
             200: {
                 headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
+                        windows?: {
+                            "7d": {
+                                /** @description Human-readable window width (e.g. '7d', '30d') */
+                                window_label: string;
+                                window_days: number;
+                                /** Format: date-time */
+                                window_start: string;
+                                /** Format: date-time */
+                                window_end: string;
+                                total_decisions: number;
+                                /** @description escalations_to_human / total_decisions (nullable when sparse) */
+                                escalation_rate: number | null;
+                                /** @description overridden_auto_handles / auto_handled. Null when no auto-handle lane is active or the window is sparse. */
+                                auto_handle_override_rate: number | null;
+                                /** @description For human-override decisions with a recorded final_outcome, the fraction that confirmed the ensemble minus the fraction that disagreed. Currently null until settlement receipts carry post-merge outcome data (follow-up to #6373). */
+                                human_override_outcome_correlation: number | null;
+                                /** @description Median settlement duration (seconds) for escalated decisions. */
+                                settlement_duration_median_s: number | null;
+                                /** @description p95 settlement duration (seconds) for escalated decisions. */
+                                settlement_duration_p95_s: number | null;
+                                counts: {
+                                    escalations: number;
+                                    auto_handled: number;
+                                    auto_handle_overrides: number;
+                                    human_overrides: number;
+                                    human_overrides_with_outcome: number;
+                                    settlement_samples: number;
+                                };
+                                /** @description Explanations keyed by metric name for any null-valued metric above. Empty when no metrics were suppressed. */
+                                notes: {
+                                    [key: string]: string;
+                                };
+                            };
+                            "30d": {
+                                /** @description Human-readable window width (e.g. '7d', '30d') */
+                                window_label: string;
+                                window_days: number;
+                                /** Format: date-time */
+                                window_start: string;
+                                /** Format: date-time */
+                                window_end: string;
+                                total_decisions: number;
+                                /** @description escalations_to_human / total_decisions (nullable when sparse) */
+                                escalation_rate: number | null;
+                                /** @description overridden_auto_handles / auto_handled. Null when no auto-handle lane is active or the window is sparse. */
+                                auto_handle_override_rate: number | null;
+                                /** @description For human-override decisions with a recorded final_outcome, the fraction that confirmed the ensemble minus the fraction that disagreed. Currently null until settlement receipts carry post-merge outcome data (follow-up to #6373). */
+                                human_override_outcome_correlation: number | null;
+                                /** @description Median settlement duration (seconds) for escalated decisions. */
+                                settlement_duration_median_s: number | null;
+                                /** @description p95 settlement duration (seconds) for escalated decisions. */
+                                settlement_duration_p95_s: number | null;
+                                counts: {
+                                    escalations: number;
+                                    auto_handled: number;
+                                    auto_handle_overrides: number;
+                                    human_overrides: number;
+                                    human_overrides_with_outcome: number;
+                                    settlement_samples: number;
+                                };
+                                /** @description Explanations keyed by metric name for any null-valued metric above. Empty when no metrics were suppressed. */
+                                notes: {
+                                    [key: string]: string;
+                                };
+                            };
+                        };
+                        /** @description Advisory drift between the latest and previous window, keyed by metric name. */
+                        drift?: {
+                            [key: string]: {
+                                current: number | null;
+                                previous: number | null;
+                                delta: number | null;
+                                exceeded_threshold: boolean;
+                            };
+                        };
+                        /** Format: date-time */
+                        generated_at?: string;
+                        /** @description Source of authority (docs/THESIS.md Commitment 5). */
+                        commitment?: string;
                     };
                 };
             };
-        };
-    };
-    deleteReviewQueue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description Not Modified — ETag matched If-None-Match. */
+            304: {
                 headers: {
                     [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
+                    [name: string]: unknown;
+                };
                 content: {
-                    "application/json": {
-                        deleted?: boolean;
-                    };
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions for this operation */
+            403: {
+                headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many requests - Rate limit exceeded */
+            429: {
+                headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error - Unexpected error occurred */
+            500: {
+                headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -89020,30 +90034,6 @@ export interface operations {
             };
         };
     };
-    listSlos: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
     listSlosAvailability: {
         parameters: {
             query?: never;
@@ -90727,7 +91717,7 @@ export interface operations {
             };
         };
     };
-    listAccountingApInvoicesByinvoiceidPayment: {
+    createAccountingApInvoicesByinvoiceidPayment: {
         parameters: {
             query?: never;
             header?: never;
@@ -90746,8 +91736,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
+                        /** @description Created resource ID */
+                        id?: string;
                         success?: boolean;
                     };
                 };
@@ -90952,7 +91942,7 @@ export interface operations {
             };
         };
     };
-    listAccountingArInvoicesByinvoiceidPayment: {
+    createAccountingArInvoicesByinvoiceidPayment: {
         parameters: {
             query?: never;
             header?: never;
@@ -90971,15 +91961,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
+                        /** @description Created resource ID */
+                        id?: string;
                         success?: boolean;
                     };
                 };
             };
         };
     };
-    listAccountingArInvoicesByinvoiceidReminder: {
+    createAccountingArInvoicesByinvoiceidReminder: {
         parameters: {
             query?: never;
             header?: never;
@@ -90998,15 +91988,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
+                        /** @description Created resource ID */
+                        id?: string;
                         success?: boolean;
                     };
                 };
             };
         };
     };
-    listAccountingArInvoicesByinvoiceidSend: {
+    createAccountingArInvoicesByinvoiceidSend: {
         parameters: {
             query?: never;
             header?: never;
@@ -91025,8 +92015,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
+                        /** @description Created resource ID */
+                        id?: string;
                         success?: boolean;
                     };
                 };
@@ -92351,17 +93341,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -92484,6 +93470,129 @@ export interface operations {
                         data?: Record<string, never>;
                         success?: boolean;
                     };
+                };
+            };
+        };
+    };
+    getAdminCreditsByorgid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createAdminCreditsByorgidAdjust: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listAdminCreditsByorgidExpiring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createAdminCreditsByorgidIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listAdminCreditsByorgidTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: org_id */
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -100171,17 +101280,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -100195,17 +101300,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -100219,17 +101320,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -100243,17 +101340,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -100267,17 +101360,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -107882,54 +108971,6 @@ export interface operations {
             };
         };
     };
-    getCalibrationCurve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Calibration curve data */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
-    getCalibrationHistory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Calibration history */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-        };
-    };
     getCalibrationLeaderboard: {
         parameters: {
             query?: {
@@ -109400,30 +110441,6 @@ export interface operations {
         };
     };
     createChatGoogleChatWebhook: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
-    createChatKnowledgeChannel: {
         parameters: {
             query?: never;
             header?: never;
@@ -123456,30 +124473,6 @@ export interface operations {
             };
         };
     };
-    listDebatesPublic: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
     listDebatesPublicByparamOg: {
         parameters: {
             query?: never;
@@ -128126,54 +129119,6 @@ export interface operations {
                         response?: Record<string, never>;
                         sessionAttributes?: Record<string, never>;
                     };
-                };
-            };
-        };
-    };
-    handleAppleShortcuts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    action: "start_debate" | "get_status" | "vote" | "summarize";
-                    params?: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description Shortcuts response */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        result?: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Unauthorized - Authentication required or token invalid */
-            401: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -138444,50 +139389,50 @@ export interface operations {
             };
         };
     };
-    listGustoConnect: {
+    createGustoConnect: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listGustoDisconnect: {
+    createGustoDisconnect: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -138501,17 +139446,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -138525,17 +139466,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -138549,17 +139486,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -139527,9 +140460,12 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
+                        success: boolean;
+                        action: string;
+                        processed: number;
+                        results: {
+                            [key: string]: unknown;
+                        }[];
                     };
                 };
             };
@@ -139590,17 +140526,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -139614,17 +140546,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -139673,17 +140601,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -139959,17 +140883,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -140406,17 +141326,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -143910,16 +144826,65 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Integration configured */
+            /** @description Integration configuration updated */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        type?: string;
-                        configured?: boolean;
-                        message?: string;
+                        integration: {
+                            type: string;
+                            enabled: boolean;
+                            created_at?: number;
+                            updated_at?: number;
+                            notify_on_consensus?: boolean;
+                            notify_on_debate_end?: boolean;
+                            notify_on_error?: boolean;
+                            notify_on_leaderboard?: boolean;
+                            settings?: {
+                                [key: string]: unknown;
+                            };
+                            messages_sent?: number;
+                            errors_24h?: number;
+                            last_activity?: number | null;
+                            last_error?: string | null;
+                            user_id?: string | null;
+                            workspace_id?: string | null;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Integration configuration created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        integration: {
+                            type: string;
+                            enabled: boolean;
+                            created_at?: number;
+                            updated_at?: number;
+                            notify_on_consensus?: boolean;
+                            notify_on_debate_end?: boolean;
+                            notify_on_error?: boolean;
+                            notify_on_leaderboard?: boolean;
+                            settings?: {
+                                [key: string]: unknown;
+                            };
+                            messages_sent?: number;
+                            errors_24h?: number;
+                            last_activity?: number | null;
+                            last_error?: string | null;
+                            user_id?: string | null;
+                            workspace_id?: string | null;
+                        } & {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -147903,30 +148868,6 @@ export interface operations {
             };
         };
     };
-    listKnowledgeMoundGraph: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
     getKnowledgeMoundGraphBygraphid: {
         parameters: {
             query?: never;
@@ -151167,7 +152108,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        total_agents?: number;
+                        avg_elo?: number;
+                        max_elo?: number;
+                        min_elo?: number;
+                        total_matches?: number;
+                    };
                 };
             };
         };
@@ -151442,30 +152389,6 @@ export interface operations {
                     "application/json": {
                         /** @description Response data */
                         data?: Record<string, never>;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
-    createMemory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
                         success?: boolean;
                     };
                 };
@@ -152272,30 +153195,6 @@ export interface operations {
         };
     };
     createMemorySync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
-    createMemoryTier: {
         parameters: {
             query?: never;
             header?: never;
@@ -159883,209 +160782,6 @@ export interface operations {
             };
         };
     };
-    listPatterns1: {
-        parameters: {
-            query?: {
-                /** @description Filter by pattern category */
-                category?: string;
-                /** @description Filter by tags (comma-separated) */
-                tags?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of pattern templates */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatternTemplateList"];
-                };
-            };
-        };
-    };
-    createPatternsHiveMind1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Custom workflow name */
-                    name?: string;
-                    /** @description Task to analyze */
-                    task?: string;
-                    /** @description Agent names to include */
-                    agents?: string[];
-                    /**
-                     * @default majority
-                     * @enum {string}
-                     */
-                    consensus_mode?: "majority" | "weighted" | "unanimous";
-                    /** @default 0.7 */
-                    consensus_threshold?: number;
-                    /** @default true */
-                    include_dissent?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Workflow created from Hive Mind pattern */
-            201: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workflow"];
-                };
-            };
-            /** @description Bad request - Invalid input or malformed JSON */
-            400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    createPatternsMapReduce1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Custom workflow name */
-                    name?: string;
-                    /**
-                     * @default chunks
-                     * @enum {string}
-                     */
-                    split_strategy?: "chunks" | "lines" | "sentences" | "paragraphs";
-                    /** @default 4000 */
-                    chunk_size?: number;
-                    /** @description Agent for map phase */
-                    map_agent?: string;
-                    /** @description Agent for reduce phase */
-                    reduce_agent?: string;
-                    /** @description Custom map prompt template */
-                    map_prompt?: string;
-                    /** @description Custom reduce prompt template */
-                    reduce_prompt?: string;
-                    /** @default 5 */
-                    parallel_limit?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Workflow created from MapReduce pattern */
-            201: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workflow"];
-                };
-            };
-            /** @description Bad request - Invalid input or malformed JSON */
-            400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    createPatternsReviewCycle1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Custom workflow name */
-                    name?: string;
-                    /** @description Task to accomplish */
-                    task?: string;
-                    /** @description Agent for drafting phase */
-                    draft_agent?: string;
-                    /** @description Agent for review phase */
-                    review_agent?: string;
-                    /** @default 3 */
-                    max_iterations?: number;
-                    /** @default 0.85 */
-                    convergence_threshold?: number;
-                    /** @description Criteria for review */
-                    review_criteria?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Workflow created from Review Cycle pattern */
-            201: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workflow"];
-                };
-            };
-            /** @description Bad request - Invalid input or malformed JSON */
-            400: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getPattern: {
         parameters: {
             query?: never;
@@ -160126,170 +160822,387 @@ export interface operations {
             };
         };
     };
-    listPaymentsAuthorize: {
+    createPaymentsAuthorize: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listPaymentsCapture: {
+    createPaymentsCapture: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listPaymentsCharge: {
+    createPaymentsCharge: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listPaymentsCustomer: {
+    createPaymentsCustomer: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listPaymentsRefund: {
+    getPaymentsCustomerBycustomerid: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Path parameter: customer_id */
+                customer_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listPaymentsSubscription: {
+    updatePaymentsCustomerBycustomerid: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Path parameter: customer_id */
+                customer_id: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
     };
-    listPaymentsVoid: {
+    deletePaymentsCustomerBycustomerid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: customer_id */
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsRefund: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPaymentsSubscriptionBysubscriptionid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: subscription_id */
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    updatePaymentsSubscriptionBysubscriptionid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: subscription_id */
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deletePaymentsSubscriptionBysubscriptionid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: subscription_id */
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPaymentsTransactionBytransactionid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: transaction_id */
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsVoid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsWebhookAuthnet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPaymentsWebhookStripe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -164583,7 +165496,20 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Resource type the increase applies to. */
+                    resource: string;
+                    /** @description Desired new limit. */
+                    requested_limit?: number;
+                    /** @description Why the increase is needed. */
+                    reason?: string;
+                    /** @description Accepted alias for reason; the key the python SDK documents. */
+                    justification?: string;
+                };
+            };
+        };
         responses: {
             /** @description Request submitted */
             200: {
@@ -164595,7 +165521,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        request_id?: string;
+                        status?: string;
+                        resource?: string;
+                        requested_limit?: number | null;
+                        reason?: string | null;
+                        org_id?: string;
+                        submitted_by?: string;
+                        submitted_at?: string;
+                    };
                 };
             };
         };
@@ -165347,6 +166282,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getRalphByparam1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Path parameter: param */
+                param: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Response data */
+                        data?: Record<string, never>;
+                        success?: boolean;
+                    };
                 };
             };
         };
@@ -166913,7 +167875,12 @@ export interface operations {
     };
     getReputationDomain: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Domain token matched against agent names. */
+                domain: string;
+                /** @description Maximum reputations to return. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -166930,14 +167897,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        domain?: string;
+                        reputations?: {
+                            agent?: string;
+                            score?: number;
+                            vote_weight?: number;
+                            proposal_acceptance_rate?: number;
+                            critique_value?: number;
+                            debates_participated?: number;
+                        }[];
+                        count?: number;
+                    };
                 };
             };
         };
     };
     getReputationHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Restrict snapshots to a single agent. */
+                agent?: string;
+                /** @description ISO-8601 lower bound; invalid values are a 400. */
+                start_date?: string;
+                /** @description ISO-8601 upper bound; invalid values are a 400. */
+                end_date?: string;
+                /** @description Maximum snapshots to return. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -166954,7 +167941,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        history?: {
+                            timestamp?: string;
+                            agent?: string;
+                            reputation?: number;
+                            event?: string;
+                        }[];
+                        count?: number;
+                    };
                 };
             };
         };
@@ -167279,52 +168274,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    createReviewQueue1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
-    deleteReviewQueue1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        deleted?: boolean;
-                    };
                 };
             };
         };
@@ -169884,30 +170833,6 @@ export interface operations {
             };
         };
     };
-    createShared: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Created resource ID */
-                        id?: string;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
     getSharedBysharedid: {
         parameters: {
             query?: never;
@@ -170177,30 +171102,6 @@ export interface operations {
         };
     };
     listSloStatus1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Response data */
-                        data?: Record<string, never>;
-                        success?: boolean;
-                    };
-                };
-            };
-        };
-    };
-    listSlos1: {
         parameters: {
             query?: never;
             header?: never;
@@ -174496,7 +175397,14 @@ export interface operations {
     };
     listVerificationProofs: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter proofs by debate identifier. */
+                debate_id?: string;
+                /** @description Filter proofs by proof type. */
+                proof_type?: string;
+                /** @description Maximum number of proofs to return. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -174513,7 +175421,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        proofs?: Record<string, never>[];
+                        filters?: Record<string, never>;
+                        limit?: number;
+                        total?: number;
+                        /** @description False when the formal-verification backend (z3) is unavailable; that degraded envelope returns only proofs/available/hint. */
+                        available?: boolean;
+                        /** @description Remediation hint, present only in the degraded (z3-unavailable) envelope. */
+                        hint?: string;
+                    };
                 };
             };
         };
@@ -174555,17 +175472,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Validation result */
+            /** @description OK */
             200: {
                 headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        /** @description Created resource ID */
+                        id?: string;
+                        success?: boolean;
+                    };
                 };
             };
         };
@@ -182294,6 +183211,69 @@ export interface operations {
             };
         };
     };
+    verify_odr_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    odr_version: "0.1" | "0.2";
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Verification verdict returned (verified true or false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        verified: boolean;
+                        receipt_id: string;
+                        odr_digest: string;
+                        checks: {
+                            name: string;
+                            /** @enum {string} */
+                            status: "pass" | "fail" | "warn" | "skip";
+                            detail: string;
+                        }[];
+                        warnings: string[];
+                        dissent_trail: unknown[];
+                        key_id: string | null;
+                    };
+                };
+            };
+            /** @description Body is not a JSON object carrying odr_version */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body exceeds 262144 bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit exceeded (60 requests per minute per client) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getReceiptById: {
         parameters: {
             query?: never;
@@ -182370,7 +183350,12 @@ export interface operations {
     };
     exportReceipt: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Export format; odr returns the Open Decision Receipt. */
+                format?: string;
+                /** @description ODR profile version for format=odr: 0.1 or 0.2. */
+                odr_version?: string;
+            };
             header?: never;
             path: {
                 /** @description Unique identifier of the receipt */
@@ -182387,6 +183372,8 @@ export interface operations {
                     "X-Request-ID"?: string;
                     /** @description Server processing time in milliseconds */
                     "X-Response-Time"?: number;
+                    /** @description JCS content digest of the exported ODR document: 64 lowercase hex characters. Sent for format=odr. */
+                    "X-ODR-Digest"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -183310,30 +184297,6 @@ export interface operations {
             };
         };
     };
-    listVerificationProofs1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Proofs list */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-        };
-    };
     listVerificationStatus1: {
         parameters: {
             query?: never;
@@ -183358,30 +184321,6 @@ export interface operations {
                         backends?: string[];
                         z3_version?: string;
                     };
-                };
-            };
-        };
-    };
-    createVerificationValidate1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Validation result */
-            200: {
-                headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
                 };
             };
         };

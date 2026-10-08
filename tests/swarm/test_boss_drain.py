@@ -304,6 +304,119 @@ def test_proxy_authorized_false_when_not_mergeable() -> None:
     assert ok is False
 
 
+# --- exact-head settlement provenance ---------------------------------------
+
+
+_EXACT_HEAD = "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_settle_authorized_returns_exact_snapshot_head(monkeypatch) -> None:  # noqa: ANN001
+    import json
+
+    import scripts.boss_drain_pass as bdp
+
+    report = {
+        "status": "packet_authorized_dry_run",
+        "blockers": [],
+        "head_sha": _EXACT_HEAD,
+    }
+    monkeypatch.setattr(
+        bdp.subprocess,
+        "run",
+        lambda *a, **k: _FakeProc(0, stdout=json.dumps(report)),
+    )
+
+    assert bdp._settle_authorized("synaptent/aragora", 9677) == _EXACT_HEAD
+
+
+def test_settle_authorized_rejects_missing_or_malformed_head(monkeypatch) -> None:  # noqa: ANN001
+    import json
+
+    import scripts.boss_drain_pass as bdp
+
+    for head in (None, "", "abc123", _EXACT_HEAD.upper()):
+        report = {
+            "status": "packet_authorized_dry_run",
+            "blockers": [],
+        }
+        if head is not None:
+            report["head_sha"] = head
+        monkeypatch.setattr(
+            bdp.subprocess,
+            "run",
+            lambda *a, report=report, **k: _FakeProc(0, stdout=json.dumps(report)),
+        )
+        assert bdp._settle_authorized("synaptent/aragora", 9677) is None
+
+
+def test_settle_authorized_rejects_failed_settlement_command(monkeypatch) -> None:  # noqa: ANN001
+    import json
+
+    import scripts.boss_drain_pass as bdp
+
+    report = {
+        "status": "packet_authorized_dry_run",
+        "blockers": [],
+        "head_sha": _EXACT_HEAD,
+    }
+    monkeypatch.setattr(
+        bdp.subprocess,
+        "run",
+        lambda *a, **k: _FakeProc(1, stdout=json.dumps(report)),
+    )
+
+    assert bdp._settle_authorized("synaptent/aragora", 9677) is None
+
+
+def test_merge_uses_settlement_head_without_second_lookup(monkeypatch) -> None:  # noqa: ANN001
+    import scripts.boss_drain_pass as bdp
+
+    commands: list[list[str]] = []
+    monkeypatch.setattr(bdp, "_settle_authorized", lambda repo, pr: _EXACT_HEAD)
+    monkeypatch.setattr(
+        bdp,
+        "view_pr",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("unexpected second head lookup")),
+    )
+    monkeypatch.setattr(
+        bdp.subprocess,
+        "run",
+        lambda cmd, **kwargs: commands.append(cmd) or _FakeProc(0),
+    )
+
+    execute = bdp.make_execute_fn("synaptent/aragora", dry_run=False)
+    assert execute(9677, DrainAction.MERGE) is True
+    assert commands == [
+        [
+            "gh",
+            "pr",
+            "merge",
+            "9677",
+            "--repo",
+            "synaptent/aragora",
+            "--squash",
+            "--match-head-commit",
+            _EXACT_HEAD,
+        ]
+    ]
+
+
+def test_merge_missing_snapshot_head_fails_before_merge_subprocess(monkeypatch) -> None:  # noqa: ANN001
+    import scripts.boss_drain_pass as bdp
+
+    commands: list[list[str]] = []
+    monkeypatch.setattr(bdp, "_settle_authorized", lambda repo, pr: None)
+    monkeypatch.setattr(
+        bdp.subprocess,
+        "run",
+        lambda cmd, **kwargs: commands.append(cmd) or _FakeProc(0),
+    )
+
+    execute = bdp.make_execute_fn("synaptent/aragora", dry_run=False)
+    assert execute(9677, DrainAction.MERGE) is False
+    assert commands == []
+
+
 # --- dispatch_repair apply-path verification (P2 #1, P3 #3) ------------------
 
 

@@ -156,8 +156,8 @@ class ContextPhase:
             )
             grok_explorer = self.kilocode_agent_factory(
                 name="grok-explorer",
-                provider_id="openrouter/x-ai/grok-4",
-                model="openrouter/x-ai/grok-4",
+                provider_id="openrouter/x-ai/grok-4.5",
+                model="openrouter/x-ai/grok-4.5",
                 role="explorer",
                 timeout=600,
                 mode="architect",

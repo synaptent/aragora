@@ -25,14 +25,14 @@ class MediaAPI:
     Synchronous Media API.
 
     Provides methods for media asset access:
-    - Get audio file metadata and URLs
+    - Build direct audio URLs
     - List and browse podcast episodes
     - Access RSS feed for subscription
     - Media format conversions
 
     Example:
         >>> client = AragoraClient(base_url="https://api.aragora.ai")
-        >>> audio = client.media.get_audio("audio_123")
+        >>> audio_url = client.media.get_audio_url("debate_123")
         >>> episodes = client.media.list_podcast_episodes()
         >>> feed_url = client.media.get_feed_url()
     """
@@ -43,18 +43,6 @@ class MediaAPI:
     # =========================================================================
     # Audio Files
     # =========================================================================
-
-    def get_audio(self, audio_id: str) -> dict[str, Any]:
-        """
-        Get audio file metadata by ID.
-
-        Args:
-            audio_id: The audio file identifier.
-
-        Returns:
-            Audio file metadata including format, duration, size, and URL.
-        """
-        return self._client._request("GET", f"/api/v1/media/audio/{audio_id}")
 
     def get_audio_url(self, audio_id: str) -> str:
         """
@@ -102,47 +90,6 @@ class MediaAPI:
             params=params if params else None,
         )
 
-    def upload_audio(
-        self,
-        file_path: str,
-        debate_id: str | None = None,
-        format: AudioFormat | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Upload an audio file.
-
-        Args:
-            file_path: Path to the audio file.
-            debate_id: Optional debate ID to associate with.
-            format: Audio format (mp3, aac, m4a, wav, ogg).
-            metadata: Optional metadata for the audio file.
-
-        Returns:
-            Dict with uploaded audio file details.
-        """
-        data: dict[str, Any] = {"file_path": file_path}
-        if debate_id is not None:
-            data["debate_id"] = debate_id
-        if format is not None:
-            data["format"] = format
-        if metadata is not None:
-            data["metadata"] = metadata
-
-        return self._client._request("POST", "/api/v1/media/audio", json=data)
-
-    def delete_audio(self, audio_id: str) -> dict[str, Any]:
-        """
-        Delete an audio file.
-
-        Args:
-            audio_id: The audio file identifier.
-
-        Returns:
-            Dict confirming deletion.
-        """
-        return self._client._request("DELETE", f"/api/v1/media/audio/{audio_id}")
-
     # =========================================================================
     # Podcast Episodes
     # =========================================================================
@@ -173,18 +120,6 @@ class MediaAPI:
             "/api/v1/podcast/episodes",
             params=params if params else None,
         )
-
-    def get_podcast_episode(self, episode_id: str) -> dict[str, Any]:
-        """
-        Get a specific podcast episode.
-
-        Args:
-            episode_id: The episode identifier.
-
-        Returns:
-            Episode details including title, description, audio URL, and duration.
-        """
-        return self._client._request("GET", f"/api/v1/podcast/episodes/{episode_id}")
 
     def get_feed_url(self) -> str:
         """
@@ -266,10 +201,6 @@ class AsyncMediaAPI:
     # Audio Files
     # =========================================================================
 
-    async def get_audio(self, audio_id: str) -> dict[str, Any]:
-        """Get audio file metadata by ID."""
-        return await self._client._request("GET", f"/api/v1/media/audio/{audio_id}")
-
     def get_audio_url(self, audio_id: str) -> str:
         """Get the direct audio file URL."""
         base_url = getattr(self._client, "_base_url", "https://api.aragora.ai")
@@ -296,28 +227,6 @@ class AsyncMediaAPI:
             params=params if params else None,
         )
 
-    async def upload_audio(
-        self,
-        file_path: str,
-        debate_id: str | None = None,
-        format: AudioFormat | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Upload an audio file."""
-        data: dict[str, Any] = {"file_path": file_path}
-        if debate_id is not None:
-            data["debate_id"] = debate_id
-        if format is not None:
-            data["format"] = format
-        if metadata is not None:
-            data["metadata"] = metadata
-
-        return await self._client._request("POST", "/api/v1/media/audio", json=data)
-
-    async def delete_audio(self, audio_id: str) -> dict[str, Any]:
-        """Delete an audio file."""
-        return await self._client._request("DELETE", f"/api/v1/media/audio/{audio_id}")
-
     # =========================================================================
     # Podcast Episodes
     # =========================================================================
@@ -339,10 +248,6 @@ class AsyncMediaAPI:
             "/api/v1/podcast/episodes",
             params=params if params else None,
         )
-
-    async def get_podcast_episode(self, episode_id: str) -> dict[str, Any]:
-        """Get a specific podcast episode."""
-        return await self._client._request("GET", f"/api/v1/podcast/episodes/{episode_id}")
 
     def get_feed_url(self) -> str:
         """Get the podcast RSS feed URL."""

@@ -344,7 +344,7 @@ class InMemoryDeliveryStore(WebhookDeliveryStore):
     async def count_by_status(self) -> dict[DeliveryStatus, int]:
         """Count deliveries by status."""
         async with self._lock:
-            counts: dict[DeliveryStatus, int] = {status: 0 for status in DeliveryStatus}
+            counts: dict[DeliveryStatus, int] = dict.fromkeys(DeliveryStatus, 0)
             for delivery in self._deliveries.values():
                 counts[delivery.status] += 1
             return counts
@@ -833,8 +833,13 @@ class WebhookRetryQueue:
 
         try:
             # Import signature generator
+            generate_signature: Callable[[str, str], str] | None
             try:
-                from aragora.server.handlers.webhooks import generate_signature
+                from aragora.security.webhook_signing import (
+                    generate_signature as _generate_signature,
+                )
+
+                generate_signature = _generate_signature
             except ImportError:
                 generate_signature = None
 
@@ -896,8 +901,13 @@ class WebhookRetryQueue:
 
             try:
                 # Import signature generator
+                generate_signature: Callable[[str, str], str] | None
                 try:
-                    from aragora.server.handlers.webhooks import generate_signature
+                    from aragora.security.webhook_signing import (
+                        generate_signature as _generate_signature,
+                    )
+
+                    generate_signature = _generate_signature
                 except ImportError:
                     generate_signature = None
 

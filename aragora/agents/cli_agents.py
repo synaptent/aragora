@@ -231,15 +231,16 @@ class CLIAgent(CritiqueMixin, Agent):
     # Map CLI agent models to OpenRouter model identifiers
     OPENROUTER_MODEL_MAP: dict[str, str] = {
         # Claude models
-        "claude": "anthropic/claude-opus-4.8",  # Default claude CLI
+        "claude": "anthropic/claude-opus-5",  # Default claude CLI
         "claude-fable-5": "anthropic/claude-fable-5",
-        "claude-opus-4-8": "anthropic/claude-opus-4.8",
-        "claude-opus-4-7": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-6": "anthropic/claude-opus-4.8",
-        "claude-opus-4-5-20251101": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-20250514": "anthropic/claude-opus-4.8",
-        "claude-3-opus-20240229": "anthropic/claude-opus-4.8",
-        "claude-3-sonnet-20240229": "anthropic/claude-opus-4.8",
+        "claude-opus-5": "anthropic/claude-opus-5",
+        "claude-opus-4-8": "anthropic/claude-opus-5",
+        "claude-opus-4-7": "anthropic/claude-opus-5",
+        "claude-sonnet-4-6": "anthropic/claude-opus-5",
+        "claude-opus-4-5-20251101": "anthropic/claude-opus-5",
+        "claude-sonnet-4-20250514": "anthropic/claude-opus-5",
+        "claude-3-opus-20240229": "anthropic/claude-opus-5",
+        "claude-3-sonnet-20240229": "anthropic/claude-opus-5",
         # OpenAI/Codex models
         "gpt-5.5": "openai/gpt-5.5",
         "gpt-5.4": "openai/gpt-5.5",
@@ -263,10 +264,10 @@ class CLIAgent(CritiqueMixin, Agent):
         "gemini-1.5-pro": "google/gemini-pro-1.5",
         # Grok models
         "grok-4-1-fast": "x-ai/grok-4.1-fast",
-        "grok-4-latest": "x-ai/grok-4",
-        "grok-4": "x-ai/grok-4",
-        "grok-3": "x-ai/grok-4",
-        "grok-2": "x-ai/grok-4",
+        "grok-4-latest": "x-ai/grok-4.5",
+        "grok-4": "x-ai/grok-4.5",
+        "grok-3": "x-ai/grok-4.5",
+        "grok-2": "x-ai/grok-4.5",
         # Deepseek models
         "deepseek-coder": "deepseek/deepseek-v4-pro",
         "deepseek-v3": "deepseek/deepseek-v4-pro",
@@ -361,7 +362,7 @@ class CLIAgent(CritiqueMixin, Agent):
                     else:
                         openrouter_model = self.model
                 else:
-                    openrouter_model = "anthropic/claude-opus-4.8"  # Default fallback model
+                    openrouter_model = "anthropic/claude-opus-5"  # Default fallback model
 
             self._fallback_agent = OpenRouterAgent(
                 name=f"{self.name}_fallback",

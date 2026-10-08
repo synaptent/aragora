@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, MetaFunction } from '@remix-run/node';
 import { json, redirect } from '@remix-run/node';
 import { Form, useActionData, useNavigation } from '@remix-run/react';
-import { getClient } from '~/aragora.server';
+import { getClient } from '../aragora.server';
 
 export const meta: MetaFunction = () => [{ title: 'New Debate | Aragora' }];
 
@@ -52,10 +52,11 @@ export default function NewDebate() {
 
       <Form method="post">
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
+          <label htmlFor="task" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
             Debate Topic
           </label>
           <textarea
+            id="task"
             name="task"
             className="input"
             placeholder="What question should the agents debate?"
@@ -64,10 +65,10 @@ export default function NewDebate() {
           />
         </div>
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
+        <fieldset style={{ marginBottom: '1.5rem', border: 0 }}>
+          <legend style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
             Select Agents
-          </label>
+          </legend>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {AGENTS.map((agent) => (
               <label
@@ -95,13 +96,13 @@ export default function NewDebate() {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
+          <label htmlFor="rounds" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
             Number of Rounds
           </label>
-          <select name="rounds" className="input" defaultValue="5">
+          <select id="rounds" name="rounds" className="input" defaultValue="5">
             <option value="3">3 rounds (Quick)</option>
             <option value="5">5 rounds (Standard)</option>
             <option value="7">7 rounds (Thorough)</option>

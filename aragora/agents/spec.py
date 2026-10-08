@@ -4,7 +4,7 @@ Unified Agent Specification for Aragora.
 This module provides a single AgentSpec class that separates four distinct concepts:
 
 - provider: API/service type (e.g., 'anthropic-api', 'qwen', 'deepseek')
-- model: Specific model identifier (e.g., 'claude-opus-4-8')
+- model: Specific model identifier (e.g., 'claude-opus-5')
 - persona: Behavioral archetype (e.g., 'philosopher', 'security_engineer')
 - role: Debate function (proposer, critic, synthesizer, judge)
 

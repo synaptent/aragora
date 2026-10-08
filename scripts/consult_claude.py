@@ -69,7 +69,7 @@ from aragora.agents.transports.vibeproxy import (  # noqa: E402
 )
 
 DEFAULT_MODEL = "claude-fable-5"
-FALLBACK_MODEL = "claude-opus-4-8"
+FALLBACK_MODEL = "claude-opus-5"
 DEFAULT_TIMEOUT_SECONDS = 600
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"

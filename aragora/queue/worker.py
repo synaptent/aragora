@@ -327,7 +327,7 @@ class DebateWorker:
             duration = time.time() - start_time
             self._jobs_processed += 1
 
-            logger.info(f"Job {job.id} completed in {duration:.2f}s")
+            logger.info("Job %s completed in %.2fs", job.id, duration)
 
         except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError) as e:
             error_msg = str(e)
@@ -345,8 +345,11 @@ class DebateWorker:
                 # Calculate retry delay
                 delay = self._retry_policy.get_delay(job.attempts - 1)
                 logger.info(
-                    f"Job {job.id} will retry in {delay:.1f}s "
-                    f"(attempt {job.attempts}/{job.max_attempts})"
+                    "Job %s will retry in %.1fs (attempt %s/%s)",
+                    job.id,
+                    delay,
+                    job.attempts,
+                    job.max_attempts,
                 )
                 # Leave in pending list for retry
                 await self._queue.nack(job.id, requeue=True)

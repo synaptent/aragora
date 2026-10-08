@@ -494,7 +494,7 @@ async def upgrade_issue_llm(
     body: str,
     *,
     repo_root: Path,
-    model: str = "claude-opus-4-8",
+    model: str = "claude-opus-5",
     timeout: float = 20.0,
 ) -> UpgradedIssue | None:
     """Upgrade an issue using LLM analysis for richer understanding."""
@@ -546,11 +546,21 @@ Return a JSON object with:
             client = anthropic.AsyncAnthropic(api_key=api_key)
             response = await client.messages.create(
                 model=model,
-                max_tokens=512,
+                # Opus 5 thinks by default; max_tokens covers thinking + response.
+                max_tokens=4096,
                 messages=[{"role": "user", "content": prompt}],
                 timeout=timeout,
             )
-            text = response.content[0].text.strip()
+            # Opus 5 thinks by default, so content[0] is a thinking block, not
+            # text. Scan for the text block instead of indexing blindly.
+            text = next(
+                (
+                    getattr(b, "text", "")
+                    for b in response.content
+                    if getattr(b, "type", None) == "text"
+                ),
+                "",
+            ).strip()
     except Exception as exc:
         logger.debug("LLM upgrade unavailable: %s", exc)
 
@@ -568,8 +578,10 @@ Return a JSON object with:
                             "Content-Type": "application/json",
                         },
                         json={
-                            "model": "anthropic/claude-opus-4.8",
-                            "max_tokens": 512,
+                            "model": "anthropic/claude-opus-5",
+                            # Opus 5 thinks by default; max_tokens covers
+                            # thinking + response, so keep generous headroom.
+                            "max_tokens": 4096,
                             "messages": [{"role": "user", "content": prompt}],
                         },
                     )

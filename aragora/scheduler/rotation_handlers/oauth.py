@@ -83,7 +83,7 @@ class OAuthRotationHandler(RotationHandler):
         token_url = self._get_token_url(provider, metadata)
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("oauth") as client:
@@ -172,7 +172,7 @@ class OAuthRotationHandler(RotationHandler):
             return True
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("oauth") as client:
@@ -241,7 +241,7 @@ class OAuthRotationHandler(RotationHandler):
         client_secret = metadata.get("client_secret")
 
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("oauth") as client:

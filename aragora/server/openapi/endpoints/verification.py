@@ -62,6 +62,74 @@ VERIFICATION_ENDPOINTS = {
             "security": [{"bearerAuth": []}],
         },
     },
+    # Registered under the v1 literal only: the runtime dispatcher passes raw
+    # request paths to can_handle with no legacy<->v1 aliasing, and
+    # VerificationHandler.ROUTES claims only the /api/v1/ form, so an
+    # unversioned alias here would document an unserved path.
+    "/api/v1/verification/proofs": {
+        "get": {
+            "tags": ["Verification"],
+            "summary": "List verification proofs",
+            "operationId": "listVerificationProofs",
+            "description": "Return stored verification proofs and associated metadata for prior verification runs.",
+            "parameters": [
+                {
+                    "name": "debate_id",
+                    "in": "query",
+                    "required": False,
+                    "description": "Filter proofs by debate identifier.",
+                    "schema": {"type": "string"},
+                },
+                {
+                    "name": "proof_type",
+                    "in": "query",
+                    "required": False,
+                    "description": "Filter proofs by proof type.",
+                    "schema": {"type": "string"},
+                },
+                {
+                    "name": "limit",
+                    "in": "query",
+                    "required": False,
+                    "description": "Maximum number of proofs to return.",
+                    "schema": {"type": "integer", "default": 20},
+                },
+            ],
+            "responses": {
+                "200": _ok_response(
+                    "Proofs list",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "proofs": {
+                                "type": "array",
+                                "items": {"type": "object"},
+                            },
+                            "filters": {"type": "object"},
+                            "limit": {"type": "integer"},
+                            "total": {"type": "integer"},
+                            "available": {
+                                "type": "boolean",
+                                "description": (
+                                    "False when the formal-verification backend "
+                                    "(z3) is unavailable; that degraded envelope "
+                                    "returns only proofs/available/hint."
+                                ),
+                            },
+                            "hint": {
+                                "type": "string",
+                                "description": (
+                                    "Remediation hint, present only in the "
+                                    "degraded (z3-unavailable) envelope."
+                                ),
+                            },
+                        },
+                    },
+                )
+            },
+            "security": [{"bearerAuth": []}],
+        },
+    },
     "/api/debates/capability-probe": {
         "post": {
             "tags": ["Auditing"],

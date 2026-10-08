@@ -1,0 +1,25 @@
+{
+ "repo": "synaptent/aragora",
+ "since": "2026-06-26T21:04:36Z",
+ "since_basis": "PR #8638 merged_at",
+ "prs": [
+  {
+   "number": 8824,
+   "closed_at": "2026-07-04T04:20:11Z",
+   "merged_at": "2026-07-04T04:20:11Z",
+   "head_sha": "6e9e1bb2de6d1cfaa3cb293ffdb42f6ad700ffd1"
+  },
+  {
+   "number": 8802,
+   "closed_at": "2026-07-04T02:58:44Z",
+   "merged_at": "2026-07-04T02:58:44Z",
+   "head_sha": "75e91939d4bd29d633cd76e6f8a557e87b34430c"
+  },
+  {
+   "number": 8811,
+   "closed_at": "2026-07-04T08:05:30Z",
+   "merged_at": "2026-07-04T08:05:30Z",
+   "head_sha": "15e87b1c1af65d745b4f64790f6069be0632acb4"
+  }
+ ]
+}

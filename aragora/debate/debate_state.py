@@ -375,10 +375,10 @@ class DebateContext:
         return self.proposals.get(agent_name, "")
 
     def add_message(self, msg: Message) -> None:
-        """Add a message to both context and partial tracking."""
+        """Record one message in context, recovery, and final-result tracking."""
         self.context_messages.append(msg)
         self.partial_messages.append(msg)
-        if self.result:
+        if self.result is not None:
             self.result.messages.append(msg)
 
     def record_agent_failure(

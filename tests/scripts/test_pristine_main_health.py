@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "pristine_main_health.py"
+_LOCKED_DEV_RUN = ["uv", "run", "--locked", "--extra", "dev", "--extra", "test"]
 
 
 @pytest.fixture()
@@ -44,28 +45,7 @@ class _Proc:
 
 
 def _is_runtime_probe(cmd: list[str]) -> bool:
-    return cmd == [sys.executable, "-c", "import pytest"]
-
-
-def _write_required_pyproject(pristine: Path, specifier: str = ">=2.1.0,<3.0") -> None:
-    pristine.mkdir(parents=True, exist_ok=True)
-    (pristine / "pyproject.toml").write_text(
-        f"""[project.optional-dependencies]
-dev = [
-    "mypy{specifier}",
-    "mypy-baseline>=0.7.4,<0.8",
-]
-""",
-        encoding="utf-8",
-    )
-
-
-def _write_fake_mypy(bin_dir: Path, version: str) -> Path:
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    executable = bin_dir / "mypy"
-    executable.write_text(f"#!/bin/sh\necho 'mypy {version} (compiled: yes)'\n", encoding="utf-8")
-    executable.chmod(0o755)
-    return executable
+    return cmd == [*_LOCKED_DEV_RUN, "python", "-c", "import pytest"]
 
 
 def test_existing_pristine_without_owner_marker_refuses_destructive_refresh(
@@ -222,14 +202,19 @@ def test_no_halt_file_flag_reports_only(mod, monkeypatch, tmp_path):
 def test_missing_pytest_records_infra_error_without_touching_halt(
     mod, monkeypatch, tmp_path, capsys
 ):
-    monkeypatch.setattr(
-        mod,
-        "refresh_pristine_worktree",
-        lambda repo, pristine: pytest.fail("runtime probe must precede worktree refresh"),
-    )
+    pristine = tmp_path / "pristine"
+    events: list[tuple[str, Path]] = []
+
+    def fake_refresh(repo, target):
+        events.append(("refresh", target))
+        target.mkdir()
+        return "deadbeef" * 5
+
+    monkeypatch.setattr(mod, "refresh_pristine_worktree", fake_refresh)
 
     def fake_run(cmd, *, cwd, timeout):
         assert _is_runtime_probe(cmd)
+        events.append(("runtime", cwd))
         return _Proc(
             1,
             "probe stdout",
@@ -246,7 +231,7 @@ def test_missing_pytest_records_infra_error_without_touching_halt(
             "--repo-root",
             str(tmp_path),
             "--pristine-dir",
-            str(tmp_path / "pristine"),
+            str(pristine),
             "--halt-file",
             str(halt),
             "--suite",
@@ -270,19 +255,27 @@ def test_missing_pytest_records_infra_error_without_touching_halt(
     assert record.data["failures"] == []
     assert "probe stdout" in record.data["infra_errors"][0]
     assert "No module named pytest" in record.data["infra_errors"][0]
+    assert events == [("refresh", pristine), ("runtime", pristine)]
 
 
-def test_below_floor_path_mypy_is_infra_error_without_touching_halt(
+def test_locked_mypy_failure_is_infra_error_without_touching_halt(
     mod, monkeypatch, tmp_path, capsys
 ):
     repo = tmp_path / "repo"
     repo.mkdir()
     pristine = tmp_path / "pristine"
-    _write_required_pyproject(pristine)
-    mypy_path = _write_fake_mypy(tmp_path / "bin", "1.19.1")
-    monkeypatch.setenv("PATH", str(mypy_path.parent))
+    pristine.mkdir()
     monkeypatch.setattr(mod, "_check_test_runtime", lambda repo: None)
     monkeypatch.setattr(mod, "refresh_pristine_worktree", lambda repo, pristine: "deadbeef" * 5)
+    monkeypatch.setattr(
+        mod,
+        "_run",
+        lambda cmd, *, cwd, timeout: _Proc(
+            2,
+            "",
+            "The lockfile at uv.lock needs to be updated",
+        ),
+    )
 
     halt = tmp_path / "halt.json"
     original_halt = b'{"reason": "existing-main-red"}\n'
@@ -305,58 +298,14 @@ def test_below_floor_path_mypy_is_infra_error_without_touching_halt(
     assert halt.read_bytes() == original_halt
     stderr = capsys.readouterr().err
     assert "INFRA_ERROR" in stderr
-    assert "found 1.19.1" in stderr
-    assert "required mypy>=2.1.0,<3.0" in stderr
-    assert str(mypy_path) in stderr
+    assert "uv run --locked --extra dev --extra test mypy --version" in stderr
+    assert "lockfile at uv.lock needs to be updated" in stderr
 
     from aragora.nomic.throughput import ThroughputLedger
 
     (record,) = ThroughputLedger(repo).records()
     assert record.data["status"] == "infra_error"
-    assert "found 1.19.1" in record.data["infra_errors"][0]
-
-
-def test_invalid_toolchain_contract_is_infra_error_without_touching_halt(
-    mod, monkeypatch, tmp_path, capsys
-):
-    """A malformed pyproject (no parsable mypy floor) is inconclusive about main:
-    it must be classified infra_error, never written as a main-red halt (#9113)."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    pristine = tmp_path / "pristine"
-    pristine.mkdir(parents=True)
-    (pristine / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
-    monkeypatch.setattr(mod, "_check_test_runtime", lambda repo: None)
-    monkeypatch.setattr(mod, "refresh_pristine_worktree", lambda repo, pristine: "deadbeef" * 5)
-
-    halt = tmp_path / "halt.json"
-    original_halt = b'{"reason": "existing-main-red"}\n'
-    halt.write_bytes(original_halt)
-
-    rc = mod.main(
-        [
-            "--repo-root",
-            str(repo),
-            "--pristine-dir",
-            str(pristine),
-            "--halt-file",
-            str(halt),
-            "--suite",
-            "required",
-        ]
-    )
-
-    assert rc == mod.INFRA_ERROR_EXIT
-    assert halt.read_bytes() == original_halt
-    stderr = capsys.readouterr().err
-    assert "INFRA_ERROR" in stderr
-    assert "toolchain contract invalid" in stderr
-
-    from aragora.nomic.throughput import ThroughputLedger
-
-    (record,) = ThroughputLedger(repo).records()
-    assert record.data["status"] == "infra_error"
-    assert "toolchain contract invalid" in record.data["infra_errors"][0]
+    assert "lockfile at uv.lock needs to be updated" in record.data["infra_errors"][0]
 
 
 def test_infra_failure_signature_classification(mod):
@@ -366,6 +315,16 @@ def test_infra_failure_signature_classification(mod):
         mod._infra_failure_signature(_Proc(2, "make: mypy: No such file or directory")) is not None
     )
     assert mod._infra_failure_signature(_Proc(127, "zsh: ruff: command not found")) is not None
+    assert (
+        mod._infra_failure_signature(
+            _Proc(
+                2,
+                "",
+                "error: Failed to spawn: `ruff`\n  Caused by: No such file or directory (os error 2)",
+            )
+        )
+        is not None
+    )
     # A missing THIRD-PARTY module in the runner interpreter is infra.
     proc = _Proc(1, "")
     proc.stderr = "ModuleNotFoundError: No module named 'jsonschema'"
@@ -388,7 +347,11 @@ def test_suite_tool_missing_is_infra_error_without_touching_halt(
     monkeypatch.setattr(
         mod,
         "_run_suite",
-        lambda cmd, *, cwd, timeout: _Proc(2, "make: ruff: command not found"),
+        lambda cmd, *, cwd, timeout: _Proc(
+            2,
+            "",
+            "error: Failed to spawn: `ruff`\n  Caused by: No such file or directory (os error 2)",
+        ),
     )
 
     halt = tmp_path / "halt.json"
@@ -407,7 +370,7 @@ def test_suite_tool_missing_is_infra_error_without_touching_halt(
 
     assert rc == mod.INFRA_ERROR_EXIT
     assert not halt.exists()
-    assert "command not found" in capsys.readouterr().err
+    assert "Failed to spawn" in capsys.readouterr().err
 
     from aragora.nomic.throughput import ThroughputLedger
 
@@ -416,49 +379,25 @@ def test_suite_tool_missing_is_infra_error_without_touching_halt(
     assert "runner environment failure" in record.data["infra_errors"][0]
 
 
-def test_missing_path_mypy_is_infra_error_without_touching_halt(mod, monkeypatch, tmp_path, capsys):
-    repo = tmp_path / "repo"
-    repo.mkdir()
+def test_locked_mypy_command_ignores_unrelated_path_mypy(mod, monkeypatch, tmp_path):
     pristine = tmp_path / "pristine"
-    _write_required_pyproject(pristine)
-    empty_bin = tmp_path / "bin"
-    empty_bin.mkdir()
-    monkeypatch.setenv("PATH", str(empty_bin))
-    monkeypatch.setattr(mod, "_check_test_runtime", lambda repo: None)
-    monkeypatch.setattr(mod, "refresh_pristine_worktree", lambda repo, pristine: "deadbeef" * 5)
+    pristine.mkdir()
+    commands: list[list[str]] = []
 
-    halt = tmp_path / "halt.json"
-    original_halt = b'{"reason": "existing-main-red"}\n'
-    halt.write_bytes(original_halt)
+    def fake_run(cmd, *, cwd, timeout):
+        commands.append(cmd)
+        return _Proc(0, "mypy 2.1.0 (compiled: yes)")
 
-    rc = mod.main(
-        [
-            "--repo-root",
-            str(repo),
-            "--pristine-dir",
-            str(pristine),
-            "--halt-file",
-            str(halt),
-            "--suite",
-            "required",
-        ]
-    )
-
-    assert rc == mod.INFRA_ERROR_EXIT
-    assert halt.read_bytes() == original_halt
-    stderr = capsys.readouterr().err
-    assert "INFRA_ERROR" in stderr
-    assert "required-suite mypy missing from PATH" in stderr
-    assert "required mypy>=2.1.0,<3.0" in stderr
-
-
-def test_path_mypy_satisfying_declared_floor_has_no_toolchain_error(mod, monkeypatch, tmp_path):
-    pristine = tmp_path / "pristine"
-    _write_required_pyproject(pristine)
-    mypy_path = _write_fake_mypy(tmp_path / "bin", "2.2.0")
-    monkeypatch.setenv("PATH", str(mypy_path.parent))
+    monkeypatch.setattr(mod, "_run", fake_run)
 
     assert mod._check_required_toolchain(pristine) is None
+    assert commands == [[*_LOCKED_DEV_RUN, "mypy", "--version"]]
+
+
+def test_locked_command_replaces_caller_python_with_environment_python(mod):
+    command = mod._locked_dev_command([sys.executable, "scripts/check.py", "--flag"])
+
+    assert command == [*_LOCKED_DEV_RUN, "python", "scripts/check.py", "--flag"]
 
 
 def test_suite_launch_error_is_infra_error_and_never_writes_halt(
@@ -521,6 +460,7 @@ def test_timeout_kills_sigterm_ignoring_group_and_never_writes_halt(
         ),
     ]
     monkeypatch.setitem(mod.SUITES, "required", [child])
+    monkeypatch.setattr(mod, "_locked_dev_command", lambda cmd: cmd)
 
     halt = tmp_path / "halt.json"
     original_halt = b'{"reason": "existing-main-red"}\n'

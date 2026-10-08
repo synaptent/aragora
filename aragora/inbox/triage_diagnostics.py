@@ -47,6 +47,7 @@ _TARGET_LOGGER_PREFIXES = (
     "aragora.pulse.ingestor",
     "aragora.server.research_phase",
     "aragora.server.startup.database",
+    "aragora.shared.embedding_cache",
     "aragora.storage.connection_factory",
     "aragora.storage.pool_manager",
 )

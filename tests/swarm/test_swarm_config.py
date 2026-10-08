@@ -117,7 +117,7 @@ class TestInterrogatorConfigDefaults:
 
     def test_default_model(self):
         cfg = InterrogatorConfig()
-        assert cfg.model == "claude-sonnet-4-20250514"
+        assert cfg.model == "claude-opus-5"
 
     def test_default_fallback_flag(self):
         cfg = InterrogatorConfig()

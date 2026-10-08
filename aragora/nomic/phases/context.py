@@ -90,8 +90,8 @@ class ContextPhase:
         self.skip_kilocode = skip_kilocode
         self.kilocode_agent_factory = kilocode_agent_factory
         self.cycle_count = cycle_count
-        self._log = log_fn or print
-        self._stream_emit = stream_emit_fn or (lambda *args: None)
+        self._log: Callable[..., None] = log_fn or print
+        self._stream_emit: Callable[..., None] = stream_emit_fn or (lambda *args: None)
         self._get_features = get_features_fn or (lambda: "No features available")
         self._context_builder = context_builder
 
@@ -166,8 +166,8 @@ class ContextPhase:
             )
             grok_explorer = self.kilocode_agent_factory(
                 name="grok-explorer",
-                provider_id="openrouter/x-ai/grok-4",
-                model="openrouter/x-ai/grok-4",
+                provider_id="openrouter/x-ai/grok-4.5",
+                model="openrouter/x-ai/grok-4.5",
                 role="explorer",
                 timeout=600,
                 mode="architect",

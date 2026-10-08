@@ -346,7 +346,7 @@ class AragoraRLM(RLMStreamingMixin):
                     # anthropic backend; use the repo's canonical default
                     # (see aragora/agents/api_agents/anthropic.py).
                     self.backend_config.model_name = os.environ.get(
-                        "ARAGORA_RLM_ANTHROPIC_MODEL", "claude-opus-4-8"
+                        "ARAGORA_RLM_ANTHROPIC_MODEL", "claude-opus-5"
                     )
                 logger.info(
                     "[AragoraRLM] OPENAI_API_KEY not configured; routing RLM backend to anthropic"
@@ -1365,7 +1365,7 @@ Please provide an improved answer based on the feedback."""
             debate_id: Optional debate ID for context
         """
         try:
-            from aragora.audit.log import AuditCategory, AuditEvent, get_audit_log
+            from aragora.observability.audit_log import AuditCategory, AuditEvent, get_audit_log
 
             audit = get_audit_log()
             audit.log(

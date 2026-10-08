@@ -32,13 +32,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ESSAY_PATH = REPO_ROOT / "aragora" / "server" / "handlers" / "oracle_essay.md"
-OUTPUT_DIR = REPO_ROOT / "aragora" / "server" / "handlers" / "essay_summaries"
+ESSAY_PATH = REPO_ROOT / "aragora" / "server" / "handlers" / "demo" / "oracle_essay.md"
+OUTPUT_DIR = REPO_ROOT / "aragora" / "server" / "handlers" / "demo" / "essay_summaries"
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 MODELS: dict[str, str] = {
-    "claude": "anthropic/claude-opus-4.8",
+    "claude": "anthropic/claude-opus-5",
     "gpt": "openai/gpt-5.3",
     "grok": "x-ai/grok-4.1-fast",
     "deepseek": "deepseek/deepseek-v4-pro",
@@ -91,7 +91,7 @@ def build_payload(model_id: str, essay_text: str) -> dict[str, Any]:
     """Build the OpenRouter API request payload.
 
     Args:
-        model_id: The OpenRouter model identifier (e.g. ``anthropic/claude-opus-4.8``).
+        model_id: The OpenRouter model identifier (e.g. ``anthropic/claude-opus-5``).
         essay_text: The full essay to include in the user message.
 
     Returns:
