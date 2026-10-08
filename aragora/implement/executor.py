@@ -664,7 +664,10 @@ Follow existing code style and tests.""",
         prompt = self._build_prompt(task, memory_context=memory_context)
 
         logger.info(
-            f"  Executing [{task.complexity}] {task.id} via harness implementation mode (timeout {timeout}s)..."
+            "  Executing [%s] %s via harness implementation mode (timeout %ss)...",
+            task.complexity,
+            task.id,
+            timeout,
         )
 
         start_time = time.time()
@@ -754,11 +757,20 @@ Follow existing code style and tests.""",
 
         if attempt > 1:
             logger.info(
-                f"  Retry [{task.complexity}] {task.id} with {model_name} (attempt {attempt}, timeout {getattr(agent, 'timeout', base_timeout)}s)..."
+                "  Retry [%s] %s with %s (attempt %s, timeout %ss)...",
+                task.complexity,
+                task.id,
+                model_name,
+                attempt,
+                getattr(agent, "timeout", base_timeout),
             )
         else:
             logger.info(
-                f"  Executing [{task.complexity}] {task.id} with {model_name} (timeout {getattr(agent, 'timeout', base_timeout)}s)..."
+                "  Executing [%s] %s with %s (timeout %ss)...",
+                task.complexity,
+                task.id,
+                model_name,
+                getattr(agent, "timeout", base_timeout),
             )
 
         memory_context = await self._fetch_memory_context(task.description)
@@ -778,9 +790,9 @@ Follow existing code style and tests.""",
             diff = self._get_git_diff(files=task.files)
             duration = time.time() - start_time
 
-            logger.info(f"    Completed in {duration:.1f}s")
+            logger.info("    Completed in %.1fs", duration)
             if diff:
-                logger.debug(f"    Changes:\n{diff[:200]}...")
+                logger.debug("    Changes:\n%s...", diff[:200])
 
             return TaskResult(
                 task_id=task.id,
@@ -792,7 +804,7 @@ Follow existing code style and tests.""",
 
         except TimeoutError as e:
             duration = time.time() - start_time
-            logger.warning(f"    Timeout after {duration:.1f}s")
+            logger.warning("    Timeout after %.1fs", duration)
             return TaskResult(
                 task_id=task.id,
                 success=False,
@@ -846,7 +858,7 @@ Follow existing code style and tests.""",
 
         if self.max_retries >= 2:
             # Attempt 2: retry with error context injected as feedback
-            logger.info(f"    Retrying {task.id} ({analysis.category} error)...")
+            logger.info("    Retrying %s (%s error)...", task.id, analysis.category)
             result = await self.execute_task(
                 task,
                 attempt=2,
@@ -1288,7 +1300,7 @@ Be constructive but thorough."""
                 response = await self._codex.generate(review_prompt, context=[])
             duration = time.time() - start_time
 
-            logger.info(f"    Review completed in {duration:.1f}s")
+            logger.info("    Review completed in %.1fs", duration)
 
             # Parse response (basic parsing)
             response_lower = response.lower() if response else ""
@@ -1303,7 +1315,7 @@ Be constructive but thorough."""
 
         except (RuntimeError, OSError, TimeoutError) as e:
             duration = time.time() - start_time
-            logger.error(f"    Review failed after {duration:.1f}s: {e}")
+            logger.error("    Review failed after %.1fs: %s", duration, e)
             return {
                 "approved": None,
                 "error": "Review execution failed",

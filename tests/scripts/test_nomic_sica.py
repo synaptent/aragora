@@ -3,11 +3,45 @@
 from __future__ import annotations
 
 import importlib
+import sys
+from collections.abc import Iterator, MutableMapping
+from types import ModuleType
+from typing import Any
 
 import pytest
 
 
+def _put_back(mapping: MutableMapping[str, Any], key: str, value: ModuleType | None) -> None:
+    if value is None:
+        mapping.pop(key, None)
+    else:
+        mapping[key] = value
+
+
+@pytest.fixture
+def fresh_nomic_modules() -> Iterator[None]:
+    """Make the test import scripts.nomic.config and scripts.nomic_loop under its own env.
+
+    scripts.nomic_loop takes its NOMIC_SICA_* flags from scripts.nomic.config, which
+    reads the environment once at import time, so a config module cached by an earlier
+    test would win over the env the test sets. The fixture imports the parent packages
+    first, which loads scripts.nomic.config under the default env, then drops both
+    modules before the test body runs. Afterwards it puts back the previous modules and
+    package attributes; scripts.nomic_loop is removed again if it had not been imported.
+    """
+    saved = []
+    for name in ("scripts.nomic.config", "scripts.nomic_loop"):
+        parent_name, _, child = name.rpartition(".")
+        parent = importlib.import_module(parent_name)
+        saved.append((name, parent, child, sys.modules.pop(name, None), vars(parent).get(child)))
+    yield
+    for name, parent, child, module, attribute in saved:
+        _put_back(sys.modules, name, module)
+        _put_back(vars(parent), child, attribute)
+
+
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("fresh_nomic_modules")
 async def test_run_sica_cycle_parses_env(monkeypatch, tmp_path):
     monkeypatch.setenv("NOMIC_SICA_ENABLED", "1")
     monkeypatch.setenv("NOMIC_SICA_IMPROVEMENT_TYPES", "reliability,readability")
@@ -24,8 +58,6 @@ async def test_run_sica_cycle_parses_env(monkeypatch, tmp_path):
     monkeypatch.setenv("NOMIC_SICA_MAX_ROLLBACKS", "1")
 
     import scripts.nomic_loop as nomic_loop
-
-    nomic_loop = importlib.reload(nomic_loop)
 
     captured: dict[str, object] = {}
 

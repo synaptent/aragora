@@ -1,0 +1,394 @@
+"""Unit tests for aragora.protocols.a2a.metering (AGT-02).
+
+Verifies flag-gate semantics, record creation, content-addressing, and
+serialisation.  No network, no subprocess, no queue mutation.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from typing import Any
+
+import pytest
+
+import aragora.protocols.a2a.metering as _metering_module
+from aragora.protocols.a2a.metering import (
+    AgentMeteringRecord,
+    METERING_SCHEMA_VERSION,
+    agent_metering_enabled,
+    create_metering_record,
+    enable_agent_metering,
+    reset_agent_metering,
+)
+
+
+# ---------------------------------------------------------------------------
+# Autouse fixture: always restore module-level override after each test
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_metering_override() -> pytest.IterableFixture:  # type: ignore[type-arg]
+    reset_agent_metering()
+    yield
+    reset_agent_metering()
+
+
+def _payload_hash(payload: dict[str, Any]) -> str:
+    """Recompute a record's content hash the way an independent consumer would."""
+    canonical = {key: value for key, value in payload.items() if key != "content_hash"}
+    return hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Flag-gate tests
+# ---------------------------------------------------------------------------
+
+
+class TestFlagGate:
+    def test_disabled_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        assert not agent_metering_enabled()
+
+    def test_enabled_via_env_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_AGENT_METERING_ENABLED", "1")
+        assert agent_metering_enabled()
+
+    def test_enabled_via_env_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_AGENT_METERING_ENABLED", "true")
+        assert agent_metering_enabled()
+
+    def test_enabled_via_env_yes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_AGENT_METERING_ENABLED", "yes")
+        assert agent_metering_enabled()
+
+    def test_enabled_via_env_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_AGENT_METERING_ENABLED", "on")
+        assert agent_metering_enabled()
+
+    def test_arbitrary_string_not_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_AGENT_METERING_ENABLED", "maybe")
+        assert not agent_metering_enabled()
+
+    def test_enable_helper_sets_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        enable_agent_metering()
+        assert agent_metering_enabled()
+        assert _metering_module._metering_enabled_override is True  # noqa: SLF001
+
+    def test_enable_does_not_mutate_environ(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        before = dict(os.environ)
+        enable_agent_metering()
+        assert os.environ == before
+
+    def test_reset_clears_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        enable_agent_metering()
+        reset_agent_metering()
+        assert _metering_module._metering_enabled_override is None  # noqa: SLF001
+        assert not agent_metering_enabled()
+
+    def test_override_takes_priority_over_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        enable_agent_metering()
+        assert agent_metering_enabled()
+
+    def test_create_raises_when_flag_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        with pytest.raises(RuntimeError, match="ARAGORA_AGENT_METERING_ENABLED"):
+            create_metering_record(agent_id="ag-1", session_id="sess-1")
+
+
+# ---------------------------------------------------------------------------
+# Record creation tests
+# ---------------------------------------------------------------------------
+
+
+class TestCreateMeteringRecord:
+    def test_basic_round_trip(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-123",
+            session_id="sess-abc",
+            compute_units=42.0,
+            debate_cost_usd=0.05,
+            verifier_cost_usd=0.01,
+            timestamp="2026-08-25T12:00:00Z",
+        )
+        assert rec.agent_id == "ag-123"
+        assert rec.session_id == "sess-abc"
+        assert rec.compute_units == 42.0
+        assert rec.debate_cost_usd == 0.05
+        assert rec.verifier_cost_usd == 0.01
+        assert rec.timestamp == "2026-08-25T12:00:00Z"
+        assert rec.schema_version == METERING_SCHEMA_VERSION
+
+    def test_defaults_to_zero_costs(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(agent_id="ag-1", session_id="sess-1")
+        assert rec.compute_units == 0.0
+        assert rec.debate_cost_usd == 0.0
+        assert rec.verifier_cost_usd == 0.0
+
+    def test_content_hash_non_empty(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="sess-1",
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        assert len(rec.content_hash) == 64  # SHA-256 hex
+
+    def test_content_hash_deterministic(self) -> None:
+        enable_agent_metering()
+        kwargs = dict(
+            agent_id="ag-det",
+            session_id="sess-det",
+            compute_units=10.0,
+            debate_cost_usd=0.02,
+            verifier_cost_usd=0.005,
+            timestamp="2026-08-25T09:00:00Z",
+        )
+        r1 = create_metering_record(**kwargs)
+        r2 = create_metering_record(**kwargs)
+        assert r1.content_hash == r2.content_hash
+
+    def test_different_inputs_produce_different_hashes(self) -> None:
+        enable_agent_metering()
+        r1 = create_metering_record(
+            agent_id="ag-1",
+            session_id="sess-1",
+            compute_units=1.0,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        r2 = create_metering_record(
+            agent_id="ag-2",
+            session_id="sess-1",
+            compute_units=1.0,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        assert r1.content_hash != r2.content_hash
+
+    def test_timestamp_auto_generated_when_omitted(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(agent_id="ag-1", session_id="sess-1")
+        assert rec.timestamp.endswith("Z")
+        assert "T" in rec.timestamp
+
+    def test_raises_on_empty_agent_id(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="agent_id"):
+            create_metering_record(agent_id="", session_id="sess-1")
+
+    def test_raises_on_whitespace_agent_id(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="agent_id"):
+            create_metering_record(agent_id="   ", session_id="sess-1")
+
+    def test_raises_on_empty_session_id(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="session_id"):
+            create_metering_record(agent_id="ag-1", session_id="")
+
+    def test_raises_on_negative_compute_units(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="compute_units"):
+            create_metering_record(agent_id="ag-1", session_id="s-1", compute_units=-1.0)
+
+    def test_raises_on_negative_debate_cost(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="debate_cost_usd"):
+            create_metering_record(agent_id="ag-1", session_id="s-1", debate_cost_usd=-0.01)
+
+    def test_raises_on_negative_verifier_cost(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="verifier_cost_usd"):
+            create_metering_record(agent_id="ag-1", session_id="s-1", verifier_cost_usd=-0.01)
+
+    @pytest.mark.parametrize("field", ["compute_units", "debate_cost_usd", "verifier_cost_usd"])
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_rejects_non_finite_values(self, field: str, value: float) -> None:
+        enable_agent_metering()
+        overrides: dict[str, Any] = {field: value}
+        with pytest.raises(ValueError, match=field):
+            create_metering_record(agent_id="ag-1", session_id="s-1", **overrides)
+
+    def test_rejects_total_cost_overflow(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="total_cost_usd"):
+            create_metering_record(
+                agent_id="ag-1",
+                session_id="s-1",
+                debate_cost_usd=1e308,
+                verifier_cost_usd=1e308,
+            )
+
+    def test_finite_record_round_trips_through_a2a_result(self) -> None:
+        from aragora.protocols.a2a.types import TaskResult, TaskStatus
+
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="s-1",
+            compute_units=1.25,
+            debate_cost_usd=0.125,
+            verifier_cost_usd=0.0625,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        result = TaskResult(
+            task_id=rec.session_id,
+            agent_name=rec.agent_id,
+            status=TaskStatus.COMPLETED,
+            metadata={"metering": rec.to_dict()},
+        )
+        restored = TaskResult.from_dict(json.loads(json.dumps(result.to_dict(), allow_nan=False)))
+        payload = restored.metadata["metering"]
+        assert payload == json.loads(rec.to_json())
+        assert "total_cost_usd" not in payload
+        assert rec.total_cost_usd == 0.1875
+        assert payload["content_hash"] == _payload_hash(payload)
+
+
+# ---------------------------------------------------------------------------
+# Property and serialisation tests
+# ---------------------------------------------------------------------------
+
+
+class TestAgentMeteringRecord:
+    def _make(self, **kwargs: object) -> AgentMeteringRecord:
+        enable_agent_metering()
+        defaults: dict = dict(
+            agent_id="ag-1",
+            session_id="sess-1",
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        defaults.update(kwargs)
+        return create_metering_record(**defaults)
+
+    def test_total_cost_sums_debate_and_verifier(self) -> None:
+        rec = self._make(debate_cost_usd=0.10, verifier_cost_usd=0.03)
+        assert abs(rec.total_cost_usd - 0.13) < 1e-9
+
+    def test_total_cost_zero_when_both_zero(self) -> None:
+        rec = self._make()
+        assert rec.total_cost_usd == 0.0
+
+    def test_to_dict_has_required_keys(self) -> None:
+        d = self._make().to_dict()
+        required = {
+            "schema_version",
+            "agent_id",
+            "session_id",
+            "compute_units",
+            "debate_cost_usd",
+            "verifier_cost_usd",
+            "timestamp",
+            "content_hash",
+        }
+        assert set(d) == required
+
+    def test_to_dict_omits_derived_total(self) -> None:
+        rec = self._make(debate_cost_usd=0.07, verifier_cost_usd=0.02)
+        d = rec.to_dict()
+        assert "total_cost_usd" not in d
+        assert rec.total_cost_usd == d["debate_cost_usd"] + d["verifier_cost_usd"]
+
+    def test_to_json_is_valid_json(self) -> None:
+        rec = self._make()
+        parsed = json.loads(rec.to_json())
+        assert parsed["agent_id"] == "ag-1"
+
+    def test_to_json_sorted_keys(self) -> None:
+        rec = self._make()
+        raw = rec.to_json()
+        keys = list(json.loads(raw).keys())
+        assert keys == sorted(keys)
+
+    def test_record_is_immutable(self) -> None:
+        rec = self._make()
+        with pytest.raises((AttributeError, TypeError)):
+            rec.compute_units = 999.0  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Record invariants (hold for direct construction as well as the factory)
+# ---------------------------------------------------------------------------
+
+
+class TestRecordInvariants:
+    @pytest.mark.parametrize(
+        ("overrides", "match"),
+        [
+            ({"compute_units": float("nan")}, "compute_units"),
+            ({"debate_cost_usd": float("inf")}, "debate_cost_usd"),
+            ({"verifier_cost_usd": float("-inf")}, "verifier_cost_usd"),
+            ({"compute_units": -1.0}, "compute_units"),
+            ({"verifier_cost_usd": -0.01}, "verifier_cost_usd"),
+            ({"debate_cost_usd": 1e308, "verifier_cost_usd": 1e308}, "total_cost_usd"),
+            ({"agent_id": ""}, "agent_id"),
+            ({"session_id": "   "}, "session_id"),
+        ],
+    )
+    def test_direct_construction_rejects_invalid_fields(
+        self, overrides: dict[str, Any], match: str
+    ) -> None:
+        fields: dict[str, Any] = {"agent_id": "ag-1", "session_id": "s-1"}
+        fields.update(overrides)
+        with pytest.raises(ValueError, match=match):
+            AgentMeteringRecord(**fields)
+
+    def test_direct_construction_accepts_valid_fields_without_flag(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("ARAGORA_AGENT_METERING_ENABLED", raising=False)
+        assert not agent_metering_enabled()
+        rec = AgentMeteringRecord(agent_id="ag-1", session_id="s-1", compute_units=2.0)
+        assert rec.content_hash == ""
+        assert json.loads(rec.to_json())["compute_units"] == 2.0
+
+    def test_to_json_refuses_non_finite_values(self) -> None:
+        rec = AgentMeteringRecord(agent_id="ag-1", session_id="s-1")
+        object.__setattr__(rec, "compute_units", float("nan"))
+        with pytest.raises(ValueError):
+            rec.to_json()
+
+    def test_content_hash_covers_every_emitted_field(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="s-1",
+            compute_units=1.0,
+            debate_cost_usd=0.5,
+            verifier_cost_usd=0.25,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        payload = json.loads(rec.to_json())
+        assert payload["content_hash"] == _payload_hash(payload)
+        for field, value in (("debate_cost_usd", 999.0), ("timestamp", "2026-08-26T00:00:00Z")):
+            changed = dict(payload, **{field: value})
+            assert changed["content_hash"] != _payload_hash(changed)
+
+    def test_emitted_numbers_are_the_caller_supplied_values(self) -> None:
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="s-1",
+            compute_units=1.0,
+            debate_cost_usd=0.1,
+            verifier_cost_usd=0.2,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        raw = rec.to_json()
+        payload = json.loads(raw)
+        emitted = {
+            value
+            for value in payload.values()
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+        }
+        assert emitted == {1.0, 0.1, 0.2}
+        assert repr(0.1 + 0.2) not in raw

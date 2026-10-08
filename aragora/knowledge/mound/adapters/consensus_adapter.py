@@ -14,7 +14,7 @@ The adapter provides:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
@@ -46,7 +46,7 @@ class ConsensusSearchResult:
 
     record: ConsensusRecord
     similarity: float = 0.0
-    dissents: list[DissentRecord] = None
+    dissents: list[DissentRecord] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.dissents is None:

@@ -244,8 +244,8 @@ class TestTimedQuery:
             cursor.fetchall()
 
             mock_logger.warning.assert_called()
-            args = mock_logger.warning.call_args[0][0]
-            assert "Slow query" in args
+            msg, *fmt_args = mock_logger.warning.call_args[0]
+            assert "Slow query" in msg % tuple(fmt_args)
 
     def test_does_not_log_fast_queries(self, db_conn):
         """Does not log fast queries."""
@@ -269,8 +269,8 @@ class TestTimedQuery:
                 threshold_ms=0.0001,
             )
 
-            args = mock_logger.warning.call_args[0][0]
-            assert "fetch_items" in args
+            msg, *fmt_args = mock_logger.warning.call_args[0]
+            assert "fetch_items" in msg % tuple(fmt_args)
 
     def test_truncates_long_queries_in_log(self, db_conn):
         """Truncates long queries in log output."""
@@ -284,8 +284,8 @@ class TestTimedQuery:
 
             # Check warning was called and query was truncated
             if mock_logger.warning.called:
-                args = mock_logger.warning.call_args[0][0]
-                assert "..." in args
+                msg, *fmt_args = mock_logger.warning.call_args[0]
+                assert "..." in msg % tuple(fmt_args)
 
     def test_raises_on_error(self, db_conn):
         """Raises exception on query error."""

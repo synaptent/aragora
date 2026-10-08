@@ -27,6 +27,7 @@ Contract:
 from __future__ import annotations
 
 import argparse
+import functools
 import glob as glob_module
 import hashlib
 import importlib.util
@@ -1916,7 +1917,7 @@ def run_checks(args: argparse.Namespace, now: datetime) -> list[CheckResult]:
                         lane_max_age_hours=args.lane_max_age_hours,
                         orphan_age_hours=args.orphan_branch_age_hours,
                         now=now,
-                        remote_heads=lambda repo=repo: _default_remote_heads(repo),
+                        remote_heads=functools.partial(_default_remote_heads, repo),
                         ahead_counter=_default_ahead_counter(repo),
                         commit_dater=_default_commit_dater(repo),
                     )
@@ -1986,12 +1987,12 @@ def run_checks(args: argparse.Namespace, now: datetime) -> list[CheckResult]:
             elif name == "trail_reconcile":
                 if args.trail_witness_replica:
                     replica = Path(args.trail_witness_replica)
-                    fetcher: Callable[[], list[dict[str, Any]]] = (
-                        lambda replica=replica: _replica_witness_events(replica)
+                    fetcher: Callable[[], list[dict[str, Any]]] = functools.partial(
+                        _replica_witness_events, replica
                     )
                     coverage = "full"
                 else:
-                    fetcher = lambda slug=args.trail_witness_repo: _github_witness_events(slug)  # noqa: E731
+                    fetcher = functools.partial(_github_witness_events, args.trail_witness_repo)
                     coverage = "events_api"
                 results.append(
                     check_trail_reconcile(

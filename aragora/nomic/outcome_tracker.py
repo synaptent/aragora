@@ -199,7 +199,7 @@ async def _lightweight_debate_runner(
     try:
         from aragora.core_types import Environment
         from aragora.debate.orchestrator import Arena
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         env = Environment(task=topic)
         protocol = DebateProtocol(
