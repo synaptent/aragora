@@ -3768,6 +3768,70 @@ def test_apply_prepared_evidence_does_not_repost_already_live_family(
     assert posted == []
 
 
+def test_apply_prepared_evidence_dogfood_only_live_family_does_not_meet_frontier_bar(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aragora.swarm import merge_quorum_io as mq
+    from aragora.swarm.merge_quorum_reconcile import EvidenceComment
+
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "1")
+    monkeypatch.setattr(
+        mq,
+        "fetch_evidence_comments",
+        lambda repo, pr, head_sha, committed_at: [
+            EvidenceComment(
+                created_at="2026-06-04T15:00:00Z",
+                would_count=True,
+                reviewer_id="openai",
+                is_dogfood=True,
+                reviewer_signals=(),
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        mq,
+        "fetch_merge_packet_entry",
+        lambda repo, pr, **kwargs: {
+            "pr_number": pr,
+            "head_sha": HEAD,
+            "unresolved_dissent": False,
+        },
+    )
+    prepared = _prepared_outcome_file(
+        tmp_path,
+        items=[EvidenceItem("qwen", _prepared_body("qwen"), True, ["qwen"], [], "pass")],
+        tier=2,
+        tiered_gate=True,
+    )
+    posted: list[str] = []
+
+    outcome = qe.apply_prepared_evidence(
+        repo="o/r",
+        pr=1,
+        prepared_json=prepared,
+        author="me",
+        apply=True,
+        context_fetcher=lambda repo, pr: {
+            "head_sha": HEAD,
+            "head_committed_at": COMMITTED,
+        },
+        tier_fetcher=lambda repo, pr: 2,
+        linter=lambda *args, **kwargs: {
+            "would_count": True,
+            "counted_reviewer_ids": ["qwen"],
+            "problems": [],
+        },
+        live_evidence_fetcher=mq.fetch_live_evidence_state,
+        poster=lambda repo, pr, body: posted.append(body),
+    )
+
+    assert outcome.action == "prepare"
+    assert outcome.live_counting_families == []
+    assert outcome.has_supportive_quorum is False
+    assert outcome.posted == []
+    assert posted == []
+
+
 def test_apply_prepared_evidence_recomputes_exact_head_adjudication(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,

@@ -24,7 +24,7 @@ from aragora.swarm.merge_quorum_reconcile import (
     EvidenceComment,
     PacketClassification,
     QuorumRun,
-    counted_reviewer_ids,
+    counted_reviewer_signal_families,
     parse_ci_packet_classification,
 )
 
@@ -869,9 +869,13 @@ def fetch_live_evidence_state(
 ) -> dict[str, Any]:
     """Return same-head countable comment families plus blocking-dissent state.
 
-    Comment families come from the canonical ``evidence-lint`` path. The merge
-    packet supplies the current head and unresolved-dissent verdict, so callers
-    fail closed if comments and packet do not describe the same PR head.
+    Comment families come from the canonical ``evidence-lint`` path and count
+    only genuine model-review signals: a dogfood-only counted identity is
+    excluded, because the live gate derives its western-frontier leg from
+    reviewer signals alone and the caller adds these families to its quorum
+    check. That makes this at most as permissive as the gate. The merge packet
+    supplies the current head and unresolved-dissent verdict, so callers fail
+    closed if comments and packet do not describe the same PR head.
     """
     comments = fetch_evidence_comments(repo, pr, head_sha, head_committed_at)
     entry = fetch_merge_packet_entry(
@@ -889,7 +893,7 @@ def fetch_live_evidence_state(
         raise RuntimeError(f"merge packet missing head SHA for {repo}#{pr}")
     return {
         "head_sha": packet_head,
-        "counting_families": counted_reviewer_ids(comments),
+        "counting_families": sorted(counted_reviewer_signal_families(comments)),
         # Keep the explicit packet value. The selector rejects missing/unknown
         # values, and callers still require literal False before posting.
         "unresolved_dissent": entry.get("unresolved_dissent"),

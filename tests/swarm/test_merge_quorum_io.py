@@ -514,6 +514,38 @@ def test_fetch_live_evidence_state_combines_linted_comments_and_packet(monkeypat
     }
 
 
+def test_fetch_live_evidence_state_counts_only_genuine_reviewer_signals(monkeypatch) -> None:
+    comments = [
+        m.EvidenceComment(
+            created_at="2026-07-09T12:00:00Z",
+            would_count=True,
+            reviewer_id="openai",
+            is_dogfood=True,
+            reviewer_signals=(),
+        ),
+        m.EvidenceComment(
+            created_at="2026-07-09T12:05:00Z",
+            would_count=True,
+            reviewer_id="claude",
+            reviewer_signals=("claude",),
+        ),
+    ]
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: comments)
+    monkeypatch.setattr(
+        m,
+        "fetch_merge_packet_entry",
+        lambda repo, pr, **kwargs: {
+            "pr_number": pr,
+            "head_sha": "abc123",
+            "unresolved_dissent": False,
+        },
+    )
+
+    state = m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+    assert state["counting_families"] == ["claude"]
+
+
 def test_fetch_live_evidence_state_fails_when_packet_has_no_head(monkeypatch) -> None:
     monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: [])
     monkeypatch.setattr(
