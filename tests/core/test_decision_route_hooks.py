@@ -315,6 +315,17 @@ def test_declared_registrations_only_fill_what_the_caller_left_missing(
     assert hooks.get_decision_audit_sink() is declared_sink
 
 
+def test_the_first_declared_registration_of_a_key_wins(undiscovered_hooks, monkeypatch):
+    first, second = MagicMock(), MagicMock()
+    _declare(
+        monkeypatch,
+        lambda: hooks.register_decision_audit_sink(first),
+        lambda: hooks.register_decision_audit_sink(second),
+    )
+
+    assert hooks.get_decision_audit_sink() is first
+
+
 def test_registering_replaces_again_after_a_declared_registration_fails(
     undiscovered_hooks, monkeypatch
 ):

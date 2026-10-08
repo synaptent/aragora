@@ -15,7 +15,9 @@ aragora's own ``pyproject.toml`` declares the server registration there. The
 dependency stays declared by the upper package in packaging metadata, so this
 module names none of the packages it reaches. Those declared registrations only
 fill what is missing: an entry registered before they ran (for example a caller's
-own workflow target or audit sink) is kept.
+own workflow target or audit sink) is kept, and when two declared registrations
+provide the same key, the one that runs first wins (entry-point order is not
+defined, so plugins should not rely on overriding each other).
 
 Every getter raises :class:`DecisionRouteNotRegisteredError` when nothing is
 registered after that. Registration is keyed, so registering again (for example
