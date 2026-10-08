@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import ast
 import importlib.metadata
+import json
+import os
 import re
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -275,6 +279,174 @@ def test_source_checkout_declarations_come_only_from_aragoras_pyproject(monkeypa
     assert hooks._source_checkout_registrations() == []
     monkeypatch.setattr(hooks, "_SOURCE_PYPROJECT", tmp_path / "missing.toml")
     assert hooks._source_checkout_registrations() == []
+
+
+# ---------------------------------------------------------------------------
+# Declared registrations never replace what a caller registered first
+# ---------------------------------------------------------------------------
+
+
+def test_declared_registrations_only_fill_what_the_caller_left_missing(
+    undiscovered_hooks, monkeypatch
+):
+    workflow, sink = AsyncMock(), MagicMock()
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, workflow)
+    hooks.register_decision_audit_sink(sink)
+    declared_workflow, declared_gauntlet = AsyncMock(), AsyncMock()
+    declared_sink, declared_builder = MagicMock(), AsyncMock()
+
+    def register():
+        hooks.register_route_target(hooks.ROUTE_WORKFLOW, declared_workflow)
+        hooks.register_route_target(hooks.ROUTE_GAUNTLET, declared_gauntlet)
+        hooks.register_decision_audit_sink(declared_sink)
+        hooks.register_decision_integrity_builder(declared_builder)
+
+    _declare(monkeypatch, register)
+
+    assert hooks.get_route_target(hooks.ROUTE_GAUNTLET) is declared_gauntlet
+    assert hooks.get_route_target(hooks.ROUTE_WORKFLOW) is workflow
+    assert hooks.get_decision_audit_sink() is sink
+    assert hooks.get_decision_integrity_builder() is declared_builder
+
+    # Outside discovery, registering again still replaces the entry.
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, declared_workflow)
+    hooks.register_decision_audit_sink(declared_sink)
+    assert hooks.get_route_target(hooks.ROUTE_WORKFLOW) is declared_workflow
+    assert hooks.get_decision_audit_sink() is declared_sink
+
+
+def test_registering_replaces_again_after_a_declared_registration_fails(
+    undiscovered_hooks, monkeypatch
+):
+    class PluginBug(Exception):
+        pass
+
+    def broken():
+        raise PluginBug("plugin defect")
+
+    _declare(monkeypatch, broken)
+    with pytest.raises(PluginBug):
+        hooks.get_route_target(hooks.ROUTE_WORKFLOW)
+
+    first, second = AsyncMock(), AsyncMock()
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, first)
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, second)
+    assert hooks.get_route_target(hooks.ROUTE_WORKFLOW) is second
+
+
+_EXPLICIT_REGISTRATION_CALLER = """
+    import asyncio, json, sys
+
+    from aragora.core import decision_route_hooks as hooks
+    from aragora.core.decision import (
+        DecisionConfig,
+        DecisionRequest,
+        DecisionResult,
+        DecisionRouter,
+        DecisionType,
+    )
+
+    scenario = sys.argv[1]
+    called = []
+
+    async def custom_workflow(router, request, span):
+        called.append(request.request_id)
+        return DecisionResult(
+            request_id=request.request_id,
+            decision_type=DecisionType.WORKFLOW,
+            answer="custom-workflow",
+            confidence=1.0,
+            consensus_reached=True,
+        )
+
+    class Sink:
+        def __init__(self):
+            self.events = []
+
+        def log_decision_started(self, *, request_id, **_kwargs):
+            self.events.append(["started", request_id])
+
+        def log_decision_completed(self, *, request_id, **_kwargs):
+            self.events.append(["completed", request_id])
+
+    sink = Sink()
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, custom_workflow)
+    if scenario == "sink":
+        hooks.register_decision_audit_sink(sink)
+        # A route miss runs the declared registrations after both caller registrations.
+        hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+
+    request = DecisionRequest(
+        content="Run the thing",
+        decision_type=DecisionType.WORKFLOW,
+        config=DecisionConfig(agents=[]),
+    )
+    router = DecisionRouter(
+        workflow_engine=object(), enable_caching=False, enable_deduplication=False
+    )
+    result = asyncio.run(router.route(request))
+    audit = hooks.get_decision_audit_sink()
+    print(json.dumps({
+        "server_loaded": "aragora.server.decision_routes" in sys.modules,
+        "called": called == [request.request_id],
+        "result": [result.success, result.answer, result.error],
+        "workflow_kept": hooks.get_registered_routes()[hooks.ROUTE_WORKFLOW] is custom_workflow,
+        "gauntlet": hooks.get_route_target(hooks.ROUTE_GAUNTLET).__module__,
+        "audit": "caller" if audit is sink else type(audit).__module__,
+        "sink_events": sink.events == [
+            ["started", request.request_id], ["completed", request.request_id]
+        ],
+    }))
+"""
+
+
+def _run_core_only_caller(scenario: str, tmp_path: Path) -> dict:
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(REPO_ROOT),
+        "ARAGORA_DATA_DIR": str(tmp_path / "data"),
+        "AWS_CONFIG_FILE": "/dev/null",
+        "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "ARAGORA_SECRETS_STRICT": "false",
+    }
+    proc = subprocess.run(
+        [sys.executable, "-W", "ignore", "-c", textwrap.dedent(_EXPLICIT_REGISTRATION_CALLER)]
+        + [scenario],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr[-4000:]
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+def test_core_only_caller_keeps_its_workflow_target_when_routing(tmp_path):
+    out = _run_core_only_caller("route", tmp_path)
+
+    # The audit sink miss ran the declared registrations, which filled only the
+    # keys the caller left empty.
+    assert out["server_loaded"] is True
+    assert out["called"] is True
+    assert out["result"] == [True, "custom-workflow", None]
+    assert out["workflow_kept"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["audit"] == "aragora.server.decision_routes"
+
+
+def test_core_only_caller_keeps_its_audit_sink_through_a_route_miss(tmp_path):
+    out = _run_core_only_caller("sink", tmp_path)
+
+    assert out["server_loaded"] is True
+    assert out["called"] is True
+    assert out["result"] == [True, "custom-workflow", None]
+    assert out["workflow_kept"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["audit"] == "caller"
+    assert out["sink_events"] is True
 
 
 def _function_calls(path: Path, function_name: str) -> set[str]:
