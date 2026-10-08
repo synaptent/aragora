@@ -226,8 +226,8 @@ class StateStore(Protocol):
         """Retrieve debate state by ID."""
         ...
 
-    async def list_active(self, limit: int = 100) -> list[DebateState]:
-        """List active (running/pending) debates."""
+    async def list_active(self, limit: int = 100, org_id: str | None = None) -> list[DebateState]:
+        """List active (running/pending) debates, only ``org_id``'s when given."""
         ...
 
     async def delete(self, debate_id: str) -> bool:
@@ -314,12 +314,13 @@ class InMemoryStateStore:
         """Get state from memory."""
         return self._states.get(debate_id)
 
-    async def list_active(self, limit: int = 100) -> list[DebateState]:
-        """List active debates."""
+    async def list_active(self, limit: int = 100, org_id: str | None = None) -> list[DebateState]:
+        """List active debates, only ``org_id``'s when given."""
         active = [
             s
             for s in self._states.values()
             if s.status in (DebateStatus.PENDING, DebateStatus.RUNNING)
+            and (org_id is None or (bool(org_id) and s.metadata.get("org_id") == org_id))
         ]
         return sorted(active, key=lambda s: s.created_at)[:limit]
 
@@ -449,11 +450,13 @@ class AsyncDecisionService:
             total_rounds=request.rounds,
             agents=request.agents or self._default_agents,
             metadata={
-                "org_id": request.org_id,
-                "user_id": request.user_id,
                 "correlation_id": request.correlation_id,
                 "priority": request.priority,
                 **request.metadata,
+                # After the caller's metadata: the owner fields decide who may
+                # see the decision, so caller-supplied keys must not replace them.
+                "org_id": request.org_id,
+                "user_id": request.user_id,
             },
         )
 
@@ -545,8 +548,11 @@ class AsyncDecisionService:
         self,
         status: DebateStatus | None = None,
         limit: int = 100,
+        org_id: str | None = None,
     ) -> list[DebateState]:
-        """List debates, optionally filtered by status."""
+        """List debates, optionally filtered by status and by owning org."""
+        if org_id is not None:
+            return await self._store.list_active(limit, org_id=org_id)
         if status in (DebateStatus.PENDING, DebateStatus.RUNNING):
             return await self._store.list_active(limit)
         # For other statuses, implementation depends on store capabilities

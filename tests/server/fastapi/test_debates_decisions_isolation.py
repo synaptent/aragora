@@ -1,7 +1,8 @@
-"""Org isolation of the FastAPI v2 debate routes.
+"""Org isolation of the FastAPI v2 debate and decision routes.
 
 Two orgs (real JWTs), an org-less user and an anonymous caller exercise every
-``/api/v2/debates`` route against a real SQLite ``DebateStorage``:
+``/api/v2/debates`` and ``/api/v2/decisions`` route against a real SQLite
+``DebateStorage`` and a real ``AsyncDecisionService``:
 
 * another org's record, an unowned record and a missing one answer the same
   404 body, before any permission check, and writes to them have no effect;
@@ -13,14 +14,24 @@ Two orgs (real JWTs), an org-less user and an anonymous caller exercise every
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from aragora.debate.decision_service import (
+    AsyncDecisionService,
+    DebateEvent,
+    DebateState,
+    DebateStatus,
+    EventType,
+    InMemoryStateStore,
+)
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi import create_app
 from aragora.server.fastapi.dependencies.auth import require_authenticated
@@ -37,7 +48,13 @@ DN = "debate-iso-null"
 DP = "debate-iso-b-public"
 DX = "debate-iso-missing"
 
+DEC_A = "decision-iso-a"
+DEC_B = "decision-iso-b"
+DEC_NULL = "decision-iso-null"
+DEC_X = "decision-iso-missing"
+
 DEBATE_NOT_FOUND = {"error": "Debate not found", "code": "not_found"}
+DECISION_NOT_FOUND = {"error": "Decision not found", "code": "not_found"}
 ORG_REQUIRED = "org_required"
 
 # Every route on one debate, as (method, path template, JSON body).
@@ -51,6 +68,11 @@ DEBATE_ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
     ("GET", "/api/v2/debates/{id}/stats", None),
     ("PATCH", "/api/v2/debates/{id}", {"title": "hijacked"}),
     ("DELETE", "/api/v2/debates/{id}", None),
+]
+DECISION_ROUTES: list[tuple[str, str]] = [
+    ("GET", "/api/v2/decisions/{id}"),
+    ("GET", "/api/v2/decisions/{id}/events"),
+    ("DELETE", "/api/v2/decisions/{id}"),
 ]
 
 
@@ -90,10 +112,30 @@ def storage(nomic_dir: Path) -> DebateStorage:
     return store
 
 
+def _decision(decision_id: str, org_id: str | None) -> DebateState:
+    metadata = {"org_id": org_id, "user_id": f"user-{org_id}"} if org_id else {}
+    return DebateState(
+        id=decision_id,
+        task=f"decision {decision_id}",
+        status=DebateStatus.RUNNING,
+        metadata=metadata,
+    )
+
+
 @pytest.fixture
-def app(nomic_dir, storage, fastapi_context_builder):
+def decision_service() -> AsyncDecisionService:
+    store = InMemoryStateStore()
+    for decision_id, org_id in ((DEC_A, ORG_A), (DEC_B, ORG_B), (DEC_NULL, None)):
+        asyncio.run(store.save(_decision(decision_id, org_id)))
+    return AsyncDecisionService(store=store)
+
+
+@pytest.fixture
+def app(nomic_dir, storage, decision_service, fastapi_context_builder):
     application = create_app(nomic_dir=nomic_dir)
-    application.state.context = fastapi_context_builder(storage=storage)
+    application.state.context = fastapi_context_builder(
+        storage=storage, decision_service=decision_service
+    )
     yield application
     application.dependency_overrides.clear()
 
@@ -144,10 +186,13 @@ def _snapshot(storage: DebateStorage, debate_id: str) -> tuple[Any, Any]:
 class TestNoScope:
     def test_anonymous_gets_401_on_every_route(self, client, storage):
         before = _snapshot(storage, DA)
-        responses = [client.get("/api/v2/debates")]
+        responses = [client.get("/api/v2/debates"), client.get("/api/v2/decisions")]
         for method, template, body in DEBATE_ROUTES:
             for debate_id in (DA, DX):
                 responses.append(_call(client, method, template.format(id=debate_id), {}, body))
+        for method, template in DECISION_ROUTES:
+            responses.append(client.request(method, template.format(id=DEC_A)))
+        responses.append(client.post("/api/v2/decisions", json={"task": "anon"}))
 
         assert [r.status_code for r in responses] == [401] * len(responses)
         assert _snapshot(storage, DA) == before
@@ -160,6 +205,9 @@ class TestNoScope:
             client.get(f"/api/v2/debates/{DA}/export/json", headers=no_org),
             client.patch(f"/api/v2/debates/{DA}", headers=no_org, json={"title": "x"}),
             client.delete(f"/api/v2/debates/{DA}", headers=no_org),
+            client.get("/api/v2/decisions", headers=no_org),
+            client.get(f"/api/v2/decisions/{DEC_A}", headers=no_org),
+            client.post("/api/v2/decisions", headers=no_org, json={"task": "no org"}),
         ]
 
         assert [r.status_code for r in responses] == [403] * len(responses)
@@ -361,3 +409,70 @@ class TestNomicDir:
         assert other_org.json() == DEBATE_NOT_FOUND
         assert owner.status_code == 200
         assert owner.json()["node_count"] >= 1
+
+
+# =============================================================================
+# Decisions
+# =============================================================================
+
+
+async def _one_terminal_event(debate_id: str):
+    yield DebateEvent(debate_id=debate_id, type=EventType.DEBATE_COMPLETED, data={})
+
+
+class TestDecisions:
+    @pytest.mark.parametrize(("method", "template"), DECISION_ROUTES)
+    def test_other_org_decision_answers_like_a_missing_one(
+        self, client, decision_service, as_b, method, template
+    ):
+        answers = [
+            client.request(method, template.format(id=decision_id), headers=as_b)
+            for decision_id in (DEC_A, DEC_NULL, DEC_X)
+        ]
+
+        assert [r.status_code for r in answers] == [404, 404, 404]
+        assert all(r.json() == DECISION_NOT_FOUND for r in answers)
+        for decision_id in (DEC_A, DEC_NULL):
+            state = asyncio.run(decision_service.get_debate(decision_id))
+            assert state.status == DebateStatus.RUNNING
+
+    def test_list_shows_only_the_callers_org(self, client, as_a, as_b):
+        listed_a = client.get("/api/v2/decisions", headers=as_a)
+        listed_b = client.get("/api/v2/decisions", headers=as_b)
+
+        assert [d["id"] for d in listed_a.json()] == [DEC_A]
+        assert [d["id"] for d in listed_b.json()] == [DEC_B]
+
+    def test_owner_reads_streams_and_cancels(self, client, decision_service, as_a):
+        decision_service.subscribe_events = _one_terminal_event
+
+        detail = client.get(f"/api/v2/decisions/{DEC_A}", headers=as_a)
+        events = client.get(f"/api/v2/decisions/{DEC_A}/events", headers=as_a)
+        cancelled = client.delete(f"/api/v2/decisions/{DEC_A}", headers=as_a)
+
+        assert detail.status_code == 200
+        assert detail.json()["metadata"]["org_id"] == ORG_A
+        assert events.status_code == 200
+        assert "event: debate_completed" in events.text
+        assert cancelled.status_code == 200
+        assert cancelled.json()["cancelled"] is True
+
+    def test_start_owns_the_decision_by_the_callers_org_not_the_body(
+        self, client, decision_service, as_a, as_b
+    ):
+        with patch.object(AsyncDecisionService, "_run_debate", AsyncMock()):
+            response = client.post(
+                "/api/v2/decisions",
+                headers=as_a,
+                json={"task": "Who owns this?", "metadata": {"org_id": ORG_B, "user_id": "evil"}},
+            )
+        assert response.status_code == 202
+        decision_id = response.json()["id"]
+
+        state = asyncio.run(decision_service.get_debate(decision_id))
+        assert state.metadata["org_id"] == ORG_A
+        assert state.metadata["user_id"] == "user-a"
+        assert client.get(f"/api/v2/decisions/{decision_id}", headers=as_a).status_code == 200
+        foreign = client.get(f"/api/v2/decisions/{decision_id}", headers=as_b)
+        assert foreign.status_code == 404
+        assert foreign.json() == DECISION_NOT_FOUND

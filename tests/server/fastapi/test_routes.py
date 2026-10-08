@@ -4,13 +4,13 @@ Tests for FastAPI route endpoints.
 Covers:
 - Health check endpoints (liveness/readiness)
 - Debate listing (org members only)
-- Decision endpoints (auth-protected write operations)
+- Decision endpoints (org members only)
 - RBAC enforcement
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -115,29 +115,37 @@ class TestDecisionRoutes:
         response = client.delete("/api/v2/decisions/test-id")
         assert response.status_code == 401
 
-    def test_get_decision_is_public(self, client):
-        """GET /decisions/{id} should be publicly accessible."""
-        # Mock the decision service
+    def test_get_decision_requires_auth(self, client):
+        """GET /decisions/{id} needs a signed-in org member."""
+        response = client.get("/api/v2/decisions/nonexistent-id")
+        assert response.status_code == 401
+
+    def test_get_missing_decision_is_404(self, client, fastapi_bearer):
+        """An org member asking for a missing decision gets the shared 404."""
         mock_service = AsyncMock()
         mock_service.get_debate = AsyncMock(return_value=None)
+        client.app.state.context["decision_service"] = mock_service
 
-        with patch(
-            "aragora.server.fastapi.routes.decisions.get_decision_service",
-            return_value=mock_service,
-        ):
-            response = client.get("/api/v2/decisions/nonexistent-id")
-            # 404 because debate doesn't exist, not 401
-            assert response.status_code in [404, 500]
+        response = client.get(
+            "/api/v2/decisions/nonexistent-id", headers=fastapi_bearer("user-1", "org-1")
+        )
+        assert response.status_code == 404
+        assert response.json() == {"error": "Decision not found", "code": "not_found"}
 
-    def test_list_decisions_is_public(self, client):
-        """GET /decisions should be publicly accessible."""
+    def test_list_decisions_requires_auth(self, client):
+        """Anonymous callers cannot list decisions."""
+        response = client.get("/api/v2/decisions")
+        assert response.status_code == 401
+
+    def test_list_decisions_returns_200(self, client, fastapi_bearer):
+        """An org member lists the org's decisions."""
         mock_service = AsyncMock()
         mock_service.list_debates = AsyncMock(return_value=[])
-
-        # Override the decision service in app context
         client.app.state.context["decision_service"] = mock_service
-        response = client.get("/api/v2/decisions")
+
+        response = client.get("/api/v2/decisions", headers=fastapi_bearer("user-1", "org-1"))
         assert response.status_code == 200
+        assert mock_service.list_debates.await_args.kwargs["org_id"] == "org-1"
 
 
 class TestCORSHeaders:
