@@ -48,6 +48,13 @@ FAMILY_PATHS = [
     "/api/pipeline/dag/d-1",
     "/api/canvas/pipeline",
     "/api/canvas/pipeline/p-1/graph",
+    "/api/canvas/convert/debate",
+    "/api/canvas/convert/workflow",
+    "/api/explain/deb-1",
+    "/api/explainability/batch",
+    "/api/explainability/batch/batch-1/status",
+    "/api/explainability/batch/batch-1/results",
+    "/api/explainability/compare",
     "/api/workspace",
     "/api/workspace/decisions/dec-1/actions",
     "/api/checkpoints",
@@ -78,6 +85,9 @@ OTHER_PATHS = [
     "/api/workspaces/ws-1",
     "/api/canvas",
     "/api/canvas/c-1",
+    "/api/canvas/converter",
+    "/api/explainer",
+    "/api/explainabilityx",
     "/api/knowledge",
     "/api/knowledge/search",
     "/api/playground/debate",
@@ -151,6 +161,8 @@ class TestStaticTokenDenial:
 
         assert static_token_denial("/api/v1/plans", headers) is ORG_REQUIRED
         assert static_token_denial("/api/v2/receipts", headers) is ORG_REQUIRED
+        assert static_token_denial("/api/v1/explain/deb-1", headers) is ORG_REQUIRED
+        assert static_token_denial("/api/v2/canvas/convert/debate", headers) is ORG_REQUIRED
 
     def test_token_signed_with_static_token_counts(self, monkeypatch):
         config = _install_api_token(monkeypatch, STATIC_TOKEN)
