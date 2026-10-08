@@ -173,6 +173,11 @@ server = "aragora.server.decision_routes:register_decision_routes"
 [project.entry-points."aragora.code_scanners"]
 audit = "aragora.audit.code_scanners:register_code_scanners"
 
+# Run by aragora/events/debate_completion.py on the first debate_completed emit, so a
+# process that only runs debates still records them in the debate analytics store.
+[project.entry-points."aragora.debate_completed_subscribers"]
+analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve

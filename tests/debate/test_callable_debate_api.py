@@ -152,7 +152,7 @@ def _runtime_imports(tree: ast.AST) -> list[tuple[int, str]]:
     return found
 
 
-@pytest.mark.parametrize("target", ["aragora.golden"])
+@pytest.mark.parametrize("target", ["aragora.golden", "aragora.analytics"])
 def test_debate_package_does_not_import_target_at_runtime(target: str) -> None:
     offenders = []
     for path in sorted(DEBATE_PACKAGE.rglob("*.py")):
