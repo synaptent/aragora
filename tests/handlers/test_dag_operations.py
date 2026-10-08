@@ -157,6 +157,15 @@ class MockCoordinator:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+
+@pytest.fixture(autouse=True)
+def _caller_owns_every_graph():
+    """The caller's org owns every graph; isolation is covered in the pipeline isolation tests."""
+    with patch("aragora.tenancy.pipeline_access.graph_owned", return_value=True):
+        yield
+
 
 @pytest.fixture
 def handler():

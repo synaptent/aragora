@@ -98,15 +98,17 @@ def record_owned(store: Any, record_id: str, scope: OrgScope | None) -> bool:
     return record_visible(store_owner_org(store, record_id), scope)
 
 
-def graph_owned(graph_id: str, scope: OrgScope | None) -> bool:
-    """Whether the caller's org owns the graph ``graph_id`` in the graph store.
+def graph_owned(graph_id: str, scope: OrgScope | None, store: Any | None = None) -> bool:
+    """Whether the caller's org owns the graph ``graph_id``.
 
-    Store errors answer False.
+    ``store`` defaults to the shared graph store. Store errors answer False.
     """
     try:
-        from aragora.pipeline.graph_store import get_graph_store
+        if store is None:
+            from aragora.pipeline.graph_store import get_graph_store
 
-        return record_owned(get_graph_store(), graph_id, scope)
+            store = get_graph_store()
+        return record_owned(store, graph_id, scope)
     except Exception as exc:  # noqa: BLE001 - an unreadable owner must hide the graph
         logger.warning("Graph owner lookup failed; denying: %s", type(exc).__name__)
         return False

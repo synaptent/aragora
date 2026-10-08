@@ -11,6 +11,10 @@ Exposes the DAGOperationsCoordinator via REST endpoints:
 - POST /api/v1/pipeline/dag/{graph_id}/cluster-ideas
 - POST /api/v1/pipeline/dag/{graph_id}/auto-flow
 - GET  /api/v1/pipeline/dag/{graph_id}
+
+Every route needs an org-scoped caller (``canvas:read`` to read the graph,
+``canvas:run`` for the operations) and answers the missing-graph 404 when
+the caller's org does not own the graph.
 """
 
 from __future__ import annotations
@@ -21,17 +25,8 @@ import re
 from typing import Any
 
 from aragora.server.handlers.base import HandlerResult, error_response, handle_errors, json_response
-
-try:
-    from aragora.rbac.decorators import require_permission
-except ImportError:  # pragma: no cover
-
-    def require_permission(*_a, **_kw):  # type: ignore[misc]
-        def _noop(fn):  # type: ignore[no-untyped-def]
-            return fn
-
-        return _noop
-
+from aragora.tenancy import pipeline_access
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -88,37 +83,50 @@ class DAGOperationsHandler:
         """Check if this handler can handle the given path."""
         return "/api/v1/pipeline/dag/" in path
 
-    @require_permission("pipeline:read")
+    @staticmethod
+    def _check_permission(
+        handler: Any, permission: str
+    ) -> tuple[OrgScope, None] | tuple[None, HandlerResult]:
+        """``(scope, None)`` when the caller has an org and ``permission``, else ``(None, error)``."""
+        return pipeline_access.authorize_pipeline_request(handler, permission)
+
+    @staticmethod
+    def _owns(graph_id: str, scope: OrgScope) -> bool:
+        return pipeline_access.graph_owned(graph_id, scope, store=_get_graph_store())
+
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
         """Dispatch GET requests."""
         m = _DAG_BASE.match(path)
-        if m:
-            return self._handle_get_graph(m.group(1))
-        return None
+        if not m:
+            return None
+        scope, denial = self._check_permission(handler, pipeline_access.PIPELINE_READ)
+        if scope is None:
+            return denial
+        if not self._owns(m.group(1), scope):
+            return record_not_found("Graph")
+        return self._handle_get_graph(m.group(1))
 
-    @require_permission("pipeline:write")
     @handle_errors("DAG operation")
     def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
         """Dispatch POST requests."""
+        node_op = _DAG_NODE_OP.match(path)
+        cluster = _DAG_CLUSTER.match(path)
+        match = node_op or cluster or _DAG_AUTO_FLOW.match(path)
+        if match is None:
+            return None
+        scope, denial = self._check_permission(handler, pipeline_access.PIPELINE_RUN)
+        if scope is None:
+            return denial
+        if not self._owns(match.group(1), scope):
+            return record_not_found("Graph")
+
         body = self._get_request_body(handler)
-
-        # Node-level operations
-        m = _DAG_NODE_OP.match(path)
-        if m:
-            graph_id, node_id, operation = m.group(1), m.group(2), m.group(3)
+        if node_op:
+            graph_id, node_id, operation = node_op.group(1), node_op.group(2), node_op.group(3)
             return self._dispatch_node_op(graph_id, node_id, operation, body)
-
-        # Cluster ideas
-        m = _DAG_CLUSTER.match(path)
-        if m:
-            return self._handle_cluster_ideas(m.group(1), body)
-
-        # Auto-flow
-        m = _DAG_AUTO_FLOW.match(path)
-        if m:
-            return self._handle_auto_flow(m.group(1), body)
-
-        return None
+        if cluster:
+            return self._handle_cluster_ideas(cluster.group(1), body)
+        return self._handle_auto_flow(match.group(1), body)
 
     @staticmethod
     def _get_request_body(handler: Any) -> dict[str, Any]:
