@@ -21,6 +21,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aragora.server.fastapi import create_app
+from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+
+ORG = "org-1"
 
 
 @pytest.fixture
@@ -42,11 +45,14 @@ def client(fastapi_context_builder, pipeline_store):
 
 @pytest.fixture
 def authed_client(client, override_fastapi_auth):
-    """Client with auth overrides applied."""
+    """Client acting for org ``org-1`` with the canvas permissions pipeline runs check."""
     override_fastapi_auth(
         client,
         roles={"admin"},
-        permissions={"pipeline:create", "pipeline:approve", "pipeline:delete"},
+        permissions={"canvas:read", "canvas:create", "canvas:run", "canvas:delete"},
+    )
+    client.app.dependency_overrides[require_org_scope_fastapi] = lambda: OrgScope(
+        org_id=ORG, user_id="user-1", role="admin"
     )
     return client
 
@@ -101,6 +107,7 @@ def sample_run(pipeline_store):
         "config": {"dry_run": True},
         "result": None,
     }
+    run["org_id"] = ORG
     pipeline_store["pipe-abc123"] = run
     return run
 
@@ -137,6 +144,7 @@ def completed_run(pipeline_store):
         "config": {},
         "result": {"pipeline_id": "pipe-done999", "stage_status": {}},
     }
+    run["org_id"] = ORG
     pipeline_store["pipe-done999"] = run
     return run
 
@@ -164,6 +172,7 @@ def cancelled_run(pipeline_store):
         "config": {},
         "result": None,
     }
+    run["org_id"] = ORG
     pipeline_store["pipe-cancel1"] = run
     return run
 
@@ -223,6 +232,7 @@ def workflow_ready_run(pipeline_store):
             "stage_status": {"ideation": "complete", "goals": "complete"},
         },
     }
+    run["org_id"] = ORG
     pipeline_store["pipe-workflow1"] = run
     return run
 
@@ -250,6 +260,7 @@ def no_goal_workflow_run(pipeline_store):
             "stage_status": {"ideation": "complete", "goals": "complete"},
         },
     }
+    run["org_id"] = ORG
     pipeline_store["pipe-no-goals1"] = run
     return run
 
@@ -262,9 +273,9 @@ def no_goal_workflow_run(pipeline_store):
 class TestListPipelineRuns:
     """Tests for GET /api/v2/pipeline/runs."""
 
-    def test_returns_200_empty_list(self, client):
+    def test_returns_200_empty_list(self, authed_client):
         """List pipeline runs returns 200 with empty list."""
-        response = client.get("/api/v2/pipeline/runs")
+        response = authed_client.get("/api/v2/pipeline/runs")
         assert response.status_code == 200
         data = response.json()
         assert data["runs"] == []
@@ -272,9 +283,9 @@ class TestListPipelineRuns:
         assert data["limit"] == 50
         assert data["offset"] == 0
 
-    def test_returns_runs_with_data(self, client, sample_run):
+    def test_returns_runs_with_data(self, authed_client, sample_run):
         """List pipeline runs returns summaries from store."""
-        response = client.get("/api/v2/pipeline/runs")
+        response = authed_client.get("/api/v2/pipeline/runs")
         assert response.status_code == 200
         data = response.json()
         assert len(data["runs"]) == 1
@@ -286,9 +297,9 @@ class TestListPipelineRuns:
         assert first["stage_count"] == 4
         assert first["completed_stages"] == 1
 
-    def test_pagination_params(self, client, sample_run, completed_run):
+    def test_pagination_params(self, authed_client, sample_run, completed_run):
         """List pipeline runs respects pagination params."""
-        response = client.get("/api/v2/pipeline/runs?limit=1&offset=0")
+        response = authed_client.get("/api/v2/pipeline/runs?limit=1&offset=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["runs"]) == 1
@@ -296,43 +307,43 @@ class TestListPipelineRuns:
         assert data["limit"] == 1
         assert data["offset"] == 0
 
-    def test_pagination_offset(self, client, sample_run, completed_run):
+    def test_pagination_offset(self, authed_client, sample_run, completed_run):
         """List pipeline runs respects offset."""
-        response = client.get("/api/v2/pipeline/runs?limit=1&offset=1")
+        response = authed_client.get("/api/v2/pipeline/runs?limit=1&offset=1")
         assert response.status_code == 200
         data = response.json()
         assert len(data["runs"]) == 1
         assert data["total"] == 2
 
-    def test_status_filter(self, client, sample_run, completed_run):
+    def test_status_filter(self, authed_client, sample_run, completed_run):
         """List pipeline runs supports status filter."""
-        response = client.get("/api/v2/pipeline/runs?status=completed")
+        response = authed_client.get("/api/v2/pipeline/runs?status=completed")
         assert response.status_code == 200
         data = response.json()
         assert len(data["runs"]) == 1
         assert data["runs"][0]["status"] == "completed"
 
-    def test_status_filter_no_matches(self, client, sample_run):
+    def test_status_filter_no_matches(self, authed_client, sample_run):
         """Status filter returns empty when no matches."""
-        response = client.get("/api/v2/pipeline/runs?status=failed")
+        response = authed_client.get("/api/v2/pipeline/runs?status=failed")
         assert response.status_code == 200
         data = response.json()
         assert data["runs"] == []
         assert data["total"] == 0
 
-    def test_limit_validation_min(self, client):
+    def test_limit_validation_min(self, authed_client):
         """Limit must be >= 1."""
-        response = client.get("/api/v2/pipeline/runs?limit=0")
+        response = authed_client.get("/api/v2/pipeline/runs?limit=0")
         assert response.status_code == 422
 
-    def test_limit_validation_max(self, client):
+    def test_limit_validation_max(self, authed_client):
         """Limit must be <= 100."""
-        response = client.get("/api/v2/pipeline/runs?limit=101")
+        response = authed_client.get("/api/v2/pipeline/runs?limit=101")
         assert response.status_code == 422
 
-    def test_offset_validation_min(self, client):
+    def test_offset_validation_min(self, authed_client):
         """Offset must be >= 0."""
-        response = client.get("/api/v2/pipeline/runs?offset=-1")
+        response = authed_client.get("/api/v2/pipeline/runs?offset=-1")
         assert response.status_code == 422
 
 
@@ -483,14 +494,14 @@ class TestCreatePipelineRun:
 class TestGetPipelineRun:
     """Tests for GET /api/v2/pipeline/runs/{run_id}."""
 
-    def test_returns_404_for_nonexistent(self, client):
+    def test_returns_404_for_nonexistent(self, authed_client):
         """Get nonexistent pipeline run returns 404."""
-        response = client.get("/api/v2/pipeline/runs/nonexistent-id")
+        response = authed_client.get("/api/v2/pipeline/runs/nonexistent-id")
         assert response.status_code == 404
 
-    def test_returns_run_details(self, client, sample_run):
+    def test_returns_run_details(self, authed_client, sample_run):
         """Get existing pipeline run returns full details."""
-        response = client.get("/api/v2/pipeline/runs/pipe-abc123")
+        response = authed_client.get("/api/v2/pipeline/runs/pipe-abc123")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "pipe-abc123"
@@ -504,9 +515,9 @@ class TestGetPipelineRun:
         assert data["config"]["dry_run"] is True
         assert data["created_at"] == "2026-02-20T10:00:00"
 
-    def test_returns_completed_run(self, client, completed_run):
+    def test_returns_completed_run(self, authed_client, completed_run):
         """Get completed pipeline run includes result."""
-        response = client.get("/api/v2/pipeline/runs/pipe-done999")
+        response = authed_client.get("/api/v2/pipeline/runs/pipe-done999")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "completed"
@@ -522,14 +533,14 @@ class TestGetPipelineRun:
 class TestGetPipelineStages:
     """Tests for GET /api/v2/pipeline/runs/{run_id}/stages."""
 
-    def test_returns_404_for_nonexistent(self, client):
+    def test_returns_404_for_nonexistent(self, authed_client):
         """Stages endpoint returns 404 for nonexistent run."""
-        response = client.get("/api/v2/pipeline/runs/nonexistent/stages")
+        response = authed_client.get("/api/v2/pipeline/runs/nonexistent/stages")
         assert response.status_code == 404
 
-    def test_returns_all_stages(self, client, sample_run):
+    def test_returns_all_stages(self, authed_client, sample_run):
         """Stages endpoint returns all stages for a run."""
-        response = client.get("/api/v2/pipeline/runs/pipe-abc123/stages")
+        response = authed_client.get("/api/v2/pipeline/runs/pipe-abc123/stages")
         assert response.status_code == 200
         data = response.json()
         assert data["run_id"] == "pipe-abc123"
@@ -550,9 +561,9 @@ class TestGetPipelineStages:
         assert goals["status"] == "pending"
         assert goals["output"] is None
 
-    def test_returns_stages_for_completed_run(self, client, completed_run):
+    def test_returns_stages_for_completed_run(self, authed_client, completed_run):
         """Stages endpoint works for completed runs."""
-        response = client.get("/api/v2/pipeline/runs/pipe-done999/stages")
+        response = authed_client.get("/api/v2/pipeline/runs/pipe-done999/stages")
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 2
@@ -669,6 +680,7 @@ class TestApprovePipelineStage:
             "updated_at": "2026-02-20T10:00:00",
             "config": {},
             "result": None,
+            "org_id": ORG,
         }
         pipeline_store["pipe-gate1"] = run
 

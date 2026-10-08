@@ -8,6 +8,10 @@ Surfaces the idea-to-execution pipeline backend as REST endpoints:
 - GET    /api/v2/pipeline/runs/{run_id}/stages - Get individual stage results
 - POST   /api/v2/pipeline/runs/{run_id}/approve - Approve a stage gate
 - DELETE /api/v2/pipeline/runs/{run_id}        - Cancel a pipeline run
+
+Runs belong to the org that started them. Every route needs a signed-in caller
+acting for an org; another org's run, a run with no recorded org and a missing
+run all answer the same 404, checked before the permission.
 """
 
 from __future__ import annotations
@@ -15,17 +19,30 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from aragora.rbac.models import AuthorizationContext
+from aragora.tenancy.record_scope import record_not_found_error, record_visible
 
-from ..dependencies.auth import require_permission
+from ..dependencies.auth import check_permission
+from ..dependencies.pipeline_access import (
+    PIPELINE_CREATE,
+    PIPELINE_DELETE,
+    PIPELINE_READ,
+    PIPELINE_RUN,
+    PipelineCaller,
+    pipeline_permission,
+    require_pipeline_caller,
+)
 from ..middleware.error_handling import NotFoundError
 
 logger = logging.getLogger(__name__)
+
+_RUN = "Pipeline run"
 
 router = APIRouter(prefix="/api/v2", tags=["Pipeline"])
 
@@ -149,6 +166,36 @@ async def get_pipeline_store(request: Request) -> dict[str, dict[str, Any]]:
     return _get_pipeline_store()
 
 
+def _visible_to(run: Any, caller: PipelineCaller) -> bool:
+    return isinstance(run, dict) and record_visible(run.get("org_id"), caller.scope)
+
+
+@dataclass(frozen=True, slots=True)
+class OwnedRun:
+    """A run the caller's org owns, with the caller acting on it."""
+
+    caller: PipelineCaller
+    run: dict[str, Any]
+
+
+def owned_run(permission: str) -> Callable[..., Awaitable[OwnedRun]]:
+    """Dependency for routes on ``{run_id}``: the caller's org must own the run
+    (else the shared 404), then the caller needs ``permission``."""
+
+    async def dependency(
+        run_id: str,
+        caller: PipelineCaller = Depends(require_pipeline_caller),
+        store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
+    ) -> OwnedRun:
+        run = store.get(run_id)
+        if run is None or not _visible_to(run, caller):
+            raise record_not_found_error(_RUN)
+        check_permission(caller.auth, permission)
+        return OwnedRun(caller=caller, run=run)
+
+    return dependency
+
+
 # =============================================================================
 # Pipeline Execution Helper
 # =============================================================================
@@ -195,15 +242,16 @@ async def list_pipeline_runs(
     limit: int = Query(50, ge=1, le=100, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     status: str | None = Query(None, description="Filter by status"),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_READ)),
     store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
 ) -> PipelineListResponse:
     """
-    List all pipeline runs with pagination.
+    List the caller org's pipeline runs with pagination.
 
     Returns a paginated list of pipeline run summaries.
     """
     try:
-        all_runs = list(store.values())
+        all_runs = [run for run in store.values() if _visible_to(run, caller)]
 
         # Filter by status if provided
         if status:
@@ -248,14 +296,14 @@ async def list_pipeline_runs(
 @router.post("/pipeline/runs", response_model=PipelineRunResponse, status_code=201)
 async def create_pipeline_run(
     body: PipelineRunCreate,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
     store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
 ) -> PipelineRunResponse:
     """
-    Start a new pipeline run.
+    Start a new pipeline run owned by the caller's org.
 
     Creates a pipeline run from an idea/goal text and begins processing.
-    Requires `pipeline:create` permission.
+    Requires `canvas:create` permission.
     """
     try:
         run_id = f"pipe-{uuid.uuid4().hex[:12]}"
@@ -290,6 +338,7 @@ async def create_pipeline_run(
             "updated_at": now,
             "config": config,
             "result": None,
+            **caller.owner_fields(),
         }
 
         # Try to start the pipeline
@@ -367,7 +416,7 @@ async def create_pipeline_run(
 @router.get("/pipeline/runs/{run_id}", response_model=PipelineRunResponse)
 async def get_pipeline_run(
     run_id: str,
-    store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
+    owned: OwnedRun = Depends(owned_run(PIPELINE_READ)),
 ) -> PipelineRunResponse:
     """
     Get pipeline run status and details.
@@ -375,9 +424,7 @@ async def get_pipeline_run(
     Returns full pipeline run details including all stage results.
     """
     try:
-        run_data = store.get(run_id)
-        if not run_data:
-            raise NotFoundError(f"Pipeline run {run_id} not found")
+        run_data = owned.run
 
         stage_responses = [
             PipelineStageResponse(
@@ -413,7 +460,7 @@ async def get_pipeline_run(
 @router.get("/pipeline/runs/{run_id}/stages", response_model=PipelineStagesResponse)
 async def get_pipeline_stages(
     run_id: str,
-    store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
+    owned: OwnedRun = Depends(owned_run(PIPELINE_READ)),
 ) -> PipelineStagesResponse:
     """
     Get individual stage results for a pipeline run.
@@ -421,9 +468,7 @@ async def get_pipeline_stages(
     Returns detailed information about each stage in the pipeline.
     """
     try:
-        run_data = store.get(run_id)
-        if not run_data:
-            raise NotFoundError(f"Pipeline run {run_id} not found")
+        run_data = owned.run
 
         stages = [
             PipelineStageResponse(
@@ -458,19 +503,16 @@ _VALID_STAGE_NAMES = {"ideation", "goals", "workflow", "orchestration", "princip
 async def approve_pipeline_stage(
     run_id: str,
     body: PipelineApproveRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:approve")),
-    store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
+    owned: OwnedRun = Depends(owned_run(PIPELINE_RUN)),
 ) -> PipelineApproveResponse:
     """
     Approve a stage gate in a pipeline run.
 
     Human-in-the-loop approval to advance the pipeline to the next stage.
-    Requires `pipeline:approve` permission.
+    Requires `canvas:run` permission.
     """
     try:
-        run_data = store.get(run_id)
-        if not run_data:
-            raise NotFoundError(f"Pipeline run {run_id} not found")
+        run_data = owned.run
 
         if run_data.get("status") == "cancelled":
             raise HTTPException(status_code=400, detail="Cannot approve a cancelled pipeline run")
@@ -514,7 +556,7 @@ async def approve_pipeline_stage(
             "Pipeline run %s stage '%s' approved by %s",
             run_id,
             body.stage,
-            auth.user_id,
+            owned.caller.scope.user_id,
         )
 
         return PipelineApproveResponse(
@@ -536,19 +578,16 @@ async def approve_pipeline_stage(
 @router.delete("/pipeline/runs/{run_id}", response_model=PipelineDeleteResponse)
 async def cancel_pipeline_run(
     run_id: str,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:delete")),
-    store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
+    owned: OwnedRun = Depends(owned_run(PIPELINE_DELETE)),
 ) -> PipelineDeleteResponse:
     """
     Cancel a pipeline run.
 
     Marks the pipeline run as cancelled and stops any further processing.
-    Requires `pipeline:delete` permission.
+    Requires `canvas:delete` permission.
     """
     try:
-        run_data = store.get(run_id)
-        if not run_data:
-            raise NotFoundError(f"Pipeline run {run_id} not found")
+        run_data = owned.run
 
         if run_data.get("status") in ("completed", "cancelled"):
             raise HTTPException(
@@ -564,7 +603,7 @@ async def cancel_pipeline_run(
             if stage.get("status") == "pending":
                 stage["status"] = "skipped"
 
-        logger.info("Pipeline run %s cancelled by %s", run_id, auth.user_id)
+        logger.info("Pipeline run %s cancelled by %s", run_id, owned.caller.scope.user_id)
 
         return PipelineDeleteResponse(cancelled=True, id=run_id)
 
@@ -600,20 +639,19 @@ class ExecuteWorkflowResponse(BaseModel):
 )
 async def execute_workflow_from_pipeline(
     run_id: str,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
-    store: dict[str, dict[str, Any]] = Depends(get_pipeline_store),
+    owned: OwnedRun = Depends(owned_run(PIPELINE_RUN)),
 ) -> ExecuteWorkflowResponse:
     """
     Create, persist, and start a workflow from a pipeline's goal graph.
 
     Converts the pipeline result's goal graph into a WorkflowDefinition
     via ``canvas_to_workflow()``, stores it through the workflow subsystem,
-    and starts a real execution record.
-    Requires ``pipeline:create`` permission.
+    and starts a real execution record for the caller's org.
+    Requires ``canvas:run`` permission.
     """
-    run_data = store.get(run_id)
-    if not run_data:
-        raise NotFoundError(f"Pipeline run {run_id} not found")
+    run_data = owned.run
+    auth = owned.caller.auth
+    scope = owned.caller.scope
 
     try:
         from aragora.pipeline.idea_to_execution import (
@@ -670,13 +708,11 @@ async def execute_workflow_from_pipeline(
         from aragora.server.handlers.workflows.crud import create_workflow
         from aragora.server.handlers.workflows.execution import execute_workflow
 
-        tenant_id = str(
-            getattr(auth, "workspace_id", None) or getattr(auth, "org_id", None) or "default"
-        )
+        tenant_id = str(getattr(auth, "workspace_id", None) or scope.org_id)
         created_workflow = await create_workflow(
             workflow_def.to_dict(),
             tenant_id=tenant_id,
-            created_by=str(getattr(auth, "user_id", "") or ""),
+            created_by=scope.user_id,
         )
         workflow_id = str(created_workflow.get("id") or workflow_def.id)
 
@@ -684,8 +720,8 @@ async def execute_workflow_from_pipeline(
             workflow_id,
             inputs={"pipeline_id": run_id},
             tenant_id=tenant_id,
-            user_id=str(getattr(auth, "user_id", "") or "") or None,
-            org_id=str(getattr(auth, "org_id", "") or "") or None,
+            user_id=scope.user_id,
+            org_id=scope.org_id,
         )
         execution_id = (
             str(execution_result.get("execution_id") or execution_result.get("id") or "") or None
