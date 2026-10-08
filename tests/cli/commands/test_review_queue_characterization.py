@@ -16,6 +16,7 @@ import difflib
 import json
 import os
 import re
+import subprocess
 import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -48,13 +49,7 @@ REPORTING_CASES = tuple(
     required_fail required_pending optional_fail optional_pending
     """.split()
 )
-REQUIRED_NAMES = (
-    "lint",
-    "typecheck",
-    "sdk-parity",
-    "Generate & Validate",
-    "TypeScript SDK Type Check",
-)
+REQUIRED = ("lint", "typecheck", "sdk-parity", "Generate & Validate", "TypeScript SDK Type Check")
 VOLATILE_KEYS = {"generated_at", "packet_sha"}
 
 
@@ -79,13 +74,10 @@ def _assert_matches_golden(name: str, key: str, actual: Any) -> None:
         _write_golden(name, entries)
     expected = _read_golden(name).get(key)
     if _canonical(expected) != _canonical(actual):
-        diff = difflib.unified_diff(
-            json.dumps(expected, indent=1, sort_keys=True).splitlines(),
-            json.dumps(actual, indent=1, sort_keys=True).splitlines(),
-            "golden",
-            "actual",
-            lineterm="",
+        old, new = (
+            json.dumps(v, indent=1, sort_keys=True).splitlines() for v in (expected, actual)
         )
+        diff = difflib.unified_diff(old, new, "golden", "actual", lineterm="")
         pytest.fail(f"{name}[{key}] drifted:\n" + "\n".join(list(diff)[:120]))
 
 
@@ -183,7 +175,7 @@ def _in_job(
         "conclusion": "",
         "detailsUrl": "https://github.com/synaptent/aragora/actions/runs/26288586838/job/1",
     }
-    green = [{"name": n, "status": "COMPLETED", "conclusion": "SUCCESS"} for n in REQUIRED_NAMES]
+    green = [{"name": n, "status": "COMPLETED", "conclusion": "SUCCESS"} for n in REQUIRED]
     pr = _pr(
         statusCheckRollup=[
             quorum_row,
@@ -385,6 +377,7 @@ def _rest_fallback_routes() -> dict[str, Any]:
         f"{base}/pulls/7466/commits?per_page=100": [
             {"sha": head, "commit": {"author": {"date": "2026-06-12T00:00:00Z"}}}
         ],
+        f"{base}/commits/{head}/statuses?per_page=100": [],
         f"{base}/commits/{head}/status": {
             "statuses": [{**status, "updated_at": status["created_at"]}]
         },
@@ -577,13 +570,26 @@ def test_section8_advisory_behaviors_stay_frozen(
 # --- C-1 public surface -----------------------------------------------------
 
 
-def test_public_surface_keeps_every_recorded_name() -> None:
+def _fresh_public_names() -> list[str]:
+    """Names from a fresh facade import; attributes other tests attach in-process do not count."""
+    probe = "import json, aragora.cli.commands.review_queue as m; print(json.dumps(dir(m)))"
+    path = os.pathsep.join(filter(None, (str(REPO_ROOT), os.environ.get("PYTHONPATH"))))
+    env = {**os.environ, "PYTHONPATH": path}
+    out = subprocess.check_output([sys.executable, "-c", probe], cwd=REPO_ROOT, env=env, text=True)
+    return sorted(name for name in json.loads(out.splitlines()[-1]) if not name.startswith("__"))
+
+
+def test_public_surface_matches_the_recorded_names() -> None:
+    names = _fresh_public_names()
     if REGEN:
-        names = sorted(name for name in dir(rq) if not name.startswith("__"))
         _write_golden("public_surface.json", {"names": names})
     recorded = _read_golden("public_surface.json")["names"]
     assert recorded and recorded == sorted(recorded)
-    assert [name for name in recorded if not hasattr(rq, name)] == []
+    drift = {
+        "missing": sorted(set(recorded) - set(names)),
+        "added": sorted(set(names) - set(recorded)),
+    }
+    assert drift == {"missing": [], "added": []}
     for name in recorded:
         obj = getattr(rq, name)
         owner = getattr(obj, "__module__", None)
@@ -611,11 +617,11 @@ def _seam_census() -> set[str]:
 
 
 def _seam_violations(tree: ast.Module, seams: set[str]) -> list[str]:
+    """Design rule I2: units reach seams through the facade at call time, either as
+    ``_review_queue_backend().<name>`` or through a function-local import from the facade
+    (I2's own description of that precedent; ``review_queue_render.py`` already does this)."""
     facade = "aragora.cli.commands.review_queue"
     violations: list[str] = []
-
-    def is_type_checking(node: ast.AST) -> bool:
-        return isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test)
 
     def visit(node: ast.AST, late_bound: frozenset[str], import_time: bool) -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
@@ -626,7 +632,7 @@ def _seam_violations(tree: ast.Module, seams: set[str]) -> list[str]:
                 for alias in child.names
             }
             late_bound, import_time = late_bound | local, False
-        if is_type_checking(node):
+        if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test):
             return
         if isinstance(node, ast.ImportFrom) and import_time:
             for alias in node.names:
@@ -666,10 +672,14 @@ def test_seam_checker_flags_bindings_and_direct_calls() -> None:
         "def late():\n"
         "    from aragora.cli.commands.review_queue import _gh_json\n    return _gh_json([])\n"
         "def backend():\n    return _review_queue_backend()._gh_json([])\n"
+        "if TYPE_CHECKING:\n    from aragora.cli.commands.review_queue_transport import _gh_json\n"
+        "def other():\n    from aragora.cli.commands.review_queue_transport import _gh_json\n"
+        "    return _gh_json([])\n"
     )
     assert _seam_violations(tree, {"_gh_json"}) == [
         "line 1: import-time binding of _gh_json",
         "line 3: direct call to seam _gh_json",
+        "line 13: direct call to seam _gh_json",
     ]
 
 
