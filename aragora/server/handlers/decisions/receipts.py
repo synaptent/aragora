@@ -114,6 +114,14 @@ class WorkspaceNotFoundError(LookupError):
     """
 
 
+class WorkspaceTokenMissingError(ValueError):
+    """The acting org's delivery workspace has no bot token stored.
+
+    Delivery is refused rather than sent with the process-wide bot token,
+    which belongs to no tenant.
+    """
+
+
 def _require_owned_workspace(workspace: Any, org_attr: str, org_id: str | None) -> Any:
     """Return ``workspace`` when ``org_id`` owns it; otherwise raise WorkspaceNotFoundError."""
     owner = str(getattr(workspace, org_attr, None) or "").strip() if workspace else ""
@@ -2076,6 +2084,17 @@ class ReceiptsHandler(BaseHandler):
 
         except WorkspaceNotFoundError:
             return record_not_found("Workspace")
+        except WorkspaceTokenMissingError as e:
+            self._record_delivery_history(
+                receipt_id=receipt_id,
+                channel_type=channel_type,
+                channel_id=channel_id,
+                workspace_id=workspace_id,
+                status="failed",
+                error=str(e),
+                org_id=scope.org_id,
+            )
+            return error_response(str(e), 409)
         except ImportError as e:
             self._record_delivery_history(
                 receipt_id=receipt_id,
@@ -2112,7 +2131,8 @@ class ReceiptsHandler(BaseHandler):
         """Send formatted receipt to a Slack channel of a workspace ``org_id`` owns.
 
         Raises WorkspaceNotFoundError when the workspace is missing, unowned or
-        installed by another org.
+        installed by another org, and WorkspaceTokenMissingError (before any
+        connector is built) when the workspace has no bot token.
         """
         from aragora.storage.slack_workspace_store import get_slack_workspace_store
 
@@ -2123,13 +2143,16 @@ class ReceiptsHandler(BaseHandler):
         workspace = _require_owned_workspace(
             await _call_nonblocking(store, "get", workspace_id), "tenant_id", org_id
         )
+        bot_token = str(getattr(workspace, "access_token", None) or "").strip()
+        if not bot_token:
+            raise WorkspaceTokenMissingError("Slack workspace has no bot token")
 
-        # Use Slack connector to send
         from aragora.connectors.chat.slack import SlackConnector
 
         connector = SlackConnector(
-            token=workspace.access_token,
+            bot_token=bot_token,
             signing_secret=workspace.signing_secret,
+            workspace_id=workspace_id,
         )
 
         blocks = formatted.get("blocks", [])
