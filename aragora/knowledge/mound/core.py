@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from aragora.knowledge.fact_store import FactStore
     from aragora.evidence.store import EvidenceStore
     from aragora.memory.store import CritiqueStore
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class KnowledgeMoundCore:
         self,
         config: MoundConfig | None = None,
         workspace_id: str | None = None,
-        event_emitter: EventEmitterProtocol | None = None,
+        event_emitter: LegacyEventEmitterProtocol | None = None,
     ) -> None:
         """
         Initialize the Knowledge Mound core.

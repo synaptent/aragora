@@ -217,3 +217,75 @@ class TestConsumersUseCanonicalPath:
         asyncio.run(_probe())
         """
         assert _run_shim_warning_probe(body) == 0
+
+
+class TestRbacAndHandlerConsumersUseCanonicalPath:
+    """Repointed rbac/ and server-handler consumers must not touch the shim.
+
+    Same fresh-interpreter call-time probe pattern as
+    TestConsumersUseCanonicalPath; every remaining consumer here imports the
+    Redis helpers lazily inside a method, so each probe exercises the actual
+    call path rather than mere module import.
+    """
+
+    def test_quota_enforcer_get_redis_emits_no_shim_warning(self):
+        body = """
+        from aragora.rbac.quotas import QuotaEnforcer
+
+        QuotaEnforcer(enable_persistence=False)._get_redis()
+        """
+        assert _run_shim_warning_probe(body) == 0
+
+    def test_break_glass_get_redis_emits_no_shim_warning(self):
+        body = """
+        from aragora.rbac.emergency import BreakGlassAccess
+
+        BreakGlassAccess(enable_persistence=False)._get_redis()
+        """
+        assert _run_shim_warning_probe(body) == 0
+
+    def test_batch_store_explicit_redis_backend_emits_no_shim_warning(self):
+        body = """
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ARAGORA_EXPLAINABILITY_STORE_BACKEND"] = "redis"
+            os.environ["ARAGORA_EXPLAINABILITY_DB"] = os.path.join(tmp, "probe.db")
+            from aragora.server.handlers.explainability_store import (
+                get_batch_job_store,
+                reset_batch_job_store,
+            )
+
+            reset_batch_job_store()
+            get_batch_job_store()
+            reset_batch_job_store()
+        """
+        assert _run_shim_warning_probe(body) == 0
+
+    def test_batch_store_default_backend_emits_no_shim_warning(self):
+        body = """
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ.pop("ARAGORA_EXPLAINABILITY_STORE_BACKEND", None)
+            os.environ["ARAGORA_EXPLAINABILITY_DB"] = os.path.join(tmp, "probe.db")
+            from aragora.server.handlers.explainability_store import (
+                get_batch_job_store,
+                reset_batch_job_store,
+            )
+
+            reset_batch_job_store()
+            get_batch_job_store()
+            reset_batch_job_store()
+        """
+        assert _run_shim_warning_probe(body) == 0
+
+    def test_status_page_redis_health_emits_no_shim_warning(self):
+        body = """
+        from aragora.server.handlers.public.status_page import StatusPageHandler
+
+        StatusPageHandler()._check_redis_health()
+        """
+        assert _run_shim_warning_probe(body) == 0

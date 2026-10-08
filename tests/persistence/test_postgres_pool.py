@@ -1075,7 +1075,8 @@ class TestEdgeCases:
         with patch(
             "asyncio.timeout",
             return_value=MagicMock(
-                __aenter__=AsyncMock(side_effect=asyncio.TimeoutError()), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(side_effect=asyncio.TimeoutError()),
+                __aexit__=AsyncMock(return_value=False),
             ),
         ):
             await pool._check_replica_health()

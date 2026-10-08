@@ -336,14 +336,21 @@ def _git_text(repo_root: Path, *args: str) -> str:
 
 
 def _git_env() -> dict[str, str]:
-    return {
-        **os.environ,
-        "GIT_CONFIG_GLOBAL": os.devnull,
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_NO_REPLACE_OBJECTS": "1",
-        "GIT_OPTIONAL_LOCKS": "0",
-        "LC_ALL": "C",
-    }
+    # Ambient GIT_* variables (GIT_CONFIG_COUNT/GIT_CONFIG_PARAMETERS
+    # command-scope config, identity/date overrides, object-store redirection)
+    # bypass the two config pins below and make fixed-ref output
+    # session-dependent, so drop them all before pinning.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "LC_ALL": "C",
+        }
+    )
+    return env
 
 
 def _git_bytes(repo_root: Path, *args: str) -> bytes:
@@ -821,6 +828,10 @@ def _load_authority_manifest(repo_root: Path, source_sha: str) -> dict[str, Any]
         ],
         cwd=repo_root,
         capture_output=True,
+        # The generator shells out to git without scrubbing, so its whole
+        # child tree must inherit the pinned git environment or the manifest
+        # digest embedded in the payload absorbs session git config.
+        env=_git_env(),
     )
     if proc.returncode != 0:
         _fail(

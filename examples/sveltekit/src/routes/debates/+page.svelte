@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import { debateView } from '$lib/debate-view';
 
   export let data: PageData;
 </script>
@@ -23,7 +24,7 @@
         </div>
         <h3>{debate.task?.slice(0, 60) || 'Untitled'}{debate.task?.length > 60 ? '...' : ''}</h3>
         <p class="meta">
-          {debate.agents?.length || 0} agents | Round {debate.current_round || 0}/{debate.total_rounds || 9}
+          {debate.agents?.length || 0} agents | Completed rounds: {debateView(debate).roundsCompleted}
         </p>
       </a>
     {/each}

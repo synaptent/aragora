@@ -34,7 +34,7 @@ These are standard OOP patterns where abstract base classes define interfaces th
 | `aragora/pulse/ingestor.py` | 1 | Abstract fetch_trending |
 | `aragora/server/handlers/admin/health/probes.py` | 2 | Abstract health probes |
 | `aragora/server/handlers/knowledge_base/mound/*.py` | 8 | Abstract _get_mound (mixin pattern) |
-| `aragora/skills/base.py` | 3 | Abstract skill interface |
+| `aragora/types/skills.py` | 3 | Abstract skill interface |
 
 **Status:** KEEP - Standard OOP inheritance patterns
 

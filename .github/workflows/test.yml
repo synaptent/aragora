@@ -7,9 +7,11 @@ on:
     paths:
       - 'aragora/**'
       - 'aragora-debate/**'
+      - 'aragora-verify/**'
       - 'tests/**'
       - 'pyproject.toml'
       - 'requirements.txt'
+      - 'scripts/gen_odr_vectors.py'
       - 'scripts/capability_gap_report.py'
       - 'scripts/generate_capability_matrix.py'
       - 'scripts/check_capability_matrix_sync.py'
@@ -85,7 +87,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -260,7 +262,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: 'npm'
@@ -664,6 +666,8 @@ jobs:
               - 'aragora/compliance/**'
               - 'aragora/gauntlet/**'
               - 'aragora/cli/**'
+              - 'aragora-verify/**'
+              - 'scripts/gen_odr_vectors.py'
               - 'tests/nomic/**'
               - 'tests/control_plane/**'
               - 'tests/rbac/**'
@@ -672,6 +676,7 @@ jobs:
               - 'tests/compliance/**'
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
+              - 'tests/verify/**'
 
       - name: Report scopes
         run: |
@@ -723,7 +728,7 @@ jobs:
             scope: storage
             timeout: 30
           - name: infra
-            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/verify
             scope: infra
             timeout: 30
 
@@ -1796,7 +1801,7 @@ jobs:
           retention-days: 14
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -2045,7 +2050,7 @@ jobs:
           bash scripts/ci_install_project.sh --extras dev,test
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
           cache: 'npm'
@@ -2185,7 +2190,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.scope.outputs.frontend == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
           cache: 'npm'
@@ -2376,7 +2381,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           bash scripts/ci_install_project.sh --extras dev
-          python -m pip install alembic psycopg2-binary asyncpg
+          # SQLAlchemy 2.1 no longer installs greenlet by default; the async
+          # Alembic env needs it, so request the asyncio extra explicitly.
+          python -m pip install alembic psycopg2-binary asyncpg "sqlalchemy[asyncio]"
 
       - name: Verify migration files
         run: |
@@ -2393,6 +2400,13 @@ jobs:
           echo "Running migrations to head..."
           alembic upgrade head
           echo "✓ Migrations completed successfully"
+        env:
+          DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
+
+      - name: Run Aragora runtime migrations
+        run: |
+          python -m aragora.migrations upgrade --database-url "$DATABASE_URL"
+          python -m aragora.migrations status
         env:
           DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
 

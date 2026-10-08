@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Trace context imports for distributed tracing
 try:
-    from aragora.server.middleware.tracing import (
+    from aragora.observability.middleware.tracing import (
         get_trace_id,
         get_span_id,
         TRACE_ID_HEADER as CUSTOM_TRACE_ID_HEADER,
@@ -787,8 +787,11 @@ class WebhookDeliveryManager:
 
         self._metrics.retries += 1
         logger.debug(
-            f"Scheduled retry for {delivery.delivery_id} in {delay:.1f}s "
-            f"(attempt {delivery.attempts}/{self._max_retries})"
+            "Scheduled retry for %s in %.1fs (attempt %s/%s)",
+            delivery.delivery_id,
+            delay,
+            delivery.attempts,
+            self._max_retries,
         )
 
     def _move_to_dead_letter(self, delivery: WebhookDelivery) -> None:

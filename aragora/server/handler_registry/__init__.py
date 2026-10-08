@@ -84,7 +84,7 @@ if TYPE_CHECKING:
     from aragora.debate.embeddings import DebateEmbeddingsDatabase
     from aragora.memory.store import CritiqueStore
     from aragora.ranking.elo import EloSystem
-    from aragora.server.storage import DebateStorage
+    from aragora.storage.debate_storage import DebateStorage
 
 logger = logging.getLogger(__name__)
 

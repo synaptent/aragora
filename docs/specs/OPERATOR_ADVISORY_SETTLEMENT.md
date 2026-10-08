@@ -85,6 +85,15 @@ untouched. The settled verdict is a **distinct, auditable value**
 emits a `::notice::OPERATOR-SETTLED-OVER-ADVISORY` line naming the PR, head,
 tier, and validated families.
 
+Inside the enforcing job, the required-check surface is also fetched whenever its own quorum row was excluded from the rollup summary, keeping the valve reachable when every other check is green.
+
+Packet reporting claims non-required non-green checks only when the rollup's
+required-check membership classification identifies them. An unavailable required
+surface remains unknown, not a failed rollup. Raw pending self rows are preserved;
+the existing self-row exclusions still apply to summaries and diagnostic counts.
+Controlled in-job fixtures, including mocked settlement-creator checks, prove
+unit reachability only, not live CI execution or authorization.
+
 ## What is preserved
 
 - `[P0]`/`[P1]` model dissent blocks the operator exactly as before.

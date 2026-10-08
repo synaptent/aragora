@@ -52,7 +52,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 if TYPE_CHECKING:
     from aragora.connectors.enterprise.communication.outlook import OutlookConnector

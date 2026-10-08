@@ -23,7 +23,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | [Self-Improvement](#9-self-improvement--nomic-loop) | 18+ | Stable |
 
 <!-- metrics:begin feature-discovery-total -->
-**Total**: 230+ features | 4,314 Python files | 226,063 tests | 3,205 API operations across 2,912 paths
+**Total**: 230+ features | 4,344 Python files | 227,861 tests | 3,205 API operations across 2,912 paths
 <!-- metrics:end -->
 
 ---
@@ -560,7 +560,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **SkillMarketplace** | Integrated | Publish, search, and install from marketplace catalog | `aragora/skills/marketplace.py` |
 | **Skill Installer** | Integrated | Manifest-based dependency management and install | `aragora/skills/installer.py` |
 | **Built-in Skills** | Integrated | Bundled skills for common patterns | `aragora/skills/builtin/` |
-| **LLM Function Calling** | Integrated | Pluggable skills exposed as LLM tool calls | `aragora/skills/base.py` |
+| **LLM Function Calling** | Integrated | Pluggable skills exposed as LLM tool calls | `aragora/types/skills.py` |
 
 Install skills via CLI: `aragora skills install <skill-name>`
 

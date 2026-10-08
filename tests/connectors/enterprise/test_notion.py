@@ -16,6 +16,7 @@ import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from aragora.connectors.enterprise.base import SyncState, SyncStatus
@@ -382,38 +383,44 @@ class TestNotionErrorHandling:
 
     @pytest.mark.asyncio
     async def test_handles_invalid_page_id(self, mock_credentials):
-        """Should handle invalid page ID gracefully."""
+        """A not-found error for the page's blocks propagates out of _get_page_content."""
         from aragora.connectors.enterprise.collaboration.notion import NotionConnector
 
         connector = NotionConnector()
         connector.credentials = mock_credentials
 
         with patch.object(connector, "_api_request", new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = Exception("object_not_found")
+            # Notion answers an unknown page id with HTTP 404 object_not_found,
+            # which _api_request surfaces via response.raise_for_status()
+            mock_api.side_effect = httpx.HTTPStatusError(
+                "object_not_found", request=MagicMock(), response=MagicMock(status_code=404)
+            )
 
-            try:
-                content = await connector._get_page_content("invalid-page-id")
-                assert content == "" or content is None
-            except Exception:
-                # Exception is acceptable for not found
-                pass
+            with pytest.raises(httpx.HTTPStatusError, match="object_not_found"):
+                await connector._get_page_content("invalid-page-id")
+
+            mock_api.assert_awaited_once_with(
+                "/blocks/invalid-page-id/children", params={"page_size": 100}
+            )
 
     @pytest.mark.asyncio
     async def test_handles_permission_denied(self, mock_credentials):
-        """Should handle permission denied errors."""
+        """A 403 restricted_resource error propagates out of _search_pages."""
         from aragora.connectors.enterprise.collaboration.notion import NotionConnector
 
         connector = NotionConnector()
         connector.credentials = mock_credentials
 
         with patch.object(connector, "_api_request", new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = Exception("restricted_resource")
+            # Notion answers a permission failure with HTTP 403 restricted_resource
+            mock_api.side_effect = httpx.HTTPStatusError(
+                "restricted_resource", request=MagicMock(), response=MagicMock(status_code=403)
+            )
 
-            try:
-                pages = await connector._search_pages()
-                assert pages == [] or pages is None
-            except Exception:
-                pass
+            with pytest.raises(httpx.HTTPStatusError, match="restricted_resource"):
+                await connector._search_pages()
+
+            mock_api.assert_awaited_once()
 
 
 class TestNotionRichTextExtraction:

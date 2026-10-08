@@ -11,13 +11,11 @@ contract and adds:
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from aragora.governance.gate_snapshot import GateSnapshot, GateSnapshotError
 from aragora.swarm.campaign import (
     CampaignExecutor,
     CampaignManifest,
@@ -30,8 +28,10 @@ from aragora.swarm.campaign import (
 from aragora.swarm.merge_arbiter import (
     REQUIRED_CHECKS,
     ArbiterOperationalError,
+    CheckSnapshotHeadMismatch,
     _classify_required_checks,
     _get_check_status,
+    _is_full_head_sha,
     _merge_pr,
     _promote_draft,
     _run_gh,
@@ -217,29 +217,6 @@ def _ordered_projects(manifest: CampaignManifest) -> list[CampaignProject]:
         ordered_ids.extend(remaining)
 
     return [project_map[project_id] for project_id in ordered_ids]
-
-
-def _snapshot_from_pr_row(pr_number: int, repo: str, row: dict[str, Any] | None) -> GateSnapshot:
-    """Freeze the head captured alongside this PR's gate read (#9873).
-
-    Raises GateSnapshotError when the row carries no head, which is the refusal
-    the contract requires — the alternative, looking the head up now, would bind
-    the merge to a commit these checks never saw.
-    """
-    data = row or {}
-    return GateSnapshot(
-        pr_number=pr_number,
-        repo=repo,
-        head_sha=str(data.get("pr_head_sha") or data.get("headRefOid") or ""),
-        required_checks_green=True,
-        checks_known=True,
-        state=str(data.get("pr_state") or data.get("state") or "OPEN").upper(),
-        is_draft=bool(data.get("pr_draft") or data.get("isDraft") or False),
-        merge_state_status=(
-            str(data["mergeStateStatus"]) if data.get("mergeStateStatus") else None
-        ),
-        captured_at=dt.datetime.now(dt.timezone.utc).isoformat(),
-    )
 
 
 class InitiativeIntegrator:
@@ -441,6 +418,17 @@ class InitiativeIntegrator:
             }
 
         if next_action == "merge":
+            head_sha = str(row.get("head_sha") or "")
+            if not _is_full_head_sha(head_sha):
+                return {
+                    "mode": "initiative-promote",
+                    "initiative_id": manifest.campaign_id,
+                    "project_id": target.project_id,
+                    "action": "blocked",
+                    "pr_number": pr_number,
+                    "pr_url": row.get("pr_url"),
+                    "reason": "PR snapshot missing valid full head SHA",
+                }
             if dry_run:
                 return {
                     "mode": "initiative-promote",
@@ -449,22 +437,13 @@ class InitiativeIntegrator:
                     "action": "would_merge",
                     "pr_number": pr_number,
                     "pr_url": row.get("pr_url"),
+                    "head_sha": head_sha,
                 }
-            # #9873: the head must come from the gate read, not a fresh lookup at
-            # merge time — that pairing of a stale verdict with a new commit is
-            # exactly the TOCTOU this contract forbids. _merge_pr refuses a
-            # missing head, so a snapshot that cannot be built blocks the merge.
-            try:
-                gate = _snapshot_from_pr_row(pr_number, self.repo, row)
-            except GateSnapshotError as exc:
-                return {
-                    "mode": "initiative-promote",
-                    "initiative_id": manifest.campaign_id,
-                    "action": "merge_blocked",
-                    "pr_number": pr_number,
-                    "reason": f"no captured head for PR #{pr_number}: {exc}",
-                }
-            merged, reason = _merge_pr(gate)
+            merged, reason = _merge_pr(
+                pr_number,
+                self.repo,
+                head_sha,
+            )
             if not merged:
                 return {
                     "mode": "initiative-promote",
@@ -563,6 +542,7 @@ class InitiativeIntegrator:
                 "isDraft": None,
                 "state": "UNKNOWN",
                 "headRefName": project.branch,
+                "headRefOid": None,
                 "mergeStateStatus": "",
                 "mergedAt": None,
             }
@@ -582,6 +562,7 @@ class InitiativeIntegrator:
                         "isDraft": None,
                         "state": "UNKNOWN",
                         "headRefName": branch,
+                        "headRefOid": None,
                         "mergeStateStatus": "",
                         "mergedAt": None,
                     }
@@ -595,8 +576,17 @@ class InitiativeIntegrator:
     ) -> dict[str, Any]:
         snapshot = self._resolve_project_pr_snapshot(project)
         pr_number = _parse_pr_number((snapshot or {}).get("number") or (snapshot or {}).get("url"))
+        head_sha = (snapshot or {}).get("headRefOid")
+        check_snapshot_error: str | None = None
         try:
-            checks = _get_check_status(pr_number, self.repo) if pr_number is not None else {}
+            checks = (
+                _get_check_status(pr_number, self.repo, str(head_sha))
+                if pr_number is not None and _is_full_head_sha(head_sha)
+                else {}
+            )
+        except CheckSnapshotHeadMismatch as exc:
+            checks = {}
+            check_snapshot_error = str(exc)
         except ArbiterOperationalError:
             # Status reporting degrades to "checks unknown" on gh faults; only
             # the arbiter poll loop feeds these faults to its circuit breaker.
@@ -609,6 +599,10 @@ class InitiativeIntegrator:
         if project.status == CampaignProjectStatus.WAITING_FOR_PR.value and not snapshot:
             promotion_blockers.append("published PR not found for branch deliverable")
         elif project.status == CampaignProjectStatus.WAITING_FOR_MERGE.value:
+            if check_snapshot_error:
+                promotion_blockers.append(check_snapshot_error)
+            if snapshot is not None and not _is_full_head_sha(head_sha):
+                promotion_blockers.append("PR snapshot missing valid full head SHA")
             if dependency_blockers:
                 promotion_blockers.append(
                     "dependencies not merged: " + ", ".join(dependency_blockers)
@@ -636,12 +630,9 @@ class InitiativeIntegrator:
             "branch": project.branch,
             "pr_url": (snapshot or {}).get("url") or _project_pr_reference(project),
             "pr_number": pr_number,
+            "head_sha": head_sha if _is_full_head_sha(head_sha) else None,
             "pr_draft": bool(snapshot.get("isDraft")) if isinstance(snapshot, dict) else None,
             "pr_state": str((snapshot or {}).get("state") or "").strip() or None,
-            # #9873: the head is carried from the SAME read that produced this
-            # row's verdict. A row without it means no head was captured, and
-            # the merge is refused rather than looked up at merge time.
-            "pr_head_sha": str((snapshot or {}).get("headRefOid") or "").strip() or None,
             "dependencies": [dep.project_id for dep in project.dependencies],
             "dependency_blockers": dependency_blockers,
             "feature_flag": project.feature_flag,

@@ -16,7 +16,7 @@ from typing import Any
 from aragora.agents.base import create_agent
 from aragora.core import Agent
 from aragora.core_types import Environment
-from aragora.debate.protocol import DebateProtocol
+from aragora.protocols.debate import DebateProtocol
 from aragora.nomic.testfixer.analyzer import FailureAnalysis
 from aragora.nomic.testfixer.proposer import PatchProposal
 

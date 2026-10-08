@@ -264,6 +264,7 @@ class TestLifecycle:
     """Tests for start/stop lifecycle (legacy API)."""
 
     def test_start_stop_lifecycle(self, temp_vault: Path) -> None:
+        pytest.importorskip("watchdog")
         with patch("aragora.connectors.knowledge.obsidian_watcher.Observer") as MockObserver:
             mock_observer = MagicMock()
             MockObserver.return_value = mock_observer

@@ -12,15 +12,15 @@ Live project-scale numbers are auto-regenerated in [`docs/METRICS.md`](METRICS.m
 <!-- metrics:begin canonical-goals-metrics -->
 | Metric | Value | Source |
 |--------|-------|--------|
-| Version | 2.9.0 | `pyproject.toml` |
-| Python files under `aragora/` | 4,314 | `docs/METRICS.md` |
-| Python modules | 146 top-level package directories | `docs/METRICS.md` |
-| Lines of code under `aragora/` | 1,995,980 | `docs/METRICS.md` |
-| Automated tests | 226,063 test functions | `docs/METRICS.md` |
-| Test files | 5,553 | `docs/METRICS.md` |
+| Version | 2.11.1 | `pyproject.toml` |
+| Python files under `aragora/` | 4,344 | `docs/METRICS.md` |
+| Python modules | 144 top-level package directories | `docs/METRICS.md` |
+| Lines of code under `aragora/` | 2,009,195 | `docs/METRICS.md` |
+| Automated tests | 227,861 test functions | `docs/METRICS.md` |
+| Test files | 5,666 | `docs/METRICS.md` |
 | API operations | 3,205 across 2,912 paths | `docs/METRICS.md` |
 | API paths | 2,912 | `docs/METRICS.md` |
-| Knowledge Mound adapters | 46 adapter files / 41 registered specs | `docs/METRICS.md` |
+| Knowledge Mound adapters | 47 adapter files / 42 registered specs | `docs/METRICS.md` |
 <!-- metrics:end -->
 
 Other canonical claims (manually maintained):

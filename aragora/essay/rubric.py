@@ -86,7 +86,7 @@ def _normalize_score(value: Any) -> float:
     """Coerce a model-provided score field into a safe float."""
     try:
         score = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.0
     return score if math.isfinite(score) else 0.0
 

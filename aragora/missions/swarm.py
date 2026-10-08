@@ -27,7 +27,7 @@ from pathlib import Path
 
 from .intake import is_intake_feature
 from .ledger import DEFAULT_LEASE_TTL, Ledger, LedgerCorruptError, select_for
-from .orchestrator import Dispatch, Handoff
+from .handoff import Dispatch, Handoff
 from .state import (
     PARK_KIND_MATERIALIZATION,
     PARK_KIND_MISSING_BRANCH,
