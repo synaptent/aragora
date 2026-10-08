@@ -52,7 +52,8 @@ Pipelines belong to the org that created them (the ``PipelineResultStore``
 owner). Every route except the template list needs a signed-in caller acting
 for an org. Routes on one pipeline check that the caller's org owns it before
 checking the permission, so another org's pipeline, one with no recorded org
-and a missing one answer the same 404.
+and a missing one answer the same 404. Every save writes only a new pipeline
+or one the caller's org still owns, and answers the same 404 otherwise.
 """
 
 from __future__ import annotations
@@ -463,15 +464,32 @@ def _summarize_result(result: Any) -> PipelineCreateResponse:
     )
 
 
+async def _save_owned(pipeline_id: str, data: dict[str, Any], scope: OrgScope) -> bool:
+    """Save a new pipeline for the caller's org, or one that org owns.
+
+    False means another org (or nobody) owns ``pipeline_id`` by now and nothing
+    was written; the owner check and the write are one statement. The live
+    object kept under that id is then dropped, as it is not the owner's.
+    """
+    written = await _call_store_method(
+        _get_store(), "save_for_org", pipeline_id, data, scope.org_id, scope.user_id
+    )
+    if not written:
+        _pipeline_objects.pop(pipeline_id, None)
+    return bool(written)
+
+
 async def _store_result(result: Any, caller: PipelineCaller) -> None:
     """Persist pipeline result to store and keep live object.
 
-    A new pipeline (and its universal graph) belongs to the caller's org; the
-    store keeps the first owner of an existing pipeline.
+    A new pipeline (and its universal graph) belongs to the caller's org. A
+    pipeline id another org (or nobody) owns is not written and raises the
+    shared 404.
     """
     owner = caller.owner_fields()
     result_dict = attach_unified_live_state(result.to_dict()) if hasattr(result, "to_dict") else {}
-    await _call_store_method(_get_store(), "save", result.pipeline_id, result_dict, **owner)
+    if not await _save_owned(result.pipeline_id, result_dict, caller.scope):
+        raise record_not_found_error(_PIPELINE)
     _pipeline_objects[result.pipeline_id] = result
     await asyncio.to_thread(_persist_universal_graph, result, owner)
     await asyncio.to_thread(_persist_pipeline_to_km, result)
@@ -991,7 +1009,19 @@ async def execute_pipeline(
             "agent_tasks": len(agent_tasks),
             "total_orchestration_nodes": len(orch_nodes),
         }
-        await _call_store_method(_get_store(), "save", pipeline_id, data_dict)
+        if not await _save_owned(pipeline_id, data_dict, caller.scope):
+            # The execution API has no cancel: the queued execution stays
+            # queued, owned by the caller's org, and is never run.
+            raise record_not_found_error(_PIPELINE)
+
+        async def _save_state(state: dict[str, Any]) -> bool:
+            if await _save_owned(pipeline_id, state, caller.scope):
+                return True
+            logger.warning(
+                "Pipeline %s changed owner during execution; execution state not saved",
+                pipeline_id,
+            )
+            return False
 
         async def _execute() -> None:
             current_data = dict(data_dict)
@@ -1001,7 +1031,8 @@ async def execute_pipeline(
                     **(current_execution if isinstance(current_execution, dict) else {}),
                     "status": "running",
                 }
-                await _call_store_method(_get_store(), "save", pipeline_id, current_data)
+                if not await _save_state(current_data):
+                    return
                 outcome, record, decision_receipt = await execute_queued_plan(
                     plan,
                     execution_id=launch["execution_id"],
@@ -1042,7 +1073,7 @@ async def execute_pipeline(
                 }
                 current_data["receipt"] = receipt_bundle
                 current_data = attach_unified_live_state(current_data)
-                await _call_store_method(_get_store(), "save", pipeline_id, current_data)
+                await _save_state(current_data)
             except Exception as exc:  # noqa: BLE001 - background task must persist terminal failure
                 logger.error("Pipeline execute failed: %s", exc)
                 current_data["execution"] = {
@@ -1051,7 +1082,7 @@ async def execute_pipeline(
                     "error": str(exc),
                 }
                 current_data = attach_unified_live_state(current_data)
-                await _call_store_method(_get_store(), "save", pipeline_id, current_data)
+                await _save_state(current_data)
 
         asyncio.create_task(_execute())
 
@@ -1791,7 +1822,8 @@ async def save_canvas_state(
             existing.update(body.canvas_data)
 
         existing["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        await _call_store_method(store, "save", pipeline_id, existing)
+        if not await _save_owned(pipeline_id, existing, caller.scope):
+            raise record_not_found_error(_PIPELINE)
 
         return {"saved": True, "pipeline_id": pipeline_id}
 

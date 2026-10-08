@@ -9,14 +9,19 @@ Two orgs (real JWTs), an org-less user and an anonymous caller exercise every
   body, before any permission check, and writes to them have no effect;
 * anonymous callers get 401 everywhere (create routes included) and org-less
   users 403 ``org_required``;
-* the owner keeps access, and what it creates belongs to its org.
+* the owner keeps access, and what it creates belongs to its org;
+* a save checks the owner when it writes, so an id that changed hands after
+  the caller was admitted is left as the other org wrote it.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,9 +31,13 @@ from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.pipeline.graph_store import GraphStore
 from aragora.pipeline.universal_node import UniversalGraph, UniversalNode
 from aragora.server.fastapi import create_app
+from aragora.server.fastapi.dependencies.pipeline_access import PipelineCaller
+from aragora.server.fastapi.middleware.error_handling import APIError
 from aragora.server.fastapi.routes import canvas_pipeline as canvas_routes
+from aragora.server.fastapi.routes.canvas_pipeline import ExecuteRequest
 from aragora.storage.debate_storage import DebateStorage
 from aragora.storage.pipeline_store import PipelineResultStore
+from aragora.tenancy.record_scope import OrgScope
 
 ORG_A = "org-a"
 ORG_B = "org-b"
@@ -365,3 +374,145 @@ class TestOwner:
         assert read.status_code == 403
         assert save.status_code == 403
         assert _snapshot(store) == before
+
+
+B_TAKEOVER = {
+    "stage_status": {"ideas": "complete"},
+    "ideas": {"nodes": [{"id": "b-idea", "data": {"label": "Org B idea"}}]},
+}
+A_PLAN = "Org A secret plan"
+A_IDEAS = {"nodes": [{"id": "a-idea", "data": {"label": A_PLAN}}]}
+
+
+def _b_takes_the_id_before_write(
+    store: PipelineResultStore, monkeypatch, write: int = 1
+) -> SimpleNamespace:
+    """Right before the ``write``-th pipeline save, the id being saved changes
+    hands: A's row (if any) is deleted and org B creates the id.
+
+    Returns the ids saved (``written``) and B's row as B wrote it (``b_row``).
+    """
+    real_save, real_save_for_org = store.save, store.save_for_org
+    taken = SimpleNamespace(written=[], b_row=None)
+
+    def take(pipeline_id: str) -> None:
+        taken.written.append(pipeline_id)
+        if len(taken.written) == write:
+            store.delete(pipeline_id)
+            real_save(pipeline_id, {**B_TAKEOVER, "pipeline_id": pipeline_id}, org_id=ORG_B)
+            taken.b_row = store.get(pipeline_id)
+
+    def save(pipeline_id: str, *args: Any, **kwargs: Any) -> Any:
+        take(pipeline_id)
+        return real_save(pipeline_id, *args, **kwargs)
+
+    def save_for_org(pipeline_id: str, *args: Any, **kwargs: Any) -> Any:
+        take(pipeline_id)
+        return real_save_for_org(pipeline_id, *args, **kwargs)
+
+    monkeypatch.setattr(store, "save", save)
+    monkeypatch.setattr(store, "save_for_org", save_for_org)
+    return taken
+
+
+def _assert_b_row_intact(store: PipelineResultStore, taken: SimpleNamespace) -> None:
+    pipeline_id = taken.written[-1]
+    saved = store.get(pipeline_id)
+    assert saved == taken.b_row
+    assert saved["ideas"] == B_TAKEOVER["ideas"]
+    assert store.get_owner_org(pipeline_id) == ORG_B
+    for text in (A_PLAN, f"{PA} secret idea", "Build cache"):
+        assert text not in json.dumps(saved)
+
+
+def _live_a_result() -> SimpleNamespace:
+    stages = ("ideation", "principles", "goals", "actions", "orchestration")
+    complete = dict.fromkeys(stages, "complete")
+    return SimpleNamespace(
+        pipeline_id=PA,
+        stage_status=complete,
+        universal_graph=None,
+        ideas_canvas=None,
+        actions_canvas=None,
+        orchestration_canvas=None,
+        approve_transition=lambda approved, feedback: None,
+        to_dict=lambda: {"pipeline_id": PA, "stage_status": complete, "ideas": A_IDEAS},
+    )
+
+
+class TestOwnerChangesRightBeforeTheSave:
+    """Another org takes the pipeline id after the route admitted the caller."""
+
+    @pytest.mark.parametrize(
+        "route",
+        [
+            ("POST", CANVAS + "/from-ideas", {"ideas": [A_PLAN]}),
+            ("POST", CANVAS + "/advance", {"pipeline_id": "{id}"}),
+            ("POST", CANVAS + "/{id}/approve-transition", {"approved": True}),
+            ("PUT", CANVAS + "/{id}", {"canvas_data": {"ideas": A_IDEAS}}),
+        ],
+        ids=lambda r: f"{r[0]} {r[1]}",
+    )
+    def test_route_answers_404_and_leaves_the_other_orgs_row(
+        self, client, store, as_a, monkeypatch, route
+    ):
+        canvas_routes._pipeline_objects[PA] = _live_a_result()
+        taken = _b_takes_the_id_before_write(store, monkeypatch)
+
+        response = _call(client, route, PA, as_a)
+
+        assert (response.status_code, response.json()) == (404, PIPELINE_NOT_FOUND)
+        [pipeline_id] = taken.written
+        _assert_b_row_intact(store, taken)
+        assert pipeline_id not in canvas_routes._pipeline_objects
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("write", [1, 2], ids=["queued save", "running save"])
+    async def test_execute_stops_when_the_pipeline_changed_hands(self, store, monkeypatch, write):
+        complete = dict.fromkeys(("ideas", "goals", "actions", "orchestration"), "complete")
+        task = {"id": "t1", "data": {"orch_type": "agent_task", "label": "Build cache"}}
+        store.save(
+            PA,
+            {"stage_status": complete, "orchestration": {"nodes": [task], "edges": []}},
+            org_id=ORG_A,
+        )
+        taken = _b_takes_the_id_before_write(store, monkeypatch, write=write)
+        launch = {
+            "execution_id": "exec-a",
+            "correlation_id": "corr-a",
+            "execution_mode": "workflow",
+        }
+        execute = AsyncMock(return_value=(MagicMock(success=True), {}, {}))
+        tasks: list[asyncio.Task] = []
+        create_task = asyncio.create_task
+        caller = PipelineCaller(
+            auth=MagicMock(), scope=OrgScope(org_id=ORG_A, user_id="user-a", role="owner")
+        )
+
+        with (
+            patch(
+                "aragora.pipeline.canonical_execution.build_decision_plan_from_orchestration",
+                return_value=(MagicMock(id="plan-a"), []),
+            ),
+            patch("aragora.pipeline.canonical_execution.queue_plan_execution", return_value=launch),
+            patch("aragora.pipeline.canonical_execution.execute_queued_plan", new=execute),
+            patch.object(
+                canvas_routes.asyncio,
+                "create_task",
+                side_effect=lambda coro: tasks.append(create_task(coro)) or tasks[-1],
+            ),
+        ):
+            if write == 1:
+                with pytest.raises(APIError) as refused:
+                    await canvas_routes.execute_pipeline(PA, ExecuteRequest(), caller=caller)
+                assert (refused.value.status_code, refused.value.code) == (404, "not_found")
+                assert refused.value.message == PIPELINE_NOT_FOUND["error"]
+            else:
+                await canvas_routes.execute_pipeline(PA, ExecuteRequest(), caller=caller)
+            for background in tasks:
+                await background
+
+        assert len(tasks) == write - 1
+        assert taken.written == [PA] * write
+        _assert_b_row_intact(store, taken)
+        execute.assert_not_awaited()

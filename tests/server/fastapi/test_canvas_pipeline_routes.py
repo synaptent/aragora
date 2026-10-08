@@ -485,10 +485,12 @@ class TestPipelineExecution:
         assert "execution" not in pipeline
         assert "receipt" not in pipeline
 
-        assert "live_state" not in store.save.call_args_list[0].args[1]
-        assert "live_state" not in store.save.call_args_list[1].args[1]
+        saves = store.save_for_org.call_args_list
+        assert {call.args[2:] for call in saves} == {(ORG, "test-user")}
+        assert "live_state" not in saves[0].args[1]
+        assert "live_state" not in saves[1].args[1]
 
-        saved_pipeline = store.save.call_args_list[-1].args[1]
+        saved_pipeline = saves[-1].args[1]
         assert saved_pipeline["execution"]["status"] == "completed"
         assert saved_pipeline["execution"]["receipt_id"] == "receipt-fastapi"
         assert saved_pipeline["live_state"]["orchestration"]["status"] == "completed"
