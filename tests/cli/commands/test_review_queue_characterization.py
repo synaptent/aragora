@@ -616,8 +616,9 @@ def _seam_census() -> set[str]:
 
 
 def _seam_violations(tree: ast.Module, seams: set[str]) -> list[str]:
-    """Rule I2: units reach seams at call time, via ``_review_queue_backend().<name>`` or a
-    function-local facade import (the I2 precedent, already used by review_queue_render.py)."""
+    """Rule I2: a unit references a seam only as ``_review_queue_backend().<name>`` or through a
+    function-local facade import (the I2 precedent, used by review_queue_render.py). A static
+    guard: string-based access such as ``getattr(module, "name")`` is out of its reach."""
     facade = "aragora.cli.commands.review_queue"
     violations: list[str] = []
 
@@ -644,12 +645,11 @@ def _seam_violations(tree: ast.Module, seams: set[str]) -> list[str]:
             for alias in node.names:
                 if alias.name in seams and (import_time or node.module != facade):
                     violations.append(f"line {node.lineno}: binds seam {alias.name}")
-        if isinstance(node, ast.Call):
-            func = node.func
-            seam = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-            holder = getattr(func.value if isinstance(func, ast.Attribute) else func, "id", None)
-            if seam in seams and holder and holder not in late_bound:
-                violations.append(f"line {node.lineno}: calls seam {seam}")
+        if isinstance(node, ast.Name) and node.id in seams and node.id not in late_bound:
+            violations.append(f"line {node.lineno}: uses seam {node.id}")
+        if isinstance(node, ast.Attribute) and node.attr in seams:
+            if ast.unparse(node.value) not in {"_review_queue_backend()", *late_bound}:
+                violations.append(f"line {node.lineno}: uses seam {node.attr}")
         for child in ast.iter_child_nodes(node):
             visit(child, late_bound, import_time)
 
@@ -685,11 +685,11 @@ def test_seam_checker_flags_bindings_and_direct_calls() -> None:
         "def other():\n    from aragora.cli.commands.review_queue_transport import _gh_json\n"
         "    return _gh_json([])\n"
         "def via_module(t):\n    from aragora.cli.commands import review_queue as rq\n"
-        "    return rq._gh_json([]), t._gh_json([])\n"
+        "    gh = t._gh_json\n    return rq._gh_json([]), helper()._gh_json([]), gh([])\n"
         "def outer():\n    def inner(): from aragora.cli.commands.review_queue import _gh_json\n"
         "    return _gh_json([])\n"
     )
-    expected = {1: "binds", 3: "calls", 12: "binds", 13: "calls", 16: "calls", 19: "calls"}
+    expected = {1: "binds", 3: "uses", 12: "binds", 13: "uses", 16: "uses", 17: "uses", 20: "uses"}
     found = _seam_violations(tree, {"_gh_json"})
     assert found == [f"line {n}: {verb} seam _gh_json" for n, verb in expected.items()]
 
