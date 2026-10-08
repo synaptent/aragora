@@ -101,6 +101,9 @@ LARGE_DIFF_THRESHOLD = 500  # additions + deletions, beyond which "needs_human_a
 MODEL_REVIEW_QUEUE_CAP = 6
 MODEL_REVIEW_QUORUM_VERSION = "model_review_quorum.v1"
 HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"
+_HUMAN_GATED_QUORUM_STATUSES = frozenset(
+    {"human_risk_settlement_required", "human_preapproval_required"}
+)
 TIER_FOUR_SETTLEMENT_MARKER = "Tier-4 Human Settlement Authorization"
 DEFAULT_TRUSTED_SETTLEMENT_CREATOR = "scarmani"
 SETTLEMENT_CREATOR_ENV_VAR = "ARAGORA_SETTLEMENT_CREATOR"
@@ -3085,10 +3088,19 @@ def _build_merge_authorization_packet(
         }
         entry_status = quorum["status"]
         entry_verdict = quorum["verdict"]
-        if model_quorum_admin_squash_allowed and admin_squash_gate_blockers:
+        park_record = packet.park_record
+        current_head_parked = isinstance(park_record, dict) and bool(park_record.get("blocked"))
+        if admin_squash_gate_blockers and (
+            model_quorum_admin_squash_allowed
+            or (current_head_parked and entry_status in _HUMAN_GATED_QUORUM_STATUSES)
+        ):
             # The live gate flipped admin_squash_allowed to false; the quorum
             # status/verdict ("satisfied"/"admin_squash_allowed") would be
             # misleading in human-readable output (#8965 openai [P3]).
+            # A park must also replace a human-gated Tier 3-4 status: the
+            # merge-quorum check and settle_tier4_pr.py accept those statuses on
+            # the aragora/human-settlement commit status alone, and CI never sees
+            # the local settlement receipt that would turn the entry "satisfied".
             entry_status = "blocked_by_live_gate"
             entry_verdict = "admin_squash_blocked_by_live_gate"
         entry = {

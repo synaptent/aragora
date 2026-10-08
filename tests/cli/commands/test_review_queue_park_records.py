@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from aragora.cli.commands.review_queue_park_records import current_head_park_record
@@ -331,3 +334,53 @@ The earlier Current-head evidence blocker was lifted by the operator.
 
     assert record["blocked"] is False
     assert record["lifted_by"]["created_at"] == "2026-07-08T05:30:00Z"
+
+
+_GOVERNANCE_DOC = (
+    Path(__file__).resolve().parents[3] / "docs" / "governance" / "MERGE_GATE_RECONCILIATION.md"
+)
+_TEMPLATE_HEAD_PLACEHOLDER = "<full 40-character head SHA>"
+
+
+def _park_section() -> str:
+    doc = _GOVERNANCE_DOC.read_text(encoding="utf-8")
+    return doc[doc.index("## Parking an exact head") :]
+
+
+def test_documented_park_and_lift_templates_are_recognized() -> None:
+    park_template, lift_template = re.findall(r"```text\n(.*?)```", _park_section(), flags=re.S)[:2]
+    assert _TEMPLATE_HEAD_PLACEHOLDER in park_template
+    assert _TEMPLATE_HEAD_PLACEHOLDER in lift_template
+    park = _comment(
+        park_template.replace(_TEMPLATE_HEAD_PLACEHOLDER, HEAD_X),
+        created_at="2026-07-08T05:20:08Z",
+        author_association="MEMBER",
+    )
+
+    assert current_head_park_record([park], head_sha=HEAD_X)["blocked"] is True
+    assert current_head_park_record([park], head_sha=HEAD_Y)["blocked"] is False
+
+    lift = _comment(
+        lift_template.replace(_TEMPLATE_HEAD_PLACEHOLDER, HEAD_X),
+        created_at="2026-07-08T05:30:00Z",
+    )
+    lifted = current_head_park_record([park, lift], head_sha=HEAD_X)
+    assert lifted["blocked"] is False
+    assert lifted["lifted_by"]["created_at"] == "2026-07-08T05:30:00Z"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        f"## Current-head repeat-blocker park\n\nHead SHA: {HEAD_X}\n",
+        f"## Current-head repeat-blocker park\n\nhead_sha: {HEAD_X}\n",
+        f"**Current-head repeat-blocker park**\n\nExact head: {HEAD_X}\n",
+        f"Current-head repeat-blocker park - PR #9011\n\nExact head: {HEAD_X}\n",
+        f"## Current-head repeat-blocker park\n\nExact head: {HEAD_X[:12]}\n",
+    ],
+)
+def test_formats_outside_the_documented_template_do_not_park(body: str) -> None:
+    assert "is not recognized" in _park_section()
+    comment = _comment(body, created_at="2026-07-08T05:20:08Z", author_association="MEMBER")
+
+    assert current_head_park_record([comment], head_sha=HEAD_X)["blocked"] is False

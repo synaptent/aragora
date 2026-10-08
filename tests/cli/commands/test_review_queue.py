@@ -4915,6 +4915,109 @@ class TestBuildQueueAndPacket:
         assert entry["verdict"] == "admin_squash_blocked_by_live_gate"
         assert packet["not_ready"] == [9005]
 
+    @pytest.mark.parametrize(
+        ("human_status", "human_verdict", "unparked_not_ready"),
+        [
+            (
+                "human_risk_settlement_required",
+                "model_quorum_satisfied_human_risk_settlement_required",
+                [],
+            ),
+            ("human_preapproval_required", "tier_4_human_preapproval_required", [9011]),
+        ],
+    )
+    @pytest.mark.parametrize("parked", [True, False])
+    def test_merge_packet_current_head_park_blocks_human_gated_tier4_entry(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        human_status: str,
+        human_verdict: str,
+        unparked_not_ready: list[int],
+        parked: bool,
+    ) -> None:
+        # CI never sees the local settlement receipt, so a Tier 3-4 entry keeps its
+        # human-gated status even after the operator's settlement status exists; the
+        # merge-quorum check and settle_tier4_pr.py then pass it on that status alone.
+        head = "c" * 40
+        park_record = (
+            {
+                "blocked": True,
+                "blocker": "current-head park record present: Current-head evidence blocker",
+                "head_sha": head,
+                "park_marker": "Current-head evidence blocker",
+                "reason": "Do not merge this PR on this head.",
+            }
+            if parked
+            else {"blocked": False, "head_sha": head, "lifted_by": None}
+        )
+
+        def fake_build_packet(ref: str, **_kwargs: Any) -> ReviewPacket:
+            return ReviewPacket(
+                pr_number=int(ref),
+                title=f"PR {ref}",
+                url=f"https://github.com/synaptent/aragora/pull/{ref}",
+                head_sha=head,
+                base_sha="d" * 40,
+                author="codex",
+                is_draft=False,
+                additions=1,
+                deletions=1,
+                changed_files=1,
+                queue_bucket="ready_now",
+                touched_subsystems=["ci"],
+                high_risk_paths_touched=[".github/workflows/"],
+                validation=[],
+                checks_summary="4/4 green",
+                risk_flags=[],
+                machine_recommendation="approve_candidate",
+                machine_recommendation_reason="bounded test packet",
+                packet_sha="sha256:test",
+                generated_at="2026-05-30T00:00:00+00:00",
+                labels=[],
+                merge_state_status="BLOCKED",
+                park_record=park_record,
+                model_review_quorum={
+                    "tier": 4,
+                    "tier_name": "Tier 4",
+                    "status": human_status,
+                    "verdict": human_verdict,
+                    "admin_squash_allowed": False,
+                    "requires_human_risk_settlement": True,
+                    "unresolved_dissent": False,
+                    "reviewer_signals": [],
+                    "dogfood_evidence": [],
+                    "counted_reviewer_ids": ["claude", "openai"],
+                    "reasons": ["workflow change"],
+                },
+            )
+
+        monkeypatch.setattr("aragora.cli.commands.review_queue._build_packet", fake_build_packet)
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._explicit_merged_pr_merge_packet_entry",
+            lambda ref, repo_override: None,
+        )
+
+        packet = _build_merge_authorization_packet(
+            pr_refs=["9011"],
+            limit=30,
+            repo_override=None,
+        )
+
+        entry = packet["entries"][0]
+        assert entry["admin_squash_allowed"] is False
+        assert entry["requires_human_risk_settlement"] is True
+        assert packet["admin_squash_order"] == []
+        if parked:
+            assert entry["status"] == "blocked_by_live_gate"
+            assert entry["verdict"] == "admin_squash_blocked_by_live_gate"
+            assert "current-head park record present" in entry["admin_squash_gate_blockers"][0]
+            assert packet["not_ready"] == [9011]
+        else:
+            assert entry["status"] == human_status
+            assert entry["verdict"] == human_verdict
+            assert entry["admin_squash_gate_blockers"] == []
+            assert packet["not_ready"] == unparked_not_ready
+
     def test_merge_packet_allows_verified_allowlisted_unstable_cancellations(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
