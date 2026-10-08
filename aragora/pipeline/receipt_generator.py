@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 async def generate_pipeline_receipt(
     pipeline_id: str,
     execution_result: dict[str, Any],
+    *,
+    org_id: str | None,
 ) -> dict[str, Any]:
     """Generate a DecisionReceipt for a completed pipeline execution.
 
@@ -31,6 +33,9 @@ async def generate_pipeline_receipt(
     Args:
         pipeline_id: The pipeline that was executed
         execution_result: Results from the execution (cycle_id, status, etc.)
+        org_id: The caller's org. Graph nodes are read only when the graph
+            named ``pipeline_id`` belongs to this org; otherwise the receipt
+            has no provenance nodes, as for a pipeline without a graph.
 
     Returns:
         Receipt dictionary with provenance chain
@@ -42,6 +47,8 @@ async def generate_pipeline_receipt(
         from aragora.pipeline.graph_store import get_graph_store
 
         graph_store = get_graph_store()
+        graph_owner = graph_store.get_owner_org(pipeline_id)
+        graph_visible = isinstance(org_id, str) and bool(org_id) and graph_owner == org_id
         stage_mapping = {
             "ideas": PipelineStage.IDEAS,
             "goals": PipelineStage.GOALS,
@@ -50,9 +57,8 @@ async def generate_pipeline_receipt(
         }
 
         for stage_name, stage in stage_mapping.items():
-            stage_nodes = graph_store.query_nodes(
-                graph_id=pipeline_id,
-                stage=stage,
+            stage_nodes = (
+                graph_store.query_nodes(graph_id=pipeline_id, stage=stage) if graph_visible else []
             )
             stages[stage_name] = [
                 {

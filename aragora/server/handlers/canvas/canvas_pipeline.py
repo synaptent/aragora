@@ -889,7 +889,8 @@ class CanvasPipelineHandler:
         PUT /api/v1/canvas/pipeline/{id}
 
         Saving to an id no pipeline has yet creates the pipeline for the
-        caller's org.
+        caller's org. The save itself is conditional on that org, so an id
+        another org claims after this check answers the same 404.
         """
         m = _PIPELINE_ID.match(_versioned(path))
         if not m:
@@ -2197,7 +2198,12 @@ class CanvasPipelineHandler:
                     existing.setdefault("stage_status", {})[stage_name] = "complete"
 
         existing = attach_unified_live_state(existing)
-        store.save(pipeline_id, existing, **_owner_fields(scope))
+        if scope is None:
+            store.save(pipeline_id, existing)
+        elif not store.save_for_org(pipeline_id, existing, scope.org_id, scope.user_id):
+            # The id was free when the request was admitted but another org (or
+            # no org) owns it now.
+            return record_not_found(_PIPELINE)
 
         return json_response(
             {
@@ -2559,6 +2565,19 @@ class CanvasPipelineHandler:
         }
         store.save(pipeline_id, existing)
 
+        def _save_execution_state(state: dict[str, Any]) -> bool:
+            """Save the state unless the pipeline id now belongs to another org (or nobody)."""
+            if scope is None:
+                store.save(pipeline_id, state)
+                return True
+            if store.save_for_org(pipeline_id, state, scope.org_id, scope.user_id):
+                return True
+            logger.warning(
+                "Pipeline %s changed owner during execution; execution state not saved",
+                pipeline_id,
+            )
+            return False
+
         async def _execute() -> None:
             current_state = dict(existing)
             try:
@@ -2578,7 +2597,7 @@ class CanvasPipelineHandler:
                     **(current_execution if isinstance(current_execution, dict) else {}),
                     "status": "running",
                 }
-                store.save(pipeline_id, current_state)
+                _save_execution_state(current_state)
 
                 outcome, record, decision_receipt = await execute_queued_plan(
                     plan,
@@ -2608,6 +2627,7 @@ class CanvasPipelineHandler:
                             "started_at": current_state["execution"].get("scheduled_at"),
                             "completed_at": datetime.now(timezone.utc).isoformat(),
                         },
+                        org_id=scope.org_id if scope is not None else None,
                     )
                 except (ImportError, RuntimeError, ValueError, TypeError, OSError) as exc:
                     logger.debug("Pipeline provenance receipt generation skipped: %s", exc)
@@ -2622,9 +2642,8 @@ class CanvasPipelineHandler:
                 }
                 current_state["receipt"] = receipt_bundle
                 current_state = attach_unified_live_state(current_state)
-                store.save(pipeline_id, current_state)
-
-                if emitter:
+                # Watchers of a pipeline id that changed hands are the new owner's.
+                if _save_execution_state(current_state) and emitter:
                     await emitter.emit_completed(pipeline_id, receipt_bundle)
             except Exception as exc:  # noqa: BLE001 - background execution must update state before surfacing
                 logger.error("Pipeline execution failed: %s", exc)
@@ -2635,8 +2654,7 @@ class CanvasPipelineHandler:
                     "error": str(exc),
                 }
                 current_state = attach_unified_live_state(current_state)
-                store.save(pipeline_id, current_state)
-                if emitter:
+                if _save_execution_state(current_state) and emitter:
                     await emitter.emit_failed(pipeline_id, str(exc))
 
         task = asyncio.create_task(_execute())

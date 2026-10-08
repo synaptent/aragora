@@ -3,7 +3,9 @@
 The same node id (``raw-idea-0``, ``fractal-0``, ...) in two graphs names two
 different nodes; writing one graph never moves, replaces or deletes the nodes
 of another. Stores created before node identity was per graph keep their old
-``nodes`` table untouched and get their rows copied once into ``graph_nodes``.
+``nodes`` table (its schema is never changed) and get their rows copied once
+into ``graph_nodes``. Deleting or rewriting a copied graph's nodes also deletes
+that graph's rows from the old table, as writes did before the copy.
 """
 
 from __future__ import annotations
@@ -248,10 +250,10 @@ class TestOldSchemaCopy:
         assert store.get_owner_org("g-old-a") == "org-a"
         assert _old_table_state(db_path) == old_state
 
-    def test_copy_runs_once_and_never_touches_the_old_table(self, tmp_path: Path) -> None:
+    def test_copy_runs_once_and_never_changes_the_old_schema(self, tmp_path: Path) -> None:
         db_path = tmp_path / "old.db"
         _old_db(db_path)
-        old_state = _old_table_state(db_path)
+        old_schema, _ = _old_table_state(db_path)
         tables_before = _tables(db_path)
 
         store = GraphStore(db_path=str(db_path))
@@ -271,7 +273,7 @@ class TestOldSchemaCopy:
             ("g-new", "raw-idea-0", "new idea"),
             ("g-old-a", "raw-idea-0", "A legacy idea"),
         ]
-        assert _old_table_state(db_path) == old_state
+        assert _old_table_state(db_path) == (old_schema, [])
         assert tables_before <= _tables(db_path)
 
     def test_new_table_is_keyed_by_graph_and_id_with_the_old_indexes(self, tmp_path: Path) -> None:
@@ -297,3 +299,108 @@ class TestOldSchemaCopy:
     def test_fresh_store_has_no_old_nodes_table(self, store: GraphStore) -> None:
         assert "graph_nodes" in _tables(Path(store._db_path))
         assert "nodes" not in _tables(Path(store._db_path))
+
+
+def _old_rows_of(path: Path, graph_id: str) -> list[tuple]:
+    return [row for row in _old_table_state(path)[1] if row[1] == graph_id]
+
+
+def _add_orphan_row(path: Path) -> None:
+    """An old row whose graph is gone; the copy skips it."""
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "INSERT INTO nodes (id, graph_id, stage, node_subtype, label, content_hash,"
+        " created_at, updated_at) VALUES ('orphan-0', 'g-gone', 'ideas', 'concept',"
+        " 'Orphan idea', 'h9', 1, 2)"
+    )
+    conn.commit()
+    conn.close()
+
+
+class TestOldTableRows:
+    """Writes that drop a copied graph's nodes drop the same rows from the old table."""
+
+    @pytest.fixture
+    def old_store(self, tmp_path: Path) -> tuple[GraphStore, Path, list]:
+        db_path = tmp_path / "old.db"
+        _old_db(db_path)
+        _add_orphan_row(db_path)
+        schema, _ = _old_table_state(db_path)
+        return GraphStore(db_path=str(db_path)), db_path, schema
+
+    def test_delete_removes_that_graphs_old_rows_only(self, old_store) -> None:
+        store, db_path, schema = old_store
+        b_rows = _old_rows_of(db_path, "g-old-b")
+        orphan_rows = _old_rows_of(db_path, "g-gone")
+
+        assert store.delete("g-old-a") is True
+
+        assert store.get("g-old-a") is None
+        assert _old_rows_of(db_path, "g-old-a") == []
+        assert _old_rows_of(db_path, "g-old-b") == b_rows
+        assert _old_rows_of(db_path, "g-gone") == orphan_rows
+        assert _old_table_state(db_path)[0] == schema
+        assert _labels(store, "g-old-b") == {"raw-idea-1": "B legacy idea"}
+
+    def test_update_removes_that_graphs_old_rows_only(self, old_store) -> None:
+        store, db_path, schema = old_store
+        b_rows = _old_rows_of(db_path, "g-old-b")
+        graph_a = store.get("g-old-a")
+        graph_a.nodes["raw-idea-0"].label = "A edited idea"
+
+        store.update(graph_a)
+
+        assert _old_rows_of(db_path, "g-old-a") == []
+        assert _old_rows_of(db_path, "g-old-b") == b_rows
+        assert _old_table_state(db_path)[0] == schema
+        assert _labels(store, "g-old-a") == {
+            "raw-idea-0": "A edited idea",
+            "goal-1": "A legacy goal",
+        }
+
+    def test_create_over_a_graph_removes_its_old_rows_only(self, old_store) -> None:
+        store, db_path, _ = old_store
+        b_rows = _old_rows_of(db_path, "g-old-b")
+
+        store.create(_graph("g-old-a", _node("raw-idea-0", "A replaced idea")), org_id="org-a")
+
+        assert _old_rows_of(db_path, "g-old-a") == []
+        assert _old_rows_of(db_path, "g-old-b") == b_rows
+        assert _labels(store, "g-old-a") == {"raw-idea-0": "A replaced idea"}
+
+    def test_remove_and_replace_node_drop_only_that_graphs_old_row(self, old_store) -> None:
+        store, db_path, schema = old_store
+        b_rows = _old_rows_of(db_path, "g-old-b")
+        a_goal = [row for row in _old_rows_of(db_path, "g-old-a") if row[0] == "goal-1"]
+
+        # goal-1's old row belongs to g-old-a; writing goal-1 in g-old-b leaves it.
+        store.add_node("g-old-b", _node("goal-1", "B goal"))
+        store.remove_node("g-old-b", "goal-1")
+        assert [row for row in _old_rows_of(db_path, "g-old-a") if row[0] == "goal-1"] == a_goal
+
+        store.remove_node("g-old-a", "goal-1")
+        store.add_node("g-old-a", _node("raw-idea-0", "A replaced idea"))
+
+        assert _old_rows_of(db_path, "g-old-a") == []
+        assert _old_rows_of(db_path, "g-old-b") == b_rows
+        assert _old_table_state(db_path)[0] == schema
+        assert _labels(store, "g-old-a") == {"raw-idea-0": "A replaced idea"}
+        assert _labels(store, "g-old-b") == {"raw-idea-1": "B legacy idea"}
+
+    def test_delete_keeps_foreign_keys_on_and_is_one_transaction(self, old_store) -> None:
+        store, db_path, _ = old_store
+        old_state = _old_table_state(db_path)
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE fk_probe (graph_id TEXT NOT NULL REFERENCES graphs(id))")
+        conn.execute("INSERT INTO fk_probe VALUES ('g-old-a')")
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            store.delete("g-old-a")
+
+        assert _old_table_state(db_path) == old_state
+        assert _labels(store, "g-old-a") == {
+            "raw-idea-0": "A legacy idea",
+            "goal-1": "A legacy goal",
+        }

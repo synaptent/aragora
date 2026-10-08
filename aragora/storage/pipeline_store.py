@@ -111,6 +111,41 @@ class PipelineResultStore(SQLiteStore):
             org_id: Owning org, recorded only when the row is first inserted
             created_by: Creating user, recorded only when the row is first inserted
         """
+        self._upsert(pipeline_id, result_dict, org_id=org_id, created_by=created_by)
+
+    def save_for_org(
+        self,
+        pipeline_id: str,
+        result_dict: dict[str, Any],
+        org_id: str,
+        created_by: str | None,
+    ) -> bool:
+        """Insert the row for ``org_id`` or update it if ``org_id`` owns it.
+
+        The owner check and the write are one statement, so a row another org
+        (or nobody) owns is never written, even if it appeared after the
+        caller last looked. Returns whether a row was written.
+        """
+        if not isinstance(org_id, str) or not org_id:
+            return False
+        written = self._upsert(
+            pipeline_id,
+            result_dict,
+            org_id=org_id,
+            created_by=created_by,
+            same_org_only=True,
+        )
+        return written > 0
+
+    def _upsert(
+        self,
+        pipeline_id: str,
+        result_dict: dict[str, Any],
+        *,
+        org_id: str | None,
+        created_by: str | None,
+        same_org_only: bool = False,
+    ) -> int:
         owner_org = org_id if isinstance(org_id, str) and org_id else None
         now = time.time()
         stage_status = result_dict.get("stage_status", {})
@@ -126,8 +161,11 @@ class PipelineResultStore(SQLiteStore):
         else:
             status = "pending"
 
+        owner_predicate = (
+            " WHERE pipeline_results.org_id = excluded.org_id" if same_org_only else ""
+        )
         with self.connection() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
                 INSERT INTO pipeline_results (
                     id, status, stage_status_json,
@@ -150,7 +188,8 @@ class PipelineResultStore(SQLiteStore):
                     execution_json = excluded.execution_json,
                     duration = excluded.duration,
                     updated_at = excluded.updated_at
-                """,
+                """
+                + owner_predicate,
                 (
                     pipeline_id,
                     status,
@@ -176,6 +215,7 @@ class PipelineResultStore(SQLiteStore):
                     OWNERSHIP_CREATED if owner_org else None,
                 ),
             )
+            return int(cursor.rowcount)
 
     def get_owner_org(self, pipeline_id: str) -> str | None:
         """The org that owns the pipeline, or None if it is missing or has no owner."""

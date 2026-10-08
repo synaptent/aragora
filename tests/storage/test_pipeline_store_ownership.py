@@ -84,6 +84,38 @@ def test_list_for_org_honours_status_and_limit(store: PipelineResultStore) -> No
     assert len(store.list_for_org("org-a", limit=1)) == 1
 
 
+def test_save_for_org_creates_a_missing_row_for_that_org(store: PipelineResultStore) -> None:
+    assert store.save_for_org("pipe-new", _result(), org_id="org-b", created_by="user-b") is True
+
+    assert _owner_row(store, "pipe-new") == ("org-b", "user-b", "created")
+    assert store.get("pipe-new")["stage_status"] == {"ideas": "complete"}
+
+
+def test_save_for_org_updates_only_the_owners_row(store: PipelineResultStore) -> None:
+    store.save("pipe-a", _result(), org_id="org-a", created_by="user-a")
+
+    assert store.save_for_org("pipe-a", _result(goals="complete"), "org-a", "user-a2") is True
+    assert store.get("pipe-a")["stage_status"] == {"goals": "complete"}
+    assert _owner_row(store, "pipe-a") == ("org-a", "user-a", "created")
+
+    assert store.save_for_org("pipe-a", _result(actions="complete"), "org-b", "user-b") is False
+    assert store.get("pipe-a")["stage_status"] == {"goals": "complete"}
+    assert _owner_row(store, "pipe-a") == ("org-a", "user-a", "created")
+
+
+def test_save_for_org_never_writes_an_unowned_row(store: PipelineResultStore) -> None:
+    store.save("pipe-x", _result())
+
+    assert store.save_for_org("pipe-x", _result(goals="complete"), "org-a", "user-a") is False
+    assert store.get("pipe-x")["stage_status"] == {"ideas": "complete"}
+    assert _owner_row(store, "pipe-x") == (None, None, None)
+
+
+def test_save_for_org_needs_an_org(store: PipelineResultStore) -> None:
+    assert store.save_for_org("pipe-new", _result(), "", None) is False
+    assert store.get("pipe-new") is None
+
+
 def test_migration_marks_existing_rows_unknown(tmp_path) -> None:
     db_path = tmp_path / "legacy.db"
     conn = sqlite3.connect(db_path)

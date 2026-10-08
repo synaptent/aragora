@@ -21,8 +21,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from aragora.canvas.stages import PipelineStage
 from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.pipeline.graph_store import GraphStore
+from aragora.pipeline.universal_node import UniversalGraph, UniversalNode
 from aragora.server.fastapi import create_app
 from aragora.server.fastapi.routes import canvas_pipeline as canvas_routes
 from aragora.storage.debate_storage import DebateStorage
@@ -101,7 +103,10 @@ def store(tmp_path: Path, monkeypatch) -> PipelineResultStore:
 @pytest.fixture
 def graphs(tmp_path: Path):
     graph_store = GraphStore(db_path=str(tmp_path / "graphs.db"))
-    with patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store):
+    with (
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store),
+        patch("aragora.knowledge.mound.adapters.receipt_adapter.ReceiptAdapter"),
+    ):
         yield graph_store
 
 
@@ -326,6 +331,29 @@ class TestOwner:
             assert graphs.get_owner_org(graph_id) == org
             assert graph.nodes["raw-idea-0"].label == idea
             assert graph.nodes["raw-idea-1"].label == f"{idea} two"
+
+    def test_receipt_reads_graph_nodes_only_for_the_graphs_org(self, client, graphs, as_a, as_b):
+        """B's pipeline named like A's graph gets a receipt without A's nodes."""
+        for graph_id, node_id, label in (
+            (PB, "idea-x", "A graph secret"),
+            (PA, "idea-1", "A own idea"),
+        ):
+            graph = UniversalGraph(id=graph_id, name="A graph")
+            graph.nodes[node_id] = UniversalNode(
+                id=node_id, stage=PipelineStage.IDEAS, node_subtype="concept", label=label
+            )
+            graphs.create(graph, org_id=ORG_A, created_by="user-a")
+
+        foreign = client.get(f"{CANVAS}/{PB}/receipt", headers=as_b)
+        own = client.get(f"{CANVAS}/{PA}/receipt", headers=as_a)
+
+        assert foreign.status_code == 200
+        assert "A graph secret" not in foreign.text
+        assert foreign.json()["receipt"]["provenance"]["ideas"] == []
+        assert own.status_code == 200
+        assert own.json()["receipt"]["provenance"]["ideas"] == [
+            {"id": "idea-1", "label": "A own idea", "type": "concept"}
+        ]
 
     def test_viewer_of_the_owning_org_gets_403(self, client, store, fastapi_bearer):
         viewer_a = fastapi_bearer("viewer-a", ORG_A, role="viewer")

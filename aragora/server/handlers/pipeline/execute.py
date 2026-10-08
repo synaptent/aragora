@@ -427,6 +427,7 @@ class PipelineExecuteHandler(BaseHandler):
                             "correlation_id": correlation_id,
                             "status": "completed" if outcome.success else "failed",
                         },
+                        org_id=execution_state.get("org_id"),
                     ),
                 }
             except (ImportError, RuntimeError, ValueError, TypeError, OSError) as exc:
