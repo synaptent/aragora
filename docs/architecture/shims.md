@@ -106,6 +106,12 @@ import-and-call tests at both paths.
 | `aragora.debate.tracing:trace_round` | `aragora.observability.debate_tracing:trace_round` | #10307 | not before M4 seal |
 | `aragora.debate.tracing:with_debate_context` | `aragora.observability.debate_tracing:with_debate_context` | #10307 | not before M4 seal |
 | `aragora.golden:debate` | `aragora.debate.api:debate` | #10444 | not before M4 seal |
+| `aragora.inbox.triage_diagnostics:DiagnosticSeverity` | `aragora.debate.triage_diagnostics:DiagnosticSeverity` | #10453 | not before M4 seal |
+| `aragora.inbox.triage_diagnostics:TriageDiagnosticEvent` | `aragora.debate.triage_diagnostics:TriageDiagnosticEvent` | #10453 | not before M4 seal |
+| `aragora.inbox.triage_diagnostics:TriageRunDiagnostics` | `aragora.debate.triage_diagnostics:TriageRunDiagnostics` | #10453 | not before M4 seal |
+| `aragora.inbox.triage_diagnostics:get_active_triage_diagnostics` | `aragora.debate.triage_diagnostics:get_active_triage_diagnostics` | #10453 | not before M4 seal |
+| `aragora.inbox.triage_diagnostics:record_triage_diagnostic` | `aragora.debate.triage_diagnostics:record_triage_diagnostic` | #10453 | not before M4 seal |
+| `aragora.inbox.triage_diagnostics:triage_diagnostics_should_mirror_logs` | `aragora.debate.triage_diagnostics:triage_diagnostics_should_mirror_logs` | #10453 | not before M4 seal |
 | `aragora.services:EmbeddingCacheService` | `aragora.embeddings.service_markers:EmbeddingCacheService` | #10406 | not before M4 seal |
 | `aragora.services:EmbeddingProviderService` | `aragora.embeddings.service_markers:EmbeddingProviderService` | #10406 | not before M4 seal |
 | `aragora.services.metering_models:ApiCallRecord` | `aragora.billing.metering_models:ApiCallRecord` | #10406 | not before M4 seal |
@@ -301,6 +307,14 @@ import-and-call tests at both paths.
 | `aragora.services.usage_metering:UsageSummary` | `aragora.billing.usage_metering:UsageSummary` | #10406 | not before M4 seal |
 | `aragora.services.usage_metering:UsageType` | `aragora.billing.usage_metering:UsageType` | #10406 | not before M4 seal |
 | `aragora.services.usage_metering:get_usage_meter` | `aragora.billing.usage_metering:get_usage_meter` | #10406 | not before M4 seal |
+| `aragora.skills.base:CapabilityLevel` | `aragora.types.skills:CapabilityLevel` | #10453 | not before M4 seal |
+| `aragora.skills.base:Skill` | `aragora.types.skills:Skill` | #10453 | not before M4 seal |
+| `aragora.skills.base:SkillCapability` | `aragora.types.skills:SkillCapability` | #10453 | not before M4 seal |
+| `aragora.skills.base:SkillContext` | `aragora.types.skills:SkillContext` | #10453 | not before M4 seal |
+| `aragora.skills.base:SkillManifest` | `aragora.types.skills:SkillManifest` | #10453 | not before M4 seal |
+| `aragora.skills.base:SkillResult` | `aragora.types.skills:SkillResult` | #10453 | not before M4 seal |
+| `aragora.skills.base:SkillStatus` | `aragora.types.skills:SkillStatus` | #10453 | not before M4 seal |
+| `aragora.skills.base:SyncSkill` | `aragora.types.skills:SyncSkill` | #10453 | not before M4 seal |
 | `aragora.swarm.shift_ledger:DEFAULT_LEDGER_PATH` | `aragora.evaluation.shift_ledger:DEFAULT_LEDGER_PATH` | #10307 | not before M4 seal |
 | `aragora.swarm.shift_ledger:FAILURE_THRESHOLDS` | `aragora.evaluation.shift_ledger:FAILURE_THRESHOLDS` | #10307 | not before M4 seal |
 | `aragora.swarm.shift_ledger:GREEN_SHIFT_REQUIRED_HOURS` | `aragora.evaluation.shift_ledger:GREEN_SHIFT_REQUIRED_HOURS` | #10307 | not before M4 seal |
