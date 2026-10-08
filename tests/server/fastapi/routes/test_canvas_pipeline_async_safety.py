@@ -37,9 +37,9 @@ class _SlowSaveStore:
         time.sleep(0.2)
         return {"pipeline_id": pipeline_id}
 
-    def save(self, pipeline_id: str, data: dict):
+    def save_for_org(self, pipeline_id: str, data: dict, org_id: str, created_by: str) -> bool:
         time.sleep(0.2)
-        return None
+        return True
 
 
 async def _ticker(duration: float) -> int:

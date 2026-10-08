@@ -117,6 +117,24 @@ def _owner_fields(scope: OrgScope | None) -> dict[str, str]:
     return {"org_id": scope.org_id, "created_by": scope.user_id}
 
 
+def _save_for_scope(
+    store: Any, pipeline_id: str, result_dict: dict[str, Any], scope: OrgScope | None
+) -> bool:
+    """Save a pipeline row; with ``scope``, only a new row or one the scope's org owns.
+
+    False means another org (or nobody) owns ``pipeline_id`` by now and nothing
+    was written; the live object kept under that id is then dropped, as it is
+    not the owner's. Without a scope the row is upserted as before.
+    """
+    if scope is None:
+        store.save(pipeline_id, result_dict)
+        return True
+    if store.save_for_org(pipeline_id, result_dict, scope.org_id, scope.user_id):
+        return True
+    _pipeline_objects.pop(pipeline_id, None)
+    return False
+
+
 def _versioned(path: str) -> str:
     if path.startswith("/api/canvas/"):
         return "/api/v1/canvas/" + path[len("/api/canvas/") :]
@@ -804,14 +822,14 @@ class CanvasPipelineHandler:
         ``pipeline_id`` None means the id comes from the request body.
         """
         if path == "/api/v1/canvas/pipeline/advance":
-            return None, lambda body, scope: self.handle_advance(body)
+            return None, lambda body, scope: self.handle_advance(body, scope=scope)
         if path == "/api/v1/canvas/pipeline/approve-transition":
 
             def _approve_from_body(body: dict[str, Any], scope: OrgScope) -> Any:
                 pipeline_id = body.get("pipeline_id")
                 if not pipeline_id:
                     return error_response("Missing pipeline_id in request body", 400)
-                return self.handle_approve_transition(str(pipeline_id), body)
+                return self.handle_approve_transition(str(pipeline_id), body, scope=scope)
 
             return None, _approve_from_body
 
@@ -819,7 +837,7 @@ class CanvasPipelineHandler:
         if m:
             pipeline_id = m.group(1)
             return pipeline_id, lambda body, scope: self.handle_approve_transition(
-                pipeline_id, body
+                pipeline_id, body, scope=scope
             )
         m = _PIPELINE_EXECUTE.match(path)
         if m:
@@ -1018,7 +1036,8 @@ class CanvasPipelineHandler:
 
             # Persist result and keep live object in memory
             result_dict = attach_unified_live_state(result.to_dict())
-            _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
+            if not _save_for_scope(_get_store(), result.pipeline_id, result_dict, scope):
+                return record_not_found(_PIPELINE)
             _pipeline_objects[result.pipeline_id] = result
 
             # Persist universal graph if generated
@@ -1099,7 +1118,8 @@ class CanvasPipelineHandler:
             )
 
             result_dict = attach_unified_live_state(result.to_dict())
-            _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
+            if not _save_for_scope(_get_store(), result.pipeline_id, result_dict, scope):
+                return record_not_found(_PIPELINE)
             _pipeline_objects[result.pipeline_id] = result
             _persist_universal_graph(result, scope)
             _persist_pipeline_to_km(result)
@@ -1191,7 +1211,8 @@ class CanvasPipelineHandler:
         )
 
         result_dict = attach_unified_live_state(result.to_dict())
-        _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
+        if not _save_for_scope(_get_store(), result.pipeline_id, result_dict, scope):
+            return record_not_found(_PIPELINE)
         _pipeline_objects[result.pipeline_id] = result
         _persist_pipeline_to_km(result)
 
@@ -1241,7 +1262,8 @@ class CanvasPipelineHandler:
         result = pipeline.from_ideas(ideas, auto_advance=True)
 
         result_dict = attach_unified_live_state(result.to_dict())
-        _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
+        if not _save_for_scope(_get_store(), result.pipeline_id, result_dict, scope):
+            return record_not_found(_PIPELINE)
         _pipeline_objects[result.pipeline_id] = result
 
         return json_response(
@@ -1255,7 +1277,9 @@ class CanvasPipelineHandler:
             201,
         )
 
-    async def handle_advance(self, request_data: dict[str, Any]) -> HandlerResult:
+    async def handle_advance(
+        self, request_data: dict[str, Any], *, scope: OrgScope | None = None
+    ) -> HandlerResult:
         """POST /api/v1/canvas/pipeline/advance
 
         Advance a pipeline to the next stage.
@@ -1311,7 +1335,8 @@ class CanvasPipelineHandler:
 
             # Persist updated result and keep live object
             result_dict = attach_unified_live_state(result_obj.to_dict())
-            _get_store().save(pipeline_id, result_dict)
+            if not _save_for_scope(_get_store(), pipeline_id, result_dict, scope):
+                return record_not_found(_PIPELINE)
             _pipeline_objects[pipeline_id] = result_obj
 
             return json_response(
@@ -1502,7 +1527,8 @@ class CanvasPipelineHandler:
         )
 
         result_dict = attach_unified_live_state(result.to_dict())
-        _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
+        if not _save_for_scope(_get_store(), result.pipeline_id, result_dict, scope):
+            return record_not_found(_PIPELINE)
         _pipeline_objects[result.pipeline_id] = result
         _persist_pipeline_to_km(result)
 
@@ -1583,7 +1609,11 @@ class CanvasPipelineHandler:
                     config.event_callback = emitter.as_event_callback(pipeline_id)
                 result = await pipeline.run(input_text, config, pipeline_id=pipeline_id)
                 result_dict = attach_unified_live_state(result.to_dict())
-                _get_store().save(pipeline_id, result_dict, **_owner_fields(scope))
+                if not _save_for_scope(_get_store(), pipeline_id, result_dict, scope):
+                    logger.warning(
+                        "Pipeline %s changed owner during its run; result not saved", pipeline_id
+                    )
+                    return
                 _pipeline_objects[pipeline_id] = result
                 _persist_universal_graph(result, scope)
                 _persist_pipeline_to_km(result)
@@ -1593,7 +1623,8 @@ class CanvasPipelineHandler:
 
             pipeline_id = f"pipe-{uuid.uuid4().hex[:8]}"
             # Store placeholder so status queries work immediately
-            _get_store().save(pipeline_id, _pending_pipeline(), **_owner_fields(scope))
+            if not _save_for_scope(_get_store(), pipeline_id, _pending_pipeline(), scope):
+                return record_not_found(_PIPELINE)
 
             task = asyncio.create_task(_run_pipeline())
             task.add_done_callback(
@@ -1879,7 +1910,8 @@ class CanvasPipelineHandler:
             from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
 
             # Recorded so the owner's status and agent reads find the pipeline.
-            _get_store().save(pipeline_id, _pending_pipeline(), **_owner_fields(scope))
+            if not _save_for_scope(_get_store(), pipeline_id, _pending_pipeline(), scope):
+                return record_not_found(_PIPELINE)
 
             # Fire off the pipeline asynchronously
             task = asyncio.ensure_future(
@@ -2130,12 +2162,10 @@ class CanvasPipelineHandler:
             result = await IdeaToExecutionPipeline.from_system_metrics(
                 pipeline_id=pipeline_id,
             )
+            result_dict = attach_unified_live_state(result.to_dict())
+            if not _save_for_scope(_get_store(), pipeline_id, result_dict, scope):
+                return record_not_found(_PIPELINE)
             _pipeline_objects[pipeline_id] = result
-            _get_store().save(
-                pipeline_id,
-                attach_unified_live_state(result.to_dict()),
-                **_owner_fields(scope),
-            )
 
             return json_response(
                 {
@@ -2198,9 +2228,7 @@ class CanvasPipelineHandler:
                     existing.setdefault("stage_status", {})[stage_name] = "complete"
 
         existing = attach_unified_live_state(existing)
-        if scope is None:
-            store.save(pipeline_id, existing)
-        elif not store.save_for_org(pipeline_id, existing, scope.org_id, scope.user_id):
+        if not _save_for_scope(store, pipeline_id, existing, scope):
             # The id was free when the request was admitted but another org (or
             # no org) owns it now.
             return record_not_found(_PIPELINE)
@@ -2221,6 +2249,8 @@ class CanvasPipelineHandler:
         self,
         pipeline_id: str,
         request_data: dict[str, Any],
+        *,
+        scope: OrgScope | None = None,
     ) -> HandlerResult:
         """POST /api/v1/canvas/pipeline/{id}/approve-transition
 
@@ -2298,7 +2328,8 @@ class CanvasPipelineHandler:
             existing["stage_status"] = stage_status
 
         existing = attach_unified_live_state(existing)
-        store.save(pipeline_id, existing)
+        if not _save_for_scope(store, pipeline_id, existing, scope):
+            return record_not_found(_PIPELINE)
 
         return json_response(
             {
@@ -2379,17 +2410,15 @@ class CanvasPipelineHandler:
         # Trigger self-improvement asynchronously
         try:
             # Store the run config for status polling
-            store.save(
-                f"self-improve-{run_id}",
-                {
-                    "run_id": run_id,
-                    "goal": goal,
-                    "pipeline_id": pipeline_id,
-                    "status": "started",
-                    "budget_limit": budget_limit,
-                },
-                **_owner_fields(scope),
-            )
+            run_config = {
+                "run_id": run_id,
+                "goal": goal,
+                "pipeline_id": pipeline_id,
+                "status": "started",
+                "budget_limit": budget_limit,
+            }
+            if not _save_for_scope(store, f"self-improve-{run_id}", run_config, scope):
+                return record_not_found(_PIPELINE)
 
             logger.info(
                 "Self-improve triggered from pipeline %s: %s (budget=%s)",
@@ -2513,7 +2542,8 @@ class CanvasPipelineHandler:
                 synced_workflow = sync_canvas_to_workflow(pipeline_graph)
                 existing["synced_workflow"] = synced_workflow
                 existing = attach_unified_live_state(existing)
-                store.save(pipeline_id, existing)
+                if not _save_for_scope(store, pipeline_id, existing, scope):
+                    return record_not_found(_PIPELINE)
                 logger.info(
                     "Synced canvas to workflow for pipeline %s: %d steps",
                     pipeline_id,
@@ -2563,14 +2593,14 @@ class CanvasPipelineHandler:
             "agent_tasks": len(agent_tasks),
             "total_orchestration_nodes": len(orch_nodes),
         }
-        store.save(pipeline_id, existing)
+        if not _save_for_scope(store, pipeline_id, existing, scope):
+            # The execution API has no cancel: the queued execution stays
+            # queued, owned by this org, and is never run.
+            return record_not_found(_PIPELINE)
 
         def _save_execution_state(state: dict[str, Any]) -> bool:
             """Save the state unless the pipeline id now belongs to another org (or nobody)."""
-            if scope is None:
-                store.save(pipeline_id, state)
-                return True
-            if store.save_for_org(pipeline_id, state, scope.org_id, scope.user_id):
+            if _save_for_scope(store, pipeline_id, state, scope):
                 return True
             logger.warning(
                 "Pipeline %s changed owner during execution; execution state not saved",
@@ -2581,6 +2611,15 @@ class CanvasPipelineHandler:
         async def _execute() -> None:
             current_state = dict(existing)
             try:
+                current_execution = current_state.get("execution", {})
+                current_state["execution"] = {
+                    **(current_execution if isinstance(current_execution, dict) else {}),
+                    "status": "running",
+                }
+                # Saved before the start event, so a pipeline id that changed hands
+                # gets neither the event nor the run.
+                if not _save_execution_state(current_state):
+                    return
                 if emitter:
                     await emitter.emit_stage_started(
                         pipeline_id,
@@ -2591,13 +2630,6 @@ class CanvasPipelineHandler:
                             "agent_tasks": len(agent_tasks),
                         },
                     )
-
-                current_execution = current_state.get("execution", {})
-                current_state["execution"] = {
-                    **(current_execution if isinstance(current_execution, dict) else {}),
-                    "status": "running",
-                }
-                _save_execution_state(current_state)
 
                 outcome, record, decision_receipt = await execute_queued_plan(
                     plan,
@@ -2729,7 +2761,8 @@ class CanvasPipelineHandler:
         )
 
         result_dict = attach_unified_live_state(result.to_dict())
-        _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
+        if not _save_for_scope(_get_store(), result.pipeline_id, result_dict, scope):
+            return record_not_found(_PIPELINE)
         _pipeline_objects[result.pipeline_id] = result
         _persist_pipeline_to_km(result)
 

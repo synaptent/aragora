@@ -691,6 +691,233 @@ async def test_execute_refused_by_plan_ownership_is_404(handler, store) -> None:
     assert "execution" not in store.get(PA)
 
 
+# ---------------------------------------------------------------------------
+# Every scoped save checks the owner when it writes
+# ---------------------------------------------------------------------------
+
+NOT_FOUND = {"error": "Pipeline not found", "code": "not_found"}
+A_PLAN = "A secret plan"
+
+
+def _b_takes_the_id_before_write(
+    store: PipelineResultStore, monkeypatch, write: int = 1
+) -> SimpleNamespace:
+    """Right before the ``write``-th pipeline save, the id being saved changes
+    hands: A's row (if any) is deleted and org B creates the id.
+
+    Returns the ids saved (``written``) and B's row as B wrote it (``b_row``).
+    """
+    real_save, real_save_for_org = store.save, store.save_for_org
+    taken = SimpleNamespace(written=[], b_row=None)
+
+    def take(pipeline_id: str) -> None:
+        taken.written.append(pipeline_id)
+        if len(taken.written) == write:
+            store.delete(pipeline_id)
+            real_save(pipeline_id, {**B_CONTENT, "pipeline_id": pipeline_id}, org_id="org-b")
+            taken.b_row = store.get(pipeline_id)
+
+    def save(pipeline_id: str, *args: Any, **kwargs: Any) -> Any:
+        take(pipeline_id)
+        return real_save(pipeline_id, *args, **kwargs)
+
+    def save_for_org(pipeline_id: str, *args: Any, **kwargs: Any) -> Any:
+        take(pipeline_id)
+        return real_save_for_org(pipeline_id, *args, **kwargs)
+
+    monkeypatch.setattr(store, "save", save)
+    monkeypatch.setattr(store, "save_for_org", save_for_org)
+    return taken
+
+
+def _assert_b_row_intact(store: PipelineResultStore, taken: SimpleNamespace, *a_texts: str) -> None:
+    pipeline_id = taken.written[-1]
+    saved = store.get(pipeline_id)
+    assert saved == taken.b_row
+    assert saved["ideas"] == B_CONTENT["ideas"]
+    assert store.get_owner_org(pipeline_id) == "org-b"
+    for text in a_texts:
+        assert text not in json.dumps(saved)
+
+
+def _a_result(*args: Any, pipeline_id: str = "pipe-a-new", **kwargs: Any) -> SimpleNamespace:
+    """What any pipeline factory returns for org A, whatever it was called with."""
+    result = _fake_result(pipeline_id)
+    content = {
+        "pipeline_id": pipeline_id,
+        "stage_status": {"ideas": "complete"},
+        "ideas": {"nodes": [{"id": "a-idea", "data": {"label": A_PLAN}}]},
+    }
+    result.to_dict = lambda: content
+    return result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (f"{BASE}/from-debate", {"cartographer_data": {"nodes": [{"label": A_PLAN}]}}),
+        (f"{BASE}/from-ideas", {"ideas": [A_PLAN]}),
+        (f"{BASE}/from-braindump", {"text": f"{A_PLAN}. Another plan."}),
+        (f"{BASE}/from-template", {"template_name": "product_launch"}),
+        (f"{BASE}/demo", {"ideas": [A_PLAN]}),
+        (f"{BASE}/run", {"input_text": A_PLAN}),
+        (f"{BASE}/auto-run", {"text": A_PLAN}),
+        (f"{BASE}/from-system-metrics", {}),
+        ("/api/v1/debates/debate-a/to-pipeline", {}),
+    ],
+)
+async def test_create_never_saves_over_an_id_another_org_took(
+    store, monkeypatch, path, body
+) -> None:
+    from aragora.pipeline import idea_to_execution
+
+    storage = MagicMock()
+    storage.get_access_info.return_value = ("debate-a", "org-a", False)
+    cartographer = MagicMock()
+    cartographer.return_value.get_graph.return_value = {"nodes": [{"label": A_PLAN}]}
+    pipeline_cls = idea_to_execution.IdeaToExecutionPipeline
+    taken = _b_takes_the_id_before_write(store, monkeypatch)
+
+    with (
+        patch.object(pipeline_cls, "from_debate", side_effect=_a_result),
+        patch.object(pipeline_cls, "from_ideas", side_effect=_a_result),
+        patch.object(pipeline_cls, "run", new=AsyncMock(side_effect=_a_result)),
+        patch.object(pipeline_cls, "from_brain_dump", new=AsyncMock(side_effect=_a_result)),
+        patch.object(pipeline_cls, "from_system_metrics", new=AsyncMock(side_effect=_a_result)),
+        patch.dict(
+            "sys.modules",
+            {
+                "aragora.visualization.argument_cartographer": SimpleNamespace(
+                    ArgumentCartographer=cartographer
+                )
+            },
+        ),
+        patch.object(module, "_persist_pipeline_to_km") as km,
+        patch.object(module, "_persist_universal_graph") as graph,
+    ):
+        result = await _post(CanvasPipelineHandler({"storage": storage}), USER_A, path, body)
+
+    assert (result.status_code, _json(result)) == (404, NOT_FOUND)
+    [pipeline_id] = taken.written
+    _assert_b_row_intact(store, taken, A_PLAN)
+    assert pipeline_id not in module._pipeline_objects
+    assert not module._pipeline_tasks
+    km.assert_not_called()
+    graph.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_result_is_not_saved_over_an_id_another_org_took(handler, store, monkeypatch):
+    from aragora.pipeline import idea_to_execution
+
+    taken = _b_takes_the_id_before_write(store, monkeypatch, write=2)
+    with (
+        patch.object(
+            idea_to_execution.IdeaToExecutionPipeline, "run", new=AsyncMock(side_effect=_a_result)
+        ),
+        patch.object(module, "_persist_pipeline_to_km") as km,
+        patch.object(module, "_persist_universal_graph") as graph,
+    ):
+        result = await _post(handler, USER_A, f"{BASE}/run", {"input_text": A_PLAN})
+        pipeline_id = _json(result)["pipeline_id"]
+        await module._pipeline_tasks[pipeline_id]
+
+    assert result.status_code == 202
+    assert taken.written == [pipeline_id, pipeline_id]
+    _assert_b_row_intact(store, taken, A_PLAN)
+    assert pipeline_id not in module._pipeline_objects
+    km.assert_not_called()
+    graph.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (f"{BASE}/advance", {"pipeline_id": PA, "target_stage": "goals"}),
+        (f"{BASE}/{PA}/approve-transition", {"from_stage": "ideas", "to_stage": "goals"}),
+        (
+            f"{BASE}/approve-transition",
+            {"pipeline_id": PA, "from_stage": "ideas", "to_stage": "goals"},
+        ),
+        (f"{BASE}/{PA}/self-improve", {}),
+    ],
+)
+async def test_owner_write_never_saves_over_a_pipeline_that_changed_hands(
+    handler, store, monkeypatch, path, body
+) -> None:
+    from aragora.pipeline import idea_to_execution
+
+    taken = _b_takes_the_id_before_write(store, monkeypatch)
+    with patch.object(
+        idea_to_execution.IdeaToExecutionPipeline,
+        "advance_stage",
+        side_effect=lambda result, stage: _a_result(pipeline_id=PA),
+    ):
+        result = await _post(handler, USER_A, path, body)
+
+    assert (result.status_code, _json(result)) == (404, NOT_FOUND)
+    [pipeline_id] = taken.written
+    _assert_b_row_intact(store, taken, "A secret idea", A_PLAN)
+    assert pipeline_id not in module._pipeline_objects
+    assert not module._pipeline_tasks
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changes_hands_before", ["canvas sync", "queued save", "running save"])
+async def test_execute_stops_when_the_pipeline_changed_hands_before_it_runs(
+    handler, store, monkeypatch, changes_hands_before
+) -> None:
+    """No execution, event or save for A once B owns the pipeline id."""
+    _save_executable(store)
+    emitter = _emitter()
+    graph_store = MagicMock()
+    synced = changes_hands_before == "canvas sync"
+    graph_store.list.return_value = [{"id": "graph-a"}] if synced else []
+    graph_store.get.return_value = SimpleNamespace(metadata={"pipeline_id": PA})
+    launch = {
+        "execution_id": "exec-flip",
+        "correlation_id": "corr-flip",
+        "execution_mode": "workflow",
+        "run_id": "run-flip",
+    }
+    execute = AsyncMock(return_value=(_outcome(), {"record": "A execution record"}, {}))
+    taken = _b_takes_the_id_before_write(
+        store, monkeypatch, write=2 if changes_hands_before == "running save" else 1
+    )
+
+    with (
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store),
+        patch(
+            "aragora.pipeline.canvas_workflow_sync.sync_canvas_to_workflow",
+            return_value={"steps": [{"label": "A synced step"}]},
+        ),
+        patch(
+            "aragora.pipeline.canonical_execution.queue_plan_execution", return_value=launch
+        ) as queue,
+        patch("aragora.pipeline.canonical_execution.execute_queued_plan", new=execute),
+        patch("aragora.server.stream.pipeline_stream.get_pipeline_emitter", return_value=emitter),
+    ):
+        result = await _post(handler, USER_A, f"{BASE}/{PA}/execute", {})
+        if "exec-flip" in module._pipeline_tasks:
+            await module._pipeline_tasks["exec-flip"]
+
+    if changes_hands_before == "running save":
+        assert result.status_code == 202
+        assert taken.written == [PA, PA]
+    else:
+        assert (result.status_code, _json(result)) == (404, NOT_FOUND)
+        assert taken.written == [PA]
+        assert not module._pipeline_tasks
+    assert queue.called is not synced
+    _assert_b_row_intact(store, taken, "Build cache", "A synced step", "A execution record")
+    execute.assert_not_awaited()
+    emitter.emit_stage_started.assert_not_awaited()
+    emitter.emit_completed.assert_not_awaited()
+    emitter.emit_failed.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_extract_goals_ignores_another_orgs_canvas(handler, store) -> None:
     canvas = SimpleNamespace(
