@@ -18,6 +18,7 @@ import queue
 import secrets
 import time
 from datetime import datetime
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -43,6 +44,8 @@ WS_CLOSE_MESSAGE_TOO_BIG = 1009  # Message too big
 # Maximum JSON nesting depth allowed in WebSocket messages.
 # Prevents JSON bomb attacks where deeply nested structures exhaust CPU/stack.
 WS_MAX_JSON_DEPTH = 20
+
+_SPECTATE_REVOKED = object()
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +109,7 @@ class WebSocketHandlerMixin:
         _client_subscriptions: Any
         _debate_states_lock: Any
         debate_states: Any
+        get_debate_state: Any
         _timeout_sender: Any
         _running: Any
         update_loop_state: Any
@@ -362,11 +366,39 @@ class WebSocketHandlerMixin:
 
         return redact_spectator_payload(payload)
 
+    @staticmethod
+    def _spectate_caller(request: Any) -> SimpleNamespace:
+        """The socket's caller as ``require_org_scope`` reads it.
+
+        Browsers cannot set headers on a WebSocket, so ``?token=`` stands in
+        for the Authorization header, as on the main socket. No user store is
+        attached, so an ``ara_`` API key is not resolved and its caller only
+        sees public debates here.
+        """
+        authorization = request.headers.get("Authorization", "")
+        token = request.query.get("token")
+        if not authorization and token:
+            authorization = f"Bearer {token}"
+        return SimpleNamespace(
+            headers={"Authorization": authorization} if authorization else {},
+            client_address=(request.remote or "", 0),
+        )
+
     async def _handle_spectate_websocket(self, request) -> aiohttp.web.StreamResponse:
-        """Handle debate or pipeline spectate sockets used by the live UI."""
+        """Handle debate or pipeline spectate sockets used by the live UI.
+
+        The caller sees what the spectate SSE route shows them: a named debate
+        must be public or their org's (else 401/403/404 before the upgrade),
+        and only events they may view are sent. A debate socket is closed with
+        ``share_revoked`` once the caller may no longer view the debate.
+        """
         import aiohttp
         import aiohttp.web as web
 
+        from aragora.server.handlers.streaming.spectate_ws import (
+            SpectateVisibility,
+            authorize_spectate_request,
+        )
         from aragora.spectate.ws_bridge import get_spectate_bridge
 
         origin = request.headers.get("Origin", "")
@@ -380,6 +412,18 @@ class WebSocketHandlerMixin:
             return web.Response(status=400, text="Provide either debate_id or pipeline_id")
         if not debate_id and not pipeline_id:
             return web.Response(status=400, text="Missing debate_id or pipeline_id")
+
+        visibility = await asyncio.to_thread(
+            authorize_spectate_request,
+            self._spectate_caller(request),
+            {"debate_id": debate_id} if debate_id else None,
+        )
+        if not isinstance(visibility, SpectateVisibility):
+            return web.Response(
+                status=visibility.status_code,
+                body=visibility.body,
+                content_type="application/json",
+            )
 
         bridge = get_spectate_bridge()
         if not bridge.running:
@@ -395,8 +439,17 @@ class WebSocketHandlerMixin:
         event_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=256)
         seen_signatures: set[str] = set()
 
+        def _revoke() -> None:
+            while not event_queue.empty():
+                event_queue.get_nowait()
+            event_queue.put_nowait(_SPECTATE_REVOKED)
+
         def enqueue(event: Any) -> None:
             if not self._spectate_scope_matches(event, debate_id, pipeline_id):
+                return
+            if not visibility.can_view_event(event):
+                if debate_id and visibility.lost_access(debate_id):
+                    loop.call_soon_threadsafe(_revoke)
                 return
 
             def _push() -> None:
@@ -415,6 +468,10 @@ class WebSocketHandlerMixin:
         async def pump_events() -> None:
             while True:
                 event = await event_queue.get()
+                if event is _SPECTATE_REVOKED:
+                    await ws.send_json({"type": "share_revoked", "debate_id": debate_id})
+                    await ws.close()
+                    return
                 signature = self._spectate_event_signature(event)
                 if signature in seen_signatures:
                     continue
@@ -434,6 +491,8 @@ class WebSocketHandlerMixin:
 
             for event in bridge.get_recent_events(200):
                 if not self._spectate_scope_matches(event, debate_id, pipeline_id):
+                    continue
+                if not visibility.can_view_event(event):
                     continue
                 signature = self._spectate_event_signature(event)
                 if signature in seen_signatures:

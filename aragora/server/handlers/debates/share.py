@@ -27,7 +27,7 @@ from aragora.server.handlers.base import (
     json_response,
     handle_errors,
 )
-from aragora.tenancy.debate_access import authorize_debate_write
+from aragora.tenancy.debate_access import authorize_debate_write, note_public_revoked
 from aragora.tenancy.record_scope import scope_denial_first
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ def set_public_spectate(debate_id: str, enabled: bool = True) -> None:
         _shared_debates[debate_id] = True
     else:
         _shared_debates.pop(debate_id, None)
+        note_public_revoked()
         # Clean up any active collectors
         collectors = _public_collectors.pop(debate_id, None)
         if collectors:
@@ -135,6 +136,7 @@ def _reset_share_state() -> None:
     """Reset all share state. Used by tests."""
     _shared_debates.clear()
     _public_collectors.clear()
+    note_public_revoked()
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +216,8 @@ class DebateShareHandler(BaseHandler):
         self._set_public_storage_flag(storage, write.debate_id, enabled, write.scope.org_id)
 
         if not enabled:
+            # Again after the stored flag: a stream may have re-read it in between.
+            note_public_revoked()
             return json_response({"debate_id": write.debate_id, "public_spectate": False})
 
         host = _DEFAULT_HOST

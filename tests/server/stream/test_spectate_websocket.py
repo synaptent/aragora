@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import aiohttp
 import aiohttp.web
 import pytest
 
+from aragora.server.handlers.debates.share import _reset_share_state, set_public_spectate
+from aragora.server.handlers.streaming import spectate_ws
 from aragora.server.stream.servers import AiohttpUnifiedServer
 from aragora.spectate.ws_bridge import SpectateEvent, get_spectate_bridge, reset_spectate_bridge
 
@@ -65,6 +68,30 @@ def _reset_bridge():
     reset_spectate_bridge()
 
 
+@pytest.fixture
+def public_debate(monkeypatch):
+    """``debate-123`` is shared publicly, so any caller may spectate it."""
+    monkeypatch.setattr(spectate_ws, "_resolve_debates_storage", lambda storage: None)
+    _reset_share_state()
+    set_public_spectate("debate-123", True)
+    yield "debate-123"
+    _reset_share_state()
+
+
+@pytest.fixture
+def pipeline_org(monkeypatch):
+    """The caller signs in for the org that owns ``pipe-7``."""
+    user = SimpleNamespace(user_id="u-1", org_id="org-a", role="member", is_authenticated=True)
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request", lambda request, user_store=None: user
+    )
+    monkeypatch.setattr(spectate_ws, "_resolve_debates_storage", lambda storage: None)
+    monkeypatch.setattr(
+        spectate_ws, "pipeline_owned", lambda pipeline_id, scope: pipeline_id == "pipe-7"
+    )
+    return user
+
+
 def _make_request(
     *,
     debate_id: str | None = None,
@@ -81,7 +108,7 @@ def _make_request(
 
 class TestSpectateWebSocket:
     @pytest.mark.asyncio
-    async def test_replays_metadata_and_backlog_for_debate_scope(self, monkeypatch):
+    async def test_replays_metadata_and_backlog_for_debate_scope(self, monkeypatch, public_debate):
         ws_stub = _StubWebSocket(messages=[_FakeWSMsg(type=aiohttp.WSMsgType.CLOSE)])
         monkeypatch.setattr(aiohttp.web, "WebSocketResponse", lambda **_: ws_stub)
 
@@ -123,7 +150,7 @@ class TestSpectateWebSocket:
         assert ws_stub.sent_json[1]["round"] == 2
 
     @pytest.mark.asyncio
-    async def test_supports_pipeline_scope_via_query_string(self, monkeypatch):
+    async def test_supports_pipeline_scope_via_query_string(self, monkeypatch, pipeline_org):
         ws_stub = _StubWebSocket(messages=[_FakeWSMsg(type=aiohttp.WSMsgType.CLOSE)])
         monkeypatch.setattr(aiohttp.web, "WebSocketResponse", lambda **_: ws_stub)
 
@@ -144,6 +171,26 @@ class TestSpectateWebSocket:
         assert ws_stub.sent_json[0]["pipeline_id"] == "pipe-7"
         assert ws_stub.sent_json[1]["type"] == "assignment_started"
         assert ws_stub.sent_json[1]["pipeline_id"] == "pipe-7"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_events_are_not_sent_to_anonymous_callers(self, monkeypatch):
+        ws_stub = _StubWebSocket(messages=[_FakeWSMsg(type=aiohttp.WSMsgType.CLOSE)])
+        monkeypatch.setattr(aiohttp.web, "WebSocketResponse", lambda **_: ws_stub)
+        monkeypatch.setattr(spectate_ws, "_resolve_debates_storage", lambda storage: None)
+
+        server = AiohttpUnifiedServer(port=0, host="127.0.0.1")
+        get_spectate_bridge()._event_buffer.append(
+            SpectateEvent(
+                event_type="assignment_started",
+                timestamp="2026-03-27T20:00:00+00:00",
+                pipeline_id="pipe-7",
+                data={"details": "planner -> implementer"},
+            )
+        )
+
+        await server._handle_spectate_websocket(_make_request(pipeline_id="pipe-7"))
+
+        assert [message["type"] for message in ws_stub.sent_json] == ["metadata"]
 
     @pytest.mark.asyncio
     async def test_requires_single_scope_parameter(self):

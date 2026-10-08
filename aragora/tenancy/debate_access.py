@@ -16,6 +16,9 @@ extend :mod:`aragora.tenancy.record_scope`:
   get the same 404 body.
 * A debate that is still running has no stored row yet. Its org comes from the
   server's active-debate registry, where the create path records it.
+* Readers that hold an answer for a long time (live spectate streams) start
+  over when :func:`public_revocation_count` changes, which the unshare path
+  bumps through :func:`note_public_revoked`. The count is per process.
 
 FastAPI routes use :func:`authorize_debate_read_fastapi` and
 :func:`authorize_debate_write_fastapi`, which apply the same rules and raise
@@ -25,6 +28,7 @@ the same bodies as ``APIError``.
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -41,6 +45,22 @@ if TYPE_CHECKING:
     from starlette.requests import Request
 
     from aragora.server.handlers.utils.responses import HandlerResult
+
+
+_public_revocations = 0
+_public_revocations_lock = threading.Lock()
+
+
+def public_revocation_count() -> int:
+    """How many times a debate has stopped being public in this process."""
+    return _public_revocations
+
+
+def note_public_revoked() -> None:
+    """Record that a debate stopped being public (call it after each flag it clears)."""
+    global _public_revocations
+    with _public_revocations_lock:
+        _public_revocations += 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,4 +213,6 @@ __all__ = [
     "authorize_debate_write_fastapi",
     "debate_visible_to_org",
     "find_debate_access",
+    "note_public_revoked",
+    "public_revocation_count",
 ]

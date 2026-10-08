@@ -581,6 +581,10 @@ class UnifiedHandler(  # type: ignore[misc]
             close = getattr(stream, "close", None)
             if callable(close):
                 close()
+            # The body has no length, so only closing the connection tells the
+            # client a server-ended stream (share_revoked) is over; the
+            # keep-alive header above would otherwise hold it open.
+            self.close_connection = True
         return True
 
     def do_OPTIONS(self) -> None:

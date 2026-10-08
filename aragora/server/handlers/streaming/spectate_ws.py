@@ -27,6 +27,7 @@ from aragora.tenancy.debate_access import (
     authorize_debate_write,
     debate_visible_to_org,
     find_debate_access,
+    public_revocation_count,
 )
 from aragora.tenancy.pipeline_access import pipeline_owned
 from aragora.tenancy.record_scope import (
@@ -53,6 +54,7 @@ _MAX_SPECTATE_EVENT_COUNT = 500
 _LIVE_SSE_HEARTBEAT_SECONDS = 15.0
 _LIVE_SSE_QUEUE_SIZE = 256
 _LIVE_SSE_RESYNC_SENTINEL = object()
+_LIVE_SSE_REVOKED_SENTINEL = object()
 _PUBLIC_PLAYGROUND_DEBATE_PREFIX = "playground_"
 _SPECTATE_CACHE_CONTROL = "no-cache"
 
@@ -230,7 +232,8 @@ class SpectateVisibility:
     only to callers acting for the org that owns it; a debate with no recorded
     org is visible to no one. Events linked only to a pipeline follow the same
     rule with the pipeline's owner org. Decisions are cached for one request or
-    stream.
+    stream, and dropped whenever a debate stops being public, so a stream
+    never keeps showing a debate that was unshared after it opened.
     """
 
     def __init__(self, org_id: str | None = None, *, storage: Any | None = None) -> None:
@@ -240,6 +243,14 @@ class SpectateVisibility:
         self._public: dict[str, bool] = {}
         self._visible: dict[str, bool] = {}
         self._owned_pipelines: set[str] = set()
+        self._revocations = public_revocation_count()
+
+    def _forget_after_revocation(self) -> None:
+        revocations = public_revocation_count()
+        if revocations != self._revocations:
+            self._revocations = revocations
+            self._public.clear()
+            self._visible.clear()
 
     def _get_storage(self) -> Any | None:
         if not self._storage_resolved:
@@ -250,6 +261,7 @@ class SpectateVisibility:
     def is_public(self, debate_id: Any) -> bool:
         if not isinstance(debate_id, str) or not debate_id:
             return False
+        self._forget_after_revocation()
         return _is_public_spectate_debate(
             debate_id, storage=self._get_storage(), visibility_cache=self._public
         )
@@ -259,6 +271,7 @@ class SpectateVisibility:
             return True
         if not isinstance(debate_id, str):
             return False
+        self._forget_after_revocation()
         cached = self._visible.get(debate_id)
         if cached is not None:
             return cached
@@ -296,6 +309,14 @@ class SpectateVisibility:
 
     def filter_events(self, events: list[Any]) -> list[Any]:
         return [event for event in events if self.can_view_event(event)]
+
+    def lost_access(self, debate_id: str) -> bool:
+        """Whether the caller may no longer view ``debate_id``.
+
+        Only a decided answer counts: a debate that cannot be found is not
+        reported, since it may be registered after its first events.
+        """
+        return not self.can_view(debate_id) and self._visible.get(debate_id) is False
 
 
 def authorize_spectate_request(
@@ -386,6 +407,8 @@ def iter_live_spectate_sse_frames(
     Only events visible to a caller acting for ``org_id`` are sent (public
     events only when it is None); see :class:`SpectateVisibility`. Callers must
     authorize a named ``debate_id`` first with :func:`authorize_spectate_request`.
+    A stream for a named debate ends with a ``share_revoked`` frame once the
+    caller may no longer view it (its owner unshared it).
     """
     visibility = SpectateVisibility(org_id, storage=storage)
     if bridge is None:
@@ -423,10 +446,24 @@ def iter_live_spectate_sse_frames(
     event_queue: queue.Queue[Any] = queue.Queue(maxsize=_LIVE_SSE_QUEUE_SIZE)
     resync_state = {"pending": False, "dropped_events": 0}
 
+    def revoke() -> None:
+        # Events queued while the debate was still visible are dropped too.
+        while True:
+            try:
+                event_queue.get_nowait()
+            except queue.Empty:
+                break
+        try:
+            event_queue.put_nowait(_LIVE_SSE_REVOKED_SENTINEL)
+        except queue.Full:
+            logger.debug("spectate_live_sse_revoke_enqueue_failed", exc_info=True)
+
     def enqueue(event: Any) -> None:
         if not _event_matches_scope(event, debate_id=debate_id, pipeline_id=pipeline_id):
             return
         if not visibility.can_view_event(event):
+            if debate_id and visibility.lost_access(debate_id):
+                revoke()
             return
         if resync_state["pending"]:
             resync_state["dropped_events"] += 1
@@ -461,8 +498,14 @@ def iter_live_spectate_sse_frames(
             try:
                 event = event_queue.get(timeout=heartbeat_interval)
             except queue.Empty:
-                yield b": heartbeat\n\n"
-                continue
+                if debate_id and visibility.lost_access(debate_id):
+                    event = _LIVE_SSE_REVOKED_SENTINEL
+                else:
+                    yield b": heartbeat\n\n"
+                    continue
+            if event is _LIVE_SSE_REVOKED_SENTINEL:
+                yield _sse_frame("share_revoked", {"debate_id": debate_id}).encode("utf-8")
+                break
             if event is _LIVE_SSE_RESYNC_SENTINEL:
                 yield _sse_frame(
                     "resync_required",
