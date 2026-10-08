@@ -24,9 +24,10 @@ def fresh_nomic_modules() -> Iterator[None]:
 
     scripts.nomic_loop takes its NOMIC_SICA_* flags from scripts.nomic.config, which
     reads the environment once at import time, so a config module cached by an earlier
-    test would win over the env the test sets. Both modules are dropped before the test
-    body runs; afterwards the previous modules and package attributes are put back, or
-    removed again when they had not been imported before.
+    test would win over the env the test sets. The fixture imports the parent packages
+    first, which loads scripts.nomic.config under the default env, then drops both
+    modules before the test body runs. Afterwards it puts back the previous modules and
+    package attributes; scripts.nomic_loop is removed again if it had not been imported.
     """
     saved = []
     for name in ("scripts.nomic.config", "scripts.nomic_loop"):
