@@ -6,6 +6,7 @@ receipts without understanding Arena/Environment/DebateProtocol internals.
 
 Every subsystem import is **lazy** (inside the function body) so that
 ``import aragora`` stays fast regardless of which subsystems are installed.
+``debate`` is :func:`aragora.debate.api.debate`, re-exported on first access.
 
 Usage::
 
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from aragora.core_types import DebateResult
+    from aragora.debate.api import debate as debate
     from aragora.gauntlet.receipt_models import DecisionReceipt
     from aragora.gauntlet.result import GauntletResult
     from aragora.memory.continuum.entry import ContinuumMemoryEntry
@@ -38,46 +40,15 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-async def debate(
-    task: str,
-    *,
-    agents: int | list[Any] = 3,
-    rounds: int = 3,
-    consensus: str = "majority",
-) -> DebateResult:
-    """Run a multi-agent debate and return the result.
+def __getattr__(name: str) -> Any:
+    # aragora.debate.api loads the whole debate engine, so it is imported on first use of
+    # ``debate`` rather than with this module (which also serves remember, recall & co.).
+    if name == "debate":
+        from aragora.debate.api import debate as debate_fn
 
-    Args:
-        task: The question or problem to debate.
-        agents: Either an ``int`` (auto-creates that many DemoAgents) or an
-            explicit list of agent instances.
-        rounds: Number of debate rounds.
-        consensus: Consensus strategy — ``"majority"``, ``"unanimous"``,
-            ``"judge"``, or ``"none"``.
-
-    Returns:
-        A :class:`~aragora.core_types.DebateResult` with the final answer,
-        confidence, messages, votes, and more.
-    """
-    from aragora.core_types import Environment
-    from aragora.debate.orchestrator import Arena
-    from aragora.protocols.debate import DebateProtocol
-
-    if isinstance(agents, int):
-        from aragora.agents.demo_agent import DemoAgent
-        from aragora.core_types import AgentRole
-
-        roles: list[AgentRole] = ["proposer", "critic", "synthesizer"]
-        agent_list: list[Any] = [
-            DemoAgent(name=f"agent-{i + 1}", role=roles[i % len(roles)]) for i in range(agents)
-        ]
-    else:
-        agent_list = list(agents)
-
-    env = Environment(task=task)
-    protocol = DebateProtocol(rounds=rounds, consensus=consensus)
-    arena = Arena(environment=env, agents=agent_list, protocol=protocol)
-    return await arena.run()
+        globals()["debate"] = debate_fn
+        return debate_fn
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +184,12 @@ class WorkflowHandle:
         Each step is run as an independent debate with the step name as the
         task, collecting results into a dict keyed by step name.
         """
+        # Looked up on the module so a replaced ``aragora.golden.debate`` is honoured.
+        from aragora.golden import debate as run_debate
+
         results: dict[str, Any] = {}
         for step_name in self.steps:
-            results[step_name] = await debate(f"[{self.name}] Execute step: {step_name}")
+            results[step_name] = await run_debate(f"[{self.name}] Execute step: {step_name}")
         return results
 
     def __repr__(self) -> str:
