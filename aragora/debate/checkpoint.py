@@ -548,9 +548,9 @@ class CheckpointManager:
         await self.store.save(checkpoint)
         return True
 
-    async def list_debates_with_checkpoints(self) -> list[dict]:
-        """List all debates that have checkpoints."""
-        all_checkpoints = await self.store.list_checkpoints()
+    async def list_debates_with_checkpoints(self, limit: int = 100) -> list[dict]:
+        """List the debates that have checkpoints among the ``limit`` newest checkpoints."""
+        all_checkpoints = await self.store.list_checkpoints(limit=limit)
 
         debates = {}
         for cp in all_checkpoints:

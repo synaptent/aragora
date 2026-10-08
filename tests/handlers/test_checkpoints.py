@@ -304,7 +304,7 @@ class TestListCheckpoints:
         )
         body = _body(result)
         assert _status(result) == 200
-        mock_store.list_checkpoints.assert_called_once_with(debate_id="dbt-001")
+        mock_store.list_checkpoints.assert_called_once_with(debate_id="dbt-001", limit=5000)
 
     @pytest.mark.asyncio
     async def test_list_with_status_filter(self, handler, mock_http_handler, mock_store):

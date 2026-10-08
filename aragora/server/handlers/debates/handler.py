@@ -310,6 +310,13 @@ class DebatesHandler(
         # Only the segment checked above may be read; an unknown suffix must not
         # fall back to looking up its last segment as a slug.
         if parts[-1]:
+            # Unserved writes (POST .../intervene, .../checkpoint, .../bridge) get
+            # the write gate's answer first: a public debate passed the read check
+            # above, but its anonymous and org-less callers still get 401 and 403.
+            if str(getattr(handler, "command", "GET") or "GET").upper() not in ("GET", "HEAD"):
+                write, write_error = self._authorize_debate_write(normalized, handler)
+                if write is None:
+                    return write_error
             return record_not_found("Debate")
 
         return None

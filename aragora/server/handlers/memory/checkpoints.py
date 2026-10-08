@@ -56,6 +56,11 @@ logger = logging.getLogger(__name__)
 # Rate limiter for checkpoint endpoints (30 requests per minute)
 _checkpoint_limiter = RateLimiter(requests_per_minute=30)
 
+# Checkpoint lists are filtered by org after the store read, so the read takes
+# this many of the newest rows instead of the store default of 100, which other
+# orgs' newer checkpoints could fill. Rows older than the cap are not listed.
+_LIST_SCAN_CAP = 5000
+
 
 class CheckpointHandler(BaseHandler):
     """Handler for checkpoint management endpoints."""
@@ -225,7 +230,7 @@ class CheckpointHandler(BaseHandler):
 
         # List checkpoints from store
         all_checkpoints = self._owned_rows(
-            await manager.store.list_checkpoints(debate_id=debate_id), scope
+            await manager.store.list_checkpoints(debate_id=debate_id, limit=_LIST_SCAN_CAP), scope
         )
 
         # Filter by status if requested
@@ -252,7 +257,9 @@ class CheckpointHandler(BaseHandler):
         List the caller's org's debates that have resumable checkpoints.
         """
         manager = self._get_checkpoint_manager()
-        debates = self._owned_rows(await manager.list_debates_with_checkpoints(), scope)
+        debates = self._owned_rows(
+            await manager.list_debates_with_checkpoints(limit=_LIST_SCAN_CAP), scope
+        )
 
         return json_response(
             {

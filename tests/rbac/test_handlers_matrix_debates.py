@@ -131,7 +131,7 @@ class TestGetMatrixDebate:
 
     @pytest.mark.asyncio
     async def test_get_debate_no_storage(self, handler):
-        """Test 503 when storage not configured."""
+        """Test 404 for an unknown id when storage not configured."""
         mock_handler = Mock()
         mock_handler.storage = None
 
@@ -141,7 +141,7 @@ class TestGetMatrixDebate:
             {},
         )
 
-        assert result.status_code == 503
+        assert result.status_code == 404
 
 
 # ============================================================================

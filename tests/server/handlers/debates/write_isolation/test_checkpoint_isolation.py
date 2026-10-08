@@ -165,6 +165,21 @@ def test_lists_hold_only_the_callers_org_checkpoints(send):
     assert body_of(b_resumable)["total"] == 1
 
 
+def test_newer_checkpoints_of_other_orgs_do_not_hide_the_callers_older_ones(send, manager):
+    for n in range(150):
+        newer = _checkpoint(f"cp-bravo-newer-{n:03d}", DB)
+        newer.created_at = f"2999-01-01T00:00:{n % 60:02d}.{n:06d}"
+        asyncio.run(manager.store.save(newer))
+
+    page = body_of(send(USER_A, "GET", "/api/v1/checkpoints", query={"limit": "1"}))
+    assert (page["total"], len(page["checkpoints"])) == (2, 1)
+    assert _ids(send(USER_A, "GET", "/api/v1/checkpoints")) == {CA, CP}
+    b_page = body_of(send(USER_B, "GET", "/api/v1/checkpoints", query={"offset": "140"}))
+    assert (b_page["total"], len(b_page["checkpoints"])) == (151, 11)
+    resumable = send(USER_A, "GET", "/api/v1/checkpoints/resumable")
+    assert _ids(resumable, "debates", "debate_id") == {DA, DP}
+
+
 def test_other_org_null_org_public_and_missing_get_the_same_404(send, manager):
     before = _stored(manager)
     for checkpoint_id in (CA, CP, CN, CX):
