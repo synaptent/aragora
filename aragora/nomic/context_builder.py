@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from aragora.nomic.repository_profile import (
+    NOMIC_DIR_NAME,
     ContextEvidenceReference,
     ContextPack,
     NomicRepositoryProfile,
@@ -529,8 +530,8 @@ class NomicContextBuilder:
             )
             if ignored.returncode != 0:
                 raise RepositoryStateError(
-                    f"repository must ignore .nomic runtime artifact path {path!r}; add '.nomic/' "
-                    "to .gitignore or a local Git exclude"
+                    f"repository must ignore {NOMIC_DIR_NAME} runtime artifact path {path!r}; "
+                    f"add '{NOMIC_DIR_NAME}/' to .gitignore or a local Git exclude"
                 )
 
     def verify_context_pack(self, pack: ContextPack) -> None:

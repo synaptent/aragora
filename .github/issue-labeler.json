@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "Keyword -> existing label map consumed by scripts/issue_autolabel.py",
+    "(issue-autolabel.yml) and scripts/label_unlabeled_issues.py.",
+    "Keys are matched case-insensitively as word-prefixes against the issue",
+    "title and body (so 'docker' also hits 'Dockerfile'). Every value MUST be",
+    "an existing repo label (`gh label list --limit 300`). Keep keys sorted."
+  ],
+  "version": 1,
+  "keywords": {
+    "connector": "connectors",
+    "cryptograph": "security",
+    "decisionreceipt": "receipts",
+    "deploy": "deployment",
+    "docker": "deployment",
+    "docs/research/": "research-intake",
+    "flaky": "testing",
+    "github actions": "ci",
+    "governance": "governance",
+    "hidden red": "ci",
+    "knowledge mound": "knowledge",
+    "merge quorum": "governance",
+    "merge-quorum": "governance",
+    "mypy": "tech-debt",
+    "nomic": "self-improvement",
+    "oauth": "auth",
+    "outage": "outage",
+    "pentest": "security",
+    "receipt": "receipts",
+    "regression": "regression",
+    "research-intake": "research-intake",
+    "salvage": "triage:defer-salvage",
+    "sdk": "sdk",
+    "security": "security",
+    "self-improvement": "self-improvement",
+    "traceback": "bug",
+    "typecheck": "tech-debt",
+    "vulnerab": "security"
+  }
+}
