@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from typing import Any, cast
 
 from aragora.agents.demo_agent import DemoAgent
@@ -32,8 +31,6 @@ async def debate(
         A :class:`~aragora.core_types.DebateResult` with the final answer,
         confidence, messages, votes, and more.
     """
-    _restore_callable_package()
-
     if isinstance(agents, int):
         roles: list[AgentRole] = ["proposer", "critic", "synthesizer"]
         agent_list: list[Any] = [
@@ -47,18 +44,6 @@ async def debate(
     protocol = DebateProtocol(rounds=rounds, consensus=cast(Any, consensus))
     arena = Arena(environment=env, agents=agent_list, protocol=protocol)
     return await arena.run()
-
-
-def _restore_callable_package() -> None:
-    # aragora/__init__.py resolves ``aragora.debate`` lazily through aragora.golden and caches
-    # the result. Resolving it imports this package, so the cache overwrites the package
-    # binding that import made with this function, and ``aragora.debate.<name>`` stops
-    # working. When the body lived in aragora.golden, its first run imported the package and
-    # put the (callable) package back; doing the same here keeps that behaviour.
-    root = sys.modules.get("aragora")
-    package = sys.modules.get(__package__ or "")
-    if root is not None and package is not None and vars(root).get("debate") is debate:
-        vars(root)["debate"] = package
 
 
 __all__ = ["debate"]

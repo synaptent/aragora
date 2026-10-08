@@ -6,7 +6,8 @@ receipts without understanding Arena/Environment/DebateProtocol internals.
 
 Every subsystem import is **lazy** (inside the function body) so that
 ``import aragora`` stays fast regardless of which subsystems are installed.
-``debate`` is :func:`aragora.debate.api.debate`, re-exported on first access.
+``debate`` is :func:`aragora.debate.api.debate` once the debate engine is loaded;
+before that it is a forwarder that loads the engine on its first call.
 
 Usage::
 
@@ -24,6 +25,7 @@ Usage::
 
 from __future__ import annotations
 
+import sys
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -41,14 +43,32 @@ if TYPE_CHECKING:
 
 
 def __getattr__(name: str) -> Any:
-    # aragora.debate.api loads the whole debate engine, so it is imported on first use of
-    # ``debate`` rather than with this module (which also serves remember, recall & co.).
     if name == "debate":
+        if "aragora.debate" not in sys.modules:
+            # ``aragora.debate`` at the package root resolves through here, and aragora/__init__.py
+            # caches the result. Importing aragora.debate.api now would load the aragora.debate
+            # subpackage first, and that cache would then replace the subpackage binding for good
+            # (a later ``import aragora.debate`` does not rebind it). So until the engine is loaded
+            # this hands out a forwarder and caches nothing.
+            return _debate_loading_engine
         from aragora.debate.api import debate as debate_fn
 
         globals()["debate"] = debate_fn
         return debate_fn
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+async def _debate_loading_engine(
+    task: str,
+    *,
+    agents: int | list[Any] = 3,
+    rounds: int = 3,
+    consensus: str = "majority",
+) -> DebateResult:
+    """Run :func:`aragora.debate.api.debate`, importing the debate engine on the first call."""
+    from aragora.debate.api import debate as debate_fn
+
+    return await debate_fn(task, agents=agents, rounds=rounds, consensus=consensus)
 
 
 # ---------------------------------------------------------------------------

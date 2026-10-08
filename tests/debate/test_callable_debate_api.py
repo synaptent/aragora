@@ -33,6 +33,12 @@ elif order == "saved-callable":
     import aragora; f = aragora.debate; import aragora.debate; run(f); run(aragora.debate)
 elif order == "arena-first":
     from aragora.debate import Arena; import aragora; run(aragora.debate)
+elif order == "resolved-then-subpackage-attribute":
+    import aragora; f = aragora.debate
+    assert "aragora.debate" not in sys.modules, "resolving aragora.debate loaded the engine"
+    import aragora.debate
+    assert aragora.debate.Arena is aragora.debate.orchestrator.Arena, type(aragora.debate)
+    run(f); run(aragora.debate)
 import aragora.golden, aragora.debate.api
 assert aragora.golden.debate is aragora.debate.api.debate
 assert aragora.debate.Arena is aragora.debate.orchestrator.Arena
@@ -59,7 +65,14 @@ def test_debate_runs_offline_at_both_paths(module_name: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "order", ["root-first", "subpackage-first", "saved-callable", "arena-first"]
+    "order",
+    [
+        "root-first",
+        "subpackage-first",
+        "saved-callable",
+        "arena-first",
+        "resolved-then-subpackage-attribute",
+    ],
 )
 def test_callable_debate_survives_import_order(order: str) -> None:
     proc = subprocess.run(
@@ -85,6 +98,26 @@ def test_importing_golden_does_not_load_the_debate_engine() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     assert "LIGHT" in proc.stdout
+
+
+def test_golden_debate_before_the_engine_loads_runs_and_then_resolves_to_the_api() -> None:
+    code = (
+        "import asyncio, sys, warnings\n"
+        "warnings.simplefilter('ignore')\n"
+        "import aragora.golden\n"
+        "early = aragora.golden.debate\n"
+        "assert 'aragora.debate' not in sys.modules, 'aragora.golden.debate loaded the engine'\n"
+        "result = asyncio.run(early('se2 offline probe', agents=2, rounds=1))\n"
+        "assert result.task == 'se2 offline probe', result\n"
+        "import aragora.debate.api\n"
+        "assert aragora.golden.debate is aragora.debate.api.debate\n"
+        "print('FORWARDED')\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=REPO_ROOT, timeout=300
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "FORWARDED" in proc.stdout
 
 
 def _is_type_checking(test: ast.expr) -> bool:
