@@ -74,9 +74,7 @@ def _assert_matches_golden(name: str, key: str, actual: Any) -> None:
         _write_golden(name, entries)
     expected = _read_golden(name).get(key)
     if _canonical(expected) != _canonical(actual):
-        old, new = (
-            json.dumps(v, indent=1, sort_keys=True).splitlines() for v in (expected, actual)
-        )
+        old, new = (json.dumps(v, indent=1, sort_keys=True).split("\n") for v in (expected, actual))
         diff = difflib.unified_diff(old, new, "golden", "actual", lineterm="")
         pytest.fail(f"{name}[{key}] drifted:\n" + "\n".join(list(diff)[:120]))
 
@@ -604,43 +602,54 @@ def test_public_surface_matches_the_recorded_names() -> None:
 
 
 def _seam_census() -> set[str]:
-    """Design section 11 census: string patch targets plus setattr targets in tests/."""
+    """Design section 11 census: string patch targets plus setattr targets on the CLI facade."""
     string_target = re.compile(rb"aragora\.cli\.commands\.review_queue\.([A-Za-z_]+)")
     setattr_target = re.compile(rb"setattr\(\s*(?:rq|review_queue),\s*\"([A-Za-z_]+)\"")
+    facade_re = re.compile(rb"(?:from|import) aragora\.cli\.commands(?: import |\.)review_queue\b")
     seams: set[str] = set()
     for path in (REPO_ROOT / "tests").rglob("*.py"):
         data = path.read_bytes()
-        if b"review_queue" in data:
-            for pattern in (string_target, setattr_target):
-                seams.update(match.group(1).decode() for match in pattern.finditer(data))
+        # Server handler tests also bind ``rq``, to a different module.
+        for pattern in (string_target, setattr_target)[: 2 if facade_re.search(data) else 1]:
+            seams.update(match.group(1).decode() for match in pattern.finditer(data))
     return seams
 
 
 def _seam_violations(tree: ast.Module, seams: set[str]) -> list[str]:
-    """Design rule I2: units reach seams through the facade at call time, either as
-    ``_review_queue_backend().<name>`` or through a function-local import from the facade
-    (I2's own description of that precedent; ``review_queue_render.py`` already does this)."""
+    """Rule I2: units reach seams at call time, via ``_review_queue_backend().<name>`` or a
+    function-local facade import (the I2 precedent, already used by review_queue_render.py)."""
     facade = "aragora.cli.commands.review_queue"
     violations: list[str] = []
 
+    def facade_names(scope: ast.AST) -> set[str]:
+        # Python scoping: an import inside a nested function does not bind in the outer one.
+        names: set[str] = set()
+        for child in ast.iter_child_nodes(scope):
+            if isinstance(child, ast.ImportFrom):
+                names.update(
+                    alias.asname or alias.name
+                    for alias in child.names
+                    if facade in (child.module, f"{child.module}.{alias.name}")
+                )
+            elif not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                names |= facade_names(child)
+        return names
+
     def visit(node: ast.AST, late_bound: frozenset[str], import_time: bool) -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            local = {
-                alias.asname or alias.name
-                for child in ast.walk(node)
-                if isinstance(child, ast.ImportFrom) and child.module == facade
-                for alias in child.names
-            }
-            late_bound, import_time = late_bound | local, False
+            late_bound, import_time = late_bound | facade_names(node), False
         if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test):
             return
-        if isinstance(node, ast.ImportFrom) and import_time:
+        if isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                if (alias.asname or alias.name) in seams:
-                    violations.append(f"line {node.lineno}: import-time binding of {alias.name}")
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in seams and node.func.id not in late_bound:
-                violations.append(f"line {node.lineno}: direct call to seam {node.func.id}")
+                if alias.name in seams and (import_time or node.module != facade):
+                    violations.append(f"line {node.lineno}: binds seam {alias.name}")
+        if isinstance(node, ast.Call):
+            func = node.func
+            seam = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            holder = getattr(func.value if isinstance(func, ast.Attribute) else func, "id", None)
+            if seam in seams and holder and holder not in late_bound:
+                violations.append(f"line {node.lineno}: calls seam {seam}")
         for child in ast.iter_child_nodes(node):
             visit(child, late_bound, import_time)
 
@@ -667,7 +676,7 @@ def test_units_reach_seams_through_the_facade_at_call_time() -> None:
 
 def test_seam_checker_flags_bindings_and_direct_calls() -> None:
     tree = ast.parse(
-        "from aragora.cli.commands.review_queue_transport import _gh_json\n"
+        "from aragora.cli.commands.review_queue_transport import _gh_json as gh\n"
         "def moved():\n    return _gh_json([])\n"
         "def late():\n"
         "    from aragora.cli.commands.review_queue import _gh_json\n    return _gh_json([])\n"
@@ -675,12 +684,14 @@ def test_seam_checker_flags_bindings_and_direct_calls() -> None:
         "if TYPE_CHECKING:\n    from aragora.cli.commands.review_queue_transport import _gh_json\n"
         "def other():\n    from aragora.cli.commands.review_queue_transport import _gh_json\n"
         "    return _gh_json([])\n"
+        "def via_module(t):\n    from aragora.cli.commands import review_queue as rq\n"
+        "    return rq._gh_json([]), t._gh_json([])\n"
+        "def outer():\n    def inner(): from aragora.cli.commands.review_queue import _gh_json\n"
+        "    return _gh_json([])\n"
     )
-    assert _seam_violations(tree, {"_gh_json"}) == [
-        "line 1: import-time binding of _gh_json",
-        "line 3: direct call to seam _gh_json",
-        "line 13: direct call to seam _gh_json",
-    ]
+    expected = {1: "binds", 3: "calls", 12: "binds", 13: "calls", 16: "calls", 19: "calls"}
+    found = _seam_violations(tree, {"_gh_json"})
+    assert found == [f"line {n}: {verb} seam _gh_json" for n, verb in expected.items()]
 
 
 # --- C-4 CLI surface --------------------------------------------------------
