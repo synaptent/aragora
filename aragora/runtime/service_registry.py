@@ -20,7 +20,7 @@ Usage:
     tier_manager = registry.resolve(TierManager)
 
     # Module-level convenience functions
-    from aragora.services import get_service, register_service
+    from aragora.runtime.service_registry import get_service, register_service
     register_service(TierManager, my_instance)
     tier_manager = get_service(TierManager)
 """

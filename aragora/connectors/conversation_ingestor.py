@@ -287,9 +287,11 @@ class ConversationIngestorConnector(BaseConnector):
             self._conversation_index[conv.id] = conv
 
         logger.info(
-            f"Loaded {export.conversation_count} conversations "
-            f"({export.total_messages} messages, {export.total_words:,} words) "
-            f"from {export.source}"
+            "Loaded %s conversations (%s messages, %s words) from %s",
+            export.conversation_count,
+            export.total_messages,
+            format(export.total_words, ","),
+            export.source,
         )
 
         return export

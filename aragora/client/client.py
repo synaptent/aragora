@@ -323,7 +323,11 @@ class AragoraClient:
                     if attempt < max_attempts - 1:
                         delay = self.retry_config.get_delay(attempt)
                         logger.debug(
-                            f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {status_code})"
+                            "Retry %s/%s after %.2fs (HTTP %s)",
+                            attempt + 1,
+                            max_attempts,
+                            delay,
+                            status_code,
                         )
                         time_module.sleep(delay)
                         continue
@@ -333,7 +337,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     time_module.sleep(delay)
                     continue
@@ -395,7 +402,11 @@ class AragoraClient:
                     if attempt < max_attempts - 1:
                         delay = self.retry_config.get_delay(attempt)
                         logger.debug(
-                            f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {status_code})"
+                            "Retry %s/%s after %.2fs (HTTP %s)",
+                            attempt + 1,
+                            max_attempts,
+                            delay,
+                            status_code,
                         )
                         time_module.sleep(delay)
                         continue
@@ -405,7 +416,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     time_module.sleep(delay)
                     continue
@@ -451,7 +465,11 @@ class AragoraClient:
                     if attempt < max_attempts - 1:
                         delay = self.retry_config.get_delay(attempt)
                         logger.debug(
-                            f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {status_code})"
+                            "Retry %s/%s after %.2fs (HTTP %s)",
+                            attempt + 1,
+                            max_attempts,
+                            delay,
+                            status_code,
                         )
                         time_module.sleep(delay)
                         continue
@@ -461,7 +479,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     time_module.sleep(delay)
                     continue
@@ -508,7 +529,11 @@ class AragoraClient:
                             if attempt < max_attempts - 1:
                                 delay = self.retry_config.get_delay(attempt)
                                 logger.debug(
-                                    f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {resp.status})"
+                                    "Retry %s/%s after %.2fs (HTTP %s)",
+                                    attempt + 1,
+                                    max_attempts,
+                                    delay,
+                                    resp.status,
                                 )
                                 await asyncio.sleep(delay)
                                 continue
@@ -523,7 +548,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -568,7 +596,11 @@ class AragoraClient:
                     if attempt < max_attempts - 1:
                         delay = self.retry_config.get_delay(attempt)
                         logger.debug(
-                            f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {status_code})"
+                            "Retry %s/%s after %.2fs (HTTP %s)",
+                            attempt + 1,
+                            max_attempts,
+                            delay,
+                            status_code,
                         )
                         time_module.sleep(delay)
                         continue
@@ -578,7 +610,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     time_module.sleep(delay)
                     continue
@@ -629,7 +664,11 @@ class AragoraClient:
                             if attempt < max_attempts - 1:
                                 delay = self.retry_config.get_delay(attempt)
                                 logger.debug(
-                                    f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {resp.status})"
+                                    "Retry %s/%s after %.2fs (HTTP %s)",
+                                    attempt + 1,
+                                    max_attempts,
+                                    delay,
+                                    resp.status,
                                 )
                                 await asyncio.sleep(delay)
                                 continue
@@ -644,7 +683,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -689,7 +731,11 @@ class AragoraClient:
                     if attempt < max_attempts - 1:
                         delay = self.retry_config.get_delay(attempt)
                         logger.debug(
-                            f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {status_code})"
+                            "Retry %s/%s after %.2fs (HTTP %s)",
+                            attempt + 1,
+                            max_attempts,
+                            delay,
+                            status_code,
                         )
                         time_module.sleep(delay)
                         continue
@@ -699,7 +745,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     time_module.sleep(delay)
                     continue
@@ -750,7 +799,11 @@ class AragoraClient:
                             if attempt < max_attempts - 1:
                                 delay = self.retry_config.get_delay(attempt)
                                 logger.debug(
-                                    f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {resp.status})"
+                                    "Retry %s/%s after %.2fs (HTTP %s)",
+                                    attempt + 1,
+                                    max_attempts,
+                                    delay,
+                                    resp.status,
                                 )
                                 await asyncio.sleep(delay)
                                 continue
@@ -765,7 +818,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -863,7 +919,11 @@ class AragoraClient:
                             if attempt < max_attempts - 1:
                                 delay = self.retry_config.get_delay(attempt)
                                 logger.debug(
-                                    f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {resp.status})"
+                                    "Retry %s/%s after %.2fs (HTTP %s)",
+                                    attempt + 1,
+                                    max_attempts,
+                                    delay,
+                                    resp.status,
                                 )
                                 await asyncio.sleep(delay)
                                 continue
@@ -878,7 +938,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -938,7 +1001,11 @@ class AragoraClient:
                             if attempt < max_attempts - 1:
                                 delay = self.retry_config.get_delay(attempt)
                                 logger.debug(
-                                    f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (HTTP {resp.status})"
+                                    "Retry %s/%s after %.2fs (HTTP %s)",
+                                    attempt + 1,
+                                    max_attempts,
+                                    delay,
+                                    resp.status,
                                 )
                                 await asyncio.sleep(delay)
                                 continue
@@ -953,7 +1020,10 @@ class AragoraClient:
                 if self.retry_config and attempt < max_attempts - 1:
                     delay = self.retry_config.get_delay(attempt)
                     logger.debug(
-                        f"Retry {attempt + 1}/{max_attempts} after {delay:.2f}s (connection error)"
+                        "Retry %s/%s after %.2fs (connection error)",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue

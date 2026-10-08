@@ -184,8 +184,11 @@ class AuditBridge:
 
         logger.log(
             log_level,
-            f"[AUDIT] {event.event_type.value}: agent={event.agent_name} "
-            f"task={event.task_id} tenant={event.tenant_id}",
+            "[AUDIT] %s: agent=%s task=%s tenant=%s",
+            event.event_type.value,
+            event.agent_name,
+            event.task_id,
+            event.tenant_id,
             extra={"audit_event": event.to_dict()},
         )
 
