@@ -42,13 +42,14 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Golden API collision guard (issue #8780)
 #
-# This subpackage shares its name with the golden callable
-# ``aragora.golden.debate`` that ``aragora/__init__.py`` exports lazily via
-# ``_EXPORT_MAP``. When this subpackage is imported, the import system binds
-# the module object onto the ``aragora`` package, shadowing the golden
-# callable. Making the module itself callable keeps ``aragora.debate(...)``
-# working in every import order while leaving normal module semantics
-# (attribute access, ``__path__``, patch targets) untouched.
+# This subpackage shares its name with the golden callable ``aragora.debate``
+# (:func:`aragora.debate.api.debate`, re-exported by ``aragora.golden``) that
+# ``aragora/__init__.py`` exports lazily via ``_EXPORT_MAP``. When this
+# subpackage is imported, the import system binds the module object onto the
+# ``aragora`` package, shadowing the golden callable. Making the module itself
+# callable keeps ``aragora.debate(...)`` working in every import order while
+# leaving normal module semantics (attribute access, ``__path__``, patch
+# targets) untouched.
 # ---------------------------------------------------------------------------
 import sys as _sys
 import types as _types
@@ -56,12 +57,12 @@ from typing import Any as _Any
 
 
 class _CallableDebateModule(_types.ModuleType):
-    """Module subclass forwarding calls to :func:`aragora.golden.debate`."""
+    """Module subclass forwarding calls to :func:`aragora.debate.api.debate`."""
 
     def __call__(self, *args: _Any, **kwargs: _Any) -> _Any:
-        from aragora.golden import debate as _golden_debate
+        from .api import debate as _api_debate
 
-        return _golden_debate(*args, **kwargs)
+        return _api_debate(*args, **kwargs)
 
 
 _sys.modules[__name__].__class__ = _CallableDebateModule
