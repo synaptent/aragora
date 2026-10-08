@@ -1,5 +1,8 @@
 # Aragora-Native Agent Flywheel Map
 
+The [Agent Operating Loop](architecture/agent-operating-loop.md) is the canonical
+read-only projection through which flywheel recommendations meet live authority.
+
 This document maps Agent Flywheel concepts into Aragora-native primitives. The
 first implementation is intentionally a **read-only kernel**: it observes,
 normalizes, scores, and recommends. It does not claim work, launch agents, close

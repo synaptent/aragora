@@ -1,5 +1,9 @@
 # Native Mission Orchestrator — Spec (Factory protocol → Aragora)
 
+Mission progress projects into the canonical
+[Agent Operating Loop](../architecture/agent-operating-loop.md); the loop does not
+replace or duplicate `MissionState`.
+
 **Date:** 2026-06-25
 **Status:** Design / buildable backlog
 **Author:** distilled from ~13 days operating Factory's Structural Excellence mission (Epic #8257) on this repo

@@ -11,6 +11,7 @@ import importlib
 import sys
 
 import pytest
+from packaging.requirements import Requirement
 
 
 # ---------------------------------------------------------------------------
@@ -282,3 +283,11 @@ class TestDependencyGroups:
 
     def test_all_group_exists(self, optional_deps: dict) -> None:
         assert "all" in optional_deps
+
+    def test_test_group_includes_jsonschema(self, optional_deps: dict) -> None:
+        jsonschema_requirement = next(
+            Requirement(raw_requirement)
+            for raw_requirement in optional_deps["test"]
+            if Requirement(raw_requirement).name == "jsonschema"
+        )
+        assert str(jsonschema_requirement.specifier) == "<5.0,>=4.23"

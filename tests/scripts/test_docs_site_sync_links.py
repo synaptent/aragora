@@ -719,6 +719,17 @@ def test_architecture_charter_links_resolve_to_absolute_repo_urls() -> None:
     assert "](charters.yaml)" not in content
 
 
+def test_agent_operating_loop_link_resolves_to_canonical_repo_url() -> None:
+    content = _read_docs_site("contributing/aragora-evolution-roadmap.md")
+
+    assert (
+        "[Agent Operating Loop]"
+        "(https://github.com/synaptent/aragora/blob/main/"
+        "docs/architecture/agent-operating-loop.md)"
+    ) in content
+    assert "](../architecture/agent-operating-loop.md)" not in content
+
+
 # docs/reference/*.md files that are already mirrored into the docs-site
 # through a pre-existing DOC_MAP entry whose destination is not under
 # `reference/` through an unambiguous basename fallback or an explicit

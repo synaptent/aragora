@@ -10,6 +10,9 @@
 > does not meet thesis) are named as Implementation gaps rather than
 > thesis errors.
 
+> **Operational projection:** the [Agent Operating Loop](architecture/agent-operating-loop.md)
+> preserves this thesis's authority and triage rules in one agent-facing read-only contract.
+
 ---
 
 ## The thesis

@@ -1,5 +1,9 @@
 # Nomic Context Builder Plan
 
+Verified commit-addressed packs project upward through the canonical
+[Agent Operating Loop](agent-operating-loop.md); the projection never makes a
+stale or unverified pack authoritative.
+
 **Status:** Proposed  
 **Owner:** Nomic/Knowledge  
 **Date:** 2026-01-29
@@ -79,4 +83,3 @@ scaling to **10M‑token equivalent** repos without prompt stuffing.
 - Index builder + storage
 - REPL query wrapper
 - Context phase integration
-
