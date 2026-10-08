@@ -229,6 +229,21 @@ class TestCanHandle:
     def test_rejects_empty(self, handler):
         assert handler.can_handle("") is False
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/v1/canvas/pipeline",
+            "/api/v1/canvas/pipeline/templates",
+            "/api/v1/canvas/pipeline/pipe-1/status",
+            "/api/v1/canvas/convert/debate",
+        ],
+    )
+    def test_leaves_pipeline_routes_to_the_pipeline_handler(self, handler, path):
+        assert handler.can_handle(path) is False
+
+    def test_still_matches_canvas_ids_that_start_with_pipeline(self, handler):
+        assert handler.can_handle("/api/v1/canvas/pipelines-board") is True
+
 
 # ============================================================================
 # B. GET /api/v1/canvas - List canvases

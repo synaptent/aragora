@@ -55,6 +55,8 @@ CANVAS_NODE_PATTERN = re.compile(r"^/api/v1/canvas/([a-zA-Z0-9_-]+)/nodes/([a-zA
 CANVAS_EDGES_PATTERN = re.compile(r"^/api/v1/canvas/([a-zA-Z0-9_-]+)/edges$")
 CANVAS_EDGE_PATTERN = re.compile(r"^/api/v1/canvas/([a-zA-Z0-9_-]+)/edges/([a-zA-Z0-9_-]+)$")
 CANVAS_ACTION_PATTERN = re.compile(r"^/api/v1/canvas/([a-zA-Z0-9_-]+)/action$")
+# Served by CanvasPipelineHandler, which is registered after this handler.
+_PIPELINE_FAMILIES = re.compile(r"^/api/v1/canvas/(?:pipeline|convert)(?:/|$)")
 
 
 class CanvasHandler(SecureHandler):
@@ -89,7 +91,7 @@ class CanvasHandler(SecureHandler):
 
     def can_handle(self, path: str) -> bool:
         """Check if this handler can handle the given path."""
-        return path.startswith("/api/v1/canvas")
+        return path.startswith("/api/v1/canvas") and not _PIPELINE_FAMILIES.match(path)
 
     def handle(
         self,
