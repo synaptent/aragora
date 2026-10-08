@@ -30,18 +30,25 @@ def _proc(returncode: int = 0, stdout: str = "", stderr: str = ""):
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
-def _view_payload(head: str, *, green: bool = True, state: str = "OPEN", draft: bool = False):
+def _view_payload(
+    head: str,
+    *,
+    green: bool = True,
+    state: str = "OPEN",
+    draft: bool = False,
+    merge_state: str | None = "CLEAN",
+):
     conclusion = "SUCCESS" if green else "FAILURE"
-    return json.dumps(
-        {
-            "number": 42,
-            "headRefOid": head,
-            "state": state,
-            "isDraft": draft,
-            "mergeStateStatus": "CLEAN",
-            "statusCheckRollup": [{"status": "COMPLETED", "conclusion": conclusion}],
-        }
-    )
+    payload = {
+        "number": 42,
+        "headRefOid": head,
+        "state": state,
+        "isDraft": draft,
+        "statusCheckRollup": [{"status": "COMPLETED", "conclusion": conclusion}],
+    }
+    if merge_state is not None:
+        payload["mergeStateStatus"] = merge_state
+    return json.dumps(payload)
 
 
 class _Recorder:
@@ -220,6 +227,35 @@ def test_merge_argv_carries_exactly_one_head_pin() -> None:
     argv = rec.calls[-1]
     assert argv.count("--match-head-commit") == 1
     assert argv[-2:] == ["--match-head-commit", HEAD_A]
+
+
+@pytest.mark.parametrize("merge_state", ["BLOCKED", "BEHIND", "DIRTY", "UNSTABLE", "UNKNOWN", None])
+def test_an_admin_merge_never_bypasses_what_the_snapshot_did_not_verify(merge_state) -> None:
+    """``--admin`` skips branch protection, including required reviews this capture never read.
+
+    Green checks are all the snapshot verifies, so an admin merge may only run when GitHub
+    itself reports nothing left to bypass; anything else is blocked before ``gh pr merge``.
+    """
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A, merge_state=merge_state))])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    outcome = merge_with_snapshot(snap, admin=True, runner=rec)
+
+    assert (outcome.merged, outcome.action) == (False, "blocked")
+    assert "admin" in outcome.detail and str(merge_state) in outcome.detail
+    assert outcome.head_sha == HEAD_A
+    assert len(rec.calls) == 1, f"an admin merge ran at {merge_state}: {rec.calls}"
+
+
+@pytest.mark.parametrize("merge_state", ["CLEAN", "HAS_HOOKS", "clean"])
+def test_an_admin_merge_runs_pinned_when_github_reports_the_pr_mergeable(merge_state) -> None:
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A, merge_state=merge_state)), _proc()])
+    outcome = merge_with_snapshot(
+        capture_gate_snapshot(42, "o/r", runner=rec), admin=True, runner=rec
+    )
+
+    assert outcome.merged is True
+    assert "--admin" in rec.calls[-1]
+    assert rec.calls[-1][-2:] == ["--match-head-commit", HEAD_A]
 
 
 def test_a_non_open_or_draft_pr_is_not_mergeable() -> None:
