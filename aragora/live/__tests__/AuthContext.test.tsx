@@ -14,6 +14,20 @@
 import { waitFor, act } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { hardNavigate, reloadDocument } from '../src/utils/navigation';
+
+jest.mock('../src/utils/navigation', () => ({
+  hardNavigate: jest.fn(),
+  reloadDocument: jest.fn(),
+}));
+const mockHardNavigate = hardNavigate as jest.MockedFunction<typeof hardNavigate>;
+const mockReloadDocument = reloadDocument as jest.MockedFunction<typeof reloadDocument>;
+
+function showPage(persisted: boolean) {
+  act(() => {
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted }));
+  });
+}
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -62,6 +76,34 @@ const mockOrganization = {
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>{children}</AuthProvider>
 );
+
+const AUTH_KEYS = ['aragora_tokens', 'aragora_user', 'aragora_active_org', 'aragora_user_orgs'];
+
+async function renderLoggedIn() {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({
+      user: mockUser,
+      tokens: mockTokens,
+      organization: mockOrganization,
+      organizations: [{ org_id: 'org-123', organization: mockOrganization, role: 'owner' }],
+    }),
+  });
+
+  const hook = renderHook(() => useAuth(), { wrapper });
+
+  await waitFor(() => {
+    expect(hook.result.current.isLoading).toBe(false);
+  });
+
+  await act(async () => {
+    await hook.result.current.login('test@example.com', 'password123');
+  });
+
+  expect(hook.result.current.isAuthenticated).toBe(true);
+  AUTH_KEYS.forEach((key) => expect(mockLocalStorage[key]).toBeDefined());
+  return hook;
+}
 
 describe('AuthContext', () => {
   beforeEach(() => {
@@ -209,40 +251,125 @@ describe('AuthContext', () => {
   });
 
   describe('Logout', () => {
-    it('clears auth state on logout', async () => {
-      // Setup: Login first
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          user: mockUser,
-          tokens: mockTokens,
-          organization: mockOrganization,
-        }),
+    function recordStorageAtNavigation(): { snapshot: Record<string, string | undefined> | null } {
+      const seen: { snapshot: Record<string, string | undefined> | null } = { snapshot: null };
+      mockHardNavigate.mockImplementationOnce(() => {
+        seen.snapshot = Object.fromEntries(AUTH_KEYS.map((key) => [key, mockLocalStorage[key]]));
       });
+      return seen;
+    }
 
-      const { result } = renderHook(() => useAuth(), { wrapper });
+    it('clears auth storage and then navigates to /auth/login', async () => {
+      const { result } = await renderLoggedIn();
+      const seen = recordStorageAtNavigation();
 
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      await act(async () => {
-        await result.current.login('test@example.com', 'password123');
-      });
-
-      expect(result.current.isAuthenticated).toBe(true);
-
-      // Mock logout API call
       mockFetch.mockResolvedValueOnce({ ok: true });
 
       await act(async () => {
         await result.current.logout();
       });
 
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        expect.stringContaining('/api/auth/logout'),
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer access-token-123' },
+        }),
+      );
+      expect(mockHardNavigate).toHaveBeenCalledTimes(1);
+      expect(mockHardNavigate).toHaveBeenCalledWith('/auth/login');
+      expect(seen.snapshot).toEqual(Object.fromEntries(AUTH_KEYS.map((key) => [key, undefined])));
       expect(result.current.isAuthenticated).toBe(false);
       expect(result.current.user).toBeNull();
       expect(result.current.tokens).toBeNull();
-      expect(localStorageMock.removeItem).toHaveBeenCalled();
+      expect(result.current.organization).toBeNull();
+      expect(result.current.organizations).toEqual([]);
+    });
+
+    it('still clears auth and navigates to /auth/login when the logout request fails', async () => {
+      const { result } = await renderLoggedIn();
+      const seen = recordStorageAtNavigation();
+
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      await act(async () => {
+        await result.current.logout();
+      });
+
+      expect(mockHardNavigate).toHaveBeenCalledTimes(1);
+      expect(mockHardNavigate).toHaveBeenCalledWith('/auth/login');
+      expect(seen.snapshot).toEqual(Object.fromEntries(AUTH_KEYS.map((key) => [key, undefined])));
+      expect(result.current.isAuthenticated).toBe(false);
+    });
+
+    it('does not navigate on login or session restore', async () => {
+      await renderLoggedIn();
+
+      expect(mockHardNavigate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Back/forward cache restore', () => {
+    it('reloads a page restored after this page logged out', async () => {
+      const { result } = await renderLoggedIn();
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      await act(async () => {
+        await result.current.logout();
+      });
+      expect(mockReloadDocument).not.toHaveBeenCalled();
+
+      showPage(true);
+
+      expect(mockReloadDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads a restored page when another session has signed in since', async () => {
+      await renderLoggedIn();
+      mockLocalStorage['aragora_tokens'] = JSON.stringify({ ...mockTokens, access_token: 'access-token-other' });
+
+      showPage(true);
+
+      expect(mockReloadDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads a restored page when its session was signed out elsewhere', async () => {
+      await renderLoggedIn();
+      delete mockLocalStorage['aragora_tokens'];
+
+      showPage(true);
+
+      expect(mockReloadDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a restored page whose session is still current', async () => {
+      await renderLoggedIn();
+
+      showPage(true);
+
+      expect(mockReloadDocument).not.toHaveBeenCalled();
+    });
+
+    it('ignores ordinary page shows', async () => {
+      const { result } = await renderLoggedIn();
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      await act(async () => {
+        await result.current.logout();
+      });
+
+      showPage(false);
+
+      expect(mockReloadDocument).not.toHaveBeenCalled();
+    });
+
+    it('keeps a restored page that never had a session', async () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      showPage(true);
+
+      expect(mockReloadDocument).not.toHaveBeenCalled();
     });
   });
 

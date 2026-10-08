@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { API_BASE_URL } from '@/config';
 import { logger } from '@/utils/logger';
 import { normalizeReturnUrl, RETURN_URL_STORAGE_KEY } from '@/utils/returnUrl';
+import { hardNavigate, reloadDocument } from '@/utils/navigation';
 
 interface User {
   id: string;
@@ -527,6 +528,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: false,
       isLoadingOrganizations: false,
     });
+    // Pages keep data they fetched for the old session in their own state, and
+    // in-flight requests could still land; a full load discards both.
+    hardNavigate('/auth/login');
   }, [state.tokens?.access_token]);
 
   const refreshToken = useCallback(async () => {
@@ -732,6 +736,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Re-throw so callback page can handle it
       throw err;
     }
+  }, []);
+
+  // Last access token this document used; deliberately kept after logout.
+  const documentAccessTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (state.tokens?.access_token) {
+      documentAccessTokenRef.current = state.tokens.access_token;
+    }
+  }, [state.tokens?.access_token]);
+
+  // A page restored from the back/forward cache still shows what it rendered for
+  // the session it was frozen in, so reload it once that session has ended.
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted || !documentAccessTokenRef.current) return;
+      if (getStoredTokens()?.access_token !== documentAccessTokenRef.current) {
+        reloadDocument();
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
   }, []);
 
   // Auto-refresh token before expiry
