@@ -6,6 +6,11 @@ Provides async decision orchestration endpoints:
 - Get debate status
 - Cancel a running debate
 - Subscribe to debate events via SSE
+
+A decision belongs to the org that started it (``metadata["org_id"]``). Every
+route needs the caller's org scope; the list shows only that org's decisions,
+and another org's decision, an unowned one and a missing one all answer the
+same 404, before any permission check.
 """
 
 from __future__ import annotations
@@ -21,7 +26,17 @@ from pydantic import BaseModel, Field
 from aragora.config import DEFAULT_CONSENSUS, DEFAULT_ROUNDS
 from aragora.config.settings import get_settings
 from aragora.rbac.models import AuthorizationContext
-from aragora.server.fastapi.dependencies.auth import require_permission
+from aragora.server.fastapi.dependencies.auth import (
+    check_permission,
+    require_authenticated,
+    require_permission,
+)
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found_error,
+    record_visible,
+    require_org_scope_fastapi,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +139,20 @@ async def get_decision_service(request: Request):
     return get_service()
 
 
+def _decision_visible(state: Any, scope: OrgScope) -> bool:
+    metadata = getattr(state, "metadata", None)
+    org_id = metadata.get("org_id") if isinstance(metadata, dict) else None
+    return record_visible(org_id, scope)
+
+
+async def _get_owned_decision(service: Any, debate_id: str, scope: OrgScope) -> Any:
+    """The decision when the caller's org owns it, else the shared 404."""
+    state = await service.get_debate(debate_id)
+    if not state or not _decision_visible(state, scope):
+        raise record_not_found_error("Decision")
+    return state
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -133,11 +162,12 @@ async def get_decision_service(request: Request):
 async def start_decision(
     body: StartDebateRequest,
     request: Request,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     auth: AuthorizationContext = Depends(require_permission("debates:create")),
     service=Depends(get_decision_service),
 ) -> StartDebateResponse:
     """
-    Start a new debate decision.
+    Start a new debate decision owned by the caller's org.
 
     Returns immediately with a debate ID. The debate runs in the background.
     Use GET /decisions/{id} to poll for status or subscribe to events via SSE.
@@ -167,6 +197,8 @@ async def start_decision(
             timeout=body.timeout,
             priority=body.priority,
             metadata=body.metadata,
+            org_id=scope.org_id,
+            user_id=scope.user_id,
             enable_streaming=body.enable_streaming,
             enable_checkpointing=body.enable_checkpointing,
             enable_memory=body.enable_memory,
@@ -190,6 +222,7 @@ async def start_decision(
 @router.get("/decisions/{debate_id}", response_model=DebateResponse)
 async def get_decision(
     debate_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     service=Depends(get_decision_service),
 ) -> DebateResponse:
     """
@@ -197,12 +230,8 @@ async def get_decision(
 
     Returns the current state including progress, messages, and result if complete.
     """
+    state = await _get_owned_decision(service, debate_id, scope)
     try:
-        state = await service.get_debate(debate_id)
-
-        if not state:
-            raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
-
         return DebateResponse(
             id=state.id,
             task=state.task,
@@ -229,14 +258,17 @@ async def get_decision(
 @router.delete("/decisions/{debate_id}", response_model=CancelResponse)
 async def cancel_decision(
     debate_id: str,
-    auth: AuthorizationContext = Depends(require_permission("debates:delete")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
+    auth: AuthorizationContext = Depends(require_authenticated),
     service=Depends(get_decision_service),
 ) -> CancelResponse:
     """
-    Cancel a running debate.
+    Cancel a running debate the caller's org owns.
 
-    Only works on pending or running debates.
+    Only works on pending or running debates. Requires `debates:delete` permission.
     """
+    await _get_owned_decision(service, debate_id, scope)
+    check_permission(auth, "debates:delete")
     try:
         cancelled = await service.cancel_debate(debate_id)
 
@@ -261,6 +293,7 @@ async def cancel_decision(
 @router.get("/decisions/{debate_id}/events")
 async def stream_events(
     debate_id: str,
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     service=Depends(get_decision_service),
 ) -> StreamingResponse:
     """
@@ -276,10 +309,7 @@ async def stream_events(
     """
     import json
 
-    # Verify debate exists
-    state = await service.get_debate(debate_id)
-    if not state:
-        raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
+    await _get_owned_decision(service, debate_id, scope)
 
     async def event_generator():
         """Generate SSE events from debate subscription."""
@@ -311,10 +341,11 @@ async def stream_events(
 async def list_decisions(
     status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=100, description="Max results"),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     service=Depends(get_decision_service),
 ) -> list[DebateResponse]:
     """
-    List debate decisions.
+    List the caller org's debate decisions.
 
     Returns a list of debates, optionally filtered by status.
     """
@@ -332,7 +363,9 @@ async def list_decisions(
                     detail=f"Invalid status: {status}. Valid values: {[s.value for s in DebateStatus]}",
                 )
 
-        states = await service.list_debates(status=status_filter, limit=limit)
+        states = await service.list_debates(status=status_filter, limit=limit, org_id=scope.org_id)
+        # Also filter here: a service that ignores org_id must not leak other orgs' decisions.
+        states = [s for s in states if _decision_visible(s, scope)]
 
         return [
             DebateResponse(
