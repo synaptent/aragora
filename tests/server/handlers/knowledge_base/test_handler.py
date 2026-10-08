@@ -92,21 +92,19 @@ class MockAuthenticatedUser:
 
 
 class MockReadOnlyUser:
-    """Mock user with only read permission."""
+    """JWT-shaped user whose RBAC v2 role (member) grants knowledge.read only."""
 
     def __init__(self, user_id: str = "readonly-user"):
         self.user_id = user_id
-        self.permissions = {"knowledge.read"}
-        self.roles = {"viewer"}
+        self.role = "member"
 
 
 class MockNoPermissionsUser:
-    """Mock user with no permissions."""
+    """JWT-shaped user whose RBAC v2 role (viewer) grants no knowledge permission."""
 
     def __init__(self, user_id: str = "restricted-user"):
         self.user_id = user_id
-        self.permissions: set[str] = set()
-        self.roles: set[str] = set()
+        self.role = "viewer"
 
 
 def make_http_handler(
@@ -445,8 +443,9 @@ class TestRateLimiting:
 # =============================================================================
 
 
+@pytest.mark.no_auto_auth
 class TestRBACPermissions:
-    """Tests for RBAC permission enforcement."""
+    """RBAC v2 enforcement, decided by the real permission checker from the user's role."""
 
     def test_check_permission_requires_auth(self, handler, get_handler):
         """_check_permission returns 401 when user is not authenticated."""
@@ -459,19 +458,38 @@ class TestRBACPermissions:
             assert result is not None
             assert result.status_code == 401
 
-    def test_check_permission_allows_admin(self, handler, get_handler):
-        """_check_permission allows users with admin role."""
-        admin_user = MockAuthenticatedUser(roles={"admin"}, permissions=set())
+    def test_check_permission_allows_admin_read(self, handler, get_handler):
+        """_check_permission allows knowledge.read for the admin role."""
+        admin_user = MockReadOnlyUser()
+        admin_user.role = "admin"
         with patch.object(handler, "require_auth_or_error", return_value=(admin_user, None)):
             result = handler._check_permission(get_handler, "knowledge.read")
             assert result is None  # None means allowed
 
-    def test_check_permission_allows_matching_permission(self, handler, get_handler):
-        """_check_permission allows users with matching permission."""
-        user = MockAuthenticatedUser(roles=set(), permissions={"knowledge.read"})
+    def test_check_permission_allows_member_read(self, handler, get_handler):
+        """_check_permission allows knowledge.read for the member role."""
+        user = MockReadOnlyUser()
         with patch.object(handler, "require_auth_or_error", return_value=(user, None)):
             result = handler._check_permission(get_handler, "knowledge.read")
             assert result is None  # None means allowed
+
+    def test_check_permission_ignores_per_user_permission_lists(self, handler, get_handler):
+        """Only the RBAC v2 role counts; ad-hoc permissions/roles attributes grant nothing."""
+        user = MockAuthenticatedUser()  # permissions {"*", ...}, roles {"admin", "owner"}
+        user.role = "viewer"
+        with patch.object(handler, "require_auth_or_error", return_value=(user, None)):
+            result = handler._check_permission(get_handler, "knowledge.read")
+            assert result is not None
+            assert result.status_code == 403
+
+    def test_check_permission_denies_missing_role(self, handler, get_handler):
+        """A user without a role is denied rather than given a default role."""
+        user = MockNoPermissionsUser()
+        del user.role
+        with patch.object(handler, "require_auth_or_error", return_value=(user, None)):
+            result = handler._check_permission(get_handler, "knowledge.read")
+            assert result is not None
+            assert result.status_code == 403
 
     def test_check_permission_denies_missing_permission(self, handler, get_handler):
         """_check_permission denies users without required permission."""
