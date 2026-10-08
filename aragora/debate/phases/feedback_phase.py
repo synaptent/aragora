@@ -812,7 +812,7 @@ class FeedbackPhase:
         try:
             from aragora.pipeline.pr_generator import DecisionMemo
 
-            debate_id = str(getattr(result, "id", None) or getattr(ctx, "debate_id", "unknown"))
+            debate_id = getattr(result, "id", None) or getattr(ctx, "debate_id", "unknown")
             task = getattr(ctx.env, "task", "") if ctx.env else ""
 
             proposals = getattr(result, "proposals", {})
@@ -897,10 +897,6 @@ class FeedbackPhase:
         This is a fire-and-forget task so it doesn't block debate completion.
         Failures are logged but don't affect the debate result.
         """
-        workflow = self.post_debate_workflow
-        if workflow is None:
-            return
-
         try:
             from aragora.workflow.engine import get_workflow_engine
 
@@ -919,7 +915,7 @@ class FeedbackPhase:
             }
 
             workflow_result = await engine.execute(
-                definition=workflow,
+                definition=self.post_debate_workflow,
                 inputs=workflow_input,
             )
 
@@ -1170,7 +1166,7 @@ class FeedbackPhase:
             self.event_emitter.emit(
                 StreamEvent(
                     type=StreamEventType.SELECTION_FEEDBACK,
-                    loop_id=self.loop_id or "",
+                    loop_id=self.loop_id,
                     data={
                         "debate_id": ctx.debate_id,
                         "adjustments": adjustments,
@@ -1297,7 +1293,7 @@ class FeedbackPhase:
                 self.event_emitter.emit(
                     StreamEvent(
                         type=StreamEventType.RISK_WARNING,
-                        loop_id=self.loop_id or "",
+                        loop_id=self.loop_id,
                         data={
                             "level": risk.level.value,
                             "domain": risk.domain,
@@ -1657,7 +1653,7 @@ class FeedbackPhase:
             return
 
         result = ctx.result
-        if result is None or not result.final_answer:
+        if not result.final_answer:
             return
 
         try:
@@ -1681,8 +1677,6 @@ class FeedbackPhase:
 
         try:
             result = ctx.result
-            if result is None:
-                return
 
             # Extract critiques from messages
             critiques = []
@@ -1719,8 +1713,6 @@ class FeedbackPhase:
 
         try:
             result = ctx.result
-            if result is None:
-                return
 
             # Upset victories
             if result.winner and self.elo_system:
@@ -1764,8 +1756,6 @@ class FeedbackPhase:
 
         try:
             result = ctx.result
-            if result is None:
-                return
 
             # Build transcript
             transcript_parts = []
@@ -1838,7 +1828,7 @@ class FeedbackPhase:
                 self.event_emitter.emit(
                     StreamEvent(
                         type=StreamEventType.FLIP_DETECTED,
-                        loop_id=self.loop_id or "",
+                        loop_id=self.loop_id,
                         data={
                             "agent": agent_name,
                             "flip_type": getattr(flip, "flip_type", "unknown"),
