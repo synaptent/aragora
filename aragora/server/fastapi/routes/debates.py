@@ -315,11 +315,21 @@ async def _load_debate(storage: Any, debate_id: str) -> Any:
     return debate
 
 
+# A list status is derived per row (see ``_summary_status``) and no store column
+# holds it, so a status filter scans the caller org's newest rows in pages of
+# _STATUS_SCAN_PAGE. Rows older than _STATUS_SCAN_CAP are neither listed nor counted.
+_STATUS_SCAN_CAP = 5000
+_STATUS_SCAN_PAGE = 500
+
+
 async def _list_org_debates(
-    storage: Any, scope: OrgScope, limit: int, offset: int
+    storage: Any, scope: OrgScope, limit: int, offset: int, status: str | None = None
 ) -> tuple[list[Any], int]:
-    """One page of the caller org's debates, newest first, and the org's total."""
+    """One page of the caller org's debates in ``status`` (any when None), newest
+    first, and how many of the org's debates are in it."""
     if hasattr(storage, "list_recent"):
+        if status is not None:
+            return await _scan_org_debates(storage, scope, status, limit, offset)
         page = await _call_storage_method(
             storage, "list_recent", limit=limit, org_id=scope.org_id, offset=offset
         )
@@ -332,7 +342,27 @@ async def _list_org_debates(
     # Storages without SQL paging keep debates in memory, each with its org.
     records = list(storage.debates.values()) if hasattr(storage, "debates") else []
     owned = [d for d in records if record_visible(_lookup_value(d, "org_id"), scope)]
+    if status is not None:
+        owned = [d for d in owned if _summary_status(d) == status]
     return owned[offset : offset + limit], len(owned)
+
+
+async def _scan_org_debates(
+    storage: Any, scope: OrgScope, status: str, limit: int, offset: int
+) -> tuple[list[Any], int]:
+    """The ``status`` page and count among the caller org's newest _STATUS_SCAN_CAP rows."""
+    matches: list[Any] = []
+    scanned = 0
+    while scanned < _STATUS_SCAN_CAP:
+        size = min(_STATUS_SCAN_PAGE, _STATUS_SCAN_CAP - scanned)
+        rows = await _call_storage_method(
+            storage, "list_recent", limit=size, org_id=scope.org_id, offset=scanned
+        )
+        matches.extend(d for d in rows if _summary_status(d) == status)
+        scanned += len(rows)
+        if len(rows) < size:
+            break
+    return matches[offset : offset + limit], len(matches)
 
 
 def _lookup_value(record: Any, *names: str) -> Any:
@@ -493,6 +523,12 @@ def _extract_status(record: Any, consensus: dict[str, Any] | None, final_answer:
     return "unknown"
 
 
+def _summary_status(record: Any) -> str:
+    """The status a list summary shows for this record."""
+    consensus = _extract_consensus(record)
+    return _extract_status(record, consensus, _extract_final_answer(record, consensus))
+
+
 def _stringify_optional(value: Any) -> str | None:
     """Convert timestamps or IDs to strings without forcing empty values."""
 
@@ -591,11 +627,12 @@ async def list_debates(
     """
     List the caller org's debates with pagination.
 
-    Returns a paginated list of debate summaries, newest first. ``status``
-    narrows the returned page; ``total`` counts all of the org's debates.
+    Returns a paginated list of debate summaries, newest first, and ``total``,
+    the number of the org's debates that match. With ``status`` only debates in
+    that status are listed and counted, among the org's newest 5000.
     """
     try:
-        debates_raw, total = await _list_org_debates(storage, scope, limit, offset)
+        debates_raw, total = await _list_org_debates(storage, scope, limit, offset, status)
 
         # Convert to summaries
         debates = []
@@ -603,8 +640,6 @@ async def list_debates(
             consensus = _extract_consensus(d)
             final_answer = _extract_final_answer(d, consensus)
             debate_status = _extract_status(d, consensus, final_answer)
-            if status is not None and debate_status != status:
-                continue
             summary = DebateSummary(
                 id=str(_lookup_value(d, "id", "debate_id") or ""),
                 task=_extract_task(d),

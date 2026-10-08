@@ -35,6 +35,7 @@ from aragora.debate.decision_service import (
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi import create_app
 from aragora.server.fastapi.dependencies.auth import require_authenticated
+from aragora.server.fastapi.routes import debates as debates_routes
 from aragora.server.fastapi.routes.debates import get_nomic_dir
 from aragora.storage.debate_storage import DebateStorage
 
@@ -360,6 +361,74 @@ class TestPublicDebate:
         assert patched.json() == deleted.json() == DEBATE_NOT_FOUND
         assert DP not in {d["id"] for d in listed["debates"]}
         assert _snapshot(storage, DP) == before
+
+
+# =============================================================================
+# Debates: status filter on the list
+# =============================================================================
+
+# Newest first. Rows with consensus list as "completed", the others as "unknown".
+STATUS_ROWS = [
+    ("a-open-1", ORG_A, False),
+    ("b-done-1", ORG_B, True),
+    ("a-open-2", ORG_A, False),
+    ("a-open-3", ORG_A, False),
+    ("a-done-1", ORG_A, True),
+    ("b-done-2", ORG_B, True),
+    ("a-done-2", ORG_A, True),
+    ("a-done-3", ORG_A, True),
+]
+
+
+class TestDebateListStatus:
+    @pytest.fixture
+    def storage(self, nomic_dir: Path) -> DebateStorage:
+        store = DebateStorage(str(nomic_dir / "debates.db"))
+        for age, (debate_id, org_id, reached) in enumerate(STATUS_ROWS):
+            store.save_dict(
+                {**_debate(debate_id, f"status {debate_id}"), "consensus_reached": reached},
+                org_id=org_id,
+            )
+            with store.connection() as conn:
+                conn.execute(
+                    "UPDATE debates SET created_at = ? WHERE id = ?",
+                    (f"2026-01-01 00:{59 - age:02d}:00", debate_id),
+                )
+                conn.commit()
+        return store
+
+    @staticmethod
+    def _list(client: TestClient, headers: dict, query: str) -> tuple[list[str], int]:
+        body = client.get(f"/api/v2/debates?{query}", headers=headers).json()
+        return [d["id"] for d in body["debates"]], body["total"]
+
+    def test_matches_older_than_the_first_page_fill_the_page(self, client, as_a):
+        assert self._list(client, as_a, "status=completed&limit=2") == (
+            ["a-done-1", "a-done-2"],
+            3,
+        )
+        assert self._list(client, as_a, "status=completed&limit=2&offset=2") == (["a-done-3"], 3)
+
+    def test_other_orgs_matches_never_appear_or_count(self, client, as_a, as_b):
+        assert self._list(client, as_a, "status=completed&limit=100") == (
+            ["a-done-1", "a-done-2", "a-done-3"],
+            3,
+        )
+        assert self._list(client, as_b, "status=completed&limit=100") == (
+            ["b-done-1", "b-done-2"],
+            2,
+        )
+        assert self._list(client, as_b, "status=unknown") == ([], 0)
+
+    def test_without_status_the_page_and_total_are_unchanged(self, client, as_a):
+        assert self._list(client, as_a, "limit=2") == (["a-open-1", "a-open-2"], 6)
+
+    def test_scan_pages_through_the_org_and_stops_at_the_cap(self, client, as_a, monkeypatch):
+        monkeypatch.setattr(debates_routes, "_STATUS_SCAN_PAGE", 2)
+        monkeypatch.setattr(debates_routes, "_STATUS_SCAN_CAP", 5)
+
+        # A's five newest rows hold two of its three completed debates.
+        assert self._list(client, as_a, "status=completed") == (["a-done-1", "a-done-2"], 2)
 
 
 # =============================================================================
