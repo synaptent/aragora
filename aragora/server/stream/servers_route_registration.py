@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 try:
-    from aragora.server.handlers.inbox_command import (
+    from aragora.server.handlers.inbox.inbox_command import (
         register_routes as register_inbox_routes,
     )
 
@@ -39,7 +39,7 @@ except ImportError:
     CODEBASE_HANDLER_AVAILABLE = False
 
 try:
-    from aragora.server.handlers.accounting import register_accounting_routes
+    from aragora.server.handlers.finance.accounting import register_accounting_routes
 
     ACCOUNTING_HANDLER_AVAILABLE = True
 except ImportError:

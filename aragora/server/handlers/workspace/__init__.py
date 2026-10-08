@@ -93,6 +93,6 @@ _WORKSPACE_EXPORTS = {
 
 def __getattr__(name: str) -> Any:
     if name in _WORKSPACE_EXPORTS:
-        module = importlib.import_module("aragora.server.handlers.workspace_module")
+        module = importlib.import_module("aragora.server.handlers.workspace.workspace_module")
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

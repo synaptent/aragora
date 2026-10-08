@@ -318,7 +318,8 @@ Every batch appends one bullet per moved module to
 `$MISSION/library/shims.md` in the normative form
 `- aragora.server.handlers.<flat> -> aragora.server.handlers.<dir>.<name> (PR #N)`.
 The retired files (§4.4) get the same bullet pointing at the surviving
-twin, since the finder resolves them too.
+pure re-export twin. `connectors` has no alias; `status_page` is the
+operator-accepted exception described in §4.4.
 
 ### 3.6 Not chosen, and why
 
@@ -389,18 +390,25 @@ that wants to add a subdir must check its name against every basename in
 | flat file | LOC | surviving twin | evidence |
 |---|---|---|---|
 | `connectors.py` | 952 | `connectors/legacy.py` | the `connectors/` package shadows the flat module on import; nothing can import the flat file today. `legacy.py` differs by 62 diff lines and is the live copy |
-| `status_page.py` | 110 | `public/status_page.py` | `HANDLER_MODULES["StatusPageHandler"]` (`_lazy_imports.py:162`) points at the `public` package, which re-exports `.status_page` (`public/__init__.py:8-13`), and `handler_registry/admin.py:204` points at `public.status_page` directly; the flat class is unreachable from the registry |
+| `status_page.py` | 110 | `public/status_page.py` | different implementation, not a pure re-export twin; retired with an operator-accepted alias in PR #10000 under AMENDMENT 6 |
 | `slack.py` | 20 | `bots/slack.py` | pure re-export alias of `bots.slack` |
 | `analytics_metrics.py` | 14 | `analytics/_analytics_metrics_impl.py` (the flat `_analytics_metrics_impl.py` after its own move in the same batch) | pure re-export of `AnalyticsMetricsHandler` |
 | `compliance_handler.py` | 18 | `compliance/handler.py` | star re-export plus five store getters (`get_receipt_store` 31 test patch strings, `get_audit_store` 52, `get_legal_hold_manager` 35, `get_deletion_scheduler` 15, `get_deletion_coordinator` 15); `compliance/handler.py` defines none of them today, so the batch imports all five into its namespace before deleting the flat file |
 
-Each retirement except `connectors` is listed in `MOVED_MODULES` pointing at
-the twin, so old imports keep working and VAL-P4B-007 samples pass if one of
-these lands at the first/median/last position. `connectors` cannot be
-shimmed (the package of the same name wins the import lookup, §3.4) and has
-no old-path behaviour to preserve; if VAL-P4B-007 samples it, the PR body
-records the deletion and the validator substitutes the next alphabetical
-entry as the contract allows.
+AMENDMENT 3 permits a retirement alias only for a pure re-export twin.
+The `status_page` alias was removed at PR #10000 H3, then restored at H4
+and accepted under AMENDMENT 6; the merged H6 retains that exception.
+Do not remove that `status_page` alias in later batches. `connectors`
+cannot be shimmed (the package of the same name wins the import lookup,
+§3.4) and has no old-path behaviour to preserve; if VAL-P4B-007 samples
+it, the PR body records the deletion and the validator substitutes the
+next alphabetical entry as the contract allows.
+
+The `connectors.py` retirement did not land with batch 4 (PR #10113).
+Deleting 952 lines would have carried that PR from 617 to 1475 changed
+lines against its 800-line cap, so the deletion was carved out and landed
+separately as a non-batch PR that consumes no batch-PR allowance. The
+`slack.py` retirement did land in batch 4.
 
 ### 4.5 Renames on landing (1)
 
@@ -484,7 +492,7 @@ flat path (import or `patch` string). Targets are relative to
 | `threat_intel.py` | 560 | HM 1 + reg 1 | 2 | 3 | `security/threat_intel.py` |
 | `analytics_metrics.py` | 14 | none | 0 | 1 | retire -> `analytics/_analytics_metrics_impl.py` |
 | `compliance_handler.py` | 18 | HM 1 + reg 1 | 0 | 5 | retire -> `compliance/handler.py` |
-| `status_page.py` | 110 | none | 1 | 0 | retire -> `public/status_page.py` |
+| `status_page.py` | 110 | none | 1 | 0 | retire -> `public/status_page.py` (accepted alias exception, AMENDMENT 6) |
 
 ### Batch 2 (41 files, 21276 LOC)
 
@@ -579,8 +587,8 @@ flat path (import or `patch` string). Targets are relative to
 | `pipeline_graph.py` | 589 | HM 1 + reg 1 | 1 | 1 | `pipeline/pipeline_graph.py` |
 | `pipeline_telemetry.py` | 134 | none | 0 | 1 | `pipeline/pipeline_telemetry.py` |
 | `_shared_inbox_handler.py` | 173 | none | 3 | 3 | `shared_inbox/_shared_inbox_handler.py` |
-| `playbooks.py` | 217 | HM 1 + reg 1 | 1 | 1 | `workflows/playbooks.py` |
-| `workflow_templates.py` | 1270 | HM 6 + reg 5 | 1 | 3 | `workflows/workflow_templates.py` |
+| `playbooks.py` | 217 | HM 1 + reg 1 | 1 | 1 | `catalog/playbooks.py` |
+| `workflow_templates.py` | 1270 | HM 6 + reg 5 | 1 | 3 | `catalog/workflow_templates.py` |
 
 ### Batch 4 (42 files, 33760 LOC)
 
@@ -706,9 +714,10 @@ into the PR body. `$ENV` below means
    retired ones other than `connectors`. Then for every basename that is
    also a directory name after the move,
    `ls aragora/server/handlers/ | sed 's/\.py$//' | sort | uniq -d`
-   must print only `connectors` (the pre-existing flat/package pair from
-   §4.4, retired in batch 4); any other line names a `MOVED_MODULES` key
-   that a same-named package shadows, i.e. a dead shim entry (§3.4). The
+   must print nothing. It printed the single line `connectors` until that
+   pre-existing flat/package pair from §4.4 was retired; any line it prints
+   now names a `MOVED_MODULES` key that a same-named package shadows, i.e.
+   a dead shim entry (§3.4). The
    `sed` is what makes the check fire: without stripping `.py`, a file and
    a directory never compare equal and the list is always empty.
 7. **Handler-specific tests.** For every target dir touched:
@@ -770,16 +779,25 @@ directory-scoped pytest tails.
 
 | Batch | Files | LOC | Target dirs | Theme | Settlement note |
 |---|---|---|---|---|---|
-| 1 | 45 | 19,170 | admin, analytics, analytics_dashboard, auth, compliance, metrics, oauth, observability, public, security | ops, health, compliance, auth | Owns `admin/health/`, so it carries the k8s readiness fix (§8). Includes the three batch-1 retirements from §4.4 (`analytics_metrics`, `compliance_handler`, `status_page`); `slack` and `connectors` retire with batch 4 (§5). |
-| 2 | 41 | 21,276 | agents, debates, decisions, evolution, memory, tasks, verification | core debate loop | Highest test density (debates alone has 16 movers); `debates/__init__.py` enumerates 21 modules and must be edited. |
+| 1 | 45 | 19,170 | admin, analytics, analytics_dashboard, auth, compliance, metrics, oauth, observability, public, security | ops, health, compliance, auth | Owns `admin/health/`, so it carries the k8s readiness fix (§8). Includes the three batch-1 retirements from §4.4 (`analytics_metrics`, `compliance_handler`, `status_page`); `slack` retires with batch 4 (§5), and `connectors` was deferred out of batch 4 and retired in a separate non-batch PR (§4.4). |
+| 2 | 41 | 21,276 | agents, debates, decisions, evolution, memory, tasks, verification | core debate loop | Debates has 15 movers; update the module inventories in the agents, debates and memory package docstrings without expanding eager exports. |
 | 3 | 45 | 30,292 | canvas, catalog (new), email, finance (new), gateway, inbox, integrations, openclaw, pipeline, shared_inbox, workflows | pipeline, integrations, SME verticals | Creates the two new subdirs; rewrites `stream/servers_route_registration.py:42` (`accounting`); `canvas_pipeline.py` (2600 LOC) carries its size-baseline row. |
-| 4 | 42 | 33,760 | autonomous, billing, codebase, control_plane, demo, gauntlet, governance, knowledge, notifications, orchestration, sme, streaming, voice, webhooks, workspace | governance, autonomy, remaining verticals | Holds the two path-frozen files (`platform_config.py` PR #9989, `webhook_management.py` PR #9853) and `connectors.py`; re-census before opening. Rewrites the six `workspace_module` runtime imports (§3.2). `playground.py` (4256 LOC) carries its size and bandit baseline rows. |
+| 4 | 42 | 33,760 | autonomous, billing, codebase, control_plane, demo, gauntlet, governance, knowledge, notifications, orchestration, sme, streaming, voice, webhooks, workspace | governance, autonomy, remaining verticals | Holds the two path-frozen files (`platform_config.py` PR #9989, `webhook_management.py` PR #9853) and `connectors.py`, whose 952-line deletion was deferred to a separate non-batch PR to stay under the batch LOC cap; re-census before opening. Rewrites the six `workspace_module` runtime imports (§3.2). `playground.py` (4256 LOC) carries its size and bandit baseline rows. |
 
 Ordering rationale: batch 1 first because it is the smallest by LOC, has
 the fewest relative imports to rewrite after batch 3, and lands the shim
 machinery (`MOVED_MODULES`, the finder, the `__getattr__` branch, the
 ledger format) that batches 2 to 4 only append to. Batch 4 last because its
 frozen files need the foreign PRs to merge or the census to be redone.
+
+Implementation status: batch 1 merged as PR #10000 (42 moves and three
+retirements). Batch 2 relocates all 41 files in its table, reducing the
+flat root from 141 to 100 modules (excluding `__init__.py`) and extending
+`MOVED_MODULES` from 45 to 86 entries, including the accepted `status_page`
+alias. Batch 3 merged as PR #10104 (45 moves) and batch 4 as PR #10113
+(38 moves plus the `slack` retirement), bringing the flat root to 16
+modules. The `connectors.py` retirement deferred out of batch 4 landed
+afterwards as a separate non-batch PR, bringing the flat root to 15.
 
 The k8s readiness fix (§8) rides batch 1 because that batch owns `admin/`;
 if the operator prefers a separately revertable change, it can be split

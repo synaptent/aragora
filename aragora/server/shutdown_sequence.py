@@ -96,8 +96,10 @@ class ShutdownSequence:
 
         elapsed = time.time() - start_time
         logger.info(
-            f"Graceful shutdown completed in {elapsed:.1f}s "
-            f"({len(self._completed)} succeeded, {len(self._failed)} failed)"
+            "Graceful shutdown completed in %.1fs (%s succeeded, %s failed)",
+            elapsed,
+            len(self._completed),
+            len(self._failed),
         )
 
         return {
@@ -543,7 +545,7 @@ class ShutdownPhaseBuilder:
         # HTTP client pool
         async def close_http_client_pool():
             try:
-                from aragora.server.http_client_pool import HTTPClientPool
+                from aragora.observability.http_client_pool import HTTPClientPool
 
                 pool = HTTPClientPool.get_instance()
                 if pool and not pool._closed:

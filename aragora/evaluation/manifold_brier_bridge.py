@@ -12,16 +12,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Protocol, Sequence, runtime_checkable
+from typing import Protocol, Sequence, runtime_checkable
 
 from aragora.evaluation.manifold_brier import (
     ManifoldBrierScorer,
     ManifoldPrediction,
     manifold_brier_enabled,
 )
-
-if TYPE_CHECKING:
-    from aragora.connectors.prediction_markets.manifold import ManifoldResolution  # noqa: F401
 
 _DISABLED_MSG = (
     "ManifoldBrierScorer bridge is disabled. Set ARAGORA_MANIFOLD_BRIER_ENABLED=1 to enable."

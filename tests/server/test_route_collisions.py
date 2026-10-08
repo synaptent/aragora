@@ -173,45 +173,9 @@ KNOWN_COLLISIONS: dict[tuple[str, str], frozenset[str]] = {
     ("*", "/api/agent/*/performance"): frozenset({"AgentsHandler", "PersonaHandler"}),
     ("*", "/api/flips/recent"): frozenset({"AgentsHandler", "InsightsHandler"}),
     ("*", "/api/flips/summary"): frozenset({"AgentsHandler", "InsightsHandler"}),
-    ("*", "/api/v1/accounting/expenses"): frozenset({"APAutomationHandler", "ExpenseHandler"}),
-    ("*", "/api/v1/accounting/expenses/categorize"): frozenset(
-        {"APAutomationHandler", "ExpenseHandler"}
-    ),
-    ("*", "/api/v1/accounting/expenses/export"): frozenset(
-        {"APAutomationHandler", "ExpenseHandler"}
-    ),
-    ("*", "/api/v1/accounting/expenses/pending"): frozenset(
-        {"APAutomationHandler", "ExpenseHandler"}
-    ),
-    ("*", "/api/v1/accounting/expenses/stats"): frozenset(
-        {"APAutomationHandler", "ExpenseHandler"}
-    ),
-    ("*", "/api/v1/accounting/expenses/sync"): frozenset({"APAutomationHandler", "ExpenseHandler"}),
-    ("*", "/api/v1/accounting/expenses/upload"): frozenset(
-        {"APAutomationHandler", "ExpenseHandler"}
-    ),
-    ("*", "/api/v1/accounting/invoices"): frozenset({"APAutomationHandler", "InvoiceHandler"}),
-    ("*", "/api/v1/accounting/invoices/overdue"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
-    ("*", "/api/v1/accounting/invoices/pending"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
-    ("*", "/api/v1/accounting/invoices/stats"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
-    ("*", "/api/v1/accounting/invoices/status"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
-    ("*", "/api/v1/accounting/invoices/upload"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
-    ("*", "/api/v1/accounting/payments/scheduled"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
-    ("*", "/api/v1/accounting/purchase-orders"): frozenset(
-        {"APAutomationHandler", "InvoiceHandler"}
-    ),
+    # RESOLVED: /api/v1/accounting/{expenses,invoices,payments/scheduled,
+    # purchase-orders}* now owned solely by ExpenseHandler / InvoiceHandler;
+    # APAutomationHandler claims only /api/v1/accounting/ap/*.
     ("*", "/api/v1/billing/usage"): frozenset({"BillingHandler", "UsageMeteringHandler"}),
     ("*", "/api/v1/billing/usage/export"): frozenset({"BillingHandler", "UsageMeteringHandler"}),
     ("*", "/api/v1/debates/*/share"): frozenset({"DebateShareHandler", "SharingHandler"}),

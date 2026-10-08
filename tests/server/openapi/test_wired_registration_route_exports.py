@@ -24,10 +24,15 @@ _REGISTRARS = {
     "aragora/server/handlers/payments/plans.py": "register_payment_routes",
     "aragora/server/handlers/costs/routes.py": "register_routes",
 }
+# Registrar modules that moved on disk while their wired-registration source
+# label (baked into the exported OpenAPI descriptions) stayed on the flat path.
+_REGISTRAR_SOURCE_PATHS = {
+    "aragora/server/handlers/inbox_command.py": "aragora/server/handlers/inbox/inbox_command.py",
+}
 
 
 def _literal_registrar_operations(source: str, function_name: str) -> set[tuple[str, str]]:
-    tree = ast.parse((_ROOT / source).read_text())
+    tree = ast.parse((_ROOT / _REGISTRAR_SOURCE_PATHS.get(source, source)).read_text())
     function = next(
         node
         for node in tree.body

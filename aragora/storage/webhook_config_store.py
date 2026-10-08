@@ -20,19 +20,21 @@ Usage:
 from __future__ import annotations
 
 import atexit
+import base64
 import contextvars
 import json
 import logging
 import os
 import secrets
 import sqlite3
+import struct
 import threading
 import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from asyncpg import Pool
@@ -58,16 +60,32 @@ logger = logging.getLogger(__name__)
 # Alias to avoid shadowing by `list()` methods inside store classes
 _list = list
 
+
+class _EncryptedSecret(Protocol):
+    """Encrypted payload returned by the encryption service."""
+
+    def to_base64(self) -> str: ...
+
+
+class _SecretEncryptionService(Protocol):
+    """The part of the encryption service this store uses for webhook secrets."""
+
+    def encrypt(self, plaintext: str, /) -> _EncryptedSecret: ...
+
+    def decrypt_string(self, encrypted: str, /) -> str: ...
+
+
 # Try to import encryption service
 try:
     from aragora.security.encryption import (
         get_encryption_service as _get_encryption_service,
         CRYPTO_AVAILABLE,
+        EncryptedData as _EncryptedData,
         is_encryption_required as _is_encryption_required,
         EncryptionError as _EncryptionError,
     )
 
-    def get_encryption_service() -> Any | None:
+    def get_encryption_service() -> _SecretEncryptionService | None:
         return _get_encryption_service()
 
     def is_encryption_required() -> bool:
@@ -78,7 +96,7 @@ try:
 except ImportError:
     CRYPTO_AVAILABLE = False
 
-    def get_encryption_service() -> Any | None:
+    def get_encryption_service() -> _SecretEncryptionService | None:
         """Fallback when security module unavailable."""
         return None
 
@@ -124,18 +142,40 @@ def _encrypt_secret(secret: str) -> str:
         return secret
 
     try:
-        service = cast(Any, get_encryption_service())
-        encrypted = service.encrypt(secret)
-        return encrypted.to_base64()
+        service = get_encryption_service()
+        if service is not None:
+            return service.encrypt(secret).to_base64()
     except (EncryptionError, ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
-        if is_encryption_required():
-            raise EncryptionError(
-                "encrypt",
-                str(e),
-                "webhook_config_store",
-            ) from e
-        logger.warning("Secret encryption failed, storing unencrypted: %s", e)
-        return secret
+        return _store_unencrypted_or_raise(secret, str(e), cause=e)
+    return _store_unencrypted_or_raise(secret, "encryption service not available")
+
+
+def _store_unencrypted_or_raise(
+    secret: str, reason: str, *, cause: BaseException | None = None
+) -> str:
+    """Apply the required-versus-optional policy after encryption failed."""
+    if is_encryption_required():
+        raise EncryptionError("encrypt", reason, "webhook_config_store") from cause
+    logger.warning("Secret encryption failed, storing unencrypted: %s", reason)
+    return secret
+
+
+_GCM_TAG_BYTES = 16
+
+
+def _looks_like_encrypted_secret(value: str) -> bool:
+    """Return True when ``value`` has the layout of ``EncryptedData.to_base64()``.
+
+    Only called when ``CRYPTO_AVAILABLE`` is true, which implies the security
+    module (and ``_EncryptedData``) imported successfully.
+    """
+    try:
+        payload = _EncryptedData.from_bytes(base64.b64decode(value, validate=True))
+    except (struct.error, ValueError):
+        return False
+    return (
+        bool(payload.key_id) and bool(payload.nonce) and len(payload.ciphertext) >= _GCM_TAG_BYTES
+    )
 
 
 def _decrypt_secret(encrypted_secret: str) -> str:
@@ -143,16 +183,17 @@ def _decrypt_secret(encrypted_secret: str) -> str:
     if not CRYPTO_AVAILABLE or not encrypted_secret:
         return encrypted_secret
 
-    # Check if it looks like encrypted data (base64 with specific structure)
-    # Legacy secrets are 43-char base64 (32 bytes urlsafe)
-    if len(encrypted_secret) < 50 or not encrypted_secret.startswith("AAAA"):
-        # Likely legacy unencrypted secret
+    if not _looks_like_encrypted_secret(encrypted_secret):
+        # Legacy plaintext secret stored before encryption was enabled
         return encrypted_secret
 
     try:
-        service = cast(Any, get_encryption_service())
+        service = get_encryption_service()
+        if service is None:
+            logger.debug("Secret decryption skipped: encryption service not available")
+            return encrypted_secret
         return service.decrypt_string(encrypted_secret)
-    except (EncryptionError, ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
+    except Exception as e:  # noqa: BLE001 - cryptography.exceptions.InvalidTag inherits directly from Exception
         logger.debug("Secret decryption failed (may be legacy unencrypted): %s", e)
         return encrypted_secret  # Return as-is if decryption fails
 

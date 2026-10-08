@@ -134,7 +134,7 @@ def _emit_telemetry(telemetry: AgentTelemetry) -> None:
 def _default_prometheus_collector(telemetry: AgentTelemetry) -> None:
     """Default collector that records to Prometheus metrics."""
     try:
-        from aragora.server.prometheus import (
+        from aragora.observability.prometheus import (
             record_agent_failure,
             record_agent_generation,
         )
@@ -303,8 +303,11 @@ def with_telemetry(
             finally:
                 _emit_telemetry(telemetry)
                 logger.debug(
-                    f"telemetry agent={agent_name} op={operation} "
-                    f"duration={telemetry.duration_ms:.0f}ms success={telemetry.success}"
+                    "telemetry agent=%s op=%s duration=%.0fms success=%s",
+                    agent_name,
+                    operation,
+                    telemetry.duration_ms,
+                    telemetry.success,
                 )
 
         @functools.wraps(func)

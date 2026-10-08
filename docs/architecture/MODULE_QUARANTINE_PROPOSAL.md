@@ -138,7 +138,7 @@ to get a verifiable unsigned ODR on a PR.
 | receipt emission script | `scripts/emit_pr_receipt.py` | dry-run quorum → `DecisionReceipt` → ODR export → verify → upload; called only by the root Action's "Emit decision receipt" step |
 | review-counts parser | `scripts/extract_review_counts.py` | parses reviewer output posted to PR; called only by the root Action |
 | collect-quorum-evidence | `scripts/collect_quorum_evidence.py` | groups reviewers by family for `quorum.independence.distinct_model_families`; called by the root Action and by M8 dogfood |
-| Action docs | `docs/GITHUB_ACTION_SETUP.md`, `docs/guides/github-actions-review.md` | the root-vs-nested disambiguation lives here |
+| Action docs | `docs/guides/GITHUB_ACTION_SETUP.md`, `docs/guides/github-actions-review.md` | the root-vs-nested disambiguation lives here |
 | CLAUDE.md cross-link | `CLAUDE.md` §"Quick Reference" — `Gauntlet` row + `Backup` row | the canonical front-door quickly locates the wedge |
 
 **Owed contract:**
@@ -210,14 +210,14 @@ calls** — Boundary 4 produces results that *this* boundary exposes.
   (Boundary 4 queue → Boundary 3 emit if `--emit-receipt`), `aragora serve` (this boundary
   ↔ API), `aragora quickstart --demo` (this boundary ↔ Boundary 4 demo path). No CLI verb
   may apply to an `.odr.json` artifact without Boundary 2 install
-  (`pip install "aragora-verify>=0.1.1"` per VAL-INSTALL-001/VAL-VERIFY-007).
+  (`pip install "aragora-verify>=0.2.0"` per VAL-INSTALL-001/VAL-VERIFY-007).
 - API public surface (`aragora/server/handlers/`, `aragora/server/stream/`): semver-aware;
   deprecated endpoints get a `Deprecation` header for at least one release before removal;
   receipt-facing endpoints (`/api/v2/receipts/...`) currently verify native-or-legacy, not
   ODR (per `docs/specs/RECEIPT_LINEAGE_RECONCILIATION.md` "Two verifiers" section and
   `docs/specs/OPEN_DECISION_RECEIPT.md`).
 - SDK versioning tracks `pyproject.toml` ([project].version); floor-pin install is
-  `pip install "aragora-verify>=0.1.1"`, not `==` (per `docs/AGENT_OPERATING_CONTRACT.md`
+  `pip install "aragora-verify>=0.2.0"`, not `==` (per `docs/AGENT_OPERATING_CONTRACT.md`
   merge-policy convention; VAL-INSTALL-001/VAL-VERIFY-001/007).
 **NOT in this boundary:** the Action's `uses:` references (Boundary 3); the SDK does not
 emit receipts itself (a SDK caller invokes Boundary 3 for that); the in-tree web frontend

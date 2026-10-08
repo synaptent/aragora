@@ -28,7 +28,6 @@ from aragora.agents.transports.claude_vibeproxy import DEFAULT_CLAUDE_MODEL
 from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
 from aragora.swarm import quorum_evidence as legacy
 
-CLI_VERSION = "2.1.263"
 READ_LINES = 200
 MAX_BYTES = 2_000_000
 MAX_OUTPUT = 8_000_000
@@ -38,6 +37,17 @@ MAX_REQUESTS = 40
 def require(condition: Any, reason: str) -> None:
     if not condition:
         raise ValueError(reason)
+
+
+def validate_cli_version(version: str) -> None:
+    """Admit Claude Code 2.x; runtime protocol and containment checks still apply."""
+    require(
+        re.fullmatch(
+            r"2\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)? \(Claude Code\)",
+            version,
+        ),
+        "unsupported_cli_version",
+    )
 
 
 def digest(data: bytes) -> str:
@@ -554,7 +564,7 @@ def prepare(
             .decode()
             .strip()
         )
-        require(version == f"{CLI_VERSION} (Claude Code)", "unsupported_cli_version")
+        validate_cli_version(version)
         probe = subprocess.run(
             prefix + ["/usr/bin/touch", str(frozen / "forbidden")],
             env=env,

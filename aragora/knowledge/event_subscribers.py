@@ -152,7 +152,7 @@ class KnowledgeEventSubscriber:
             return
 
         logger.debug(
-            f"Syncing high-importance memory to KM: importance={importance:.2f}, tier={tier}"
+            "Syncing high-importance memory to KM: importance=%.2f, tier=%s", importance, tier
         )
 
         # Record KM inbound metric
@@ -186,7 +186,7 @@ class KnowledgeEventSubscriber:
                 loop.create_task(mound.store(request))
             except RuntimeError:
                 pass  # No event loop available
-            logger.info(f"Synced memory to Knowledge Mound (importance={importance:.2f})")
+            logger.info("Synced memory to Knowledge Mound (importance=%.2f)", importance)
 
         except ImportError:
             pass  # KnowledgeMound not available
@@ -210,7 +210,7 @@ class KnowledgeEventSubscriber:
         if not query or results_count == 0:
             return
 
-        logger.debug(f"KM queried, pre-warming memory cache: query='{query[:50]}...'")
+        logger.debug("KM queried, pre-warming memory cache: query='%s...'", query[:50])
 
         # Record KM outbound metric
         record_km_outbound_event("memory", event.type.value)
@@ -308,7 +308,9 @@ class KnowledgeEventSubscriber:
 
             if similar_cruxes:
                 logger.info(
-                    f"Found {len(similar_cruxes)} historical cruxes relevant to debate {debate_id}"
+                    "Found %s historical cruxes relevant to debate %s",
+                    len(similar_cruxes),
+                    debate_id,
                 )
                 # Store in event data for debate to pick up
                 # (Actual initialization happens in debate orchestrator)
@@ -337,7 +339,9 @@ class KnowledgeEventSubscriber:
             return
 
         logger.debug(
-            f"Storing RLM compression pattern: ratio={compression_ratio:.2f}, value={value_score:.2f}"
+            "Storing RLM compression pattern: ratio=%.2f, value=%.2f",
+            compression_ratio,
+            value_score,
         )
 
         # Record KM inbound metric
@@ -421,7 +425,7 @@ class KnowledgeEventSubscriber:
             return
 
         logger.debug(
-            f"Storing agent expertise: {agent_name} -> {new_elo} (Δ{delta:+.0f}) in {domain}"
+            "Storing agent expertise: %s -> %s (Δ%+.0f) in %s", agent_name, new_elo, delta, domain
         )
 
         # Record KM inbound metric
@@ -503,7 +507,7 @@ class KnowledgeEventSubscriber:
         if confidence < 0.7:
             return
 
-        logger.debug(f"Storing insight: type={insight_type}, confidence={confidence:.2f}")
+        logger.debug("Storing insight: type=%s, confidence=%.2f", insight_type, confidence)
 
         # Record KM inbound metric
         record_km_inbound_event("insights", event.type.value)
@@ -771,8 +775,10 @@ class KnowledgeEventSubscriber:
             return
 
         logger.info(
-            f"Ingesting consensus from debate {debate_id} to Knowledge Mound "
-            f"(dissents={len(dissents)}, evolution={supersedes is not None})"
+            "Ingesting consensus from debate %s to Knowledge Mound (dissents=%s, evolution=%s)",
+            debate_id,
+            len(dissents),
+            supersedes is not None,
         )
 
         # Record KM inbound metric
@@ -851,8 +857,10 @@ class KnowledgeEventSubscriber:
                             if prior_debate_id != debate_id:
                                 supersedes_node_id = prior.id
                                 logger.info(
-                                    f"Consensus {debate_id} supersedes prior "
-                                    f"consensus {prior_debate_id} on topic '{topic[:50]}...'"
+                                    "Consensus %s supersedes prior consensus %s on topic '%s...'",
+                                    debate_id,
+                                    prior_debate_id,
+                                    topic[:50],
                                 )
                     except (RuntimeError, TypeError, AttributeError, ValueError, OSError) as e:
                         logger.debug("Evolution tracking search failed: %s", e)
@@ -896,8 +904,11 @@ class KnowledgeEventSubscriber:
                 consensus_node_id = result.node_id
 
                 logger.debug(
-                    f"Ingested consensus {debate_id}: node_id={consensus_node_id}, "
-                    f"deduplicated={result.deduplicated}, supersedes={supersedes_node_id}"
+                    "Ingested consensus %s: node_id=%s, deduplicated=%s, supersedes=%s",
+                    debate_id,
+                    consensus_node_id,
+                    result.deduplicated,
+                    supersedes_node_id,
                 )
 
                 # ============================================================
@@ -968,13 +979,17 @@ class KnowledgeEventSubscriber:
                     if dissent_result.node_id:
                         dissent_node_ids.append(dissent_result.node_id)
                         logger.debug(
-                            f"Stored dissent from {dissent_agent}: "
-                            f"type={dissent_type}, node_id={dissent_result.node_id}"
+                            "Stored dissent from %s: type=%s, node_id=%s",
+                            dissent_agent,
+                            dissent_type,
+                            dissent_result.node_id,
                         )
 
                 if dissent_node_ids:
                     logger.info(
-                        f"Stored {len(dissent_node_ids)} dissenting views for consensus {debate_id}"
+                        "Stored %s dissenting views for consensus %s",
+                        len(dissent_node_ids),
+                        debate_id,
                     )
 
                 # ============================================================
@@ -1036,17 +1051,22 @@ class KnowledgeEventSubscriber:
                             updates={"metadata": {"superseded_by": consensus_node_id}},
                         )
                         logger.debug(
-                            f"Marked {supersedes_node_id} as superseded by {consensus_node_id}"
+                            "Marked %s as superseded by %s", supersedes_node_id, consensus_node_id
                         )
                     except (RuntimeError, TypeError, AttributeError, ValueError, OSError) as e:
                         logger.debug("Failed to update superseded node: %s", e)
 
                 # Log summary
                 logger.info(
-                    f"Consensus ingestion complete for debate {debate_id}: "
-                    f"consensus={consensus_node_id}, claims={len(claim_node_ids)}, "
-                    f"dissents={len(dissent_node_ids)}, "
-                    f"supersedes={'yes' if supersedes_node_id else 'no'}"
+                    "Consensus ingestion complete for debate %s: "
+                    "consensus=%s, claims=%s, "
+                    "dissents=%s, "
+                    "supersedes=%s",
+                    debate_id,
+                    consensus_node_id,
+                    len(claim_node_ids),
+                    len(dissent_node_ids),
+                    "yes" if supersedes_node_id else "no",
                 )
 
             # Run async ingestion
@@ -1098,8 +1118,10 @@ class KnowledgeEventSubscriber:
             return
 
         logger.debug(
-            f"Processing KM validation feedback for debate {debate_id}: "
-            f"confidence={confidence:.2f}, topic={topic[:50]}..."
+            "Processing KM validation feedback for debate %s: confidence=%.2f, topic=%s...",
+            debate_id,
+            confidence,
+            topic[:50],
         )
 
         try:
@@ -1135,7 +1157,7 @@ class KnowledgeEventSubscriber:
                     )
 
                     if not results:
-                        logger.debug(f"No KM items found for validation feedback: {topic[:50]}")
+                        logger.debug("No KM items found for validation feedback: %s", topic[:50])
                         return
 
                     continuum_validations = 0
@@ -1218,8 +1240,10 @@ class KnowledgeEventSubscriber:
 
                     if continuum_validations > 0 or consensus_validations > 0:
                         logger.info(
-                            f"KM validation feedback for debate {debate_id}: "
-                            f"continuum={continuum_validations}, consensus={consensus_validations}"
+                            "KM validation feedback for debate %s: continuum=%s, consensus=%s",
+                            debate_id,
+                            continuum_validations,
+                            consensus_validations,
                         )
 
                         # Emit validation event for dashboard
@@ -1405,7 +1429,7 @@ class KnowledgeEventSubscriber:
             }
 
             logger.info(
-                f"Stored culture context for debate {debate_id}: {len(protocol_hints)} hints"
+                "Stored culture context for debate %s: %s hints", debate_id, len(protocol_hints)
             )
 
         except (TypeError, AttributeError, ValueError, KeyError) as e:

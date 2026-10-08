@@ -97,6 +97,11 @@ def _normalize_backend(value: str | None) -> str | None:
     return normalized
 
 
+def is_postgres_backend(value: str | None) -> bool:
+    """Return whether a backend value names either PostgreSQL alias."""
+    return _normalize_backend(value) in {"postgres", "postgresql"}
+
+
 def _get_backend_override(
     store_name: str,
     extra_envs: Sequence[str] | None = None,

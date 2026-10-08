@@ -17,6 +17,11 @@ Usage:
 
     # Full run with subset
     python scripts/debate_quality_benchmark.py --prompts 6
+
+    # Validate a frozen outcome-backed corpus and answer-key sidecar
+    python scripts/debate_quality_benchmark.py validate-corpus \
+        --corpus docs/benchmarks/decision_quality/corpus.json \
+        --outcomes docs/benchmarks/decision_quality/outcomes.json
 """
 
 from __future__ import annotations
@@ -47,6 +52,10 @@ from aragora.evaluation.llm_judge import (  # noqa: E402
     LLMJudge,
     PairwiseResult,
     WEIGHT_PROFILES,
+)
+from aragora.evaluation.decision_quality_corpus import (  # noqa: E402
+    CorpusValidationReport,
+    validate_corpus_files,
 )
 
 logging.basicConfig(
@@ -958,8 +967,67 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-async def main() -> None:
-    args = parse_args()
+def parse_validate_corpus_args(argv: list[str]) -> argparse.Namespace:
+    """Parse the additive outcome-backed corpus validation command."""
+    parser = argparse.ArgumentParser(
+        prog="debate_quality_benchmark.py validate-corpus",
+        description="Validate a frozen decision corpus and its hash-bound outcome sidecar.",
+    )
+    parser.add_argument("--corpus", type=Path, required=True, help="Model-visible corpus JSON")
+    parser.add_argument(
+        "--outcomes",
+        type=Path,
+        required=True,
+        help="Outcome and preregistered-crux sidecar JSON",
+    )
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Skip only the final 24-case domain/split count gate during corpus construction.",
+    )
+    parser.add_argument(
+        "--expected-outcomes-sha256",
+        help="Require the outcome sidecar to match this frozen canonical SHA-256 digest.",
+    )
+    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    return parser.parse_args(argv)
+
+
+def print_corpus_validation(report: CorpusValidationReport, *, as_json: bool) -> None:
+    """Print a deterministic corpus validation result."""
+    if as_json:
+        print(json.dumps(report.to_dict(), sort_keys=True))
+        return
+    verdict = "PASS" if report.ok else "FAIL"
+    print(f"Decision-quality corpus validation: {verdict}")
+    print(f"Corpus SHA-256: {report.corpus_sha256 or 'unavailable'}")
+    print(f"Outcomes SHA-256: {report.outcomes_sha256 or 'unavailable'}")
+    print(f"Cases: {report.case_count}")
+    print(f"Domains: {json.dumps(report.domain_counts, sort_keys=True)}")
+    print(f"Splits: {json.dumps(report.split_counts, sort_keys=True)}")
+    for issue in report.issues:
+        print(f"- {issue.path} [{issue.code}] {issue.message}")
+
+
+def run_validate_corpus(argv: list[str]) -> int:
+    """Run the corpus validator and return a process-style status code."""
+    args = parse_validate_corpus_args(argv)
+    report = validate_corpus_files(
+        args.corpus,
+        args.outcomes,
+        allow_partial=args.allow_partial,
+        expected_outcomes_sha256=args.expected_outcomes_sha256,
+    )
+    print_corpus_validation(report, as_json=args.json)
+    return 0 if report.ok else 1
+
+
+async def main(argv: list[str] | None = None) -> None:
+    raw_argv = sys.argv[1:] if argv is None else argv
+    if raw_argv and raw_argv[0] == "validate-corpus":
+        raise SystemExit(run_validate_corpus(raw_argv[1:]))
+
+    args = parse_args(raw_argv)
 
     selected = select_prompts(args.prompts)
 

@@ -22,13 +22,17 @@ Common patterns:
 
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
 from aragora.rbac.models import AuthorizationContext
+
+if TYPE_CHECKING:
+    from aragora.server.handlers.base import BaseHandler
 
 
 # ============================================================================
@@ -349,7 +353,7 @@ def parse_handler_response(result) -> dict[str, Any]:
         return {}
 
 
-def assert_success_response(result, expected_keys: list[str] = None):
+def assert_success_response(result, expected_keys: list[str] | None = None):
     """Assert that a handler result is a successful JSON response.
 
     Args:
@@ -369,7 +373,7 @@ def assert_success_response(result, expected_keys: list[str] = None):
             assert key in body, f"Expected key '{key}' in response"
 
 
-def assert_error_response(result, expected_status: int, error_substring: str = None):
+def assert_error_response(result, expected_status: int, error_substring: str | None = None):
     """Assert that a handler result is an error response.
 
     Args:
@@ -401,9 +405,9 @@ class MockHTTPRequest:
 
     method: str = "GET"
     path: str = "/"
-    headers: dict[str, str] = None
+    headers: dict[str, str] | None = None
     body: bytes = b"{}"
-    query_params: dict[str, str] = None
+    query_params: dict[str, str] | None = None
 
     def __post_init__(self):
         if self.headers is None:
@@ -764,13 +768,13 @@ class MockAuthorizationContext:
     user_email: str = "test@example.com"
     org_id: str = "test-org-001"
     workspace_id: str = "test-ws-001"
-    roles: list[str] = None
-    permissions: list[str] = None
+    roles: list[str] | None = None
+    permissions: list[str] | None = None
     api_key_scope: str | None = None
     ip_address: str = "127.0.0.1"
     user_agent: str = "test-agent"
     request_id: str = "req-test-001"
-    timestamp: str = None
+    timestamp: str | None = None
 
     def __post_init__(self):
         if self.roles is None:
@@ -803,13 +807,15 @@ class MockAuthorizationContext:
 
             self.timestamp = datetime.now().isoformat()
 
+    # __post_init__ replaces a None roles/permissions with a list, so both are
+    # lists by the time these run; cast() records that without a runtime check.
     def has_permission(self, permission: str) -> bool:
         """Check if context has a specific permission."""
-        return permission in self.permissions
+        return permission in cast("list[str]", self.permissions)
 
     def has_role(self, role: str) -> bool:
         """Check if context has a specific role."""
-        return role in self.roles
+        return role in cast("list[str]", self.roles)
 
 
 @pytest.fixture
@@ -833,8 +839,8 @@ def mock_auth_context():
         user_id: str = "test-user-001",
         org_id: str = "test-org-001",
         workspace_id: str = "test-ws-001",
-        roles: list[str] = None,
-        permissions: list[str] = None,
+        roles: list[str] | None = None,
+        permissions: list[str] | None = None,
         **kwargs,
     ) -> MockAuthorizationContext:
         return MockAuthorizationContext(
@@ -919,8 +925,8 @@ def authenticated_handler(mock_auth_context):
         handler_instance,
         user_id: str = "test-user-001",
         org_id: str = "test-org-001",
-        roles: list[str] = None,
-        permissions: list[str] = None,
+        roles: list[str] | None = None,
+        permissions: list[str] | None = None,
     ):
         ctx = mock_auth_context(
             user_id=user_id,
@@ -1514,21 +1520,64 @@ if _real_side_effect_descriptor is None:
 
 # Capture the real run_async function at import time, before any test can
 # replace it with a mock.  This reference is immutable for the session.
+_real_run_async: Callable[..., Any] | None
 try:
-    from aragora.utils.async_utils import run_async as _real_run_async
+    from aragora.utils.async_utils import run_async as _imported_run_async
+
+    _real_run_async = _imported_run_async
 except ImportError:
     _real_run_async = None
 
 # Capture real BaseHandler methods at import time for reliable restoration.
 _real_extract_path_param = None
 _real_extract_path_params = None
+_BaseHandler: "type[BaseHandler] | None"
 try:
-    from aragora.server.handlers.base import BaseHandler as _BaseHandler
+    from aragora.server.handlers.base import BaseHandler as _ImportedBaseHandler
 
+    _BaseHandler = _ImportedBaseHandler
     _real_extract_path_param = getattr(_BaseHandler, "extract_path_param", None)
     _real_extract_path_params = getattr(_BaseHandler, "extract_path_params", None)
 except ImportError:
     _BaseHandler = None
+
+_RUN_ASYNC_MODULE_PREFIXES = ("aragora.server.", "aragora.utils.")
+_RUN_ASYNC_ATTRS = ("run_async", "_run_async")
+_SYS_MODULES_SNAPSHOT_ATTEMPTS = 3
+
+
+def _snapshot_sys_modules(modules: dict[str, Any] | None = None) -> list[tuple[str, Any]]:
+    """Return the ``sys.modules`` items as a list detached from the live dict.
+
+    Walking the live dict (``list(sys.modules.items())``) is not safe on
+    CPython 3.11: every item tuple is a GC allocation, so a collection can
+    start mid-walk, and an import made by a GC callback, a finalizer, or
+    another thread scheduled during that collection resizes the dict and
+    raises ``RuntimeError: dictionary changed size during iteration``.
+    ``dict.copy`` clones the table without running Python code between
+    entries.  Earlier attempts retry a resize observed by the copy itself;
+    the final attempt is unguarded so a persistent failure propagates.
+    """
+    source = sys.modules if modules is None else modules
+    for _ in range(_SYS_MODULES_SNAPSHOT_ATTEMPTS - 1):
+        try:
+            return list(source.copy().items())
+        except RuntimeError:
+            continue
+    return list(source.copy().items())
+
+
+def _restore_polluted_run_async() -> None:
+    """Point every loaded ``run_async``/``_run_async`` back at the real function."""
+    if _real_run_async is None:
+        return
+    for mod_name, mod in _snapshot_sys_modules():
+        if mod is None or not mod_name.startswith(_RUN_ASYNC_MODULE_PREFIXES):
+            continue
+        for attr in _RUN_ASYNC_ATTRS:
+            current = getattr(mod, attr, None)
+            if current is not None and current is not _real_run_async:
+                setattr(mod, attr, _real_run_async)
 
 
 @pytest.fixture(autouse=True)
@@ -1551,26 +1600,16 @@ def _restore_module_level_functions():
     a test accidentally set ``MagicMock.side_effect`` on the CLASS (e.g.
     via ``spec.adapter_class = MagicMock; spec.adapter_class.side_effect = ...``).
     """
-    import sys
-
     # Guard: repair MagicMock.side_effect property if destroyed
     if _real_side_effect_descriptor is not None:
         current_descriptor = _NCMock.__dict__.get("side_effect")
         if current_descriptor is not _real_side_effect_descriptor:
             _NCMock.side_effect = _real_side_effect_descriptor
 
-    if _real_run_async is not None:
-        # Scan ALL loaded aragora modules for polluted run_async references.
-        # 51+ handler modules import run_async at module level; rather than
-        # maintaining a hardcoded list, we dynamically find and restore them.
-        _prefixes = ("aragora.server.", "aragora.utils.")
-        for mod_name, mod in list(sys.modules.items()):
-            if mod is None or not mod_name.startswith(_prefixes):
-                continue
-            for attr in ("run_async", "_run_async"):
-                current = getattr(mod, attr, None)
-                if current is not None and current is not _real_run_async:
-                    setattr(mod, attr, _real_run_async)
+    # Scan ALL loaded aragora modules for polluted run_async references.
+    # 51+ handler modules import run_async at module level; rather than
+    # maintaining a hardcoded list, we dynamically find and restore them.
+    _restore_polluted_run_async()
 
     # Reset the cached has_permission in control_plane.health
     # This global caches whatever callable it finds on the control_plane
@@ -1607,14 +1646,7 @@ def _restore_module_level_functions():
         if current_descriptor is not _real_side_effect_descriptor:
             _NCMock.side_effect = _real_side_effect_descriptor
 
-    if _real_run_async is not None:
-        for mod_name, mod in list(sys.modules.items()):
-            if mod is None or not mod_name.startswith(_prefixes):
-                continue
-            for attr in ("run_async", "_run_async"):
-                current = getattr(mod, attr, None)
-                if current is not None and current is not _real_run_async:
-                    setattr(mod, attr, _real_run_async)
+    _restore_polluted_run_async()
 
     try:
         import aragora.server.handlers.control_plane.health as _cp_health
@@ -1788,7 +1820,7 @@ class HandlerTestCase:
         """Assert successful response with expected keys."""
         assert_success_response(result, expected_keys=keys)
 
-    def assert_error(self, result, status: int, message: str = None):
+    def assert_error(self, result, status: int, message: str | None = None):
         """Assert error response with status and optional message."""
         assert_error_response(result, expected_status=status, error_substring=message)
 

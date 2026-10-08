@@ -697,8 +697,11 @@ class WebConnector(BaseConnector):
             if attempt < max_retries - 1:
                 delay = base_delay * (2**attempt)
                 logger.info(
-                    f"Fetch failed (attempt {attempt + 1}/{max_retries}), "
-                    f"retrying in {delay:.1f}s: {last_error}"
+                    "Fetch failed (attempt %s/%s), retrying in %.1fs: %s",
+                    attempt + 1,
+                    max_retries,
+                    delay,
+                    last_error,
                 )
                 await asyncio.sleep(delay)
 

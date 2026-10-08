@@ -20,6 +20,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import TypedDict
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
@@ -80,7 +81,27 @@ RISKS = [
 TOURN_AGENTS = ["claude-opus", "gpt-4o", "gemini-pro", "mistral-large"]
 _DEMO_LIKE = "demo_%"
 
-PIPELINES = [
+
+class DemoPipeline(TypedDict):
+    id: str
+    ideas: list[str]
+    goals: list[str]
+    status: str
+    duration: float
+
+
+class DemoReceipt(TypedDict):
+    id: str
+    gauntlet_id: str
+    debate_id: str
+    verdict: str
+    confidence: float
+    risk_level: str
+    risk_score: float
+    summary: str
+
+
+PIPELINES: list[DemoPipeline] = [
     {
         "id": "demo_pipeline_001",
         "ideas": ["Implement rate limiting for API endpoints", "Add circuit breaker pattern"],
@@ -111,7 +132,7 @@ PIPELINES = [
     },
 ]
 
-RECEIPTS = [
+RECEIPTS: list[DemoReceipt] = [
     {
         "id": "demo_receipt_001",
         "gauntlet_id": "demo_gauntlet_001",
@@ -247,7 +268,7 @@ def seed_elo(clear: bool) -> int:
 # -- Seed debates (DebateStorage) -------------------------------------------
 def seed_debates(clear: bool) -> int:
     try:
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
     except ImportError:
         logger.warning("DebateStorage not importable, skipping")
         return 0
@@ -697,7 +718,7 @@ def check_data() -> dict[str, int]:
         return len(EloSystem().list_agents())
 
     def _debates():
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
 
         with DebateStorage().connection() as c:
             return c.execute(
