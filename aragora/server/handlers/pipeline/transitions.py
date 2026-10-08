@@ -7,6 +7,13 @@ Provides:
   POST /api/v1/pipeline/transitions/tasks-to-workflow
   POST /api/v1/pipeline/transitions/execute
   GET  /api/v1/pipeline/transitions/:node_id/provenance
+
+Every route needs an org-scoped caller: provenance reads need
+``canvas:read``, the three transitions ``canvas:create`` and execute
+``canvas:run``. Nodes are kept in a separate store per org, so one org can
+neither read nor overwrite another org's nodes by id. A request body that
+names a ``pipeline_id`` or ``graph_id`` the caller's org does not own gets
+the missing-pipeline 404 before anything runs.
 """
 
 from __future__ import annotations
@@ -20,6 +27,8 @@ from datetime import datetime, timezone
 from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
+from aragora.tenancy import pipeline_access
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 from ..base import (
     SAFE_ID_PATTERN,
@@ -104,13 +113,20 @@ class TransitionResult:
     provenance: dict[str, Any] = field(default_factory=dict)
 
 
-# In-memory store keyed by node id (production would use DB)
-_node_store: dict[str, dict[str, Any]] = {}
+NodeStore = dict[str, dict[str, Any]]
+
+# In-memory stores keyed by node id (production would use DB). ``_node_store``
+# serves direct calls of the transition functions; the HTTP routes use the
+# caller's org store in ``_org_node_stores``.
+_node_store: NodeStore = {}
+_org_node_stores: dict[str, NodeStore] = {}
 
 
-def get_node_store() -> dict[str, dict[str, Any]]:
-    """Return the node store (allows test injection)."""
-    return _node_store
+def get_node_store(org_id: str | None = None) -> NodeStore:
+    """Return the node store of ``org_id``, or the default store when None."""
+    if org_id is None:
+        return _node_store
+    return _org_node_stores.setdefault(org_id, {})
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +167,7 @@ def _ideas_to_goals_logic(
     ideas: list[dict[str, Any]],
     context: str | None = None,
     mode: str = "quick",
+    store: NodeStore | None = None,
 ) -> TransitionResult:
     """Cluster ideas by topic similarity and extract goals.
 
@@ -163,8 +180,10 @@ def _ideas_to_goals_logic(
 
     Tries LLM-powered goal derivation via MetaPlanner first, falling back
     to keyword-overlap clustering when MetaPlanner is unavailable or when
-    ``mode="heuristic"``.
+    ``mode="heuristic"``. Nodes are written to ``store`` (default
+    ``_node_store``).
     """
+    node_store = _node_store if store is None else store
     # ── Build idea nodes (shared by both LLM and heuristic paths) ──────
     idea_nodes: list[PipelineNode] = []
     idea_node_ids: list[str] = []
@@ -178,7 +197,7 @@ def _ideas_to_goals_logic(
         )
         idea_nodes.append(idea_node)
         idea_node_ids.append(idea_id)
-        _node_store[idea_id] = asdict(idea_node)
+        node_store[idea_id] = asdict(idea_node)
 
     # ── Try LLM-powered goal derivation via MetaPlanner ────────────────
     if mode != "heuristic":
@@ -228,7 +247,7 @@ def _ideas_to_goals_logic(
                         derived_from=idea_node_ids,
                     )
                     result_nodes.append(goal_node)
-                    _node_store[goal_node.id] = asdict(goal_node)
+                    node_store[goal_node.id] = asdict(goal_node)
                     for idea_n in idea_nodes:
                         result_edges.append(
                             PipelineEdge(
@@ -278,7 +297,7 @@ def _ideas_to_goals_logic(
             derived_from=source_ids,
         )
         nodes.append(goal_node)
-        _node_store[goal_id] = asdict(goal_node)
+        node_store[goal_id] = asdict(goal_node)
 
         for src in source_ids:
             edges.append(PipelineEdge(source=src, target=goal_id, edge_type="derives"))
@@ -300,6 +319,7 @@ def _goals_to_tasks_logic(
     goals: list[dict[str, Any]],
     max_tasks: int | None = None,
     mode: str = "quick",
+    store: NodeStore | None = None,
 ) -> TransitionResult:
     """Decompose goals into actionable tasks.
 
@@ -312,19 +332,21 @@ def _goals_to_tasks_logic(
 
     Tries LLM-powered decomposition via TaskDecomposer first, falling back
     to heuristic key-result splitting when TaskDecomposer is unavailable or
-    when ``mode="heuristic"``.
+    when ``mode="heuristic"``. Nodes are written to ``store`` (default
+    ``_node_store``).
     """
+    node_store = _node_store if store is None else store
     # Ensure all goals are stored
     for goal in goals:
         goal_id = goal.get("id") or f"goal-{uuid.uuid4().hex[:8]}"
-        if goal_id not in _node_store:
+        if goal_id not in node_store:
             goal_node = PipelineNode(
                 id=goal_id,
                 stage="goal",
                 label=goal.get("label", ""),
                 metadata=goal.get("metadata", {}),
             )
-            _node_store[goal_id] = asdict(goal_node)
+            node_store[goal_id] = asdict(goal_node)
 
     # ── Try LLM-powered decomposition via TaskDecomposer ───────────────
     if mode != "heuristic":
@@ -378,7 +400,7 @@ def _goals_to_tasks_logic(
                         derived_from=[goal_id],
                     )
                     all_nodes.append(task_node)
-                    _node_store[task_id] = asdict(task_node)
+                    node_store[task_id] = asdict(task_node)
                     all_edges.append(
                         PipelineEdge(
                             source=goal_id,
@@ -457,7 +479,7 @@ def _goals_to_tasks_logic(
                 derived_from=[goal_id],
             )
             nodes.append(task_node)
-            _node_store[task_id] = asdict(task_node)
+            node_store[task_id] = asdict(task_node)
             edges.append(PipelineEdge(source=goal_id, target=task_id, edge_type="decomposes"))
             task_count += 1
 
@@ -492,12 +514,15 @@ def _goals_to_tasks_logic(
 def _tasks_to_workflow_logic(
     tasks: list[dict[str, Any]],
     execution_mode: str | None = None,
+    store: NodeStore | None = None,
 ) -> TransitionResult:
     """Generate a workflow DAG from tasks.
 
     Tries creating a real WorkflowDefinition via the WorkflowEngine first,
     falling back to manual DAG generation when the engine is unavailable.
+    Nodes are written to ``store`` (default ``_node_store``).
     """
+    node_store = _node_store if store is None else store
     agent_map = {
         "researcher": "research_agent",
         "implementer": "code_agent",
@@ -552,7 +577,7 @@ def _tasks_to_workflow_logic(
                 derived_from=[source_task_id] if source_task_id else [],
             )
             nodes.append(orch_node)
-            _node_store[orch_id] = asdict(orch_node)
+            node_store[orch_id] = asdict(orch_node)
             if source_task_id:
                 edges.append(
                     PipelineEdge(
@@ -625,7 +650,7 @@ def _tasks_to_workflow_logic(
             derived_from=[task_id],
         )
         nodes.append(orch_node)
-        _node_store[orch_id] = asdict(orch_node)
+        node_store[orch_id] = asdict(orch_node)
         edges.append(PipelineEdge(source=task_id, target=orch_id, edge_type="triggers"))
 
     # Carry over depends_on as sequential ordering
@@ -661,8 +686,9 @@ def _tasks_to_workflow_logic(
     )
 
 
-def _get_provenance_chain(node_id: str) -> list[dict[str, Any]]:
-    """Walk derived_from links back to origin, returning ordered chain."""
+def _get_provenance_chain(node_id: str, store: NodeStore | None = None) -> list[dict[str, Any]]:
+    """Walk derived_from links back to origin in ``store``, returning ordered chain."""
+    node_store = _node_store if store is None else store
     chain: list[dict[str, Any]] = []
     visited: set[str] = set()
     queue = [node_id]
@@ -672,7 +698,7 @@ def _get_provenance_chain(node_id: str) -> list[dict[str, Any]]:
         if nid in visited:
             continue
         visited.add(nid)
-        node_data = _node_store.get(nid)
+        node_data = node_store.get(nid)
         if node_data is None:
             continue
         chain.append(node_data)
@@ -687,6 +713,28 @@ def _get_provenance_chain(node_id: str) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Handler
 # ---------------------------------------------------------------------------
+
+_POST_PERMISSIONS = {
+    "/api/pipeline/transitions/ideas-to-goals": pipeline_access.PIPELINE_CREATE,
+    "/api/pipeline/transitions/goals-to-tasks": pipeline_access.PIPELINE_CREATE,
+    "/api/pipeline/transitions/tasks-to-workflow": pipeline_access.PIPELINE_CREATE,
+    "/api/pipeline/transitions/execute": pipeline_access.PIPELINE_RUN,
+}
+
+
+def _references_owned(body: dict[str, Any], scope: OrgScope) -> bool:
+    """False when ``body`` names a pipeline or graph the caller's org does not own."""
+    pipeline_id = body.get("pipeline_id")
+    if pipeline_id and not (
+        isinstance(pipeline_id, str) and pipeline_access.pipeline_owned(pipeline_id, scope)
+    ):
+        return False
+    graph_id = body.get("graph_id")
+    if graph_id and not (
+        isinstance(graph_id, str) and pipeline_access.graph_owned(graph_id, scope)
+    ):
+        return False
+    return True
 
 
 class PipelineTransitionsHandler(SecureHandler):
@@ -710,30 +758,36 @@ class PipelineTransitionsHandler(SecureHandler):
         """Route GET requests."""
         cleaned = strip_version_prefix(path)
 
+        # GET /api/pipeline/transitions/:node_id/provenance
+        parts = cleaned.split("/")
+        if not (
+            len(parts) == 6
+            and parts[1] == "api"
+            and parts[2] == "pipeline"
+            and parts[3] == "transitions"
+            and parts[5] == "provenance"
+        ):
+            return None
+
+        scope, denial = pipeline_access.authorize_pipeline_request(
+            handler, pipeline_access.PIPELINE_READ
+        )
+        if scope is None:
+            return denial
+
         client_ip = get_client_ip(handler)
         if not _transition_limiter.is_allowed(client_ip):
             return error_response("Rate limit exceeded", 429)
 
-        # GET /api/pipeline/transitions/:node_id/provenance
-        parts = cleaned.split("/")
-        if (
-            len(parts) >= 5
-            and parts[1] == "api"
-            and parts[2] == "pipeline"
-            and parts[3] == "transitions"
-        ):
-            if len(parts) == 6 and parts[5] == "provenance":
-                node_id = parts[4]
-                is_valid, err = validate_path_segment(
-                    node_id,
-                    "node_id",
-                    SAFE_ID_PATTERN,
-                )
-                if not is_valid:
-                    return error_response(cast(str, err), 400)
-                return self._get_provenance(node_id)
-
-        return None
+        node_id = parts[4]
+        is_valid, err = validate_path_segment(
+            node_id,
+            "node_id",
+            SAFE_ID_PATTERN,
+        )
+        if not is_valid:
+            return error_response(cast(str, err), 400)
+        return self._get_provenance(node_id, get_node_store(scope.org_id))
 
     @handle_errors("pipeline transition")
     def handle_post(
@@ -744,6 +798,13 @@ class PipelineTransitionsHandler(SecureHandler):
     ) -> HandlerResult | None:
         """Route POST requests to transition sub-endpoints."""
         cleaned = strip_version_prefix(path)
+        permission = _POST_PERMISSIONS.get(cleaned)
+        if permission is None:
+            return None
+
+        scope, denial = pipeline_access.authorize_pipeline_request(handler, permission)
+        if scope is None:
+            return denial
 
         client_ip = get_client_ip(handler)
         if not _transition_limiter.is_allowed(client_ip):
@@ -752,17 +813,17 @@ class PipelineTransitionsHandler(SecureHandler):
         body = self.read_json_body(handler)
         if body is None:
             return error_response("Invalid JSON body", 400)
+        if not _references_owned(body, scope):
+            return record_not_found("Pipeline")
 
+        store = get_node_store(scope.org_id)
         if cleaned == "/api/pipeline/transitions/ideas-to-goals":
-            return self._ideas_to_goals(body, query_params)
+            return self._ideas_to_goals(body, query_params, store=store)
         if cleaned == "/api/pipeline/transitions/goals-to-tasks":
-            return self._goals_to_tasks(body, query_params)
+            return self._goals_to_tasks(body, query_params, store=store)
         if cleaned == "/api/pipeline/transitions/tasks-to-workflow":
-            return self._tasks_to_workflow(body)
-        if cleaned == "/api/pipeline/transitions/execute":
-            return self._execute(body)
-
-        return None
+            return self._tasks_to_workflow(body, store=store)
+        return self._execute(body)
 
     # ── Endpoint implementations ────────────────────────────────────────
 
@@ -770,6 +831,7 @@ class PipelineTransitionsHandler(SecureHandler):
         self,
         body: dict[str, Any],
         query_params: dict[str, Any] | None = None,
+        store: NodeStore | None = None,
     ) -> HandlerResult:
         ideas = body.get("ideas")
         if not ideas or not isinstance(ideas, list):
@@ -781,13 +843,14 @@ class PipelineTransitionsHandler(SecureHandler):
             return error_response(str(exc), 400)
 
         context = body.get("context")
-        result = _ideas_to_goals_logic(ideas, context, mode=mode)
+        result = _ideas_to_goals_logic(ideas, context, mode=mode, store=store)
         return json_response(self._serialize_result(result))
 
     def _goals_to_tasks(
         self,
         body: dict[str, Any],
         query_params: dict[str, Any] | None = None,
+        store: NodeStore | None = None,
     ) -> HandlerResult:
         goals = body.get("goals")
         if not goals or not isinstance(goals, list):
@@ -800,16 +863,18 @@ class PipelineTransitionsHandler(SecureHandler):
 
         constraints = body.get("constraints") or {}
         max_tasks = constraints.get("max_tasks")
-        result = _goals_to_tasks_logic(goals, max_tasks, mode=mode)
+        result = _goals_to_tasks_logic(goals, max_tasks, mode=mode, store=store)
         return json_response(self._serialize_result(result))
 
-    def _tasks_to_workflow(self, body: dict[str, Any]) -> HandlerResult:
+    def _tasks_to_workflow(
+        self, body: dict[str, Any], store: NodeStore | None = None
+    ) -> HandlerResult:
         tasks = body.get("tasks")
         if not tasks or not isinstance(tasks, list):
             return error_response("'tasks' must be a non-empty list", 400)
 
         execution_mode = body.get("execution_mode")
-        result = _tasks_to_workflow_logic(tasks, execution_mode)
+        result = _tasks_to_workflow_logic(tasks, execution_mode, store=store)
         return json_response(self._serialize_result(result))
 
     def _execute(self, body: dict[str, Any]) -> HandlerResult:
@@ -844,8 +909,8 @@ class PipelineTransitionsHandler(SecureHandler):
             }
         )
 
-    def _get_provenance(self, node_id: str) -> HandlerResult:
-        chain = _get_provenance_chain(node_id)
+    def _get_provenance(self, node_id: str, store: NodeStore | None = None) -> HandlerResult:
+        chain = _get_provenance_chain(node_id, store)
         if not chain:
             return error_response(f"Node '{node_id}' not found", 404)
 

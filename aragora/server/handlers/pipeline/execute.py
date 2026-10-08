@@ -6,6 +6,11 @@ pipeline, bridging the visual canvas editor to autonomous code execution.
 Endpoints:
 - POST /api/v1/pipeline/:pipeline_id/execute  Start execution
 - GET  /api/v1/pipeline/:pipeline_id/execute   Get execution status
+
+Both routes need an org-scoped caller (``canvas:read`` for status,
+``canvas:run`` to start) and answer the missing-pipeline 404 when the
+caller's org does not own the pipeline (see
+:func:`aragora.tenancy.pipeline_access.pipeline_owned`).
 """
 
 from __future__ import annotations
@@ -22,6 +27,8 @@ from aragora.pipeline.backbone_errors import (
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
 from aragora.server.versioning.compat import strip_version_prefix
+from aragora.tenancy import pipeline_access
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 from ..base import (
     SAFE_ID_PATTERN,
@@ -32,14 +39,16 @@ from ..base import (
     validate_path_segment,
     handle_errors,
 )
-from ..utils.decorators import require_permission
 from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
 _execute_limiter = RateLimiter(requests_per_minute=10)
 
-# Active pipeline executions: pipeline_id -> execution state
+_PIPELINE = "Pipeline"
+
+# Active pipeline executions: pipeline_id -> execution state, which records
+# the org_id and created_by of the caller that started it.
 _executions: dict[str, dict[str, Any]] = {}
 _execution_tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -77,25 +86,40 @@ class PipelineExecuteHandler(BaseHandler):
                 return pid
         return None
 
-    @require_permission("pipeline:read")
+    @staticmethod
+    def _check_permission(
+        handler: Any, permission: str
+    ) -> tuple[OrgScope, None] | tuple[None, HandlerResult]:
+        """``(scope, None)`` when the caller has an org and ``permission``, else ``(None, error)``."""
+        return pipeline_access.authorize_pipeline_request(handler, permission)
+
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """GET /api/v1/pipeline/:pipeline_id/execute — execution status."""
+        scope, denial = self._check_permission(handler, pipeline_access.PIPELINE_READ)
+        if scope is None:
+            return denial
+
         pipeline_id = self._extract_pipeline_id(path)
         if not pipeline_id:
             return error_response("Invalid pipeline ID", 400)
+        if not pipeline_access.pipeline_owned(pipeline_id, scope):
+            return record_not_found(_PIPELINE)
 
         execution = _executions.get(pipeline_id)
-        if not execution:
+        if not execution or execution.get("org_id") != scope.org_id:
             return json_response({"pipeline_id": pipeline_id, "status": "not_started"})
 
         return json_response(execution)
 
     @handle_errors("pipeline execute")
-    @require_permission("pipeline:execute")
     async def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """POST /api/v1/pipeline/:pipeline_id/execute — start execution."""
+        scope, denial = self._check_permission(handler, pipeline_access.PIPELINE_RUN)
+        if scope is None:
+            return denial
+
         client_ip = get_client_ip(handler)
         if not _execute_limiter.is_allowed(client_ip):
             return error_response("Rate limit exceeded", 429)
@@ -103,6 +127,8 @@ class PipelineExecuteHandler(BaseHandler):
         pipeline_id = self._extract_pipeline_id(path)
         if not pipeline_id:
             return error_response("Invalid pipeline ID", 400)
+        if not pipeline_access.pipeline_owned(pipeline_id, scope):
+            return record_not_found(_PIPELINE)
 
         # Check if already executing
         if pipeline_id in _execution_tasks:
@@ -134,6 +160,8 @@ class PipelineExecuteHandler(BaseHandler):
             "started_at": datetime.now(timezone.utc).isoformat(),
             "goal_count": len(goals),
             "dry_run": dry_run,
+            "org_id": scope.org_id,
+            "created_by": scope.user_id,
         }
 
         if dry_run:
@@ -155,6 +183,7 @@ class PipelineExecuteHandler(BaseHandler):
             build_decision_plan_from_orchestration,
             queue_plan_execution,
         )
+        from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 
         synthetic_nodes = [
             {
@@ -183,7 +212,14 @@ class PipelineExecuteHandler(BaseHandler):
                 plan,
                 execution_mode="workflow",
                 safety_mode=SafetyMode.INTERACTIVE,
+                org_id=scope.org_id,
+                created_by=scope.user_id,
             )
+        except ExecutionNotAuthorizedError as exc:
+            _executions.pop(pipeline_id, None)
+            _execution_tasks.pop(pipeline_id, None)
+            logger.warning("Pipeline execution of %s refused: %s", pipeline_id, exc.code)
+            return record_not_found(_PIPELINE)
         except BackbonePersistenceError as exc:
             _executions.pop(pipeline_id, None)
             _execution_tasks.pop(pipeline_id, None)
@@ -337,6 +373,8 @@ class PipelineExecuteHandler(BaseHandler):
                     plan,
                     execution_mode="workflow",
                     safety_mode=SafetyMode.INTERACTIVE,
+                    org_id=execution_state.get("org_id"),
+                    created_by=execution_state.get("created_by"),
                 )
                 execution_state.update(
                     {

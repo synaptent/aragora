@@ -21,8 +21,12 @@ from aragora.server.handlers.pipeline.transitions import (
     _goals_to_tasks_logic,
     _ideas_to_goals_logic,
     _node_store,
+    _org_node_stores,
     _tasks_to_workflow_logic,
+    get_node_store,
 )
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
 
 
 # ---------------------------------------------------------------------------
@@ -34,8 +38,10 @@ from aragora.server.handlers.pipeline.transitions import (
 def _clear_node_store():
     """Reset the in-memory node store between tests."""
     _node_store.clear()
+    _org_node_stores.clear()
     yield
     _node_store.clear()
+    _org_node_stores.clear()
 
 
 def _make_handler_ctx() -> dict[str, Any]:
@@ -390,7 +396,7 @@ class TestProvenance:
         assert chain == []
 
     def test_provenance_handler_endpoint(self):
-        _node_store["n1"] = {
+        get_node_store("test-org-001")["n1"] = {
             "id": "n1",
             "stage": "idea",
             "label": "Idea",
