@@ -29,7 +29,7 @@ class TestIntegrationManagementLogging:
             mock_client.return_value.__aenter__ = AsyncMock(
                 side_effect=ConnectionError("Connection failed")
             )
-            mock_client.return_value.__aexit__ = AsyncMock()
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with caplog.at_level(logging.WARNING):
                 result = await handler._check_slack_health(mock_workspace)
@@ -52,7 +52,7 @@ class TestIntegrationManagementLogging:
             mock_client.return_value.__aenter__ = AsyncMock(
                 side_effect=ConnectionError("Graph API error")
             )
-            mock_client.return_value.__aexit__ = AsyncMock()
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with caplog.at_level(logging.WARNING):
                 result = await handler._check_teams_health(mock_workspace)
@@ -74,7 +74,7 @@ class TestIntegrationManagementLogging:
                 mock_client.return_value.__aenter__ = AsyncMock(
                     side_effect=ConnectionError("Discord API error")
                 )
-                mock_client.return_value.__aexit__ = AsyncMock()
+                mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
                 with caplog.at_level(logging.WARNING):
                     result = await handler._check_discord_health()
@@ -165,14 +165,15 @@ class TestInvoicesLogging:
         # Check that the logging statements exist in the source code
         from pathlib import Path
 
-        invoices_path = Path("aragora/server/handlers/invoices.py")
+        invoices_path = Path("aragora/server/handlers/finance/invoices.py")
         assert invoices_path.exists(), "Invoices handler should exist"
 
         content = invoices_path.read_text()
 
-        # Verify logging statements for date parsing are present
-        assert 'logger.debug("Invalid start_date format' in content
-        assert 'logger.debug("Invalid end_date format' in content
+        # start_date/end_date are no longer silently logged: the shared helper
+        # rejects an invalid value with a 400 that names the parameter.
+        assert "parse_date_range_params(query_params)" in content
+        assert 'logger.debug("Invalid start_date format' not in content
         assert 'logger.debug("Invalid order_date format' in content
         assert 'logger.debug("Invalid expected_delivery format' in content
 

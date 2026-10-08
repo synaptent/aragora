@@ -697,7 +697,7 @@ async def audit_security_incident(
     description: str,
     actor: str | None = None,
     ip_address: str | None = None,
-    affected_resources: list[dict[str, str] | None] = None,
+    affected_resources: list[dict[str, str]] | None = None,
     **details: Any,
 ) -> AuditEntry:
     """

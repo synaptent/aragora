@@ -138,8 +138,8 @@ All OpenRouter agents require `OPENROUTER_API_KEY`.
 | `llama4-maverick` | meta-llama/llama-4-maverick | Llama 4 Maverick |
 | `llama4-scout` | meta-llama/llama-4-scout | Llama 4 Scout |
 | `mistral` | mistralai/mistral-large-2411 | Mistral Large |
-| `qwen` | qwen/qwen3-max | Qwen3 Max |
-| `qwen-max` | qwen/qwen3-max | Qwen3 Max |
+| `qwen` | qwen/qwen3.8-max | Qwen 3.8 Max |
+| `qwen-max` | qwen/qwen3.8-max | Qwen 3.8 Max |
 | `qwen-3.5` | qwen/qwen3.5-plus-02-15 | Qwen 3.5 Plus |
 | `yi` | 01-ai/yi-large | Yi Large |
 | `kimi` | moonshotai/kimi-k2-0905 | Kimi K2 |

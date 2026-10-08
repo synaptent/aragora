@@ -23,6 +23,7 @@ The Knowledge Mound is Aragora's unified knowledge storage system that accumulat
 - [Examples](#examples)
 - [Architecture](#architecture)
 - [Performance Tuning](#performance-tuning)
+- [Legacy facts without an organization (operator-only)](#legacy-facts-without-an-organization-operator-only)
 
 ---
 
@@ -798,6 +799,50 @@ the same request or task.
 - **Pull frequency**: Every 15-60 minutes
 - **Batch size**: 100-500 items
 - **Conflict resolution**: `highest_confidence` or `most_recent`
+
+---
+
+## Legacy facts without an organization (operator-only)
+
+Facts stored before facts carried an owning organization keep `org_id = NULL`. They are
+quarantined: no API route, CLI command, sync job or in-process reader returns, changes or
+deletes them, and no organization can claim them. The rows are kept, not deleted.
+
+Only an operator with direct access to the knowledge database may give such a fact an owner.
+This is never done over HTTP and never by an ordinary user.
+
+1. Record, outside Aragora, the ownership evidence for each fact ID: which organization owns
+   it and how that is known. A fact without recorded evidence stays unassigned.
+2. Back up the database (default `ARAGORA_DATA_DIR/knowledge.db`):
+
+   ```bash
+   sqlite3 "$ARAGORA_DATA_DIR/knowledge.db" ".backup 'knowledge.db.bak'"
+   ```
+
+3. List the unassigned IDs read-only:
+
+   ```bash
+   sqlite3 -readonly "$ARAGORA_DATA_DIR/knowledge.db" \
+     "SELECT id, workspace_id, substr(statement, 1, 80) FROM facts WHERE org_id IS NULL;"
+   ```
+
+4. Assign the evidenced facts by explicit ID and verify the returned count:
+
+   ```python
+   from pathlib import Path
+   from aragora.knowledge import FactStore
+
+   ids = ["fact-id-1", "fact-id-2"]  # only IDs with recorded ownership evidence
+   store = FactStore(db_path=Path("/path/to/knowledge.db"))
+   assigned = store.assign_org("org-id", fact_ids=ids)
+   assert assigned == len(ids), assigned
+   ```
+
+   A lower count means an ID was wrong, repeated or already owned: investigate before going on.
+
+Never call `assign_org` with `fact_ids=None`: that assigns every unassigned fact, which is bulk
+adoption and is not supported. Never guess an owner, and never adopt facts automatically or for
+the first writer. `assign_org` never changes a fact that already belongs to an organization.
 
 ---
 

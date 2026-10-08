@@ -92,6 +92,9 @@ from .evidence_adapter import (
     EvidenceSource,
     enrich_finding_with_evidence,
 )
+from .code_scanners import register_code_scanners
+
+register_code_scanners()
 
 __all__ = [
     # Compliance logging

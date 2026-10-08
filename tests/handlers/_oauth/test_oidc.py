@@ -81,7 +81,7 @@ async def _run_callback(handler, http_handler, query_params):
 # Mock _oauth_impl module
 # ---------------------------------------------------------------------------
 
-_IMPL_MODULE = "aragora.server.handlers._oauth_impl"
+_IMPL_MODULE = "aragora.server.handlers.oauth._oauth_impl"
 
 
 def _make_impl(**overrides: Any) -> ModuleType:

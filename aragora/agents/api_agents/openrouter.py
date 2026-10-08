@@ -34,6 +34,7 @@ from aragora.agents.api_agents.rate_limiter import get_openrouter_limiter
 from aragora.agents.registry import AgentRegistry
 from aragora.config import DB_TIMEOUT_SECONDS
 from aragora.exceptions import ExternalServiceError
+from aragora.models import CATALOG
 from aragora.models.compat import strip_sampling_params
 from aragora.observability.metrics.agents import (
     ErrorType,
@@ -46,6 +47,8 @@ from aragora.observability.metrics.agents import (
 logger = logging.getLogger(__name__)
 
 DEEPSEEK_V4_PRO_MODEL = "deepseek/deepseek-v4-pro"
+KIMI_K3_MODEL = CATALOG["kimi-k3"].openrouter_id
+QWEN_3_8_MAX_MODEL = CATALOG["qwen3.8-max"].openrouter_id
 # OpenRouter Fusion: a multi-model council+judge endpoint (panel of models +
 # synthesis). It is itself a *blend*, so it must never be treated as an
 # independent quorum family (see aragora.swarm.quorum_evidence) -- it is a single
@@ -61,6 +64,7 @@ FUSION_MODEL = "openrouter/fusion"
 # Maps primary model -> fallback model (used after max_retries exhausted)
 OPENROUTER_FALLBACK_MODELS: dict[str, str] = {
     # Qwen models -> DeepSeek
+    QWEN_3_8_MAX_MODEL: DEEPSEEK_V4_PRO_MODEL,
     "qwen/qwen-2.5-72b-instruct": DEEPSEEK_V4_PRO_MODEL,
     "qwen/qwen3-235b-a22b": DEEPSEEK_V4_PRO_MODEL,
     "qwen/qwen3-max": DEEPSEEK_V4_PRO_MODEL,
@@ -77,12 +81,23 @@ OPENROUTER_FALLBACK_MODELS: dict[str, str] = {
     "deepseek/deepseek-r1": "openai/gpt-5.5",
     "deepseek/deepseek-reasoner": "openai/gpt-5.5",
     # Kimi -> Claude Opus 5
+    KIMI_K3_MODEL: "anthropic/claude-opus-5",
     "moonshotai/kimi-k2.7-code": "anthropic/claude-opus-5",
     "moonshotai/kimi-k2.6": "anthropic/claude-opus-5",
     "moonshotai/kimi-k2.5": "anthropic/claude-opus-5",
     "moonshotai/kimi-k2-0905": "anthropic/claude-opus-5",
     "moonshotai/kimi-k2-thinking": "anthropic/claude-opus-5",
     "moonshot/moonshot-v1-128k": "anthropic/claude-opus-5",
+    # Retired OpenRouter defaults -> live replacements. The replacement rows
+    # themselves retain a separate frontier fallback for provider outages.
+    "perplexity/sonar-reasoning": "perplexity/sonar-reasoning-pro",
+    "perplexity/sonar-reasoning-pro": "openai/gpt-5.5",
+    "cohere/command-r-plus": "cohere/command-a",
+    "cohere/command-a": "openai/gpt-5.5",
+    "ai21/jamba-1.6-large": "ai21/jamba-large-1.7",
+    "ai21/jamba-large-1.7": "openai/gpt-5.5",
+    "x-ai/grok-4": "x-ai/grok-4.5",
+    "x-ai/grok-4.5": "openai/gpt-5.5",
     # Mistral -> GPT-5.5
     "mistralai/mistral-large-2411": "openai/gpt-5.5",
     "mistralai/mistral-large-2512": "openai/gpt-5.5",
@@ -114,9 +129,13 @@ class OpenRouterAgent(APIAgent):
     - meta-llama/llama-4-scout (Llama 4 Scout 109B MoE)
     - meta-llama/llama-3.3-70b-instruct
     - mistralai/mistral-large-2512 (Mistral Large 3)
-    - qwen/qwen3.7-max (Qwen3.7 Max)
+    - qwen/qwen3.8-max (Qwen 3.8 Max)
+    - qwen/qwen3.7-max (Qwen 3.7 Max compatibility)
     - qwen/qwen3.5-plus-02-15 (Qwen3.5 Plus)
-    - moonshotai/kimi-k2.7-code (Kimi K2.7 Code)
+    - moonshotai/kimi-k3 (Kimi K3)
+    - perplexity/sonar-reasoning-pro (Sonar Reasoning Pro)
+    - cohere/command-a (Command A)
+    - ai21/jamba-large-1.7 (Jamba Large 1.7)
     - google/gemini-3.1-pro-preview (Gemini 3.1 Pro)
     - anthropic/claude-opus-5
     - openai/gpt-5.5
@@ -713,19 +732,19 @@ class MistralAgent(OpenRouterAgent):
 
 @AgentRegistry.register(
     "qwen",
-    default_model="qwen/qwen3.7-max",
+    default_model=QWEN_3_8_MAX_MODEL,
     agent_type="API (OpenRouter)",
     env_vars="OPENROUTER_API_KEY",
-    description="Qwen3.7 Max - Alibaba's frontier model, 256K context, trillion params",
+    description="Qwen 3.8 Max - Alibaba's frontier model with 1M context",
 )
 class QwenAgent(OpenRouterAgent):
-    """Alibaba Qwen3.7 Max via OpenRouter - frontier model with 256K context."""
+    """Alibaba Qwen 3.8 Max via OpenRouter."""
 
     def __init__(
         self,
         name: str = "qwen",
         role: AgentRole = "analyst",
-        model: str = "qwen/qwen3.7-max",
+        model: str = QWEN_3_8_MAX_MODEL,
         system_prompt: str | None = None,
     ):
         super().__init__(
@@ -739,19 +758,19 @@ class QwenAgent(OpenRouterAgent):
 
 @AgentRegistry.register(
     "qwen-max",
-    default_model="qwen/qwen3.7-max",
+    default_model=QWEN_3_8_MAX_MODEL,
     agent_type="API (OpenRouter)",
     env_vars="OPENROUTER_API_KEY",
-    description="Qwen3.7 Max - Alibaba's frontier model, 256K context, trillion params",
+    description="Qwen 3.8 Max - Alibaba's frontier model with 1M context",
 )
 class QwenMaxAgent(OpenRouterAgent):
-    """Alibaba Qwen3.7 Max via OpenRouter - trillion-parameter frontier model."""
+    """Alibaba Qwen 3.8 Max via OpenRouter."""
 
     def __init__(
         self,
         name: str = "qwen-max",
         role: AgentRole = "analyst",
-        model: str = "qwen/qwen3.7-max",
+        model: str = QWEN_3_8_MAX_MODEL,
         system_prompt: str | None = None,
     ):
         super().__init__(
@@ -817,19 +836,19 @@ class YiAgent(OpenRouterAgent):
 
 @AgentRegistry.register(
     "kimi",
-    default_model="moonshotai/kimi-k2.7-code",
+    default_model=KIMI_K3_MODEL,
     agent_type="API (OpenRouter)",
     env_vars="OPENROUTER_API_KEY",
-    description="Kimi K2.7 Code - Moonshot AI's latest frontier Kimi model on OpenRouter",
+    description="Kimi K3 - Moonshot AI's frontier multimodal reasoning model on OpenRouter",
 )
-class KimiK2Agent(OpenRouterAgent):
-    """Moonshot AI Kimi K2.7 Code via OpenRouter - latest frontier Kimi model."""
+class KimiK3Agent(OpenRouterAgent):
+    """Moonshot AI Kimi K3 via OpenRouter."""
 
     def __init__(
         self,
         name: str = "kimi",
         role: AgentRole = "analyst",
-        model: str = "moonshotai/kimi-k2.7-code",
+        model: str = KIMI_K3_MODEL,
         system_prompt: str | None = None,
     ):
         super().__init__(
@@ -839,6 +858,10 @@ class KimiK2Agent(OpenRouterAgent):
             system_prompt=system_prompt,
         )
         self.agent_type = "kimi"
+
+
+# Public compatibility for callers importing the pre-K3 class name.
+KimiK2Agent = KimiK3Agent
 
 
 @AgentRegistry.register(
@@ -1044,19 +1067,19 @@ class Llama4ScoutAgent(OpenRouterAgent):
 
 @AgentRegistry.register(
     "sonar",
-    default_model="perplexity/sonar-reasoning",
+    default_model="perplexity/sonar-reasoning-pro",
     agent_type="API (OpenRouter)",
     env_vars="OPENROUTER_API_KEY",
-    description="Perplexity Sonar Reasoning - DeepSeek R1 with live web search",
+    description="Perplexity Sonar Reasoning Pro - reasoning with live web search",
 )
 class SonarAgent(OpenRouterAgent):
-    """Perplexity Sonar Reasoning via OpenRouter - chain-of-thought with web search."""
+    """Perplexity Sonar Reasoning Pro via OpenRouter with live web search."""
 
     def __init__(
         self,
         name: str = "sonar",
         role: AgentRole = "analyst",
-        model: str = "perplexity/sonar-reasoning",
+        model: str = "perplexity/sonar-reasoning-pro",
         system_prompt: str | None = None,
     ):
         super().__init__(
@@ -1073,19 +1096,19 @@ class SonarAgent(OpenRouterAgent):
 
 @AgentRegistry.register(
     "command-r",
-    default_model="cohere/command-r-plus",
+    default_model="cohere/command-a",
     agent_type="API (OpenRouter)",
     env_vars="OPENROUTER_API_KEY",
-    description="Cohere Command R+ - 104B, best-in-class RAG and tool use",
+    description="Cohere Command A - tool use, RAG, and enterprise agents",
 )
 class CommandRAgent(OpenRouterAgent):
-    """Cohere Command R+ via OpenRouter - 104B model optimized for RAG."""
+    """Cohere Command A via OpenRouter - optimized for tool use and RAG."""
 
     def __init__(
         self,
         name: str = "command-r",
         role: AgentRole = "analyst",
-        model: str = "cohere/command-r-plus",
+        model: str = "cohere/command-a",
         system_prompt: str | None = None,
     ):
         super().__init__(
@@ -1102,19 +1125,19 @@ class CommandRAgent(OpenRouterAgent):
 
 @AgentRegistry.register(
     "jamba",
-    default_model="ai21/jamba-1.6-large",
+    default_model="ai21/jamba-large-1.7",
     agent_type="API (OpenRouter)",
     env_vars="OPENROUTER_API_KEY",
-    description="AI21 Jamba Large - SSM-Transformer hybrid, 256K context, 2.5x faster",
+    description="AI21 Jamba Large 1.7 - SSM-Transformer hybrid, 256K context",
 )
 class JambaAgent(OpenRouterAgent):
-    """AI21 Jamba Large via OpenRouter - hybrid architecture with 256K context."""
+    """AI21 Jamba Large 1.7 via OpenRouter - hybrid architecture with 256K context."""
 
     def __init__(
         self,
         name: str = "jamba",
         role: AgentRole = "analyst",
-        model: str = "ai21/jamba-1.6-large",
+        model: str = "ai21/jamba-large-1.7",
         system_prompt: str | None = None,
     ):
         super().__init__(
@@ -1171,6 +1194,7 @@ __all__ = [
     "QwenMaxAgent",
     "Qwen35PlusAgent",
     "YiAgent",
+    "KimiK3Agent",
     "KimiK2Agent",
     "KimiThinkingAgent",
     "KimiLegacyAgent",

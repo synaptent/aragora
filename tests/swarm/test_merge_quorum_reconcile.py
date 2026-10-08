@@ -4,6 +4,8 @@ Covers:
 
 - ``parse_iso8601`` (Z form, naive, empty, invalid).
 - ``counted_reviewer_ids`` aggregation (distinct, ignores non-counting).
+- ``counted_reviewer_signal_families`` provenance (signal-only, ``None`` fallback).
+- ``_signal_families_from_lint`` (lint ``reviewer_signals`` -> provenance tuple).
 - ``plan_rerun`` — every safety guard and the happy path.
 - ``summarize_settlement`` — every ``next_action`` branch.
 """
@@ -13,15 +15,18 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from aragora.swarm.merge_quorum_io import (
+    _SIGNAL_IDENTITY_BLOCKERS,
     _could_count,
     _evidence_lint_args,
     _looks_like_shadow,
+    _signal_families_from_lint,
 )
 from aragora.swarm.merge_quorum_reconcile import (
     EvidenceComment,
     PacketClassification,
     QuorumRun,
     counted_reviewer_ids,
+    counted_reviewer_signal_families,
     guard_rerun_classification_divergence,
     parse_ci_packet_classification,
     parse_iso8601,
@@ -79,6 +84,95 @@ class TestCountedReviewerIds:
 
     def test_empty(self) -> None:
         assert counted_reviewer_ids([]) == []
+
+
+class TestCountedReviewerSignalFamilies:
+    def test_signal_backed_families_counted(self) -> None:
+        comments = [
+            EvidenceComment(
+                created_at=_ts(-10),
+                would_count=True,
+                reviewer_id="claude",
+                reviewer_signals=("claude",),
+            ),
+            EvidenceComment(
+                created_at=_ts(-5),
+                would_count=True,
+                reviewer_id="openai",
+                reviewer_signals=("openai",),
+            ),
+        ]
+        assert counted_reviewer_signal_families(comments) == {"claude", "openai"}
+
+    def test_dogfood_only_comment_contributes_no_signal_family(self) -> None:
+        # Explicit empty tuple = affirmatively no genuine reviewer signal:
+        # the counted identity must not leak into the signal-only set.
+        dogfood_only = EvidenceComment(
+            created_at=_ts(-10),
+            would_count=True,
+            reviewer_id="claude",
+            is_dogfood=True,
+            reviewer_signals=(),
+        )
+        assert counted_reviewer_signal_families([dogfood_only]) == set()
+
+    def test_legacy_none_falls_back_to_reviewer_id(self) -> None:
+        # Provenance-unaware records (hand-built/legacy) keep prior behavior.
+        legacy = EvidenceComment(created_at=_ts(-10), would_count=True, reviewer_id="claude")
+        assert legacy.reviewer_signals is None
+        assert counted_reviewer_signal_families([legacy]) == {"claude"}
+
+    def test_non_counting_comment_never_contributes(self) -> None:
+        rejected = EvidenceComment(
+            created_at=_ts(-10),
+            would_count=False,
+            reviewer_id="claude",
+            reviewer_signals=("claude",),
+        )
+        assert counted_reviewer_signal_families([rejected]) == set()
+
+
+class TestSignalFamiliesFromLint:
+    def test_blockers_pin_review_queue_identity_count_blockers(self) -> None:
+        # The swarm layer cannot import the CLI module (upward edge + circular
+        # import via quorum_evidence), so the blocker set is duplicated; this
+        # pins the copy against the canonical CLI set so they cannot drift.
+        from aragora.cli.commands.review_queue import IDENTITY_COUNT_BLOCKERS
+
+        assert _SIGNAL_IDENTITY_BLOCKERS == IDENTITY_COUNT_BLOCKERS
+
+    def test_signal_families_subset_of_counted(self) -> None:
+        lint = {
+            "counted_reviewer_ids": ["claude"],
+            "reviewer_signals": [
+                {"model_family": "claude", "identity_problems": []},
+                # Not in counted ids -> excluded (e.g. advisory-only family).
+                {"model_family": "gemini", "identity_problems": []},
+            ],
+        }
+        assert _signal_families_from_lint(lint) == ("claude",)
+
+    def test_dogfood_evidence_never_contributes(self) -> None:
+        # A dogfood-only lint result has a counted id but NO reviewer_signals
+        # item: provenance is affirmatively empty, not the counted id.
+        lint = {
+            "counted_reviewer_ids": ["claude"],
+            "reviewer_signals": [],
+            "dogfood_evidence": [{"model_family": "claude", "identity_problems": []}],
+        }
+        assert _signal_families_from_lint(lint) == ()
+
+    def test_identity_blockers_exclude_item(self) -> None:
+        lint = {
+            "counted_reviewer_ids": ["claude"],
+            "reviewer_signals": [
+                {
+                    "model_family": "claude",
+                    "identity_problems": ["heading_model_family_conflict"],
+                }
+            ],
+        }
+        assert _signal_families_from_lint(lint) == ()
 
 
 class TestPlanRerun:

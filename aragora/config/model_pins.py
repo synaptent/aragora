@@ -81,9 +81,11 @@ GPT54_VIA_OPENROUTER: Final = GPT55_VIA_OPENROUTER
 GEMINI_31_PRO_DIRECT: Final = "gemini-3.1-pro"
 GEMINI_31_PRO_VIA_OPENROUTER: Final = "google/gemini-3.1-pro-preview"
 
-# xAI Grok 4 (latest) - contrarian / contrarian-by-design agent
+# xAI Grok 4.5 - contrarian / contrarian-by-design agent. The OpenRouter path
+# stays on 4.5 until Grok 4.6 completes its repository soak; the direct-provider
+# ``grok-4-latest`` alias remains unchanged.
 GROK_4_DIRECT: Final = "grok-4-latest"
-GROK_4_VIA_OPENROUTER: Final = "x-ai/grok-4"
+GROK_4_VIA_OPENROUTER: Final = "x-ai/grok-4.5"
 
 # Mistral Large (latest) - European provider diversity
 MISTRAL_LARGE_DIRECT: Final = "mistral-large-2512"

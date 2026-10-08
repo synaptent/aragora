@@ -178,3 +178,13 @@ __all__ = [
     "TestPlan",
     "TestCase",
 ]
+
+# The core decision router builds decision-integrity payloads through this registration.
+from aragora.core.decision_route_hooks import (
+    register_decision_integrity_builder as _register_decision_integrity_builder,
+)
+from aragora.pipeline.decision_integrity_utils import (
+    build_decision_integrity_payload as _build_decision_integrity_payload,
+)
+
+_register_decision_integrity_builder(_build_decision_integrity_payload)

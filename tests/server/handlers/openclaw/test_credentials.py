@@ -255,7 +255,7 @@ class TestGlobalCredentialRotationLimiter:
 
         # Inject mock shim
         original_modules = sys.modules.copy()
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = mock_shim
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = mock_shim
 
         try:
             limiter = _get_credential_rotation_limiter()

@@ -9,6 +9,7 @@ to skip a maintained exact-name governance test.
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 import sys
 from types import ModuleType
@@ -240,6 +241,10 @@ def test_classifier_and_merge_train_constants_match() -> None:
         tier4_merge_train.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
         == review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
     )
+    successor_builder = "scripts/build_contract_drift_historical_backfill.py"
+    assert successor_builder in review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert review_queue._classify_model_review_tier([successor_builder])[0] == 4
+    assert tier4_merge_train.matches_serialized_path(successor_builder) == successor_builder
 
 
 @pytest.mark.parametrize("path", EXPECTED_AUTHORITY_PREFIXES)
@@ -310,9 +315,38 @@ def test_executable_authority_dependencies_are_tier4(path: str) -> None:
 
 def test_quorum_evidence_module_imports_do_not_resolve_below_tier4(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    ref = _git_text(repo_root, "rev-parse", "HEAD").strip()
+    tree = _git_text(repo_root, "write-tree").strip()
+    commit_env = {
+        **os.environ,
+        "GIT_AUTHOR_EMAIL": "cdg-test@example.invalid",
+        "GIT_AUTHOR_NAME": "cdg-test",
+        "GIT_COMMITTER_EMAIL": "cdg-test@example.invalid",
+        "GIT_COMMITTER_NAME": "cdg-test",
+    }
+    ref = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "commit-tree",
+            tree,
+            "-p",
+            _git_text(repo_root, "rev-parse", "HEAD").strip(),
+        ],
+        input="temporary complete authority closure fixture\n",
+        capture_output=True,
+        check=True,
+        text=True,
+        env=commit_env,
+    ).stdout.strip()
+    monkeypatch.setattr(
+        generate_contract_drift_inventory,
+        "_resolve_full_commit",
+        lambda _repo_root, candidate: candidate,
+    )
     manifest_scratch = tmp_path / "manifest-scratch"
     manifest_scratch.mkdir()
     manifest = generate_contract_drift_inventory.build_authority_manifest(

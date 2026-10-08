@@ -325,6 +325,26 @@ DECISION_RECEIPT_SCHEMA: dict[str, Any] = {
             "pattern": "^[a-f0-9]{64}$",
             "description": "Content-addressable hash of the entire receipt",
         },
+        "schema_version": {
+            "type": "string",
+            "enum": ["1.0", "1.1", "1.2", "1.3"],
+            "description": "DecisionReceipt schema version",
+        },
+        "evidence_references": {
+            "type": "array",
+            "items": {"type": "object", "additionalProperties": True},
+            "description": "Portable commit-addressed evidence links for the decision",
+        },
+        "decision_payload": {
+            "type": ["object", "null"],
+            "description": "Normalized selected goals bound by decision_payload_hash",
+            "additionalProperties": True,
+        },
+        "decision_payload_hash": {
+            "type": ["string", "null"],
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 binding normalized goals and sorted evidence references",
+        },
         "config_used": {
             "type": "object",
             "description": "Configuration parameters used for validation",

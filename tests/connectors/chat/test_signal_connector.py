@@ -170,19 +170,18 @@ class TestSignalConnectorCircuitBreaker:
         mock_response.text = "Server error"
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            post_mock = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = post_mock
 
-            # Trigger multiple failures to open circuit breaker
+            # HTTP 500 is reported as a failed send (never raised) and counted
+            # against the breaker; once it opens, the remaining calls short-circuit.
             for _ in range(10):
-                try:
-                    await connector.send_message("+9876543210", "test")
-                except Exception:
-                    pass
-
-            # Circuit breaker should now be open
-            result = await connector.send_message("+9876543210", "test")
-            # Either raises or returns failure
-            if result:
+                result = await connector.send_message("+9876543210", "test")
                 assert result.success is False
+            assert post_mock.await_count == connector._circuit_breaker_threshold
+
+            # Circuit breaker is now open: the call fails fast without an HTTP request
+            result = await connector.send_message("+9876543210", "test")
+            assert result.success is False
+            assert "Circuit breaker open for signal" in result.error
+            assert post_mock.await_count == connector._circuit_breaker_threshold

@@ -13,9 +13,9 @@ from collections.abc import Callable
 
 from aragora.debate.hooks import HookManager
 from aragora.events.context import get_current_task_id, streaming_task_context
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 from aragora.server.stream.emitter import SyncEventEmitter
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 
 logger = logging.getLogger(__name__)
 

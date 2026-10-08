@@ -34,7 +34,7 @@ from aragora.server.stream.server_base import (
 )
 from aragora.server.stream.emitter import SyncEventEmitter, TokenBucket
 from aragora.server.stream.state_manager import LoopInstance
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 
 
 # ===========================================================================

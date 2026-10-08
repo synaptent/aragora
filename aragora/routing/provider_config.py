@@ -203,14 +203,6 @@ _HAND_ROWS: dict[str, ProviderPricing] = {
         output_cost_per_1k=0.0025,
         context_window=1_000_000,
     ),
-    # https://openrouter.ai/x-ai/grok-4 (2026-07-09)
-    "x-ai/grok-4": ProviderPricing(
-        provider_name="openrouter",
-        model_name="x-ai/grok-4",
-        input_cost_per_1k=0.00125,
-        output_cost_per_1k=0.0025,
-        context_window=1_000_000,
-    ),
 }
 
 # Compat export for from-importers. Rebound (never mutated) to a fresh

@@ -203,9 +203,10 @@ class OutcomeTracker:
             conn.commit()
 
         logger.info(
-            f"Recorded outcome for {outcome.debate_id}: "
-            f"success={outcome.implementation_succeeded}, "
-            f"confidence={outcome.consensus_confidence:.2f}"
+            "Recorded outcome for %s: success=%s, confidence=%.2f",
+            outcome.debate_id,
+            outcome.implementation_succeeded,
+            outcome.consensus_confidence,
         )
 
     def get_outcome(self, debate_id: str) -> ConsensusOutcome | None:

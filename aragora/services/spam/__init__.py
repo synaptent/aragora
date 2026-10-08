@@ -1,5 +1,8 @@
 """
-ML-Enhanced Spam Classification Service.
+ML-Enhanced Spam Classification Service (compatibility re-export).
+
+The implementation moved to :mod:`aragora.moderation.spam`; every name below is
+the identical object.
 
 Provides machine learning-based spam detection with online learning
 from user feedback. Falls back to rule-based classification when
@@ -20,7 +23,7 @@ Features:
 - Integration with EmailPrioritizer for inbox scoring
 
 Usage:
-    from aragora.services.spam import SpamClassifier
+    from aragora.moderation.spam import SpamClassifier
 
     classifier = SpamClassifier()
     await classifier.initialize()
@@ -45,7 +48,7 @@ Usage:
 """
 
 # Models and data types
-from aragora.services.spam.models import (
+from aragora.moderation.spam.models import (
     EmailFeatures,
     SpamCategory,
     SpamClassificationResult,
@@ -54,7 +57,7 @@ from aragora.services.spam.models import (
 )
 
 # Pattern constants
-from aragora.services.spam.patterns import (
+from aragora.moderation.spam.patterns import (
     DANGEROUS_EXTENSIONS,
     FREE_EMAIL_PROVIDERS,
     KNOWN_SPAM_DOMAINS,
@@ -68,13 +71,13 @@ from aragora.services.spam.patterns import (
 )
 
 # Feature extraction
-from aragora.services.spam.features import SpamFeatures
+from aragora.moderation.spam.features import SpamFeatures
 
 # ML model
-from aragora.services.spam.model import NaiveBayesClassifier
+from aragora.moderation.spam.model import NaiveBayesClassifier
 
 # Classifier and convenience functions
-from aragora.services.spam.classifier import (
+from aragora.moderation.spam.classifier import (
     SpamClassifier,
     classify_email,
     classify_email_spam,

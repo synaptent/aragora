@@ -193,7 +193,7 @@ class TranscriptionWorker:
                 },
             )
 
-            logger.info(f"[{self.worker_id}] Completed job {job.id} in {duration:.1f}s")
+            logger.info("[%s] Completed job %s in %.1fs", self.worker_id, job.id, duration)
             self._emit_transcription_event(
                 "TRANSCRIPTION_COMPLETE",
                 {

@@ -185,11 +185,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"Error: Could not load Constitution from {constitution_path}")
         return 1
 
-    if verifier.verify_signature():
+    verified = verifier.constitution
+    if verified is not None and verifier.verify_signature():
         print("Constitution signature is VALID")
-        print(f"  Version: {verifier.constitution.version}")
-        print(f"  Rules: {len(verifier.constitution.rules)}")
-        print(f"  Signed at: {verifier.constitution.signed_at}")
+        print(f"  Version: {verified.version}")
+        print(f"  Rules: {len(verified.rules)}")
+        print(f"  Signed at: {verified.signed_at}")
         return 0
     else:
         print("Constitution signature is INVALID or missing")
@@ -250,8 +251,8 @@ def cmd_show(args: argparse.Namespace) -> int:
         print()
 
     print("PROTECTED FILES:")
-    for f in constitution.protected_files:
-        print(f"  - {f}")
+    for protected_file in constitution.protected_files:
+        print(f"  - {protected_file}")
     print()
 
     print("PROTECTED FUNCTIONS:")

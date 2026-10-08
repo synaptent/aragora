@@ -1,7 +1,7 @@
 # Test Skip Marker Audit
 
-**Generated**: 2026-07-23
-**Total Skip Markers**: 83
+**Generated**: 2026-10-08
+**Total Skip Markers**: 98
 
 ---
 
@@ -9,21 +9,21 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| integration_dependency | 29 | 34.9% |
-| missing_feature | 17 | 20.5% |
-| uncategorized | 17 | 20.5% |
-| optional_dependency | 9 | 10.8% |
-| platform_specific | 6 | 7.2% |
-| performance | 4 | 4.8% |
-| known_bug | 1 | 1.2% |
+| integration_dependency | 28 | 28.6% |
+| uncategorized | 23 | 23.5% |
+| missing_feature | 21 | 21.4% |
+| optional_dependency | 11 | 11.2% |
+| platform_specific | 9 | 9.2% |
+| performance | 4 | 4.1% |
+| known_bug | 2 | 2.0% |
 
 ## Summary by Marker Type
 
 | Type | Count |
 |------|-------|
-| `pytest.skip` | 39 |
-| `skipif` | 37 |
-| `pytest.importorskip` | 5 |
+| `pytest.skip` | 48 |
+| `skipif` | 42 |
+| `pytest.importorskip` | 6 |
 | `skip` | 2 |
 
 ## High-Skip Files (Top 10)
@@ -31,15 +31,15 @@
 | File | Skip Count |
 |------|------------|
 | `tests/integration/test_knowledge_visibility_sharing.py` | 6 |
-| `tests/swarm/test_quorum_evidence.py` | 4 |
+| `tests/swarm/test_quorum_evidence.py` | 5 |
+| `tests/debate/test_voting_engine.py` | 5 |
 | `tests/plugins/test_plugin_sandbox.py` | 4 |
-| `tests/debate/test_voting_engine.py` | 3 |
-| `tests/ranking/test_calibration_engine.py` | 2 |
+| `tests/debate/test_convergence_root.py` | 3 |
 | `tests/inbox/test_inbox_receipt_convergence.py` | 2 |
+| `tests/server/middleware/rate_limit/test_distributed_integration.py` | 2 |
+| `tests/server/startup/test_validation.py` | 2 |
 | `tests/triage/test_auto_handle_calibration.py` | 2 |
-| `tests/storage/test_integration_store.py` | 2 |
-| `tests/verification/test_proofs_root.py` | 2 |
-| `tests/performance/test_load.py` | 2 |
+| `tests/cli/test_receipt_output_errors.py` | 2 |
 
 ---
 
@@ -71,10 +71,7 @@
 
 ## Skip Count Baseline
 
-Current baseline: **83** skips
-
-This regeneration lowers the baseline from 84 to 83 after replacing the
-vacuous provider-config catalog skip with a fail-closed coverage assertion.
+Current baseline: **98** skips
 
 CI will warn if skip count exceeds this baseline.
 Update `tests/.skip_baseline` when intentionally adding skips.

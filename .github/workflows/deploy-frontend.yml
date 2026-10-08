@@ -67,7 +67,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -165,7 +165,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.skip-check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -308,7 +308,7 @@ jobs:
       # image definition. NEXT_PUBLIC_* is deliberately left at the Dockerfile's
       # defaults -- see the note on the build-args-free step below.
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.frontend

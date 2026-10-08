@@ -32,7 +32,7 @@ def _restore_sys_argv():
 
 def _import_dispatch_main():
     """Import ``aragora.__main__.main`` fresh so patching is deterministic."""
-    import aragora.__main__ as pkg_main  # noqa: WPS433 - intentional local import
+    import aragora.__main__ as pkg_main  # intentional local import
 
     return pkg_main
 

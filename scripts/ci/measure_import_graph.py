@@ -37,6 +37,7 @@ Usage
     python3 scripts/ci/measure_import_graph.py            # JSON: the 3 metrics
     python3 scripts/ci/measure_import_graph.py --json     # (same; explicit)
     python3 scripts/ci/measure_import_graph.py --check    # cycles ratchet
+    python3 scripts/ci/measure_import_graph.py --list-cycles  # JSON: the mutual pairs
     python3 scripts/ci/measure_import_graph.py --freeze --adopt   # write baseline
     python3 scripts/ci/measure_import_graph.py --freeze   # shrink-only re-freeze
 
@@ -105,15 +106,21 @@ def build_aragora_graph(exclude_type_checking: bool = True):
 # --- Pure metric functions --------------------------------------------------
 
 
-def count_mutual_cycles(graph) -> int:
-    """Unordered pairs of modules that directly import each other."""
+def list_mutual_cycles(graph) -> list[list[str]]:
+    """Sorted unordered pairs ``[a, b]`` (``a < b``) of modules that directly
+    import each other."""
     edges: set[tuple[str, str]] = set()
     for module in graph.modules:
         for imported in graph.find_modules_directly_imported_by(module):
             if module != imported:
                 edges.add((module, imported))
     pairs = {tuple(sorted((a, b))) for (a, b) in edges if (b, a) in edges}
-    return len(pairs)
+    return [list(pair) for pair in sorted(pairs)]
+
+
+def count_mutual_cycles(graph) -> int:
+    """Unordered pairs of modules that directly import each other."""
+    return len(list_mutual_cycles(graph))
 
 
 def count_server_imported_by(graph, server_package: str = SERVER_PACKAGE) -> int:
@@ -210,6 +217,7 @@ def _git_head() -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        usage="%(prog)s [options]",
         description=(
             "Measure the aragora import graph (mutual cycles, server imported-by, "
             "handlers flat-root) with TYPE_CHECKING imports excluded, and ratchet "
@@ -251,7 +259,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit a machine-readable JSON summary (the default output is already JSON).",
     )
+    parser.add_argument(
+        "--list-cycles",
+        action="store_true",
+        help=(
+            "Print the mutual import cycles themselves as JSON "
+            "({'cycles': [[a, b], ...]}, sorted pairs) instead of the counts."
+        ),
+    )
     return parser
+
+
+def _run_list_cycles() -> int:
+    cycles = list_mutual_cycles(build_aragora_graph())
+    print(json.dumps({"cycles": cycles, "exclude_type_checking_imports": True}, indent=2))
+    return 0
 
 
 def _run_check(args: argparse.Namespace) -> int:
@@ -303,6 +325,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_freeze(args)
         if args.check:
             return _run_check(args)
+        if args.list_cycles:
+            return _run_list_cycles()
         print(json.dumps(measure_all(), indent=2))
     except MeasureError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

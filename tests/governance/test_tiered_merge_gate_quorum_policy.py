@@ -321,3 +321,89 @@ def test_review_queue_reexports_canonical_jurisdiction_sets():
 
     assert rq.WESTERN_FAMILIES is WESTERN_FAMILIES
     assert rq.WESTERN_FRONTIER_FAMILIES is WESTERN_FRONTIER_FAMILIES
+
+
+# --- VAL-P4A-024: signal-only western-frontier advice in the read-only diagnostic
+
+
+def test_diagnostic_dogfood_only_identity_does_not_advance_frontier_advice(monkeypatch):
+    # VAL-P4A-024: a dogfood-only record attributed to a western-frontier family
+    # (claude/openai) may satisfy the separate dogfood requirement, but it
+    # carries NO genuine model-review signal, so the read-only settlement
+    # diagnostic must keep asking for a western-frontier review signal instead
+    # of reporting the frontier requirement as met. Mirrors the live gate's
+    # signal-only derivation (review_queue._build_model_review_quorum computes
+    # has_western_frontier_signal from reviewer signals with an EMPTY dogfood
+    # list: "The WF requirement must be met by a model-review signal, not by
+    # dogfood-only metadata").
+    from aragora.swarm.merge_quorum_reconcile import EvidenceComment, summarize_settlement
+
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "1")
+    for tier in (1, 2):
+        for family in ("claude", "openai"):
+            dogfood_only = [
+                EvidenceComment(
+                    created_at="2026-07-15T00:00:00Z",
+                    would_count=True,
+                    # Counted identity attributed via dogfood evidence only.
+                    reviewer_id=family,
+                    is_dogfood=True,
+                    # Provenance: affirmatively NO genuine reviewer signal.
+                    reviewer_signals=(),
+                )
+            ]
+            status = summarize_settlement(
+                pr_number=1,
+                head_sha="deadbeef",
+                tier=tier,
+                comments=dogfood_only,
+                human_settlement_present=False,
+                quorum_conclusion="FAILURE",
+            )
+            # The dogfood leg is satisfied by the dogfood-only record...
+            assert status.has_dogfood is True
+            # ...but the western-frontier review-signal requirement is NOT:
+            # the diagnostic must still ask for a western-frontier signal.
+            assert "western-frontier" in status.next_action
+
+
+def test_diagnostic_genuine_reviewer_signal_advances_frontier_advice(monkeypatch):
+    # VAL-P4A-024 companion: adding ONE genuine current-head claude/openai
+    # reviewer signal (on top of the same dogfood-only record) satisfies the
+    # western-frontier requirement, so the advice advances past it to the next
+    # step (here the stale-quorum re-run hint) instead of asking for a signal.
+    from aragora.swarm.merge_quorum_reconcile import EvidenceComment, summarize_settlement
+
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "1")
+    for tier in (1, 2):
+        comments = [
+            # The dogfood-only record from the companion test...
+            EvidenceComment(
+                created_at="2026-07-15T00:00:00Z",
+                would_count=True,
+                reviewer_id="claude",
+                is_dogfood=True,
+                reviewer_signals=(),
+            ),
+            # ...plus one genuine current-head claude reviewer signal.
+            EvidenceComment(
+                created_at="2026-07-15T00:05:00Z",
+                would_count=True,
+                reviewer_id="claude",
+                is_dogfood=False,
+                reviewer_signals=("claude",),
+            ),
+        ]
+        status = summarize_settlement(
+            pr_number=1,
+            head_sha="deadbeef",
+            tier=tier,
+            comments=comments,
+            human_settlement_present=False,
+            quorum_conclusion="FAILURE",
+        )
+        assert tier_quorum_rule(tier, tiered_gate=True).is_satisfied_by(["claude"]) is True
+        assert status.has_dogfood is True
+        assert "western-frontier" not in status.next_action
+        # Advice advanced past every quorum leg to the stale-check recovery hint.
+        assert "re-run aragora-merge-quorum" in status.next_action

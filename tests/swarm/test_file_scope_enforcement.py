@@ -190,8 +190,8 @@ class TestCheckFileScopeViolations:
         - README.md
         - aragora-debate/README.md
         - docs/LANDING_PAGE.md
-        - docs/STRATEGIC_ANALYSIS.md
-        - docs/WHY_ADVERSARIAL_DEBATE.md
+        - docs/archive/2026-07-15-STRATEGIC_ANALYSIS.md (then at the docs/ root)
+        - docs/strategy/WHY_ADVERSARIAL_DEBATE.md (then at the docs/ root)
         """
         work_order = {
             "work_order_id": "issue-873",
@@ -206,8 +206,8 @@ class TestCheckFileScopeViolations:
             "README.md",
             "aragora-debate/README.md",
             "docs/LANDING_PAGE.md",
-            "docs/STRATEGIC_ANALYSIS.md",
-            "docs/WHY_ADVERSARIAL_DEBATE.md",
+            "docs/archive/2026-07-15-STRATEGIC_ANALYSIS.md",
+            "docs/strategy/WHY_ADVERSARIAL_DEBATE.md",
         ]
         violations = SwarmSupervisor._check_file_scope_violations(work_order, wrong_paths)
         assert len(violations) == 6

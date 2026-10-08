@@ -1,0 +1,70 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-software-engineering-holdout-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "se-holdout-k8s-psp-removal-1-25",
+      "domain": "software_engineering",
+      "split": "holdout",
+      "title": "Migrate from Kubernetes PodSecurityPolicy before 1.25",
+      "decision_prompt": "A platform team relies on the built-in Kubernetes PodSecurityPolicy admission plugin. Upstream lifecycle metadata marks that API deprecated in 1.21 and removed in 1.25. Choose the action that best preserves enforceable workload-security policy through a Kubernetes 1.25 upgrade.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Migrate before Kubernetes 1.25\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "migrate_before_1_25",
+      "options": [
+        {
+          "option_id": "migrate_before_1_25",
+          "label": "Migrate before Kubernetes 1.25",
+          "description": "Replace PodSecurityPolicy with Pod Security Admission or another supported policy controller before upgrading to Kubernetes 1.25."
+        },
+        {
+          "option_id": "retain_psp_through_1_25",
+          "label": "Retain PodSecurityPolicy through 1.25",
+          "description": "Keep the built-in PodSecurityPolicy dependency and defer migration until after Kubernetes 1.25 ships."
+        }
+      ],
+      "information_cutoff": "2021-02-10T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "k8s-psp-lifecycle-metadata-2020-12-18",
+          "title": "Kubernetes PodSecurityPolicy prerelease lifecycle metadata",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/979c644df2ad051015a8ccf6475e3476eda0cea0/staging/src/k8s.io/api/policy/v1beta1/types.go",
+          "published_at": "2020-12-18T06:16:25Z",
+          "content_sha256": "2f41de7da96e53301706db39158038ed395106ee6c8cdbb30961cb31247e0157"
+        }
+      ]
+    },
+    {
+      "case_id": "se-holdout-pep563-python310-default",
+      "domain": "software_engineering",
+      "split": "holdout",
+      "title": "Commit to PEP 563 runtime changes for Python 3.10",
+      "decision_prompt": "A Python framework introspects annotations at runtime. The accepted PEP 563 text says postponed annotation evaluation will become the default in Python 3.10. Choose whether to make an irreversible compatibility break for that release now or preserve current behavior until the release semantics are confirmed.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Commit the breaking migration for Python 3.10\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "commit_breaking_migration_for_3_10",
+      "options": [
+        {
+          "option_id": "commit_breaking_migration_for_3_10",
+          "label": "Commit the breaking migration for Python 3.10",
+          "description": "Ship framework changes that assume annotations are strings by default in Python 3.10."
+        },
+        {
+          "option_id": "preserve_behavior_until_confirmed",
+          "label": "Preserve compatibility until confirmed",
+          "description": "Keep runtime annotation behavior compatible and gate any breaking migration on confirmed Python 3.10 release semantics."
+        }
+      ],
+      "information_cutoff": "2021-01-01T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "pep563-python310-default-2020-05-19",
+          "title": "PEP 563 accepted text targeting default adoption in Python 3.10",
+          "url": "https://raw.githubusercontent.com/python/peps/f1c3a99ad5df574489e877c0456c0c714b507357/pep-0563.rst",
+          "published_at": "2020-05-19T16:19:55Z",
+          "content_sha256": "5e302adcdc7e195497a408ee283b08e173d6348275a752532a1b351b3cc1294e"
+        }
+      ]
+    }
+  ]
+}

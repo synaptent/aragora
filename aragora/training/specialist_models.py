@@ -676,7 +676,7 @@ class SpecialistTrainingPipeline:
         self._registry.update_status(model_id, TrainingStatus.EXPORTING_DATA)
 
         # Import here to avoid circular imports
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
         from aragora.training.debate_exporter import DebateTrainingExporter, DebateTrainingConfig
 
         config = model.training_config
@@ -929,8 +929,11 @@ class SpecialistTrainingPipeline:
                 )
 
                 logger.info(
-                    f"Gauntlet evaluation complete for {model_id}: "
-                    f"ELO={elo_rating}, accuracy={vertical_accuracy:.2f}, win_rate={win_rate:.2f}"
+                    "Gauntlet evaluation complete for %s: ELO=%s, accuracy=%.2f, win_rate=%.2f",
+                    model_id,
+                    elo_rating,
+                    vertical_accuracy,
+                    win_rate,
                 )
 
             except (RuntimeError, ValueError, OSError, TypeError) as e:

@@ -2473,7 +2473,7 @@ class TaskDecomposer:
             )
             return self.analyze(goal, depth=self.config.max_depth)
         from aragora.core import Environment
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         # Build the debate task - ask agents to decompose the goal
         debate_task = self._build_debate_task(goal, context)
@@ -2520,8 +2520,9 @@ class TaskDecomposer:
             subtasks = self._create_generic_phases(goal)
 
         logger.info(
-            f"debate_decomposition_completed subtasks={len(subtasks)} "
-            f"confidence={result.confidence:.2f}"
+            "debate_decomposition_completed subtasks=%s confidence=%.2f",
+            len(subtasks),
+            result.confidence,
         )
 
         return TaskDecomposition(
@@ -2572,8 +2573,9 @@ class TaskDecomposer:
                 subtasks = self._parse_debate_subtasks(result.final_answer)
                 if subtasks:
                     logger.info(
-                        f"debate_primary_succeeded subtasks={len(subtasks)} "
-                        f"confidence={result.confidence:.2f}"
+                        "debate_primary_succeeded subtasks=%s confidence=%.2f",
+                        len(subtasks),
+                        result.confidence,
                     )
                     return result
                 else:
@@ -2650,7 +2652,7 @@ class TaskDecomposer:
 
             # Rebuild environment and protocol for fresh debate
             from aragora.core import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             fallback_env = Environment(
                 task=self._build_debate_task(goal, context),
@@ -2676,8 +2678,9 @@ class TaskDecomposer:
                 subtasks = self._parse_debate_subtasks(fallback_result.final_answer)
                 if subtasks:
                     logger.info(
-                        f"debate_fallback_succeeded subtasks={len(subtasks)} "
-                        f"confidence={fallback_result.confidence:.2f}"
+                        "debate_fallback_succeeded subtasks=%s confidence=%.2f",
+                        len(subtasks),
+                        fallback_result.confidence,
                     )
                     return fallback_result
 

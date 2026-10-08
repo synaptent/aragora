@@ -1,0 +1,13 @@
+{
+  "verifier": {
+    "verified": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify": {
+    "ok": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "description": "An unsigned v0.1 receipt: schema and digest verify and the signature check is skipped rather than failed, so the recorded verdict is ok. The packaged CLI additionally reports exit 3 (authenticity never established) when a key is supplied and the receipt carries nothing to check."
+}

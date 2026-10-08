@@ -34,7 +34,7 @@ from aragora.connectors.exceptions import (
     ConnectorTimeoutError,
 )
 from aragora.resilience import CircuitBreaker
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 # Re-export models for backward compatibility
 from aragora.connectors.accounting.qbo_models import (  # noqa: F401
@@ -111,7 +111,7 @@ class QuickBooksConnector(QBOOperationsMixin):
 
         # Circuit breaker for API resilience
         if circuit_breaker is not None:
-            self._circuit_breaker = circuit_breaker
+            self._circuit_breaker: CircuitBreaker | None = circuit_breaker
         elif enable_circuit_breaker:
             self._circuit_breaker = CircuitBreaker(
                 name="qbo",
