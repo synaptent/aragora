@@ -19,6 +19,8 @@ from aragora.pipeline.decision_plan.core import (
 from aragora.pipeline.risk_register import Risk, RiskCategory, RiskLevel, RiskRegister
 from aragora.implement.types import ImplementPlan, ImplementTask
 
+ORG = "org-a"
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -34,6 +36,7 @@ def basic_plan():
         task="Refactor the billing module",
         status=PlanStatus.CREATED,
         approval_mode=ApprovalMode.RISK_BASED,
+        org_id=ORG,
     )
 
 
@@ -47,6 +50,7 @@ def plan_with_risks():
         status=PlanStatus.AWAITING_APPROVAL,
         approval_mode=ApprovalMode.ALWAYS,
         budget=BudgetAllocation(limit_usd=500.0),
+        org_id=ORG,
     )
     plan.risk_register = RiskRegister(
         debate_id="d-risk123",
@@ -594,13 +598,14 @@ class TestFirePlanNotification:
             id="dp-fire-test",
             debate_id="d-fire",
             task="Test fire-and-forget",
+            org_id=ORG,
         )
         # Should not raise even without an event loop
-        _fire_plan_notification("created", plan)
+        _fire_plan_notification("created", plan, org_id=ORG)
 
     def test_unknown_event_does_not_crash(self):
         """_fire_plan_notification ignores unknown event types gracefully."""
         from aragora.server.handlers.plans import _fire_plan_notification
 
-        plan = DecisionPlan(id="dp-unk", debate_id="d-unk", task="Unknown test")
-        _fire_plan_notification("nonexistent_event", plan)
+        plan = DecisionPlan(id="dp-unk", debate_id="d-unk", task="Unknown test", org_id=ORG)
+        _fire_plan_notification("nonexistent_event", plan, org_id=ORG)

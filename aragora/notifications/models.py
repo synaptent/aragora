@@ -56,6 +56,8 @@ class Notification:
     resource_type: str | None = None  # finding, document, session
     resource_id: str | None = None
     workspace_id: str | None = None
+    # Tenant whose record this notification is about; None for system notices.
+    org_id: str | None = None
 
     # Metadata
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -77,6 +79,7 @@ class Notification:
             "resource_type": self.resource_type,
             "resource_id": self.resource_id,
             "workspace_id": self.workspace_id,
+            "org_id": self.org_id,
             "created_at": self.created_at.isoformat(),
             "metadata": self.metadata,
             "action_url": self.action_url,
@@ -164,9 +167,19 @@ class WebhookEndpoint:
     headers: dict[str, str] = field(default_factory=dict)
     enabled: bool = True
     workspace_id: str | None = None
+    # Owning tenant. None marks a server-operator endpoint, which receives
+    # every notification; an owned endpoint receives only its own org's.
+    org_id: str | None = None
 
     def matches_event(self, event_type: str) -> bool:
         """Check if this endpoint should receive the event."""
         if not self.events:
             return True  # All events
         return event_type in self.events
+
+    def receives_org(self, org_id: str | None) -> bool:
+        """Whether a notification about ``org_id``'s records may reach this endpoint."""
+        owner = (self.org_id or "").strip()
+        if not owner:
+            return True
+        return owner == (org_id or "").strip()
