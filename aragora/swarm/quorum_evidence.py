@@ -256,6 +256,34 @@ def advisory_dissent_settle_enabled(env: dict[str, str] | None = None) -> bool:
     )
 
 
+# Hard "never post" control for prepare-only missions. When active — via the
+# ``never_post`` kwarg (threaded from the ``--never-post`` CLI flag) or via this
+# environment variable (which also covers the ``review-queue collect-evidence``
+# path without a CLI change) — no collector run posts, so a prepare-only mission
+# no longer depends on every worker remembering to omit ``--apply``. The control
+# acts at two levels:
+# - :func:`run_collect_cli`, behind both the script and ``review-queue
+#   collect-evidence``, refuses ``apply=True`` under the control (kwarg or this
+#   variable) with a loud error before any collection work. A CLI run that
+#   passes ``--apply`` while the variable is exported therefore exits 1 with no
+#   prepared artifact; it is not downgraded to a prepare-only run.
+# - :func:`decide_action` forces ``"prepare"`` at EVERY tier, including Tier 0-2
+#   with ``apply=True``. That downgrade is reached by direct library calls of
+#   :func:`collect_evidence` / :func:`apply_prepared_evidence` and by their
+#   pre-post recheck, not by either CLI entry point.
+# The control is monotonic: an explicit ``never_post=False`` cannot switch the
+# environment variable back off.
+_NEVER_POST_ENV = "ARAGORA_EVIDENCE_NEVER_POST"
+_NEVER_POST_TRUE = frozenset(("1", "true", "yes", "on"))
+
+
+def never_post_enabled(env: dict[str, str] | None = None) -> bool:
+    """Whether the hard never-post control is active via the environment.
+    Default OFF; see :data:`_NEVER_POST_ENV`."""
+    source = os.environ if env is None else env
+    return str(source.get(_NEVER_POST_ENV, "")).strip().lower() in _NEVER_POST_TRUE
+
+
 def _coerce_relaxed_flag(value: Any) -> bool:
     """Coerce a serialized gate-regime flag (``severity_gated`` / ``tiered_gate``) to
     bool, fail-closed. A real bool passes through; a string counts as relaxed ONLY for
@@ -1337,14 +1365,21 @@ def load_prepared_outcome(path: Path) -> CollectOutcome:
     return collect_outcome_from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
-def decide_action(tier: int | None, apply: bool) -> tuple[str, str]:
+def decide_action(tier: int | None, apply: bool, *, never_post: bool = False) -> tuple[str, str]:
     """Return ``(action, reason)`` where action is ``"post"`` or ``"prepare"``.
 
     Tier 3+ (and unknown tier) always ``prepare`` — high-tier merge authority is
     only ever settled by an operator on the exact head, so this collector refuses
     to post there regardless of ``apply``. Tier 0-2 posts only when ``apply`` is
-    set; otherwise it is a dry run.
+    set; otherwise it is a dry run. The never-post control (``never_post=True``
+    or :data:`_NEVER_POST_ENV`) dominates everything: it forces ``prepare`` at
+    every tier, and the environment variable cannot be switched off per-call.
     """
+    if never_post or never_post_enabled():
+        return (
+            "prepare",
+            "never-post control active; preparing evidence only at every tier",
+        )
     if tier is None or tier < 0:
         return ("prepare", "tier unknown; preparing evidence only (fail-safe)")
     if tier >= SETTLEMENT_TIER_FLOOR:
@@ -3130,6 +3165,7 @@ def collect_evidence(
     families: Sequence[str],
     author: str,
     apply: bool,
+    never_post: bool = False,
     context_fetcher: Callable[[str, int], dict[str, Any]] = merge_quorum_io.fetch_pr_context,
     tier_fetcher: Callable[[str, int], int | None] = merge_quorum_io.fetch_pr_tier,
     prompt_builder: Callable[[str, int, dict[str, Any]], str] = default_prompt_builder,
@@ -3157,7 +3193,7 @@ def collect_evidence(
             raise ValueError(f"PR #{pr} head {head_sha} is not the expected head {pinned_head}")
 
     tier = tier_fetcher(repo, pr)
-    action, action_reason = decide_action(tier, apply)
+    action, action_reason = decide_action(tier, apply, never_post=never_post)
 
     outcome = CollectOutcome(
         repo=repo,
@@ -3314,7 +3350,7 @@ def collect_evidence(
             )
             _record_review_adjudication_if_applicable(outcome)
             return outcome
-        recheck_action, recheck_reason = decide_action(recheck_tier, apply)
+        recheck_action, recheck_reason = decide_action(recheck_tier, apply, never_post=never_post)
         if recheck_head != head_sha or recheck_action != "post":
             outcome.action = "prepare"
             outcome.action_reason = (
@@ -3783,6 +3819,7 @@ def apply_prepared_evidence(
     prepared_json: Path,
     author: str,
     apply: bool,
+    never_post: bool = False,
     families: Sequence[str] | None = None,
     context_fetcher: Callable[[str, int], dict[str, Any]] = merge_quorum_io.fetch_pr_context,
     tier_fetcher: Callable[[str, int], int | None] = merge_quorum_io.fetch_pr_tier,
@@ -3847,7 +3884,7 @@ def apply_prepared_evidence(
     live_severity_gated = severity_gated_dissent_enabled()
 
     tier = tier_fetcher(repo, pr)
-    action, action_reason = decide_action(tier, apply)
+    action, action_reason = decide_action(tier, apply, never_post=never_post)
     outcome = CollectOutcome(
         repo=repo,
         pr=pr,
@@ -3942,7 +3979,7 @@ def apply_prepared_evidence(
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
-    recheck_action, recheck_reason = decide_action(recheck_tier, apply)
+    recheck_action, recheck_reason = decide_action(recheck_tier, apply, never_post=never_post)
     recheck_stability_problem = _settlement_stability_problem(recheck_context)
     if recheck_head != head_sha or recheck_action != "post" or recheck_stability_problem:
         outcome.action = "prepare"
@@ -4068,6 +4105,7 @@ def run_collect_cli(
     author: str | None,
     apply: bool,
     json_output: bool,
+    never_post: bool = False,
     prepared_json: Path | None = None,
     reviewer_timeout_seconds: float | None = None,
     overall_timeout_seconds: float | None = None,
@@ -4087,10 +4125,22 @@ def run_collect_cli(
     still exit 2 (quorum is enforced as N-of-M elsewhere). Inspect
     ``posted_families`` in the JSON output rather than treating a non-zero exit
     as "nothing posted".
+
+    ``never_post`` (or :data:`_NEVER_POST_ENV`) is the hard prepare-only
+    control: it forces ``action=prepare`` / ``posted_families=[]`` at every
+    tier and conflicts loudly with ``apply`` (exit 1 before any collection
+    work, for the kwarg and the environment variable alike) instead of
+    silently overriding it.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()
     try:
+        if apply and (never_post or never_post_enabled()):
+            raise ValueError(
+                f"--never-post (or {_NEVER_POST_ENV}=1) conflicts with --apply: the "
+                "never-post control forbids posting at any tier; drop --apply or "
+                "clear the control"
+            )
         overall_timeout_seconds = _positive_timeout_seconds(
             overall_timeout_seconds, "overall_timeout_seconds"
         )
@@ -4110,6 +4160,7 @@ def run_collect_cli(
                     families=fams,
                     author=resolved_author,
                     apply=apply,
+                    never_post=never_post,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
@@ -4121,6 +4172,7 @@ def run_collect_cli(
                     prepared_json=prepared_json,
                     author=resolved_author,
                     apply=apply,
+                    never_post=never_post,
                     families=fams,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
