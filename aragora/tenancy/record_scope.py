@@ -121,6 +121,9 @@ _ORG_SCOPED_FAMILIES = (
     "/api/matrix-debates",
     "/api/pipeline",
     "/api/canvas/pipeline",
+    "/api/canvas/convert",
+    "/api/explain",
+    "/api/explainability",
     "/api/workspace",
     "/api/checkpoints",
 )
@@ -193,9 +196,9 @@ def is_org_scoped_path(path: str) -> bool:
 
     Plans, plan executions and runs, documents and knowledge jobs, receipts
     (gauntlet included), debates and their create aliases, debate checkpoints,
-    search, pipelines and the decision workspace, plus the per-id control-plane
-    deliberation result and status reads. Any ``/api/v<N>/`` form matches like
-    ``/api/``.
+    debate explanations, search, pipelines and their canvas conversions, the
+    decision workspace, plus the per-id control-plane deliberation result and
+    status reads. Any ``/api/v<N>/`` form matches like ``/api/``.
     Public-by-design routes in those families do not match: receipt share
     links, the signing key and the stateless verifier, the public debate
     viewer and spectate page, and gauntlet personas.

@@ -1331,6 +1331,7 @@ async def send_receipt_to_channel(
         from aragora.server.handlers.decisions.receipts import (
             ReceiptsHandler,
             WorkspaceNotFoundError,
+            WorkspaceTokenMissingError,
         )
 
         supported_channels = {"slack", "teams", "email", "discord"}
@@ -1365,6 +1366,17 @@ async def send_receipt_to_channel(
                 result = await handler._send_to_discord(formatted, body.channel_id, body.options)
         except WorkspaceNotFoundError:
             raise record_not_found_error("Workspace") from None
+        except WorkspaceTokenMissingError as e:
+            handler._record_delivery_history(
+                receipt_id=receipt_id,
+                channel_type=body.channel_type,
+                channel_id=body.channel_id,
+                workspace_id=body.workspace_id,
+                status="failed",
+                error=str(e),
+                org_id=scope.org_id,
+            )
+            raise HTTPException(status_code=409, detail=str(e)) from None
 
         handler._record_delivery_history(
             receipt_id=receipt_id,

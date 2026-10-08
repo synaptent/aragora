@@ -650,7 +650,6 @@ async def execute_workflow_from_pipeline(
     Requires ``canvas:run`` permission.
     """
     run_data = owned.run
-    auth = owned.caller.auth
     scope = owned.caller.scope
 
     try:
@@ -708,7 +707,9 @@ async def execute_workflow_from_pipeline(
         from aragora.server.handlers.workflows.crud import create_workflow
         from aragora.server.handlers.workflows.execution import execute_workflow
 
-        tenant_id = str(getattr(auth, "workspace_id", None) or scope.org_id)
+        # Not the caller's X-Workspace-ID header, which nothing validates: the
+        # workflow and execution rows belong to the org that owns the run.
+        tenant_id = scope.org_id
         created_workflow = await create_workflow(
             workflow_def.to_dict(),
             tenant_id=tenant_id,

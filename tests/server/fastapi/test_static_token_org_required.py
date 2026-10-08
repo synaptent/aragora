@@ -87,6 +87,42 @@ class TestCreateDebate:
         assert _create(client, f"Bearer {STATIC_TOKEN}").status_code == 401
 
 
+CONVERT_ROUTES = [
+    ("/api/v2/canvas/convert/debate", {"debate_data": {"id": "d-1", "task": "probe"}}),
+    ("/api/v2/canvas/convert/workflow", {"workflow_data": {"id": "wf-1", "steps": []}}),
+]
+
+
+class TestCanvasConvertRoutes:
+    @pytest.mark.parametrize(("path", "body"), CONVERT_ROUTES)
+    def test_static_token_gets_403_org_required(self, client, api_token, path, body):
+        signed = api_token.generate_token("loop-1", expires_in=600)
+
+        for token in (STATIC_TOKEN, signed):
+            response = client.post(path, json=body, headers={"Authorization": f"Bearer {token}"})
+            assert (response.status_code, response.json()) == (403, ORG_REQUIRED_BODY)
+
+    @pytest.mark.parametrize(("path", "body"), CONVERT_ROUTES)
+    @pytest.mark.parametrize("role", ["member", "viewer"])
+    def test_jwt_user_without_org_gets_403_org_required(self, client, path, body, role):
+        response = client.post(path, json=body, headers={"Authorization": _jwt(None, role)})
+
+        assert (response.status_code, response.json()) == (403, ORG_REQUIRED_BODY)
+
+    @pytest.mark.parametrize(("path", "body"), CONVERT_ROUTES)
+    @pytest.mark.parametrize("authorization", [None, "Bearer not-the-token"])
+    def test_missing_or_invalid_credential_gets_401(self, client, path, body, authorization):
+        headers = {} if authorization is None else {"Authorization": authorization}
+
+        assert client.post(path, json=body, headers=headers).status_code == 401
+
+    @pytest.mark.parametrize(("path", "body"), CONVERT_ROUTES)
+    def test_org_member_is_not_refused(self, client, path, body):
+        response = client.post(path, json=body, headers={"Authorization": _jwt("org-a")})
+
+        assert response.status_code not in (401, 403), response.text[:300]
+
+
 class TestRequireAuthenticated:
     def test_route_outside_the_matcher_still_answers_401(self, client):
         response = client.get(

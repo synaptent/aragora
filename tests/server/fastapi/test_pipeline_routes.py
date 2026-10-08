@@ -808,7 +808,8 @@ class TestExecuteWorkflowFromPipeline:
 
         mock_create_workflow.assert_awaited_once()
         create_args = mock_create_workflow.await_args
-        assert create_args.kwargs["tenant_id"] == "ws-1"
+        # The caller's workspace is "ws-1", but the rows belong to its org.
+        assert create_args.kwargs["tenant_id"] == "org-1"
         assert create_args.kwargs["created_by"] == "user-1"
         assert create_args.args[0]["id"] == "wf-pipe-workflow1"
         assert create_args.args[0]["steps"][0]["id"] == "goal-1"
@@ -816,7 +817,7 @@ class TestExecuteWorkflowFromPipeline:
         mock_execute_workflow.assert_awaited_once_with(
             "wf_pipe_workflow1",
             inputs={"pipeline_id": "pipe-workflow1"},
-            tenant_id="ws-1",
+            tenant_id="org-1",
             user_id="user-1",
             org_id="org-1",
         )

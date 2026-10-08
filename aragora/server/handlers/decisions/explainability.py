@@ -49,7 +49,11 @@ from aragora.tenancy.debate_access import (
     debate_visible_to_org,
     find_debate_access,
 )
-from aragora.tenancy.record_scope import record_not_found, require_org_scope
+from aragora.tenancy.record_scope import (
+    record_not_found,
+    require_org_scope,
+    scope_denial_first,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +371,7 @@ class ExplainabilityHandler(BaseHandler):
         return not path.startswith("/api/v1/")
 
     @rate_limit(requests_per_minute=60)
+    @scope_denial_first
     @require_permission("explainability:read")
     async def handle(
         self, path: str, query_params: dict[str, Any], handler: Any

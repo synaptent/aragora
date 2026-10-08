@@ -14,6 +14,7 @@ run route against the in-memory run store:
 from __future__ import annotations
 
 import copy
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -234,3 +235,45 @@ class TestOwner:
         assert read.status_code == 200
         assert cancel.status_code == 403
         assert runs[RA]["status"] == "running"
+
+
+class _CompletedEngine:
+    async def execute(self, workflow, inputs, execution_id, **_options):
+        return SimpleNamespace(
+            success=True, final_output={}, steps=[], error=None, total_duration_ms=1.0
+        )
+
+
+class TestExecuteWorkflowTenant:
+    @pytest.fixture
+    def workflows(self, tmp_path, monkeypatch) -> SimpleNamespace:
+        """A real workflow store, an engine that completes at once, recorded audit events."""
+        from aragora.server.handlers import workflows as workflows_package
+        from aragora.workflow.persistent_store import PersistentWorkflowStore
+
+        store = PersistentWorkflowStore(db_path=tmp_path / "workflows.db")
+        audits: list[dict[str, Any]] = []
+        monkeypatch.setattr(workflows_package, "_get_store", lambda: store)
+        monkeypatch.setattr(workflows_package, "_engine", _CompletedEngine(), raising=False)
+        monkeypatch.setattr(workflows_package, "audit_data", lambda **event: audits.append(event))
+        return SimpleNamespace(store=store, audits=audits)
+
+    @pytest.mark.parametrize("header", ["X-Workspace-ID", "X-Tenant-ID"])
+    def test_tenant_headers_cannot_move_the_rows_to_another_org(
+        self, client, runs, as_b, workflows, header
+    ):
+        response = client.post(
+            f"{RUNS}/{RB}/execute-workflow", headers={**as_b, header: ORG_A}, json=None
+        )
+
+        assert response.status_code == 201, response.text[:300]
+        workflow_id = response.json()["workflow_id"]
+        execution_id = response.json()["execution_id"]
+        assert workflows.store.list_workflows(tenant_id=ORG_A) == ([], 0)
+        assert workflows.store.list_executions(tenant_id=ORG_A) == ([], 0)
+        created, _total = workflows.store.list_workflows(tenant_id=ORG_B)
+        executed, _total = workflows.store.list_executions(tenant_id=ORG_B)
+        assert [w.id for w in created] == [workflow_id]
+        assert [e["id"] for e in executed] == [execution_id]
+        assert {event["tenant_id"] for event in workflows.audits} == {ORG_B}
+        assert runs[RB]["workflow_id"] == workflow_id
