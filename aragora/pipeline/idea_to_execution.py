@@ -28,16 +28,19 @@ Usage:
 
 from __future__ import annotations
 
+import functools
 import hashlib
+import inspect
 import logging
 import os
 import re
 import tempfile
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from aragora.canvas.converters import (
     debate_to_ideas_canvas,
@@ -55,6 +58,7 @@ from aragora.canvas.stages import (
     content_hash,
 )
 from aragora.goals.extractor import GoalExtractionConfig, GoalExtractor, GoalGraph
+from aragora.spectate.ws_bridge import bind_spectate_context
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +76,47 @@ def _spectate(event_type: str, details: str, *, pipeline_id: str | None = None) 
     """
     try:
         from aragora.spectate.stream import SpectatorStream  # noqa: F401
-        from aragora.spectate.ws_bridge import bind_spectate_context
 
         stream = _get_spectator_stream()
         with bind_spectate_context(pipeline_id=pipeline_id):
             stream.emit(event_type=event_type, details=details)
     except (ImportError, TypeError):
         logger.debug("SpectatorStream unavailable, event skipped")
+
+
+_RunMethod = TypeVar("_RunMethod", bound=Callable[..., Any])
+
+
+def _spectate_as_run(method: _RunMethod) -> _RunMethod:
+    """Bind the run's pipeline id around ``method`` so every spectate event it
+    emits, including those from awaited stage helpers, is scoped to the
+    pipeline's org instead of looking unscoped (and therefore public)."""
+    signature = inspect.signature(method)
+
+    def _resolve(args: tuple[Any, ...], kwargs: dict[str, Any]) -> inspect.BoundArguments:
+        call = signature.bind(*args, **kwargs)
+        call.arguments["pipeline_id"] = (
+            call.arguments.get("pipeline_id") or f"pipe-{uuid.uuid4().hex[:8]}"
+        )
+        return call
+
+    if inspect.iscoroutinefunction(method):
+
+        @functools.wraps(method)
+        async def run_bound(*args: Any, **kwargs: Any) -> Any:
+            call = _resolve(args, kwargs)
+            with bind_spectate_context(pipeline_id=call.arguments["pipeline_id"]):
+                return await method(*call.args, **call.kwargs)
+
+        return cast(_RunMethod, run_bound)
+
+    @functools.wraps(method)
+    def call_bound(*args: Any, **kwargs: Any) -> Any:
+        call = _resolve(args, kwargs)
+        with bind_spectate_context(pipeline_id=call.arguments["pipeline_id"]):
+            return method(*call.args, **call.kwargs)
+
+    return cast(_RunMethod, call_bound)
 
 
 def _get_spectator_stream() -> Any:
@@ -1012,6 +1050,7 @@ class IdeaToExecutionPipeline:
         )
         return result
 
+    @_spectate_as_run
     def from_debate(
         self,
         cartographer_data: dict[str, Any],
@@ -1135,6 +1174,7 @@ class IdeaToExecutionPipeline:
         _spectate("pipeline.completed", f"pipeline_id={pipeline_id}", pipeline_id=pipeline_id)
         return result
 
+    @_spectate_as_run
     def from_ideas(
         self,
         ideas: list[str],
@@ -1355,6 +1395,7 @@ class IdeaToExecutionPipeline:
     # Async pipeline execution
     # =========================================================================
 
+    @_spectate_as_run
     async def run(
         self,
         input_text: str,

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -420,17 +421,50 @@ def test_live_stream_sends_pipeline_events_only_to_the_pipelines_org(
     assert [p["pipeline_id"] for p in frames] == [PIPE_A] * 2 * visible + [None]
 
 
-def test_pipeline_run_events_are_tagged_with_their_pipeline(
-    monkeypatch, spectate, bridge, pipelines
-):
-    from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
+@pytest.fixture
+def run_events(bridge, pipelines) -> list[SpectateEvent]:
+    """Every pipeline.* event of a debate, an ideas and an async run of org A's pipeline."""
+    from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline, PipelineConfig
 
+    workspace = SimpleNamespace(has_context=True, related_beads=["bead-1"], completed_goals=[])
+    adapter = SimpleNamespace(
+        find_similar_pipelines=AsyncMock(return_value=[SimpleNamespace(to_dict=dict)]),
+        get_high_roi_patterns=AsyncMock(return_value=[]),
+    )
+    pipeline = IdeaToExecutionPipeline()
+    config = PipelineConfig(stages_to_run=["ideation"], dry_run=True, enable_receipts=False)
     bridge.start()
-    IdeaToExecutionPipeline().from_ideas(["one idea"], auto_advance=False, pipeline_id=PIPE_A)
+    pipeline.from_debate({"nodes": [], "edges": []}, auto_advance=False, pipeline_id=PIPE_A)
+    pipeline.from_ideas(["one idea"], auto_advance=False, pipeline_id=PIPE_A)
+    with (
+        patch(
+            "aragora.pipeline.workspace_bridge.WorkspacePipelineBridge.query_context",
+            AsyncMock(return_value=workspace),
+        ),
+        patch(
+            "aragora.knowledge.mound.adapters.pipeline_adapter.get_pipeline_adapter",
+            return_value=adapter,
+        ),
+        patch("aragora.debate.orchestrator.Arena", side_effect=RuntimeError("no agents")),
+        patch.object(pipeline._goal_extractor, "extract_from_raw_ideas", side_effect=ValueError),
+    ):
+        asyncio.runners.run(pipeline.run("one idea", config, pipeline_id=PIPE_A))
+    return [e for e in bridge.get_recent_events(100) if e.event_type.startswith("pipeline.")]
 
-    owner = body_of(_get(monkeypatch, spectate, USER_A, *SURFACES[0]))
-    other = body_of(_get(monkeypatch, spectate, USER_B, *SURFACES[0]))
-    assert [e["event_type"] for e in owner["events"] if e["pipeline_id"] == PIPE_A] == [
-        "pipeline.started"
-    ]
-    assert PIPE_A not in json.dumps(other)
+
+def test_pipeline_runs_tag_every_event_with_their_pipeline(run_events):
+    names = "started stage_started stage_completed stage_failed workspace_context km_context"
+    assert {e.event_type for e in run_events} >= {f"pipeline.{n}" for n in names.split()}
+    assert [e.pipeline_id for e in run_events] == [PIPE_A] * len(run_events)
+
+
+@pytest.mark.parametrize(("path", "query"), SURFACES)
+@pytest.mark.parametrize(("user", "visible"), [(USER_A, True), (USER_B, False), (ANON, False)])
+def test_pipeline_run_events_reach_only_the_pipelines_org(
+    monkeypatch, spectate, bridge, run_events, path, query, user, visible
+):
+    bridge._event_buffer.append(_event(None, "unscoped notice", now=True))
+
+    scopes = _event_scopes(_get(monkeypatch, spectate, user, path, query))
+
+    assert scopes == [(None, PIPE_A)] * (len(run_events) if visible else 0) + [(None, None)]
