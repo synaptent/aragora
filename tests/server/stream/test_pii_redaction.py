@@ -8,10 +8,12 @@ import aiohttp
 import aiohttp.web
 import pytest
 
+from aragora.server.handlers.debates.share import _reset_share_state, set_public_spectate
 from aragora.server.handlers.debates.spectate import (
     get_active_collectors,
     push_spectator_event,
 )
+from aragora.server.handlers.streaming import spectate_ws
 from aragora.server.stream.servers import AiohttpUnifiedServer
 from aragora.spectate.ws_bridge import SpectateEvent, get_spectate_bridge, reset_spectate_bridge
 
@@ -78,7 +80,9 @@ class _MockRequest:
 def _reset_spectate_state():
     reset_spectate_bridge()
     get_active_collectors().clear()
+    _reset_share_state()
     yield
+    _reset_share_state()
     get_active_collectors().clear()
     reset_spectate_bridge()
 
@@ -127,6 +131,9 @@ class TestPIIRedaction:
     async def test_websocket_redacts_pii_in_metadata_and_backlog_payload(self, monkeypatch):
         ws_stub = _StubWebSocket(messages=[_FakeWSMsg(type=aiohttp.WSMsgType.CLOSE)])
         monkeypatch.setattr(aiohttp.web, "WebSocketResponse", lambda **_: ws_stub)
+        # Anonymous spectators only see publicly shared debates.
+        monkeypatch.setattr(spectate_ws, "_resolve_debates_storage", lambda storage: None)
+        set_public_spectate("debate-123", True)
 
         server = AiohttpUnifiedServer(port=0, host="127.0.0.1")
         server.set_debate_state(

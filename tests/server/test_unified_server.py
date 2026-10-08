@@ -317,6 +317,32 @@ class TestHTTPDispatch:
         handler.send_header.assert_any_call("Content-Type", "text/event-stream")
         handler.send_header.assert_any_call("X-Aragora-Stream-Transport", "sse_live")
 
+    def test_serve_live_spectate_stream_closes_the_connection_when_the_stream_ends(
+        self, mock_request_handler
+    ):
+        """A stream the server ends (share_revoked) must not leave the client waiting."""
+        handler = self._make_unified_handler(
+            mock_request_handler,
+            accept="text/event-stream",
+        )
+        handler.close_connection = False
+        revoked = b'event: share_revoked\ndata: {"debate_id":"d-1"}\n\n'
+
+        with (
+            patch(
+                "aragora.server.handlers.spectate_ws.iter_live_spectate_sse_frames",
+                return_value=iter([revoked]),
+            ),
+            patch(
+                "aragora.billing.jwt_auth.extract_user_from_request",
+                return_value=SimpleNamespace(is_authenticated=False),
+            ),
+        ):
+            assert handler._serve_live_spectate_stream({}) is True
+
+        assert mock_request_handler.wfile.getvalue() == revoked
+        assert handler.close_connection is True
+
     def test_serve_live_spectate_stream_scopes_events_to_the_callers_org(
         self, mock_request_handler
     ):
