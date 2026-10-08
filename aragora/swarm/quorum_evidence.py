@@ -259,13 +259,20 @@ def advisory_dissent_settle_enabled(env: dict[str, str] | None = None) -> bool:
 # Hard "never post" control for prepare-only missions. When active — via the
 # ``never_post`` kwarg (threaded from the ``--never-post`` CLI flag) or via this
 # environment variable (which also covers the ``review-queue collect-evidence``
-# path without a CLI change) — :func:`decide_action` forces ``"prepare"`` at
-# EVERY tier, including Tier 0-2 runs invoked with ``apply=True``, so a
-# prepare-only mission no longer depends on every worker remembering to omit
-# ``--apply``. The control is monotonic: an explicit ``never_post=False`` cannot
-# switch the environment variable back off. Combining the control with an
-# explicit ``--apply`` is a loud error rather than a silent override, so a
-# contradictory invocation fails fast instead of quietly preparing.
+# path without a CLI change) — no collector run posts, so a prepare-only mission
+# no longer depends on every worker remembering to omit ``--apply``. The control
+# acts at two levels:
+# - :func:`run_collect_cli`, behind both the script and ``review-queue
+#   collect-evidence``, refuses ``apply=True`` under the control (kwarg or this
+#   variable) with a loud error before any collection work. A CLI run that
+#   passes ``--apply`` while the variable is exported therefore exits 1 with no
+#   prepared artifact; it is not downgraded to a prepare-only run.
+# - :func:`decide_action` forces ``"prepare"`` at EVERY tier, including Tier 0-2
+#   with ``apply=True``. That downgrade is reached by direct library calls of
+#   :func:`collect_evidence` / :func:`apply_prepared_evidence` and by their
+#   pre-post recheck, not by either CLI entry point.
+# The control is monotonic: an explicit ``never_post=False`` cannot switch the
+# environment variable back off.
 _NEVER_POST_ENV = "ARAGORA_EVIDENCE_NEVER_POST"
 _NEVER_POST_TRUE = frozenset(("1", "true", "yes", "on"))
 
@@ -4121,7 +4128,9 @@ def run_collect_cli(
 
     ``never_post`` (or :data:`_NEVER_POST_ENV`) is the hard prepare-only
     control: it forces ``action=prepare`` / ``posted_families=[]`` at every
-    tier and conflicts loudly with ``apply`` instead of silently overriding it.
+    tier and conflicts loudly with ``apply`` (exit 1 before any collection
+    work, for the kwarg and the environment variable alike) instead of
+    silently overriding it.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()

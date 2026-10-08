@@ -1,8 +1,10 @@
 """Tests for the collector-side hard never-post control.
 
-The control forces ``action="prepare"`` / ``posted_families=[]`` at EVERY tier,
-including Tier 0-2 runs that would otherwise auto-post under ``apply=True``.
-It has three surfaces:
+Under the control no collector run posts. :func:`decide_action` (and so
+:func:`collect_evidence` / :func:`apply_prepared_evidence` called directly)
+forces ``action="prepare"`` / ``posted_families=[]`` at EVERY tier, including
+Tier 0-2 runs that would otherwise auto-post under ``apply=True``. It has three
+surfaces:
 
 * the ``never_post`` kwarg on :func:`decide_action`, :func:`collect_evidence`,
   :func:`apply_prepared_evidence`, and :func:`run_collect_cli`;
@@ -10,9 +12,11 @@ It has three surfaces:
 * the ``ARAGORA_EVIDENCE_NEVER_POST`` environment variable, which also covers
   the ``review-queue collect-evidence`` path without any CLI change.
 
-Combining the control with ``--apply`` or ``--post-advisory-summary`` is a loud
-error rather than a silent override, and the default behavior without the control stays byte-identical
-to the pre-control decision matrix.
+At the CLI entry points (the script and ``review-queue collect-evidence``, both
+through :func:`run_collect_cli`), combining the control with ``--apply`` or
+``--post-advisory-summary`` is a loud error that collects nothing, rather than a
+silent downgrade to prepare. The default behavior without the control stays
+byte-identical to the pre-control decision matrix.
 """
 
 from __future__ import annotations
@@ -345,6 +349,35 @@ def test_run_collect_cli_env_apply_conflict_is_loud(monkeypatch) -> None:
     payload = json.loads(lines[-1])
     assert "never-post" in payload["error"]
     assert calls == []
+
+
+def test_review_queue_collect_evidence_env_apply_refuses_without_collecting(
+    monkeypatch, capsys
+) -> None:
+    import argparse
+
+    from aragora.cli.commands import review_queue
+
+    monkeypatch.setenv(NEVER_POST_ENV, "1")
+    calls: list[dict] = []
+    monkeypatch.setattr(qe, "collect_evidence", lambda **kwargs: calls.append(kwargs))
+    args = argparse.Namespace(
+        repo="o/r",
+        pr="1",
+        reviewers=["claude", "openai"],
+        author="me",
+        apply=True,
+        json=True,
+        reviewer_timeout=None,
+        overall_timeout=None,
+    )
+
+    rc = review_queue._cmd_collect_evidence(args)
+
+    assert rc == 1
+    assert calls == []
+    payload = json.loads(capsys.readouterr().out)
+    assert "conflicts with --apply" in payload["error"]
 
 
 def _prepare_only_outcome() -> CollectOutcome:
