@@ -1,8 +1,8 @@
 """Org isolation of the canvas pipeline routes (CanvasPipelineHandler dispatch).
 
-Requests go through ``handle`` / ``handle_post`` as the server calls them, with a real
-``PipelineResultStore`` and the real RBAC checker. Org A owns ``pipe-a``; B
-is a member of another org.
+Requests go through ``handle`` / ``handle_post`` / ``handle_put`` as the
+server calls them, with a real ``PipelineResultStore`` and the real RBAC
+checker. Org A owns ``pipe-a``; B is a member of another org.
 """
 
 from __future__ import annotations
@@ -111,6 +111,10 @@ async def _post(handler: CanvasPipelineHandler, caller: Any, path: str, body=Non
     return result
 
 
+async def _put(handler: CanvasPipelineHandler, caller: Any, path: str, body=None) -> Any:
+    return await _resolve(handler.handle_put(path, {}, _Request(caller, body)))
+
+
 # ---------------------------------------------------------------------------
 # Reads (E2)
 # ---------------------------------------------------------------------------
@@ -205,8 +209,20 @@ async def test_member_without_org_is_403(handler, store) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Creates (E3)
+# Writes (E3)
 # ---------------------------------------------------------------------------
+
+B_WRITES = [
+    (f"{BASE}/{PA}/execute", {}),
+    (f"{BASE}/{PA}/approve-transition", {"from_stage": "ideas", "to_stage": "goals"}),
+    (f"{BASE}/approve-transition", {"pipeline_id": PA, "from_stage": "ideas", "to_stage": "goals"}),
+    (f"{BASE}/advance", {"pipeline_id": PA, "target_stage": "goals"}),
+    (f"{BASE}/{PA}/self-improve", {"budget_limit": 1.0}),
+    (f"/api/v1/pipeline/{PA}/agents/agent-1/approve", {"notes": "ok"}),
+    (f"/api/v1/pipeline/{PA}/agents/agent-1/reject", {"feedback": "no"}),
+    (f"{BASE}/{PA}/run", {"input_text": "x"}),
+    (f"{BASE}/{PA}/advance", {"target_stage": "goals"}),
+]
 
 CREATE_ROUTES = [
     "from-debate",
@@ -223,16 +239,105 @@ CREATE_ROUTES = [
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("path", "body"), B_WRITES)
+async def test_other_org_writes_are_404_without_side_effect(handler, store, path, body) -> None:
+    before = store.get(PA)
+    count_before = len(store.list_pipelines(limit=100))
+    spies = {
+        name: patch.object(CanvasPipelineHandler, name, side_effect=AssertionError(name))
+        for name in (
+            "handle_execute",
+            "handle_approve_transition",
+            "handle_advance",
+            "handle_self_improve",
+            "handle_approve_agent",
+            "handle_reject_agent",
+        )
+    }
+    for spy in spies.values():
+        spy.start()
+    try:
+        result = await _post(handler, USER_B, path, body)
+    finally:
+        for spy in spies.values():
+            spy.stop()
+
+    assert result.status_code == 404
+    assert _json(result) == {"error": "Pipeline not found", "code": "not_found"}
+    assert store.get(PA) == before
+    assert len(store.list_pipelines(limit=100)) == count_before
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "path",
-    [f"{BASE}/{name}" for name in CREATE_ROUTES]
+    [path for path, _body in B_WRITES]
+    + [f"{BASE}/{name}" for name in CREATE_ROUTES]
     + ["/api/v1/canvas/convert/debate", "/api/v1/canvas/convert/workflow"],
 )
-async def test_anonymous_creates_are_401(handler, store, path) -> None:
-    result = await _post(handler, ANONYMOUS, path, {"ideas": ["x"]})
+async def test_anonymous_writes_are_401(handler, store, path) -> None:
+    before = store.get(PA)
+
+    result = await _post(handler, ANONYMOUS, path, {"pipeline_id": PA, "ideas": ["x"]})
 
     assert result.status_code == 401
+    assert store.get(PA) == before
     assert {p["id"] for p in store.list_pipelines(limit=100)} == {PA}
+
+
+@pytest.mark.asyncio
+async def test_owner_approves_own_transition(handler, store) -> None:
+    result = await _post(
+        handler,
+        USER_A,
+        f"{BASE}/{PA}/approve-transition",
+        {"from_stage": "ideas", "to_stage": "goals"},
+    )
+
+    assert result.status_code == 200
+    assert store.get(PA)["transitions"][0]["status"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_self_improve_record_belongs_to_the_owner(handler, store) -> None:
+    store.save(
+        PA,
+        {"stage_status": {}, "goals": {"goals": [{"title": "Ship it"}]}},
+        org_id="org-a",
+    )
+
+    result = await _post(handler, USER_A, f"{BASE}/{PA}/self-improve", {})
+
+    assert result.status_code == 201
+    run_id = _json(result)["data"]["run_id"]
+    assert store.get_owner_org(f"self-improve-{run_id}") == "org-a"
+
+
+@pytest.mark.asyncio
+async def test_put_other_orgs_pipeline_is_404_and_unchanged(handler, store) -> None:
+    before = store.get(PA)
+    stages = {"stages": {"ideas": {"nodes": [{"id": "evil"}], "edges": []}}}
+
+    other = await _put(handler, USER_B, f"{BASE}/{PA}", stages)
+    anonymous = await _put(handler, ANONYMOUS, f"{BASE}/{PA}", stages)
+
+    assert other.status_code == 404
+    assert anonymous.status_code == 401
+    assert store.get(PA) == before
+
+
+@pytest.mark.asyncio
+async def test_put_saves_own_and_creates_for_the_callers_org(handler, store) -> None:
+    stages = {"stages": {"goals": {"nodes": [{"id": "g1"}], "edges": []}}}
+
+    own = await _put(handler, USER_A, f"{BASE}/{PA}", stages)
+    new = await _put(handler, USER_B, f"{BASE}/pipe-new", stages)
+
+    assert own.status_code == 200
+    assert store.get(PA)["goals"]["nodes"] == [{"id": "g1"}]
+    assert new.status_code == 200
+    assert store.get_owner_org("pipe-new") == "org-b"
+    assert store.get_owner_org(PA) == "org-a"
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +424,66 @@ async def test_auto_run_and_system_metrics_record_the_creator_org(handler, store
         ).status_code == 404
 
 
+def _save_executable(store: PipelineResultStore) -> None:
+    complete = dict.fromkeys(("ideas", "goals", "actions", "orchestration"), "complete")
+    task = {"id": "t1", "data": {"orch_type": "agent_task", "label": "Build cache"}}
+    store.save(
+        PA,
+        {"stage_status": complete, "orchestration": {"nodes": [task], "edges": []}},
+        org_id="org-a",
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_queues_the_plan_for_the_owner_org(handler, store) -> None:
+    _save_executable(store)
+    graph_store = MagicMock()
+    graph_store.list.return_value = []
+    launch = {
+        "execution_id": "exec-1",
+        "correlation_id": "corr-1",
+        "execution_mode": "workflow",
+        "run_id": "run-1",
+    }
+
+    with (
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store),
+        patch(
+            "aragora.pipeline.canonical_execution.queue_plan_execution", return_value=launch
+        ) as queue,
+        patch(
+            "aragora.pipeline.canonical_execution.execute_queued_plan",
+            new=AsyncMock(side_effect=RuntimeError("stop")),
+        ),
+    ):
+        result = await _post(handler, USER_A, f"{BASE}/{PA}/execute", {})
+        await module._pipeline_tasks["exec-1"]
+
+    assert result.status_code == 202
+    assert queue.call_args.kwargs["org_id"] == "org-a"
+    assert queue.call_args.kwargs["created_by"] == "user-a"
+    assert graph_store.list.call_args.kwargs["org_id"] == "org-a"
+
+
+@pytest.mark.asyncio
+async def test_execute_refused_by_plan_ownership_is_404(handler, store) -> None:
+    from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
+
+    _save_executable(store)
+
+    with (
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=MagicMock()),
+        patch(
+            "aragora.pipeline.canonical_execution.queue_plan_execution",
+            side_effect=ExecutionNotAuthorizedError("plan_owned_by_other_org", "refused"),
+        ),
+    ):
+        result = await _post(handler, USER_A, f"{BASE}/{PA}/execute", {})
+
+    assert result.status_code == 404
+    assert "execution" not in store.get(PA)
+
+
 @pytest.mark.asyncio
 async def test_extract_goals_ignores_another_orgs_canvas(handler, store) -> None:
     canvas = SimpleNamespace(
@@ -342,6 +507,21 @@ async def test_extract_goals_ignores_another_orgs_canvas(handler, store) -> None
     assert other.body == missing.body
 
 
+@pytest.mark.asyncio
+async def test_debate_to_pipeline_needs_the_debate_owner(handler, store) -> None:
+    storage = MagicMock()
+    storage.get_access_info.return_value = ("debate-a", "org-a", True)
+    handler = CanvasPipelineHandler({"storage": storage})
+
+    with patch.object(CanvasPipelineHandler, "handle_debate_to_pipeline") as convert:
+        other = await _post(handler, USER_B, "/api/v1/debates/debate-a/to-pipeline", {})
+        anonymous = await _post(handler, ANONYMOUS, "/api/v1/debates/debate-a/to-pipeline", {})
+
+    assert other.status_code == 404
+    assert anonymous.status_code == 401
+    convert.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # VAL-PIPE-005: the permission check fails closed
 # ---------------------------------------------------------------------------
@@ -355,11 +535,30 @@ async def test_checker_failure_denies_and_skips_the_operation(handler, store, ex
     with (
         patch("aragora.rbac.checker.get_permission_checker", side_effect=exc("checker down")),
         patch.object(CanvasPipelineHandler, "handle_from_ideas") as operation,
+        patch.object(CanvasPipelineHandler, "handle_approve_transition") as approve,
     ):
         denial = handler._check_permission(request, "canvas:create")
         create = await _resolve(handler.handle_post(f"{BASE}/from-ideas", {}, request))
+        write = await _resolve(handler.handle_post(f"{BASE}/{PA}/approve-transition", {}, request))
 
     assert denial is not None and denial.status_code == 403
     assert create.status_code == 403
+    assert write.status_code == 403
     operation.assert_not_called()
+    approve.assert_not_called()
     assert {p["id"] for p in store.list_pipelines(limit=100)} == {PA}
+
+
+@pytest.mark.asyncio
+async def test_checker_call_failure_denies(handler, store) -> None:
+    checker = MagicMock()
+    checker.check_permission.side_effect = ValueError("bad context")
+
+    with (
+        patch("aragora.rbac.checker.get_permission_checker", return_value=checker),
+        patch.object(CanvasPipelineHandler, "handle_save_pipeline") as save,
+    ):
+        result = await _put(handler, USER_A, f"{BASE}/{PA}", {"stages": {"ideas": {}}})
+
+    assert result.status_code == 403
+    save.assert_not_called()
