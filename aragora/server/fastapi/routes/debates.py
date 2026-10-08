@@ -15,6 +15,13 @@ Provides async debate management endpoints:
 - PATCH  /api/v2/debates/{debate_id}                  - Update debate metadata
 - DELETE /api/v2/debates/{debate_id}                  - Delete a debate
 
+Org isolation follows :mod:`aragora.tenancy.debate_access`, as on the legacy
+routes: the list shows only the caller org's debates; a debate is readable when
+it is public or belongs to the caller's org; only the owning org may change it.
+Another org's debate, an unowned debate and a missing debate all answer the
+same 404, before any permission check, so the answer never depends on whether
+the debate exists.
+
 Migration Notes:
     This module replaces the CrudOperationsMixin in the legacy debates handler
     with native FastAPI routes. Key improvements:
@@ -41,10 +48,19 @@ from pydantic import BaseModel, Field, field_validator
 
 from aragora.agents.spec import AgentSpec
 from aragora.rbac.models import AuthorizationContext
-from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+from aragora.tenancy.debate_access import (
+    authorize_debate_read_fastapi,
+    authorize_debate_write_fastapi,
+)
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found_error,
+    record_visible,
+    require_org_scope_fastapi,
+)
 
-from ..dependencies.auth import require_permission
-from ..middleware.error_handling import NotFoundError
+from ..dependencies.auth import check_permission, require_authenticated, require_permission
+from ..middleware.error_handling import APIError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -274,13 +290,49 @@ async def _call_sync_aware(func: Any, *args: Any, **kwargs: Any) -> Any:
     return result
 
 
-def get_nomic_dir() -> Path | None:
-    """Get the nomic directory from environment."""
-    nomic_dir_str = os.environ.get("ARAGORA_NOMIC_DIR", ".")
-    nomic_dir = Path(nomic_dir_str)
+def get_nomic_dir(request: Request | None = None) -> Path | None:
+    """The nomic directory: the app's (``create_app(nomic_dir=...)``, which also
+    holds ``debates.db``), else ``ARAGORA_NOMIC_DIR``; None when it does not exist."""
+    app_state = getattr(getattr(request, "app", None), "state", None)
+    nomic_dir = getattr(app_state, "nomic_dir", None)
+    if not isinstance(nomic_dir, Path):
+        nomic_dir = Path(os.environ.get("ARAGORA_NOMIC_DIR", "."))
     if nomic_dir.exists():
         return nomic_dir
     return None
+
+
+async def _load_debate(storage: Any, debate_id: str) -> Any:
+    """The stored debate with this id, else the shared not-found 404."""
+    if hasattr(storage, "get_debate"):
+        debate = await _call_storage_method(storage, "get_debate", debate_id)
+    elif hasattr(storage, "debates"):
+        debate = storage.debates.get(debate_id)
+    else:
+        debate = None
+    if not debate:
+        raise record_not_found_error("Debate")
+    return debate
+
+
+async def _list_org_debates(
+    storage: Any, scope: OrgScope, limit: int, offset: int
+) -> tuple[list[Any], int]:
+    """One page of the caller org's debates, newest first, and the org's total."""
+    if hasattr(storage, "list_recent"):
+        page = await _call_storage_method(
+            storage, "list_recent", limit=limit, org_id=scope.org_id, offset=offset
+        )
+        if hasattr(storage, "count_debates"):
+            total = await _call_storage_method(storage, "count_debates", org_id=scope.org_id)
+        else:
+            total = offset + len(page)
+        return list(page), total
+
+    # Storages without SQL paging keep debates in memory, each with its org.
+    records = list(storage.debates.values()) if hasattr(storage, "debates") else []
+    owned = [d for d in records if record_visible(_lookup_value(d, "org_id"), scope)]
+    return owned[offset : offset + limit], len(owned)
 
 
 def _lookup_value(record: Any, *names: str) -> Any:
@@ -533,43 +585,30 @@ async def list_debates(
     limit: int = Query(50, ge=1, le=100, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     status: str | None = Query(None, description="Filter by status"),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     storage=Depends(get_storage),
 ) -> DebateListResponse:
     """
-    List all debates with pagination.
+    List the caller org's debates with pagination.
 
-    Returns a paginated list of debate summaries.
+    Returns a paginated list of debate summaries, newest first. ``status``
+    narrows the returned page; ``total`` counts all of the org's debates.
     """
     try:
-        # Get debates from storage
-        if hasattr(storage, "list_debates"):
-            debates_raw = await _call_storage_method(
-                storage,
-                "list_debates",
-                limit=limit,
-                offset=offset,
-                status=status,
-            )
-        else:
-            # Fallback for simpler storage implementations
-            all_debates = list(storage.debates.values()) if hasattr(storage, "debates") else []
-            debates_raw = all_debates[offset : offset + limit]
-
-        # Get total count
-        if hasattr(storage, "count_debates"):
-            total = await _call_storage_method(storage, "count_debates", status=status)
-        else:
-            total = len(storage.debates) if hasattr(storage, "debates") else 0
+        debates_raw, total = await _list_org_debates(storage, scope, limit, offset)
 
         # Convert to summaries
         debates = []
         for d in debates_raw:
             consensus = _extract_consensus(d)
             final_answer = _extract_final_answer(d, consensus)
+            debate_status = _extract_status(d, consensus, final_answer)
+            if status is not None and debate_status != status:
+                continue
             summary = DebateSummary(
                 id=str(_lookup_value(d, "id", "debate_id") or ""),
                 task=_extract_task(d),
-                status=_extract_status(d, consensus, final_answer),
+                status=debate_status,
                 created_at=_stringify_optional(_lookup_value(d, "created_at")),
                 updated_at=_stringify_optional(_lookup_value(d, "updated_at")),
                 round_count=len(_extract_rounds(d)),
@@ -593,24 +632,17 @@ async def list_debates(
 @router.get("/debates/{debate_id}", response_model=DebateDetail)
 async def get_debate(
     debate_id: str,
+    request: Request,
     storage=Depends(get_storage),
 ) -> DebateDetail:
     """
-    Get debate by ID.
+    Get debate by ID or slug.
 
     Returns full debate details including rounds and consensus.
     """
+    debate_id = await authorize_debate_read_fastapi(request, storage, debate_id)
     try:
-        # Get debate from storage
-        if hasattr(storage, "get_debate"):
-            debate = await _call_storage_method(storage, "get_debate", debate_id)
-        elif hasattr(storage, "debates"):
-            debate = storage.debates.get(debate_id)
-        else:
-            debate = None
-
-        if not debate:
-            raise NotFoundError(f"Debate {debate_id} not found")
+        debate = await _load_debate(storage, debate_id)
 
         consensus = _extract_consensus(debate)
         final_answer = _extract_final_answer(debate, consensus)
@@ -629,7 +661,7 @@ async def get_debate(
             metadata=_coerce_dict(_lookup_value(debate, "metadata")),
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error getting debate %s: %s", debate_id, e)
@@ -639,6 +671,7 @@ async def get_debate(
 @router.get("/debates/{debate_id}/messages", response_model=MessageResponse)
 async def get_debate_messages(
     debate_id: str,
+    request: Request,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     storage=Depends(get_storage),
@@ -648,17 +681,9 @@ async def get_debate_messages(
 
     Returns paginated list of debate messages/rounds.
     """
+    debate_id = await authorize_debate_read_fastapi(request, storage, debate_id)
     try:
-        # Get debate
-        if hasattr(storage, "get_debate"):
-            debate = await _call_storage_method(storage, "get_debate", debate_id)
-        elif hasattr(storage, "debates"):
-            debate = storage.debates.get(debate_id)
-        else:
-            debate = None
-
-        if not debate:
-            raise NotFoundError(f"Debate {debate_id} not found")
+        debate = await _load_debate(storage, debate_id)
 
         # Extract messages from rounds
         messages: list[dict[str, Any]] = []
@@ -692,7 +717,7 @@ async def get_debate_messages(
             has_more=(offset + limit) < total,
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error getting messages for debate %s: %s", debate_id, e)
@@ -702,6 +727,7 @@ async def get_debate_messages(
 @router.get("/debates/{debate_id}/convergence", response_model=ConvergenceResponse)
 async def get_debate_convergence(
     debate_id: str,
+    request: Request,
     storage=Depends(get_storage),
 ) -> ConvergenceResponse:
     """
@@ -709,17 +735,9 @@ async def get_debate_convergence(
 
     Returns whether the debate has converged and related metrics.
     """
+    debate_id = await authorize_debate_read_fastapi(request, storage, debate_id)
     try:
-        # Get debate
-        if hasattr(storage, "get_debate"):
-            debate = await _call_storage_method(storage, "get_debate", debate_id)
-        elif hasattr(storage, "debates"):
-            debate = storage.debates.get(debate_id)
-        else:
-            debate = None
-
-        if not debate:
-            raise NotFoundError(f"Debate {debate_id} not found")
+        debate = await _load_debate(storage, debate_id)
 
         consensus = _extract_consensus(debate)
         converged = consensus is not None and bool(
@@ -745,7 +763,7 @@ async def get_debate_convergence(
             similarity_scores=similarity_scores,
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error getting convergence for debate %s: %s", debate_id, e)
@@ -770,26 +788,20 @@ _VALID_STATUSES = {
 async def update_debate(
     debate_id: str,
     body: UpdateDebateRequest,
-    auth: AuthorizationContext = Depends(require_permission("debates:write")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
+    auth: AuthorizationContext = Depends(require_authenticated),
     storage=Depends(get_storage),
 ) -> UpdateDebateResponse:
     """
     Update debate metadata.
 
-    Allows updating title, tags, status, and custom metadata.
-    Requires `debates:write` permission.
+    Allows updating title, tags, status, and custom metadata of a debate the
+    caller's org owns. Requires `debates:write` permission.
     """
+    debate_id = (await authorize_debate_write_fastapi(scope, storage, debate_id)).debate_id
+    check_permission(auth, "debates:write")
     try:
-        # Get debate from storage
-        if hasattr(storage, "get_debate"):
-            debate = await _call_storage_method(storage, "get_debate", debate_id)
-        elif hasattr(storage, "debates"):
-            debate = storage.debates.get(debate_id)
-        else:
-            debate = None
-
-        if not debate:
-            raise NotFoundError(f"Debate {debate_id} not found")
+        debate = await _load_debate(storage, debate_id)
 
         # Build updates from non-None fields
         updates: dict[str, Any] = {}
@@ -853,7 +865,7 @@ async def update_debate(
             debate=summary,
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except HTTPException:
         raise
@@ -865,27 +877,21 @@ async def update_debate(
 @router.delete("/debates/{debate_id}", response_model=DeleteDebateResponse)
 async def delete_debate(
     debate_id: str,
-    auth: AuthorizationContext = Depends(require_permission("debates:delete")),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
+    auth: AuthorizationContext = Depends(require_authenticated),
     storage=Depends(get_storage),
 ) -> DeleteDebateResponse:
     """
-    Delete a debate.
+    Delete a debate the caller's org owns.
 
     Permanently deletes a debate and cascades to associated data.
     For soft-delete, use PATCH with status='archived' instead.
     Requires `debates:delete` permission.
     """
+    debate_id = (await authorize_debate_write_fastapi(scope, storage, debate_id)).debate_id
+    check_permission(auth, "debates:delete")
     try:
-        # Check debate exists
-        if hasattr(storage, "get_debate"):
-            debate = await _call_storage_method(storage, "get_debate", debate_id)
-        elif hasattr(storage, "debates"):
-            debate = storage.debates.get(debate_id)
-        else:
-            debate = None
-
-        if not debate:
-            raise NotFoundError(f"Debate {debate_id} not found")
+        await _load_debate(storage, debate_id)
 
         # Perform deletion
         deleted = False
@@ -901,12 +907,12 @@ async def delete_debate(
             deleted = True
 
         if not deleted:
-            raise NotFoundError(f"Debate {debate_id} not found")
+            raise record_not_found_error("Debate")
 
         logger.info("Debate %s permanently deleted", debate_id)
         return DeleteDebateResponse(deleted=True, id=debate_id)
 
-    except NotFoundError:
+    except APIError:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
         logger.exception("Error deleting debate %s: %s", debate_id, e)
@@ -1015,16 +1021,19 @@ _VALID_EXPORT_FORMATS = {"json", "csv", "html", "txt", "md"}
 async def export_debate(
     debate_id: str,
     export_format: str,
+    request: Request,
     table: str = Query("summary", description="Table type for CSV export"),
-    auth: AuthorizationContext = Depends(require_permission("export:read")),
+    auth: AuthorizationContext = Depends(require_authenticated),
     storage=Depends(get_storage),
 ) -> Response:
     """
-    Export a debate in the specified format.
+    Export a debate the caller may read in the specified format.
 
     Supports JSON, CSV, HTML, TXT, and Markdown formats.
-    Requires `export:read` permission.
+    Requires `debates:read` permission, like the legacy export route.
     """
+    debate_id = await authorize_debate_read_fastapi(request, storage, debate_id)
+    check_permission(auth, "debates:read")
     if export_format not in _VALID_EXPORT_FORMATS:
         raise HTTPException(
             status_code=400,
@@ -1032,16 +1041,7 @@ async def export_debate(
         )
 
     try:
-        # Get debate from storage
-        if hasattr(storage, "get_debate"):
-            debate = await _call_storage_method(storage, "get_debate", debate_id)
-        elif hasattr(storage, "debates"):
-            debate = storage.debates.get(debate_id)
-        else:
-            debate = None
-
-        if not debate:
-            raise NotFoundError(f"Debate {debate_id} not found")
+        debate = await _load_debate(storage, debate_id)
 
         # JSON export returns directly
         if export_format == "json":
@@ -1095,7 +1095,7 @@ async def export_debate(
             },
         )
 
-    except NotFoundError:
+    except APIError:
         raise
     except HTTPException:
         raise
@@ -1107,25 +1107,29 @@ async def export_debate(
 @router.get("/debates/{debate_id}/argument-graph", response_model=ArgumentGraphResponse)
 async def get_argument_graph(
     debate_id: str,
+    request: Request,
     output_format: str = Query(
         "json", alias="format", description="Output format: json or mermaid"
     ),
-    auth: AuthorizationContext = Depends(require_permission("analysis:read")),
+    auth: AuthorizationContext = Depends(require_authenticated),
+    storage=Depends(get_storage),
 ) -> ArgumentGraphResponse:
     """
-    Get the argument graph for a debate.
+    Get the argument graph for a debate the caller may read.
 
     Reconstructs the graph from stored debate traces via ArgumentCartographer.
     Supports JSON (default) and Mermaid diagram output.
     Requires `analysis:read` permission.
     """
+    debate_id = await authorize_debate_read_fastapi(request, storage, debate_id)
+    check_permission(auth, "analysis:read")
     try:
         from aragora.debate.traces import DebateTrace
         from aragora.visualization.mapper import ArgumentCartographer
     except ImportError:
         raise HTTPException(status_code=503, detail="Graph analysis module not available")
 
-    nomic_dir = get_nomic_dir()
+    nomic_dir = get_nomic_dir(request)
     if not nomic_dir:
         raise HTTPException(status_code=503, detail="Nomic directory not configured")
 
@@ -1185,21 +1189,25 @@ async def get_argument_graph(
 @router.get("/debates/{debate_id}/stats", response_model=GraphStatsResponse)
 async def get_debate_stats(
     debate_id: str,
-    auth: AuthorizationContext = Depends(require_permission("analysis:read")),
+    request: Request,
+    auth: AuthorizationContext = Depends(require_authenticated),
+    storage=Depends(get_storage),
 ) -> GraphStatsResponse:
     """
-    Get argument graph statistics for a debate.
+    Get argument graph statistics for a debate the caller may read.
 
     Returns node counts, edge counts, depth, branching factor, and complexity.
     Requires `analysis:read` permission.
     """
+    debate_id = await authorize_debate_read_fastapi(request, storage, debate_id)
+    check_permission(auth, "analysis:read")
     try:
         from aragora.debate.traces import DebateTrace
         from aragora.visualization.mapper import ArgumentCartographer
     except ImportError:
         raise HTTPException(status_code=503, detail="Graph analysis module not available")
 
-    nomic_dir = get_nomic_dir()
+    nomic_dir = get_nomic_dir(request)
     if not nomic_dir:
         raise HTTPException(status_code=503, detail="Nomic directory not configured")
 

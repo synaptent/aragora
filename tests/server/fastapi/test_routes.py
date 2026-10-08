@@ -3,7 +3,7 @@ Tests for FastAPI route endpoints.
 
 Covers:
 - Health check endpoints (liveness/readiness)
-- Debate listing (public, read-only)
+- Debate listing (org members only)
 - Decision endpoints (auth-protected write operations)
 - RBAC enforcement
 """
@@ -71,20 +71,31 @@ class TestHealthRoutes:
 
 
 class TestDebateRoutes:
-    """Tests for debate query endpoints (read-only, public)."""
+    """Tests for debate query endpoints (org members only)."""
 
-    def test_list_debates_returns_200(self, client):
-        """List debates should be publicly accessible."""
-        # Mock storage to return empty list
-        client.app.state.context["storage"].list_debates = MagicMock(return_value=[])
+    def test_list_debates_requires_auth(self, client):
+        """Anonymous callers cannot list debates."""
         response = client.get("/api/v2/debates")
+        assert response.status_code == 401
+
+    def test_list_debates_returns_200(self, client, fastapi_bearer):
+        """An org member lists the org's debates."""
+        storage = client.app.state.context["storage"]
+        storage.list_recent = MagicMock(return_value=[])
+        storage.count_debates = MagicMock(return_value=0)
+        response = client.get("/api/v2/debates", headers=fastapi_bearer("user-1", "org-1"))
         assert response.status_code == 200
 
-    def test_list_debates_with_pagination(self, client):
+    def test_list_debates_with_pagination(self, client, fastapi_bearer):
         """List debates supports pagination params."""
-        client.app.state.context["storage"].list_debates = MagicMock(return_value=[])
-        response = client.get("/api/v2/debates?limit=10&offset=0")
+        storage = client.app.state.context["storage"]
+        storage.list_recent = MagicMock(return_value=[])
+        storage.count_debates = MagicMock(return_value=0)
+        response = client.get(
+            "/api/v2/debates?limit=10&offset=0", headers=fastapi_bearer("user-1", "org-1")
+        )
         assert response.status_code == 200
+        storage.list_recent.assert_called_once_with(limit=10, org_id="org-1", offset=0)
 
 
 class TestDecisionRoutes:
