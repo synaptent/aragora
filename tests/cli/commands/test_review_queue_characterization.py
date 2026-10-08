@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import ast
 import difflib
+import importlib
 import json
 import os
 import re
@@ -140,9 +141,7 @@ def _pr(**overrides: Any) -> dict[str, Any]:
     return pr
 
 
-def _in_job(
-    mp: pytest.MonkeyPatch,
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[list[str]]]:
+def _in_job(mp: pytest.MonkeyPatch) -> tuple[dict[str, Any], list[dict[str, Any]], list[list[str]]]:
     """Same inputs as ``in_job_advisory_inputs`` in test_review_queue.py, plus a call log."""
     for flag in """TIERED_MERGE_GATE SEVERITY_GATED_DISSENT ADVISORY_DISSENT_SETTLE
     OPERATOR_ADVISORY_SETTLEMENT""".split():
@@ -177,11 +176,9 @@ def _in_job(
         {
             "author": {"login": "scarmani"},
             "createdAt": "2026-07-11T00:00:00Z",
-            "body": (
-                f"## {family} independent model review\n**Model family:** {family}\n"
-                f"Current head: {HEAD}\nVerdict: CHANGES-REQUESTED\n"
-                "- [P2] A non-blocking advisory."
-            ),
+            "body": f"## {family} independent model review\n**Model family:** {family}\n"
+            f"Current head: {HEAD}\nVerdict: CHANGES-REQUESTED\n"
+            "- [P2] A non-blocking advisory.",
         }
         for family in ("claude", "openai")
     ] + [
@@ -219,15 +216,8 @@ def _apply_reporting_case(
     if case == "low_risk":
         pr["files"] = [{"path": "docs/example.md"}]
     if case == "unavailable":
-        mp.setattr(
-            rq,
-            "_fetch_required_pr_check_surface",
-            lambda *_args: {
-                "available": False,
-                "checks": [],
-                "error": "required surface transport unavailable",
-            },
-        )
+        down = {"available": False, "checks": [], "error": "required surface transport unavailable"}
+        mp.setattr(rq, "_fetch_required_pr_check_surface", lambda *_args: down)
     row: dict[str, Any] = {}
     required_row: dict[str, Any] = {}
     if case.startswith("quorum_"):
@@ -460,7 +450,7 @@ def test_model_review_quorum_corpus(
 
 
 def _classification_inputs() -> dict[str, list[str]]:
-    tier4 = list(rq.TIER_4_PREFIXES)
+    tier4 = sorted(set(rq.TIER_4_PREFIXES) - set(rq.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES))
     near_misses = [
         f"{path}{suffix}" if not path.endswith("/") else f"{path}child/file.py"
         for path in tier4
@@ -491,6 +481,15 @@ def test_tier_classification_corpus() -> None:
     }
     record["empty_file_list"] = list(rq._classify_model_review_tier([]))
     _assert_matches_golden("behavior_corpus.json", "classify/all", record)
+
+
+def test_generated_tier4_closure_classifies_by_property() -> None:
+    """Split steps grow this generated closure (design I3): checked as a property, not a golden."""
+    closure = rq.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    misses = [f"{path}{suffix}" for path in closure for suffix in (".bak", "/child")]
+    tier = {path: rq._classify_model_review_tier([path])[0] for path in (*closure, *misses)}
+    assert closure and [path for path in closure if tier[path] != 4] == []
+    assert [path for path in misses if tier[path] >= 4] == []
 
 
 def test_corpus_has_no_unrecorded_cases() -> None:
@@ -525,9 +524,8 @@ def test_section8_advisory_behaviors_stay_frozen(
     assert packet.machine_recommendation == recommendation
     assert quorum["admin_squash_allowed"] is admin_squash
     if non_required_count is not None:
-        assert (
-            packet.check_surfaces["pr_rollup"]["non_required_non_green_count"] == non_required_count
-        )
+        rollup = packet.check_surfaces["pr_rollup"]
+        assert rollup["non_required_non_green_count"] == non_required_count
         assert bool(packet.risk_flags) is bool(non_required_count)
     if case in {"unavailable", "p3_3_skew"}:
         assert packet.risk_flags == []
@@ -649,6 +647,8 @@ def test_units_reach_seams_through_the_facade_at_call_time() -> None:
         if (found := _seam_violations(ast.parse(path.read_text(encoding="utf-8")), seams))
     }
     assert violations == {}
+    for unit in [importlib.import_module(f"aragora.cli.commands.{path.stem}") for path in existing]:
+        assert getattr(unit, "_review_queue_backend", lambda: rq)() is rq, unit.__name__
 
 
 def test_seam_checker_flags_bindings_and_direct_calls() -> None:
