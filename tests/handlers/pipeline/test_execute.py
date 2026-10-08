@@ -37,6 +37,18 @@ from aragora.server.handlers.pipeline.execute import (
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
+ORG = "test-org-001"
+
+
+@pytest.fixture(autouse=True)
+def _owned_pipelines():
+    """Treat every pipeline id as owned by the caller's org; isolation has its own tests."""
+    with patch("aragora.tenancy.pipeline_access.pipeline_owned", return_value=True):
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _clear_executions():
     """Reset module-level state between tests."""
@@ -307,6 +319,7 @@ class TestGetExecutionStatus:
 
     def test_status_started(self):
         _executions["pipe-123"] = {
+            "org_id": ORG,
             "pipeline_id": "pipe-123",
             "cycle_id": "pipe-abc",
             "status": "started",
@@ -325,6 +338,7 @@ class TestGetExecutionStatus:
 
     def test_status_completed(self):
         _executions["pipe-done"] = {
+            "org_id": ORG,
             "pipeline_id": "pipe-done",
             "status": "completed",
             "total_subtasks": 5,
@@ -340,6 +354,7 @@ class TestGetExecutionStatus:
 
     def test_status_failed(self):
         _executions["pipe-fail"] = {
+            "org_id": ORG,
             "pipeline_id": "pipe-fail",
             "status": "failed",
             "error": "Pipeline execution failed",
@@ -359,6 +374,7 @@ class TestGetExecutionStatus:
 
     def test_status_preview(self):
         _executions["pipe-dry"] = {
+            "org_id": ORG,
             "pipeline_id": "pipe-dry",
             "status": "preview",
             "goals": [{"description": "Task 1", "track": "core", "priority": 1}],
@@ -373,6 +389,7 @@ class TestGetExecutionStatus:
 
     def test_status_cancelled(self):
         _executions["pipe-cancel"] = {
+            "org_id": ORG,
             "pipeline_id": "pipe-cancel",
             "status": "cancelled",
             "completed_at": "2026-02-20T13:00:00+00:00",
@@ -1383,6 +1400,7 @@ class TestHandlerConstructor:
 class TestEdgeCases:
     def test_get_status_with_versioned_path(self):
         _executions["pipe-v1"] = {
+            "org_id": ORG,
             "pipeline_id": "pipe-v1",
             "status": "completed",
         }
@@ -1527,7 +1545,7 @@ class TestModuleStateIsolation:
         assert len(_execution_tasks) == 0
 
     def test_setting_execution_visible_in_handle(self):
-        _executions["test-iso"] = {"pipeline_id": "test-iso", "status": "running"}
+        _executions["test-iso"] = {"pipeline_id": "test-iso", "status": "running", "org_id": ORG}
         h = _make_handler()
         http = _make_http_handler()
         result = h.handle("/api/v1/pipeline/test-iso/execute", {}, http)

@@ -12,6 +12,8 @@ handlers answer the same way through these helpers. The rules extend
   ``PipelineResultStore``) or a graph (in ``GraphStore``). Missing, other-org
   and unknown-owner records all answer False, and handlers return
   :func:`~aragora.tenancy.record_scope.record_not_found` for each of them.
+  :func:`graph_owned` and :func:`pipeline_owned` answer the same question
+  against the shared stores for routes that only have an id.
 
 There are no ``pipeline:*`` permissions in the role catalog, so pipeline
 routes check the canvas permissions every org role already holds: reading
@@ -96,6 +98,41 @@ def record_owned(store: Any, record_id: str, scope: OrgScope | None) -> bool:
     return record_visible(store_owner_org(store, record_id), scope)
 
 
+def graph_owned(graph_id: str, scope: OrgScope | None) -> bool:
+    """Whether the caller's org owns the graph ``graph_id`` in the graph store.
+
+    Store errors answer False.
+    """
+    try:
+        from aragora.pipeline.graph_store import get_graph_store
+
+        return record_owned(get_graph_store(), graph_id, scope)
+    except Exception as exc:  # noqa: BLE001 - an unreadable owner must hide the graph
+        logger.warning("Graph owner lookup failed; denying: %s", type(exc).__name__)
+        return False
+
+
+def pipeline_owned(pipeline_id: str, scope: OrgScope | None) -> bool:
+    """Whether the caller's org owns the pipeline ``pipeline_id``.
+
+    When the graph store holds a graph with this id, that graph's owner
+    decides, because pipeline execution reads its nodes from the graph; a
+    saved pipeline of the same id cannot vouch for someone else's graph.
+    Otherwise the saved pipeline's owner decides. Store errors answer False.
+    """
+    try:
+        from aragora.pipeline.graph_store import get_graph_store
+        from aragora.storage.pipeline_store import get_pipeline_store
+
+        graph_store = get_graph_store()
+        if graph_store.get(pipeline_id) is not None:
+            return record_owned(graph_store, pipeline_id, scope)
+        return record_owned(get_pipeline_store(), pipeline_id, scope)
+    except Exception as exc:  # noqa: BLE001 - an unreadable owner must hide the pipeline
+        logger.warning("Pipeline owner lookup failed; denying: %s", type(exc).__name__)
+        return False
+
+
 __all__ = [
     "PERMISSION_DENIED_CODE",
     "PIPELINE_CREATE",
@@ -105,6 +142,8 @@ __all__ = [
     "PIPELINE_UPDATE",
     "authorize_pipeline_request",
     "check_pipeline_permission",
+    "graph_owned",
+    "pipeline_owned",
     "record_owned",
     "store_owner_org",
 ]
