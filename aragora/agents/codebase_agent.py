@@ -455,7 +455,7 @@ class CodebaseUnderstandingAgent:
 
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
         logger.info(
-            f"Indexed {index.total_files} files ({index.total_lines} lines) in {elapsed:.2f}s"
+            "Indexed %s files (%s lines) in %.2fs", index.total_files, index.total_lines, elapsed
         )
 
         self._index = index
@@ -632,9 +632,11 @@ class CodebaseUnderstandingAgent:
 
         elapsed = (result.completed_at - start_time).total_seconds()
         logger.info(
-            f"[{scan_id}] Audit completed in {elapsed:.2f}s: "
-            f"{len(result.security_findings)} security, "
-            f"{len(result.bug_findings)} bugs"
+            "[%s] Audit completed in %.2fs: %s security, %s bugs",
+            scan_id,
+            elapsed,
+            len(result.security_findings),
+            len(result.bug_findings),
         )
 
         return result

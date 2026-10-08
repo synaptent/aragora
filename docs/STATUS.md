@@ -153,8 +153,8 @@ For the full current-status narrative, use the canonical doc:
 
 ### Codebase Metrics (generated from `docs/METRICS.md`)
 <!-- metrics:begin status-codebase-metrics -->
-- **Python files (`aragora/`)**: 4,358
-- **Tests**: 228,072 across 5,679 test files
+- **Python files (`aragora/`)**: 4,390
+- **Tests**: 228,254 across 5,696 test files
 - **KM adapters**: 42 registered adapter specs
 - **API operations**: 3,205 across 2,912 paths
 <!-- metrics:end -->

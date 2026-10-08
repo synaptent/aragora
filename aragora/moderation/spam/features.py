@@ -13,8 +13,8 @@ from collections import Counter
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from aragora.services.spam.models import EmailFeatures
-from aragora.services.spam.patterns import (
+from aragora.moderation.spam.models import EmailFeatures
+from aragora.moderation.spam.patterns import (
     DANGEROUS_EXTENSIONS,
     FREE_EMAIL_PROVIDERS,
     KNOWN_SPAM_DOMAINS,

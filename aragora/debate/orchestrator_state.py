@@ -182,4 +182,7 @@ async def select_judge(arena: Arena, proposals: dict[str, str], context: list[Me
         sanitize_fn=OutputSanitizer.sanitize_agent_output,
         consensus_memory=arena.consensus_memory,
     )
-    return await selector.select_judge(proposals, context)
+    judge = await selector.select_judge(proposals, context)
+    if judge is None:
+        raise RuntimeError("Judge selection returned no agent")
+    return judge

@@ -10,7 +10,7 @@ Provides comprehensive token-level metering with:
 Phase 4.3 Implementation as per development roadmap.
 
 Usage:
-    from aragora.services.usage_metering import UsageMeter, get_usage_meter
+    from aragora.billing.usage_metering import UsageMeter, get_usage_meter
 
     meter = get_usage_meter()
 
@@ -47,7 +47,7 @@ from typing import Any
 from aragora.persistence.db_config import get_nomic_dir
 
 # Re-export all models for backward compatibility
-from aragora.services.metering_models import (
+from aragora.billing.metering_models import (
     ApiCallRecord,
     DebateUsageRecord,
     HourlyAggregate,

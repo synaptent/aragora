@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 # Critical modules that MUST have high coverage (80%+)
@@ -72,7 +73,7 @@ def analyze_coverage(coverage_data: dict) -> dict:
     """Analyze coverage by module."""
     files = coverage_data.get("files", {})
 
-    module_coverage = {}
+    module_coverage: dict[str, dict[str, Any]] = {}
     zero_coverage_files = []
 
     for filepath, data in files.items():
