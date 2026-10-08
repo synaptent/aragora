@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/config';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 interface HollowConsensusAlert {
   round: number;
@@ -70,7 +71,7 @@ export function TricksterAlert({ debateId }: TricksterAlertProps) {
     async function fetchTricksterData() {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/debates/${debateId}/trickster`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/api/debates/${debateId}/trickster`);
         if (!response.ok) {
           if (response.status === 404) {
             setError('Trickster analysis not available for this debate');

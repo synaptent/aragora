@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 interface ImpasseIndicators {
   repeated_critiques: boolean;
@@ -53,7 +54,7 @@ export function ImpasseDetectionPanel({
   const fetchImpasse = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${apiBase}/api/debates/${debateId}/impasse`);
+      const res = await fetchWithAuth(`${apiBase}/api/debates/${debateId}/impasse`);
       if (res.ok) {
         const impasseData = await res.json();
         setData(impasseData);
@@ -301,7 +302,7 @@ export function ImpasseStatusBadge({
   useEffect(() => {
     async function check() {
       try {
-        const res = await fetch(`${apiBase}/api/debates/${debateId}/impasse`);
+        const res = await fetchWithAuth(`${apiBase}/api/debates/${debateId}/impasse`);
         if (res.ok) {
           const data = await res.json();
           setIsImpasse(data.is_impasse || data.has_impasse || false);

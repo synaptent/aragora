@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 const API_BASE = API_BASE_URL;
 
@@ -122,7 +123,7 @@ export function useDebateFork(debateId: string) {
     setState(s => ({ ...s, loading: true, error: null }));
 
     try {
-      const response = await fetch(`${API_BASE}/api/debates/${debateId}/forks`);
+      const response = await fetchWithAuth(`${API_BASE}/api/debates/${debateId}/forks`);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -165,7 +166,7 @@ export function useDebateFork(debateId: string) {
     setState(s => ({ ...s, forking: true, forkError: null }));
 
     try {
-      const response = await fetch(`${API_BASE}/api/debates/${debateId}/fork`, {
+      const response = await fetchWithAuth(`${API_BASE}/api/debates/${debateId}/fork`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

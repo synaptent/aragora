@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { fetchWithAuth } from '@/lib/api';
 
 // =============================================================================
 // Types
@@ -95,7 +96,7 @@ function DecisionAuditCard({ apiBase }: { apiBase: string }) {
   const fetchReceipts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${apiBase}/api/gauntlet/results?limit=5`);
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/results?limit=5`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       // Map to Receipt format
@@ -193,7 +194,7 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
   const fetchCompliance = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${apiBase}/api/gauntlet/results?limit=50`);
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/results?limit=50`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       const results = data.results || data || [];
@@ -312,7 +313,7 @@ function ActiveWorkflowsCard({ apiBase }: { apiBase: string }) {
   const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${apiBase}/api/workflows/stats`);
+      const response = await fetchWithAuth(`${apiBase}/api/workflows/stats`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       setStats({
@@ -401,7 +402,7 @@ function TeamPerformanceCard({ apiBase }: { apiBase: string }) {
   const fetchTeam = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${apiBase}/api/leaderboard-view?limit=5`);
+      const response = await fetchWithAuth(`${apiBase}/api/leaderboard-view?limit=5`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       const mapped = (data.agents || data || []).slice(0, 5).map((a: Record<string, unknown>) => ({

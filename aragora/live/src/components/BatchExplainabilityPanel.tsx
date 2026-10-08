@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 interface BatchJobStatus {
   batch_id: string;
@@ -92,7 +93,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
   const fetchDebates = useCallback(async () => {
     setDebatesLoading(true);
     try {
-      const response = await fetch(`${apiBase}/api/debates?limit=50&status=completed`);
+      const response = await fetchWithAuth(`${apiBase}/api/debates?limit=50&status=completed`);
       if (!response.ok) throw new Error('Failed to fetch debates');
       const data = await response.json();
       setDebates(data.debates || []);
@@ -149,7 +150,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase}/api/v1/explainability/batch`, {
+      const response = await fetchWithAuth(`${apiBase}/api/v1/explainability/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -191,7 +192,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`${apiBase}/api/v1/explainability/batch/${batchId}/status`);
+        const response = await fetchWithAuth(`${apiBase}/api/v1/explainability/batch/${batchId}/status`);
         if (!response.ok) throw new Error('Failed to fetch batch status');
 
         const data = await response.json();
@@ -215,7 +216,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
   // Fetch batch results
   const fetchBatchResults = async (batchId: string) => {
     try {
-      const response = await fetch(`${apiBase}/api/v1/explainability/batch/${batchId}/results`);
+      const response = await fetchWithAuth(`${apiBase}/api/v1/explainability/batch/${batchId}/results`);
       if (!response.ok) throw new Error('Failed to fetch results');
 
       const data = await response.json();
@@ -242,7 +243,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase}/api/v1/explainability/compare`, {
+      const response = await fetchWithAuth(`${apiBase}/api/v1/explainability/compare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

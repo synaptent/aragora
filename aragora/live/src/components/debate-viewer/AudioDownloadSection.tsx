@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 interface AudioDownloadSectionProps {
   debateId: string;
@@ -19,7 +20,7 @@ export function AudioDownloadSection({ debateId }: AudioDownloadSectionProps) {
     const checkAudio = async () => {
       setStatus('checking');
       try {
-        const res = await fetch(`${API_BASE_URL}/audio/${debateId}.mp3`, { method: 'HEAD' });
+        const res = await fetchWithAuth(`${API_BASE_URL}/audio/${debateId}.mp3`, { method: 'HEAD' });
         if (res.ok) {
           setAudioUrl(`${API_BASE_URL}/audio/${debateId}.mp3`);
           setStatus('ready');
@@ -37,7 +38,7 @@ export function AudioDownloadSection({ debateId }: AudioDownloadSectionProps) {
     setStatus('generating');
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/debates/${debateId}/broadcast`, {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/debates/${debateId}/broadcast`, {
         method: 'POST',
       });
       const data = await res.json();

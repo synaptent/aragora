@@ -16,6 +16,7 @@ import { ScenarioCard } from './ScenarioCard';
 import { ScenarioBuilder } from './ScenarioBuilder';
 import { CompareView } from './CompareView';
 import { GridView } from './GridView';
+import { fetchWithAuth } from '@/lib/api';
 
 export interface ScenarioMatrixViewProps {
   events?: StreamEvent[];
@@ -56,7 +57,7 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
       try {
         setLoading(true);
         const apiUrl = API_BASE_URL;
-        const response = await fetch(`${apiUrl}/api/debates/matrix/${initialMatrixId}`);
+        const response = await fetchWithAuth(`${apiUrl}/api/debates/matrix/${initialMatrixId}`);
         if (response.ok) {
           const data = await response.json();
           setResult(data);
@@ -81,7 +82,7 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
       const refreshResult = async () => {
         try {
           const apiUrl = API_BASE_URL;
-          const response = await fetch(
+          const response = await fetchWithAuth(
             `${apiUrl}/api/debates/matrix/${result.matrix_id}`
           );
           if (response.ok) {
@@ -148,7 +149,7 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
       setError(null);
 
       const apiUrl = API_BASE_URL;
-      const response = await fetch(`${apiUrl}/api/debates/matrix`, {
+      const response = await fetchWithAuth(`${apiUrl}/api/debates/matrix`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

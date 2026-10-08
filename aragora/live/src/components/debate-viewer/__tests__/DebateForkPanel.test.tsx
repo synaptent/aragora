@@ -1,6 +1,7 @@
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DebateForkPanel } from '../DebateForkPanel';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 // Mock BackendSelector
 jest.mock('@/components/BackendSelector', () => ({
@@ -518,6 +519,42 @@ describe('DebateForkPanel', () => {
 
       // Context should be preserved
       expect(screen.getByDisplayValue('My context')).toBeInTheDocument();
+    });
+  });
+
+  describe('with a signed-in session', () => {
+    const bearer = `Bearer ${TEST_SESSION_TOKEN}`;
+
+    beforeEach(() => {
+      storeTestSession();
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ suggestions: [] }) });
+    });
+
+    afterEach(() => clearTestSession());
+
+    it('sends the session token with fork, suggestion and follow-up requests', async () => {
+      const user = userEvent.setup();
+      render(<DebateForkPanel debateId="debate-123" messageCount={10} />);
+
+      await act(async () => {
+        await user.click(screen.getByText('[CREATE FORK]'));
+      });
+      await act(async () => {
+        await user.click(screen.getByText('[FOLLOW-UP]'));
+      });
+      await waitFor(() => expect(authHeaderOf(mockFetch, '/api/debates/debate-123/followups')).toBe(bearer));
+
+      await act(async () => {
+        await user.type(screen.getByPlaceholderText(/What specific question/), 'My custom task');
+      });
+      await act(async () => {
+        await user.click(screen.getByText('[CREATE FOLLOW-UP]'));
+      });
+
+      await waitFor(() =>
+        expect(authHeaderOf(mockFetch, '/api/debates/debate-123/followup', 'POST')).toBe(bearer),
+      );
+      expect(authHeaderOf(mockFetch, '/api/debates/debate-123/fork', 'POST')).toBe(bearer);
     });
   });
 });

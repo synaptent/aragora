@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { getRuntimeBackendConfig } from '@/components/BackendSelector';
 import { useOnboardingStore } from '@/store';
 import { useDebateWebSocket } from '@/hooks/debate-websocket/useDebateWebSocket';
+import { fetchWithAuth } from '@/lib/api';
 
 type ReceiptListItem = {
   receipt_id?: string;
@@ -70,7 +71,7 @@ export function FirstDebateStep() {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       if (signal.aborted) return null;
 
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${apiBase}/api/v2/receipts?debate_id=${encodeURIComponent(debateId)}&limit=1&offset=0`,
         { signal }
       );
@@ -102,7 +103,7 @@ export function FirstDebateStep() {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       if (signal.aborted) return null;
 
-      const response = await fetch(`${apiBase}/api/v2/receipts/${encodeURIComponent(receiptId)}`, {
+      const response = await fetchWithAuth(`${apiBase}/api/v2/receipts/${encodeURIComponent(receiptId)}`, {
         signal,
       });
 
@@ -183,7 +184,7 @@ export function FirstDebateStep() {
 
     setReceiptError(null);
 
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `${apiBase}/api/v2/receipts/${encodeURIComponent(firstReceiptId)}/export?format=${format}&raw=true`
     );
     if (!response.ok) {
@@ -222,7 +223,7 @@ export function FirstDebateStep() {
 
     try {
       // Create the debate via API with receipt generation enabled
-      const response = await fetch(`${apiBase}/api/debates`, {
+      const response = await fetchWithAuth(`${apiBase}/api/debates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

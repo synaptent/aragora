@@ -5,6 +5,7 @@
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -199,5 +200,29 @@ describe('ScenarioMatrixView', () => {
     fireEvent.click(enterpriseCard);
 
     expect(screen.getByText('SCENARIO COMPARISON')).toBeInTheDocument();
+  });
+
+  describe('with a signed-in session', () => {
+    beforeEach(() => storeTestSession());
+    afterEach(() => clearTestSession());
+
+    it('loads an initial matrix with the session token', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMatrixResult) });
+
+      render(<ScenarioMatrixView initialMatrixId="matrix-1" />);
+
+      await waitFor(() =>
+        expect(authHeaderOf(mockFetch, '/api/debates/matrix/matrix-1')).toBe(`Bearer ${TEST_SESSION_TOKEN}`),
+      );
+    });
+
+    it('runs a matrix with the session token', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockMatrixResult) });
+
+      render(<ScenarioMatrixView />);
+      await runMatrix();
+
+      expect(authHeaderOf(mockFetch, '/api/debates/matrix', 'POST')).toBe(`Bearer ${TEST_SESSION_TOKEN}`);
+    });
   });
 });

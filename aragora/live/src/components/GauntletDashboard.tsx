@@ -14,6 +14,7 @@ import {
   type HeatmapData,
   type GauntletDashboardProps,
 } from './gauntlet-dashboard';
+import { fetchWithAuth } from '@/lib/api';
 
 export function GauntletDashboard({
   apiBase = API_BASE_URL,
@@ -44,7 +45,7 @@ export function GauntletDashboard({
         url.searchParams.set('verdict', verdictFilter);
       }
 
-      const response = await fetch(url.toString(), { headers });
+      const response = await fetchWithAuth(url.toString(), { headers });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -61,7 +62,11 @@ export function GauntletDashboard({
   const fetchHeatmap = useCallback(async (gauntletId: string) => {
     try {
       setHeatmapError(null);
-      const response = await fetch(`${apiBase}/api/gauntlet/${gauntletId}/heatmap`);
+      const headers: Record<string, string> = {};
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/${gauntletId}/heatmap`, { headers });
       if (response.ok) {
         const data = await response.json();
         setHeatmapData(data);
@@ -72,7 +77,7 @@ export function GauntletDashboard({
       logger.error('Failed to fetch heatmap:', err);
       setHeatmapError('Unable to load heatmap. Please try again.');
     }
-  }, [apiBase]);
+  }, [apiBase, authToken]);
 
   useEffect(() => {
     fetchResults();

@@ -1,5 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useDebateWebSocket } from '@/hooks/useDebateWebSocket';
+import { TEST_SESSION_TOKEN, authHeaderOf, storeTestSession } from '@/test-utils';
 
 // Create a mock WebSocket class with proper static constants
 class MockWebSocket {
@@ -724,6 +725,31 @@ describe('useDebateWebSocket', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('https://api.aragora.ai/api/debates/test-debate-1');
+      });
+    });
+
+    it('sends the session token with the HTTP status fallback', async () => {
+      localStorage.setItem('aragora-backend', 'production');
+      storeTestSession();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'running' }),
+      } as Response);
+
+      renderHook(() =>
+        useDebateWebSocket({ debateId: 'test-debate-1' })
+      );
+
+      act(() => {
+        getLatestWs().simulateOpen();
+        jest.advanceTimersByTime(180000);
+      });
+
+      await waitFor(() => {
+        expect(authHeaderOf(mockFetch, 'https://api.aragora.ai/api/debates/test-debate-1')).toBe(
+          `Bearer ${TEST_SESSION_TOKEN}`,
+        );
       });
     });
   });
