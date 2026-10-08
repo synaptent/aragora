@@ -145,14 +145,18 @@ def _no_revocation_db() -> Any:
     return patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False)
 
 
+def _sent_json(instance: Any) -> tuple[int, Any]:
+    sent = instance._send_json.call_args
+    return sent.kwargs["status"], sent.args[0]
+
+
 def _server_rbac(method: str, path: str, caller: str) -> tuple[int, dict[str, Any]] | None:
     """The server's pre-dispatch RBAC answer, or None when the request passes it."""
     instance = _request(_Server, method, path, caller)
     with _no_revocation_db():
         if instance._check_rbac(path, method):
             return None
-    sent = instance._send_json.call_args
-    return sent.kwargs["status"], sent.args[0]
+    return _sent_json(instance)
 
 
 def _dispatch(cls: type[_Registry], method: str, path: str, caller: str) -> tuple[int, Any]:
@@ -174,8 +178,7 @@ def _dispatch(cls: type[_Registry], method: str, path: str, caller: str) -> tupl
             if method == "GET":
                 checks.append(instance._check_rate_limit)
             if not all(check() for check in checks):
-                sent = instance._send_json.call_args
-                return sent.kwargs["status"], sent.args[0]
+                return _sent_json(instance)
         handled = instance._try_modular_handler(path, {})
     assert handled is True, f"{method} {path} was not handled"
     status = instance.send_response.call_args[0][0]
@@ -344,12 +347,17 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
 }
 
 
+def _memory_handler() -> Any:
+    route = get_route_index().get_handler("/api/v1/memory/tier-stats")
+    assert route is not None
+    return route[1]
+
+
 @pytest.fixture
 def fresh_memory_context(registry, monkeypatch) -> None:
     # MemoryHandler keeps the last request's context on the shared instance, and its
     # decorator reads that before the current request's; start every request without one.
-    memory_handler = get_route_index().get_handler("/api/v1/memory/tier-stats")[1]
-    monkeypatch.setattr(memory_handler, "_auth_context", None, raising=False)
+    monkeypatch.setattr(_memory_handler(), "_auth_context", None, raising=False)
 
 
 @pytest.mark.no_auto_auth
@@ -405,12 +413,10 @@ def test_member_denied_by_the_handler_behind_the_server_rule_gets_403(registry) 
 def test_every_permission_denial_maps_to_403_and_other_errors_stay_500(
     registry, monkeypatch, error: Exception, expected: tuple[int, Any]
 ) -> None:
-    memory_handler = get_route_index().get_handler("/api/v1/memory/tier-stats")[1]
-
     def _raise(*args: Any, **kwargs: Any) -> None:
         raise error
 
-    monkeypatch.setattr(memory_handler, "handle", _raise)
+    monkeypatch.setattr(_memory_handler(), "handle", _raise)
     status, body = _dispatch(registry, "GET", "/api/v1/memory/tier-stats", "owner")
     assert status == expected[0], body
     if expected[1] is not None:
