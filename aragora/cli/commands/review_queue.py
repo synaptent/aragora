@@ -54,6 +54,7 @@ from aragora.cli.commands.review_queue_comment_verdicts import (
     has_blocking_or_negative_verdict as _has_blocking_or_negative_verdict,
     highest_blocking_severity as _highest_blocking_severity,
 )
+from aragora.cli.commands.review_queue_park_records import current_head_park_record
 from aragora.cli.commands.review_queue_transport import (
     _GhError,
     _gh_error_kind,
@@ -100,6 +101,9 @@ LARGE_DIFF_THRESHOLD = 500  # additions + deletions, beyond which "needs_human_a
 MODEL_REVIEW_QUEUE_CAP = 6
 MODEL_REVIEW_QUORUM_VERSION = "model_review_quorum.v1"
 HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"
+_HUMAN_GATED_QUORUM_STATUSES = frozenset(
+    {"human_risk_settlement_required", "human_preapproval_required"}
+)
 TIER_FOUR_SETTLEMENT_MARKER = "Tier-4 Human Settlement Authorization"
 DEFAULT_TRUSTED_SETTLEMENT_CREATOR = "scarmani"
 SETTLEMENT_CREATOR_ENV_VAR = "ARAGORA_SETTLEMENT_CREATOR"
@@ -260,7 +264,7 @@ CONTRACT_DRIFT_AUTHORITY_POLICY_VERSION = 1
 CONTRACT_DRIFT_AUTHORITY_TIER = 4
 # fmt: off
 CONTRACT_DRIFT_AUTHORITY_PREFIXES: tuple[str, ...] = ("scripts/check_contract_drift_ratchet.py", "scripts/generate_contract_drift_inventory.py", "scripts/baselines/contract_drift_inventory.json", "scripts/sdk_path_normalize.py", "scripts/baselines/internal_route_prefixes.json", "scripts/baselines/contract_drift_program.json", "scripts/check_sdk_parity.py", "scripts/validate_openapi_routes.py")
-CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (".github/actions/pr-scope-classifier/action.yml", ".github/actions/setup-python-safe/action.yml", "aragora/__init__.py", "aragora/__main__.py", "aragora/__version__.py", "aragora/cli/__init__.py", "aragora/cli/_mission_parser.py", "aragora/cli/api_keys.py", "aragora/cli/commands/__init__.py", "aragora/cli/commands/review_queue_comment_verdicts.py", "aragora/cli/commands/review_queue_parsers.py", "aragora/cli/commands/review_queue_render.py", "aragora/cli/commands/review_queue_rest_fallback.py", "aragora/cli/commands/review_queue_transport.py", "aragora/cli/commands/review_queue_unstable.py", "aragora/cli/doctor.py", "aragora/cli/main.py", "aragora/compliance/__init__.py", "aragora/compliance/artifact_generator.py", "aragora/compliance/data_classification.py", "aragora/compliance/eu_ai_act.py", "aragora/compliance/framework.py", "aragora/compliance/monitor.py", "aragora/compliance/phi_detectors.py", "aragora/config/__init__.py", "aragora/config/distributed.py", "aragora/config/env_helpers.py", "aragora/config/feature_flags.py", "aragora/config/provider_readiness.py", "aragora/config/secrets.py", "aragora/config/settings.py", "aragora/config/stability.py", "aragora/config/timeouts.py", "aragora/config/validator.py", "aragora/connectors/__init__.py", "aragora/connectors/exceptions.py", "aragora/exceptions.py", "aragora/modes/__init__.py", "aragora/modes/base.py", "aragora/modes/builtin/__init__.py", "aragora/modes/builtin/architect.py", "aragora/modes/builtin/coder.py", "aragora/modes/builtin/debugger.py", "aragora/modes/builtin/epistemic_hygiene.py", "aragora/modes/builtin/orchestrator.py", "aragora/modes/builtin/reviewer.py", "aragora/modes/custom.py", "aragora/modes/handoff.py", "aragora/modes/tool_groups.py", "aragora/server/__init__.py", "aragora/server/startup/__init__.py", "aragora/server/startup/background.py", "aragora/server/startup/billing.py", "aragora/server/startup/control_plane.py", "aragora/server/startup/database.py", "aragora/server/startup/dr_drilling.py", "aragora/server/startup/event_subscribers.py", "aragora/server/startup/health_check.py", "aragora/server/startup/knowledge_mound.py", "aragora/server/startup/observability.py", "aragora/server/startup/parallel.py", "aragora/server/startup/redis.py", "aragora/server/startup/security.py", "aragora/server/startup/validation.py", "aragora/server/startup/validation_runner.py", "aragora/server/startup/workers.py", "aragora/server/webhook_store_registration.py", "aragora/swarm/__init__.py", "aragora/swarm/github_app_auth.py", "aragora/swarm/merge_quorum_io.py", "aragora/swarm/merge_quorum_reconcile.py", "scripts/__init__.py", "scripts/add_openapi_descriptions.py", "scripts/add_openapi_operation_ids.py", "scripts/add_openapi_param_descriptions.py", "scripts/audit_openapi_docs.py", "scripts/audit_test_skips.py", "scripts/build_contract_drift_historical_backfill.py", "scripts/capability_gap_report.py", "scripts/check_capability_matrix_sync.py", "scripts/check_cross_sdk_parity.py", "scripts/check_pentest_findings.py", "scripts/check_portability.py", "scripts/check_sdk_namespace_parity.py", "scripts/check_test_dependencies.py", "scripts/check_version_alignment.py", "scripts/ci_install_project.sh", "scripts/classification_scan.py", "scripts/contract_drift_report.py", "scripts/export_openapi.py", "scripts/generate_api_docs.py", "scripts/generate_capability_matrix.py", "scripts/generate_contract_drift_backlog.py", "scripts/generate_contract_drift_issue_plan.py", "scripts/generate_openapi.py", "scripts/generate_python_sdk_types.py", "scripts/generate_sdk_types.py", "scripts/gh_app_env.py", "scripts/guard_repo_clean.py", "scripts/openapi_release_envelope.py", "scripts/pre_release_check.py", "scripts/reconcile_status_docs.py", "scripts/run_pip_audit_gate.py", "scripts/smoke_test.py", "scripts/tier4_merge_train.py", "scripts/verify_sdk_contracts.py")
+CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (".github/actions/pr-scope-classifier/action.yml", ".github/actions/setup-python-safe/action.yml", "aragora/__init__.py", "aragora/__main__.py", "aragora/__version__.py", "aragora/cli/__init__.py", "aragora/cli/_mission_parser.py", "aragora/cli/api_keys.py", "aragora/cli/commands/__init__.py", "aragora/cli/commands/review_queue_comment_verdicts.py", "aragora/cli/commands/review_queue_park_records.py", "aragora/cli/commands/review_queue_parsers.py", "aragora/cli/commands/review_queue_render.py", "aragora/cli/commands/review_queue_rest_fallback.py", "aragora/cli/commands/review_queue_transport.py", "aragora/cli/commands/review_queue_unstable.py", "aragora/cli/doctor.py", "aragora/cli/main.py", "aragora/compliance/__init__.py", "aragora/compliance/artifact_generator.py", "aragora/compliance/data_classification.py", "aragora/compliance/eu_ai_act.py", "aragora/compliance/framework.py", "aragora/compliance/monitor.py", "aragora/compliance/phi_detectors.py", "aragora/config/__init__.py", "aragora/config/distributed.py", "aragora/config/env_helpers.py", "aragora/config/feature_flags.py", "aragora/config/provider_readiness.py", "aragora/config/secrets.py", "aragora/config/settings.py", "aragora/config/stability.py", "aragora/config/timeouts.py", "aragora/config/validator.py", "aragora/connectors/__init__.py", "aragora/connectors/exceptions.py", "aragora/exceptions.py", "aragora/modes/__init__.py", "aragora/modes/base.py", "aragora/modes/builtin/__init__.py", "aragora/modes/builtin/architect.py", "aragora/modes/builtin/coder.py", "aragora/modes/builtin/debugger.py", "aragora/modes/builtin/epistemic_hygiene.py", "aragora/modes/builtin/orchestrator.py", "aragora/modes/builtin/reviewer.py", "aragora/modes/custom.py", "aragora/modes/handoff.py", "aragora/modes/tool_groups.py", "aragora/server/__init__.py", "aragora/server/startup/__init__.py", "aragora/server/startup/background.py", "aragora/server/startup/billing.py", "aragora/server/startup/control_plane.py", "aragora/server/startup/database.py", "aragora/server/startup/dr_drilling.py", "aragora/server/startup/event_subscribers.py", "aragora/server/startup/health_check.py", "aragora/server/startup/knowledge_mound.py", "aragora/server/startup/observability.py", "aragora/server/startup/parallel.py", "aragora/server/startup/redis.py", "aragora/server/startup/security.py", "aragora/server/startup/validation.py", "aragora/server/startup/validation_runner.py", "aragora/server/startup/workers.py", "aragora/server/webhook_store_registration.py", "aragora/swarm/__init__.py", "aragora/swarm/github_app_auth.py", "aragora/swarm/merge_quorum_io.py", "aragora/swarm/merge_quorum_reconcile.py", "scripts/__init__.py", "scripts/add_openapi_descriptions.py", "scripts/add_openapi_operation_ids.py", "scripts/add_openapi_param_descriptions.py", "scripts/audit_openapi_docs.py", "scripts/audit_test_skips.py", "scripts/build_contract_drift_historical_backfill.py", "scripts/capability_gap_report.py", "scripts/check_capability_matrix_sync.py", "scripts/check_cross_sdk_parity.py", "scripts/check_pentest_findings.py", "scripts/check_portability.py", "scripts/check_sdk_namespace_parity.py", "scripts/check_test_dependencies.py", "scripts/check_version_alignment.py", "scripts/ci_install_project.sh", "scripts/classification_scan.py", "scripts/contract_drift_report.py", "scripts/export_openapi.py", "scripts/generate_api_docs.py", "scripts/generate_capability_matrix.py", "scripts/generate_contract_drift_backlog.py", "scripts/generate_contract_drift_issue_plan.py", "scripts/generate_openapi.py", "scripts/generate_python_sdk_types.py", "scripts/generate_sdk_types.py", "scripts/gh_app_env.py", "scripts/guard_repo_clean.py", "scripts/openapi_release_envelope.py", "scripts/pre_release_check.py", "scripts/reconcile_status_docs.py", "scripts/run_pip_audit_gate.py", "scripts/smoke_test.py", "scripts/tier4_merge_train.py", "scripts/verify_sdk_contracts.py")
 TIER_4_PREFIXES: tuple[str, ...] = (
     ".github/workflows/",
     "deploy/",
@@ -421,6 +425,7 @@ class ReviewPacket:
     model_review_quorum: dict[str, Any] = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)
     merge_state_status: str = ""
+    park_record: dict[str, Any] = field(default_factory=dict)
     unstable_non_required_contexts_ignored: list[dict[str, Any]] = field(default_factory=list)
     advisory_only: bool = True
     settlement_note: str = ADVISORY_NOTE
@@ -3014,6 +3019,10 @@ def _build_packet(
         ),
         labels=labels,
         merge_state_status=str(pr.get("mergeStateStatus") or "").strip().upper(),
+        park_record=current_head_park_record(
+            pr.get("comments") or [],
+            head_sha=str(pr.get("headRefOid", "") or "").strip(),
+        ),
         unstable_non_required_contexts_ignored=unstable_cancellation_contexts,
     )
     packet.packet_sha = _packet_sha(packet)
@@ -3079,10 +3088,19 @@ def _build_merge_authorization_packet(
         }
         entry_status = quorum["status"]
         entry_verdict = quorum["verdict"]
-        if model_quorum_admin_squash_allowed and admin_squash_gate_blockers:
+        park_record = packet.park_record
+        current_head_parked = isinstance(park_record, dict) and bool(park_record.get("blocked"))
+        if admin_squash_gate_blockers and (
+            model_quorum_admin_squash_allowed
+            or (current_head_parked and entry_status in _HUMAN_GATED_QUORUM_STATUSES)
+        ):
             # The live gate flipped admin_squash_allowed to false; the quorum
             # status/verdict ("satisfied"/"admin_squash_allowed") would be
             # misleading in human-readable output (#8965 openai [P3]).
+            # A park must also replace a human-gated Tier 3-4 status: the
+            # merge-quorum check and settle_tier4_pr.py accept those statuses on
+            # the aragora/human-settlement commit status alone, and CI never sees
+            # the local settlement receipt that would turn the entry "satisfied".
             entry_status = "blocked_by_live_gate"
             entry_verdict = "admin_squash_blocked_by_live_gate"
         entry = {
@@ -3115,6 +3133,7 @@ def _build_merge_authorization_packet(
             # must still honor the sibling hold keys.
             "non_admin_merge_eligible": model_quorum_admin_squash_allowed,
             "admin_squash_gate_blockers": admin_squash_gate_blockers,
+            "park_record": packet.park_record,
             "merge_state_status": packet.merge_state_status,
             "unstable_non_required_contexts_ignored": (
                 packet.unstable_non_required_contexts_ignored

@@ -148,6 +148,52 @@ record; the commit status is only its GitHub-visible projection. The
 `admin_squash_merge` receipt is a post-merge audit record, not the pre-merge
 human-risk signal.
 
+## Parking an exact head
+
+A maintainer can stop one exact head from merging, without pushing, by posting
+a park record as a PR comment. While it stands, `review-queue merge-packet`
+leaves the PR out of `admin_squash_order` and reports it as
+`blocked_by_live_gate` (for Tier 3-4 too, so `aragora-merge-quorum` and
+`scripts/settle_tier4_pr.py` refuse the head even when an
+`aragora/human-settlement` status exists), and `scripts/settle_one_pr.py`
+suggests no merge. The reader
+(`aragora/cli/commands/review_queue_park_records.py`) is deliberately strict:
+a comment that does not follow the template below is ignored, and the head
+stays mergeable.
+
+Park record (comment author association `OWNER`, `MEMBER` or `COLLABORATOR`):
+
+```text
+## Current-head repeat-blocker park
+
+Exact head: <full 40-character head SHA>
+
+<reason; for example: Do not merge this PR on this head.>
+```
+
+- The marker stands alone on its line, optionally as a Markdown heading and
+  with a trailing colon. Park markers: `Current-head repeat-blocker park`,
+  `Current-head evidence blocker`, `Evidence safety correction`. A marker in
+  bold, quoted, or followed by other text on the same line is not recognized.
+- The head line is `Exact head:`, `Current head:` or `Head:` (or `=`)
+  followed by the full 40-character SHA, optionally in backticks. `Head SHA:`,
+  `head_sha:` and abbreviated SHAs are not recognized.
+- A park applies only to the head it names; a new push clears it. A later
+  supportive review of the same head does not lift it.
+
+Lift (comment author association `OWNER` only):
+
+```text
+## Current-head park lift
+
+Exact head: <full 40-character head SHA>
+
+<reason>
+```
+
+`Current-head park override` is accepted as the lift marker too. For one head,
+the latest park or lift comment wins.
+
 ## Rollout order
 
 1. Merge the enforcing workflow `.github/workflows/aragora-merge-quorum.yml`.

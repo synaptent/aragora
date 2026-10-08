@@ -2036,6 +2036,39 @@ def test_required_check_source_report_fallback_blocks_status_only_required_check
     ]
 
 
+def test_build_report_blocks_merge_suggestion_for_current_head_park_record() -> None:
+    entry = _entry(
+        9005,
+        tier=0,
+        status="satisfied",
+        verdict="admin_squash_allowed",
+        admin_squash_allowed=True,
+        reasons=["docs-only change"],
+    )
+    entry["park_record"] = {
+        "blocked": True,
+        "head_sha": entry["head_sha"],
+        "park_marker": "Current-head repeat-blocker park",
+        "created_at": "2026-07-08T05:20:08Z",
+        "comment_url": "https://github.example/comment/park",
+        "reason": "Do not merge this PR on this head.",
+    }
+
+    report = build_report(
+        _packet(entry, admin_order=[9005]),
+        cwd=Path.cwd(),
+        state_root=Path.cwd(),
+        explicit_pr=9005,
+        exclude_prs=set(),
+        live=False,
+        validate=False,
+    )
+
+    assert report["status"] == "blocked"
+    assert report["suggested_commands"] == []
+    assert any("current-head park record present" in blocker for blocker in report["blockers"])
+
+
 def test_build_report_reads_required_checks_from_pr_base_branch(monkeypatch) -> None:
     commands: list[list[str]] = []
 
