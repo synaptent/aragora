@@ -5,6 +5,12 @@ Follows the PlanStore pattern: WAL mode, per-method connections,
 separate tables for graphs and nodes, edges stored as JSON in the
 graph row.
 
+A node is identified by ``(graph_id, id)``: the same node id in two graphs
+names two different nodes, so writing one graph never touches another's.
+Nodes live in ``graph_nodes``. Stores created when node ids were global kept
+them in ``nodes``; their rows are copied once into ``graph_nodes`` (in the
+transaction that creates it) and the old table is left as it was.
+
 Usage:
     store = GraphStore()
     store.create(graph)
@@ -50,6 +56,66 @@ _STAGE_SORT_ORDER: dict[PipelineStage, int] = {
 
 OWNERSHIP_CREATED = "created"
 OWNERSHIP_UNKNOWN = "unknown"
+
+_NODE_COLUMNS = (
+    "id",
+    "graph_id",
+    "stage",
+    "node_subtype",
+    "label",
+    "description",
+    "position_x",
+    "position_y",
+    "width",
+    "height",
+    "content_hash",
+    "previous_hash",
+    "parent_ids_json",
+    "source_stage",
+    "status",
+    "execution_status",
+    "confidence",
+    "data_json",
+    "style_json",
+    "metadata_json",
+    "created_at",
+    "updated_at",
+)
+
+_CREATE_GRAPH_NODES = """
+    CREATE TABLE graph_nodes (
+        graph_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        node_subtype TEXT NOT NULL,
+        label TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        position_x REAL DEFAULT 0,
+        position_y REAL DEFAULT 0,
+        width REAL DEFAULT 200,
+        height REAL DEFAULT 100,
+        content_hash TEXT NOT NULL,
+        previous_hash TEXT,
+        parent_ids_json TEXT DEFAULT '[]',
+        source_stage TEXT,
+        status TEXT DEFAULT 'active',
+        execution_status TEXT,
+        confidence REAL DEFAULT 0,
+        data_json TEXT DEFAULT '{}',
+        style_json TEXT DEFAULT '{}',
+        metadata_json TEXT DEFAULT '{}',
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL,
+        PRIMARY KEY (graph_id, id),
+        FOREIGN KEY (graph_id) REFERENCES graphs(id)
+    )
+"""
+
+_GRAPH_NODES_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_graph_nodes_graph_stage ON graph_nodes(graph_id, stage)",
+    "CREATE INDEX IF NOT EXISTS idx_graph_nodes_subtype ON graph_nodes(node_subtype)",
+    "CREATE INDEX IF NOT EXISTS idx_graph_nodes_content_hash ON graph_nodes(content_hash)",
+)
 
 
 def _get_db_path() -> str:
@@ -99,45 +165,7 @@ class GraphStore:
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
-
-                CREATE TABLE IF NOT EXISTS nodes (
-                    id TEXT PRIMARY KEY,
-                    graph_id TEXT NOT NULL,
-                    stage TEXT NOT NULL,
-                    node_subtype TEXT NOT NULL,
-                    label TEXT NOT NULL,
-                    description TEXT DEFAULT '',
-                    position_x REAL DEFAULT 0,
-                    position_y REAL DEFAULT 0,
-                    width REAL DEFAULT 200,
-                    height REAL DEFAULT 100,
-                    content_hash TEXT NOT NULL,
-                    previous_hash TEXT,
-                    parent_ids_json TEXT DEFAULT '[]',
-                    source_stage TEXT,
-                    status TEXT DEFAULT 'active',
-                    execution_status TEXT,
-                    confidence REAL DEFAULT 0,
-                    data_json TEXT DEFAULT '{}',
-                    style_json TEXT DEFAULT '{}',
-                    metadata_json TEXT DEFAULT '{}',
-                    created_at REAL NOT NULL,
-                    updated_at REAL NOT NULL,
-                    FOREIGN KEY (graph_id) REFERENCES graphs(id)
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_nodes_graph_stage
-                    ON nodes(graph_id, stage);
-                CREATE INDEX IF NOT EXISTS idx_nodes_subtype
-                    ON nodes(node_subtype);
-                CREATE INDEX IF NOT EXISTS idx_nodes_content_hash
-                    ON nodes(content_hash);
             """)
-            node_columns = {
-                row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()
-            }
-            if "execution_status" not in node_columns:
-                conn.execute("ALTER TABLE nodes ADD COLUMN execution_status TEXT")
             graph_columns = {
                 row["name"] for row in conn.execute("PRAGMA table_info(graphs)").fetchall()
             }
@@ -153,8 +181,49 @@ class GraphStore:
                 "CREATE INDEX IF NOT EXISTS idx_graphs_org_updated ON graphs(org_id, updated_at)"
             )
             conn.commit()
+            self._ensure_graph_nodes(conn)
         finally:
             conn.close()
+
+    @staticmethod
+    def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone()
+        return row is not None
+
+    def _ensure_graph_nodes(self, conn: sqlite3.Connection) -> None:
+        """Create ``graph_nodes``, copying the old ``nodes`` rows in the same transaction.
+
+        The copy runs only in the transaction that creates the table, so it
+        happens once per database; a concurrent opener waits on the write lock
+        and then finds the table. The old table is only read.
+        """
+        isolation_level = conn.isolation_level
+        conn.isolation_level = None
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if not self._table_exists(conn, "graph_nodes"):
+                conn.execute(_CREATE_GRAPH_NODES)
+                if self._table_exists(conn, "nodes"):
+                    old_columns = {
+                        row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()
+                    }
+                    columns = ", ".join(c for c in _NODE_COLUMNS if c in old_columns)
+                    # Rows of a graph that no longer exists stay only in the old table.
+                    copied = conn.execute(
+                        f"INSERT INTO graph_nodes ({columns}) SELECT {columns} FROM nodes"  # noqa: S608 -- fixed column names
+                        " WHERE graph_id IN (SELECT id FROM graphs)"
+                    ).rowcount
+                    logger.info("Copied %d graph nodes into graph_nodes", copied)
+            for statement in _GRAPH_NODES_INDEXES:
+                conn.execute(statement)
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.isolation_level = isolation_level
 
     # -- CRUD ---------------------------------------------------------------
 
@@ -173,7 +242,7 @@ class GraphStore:
         conn = self._connect()
         try:
             self._upsert_graph(conn, graph, org_id=org_id, created_by=created_by)
-            conn.execute("DELETE FROM nodes WHERE graph_id = ?", (graph.id,))
+            conn.execute("DELETE FROM graph_nodes WHERE graph_id = ?", (graph.id,))
             for node in graph.nodes.values():
                 self._insert_node(conn, graph.id, node)
             conn.commit()
@@ -204,14 +273,16 @@ class GraphStore:
             return None
         return str(row["org_id"])
 
-    def node_graph_id(self, node_id: str) -> str | None:
-        """The id of the graph that holds ``node_id``, or None if no graph does."""
+    def node_graph_ids(self, node_id: str) -> builtins.list[str]:
+        """The ids of the graphs that hold a node ``node_id``, sorted."""
         conn = self._connect()
         try:
-            row = conn.execute("SELECT graph_id FROM nodes WHERE id = ?", (node_id,)).fetchone()
+            rows = conn.execute(
+                "SELECT graph_id FROM graph_nodes WHERE id = ? ORDER BY graph_id", (node_id,)
+            ).fetchall()
         finally:
             conn.close()
-        return str(row["graph_id"]) if row is not None else None
+        return [str(row["graph_id"]) for row in rows]
 
     def get_dag_snapshot(self, graph_id: str) -> Any | None:
         """Retrieve a normalized DAG snapshot for visualization."""
@@ -249,7 +320,7 @@ class GraphStore:
                            g.created_at, g.updated_at,
                            COUNT(n.id) AS node_count
                     FROM graphs g
-                    LEFT JOIN nodes n ON n.graph_id = g.id
+                    LEFT JOIN graph_nodes n ON n.graph_id = g.id
                     {where}
                     GROUP BY g.id
                     ORDER BY g.updated_at DESC
@@ -279,7 +350,7 @@ class GraphStore:
         conn = self._connect()
         try:
             self._upsert_graph(conn, graph)
-            conn.execute("DELETE FROM nodes WHERE graph_id = ?", (graph.id,))
+            conn.execute("DELETE FROM graph_nodes WHERE graph_id = ?", (graph.id,))
             for node in graph.nodes.values():
                 self._insert_node(conn, graph.id, node)
             conn.commit()
@@ -290,7 +361,10 @@ class GraphStore:
         """Delete a graph and all its nodes. Returns True if found."""
         conn = self._connect()
         try:
-            conn.execute("DELETE FROM nodes WHERE graph_id = ?", (graph_id,))
+            # Rows the one-time copy left in the old ``nodes`` table still reference
+            # their graph. That table is kept as it was, so it must not block the delete.
+            conn.execute("PRAGMA foreign_keys=OFF")
+            conn.execute("DELETE FROM graph_nodes WHERE graph_id = ?", (graph_id,))
             cursor = conn.execute("DELETE FROM graphs WHERE id = ?", (graph_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -300,16 +374,9 @@ class GraphStore:
     # -- Node operations ----------------------------------------------------
 
     def add_node(self, graph_id: str, node: UniversalNode) -> None:
-        """Add a single node to an existing graph.
-
-        Raises ValueError when ``node.id`` already belongs to another graph:
-        node ids are unique across graphs, so writing it would move that node.
-        """
+        """Add a node to an existing graph, replacing that graph's node with the same id."""
         conn = self._connect()
         try:
-            row = conn.execute("SELECT graph_id FROM nodes WHERE id = ?", (node.id,)).fetchone()
-            if row is not None and row["graph_id"] != graph_id:
-                raise ValueError("Node id is already in use")
             self._insert_node(conn, graph_id, node)
             conn.commit()
         finally:
@@ -320,7 +387,7 @@ class GraphStore:
         conn = self._connect()
         try:
             conn.execute(
-                "DELETE FROM nodes WHERE id = ? AND graph_id = ?",
+                "DELETE FROM graph_nodes WHERE id = ? AND graph_id = ?",
                 (node_id, graph_id),
             )
             # Clean edges from the graph's edges_json
@@ -359,7 +426,7 @@ class GraphStore:
         where = " AND ".join(clauses)
         conn = self._connect()
         try:
-            rows = conn.execute(f"SELECT * FROM nodes WHERE {where}", params).fetchall()  # noqa: S608 -- internal query construction
+            rows = conn.execute(f"SELECT * FROM graph_nodes WHERE {where}", params).fetchall()  # noqa: S608 -- internal query construction
             return [self._row_to_node(r) for r in rows]
         finally:
             conn.close()
@@ -369,7 +436,9 @@ class GraphStore:
         conn = self._connect()
         try:
             # Load all nodes for this graph into memory for traversal
-            rows = conn.execute("SELECT * FROM nodes WHERE graph_id = ?", (graph_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM graph_nodes WHERE graph_id = ?", (graph_id,)
+            ).fetchall()
             node_map: dict[str, UniversalNode] = {}
             for r in rows:
                 n = self._row_to_node(r)
@@ -387,7 +456,9 @@ class GraphStore:
         """Walk child relationships recursively to build a downstream chain."""
         conn = self._connect()
         try:
-            rows = conn.execute("SELECT * FROM nodes WHERE graph_id = ?", (graph_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM graph_nodes WHERE graph_id = ?", (graph_id,)
+            ).fetchall()
             node_map: dict[str, UniversalNode] = {}
             for row in rows:
                 node = self._row_to_node(row)
@@ -446,7 +517,7 @@ class GraphStore:
 
     def _insert_node(self, conn: sqlite3.Connection, graph_id: str, node: UniversalNode) -> None:
         conn.execute(
-            """INSERT OR REPLACE INTO nodes
+            """INSERT OR REPLACE INTO graph_nodes
                (id, graph_id, stage, node_subtype, label, description,
                 position_x, position_y, width, height,
                 content_hash, previous_hash, parent_ids_json, source_stage,
@@ -526,7 +597,9 @@ class GraphStore:
             )
 
         # Load nodes
-        node_rows = conn.execute("SELECT * FROM nodes WHERE graph_id = ?", (graph.id,)).fetchall()
+        node_rows = conn.execute(
+            "SELECT * FROM graph_nodes WHERE graph_id = ?", (graph.id,)
+        ).fetchall()
         for nr in node_rows:
             node = self._row_to_node(nr)
             graph.nodes[node.id] = node

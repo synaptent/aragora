@@ -285,11 +285,11 @@ class TestUniversalGraph:
             created = _json(result)
             answers.append((result.status_code, sorted(created)))
             assert created["id"] != requested
-            assert store.node_graph_id(created["id"]) == GB
+            assert store.node_graph_ids(created["id"]) == [GB]
         assert answers == [(201, answers[0][1])] * 4
         assert {g: _snapshot(store, g) for g in before} == before
-        assert store.node_graph_id("idea-a1") == GA
-        assert store.node_graph_id("idea-free") is None
+        assert store.node_graph_ids("idea-a1") == [GA]
+        assert store.node_graph_ids("idea-free") == []
         assert store.get(GB).nodes["idea-b1"].label == "B"
 
     def test_edges_and_promote_use_the_returned_node_ids(self, store):

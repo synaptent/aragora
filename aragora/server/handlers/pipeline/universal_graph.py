@@ -387,8 +387,8 @@ class UniversalGraphHandler(BaseHandler):
         except ValueError:
             return error_response("Invalid stage", 400)
 
-        # Node ids are unique across all graphs, so a client-chosen "id" is ignored for
-        # the same reason as on graph create.
+        # A client-chosen "id" is ignored: adding a node replaces the graph's node with
+        # the same id, so a POST must never be able to name an existing node.
         node = UniversalNode(
             id=f"node-{uuid.uuid4().hex}",
             stage=stage,

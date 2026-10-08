@@ -22,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
+from aragora.pipeline.graph_store import GraphStore
 from aragora.server.fastapi import create_app
 from aragora.server.fastapi.routes import canvas_pipeline as canvas_routes
 from aragora.storage.debate_storage import DebateStorage
@@ -95,6 +96,13 @@ def store(tmp_path: Path, monkeypatch) -> PipelineResultStore:
     pipeline_store.save(PN, _pipeline(PN))
     monkeypatch.setattr(canvas_routes, "_get_store", lambda: pipeline_store)
     return pipeline_store
+
+
+@pytest.fixture
+def graphs(tmp_path: Path):
+    graph_store = GraphStore(db_path=str(tmp_path / "graphs.db"))
+    with patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store):
+        yield graph_store
 
 
 @pytest.fixture(autouse=True)
@@ -296,6 +304,28 @@ class TestOwner:
         assert queue.call_args.kwargs["org_id"] == ORG_A
         assert queue.call_args.kwargs["created_by"] == "user-a"
         assert "execution" not in store.get(PA)
+
+    def test_orgs_creating_from_ideas_keep_their_own_graph_nodes(
+        self, client, store, graphs, as_a, as_b
+    ):
+        """Every from-ideas graph has a ``raw-idea-0``; one org's never replaces another's."""
+        created = {}
+        for org, headers, idea in ((ORG_A, as_a, "Org A secret idea"), (ORG_B, as_b, "B idea")):
+            response = client.post(
+                f"{CANVAS}/from-ideas",
+                headers=headers,
+                json={"ideas": [idea, f"{idea} two"], "use_universal": True},
+            )
+            assert response.status_code == 201
+            created[org] = response.json()["pipeline_id"]
+
+        for org, idea in ((ORG_A, "Org A secret idea"), (ORG_B, "B idea")):
+            graph_id = f"ugraph-{created[org]}"
+            graph = graphs.get(graph_id)
+            assert graph is not None
+            assert graphs.get_owner_org(graph_id) == org
+            assert graph.nodes["raw-idea-0"].label == idea
+            assert graph.nodes["raw-idea-1"].label == f"{idea} two"
 
     def test_viewer_of_the_owning_org_gets_403(self, client, store, fastapi_bearer):
         viewer_a = fastapi_bearer("viewer-a", ORG_A, role="viewer")
