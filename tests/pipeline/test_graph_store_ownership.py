@@ -71,17 +71,18 @@ def test_list_filters_by_org(store: GraphStore) -> None:
     assert {g["id"] for g in store.list()} == {"g-a", "g-b", "g-x"}
 
 
-def test_add_node_refuses_a_node_id_of_another_graph(store: GraphStore) -> None:
+def test_add_node_with_another_graphs_node_id_leaves_that_node_alone(store: GraphStore) -> None:
     store.create(_graph("g-a"), org_id="org-a")
     store.create(_graph("g-b"), org_id="org-b")
     store.add_node("g-a", _node("n-shared"))
 
-    with pytest.raises(ValueError):
-        store.add_node("g-b", _node("n-shared"))
+    store.add_node("g-b", _node("n-shared"))
 
-    assert store.node_graph_id("n-shared") == "g-a"
+    assert store.node_graph_ids("n-shared") == ["g-a", "g-b"]
     assert "n-shared" in store.get("g-a").nodes
+    assert "n-shared" in store.get("g-b").nodes
     store.add_node("g-a", _node("n-shared"))
+    assert store.node_graph_ids("n-shared") == ["g-a", "g-b"]
 
 
 def test_existing_graphs_are_marked_unknown(tmp_path) -> None:
