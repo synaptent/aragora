@@ -44,8 +44,23 @@ from aragora.server.handlers.decisions.explainability_store import (
     BatchJob as StoreBatchJob,
     get_batch_job_store,
 )
+from aragora.tenancy.debate_access import (
+    authorize_debate_read,
+    debate_visible_to_org,
+    find_debate_access,
+)
+from aragora.tenancy.record_scope import record_not_found, require_org_scope
 
 logger = logging.getLogger(__name__)
+
+# Per-debate endpoints under /api/v1/debates/{id}/ (and /api/v1/explain/{id}).
+_DEBATE_ENDPOINTS = frozenset(
+    {"explanation", "evidence", "votes/pivots", "counterfactuals", "explainability/export"}
+)
+
+# Batch job option the server sets to the creating org; status and results are
+# answered only for that org.
+_OWNER_ORG_OPTION = "_owner_org_id"
 
 # LRU TTL Cache for Decision objects with bounded size and proper eviction
 CACHE_TTL_SECONDS = 300  # 5 minutes
@@ -357,19 +372,20 @@ class ExplainabilityHandler(BaseHandler):
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Route explainability requests."""
-        # Handle batch endpoints first
         if path == "/api/v1/explainability/batch":
             return self._handle_batch_create(handler)
-        if path.startswith("/api/v1/explainability/batch/") and path.endswith("/status"):
-            batch_id = path.split("/")[-2]
-            return self._handle_batch_status(batch_id)
-        if path.startswith("/api/v1/explainability/batch/") and path.endswith("/results"):
-            batch_id = path.split("/")[-2]
-            return self._handle_batch_results(batch_id, query_params)
-
-        # Handle compare endpoint
         if path == "/api/v1/explainability/compare":
             return await self._handle_compare(handler)
+        if path.startswith("/api/v1/explainability/batch/") and path.endswith(
+            ("/status", "/results")
+        ):
+            scope, scope_error = require_org_scope(handler)
+            if scope is None:
+                return scope_error
+            batch_id = path.split("/")[-2]
+            if path.endswith("/status"):
+                return self._handle_batch_status(batch_id, scope.org_id)
+            return self._handle_batch_results(batch_id, query_params, scope.org_id)
 
         # Add deprecation headers for legacy routes
         is_legacy = self._is_legacy_route(path)
@@ -380,32 +396,47 @@ class ExplainabilityHandler(BaseHandler):
         else:
             normalized = path[5:]  # Remove /api/
 
-        # Extract debate_id
+        # /explain/{id} is a shortcut for /debates/{id}/explanation
         parts = normalized.split("/")
-
-        # Handle /explain/{id} shortcut
         if parts[0] == "explain" and len(parts) >= 2:
-            debate_id = parts[1]
+            debate_ref, endpoint = parts[1], "explanation"
+        elif parts[0] == "debates" and len(parts) >= 3:
+            debate_ref, endpoint = parts[1], "/".join(parts[2:])
+        else:
+            return error_response("Invalid explainability endpoint", 400)
+        # "summary" is owned by DebatesHandler — not dispatched here.
+        if endpoint not in _DEBATE_ENDPOINTS:
+            return error_response("Invalid explainability endpoint", 400)
+
+        debate_id, denial = authorize_debate_read(handler, self._debate_storage(), debate_ref)
+        if debate_id is None:
+            return denial
+
+        if endpoint == "explanation":
             return await self._handle_full_explanation(debate_id, query_params, is_legacy)
+        if endpoint == "evidence":
+            return await self._handle_evidence(debate_id, query_params, is_legacy)
+        if endpoint == "votes/pivots":
+            return await self._handle_vote_pivots(debate_id, query_params, is_legacy)
+        if endpoint == "counterfactuals":
+            return await self._handle_counterfactuals(debate_id, query_params, is_legacy)
+        return await self._handle_export(debate_id, query_params)
 
-        # Handle /debates/{id}/...
-        if parts[0] == "debates" and len(parts) >= 3:
-            debate_id = parts[1]
-            endpoint = "/".join(parts[2:])
+    def _debate_storage(self) -> Any | None:
+        """The server's debate storage, else the process-wide default debate store.
 
-            if endpoint == "explanation":
-                return await self._handle_full_explanation(debate_id, query_params, is_legacy)
-            elif endpoint == "evidence":
-                return await self._handle_evidence(debate_id, query_params, is_legacy)
-            elif endpoint == "votes/pivots":
-                return await self._handle_vote_pivots(debate_id, query_params, is_legacy)
-            elif endpoint == "counterfactuals":
-                return await self._handle_counterfactuals(debate_id, query_params, is_legacy)
-            # "summary" is owned by DebatesHandler — not dispatched here.
-            elif endpoint == "explainability/export":
-                return await self._handle_export(debate_id, query_params)
+        Access checks and explanation builds read the same store, so a debate is
+        never explained from a store other than the one its owner was checked in.
+        """
+        storage = self.ctx.get("storage") if isinstance(self.ctx, dict) else None
+        if storage is not None:
+            return storage
+        try:
+            from aragora.server.storage import get_debates_db
 
-        return error_response("Invalid explainability endpoint", 400)
+            return get_debates_db()
+        except ImportError:
+            return None
 
     def _add_headers(self, result: HandlerResult, is_legacy: bool) -> HandlerResult:
         """Add version and deprecation headers."""
@@ -429,9 +460,7 @@ class ExplainabilityHandler(BaseHandler):
 
         # Get debate result from storage
         try:
-            from aragora.server.storage import get_debates_db
-
-            db = get_debates_db()
+            db = self._debate_storage()
             if not db:
                 return None
 
@@ -475,7 +504,7 @@ class ExplainabilityHandler(BaseHandler):
             decision = await self._get_or_build_decision(debate_id)
 
             if not decision:
-                return error_response(f"Debate not found: {debate_id}", 404)
+                return record_not_found("Debate")
 
             # Get format preference
             format_type = get_string_param(query_params, "format", "json")
@@ -508,7 +537,7 @@ class ExplainabilityHandler(BaseHandler):
             decision = await self._get_or_build_decision(debate_id)
 
             if not decision:
-                return error_response(f"Debate not found: {debate_id}", 404)
+                return record_not_found("Debate")
 
             # Get filter params
             limit = int(get_string_param(query_params, "limit", "20"))
@@ -543,7 +572,7 @@ class ExplainabilityHandler(BaseHandler):
             decision = await self._get_or_build_decision(debate_id)
 
             if not decision:
-                return error_response(f"Debate not found: {debate_id}", 404)
+                return record_not_found("Debate")
 
             # Get filter params
             min_influence = float(get_string_param(query_params, "min_influence", "0.0"))
@@ -576,7 +605,7 @@ class ExplainabilityHandler(BaseHandler):
             decision = await self._get_or_build_decision(debate_id)
 
             if not decision:
-                return error_response(f"Debate not found: {debate_id}", 404)
+                return record_not_found("Debate")
 
             # Get filter params
             min_sensitivity = float(get_string_param(query_params, "min_sensitivity", "0.0"))
@@ -605,7 +634,7 @@ class ExplainabilityHandler(BaseHandler):
             decision = await self._get_or_build_decision(debate_id)
 
             if not decision:
-                return error_response(f"Debate not found: {debate_id}", 404)
+                return record_not_found("Debate")
 
             format_type = get_string_param(query_params, "format", "markdown")
 
@@ -656,7 +685,7 @@ class ExplainabilityHandler(BaseHandler):
 
     @rate_limit(requests_per_minute=20)
     def _handle_batch_create(self, handler: Any) -> HandlerResult:
-        """Create a new batch explainability job.
+        """Create a new batch explainability job owned by the caller's org.
 
         Request body:
         {
@@ -669,6 +698,9 @@ class ExplainabilityHandler(BaseHandler):
             }
         }
         """
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
         try:
             # Parse request body
             content_length = int(handler.headers.get("Content-Length", 0))
@@ -699,6 +731,10 @@ class ExplainabilityHandler(BaseHandler):
         # Create batch job
         batch_id = f"batch-{uuid.uuid4().hex[:12]}"
         options = data.get("options", {})
+        options = {
+            **(options if isinstance(options, dict) else {}),
+            _OWNER_ORG_OPTION: scope.org_id,
+        }
 
         job = BatchJob(
             batch_id=batch_id,
@@ -750,11 +786,20 @@ class ExplainabilityHandler(BaseHandler):
         include_vote_pivots = options.get("include_vote_pivots", False)
         format_type = options.get("format", "full")
 
+        owner_org = options.get(_OWNER_ORG_OPTION)
+        storage = self._debate_storage()
+
         # Process debates (could parallelize with asyncio.gather for performance)
         for debate_id in job.debate_ids:
             start_time = time.time()
             try:
-                decision = await self._get_or_build_decision(debate_id)
+                # Debates the job's org may not read are reported like missing ones.
+                access = find_debate_access(storage, debate_id)
+                decision = (
+                    await self._get_or_build_decision(access.debate_id)
+                    if access is not None and debate_visible_to_org(access, owner_org)
+                    else None
+                )
 
                 if decision is None:
                     job.results.append(
@@ -880,17 +925,26 @@ class ExplainabilityHandler(BaseHandler):
 
         return result
 
-    def _handle_batch_status(self, batch_id: str) -> HandlerResult:
-        """Get status of a batch job."""
+    def _owned_batch_job(self, batch_id: str, org_id: str) -> BatchJob | None:
+        """The batch job if the org ``org_id`` created it, else None (same as missing)."""
         job = _get_batch_job(batch_id)
+        if job is None or not org_id or job.options.get(_OWNER_ORG_OPTION) != org_id:
+            return None
+        return job
+
+    def _handle_batch_status(self, batch_id: str, org_id: str) -> HandlerResult:
+        """Get status of a batch job."""
+        job = self._owned_batch_job(batch_id, org_id)
         if not job:
             return error_response(f"Batch job not found: {batch_id}", 404)
 
         return json_response(job.to_dict())
 
-    def _handle_batch_results(self, batch_id: str, query_params: dict[str, Any]) -> HandlerResult:
+    def _handle_batch_results(
+        self, batch_id: str, query_params: dict[str, Any], org_id: str
+    ) -> HandlerResult:
         """Get results of a completed batch job."""
-        job = _get_batch_job(batch_id)
+        job = self._owned_batch_job(batch_id, org_id)
         if not job:
             return error_response(f"Batch job not found: {batch_id}", 404)
 
@@ -937,7 +991,7 @@ class ExplainabilityHandler(BaseHandler):
 
     @rate_limit(requests_per_minute=30)
     async def _handle_compare(self, handler: Any) -> HandlerResult:
-        """Compare explanations between multiple debates.
+        """Compare explanations between debates the caller's org may read.
 
         Request body:
         {
@@ -945,6 +999,9 @@ class ExplainabilityHandler(BaseHandler):
             "compare_fields": ["contributing_factors", "evidence_quality", "confidence"]
         }
         """
+        scope, scope_error = require_org_scope(handler)
+        if scope is None:
+            return scope_error
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
             if content_length == 0:
@@ -971,10 +1028,14 @@ class ExplainabilityHandler(BaseHandler):
         )
 
         try:
-            # Fetch all decisions
+            # Fetch all decisions; debates the caller may not read count as missing.
+            storage = self._debate_storage()
             debates = {}
             for debate_id in debate_ids:
-                decision = await self._get_or_build_decision(debate_id)
+                access = find_debate_access(storage, debate_id)
+                if access is None or not debate_visible_to_org(access, scope.org_id):
+                    continue
+                decision = await self._get_or_build_decision(access.debate_id)
                 if decision:
                     debates[debate_id] = decision
 

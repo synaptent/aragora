@@ -302,6 +302,39 @@ class TestSuffixRoutes:
         assert call(USER_A, f"/api/v1/debates/{DA}/export/exe").status_code == 400
 
 
+class TestSlugRefs:
+    """Per-debate routes read the debate the access check resolved, never the raw slug."""
+
+    @pytest.mark.parametrize("suffix", ["messages", "diagnostics", "export/json"])
+    def test_owner_reads_suffix_route_by_slug_like_by_id(self, call, storage, suffix):
+        by_id = call(USER_A, f"/api/v1/debates/{DA}/{suffix}")
+        by_slug = call(USER_A, f"/api/v1/debates/{_slug(storage, DA)}/{suffix}")
+
+        assert by_id.status_code == 200, _text(by_id)
+        assert (by_slug.status_code, _text(by_slug)) == (200, _text(by_id))
+
+    def test_hidden_slugs_get_the_missing_debate_404(self, call, storage):
+        for user, debate_id in ((USER_B, DA), (USER_A, DN), (USER_B, DN)):
+            for suffix in ("messages", "diagnostics", "export/json"):
+                result = call(user, f"/api/v1/debates/{_slug(storage, debate_id)}/{suffix}")
+                assert (result.status_code, _body(result)) == (404, NOT_FOUND), suffix
+        slug_path = f"/api/v1/debates/{_slug(storage, DA)}/messages"
+        assert call(ANON, slug_path).status_code == 401
+        assert _body(call(USER_NO_ORG, slug_path))["code"] == "org_required"
+
+    def test_a_slug_never_shadows_another_orgs_id(self, call, storage):
+        """A's debate takes B's debate id as its slug: the id still names B's debate."""
+        with storage.connection() as conn:
+            conn.execute("UPDATE debates SET slug = ? WHERE id = ?", (DB, DA))
+
+        as_a = call(USER_A, f"/api/v1/debates/{DB}/messages")
+        as_b = call(USER_B, f"/api/v1/debates/{DB}/messages")
+
+        assert (as_a.status_code, _body(as_a)) == (404, NOT_FOUND)
+        assert as_b.status_code == 200
+        assert "bravo" in _text(as_b) and DA_TASK not in _text(as_b)
+
+
 class TestUnknownOwner:
     def test_null_org_debate_is_invisible_to_every_org(self, call):
         for user in (USER_A, USER_B):

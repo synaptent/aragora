@@ -16,6 +16,13 @@ import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime
 
+# Explainability reads are org-scoped; requests act for the org that owns every debate.
+pytestmark = pytest.mark.usefixtures("explainability_org_member")
+
+TEST_ORG = "test-org-001"
+# Batch jobs answer status and results only for the org that created them.
+OWNED_BY_TEST_ORG = {"_owner_org_id": TEST_ORG}
+
 
 class TestExplainabilityHandlerRouting:
     """Tests for route matching."""
@@ -428,6 +435,7 @@ class TestExplainabilityHandlerBatch:
 
         mock_job = BatchJob(
             batch_id="batch_123",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["debate_1", "debate_2"],
             status=BatchStatus.PROCESSING,
             processed_count=1,
@@ -464,6 +472,7 @@ class TestExplainabilityHandlerBatch:
 
         mock_job = BatchJob(
             batch_id="batch_123",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["debate_1", "debate_2"],
             status=BatchStatus.COMPLETED,
             processed_count=2,

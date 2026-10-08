@@ -44,6 +44,35 @@ def mock_storage() -> Mock:
 
 
 @pytest.fixture
+def explainability_org_member(monkeypatch):
+    """Requests act for test-org-001, and every debate id is a private debate of that org.
+
+    For explainability handler tests that build decisions from patched storage
+    instead of seeding debates with an owner.
+    """
+    from aragora.billing.auth.context import UserAuthContext
+    from aragora.tenancy import debate_access
+
+    user = UserAuthContext(
+        authenticated=True, user_id="test-user-001", org_id="test-org-001", role="admin"
+    )
+
+    def owned_by_caller_org(storage, ref):
+        return debate_access.DebateAccess(debate_id=ref, org_id=user.org_id, is_public=False)
+
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    monkeypatch.setattr(debate_access, "find_debate_access", owned_by_caller_org)
+    monkeypatch.setattr(
+        "aragora.server.handlers.decisions.explainability.find_debate_access",
+        owned_by_caller_org,
+    )
+    return user
+
+
+@pytest.fixture
 def mock_elo_system() -> Mock:
     """Create a mock EloSystem.
 

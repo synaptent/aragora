@@ -38,6 +38,13 @@ from aragora.server.handlers.explainability_store import (
     reset_batch_job_store,
 )
 
+# Explainability reads are org-scoped; requests act for the org that owns every debate.
+pytestmark = pytest.mark.usefixtures("explainability_org_member")
+
+TEST_ORG = "test-org-001"
+# Batch jobs answer status and results only for the org that created them.
+OWNED_BY_TEST_ORG = {"_owner_org_id": TEST_ORG}
+
 
 # ===========================================================================
 # Test Fixtures and Mocks
@@ -794,13 +801,14 @@ class TestExplainabilityHandlerHappyPath:
         """Test getting batch job status."""
         job = BatchJob(
             batch_id="batch-test-status",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1", "d2"],
             status="processing",
             processed_count=1,
         )
 
         with patch("aragora.server.handlers.explainability._get_batch_job", return_value=job):
-            result = handler._handle_batch_status("batch-test-status")
+            result = handler._handle_batch_status("batch-test-status", TEST_ORG)
 
         assert result.status_code == 200
         body = json.loads(result.body)
@@ -814,6 +822,7 @@ class TestExplainabilityHandlerHappyPath:
 
         job = BatchJob(
             batch_id="batch-test-results",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1"],
             status="completed",
         )
@@ -828,7 +837,7 @@ class TestExplainabilityHandlerHappyPath:
         ]
 
         with patch("aragora.server.handlers.explainability._get_batch_job", return_value=job):
-            result = handler._handle_batch_results("batch-test-results", {})
+            result = handler._handle_batch_results("batch-test-results", {}, TEST_ORG)
 
         assert result.status_code == 200
         body = json.loads(result.body)
@@ -855,7 +864,7 @@ class TestExplainabilityHandlerErrors:
     async def test_batch_status_not_found(self, handler):
         """Test batch status returns 404 for nonexistent job."""
         with patch("aragora.server.handlers.explainability._get_batch_job", return_value=None):
-            result = handler._handle_batch_status("nonexistent")
+            result = handler._handle_batch_status("nonexistent", TEST_ORG)
 
         assert result.status_code == 404
 
@@ -863,7 +872,7 @@ class TestExplainabilityHandlerErrors:
     async def test_batch_results_not_found(self, handler):
         """Test batch results returns 404 for nonexistent job."""
         with patch("aragora.server.handlers.explainability._get_batch_job", return_value=None):
-            result = handler._handle_batch_results("nonexistent", {})
+            result = handler._handle_batch_results("nonexistent", {}, TEST_ORG)
 
         assert result.status_code == 404
 
@@ -874,12 +883,13 @@ class TestExplainabilityHandlerErrors:
 
         job = BatchJob(
             batch_id="batch-pending",
+            options=OWNED_BY_TEST_ORG,
             debate_ids=["d1"],
         )
         job.status = BatchStatus.PENDING
 
         with patch("aragora.server.handlers.explainability._get_batch_job", return_value=job):
-            result = handler._handle_batch_results("batch-pending", {})
+            result = handler._handle_batch_results("batch-pending", {}, TEST_ORG)
 
         assert result.status_code == 202
 
