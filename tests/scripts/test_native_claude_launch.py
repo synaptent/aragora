@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import os
@@ -436,11 +437,9 @@ def test_owned_descendants_are_reaped_without_touching_neighbor(launch, mode):
             proc.kill()
             proc.wait()
         for pid in owned:
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 if _running(pid) and os.getpgid(pid) == owned[0]:
                     os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
         neighbor.terminate()
         neighbor.wait()
 
