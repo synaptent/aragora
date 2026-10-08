@@ -48,6 +48,7 @@ ALLOWED_QUERY_PARAMS = {
     "scopes": 500,
     "debate_id": 100,
     "pipeline_id": 100,
+    "list": 10,
     "org_id": 100,
     "organization_id": 100,
     "user_id": 100,

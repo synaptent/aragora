@@ -318,16 +318,10 @@ class UniversalGraphHandler(BaseHandler):
         from aragora.pipeline.universal_node import UniversalGraph
 
         store = _get_store()
-        graph_id = body.get("id")
-        if graph_id is not None:
-            invalid = _invalid_ids(id=str(graph_id))
-            if invalid is not None:
-                return invalid
-            # Creating over an existing id would replace that graph's nodes and edges.
-            if store.get(str(graph_id)) is not None:
-                return error_response("Graph id is already in use", 409)
+        # A client-chosen "id" is ignored: honoring it would either replace an existing
+        # graph or reveal, by refusing, that another org already holds that id.
         graph = UniversalGraph(
-            id=str(graph_id) if graph_id is not None else f"graph-{uuid.uuid4().hex[:8]}",
+            id=f"graph-{uuid.uuid4().hex}",
             name=body.get("name", "Untitled Pipeline"),
             owner_id=body.get("owner_id"),
             workspace_id=body.get("workspace_id"),
@@ -393,8 +387,10 @@ class UniversalGraphHandler(BaseHandler):
         except ValueError:
             return error_response("Invalid stage", 400)
 
+        # Node ids are unique across all graphs, so a client-chosen "id" is ignored for
+        # the same reason as on graph create.
         node = UniversalNode(
-            id=body.get("id", f"node-{uuid.uuid4().hex[:8]}"),
+            id=f"node-{uuid.uuid4().hex}",
             stage=stage,
             node_subtype=body.get("node_subtype", "concept"),
             label=body.get("label", ""),
@@ -406,10 +402,7 @@ class UniversalGraphHandler(BaseHandler):
             data=body.get("data", {}),
             metadata=body.get("metadata", {}),
         )
-        try:
-            store.add_node(graph_id, node)
-        except ValueError:
-            return error_response("Node id is already in use", 409)
+        store.add_node(graph_id, node)
         return json_response(node.to_dict(), status=201)
 
     def _remove_node(self, graph_id: str, node_id: str) -> HandlerResult:

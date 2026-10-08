@@ -261,7 +261,8 @@ class TestCreateGraph:
         assert result is not None
         assert result["status"] == 201
         resp = json.loads(result["body"])
-        assert resp["id"] == "g-new"
+        assert resp["id"].startswith("graph-")
+        assert resp["id"] != "g-new"
         assert resp["name"] == "New Graph"
         store.create.assert_called_once()
 
@@ -414,7 +415,8 @@ class TestAddNode:
         assert result is not None
         assert result["status"] == 201
         resp = json.loads(result["body"])
-        assert resp["id"] == "n-new"
+        assert resp["id"].startswith("node-")
+        assert resp["id"] != "n-new"
         assert resp["label"] == "New Idea"
 
     @patch("aragora.server.handlers.pipeline.universal_graph._get_store")

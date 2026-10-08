@@ -168,6 +168,17 @@ async def test_list_and_latest_only_show_the_callers_org(handler, store) -> None
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("caller", "listed"), [(USER_A, [PA]), (USER_B, [])])
+async def test_list_mode_passes_the_server_query_allowlist(handler, store, caller, listed) -> None:
+    from aragora.server.http_utils import validate_query_params
+
+    assert validate_query_params({"list": ["true"], "limit": ["500"]}) == (True, "")
+    assert validate_query_params({"list": ["t" * 11]})[0] is False
+    result = await _get(handler, caller, BASE, {"list": "true", "limit": "500"})
+    assert [p["id"] for p in _json(result)["pipelines"]] == listed
+
+
+@pytest.mark.asyncio
 async def test_owner_reads_own_pipeline(handler, store) -> None:
     listed = await _get(handler, USER_A, BASE, {"list": "true"})
     pipeline = await _get(handler, USER_A, f"{BASE}/{PA}")

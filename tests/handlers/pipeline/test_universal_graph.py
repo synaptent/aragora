@@ -398,16 +398,19 @@ class TestCreateGraph:
         result = h.handle_post("/api/v1/pipeline/graphs", body, http)
         assert _status(result) == 201
         body_out = _body(result)
-        assert body_out["id"] == "my-graph"
+        assert body_out["id"].startswith("graph-")
+        assert body_out["id"] != "my-graph"
         assert body_out["name"] == "My Pipeline"
 
-    def test_create_calls_store(self, patched_store):
+    def test_create_calls_store_with_a_server_id(self, patched_store):
         h = _make_handler()
         http = _make_http_handler()
-        h.handle_post("/api/v1/pipeline/graphs", {"id": "g1"}, http)
+        result = h.handle_post("/api/v1/pipeline/graphs", {"id": "g1"}, http)
         patched_store.create.assert_called_once()
         created = patched_store.create.call_args[0][0]
-        assert created.id == "g1"
+        assert created.id != "g1"
+        assert created.id == _body(result)["id"]
+        patched_store.get.assert_not_called()
 
     def test_create_auto_generates_id(self, patched_store):
         h = _make_handler()
@@ -633,7 +636,8 @@ class TestAddNode:
         }
         result = h.handle_post("/api/v1/pipeline/graphs/graph-abc123/nodes", body, http)
         assert _status(result) == 201
-        assert _body(result)["id"] == "node-1"
+        assert _body(result)["id"].startswith("node-")
+        assert _body(result)["id"] != "node-1"
 
     def test_add_node_graph_not_found(self, patched_store):
         patched_store.get.return_value = None

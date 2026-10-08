@@ -28,7 +28,13 @@ from aragora.tenancy.debate_access import (
     debate_visible_to_org,
     find_debate_access,
 )
-from aragora.tenancy.record_scope import AUTH_REQUIRED, record_not_found, require_org_scope
+from aragora.tenancy.pipeline_access import pipeline_owned
+from aragora.tenancy.record_scope import (
+    AUTH_REQUIRED,
+    OrgScope,
+    record_not_found,
+    require_org_scope,
+)
 
 from ..base import (
     BaseHandler,
@@ -217,12 +223,14 @@ def _is_public_spectate_debate(
 
 
 class SpectateVisibility:
-    """Which debates' spectate events one caller may see.
+    """Which debates' and pipelines' spectate events one caller may see.
 
-    Events of a public debate, and events not linked to any debate, are visible
-    to everyone. Any other debate's events are visible only to callers acting
-    for the org that owns it; a debate with no recorded org is visible to no
-    one. Decisions are cached for one request or stream.
+    Events of a public debate, and events linked to neither a debate nor a
+    pipeline, are visible to everyone. Any other debate's events are visible
+    only to callers acting for the org that owns it; a debate with no recorded
+    org is visible to no one. Events linked only to a pipeline follow the same
+    rule with the pipeline's owner org. Decisions are cached for one request or
+    stream.
     """
 
     def __init__(self, org_id: str | None = None, *, storage: Any | None = None) -> None:
@@ -231,6 +239,7 @@ class SpectateVisibility:
         self._storage_resolved = storage is not None
         self._public: dict[str, bool] = {}
         self._visible: dict[str, bool] = {}
+        self._owned_pipelines: set[str] = set()
 
     def _get_storage(self) -> Any | None:
         if not self._storage_resolved:
@@ -267,8 +276,23 @@ class SpectateVisibility:
         self._visible[debate_id] = visible
         return visible
 
+    def can_view_pipeline(self, pipeline_id: Any) -> bool:
+        if self.org_id is None or not isinstance(pipeline_id, str) or not pipeline_id:
+            return False
+        if pipeline_id in self._owned_pipelines:
+            return True
+        # Only owned pipelines are cached: a pipeline can be saved after its first events.
+        if not pipeline_owned(pipeline_id, OrgScope(org_id=self.org_id, user_id="", role="")):
+            return False
+        self._owned_pipelines.add(pipeline_id)
+        return True
+
     def can_view_event(self, event: Any) -> bool:
-        return self.can_view(getattr(event, "debate_id", None))
+        debate_id = getattr(event, "debate_id", None)
+        pipeline_id = getattr(event, "pipeline_id", None)
+        if not debate_id and pipeline_id:
+            return self.can_view_pipeline(pipeline_id)
+        return self.can_view(debate_id)
 
     def filter_events(self, events: list[Any]) -> list[Any]:
         return [event for event in events if self.can_view_event(event)]

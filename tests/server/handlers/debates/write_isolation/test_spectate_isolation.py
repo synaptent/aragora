@@ -333,3 +333,104 @@ def test_emit_for_own_debate_is_bound_to_that_debate(monkeypatch, spectate, brid
     assert result.status_code == 200
     assert body_of(result) == {"emitted": 1, "debate_id": DA}
     assert [event.debate_id for event in bridge.get_recent_events(50)] == [DA]
+
+
+PIPE_A, PIPE_U, PIPE_X = "pipe-org-a", "pipe-unowned", "pipe-missing"
+
+
+@pytest.fixture
+def pipelines(tmp_path):
+    from aragora.pipeline.graph_store import GraphStore
+    from aragora.storage.pipeline_store import PipelineResultStore
+
+    store = PipelineResultStore(str(tmp_path / "pipelines.db"))
+    store.save(PIPE_A, {"stage_status": {}}, org_id=ORG_A, created_by="user-a")
+    store.save(PIPE_U, {"stage_status": {}})
+    graphs = GraphStore(db_path=str(tmp_path / "graphs.db"))
+    with (
+        patch("aragora.storage.pipeline_store.get_pipeline_store", return_value=store),
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=graphs),
+    ):
+        yield store
+
+
+def _pipeline_event(pipeline_id: str) -> SpectateEvent:
+    return SpectateEvent(
+        event_type="approval_granted",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        pipeline_id=pipeline_id,
+        data={"agent_id": "agent-1", "notes": f"{pipeline_id} private notes"},
+    )
+
+
+def _event_scopes(result: Any) -> list[tuple[str | None, str | None]]:
+    if result.content_type == "text/event-stream":
+        frames = _sse_frames(text_of(result))
+        events = [p for t, p in frames if t not in {"connected", "snapshot_complete"}]
+    else:
+        events = body_of(result)["events"]
+    return [(event["debate_id"], event["pipeline_id"]) for event in events]
+
+
+@pytest.mark.parametrize(("path", "query"), SURFACES)
+@pytest.mark.parametrize(
+    ("user", "visible"),
+    [(USER_A, [PIPE_A]), (USER_B, []), (ADMIN_B, []), (USER_NO_ORG, []), (ANON, [])],
+)
+def test_pipeline_events_reach_only_the_pipelines_org(
+    monkeypatch, spectate, bridge, pipelines, path, query, user, visible
+):
+    for pipeline_id in (PIPE_A, PIPE_U, PIPE_X):
+        bridge._event_buffer.append(_pipeline_event(pipeline_id))
+    bridge._event_buffer.append(_event(None, "unscoped notice", now=True))
+
+    result = _get(monkeypatch, spectate, user, path, query)
+
+    assert result.status_code == 200
+    assert _event_scopes(result) == [*((None, p) for p in visible), (None, None)]
+
+
+@pytest.mark.parametrize("pipeline_id", [PIPE_A, PIPE_X])
+def test_naming_another_orgs_pipeline_reads_like_a_missing_one(
+    monkeypatch, spectate, bridge, pipelines, pipeline_id
+):
+    bridge._event_buffer.append(_pipeline_event(PIPE_A))
+
+    result = _get(monkeypatch, spectate, USER_B, SURFACES[0][0], {"pipeline_id": pipeline_id})
+
+    assert (result.status_code, body_of(result)) == (200, {"events": [], "count": 0})
+
+
+@pytest.mark.parametrize(("org_id", "visible"), [(ORG_A, 1), (ORG_B, 0), (None, 0)])
+def test_live_stream_sends_pipeline_events_only_to_the_pipelines_org(
+    storage, pipelines, org_id, visible
+):
+    bridge = _ManualBridge([_pipeline_event(PIPE_A)])
+    stream = iter_live_spectate_sse_frames(
+        {"count": "10"}, heartbeat_interval=60, bridge=bridge, org_id=org_id, storage=storage
+    )
+
+    sent = [next(stream) for _ in range(2 + visible)]
+    bridge.subscriber(_pipeline_event(PIPE_A))
+    bridge.subscriber(_event(None, "unscoped notice"))
+    sent.extend(next(stream) for _ in range(1 + visible))
+    stream.close()
+
+    frames = [p for t, p in _sse_frames(b"".join(sent)) if t == "spectate"]
+    assert [p["pipeline_id"] for p in frames] == [PIPE_A] * 2 * visible + [None]
+
+
+def test_pipeline_run_events_are_tagged_with_their_pipeline(
+    monkeypatch, spectate, bridge, pipelines
+):
+    from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
+
+    bridge.start()
+    IdeaToExecutionPipeline().from_ideas(["one idea"], auto_advance=False, pipeline_id=PIPE_A)
+
+    owner = body_of(_get(monkeypatch, spectate, USER_A, *SURFACES[0]))
+    other = body_of(_get(monkeypatch, spectate, USER_B, *SURFACES[0]))
+    assert [e["event_type"] for e in owner["events"] if e["pipeline_id"] == PIPE_A] == [
+        "pipeline.started"
+    ]
+    assert PIPE_A not in json.dumps(other)
