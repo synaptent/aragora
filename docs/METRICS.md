@@ -30,7 +30,7 @@
 | Knowledge Mound adapter files | `47` | `aragora/knowledge/mound/adapters/` | `git ls-files aragora/knowledge/mound/adapters \| grep -E '/[^/]+_adapter\.py$' \| wc -l` |
 | Markdown files under docs/ | `1120` | `docs/` | `git ls-files docs \| grep -E '\.md$' \| wc -l` |
 | GitHub Actions workflows | `97` | `.github/workflows/` | `git ls-files .github/workflows \| grep -E '\.yml$' \| wc -l` |
-| Mypy baseline errors (grandfathered) | `1883` | `.mypy-baseline` | `wc -l .mypy-baseline` |
+| Mypy baseline errors (grandfathered) | `1687` | `.mypy-baseline` | `wc -l .mypy-baseline` |
 
 ## Notes on counting methodology
 
