@@ -7,6 +7,7 @@ import { useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { useControlPlaneWebSocket, type TaskState } from '@/hooks/useControlPlaneWebSocket';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 // Lazy load heavy visualization component
 const AgentWorkflowVisualization = dynamic(
@@ -178,7 +179,7 @@ export default function ControlPlanePage() {
   useEffect(() => {
     const fetchDeliberations = async () => {
       try {
-        const res = await fetch(`${backendConfig.api}/api/v1/deliberations`);
+        const res = await fetchWithAuth(`${backendConfig.api}/api/v1/deliberations`);
         if (res.ok) {
           const data = await res.json();
           const mapped = (data.deliberations || []).map((d: Record<string, unknown>) => {
@@ -218,7 +219,7 @@ export default function ControlPlanePage() {
     setDeliberationStatus(null);
     setDeliberationResult(null);
     try {
-      const response = await fetch(`${backendConfig.api}/api/control-plane/deliberations`, {
+      const response = await fetchWithAuth(`${backendConfig.api}/api/control-plane/deliberations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -248,9 +249,14 @@ export default function ControlPlanePage() {
     setDeliberationLoading(true);
     setDeliberationError(null);
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${backendConfig.api}/api/control-plane/deliberations/${requestId}/status`
       );
+      // The status route answers 404 for a missing or other-org request id.
+      if (response.status === 404) {
+        setDeliberationStatus({ request_id: requestId, status: 'not_found' });
+        return;
+      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data?.error || 'Status check failed');
@@ -266,7 +272,7 @@ export default function ControlPlanePage() {
   // Fetch agents from control plane API
   const fetchAgents = useCallback(async () => {
     try {
-      const response = await fetch(`${backendConfig.api}/api/control-plane/agents`);
+      const response = await fetchWithAuth(`${backendConfig.api}/api/control-plane/agents`);
       if (!response.ok) throw new Error('Failed to fetch agents');
       const data = await response.json();
       // Map control plane agent format to UI format
@@ -297,7 +303,7 @@ export default function ControlPlanePage() {
   // Fetch jobs from queue endpoint
   const fetchJobs = useCallback(async () => {
     try {
-      const response = await fetch(`${backendConfig.api}/api/control-plane/queue`);
+      const response = await fetchWithAuth(`${backendConfig.api}/api/control-plane/queue`);
       if (!response.ok) throw new Error('Failed to fetch jobs');
       const data = await response.json();
       // Map backend job format to UI format
@@ -327,7 +333,7 @@ export default function ControlPlanePage() {
   // Fetch metrics from control plane API
   const fetchMetrics = useCallback(async () => {
     try {
-      const response = await fetch(`${backendConfig.api}/api/control-plane/metrics`);
+      const response = await fetchWithAuth(`${backendConfig.api}/api/control-plane/metrics`);
       if (!response.ok) throw new Error('Failed to fetch metrics');
       const data = await response.json();
       setMetrics(data);
@@ -367,7 +373,7 @@ export default function ControlPlanePage() {
   useEffect(() => {
     const fetchVerticals = async () => {
       try {
-        const res = await fetch(`${backendConfig.api}/api/verticals`);
+        const res = await fetchWithAuth(`${backendConfig.api}/api/verticals`);
         if (res.ok) {
           const data = await res.json();
           setVerticalsData(data.verticals || []);
@@ -395,7 +401,7 @@ export default function ControlPlanePage() {
     try {
       // Tasks can be cancelled, but not paused in current API
       // For now, cancelling is the closest action
-      await fetch(`${backendConfig.api}/api/control-plane/tasks/${jobId}/cancel`, { method: 'POST' });
+      await fetchWithAuth(`${backendConfig.api}/api/control-plane/tasks/${jobId}/cancel`, { method: 'POST' });
       fetchJobs();
     } catch {
       // Handle error - demo mode will continue with mock data
@@ -414,7 +420,7 @@ export default function ControlPlanePage() {
 
   const cancelJob = async (jobId: string) => {
     try {
-      await fetch(`${backendConfig.api}/api/control-plane/tasks/${jobId}/cancel`, { method: 'POST' });
+      await fetchWithAuth(`${backendConfig.api}/api/control-plane/tasks/${jobId}/cancel`, { method: 'POST' });
       fetchJobs();
     } catch {
       // Handle error - demo mode will continue with mock data

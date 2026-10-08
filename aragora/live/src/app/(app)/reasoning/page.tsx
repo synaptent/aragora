@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { useBackend } from '@/components/BackendSelector';
+import { fetchWithAuth } from '@/lib/api';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -127,10 +128,10 @@ export default function ReasoningPage() {
 
     try {
       const [cruxRes, lbRes, graphRes, posRes] = await Promise.allSettled([
-        fetch(`${backendUrl}/api/belief-network/${id}/cruxes`),
-        fetch(`${backendUrl}/api/belief-network/${id}/load-bearing-claims`),
-        fetch(`${backendUrl}/api/belief-network/${id}/graph`),
-        fetch(`${backendUrl}/api/v1/debates/${id}/positions`),
+        fetchWithAuth(`${backendUrl}/api/belief-network/${id}/cruxes`),
+        fetchWithAuth(`${backendUrl}/api/belief-network/${id}/load-bearing-claims`),
+        fetchWithAuth(`${backendUrl}/api/belief-network/${id}/graph`),
+        fetchWithAuth(`${backendUrl}/api/v1/debates/${id}/positions`),
       ]);
 
       let anyOk = false;

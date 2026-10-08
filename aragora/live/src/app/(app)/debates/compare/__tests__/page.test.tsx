@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 import DebateComparePage from '../page';
 
@@ -137,5 +138,19 @@ describe('DebateComparePage', () => {
     expect(
       screen.getByText('Hold the rollout until the metrics gap is explained.'),
     ).toBeInTheDocument();
+  });
+
+  it('sends the session token with both debate package requests', async () => {
+    storeTestSession();
+    try {
+      render(<DebateComparePage />);
+
+      expect(await screen.findByText(/outcome shift detected/i)).toBeInTheDocument();
+      const bearer = `Bearer ${TEST_SESSION_TOKEN}`;
+      expect(authHeaderOf(mockFetch, 'http://backend.test/api/v1/debates/debate-alpha/package')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, 'http://backend.test/api/v1/debates/debate-beta/package')).toBe(bearer);
+    } finally {
+      clearTestSession();
+    }
   });
 });

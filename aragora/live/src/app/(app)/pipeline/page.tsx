@@ -14,6 +14,7 @@ import { AutoTransitionSuggestion } from '@/components/pipeline-canvas/AutoTrans
 import type { TransitionSuggestion } from '@/components/pipeline-canvas/AutoTransitionSuggestion';
 import type { PipelineStageType, PipelineResultResponse, ExecutionStatus } from '@/components/pipeline-canvas/types';
 import { UseCaseWizard } from '@/components/wizards/UseCaseWizard';
+import { fetchWithAuth } from '@/lib/api';
 
 const PipelineCanvas = dynamic(
   () => import('@/components/pipeline-canvas/PipelineCanvas').then((m) => m.PipelineCanvas),
@@ -379,7 +380,7 @@ function PipelinePageContent() {
     const debateId = searchParams?.get('id');
     if (from === 'debate' && debateId && !pipelineData) {
       setDebateImportStatus('Fetching debate results...');
-      fetch(`/api/v1/debates/${encodeURIComponent(debateId)}`)
+      fetchWithAuth(`/api/v1/debates/${encodeURIComponent(debateId)}`)
         .then((res) => {
           if (!res.ok) throw new Error(`Failed to fetch debate: ${res.status}`);
           return res.json();

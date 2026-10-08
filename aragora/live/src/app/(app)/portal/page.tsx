@@ -8,6 +8,7 @@ import { useBackend } from '@/components/BackendSelector';
 import { UseCaseSelector, QuickStartCards } from '@/components/landing';
 import { AdaptiveModeToggle } from '@/components/ui/AdaptiveModeToggle';
 import { useAdaptiveMode } from '@/context/AdaptiveModeContext';
+import { fetchWithAuth } from '@/lib/api';
 
 interface LiveDebate {
   id: string;
@@ -28,7 +29,7 @@ export default function PortalPage() {
     // Fetch recent/live debates for preview
     async function fetchLiveDebates() {
       try {
-        const response = await fetch(`${config.api}/api/debates?limit=5&status=active`);
+        const response = await fetchWithAuth(`${config.api}/api/debates?limit=5&status=active`);
         if (response.ok) {
           const data = await response.json();
           setLiveDebates(data.debates || []);

@@ -1,4 +1,13 @@
-import { renderWithProviders, screen, waitFor, act } from '@/test-utils';
+import {
+  renderWithProviders,
+  screen,
+  waitFor,
+  act,
+  TEST_SESSION_TOKEN,
+  authHeaderOf,
+  clearTestSession,
+  storeTestSession,
+} from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import ControlPlanePage from '../page';
 
@@ -303,6 +312,79 @@ describe('ControlPlanePage', () => {
 
     expect(screen.getByText(/Request ID:/)).toBeInTheDocument();
     expect(screen.getByText(/Status:/)).toBeInTheDocument();
+  });
+
+  describe('deliberation status poll', () => {
+    const bearer = `Bearer ${TEST_SESSION_TOKEN}`;
+
+    function mockDeliberationBackend(statusResponse: { ok: boolean; status: number; body: unknown }) {
+      const defaultImpl = mockFetch.getMockImplementation()!;
+      mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith('/api/control-plane/deliberations') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ request_id: 'req-a', status: 'queued' }),
+          });
+        }
+        if (url.includes('/api/control-plane/deliberations/req-a/status')) {
+          return Promise.resolve({
+            ok: statusResponse.ok,
+            status: statusResponse.status,
+            json: () => Promise.resolve(statusResponse.body),
+          });
+        }
+        return defaultImpl(url, init);
+      });
+    }
+
+    async function submitAndCheckStatus() {
+      const user = userEvent.setup();
+      renderWithProviders(<ControlPlanePage />);
+      await waitFor(() => {
+        expect(screen.queryByText('Loading dashboard...')).not.toBeInTheDocument();
+      });
+      await user.type(screen.getByPlaceholderText('Describe the decision to debate...'), 'Assess risk');
+      await user.click(screen.getByRole('button', { name: /START DEBATE/i }));
+      await user.click(await screen.findByRole('button', { name: 'Check Status' }));
+    }
+
+    beforeEach(() => storeTestSession());
+    afterEach(() => clearTestSession());
+
+    it('sends the session token with every control plane request', async () => {
+      mockDeliberationBackend({ ok: true, status: 200, body: { request_id: 'req-a', status: 'running' } });
+
+      await submitAndCheckStatus();
+
+      expect(await screen.findByText('Status Update: running')).toBeInTheDocument();
+      expect(authHeaderOf(mockFetch, '/api/control-plane/deliberations/req-a/status')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/control-plane/deliberations', 'POST')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/v1/deliberations')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/control-plane/agents')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/control-plane/queue')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/control-plane/metrics')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/verticals')).toBe(bearer);
+    });
+
+    it('treats a 404 from the status route as not found rather than an error', async () => {
+      mockDeliberationBackend({ ok: false, status: 404, body: { error: 'Deliberation not found' } });
+
+      await submitAndCheckStatus();
+
+      expect(await screen.findByText('Status Update: not_found')).toBeInTheDocument();
+      expect(screen.queryByText('Deliberation not found')).not.toBeInTheDocument();
+      expect(screen.queryByText('Status check failed')).not.toBeInTheDocument();
+    });
+
+    it('still reports other status failures as errors', async () => {
+      mockDeliberationBackend({ ok: false, status: 500, body: { error: 'Status backend down' } });
+
+      await submitAndCheckStatus();
+
+      expect(await screen.findByText('Status backend down')).toBeInTheDocument();
+      expect(screen.queryByText(/Status Update:/)).not.toBeInTheDocument();
+    });
   });
 
   describe('data fetching', () => {

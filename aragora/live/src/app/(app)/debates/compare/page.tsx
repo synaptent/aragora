@@ -7,6 +7,7 @@ import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { useBackend } from '@/components/BackendSelector';
 import { getAgentColors } from '@/utils/agentColors';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 import {
   normalizeDecisionPackage,
   type DecisionPackage,
@@ -53,7 +54,7 @@ function getAgentDiff(left: string[], right: string[]) {
 }
 
 async function fetchDecisionPackage(apiBase: string, debateId: string): Promise<DecisionPackage> {
-  const response = await fetch(`${apiBase}/api/v1/debates/${debateId}/package`, {
+  const response = await fetchWithAuth(`${apiBase}/api/v1/debates/${debateId}/package`, {
     signal: AbortSignal.timeout(10000),
   });
 

@@ -8,6 +8,7 @@ import { useRightSidebar } from '@/context/RightSidebarContext';
 import { useToast } from '@/context/ToastContext';
 import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 import Link from 'next/link';
 
 // Template configurations for SME/Quickstart templates
@@ -120,7 +121,7 @@ function ArenaContent() {
 
     async function fetchTemplate() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/templates/${encodeURIComponent(templateId!)}`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/templates/${encodeURIComponent(templateId!)}`);
         if (response.ok) {
           const data = await response.json();
           setFetchedTemplate(data);
@@ -153,7 +154,7 @@ function ArenaContent() {
   useEffect(() => {
     async function fetchRecent() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/debates?limit=5`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/api/debates?limit=5`);
         if (response.ok) {
           const data = await response.json();
           if (data.debates) {
