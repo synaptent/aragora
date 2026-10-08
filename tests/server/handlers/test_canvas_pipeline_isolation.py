@@ -1,6 +1,6 @@
 """Org isolation of the canvas pipeline routes (CanvasPipelineHandler dispatch).
 
-Requests go through ``handle`` as the server calls it, with a real
+Requests go through ``handle`` / ``handle_post`` as the server calls them, with a real
 ``PipelineResultStore`` and the real RBAC checker. Org A owns ``pipe-a``; B
 is a member of another org.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -101,6 +101,14 @@ def handler() -> CanvasPipelineHandler:
 
 async def _get(handler: CanvasPipelineHandler, caller: Any, path: str, query=None) -> Any:
     return await _resolve(handler.handle(path, query or {}, _Request(caller)))
+
+
+async def _post(handler: CanvasPipelineHandler, caller: Any, path: str, body=None) -> Any:
+    request = _Request(caller, body)
+    result = await _resolve(handler.handle_post(path, {}, request))
+    if result is None:
+        result = await _resolve(handler.handle(path, {}, request))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -194,3 +202,164 @@ async def test_member_without_org_is_403(handler, store) -> None:
 
     assert result.status_code == 403
     assert _json(result)["code"] == "org_required"
+
+
+# ---------------------------------------------------------------------------
+# Creates (E3)
+# ---------------------------------------------------------------------------
+
+CREATE_ROUTES = [
+    "from-debate",
+    "from-ideas",
+    "from-braindump",
+    "from-template",
+    "demo",
+    "run",
+    "auto-run",
+    "from-system-metrics",
+    "extract-goals",
+    "extract-principles",
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [f"{BASE}/{name}" for name in CREATE_ROUTES]
+    + ["/api/v1/canvas/convert/debate", "/api/v1/canvas/convert/workflow"],
+)
+async def test_anonymous_creates_are_401(handler, store, path) -> None:
+    result = await _post(handler, ANONYMOUS, path, {"ideas": ["x"]})
+
+    assert result.status_code == 401
+    assert {p["id"] for p in store.list_pipelines(limit=100)} == {PA}
+
+
+# ---------------------------------------------------------------------------
+# Records created through the routes carry the creator's org
+# ---------------------------------------------------------------------------
+
+
+def _fake_result(pipeline_id: str = "pipe-fake") -> SimpleNamespace:
+    return SimpleNamespace(
+        pipeline_id=pipeline_id,
+        stage_status={"ideas": "complete"},
+        goal_graph=None,
+        universal_graph=None,
+        ideas_canvas=None,
+        actions_canvas=None,
+        orchestration_canvas=None,
+        to_dict=lambda: {"pipeline_id": pipeline_id, "stage_status": {"ideas": "complete"}},
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route", "body"),
+    [
+        ("from-ideas", {"ideas": ["Rate limit the API"], "auto_advance": False}),
+        ("from-template", {"template_name": "product_launch"}),
+        ("demo", {}),
+    ],
+)
+async def test_created_pipelines_carry_the_creator_org(handler, store, route, body) -> None:
+    with patch.object(module, "_persist_pipeline_to_km"):
+        result = await _post(handler, USER_B, f"{BASE}/{route}", body)
+
+    assert result.status_code == 201, _json(result)
+    pipeline_id = _json(result)["pipeline_id"]
+    assert store.get_owner_org(pipeline_id) == "org-b"
+    assert (await _get(handler, USER_B, f"{BASE}/{pipeline_id}")).status_code == 200
+    assert (await _get(handler, USER_A, f"{BASE}/{pipeline_id}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_run_records_the_creator_org(handler, store) -> None:
+    from aragora.pipeline import idea_to_execution
+
+    with (
+        patch.object(
+            idea_to_execution.IdeaToExecutionPipeline,
+            "run",
+            new=AsyncMock(return_value=_fake_result()),
+        ),
+        patch.object(module, "_persist_pipeline_to_km"),
+    ):
+        result = await _post(handler, USER_B, f"{BASE}/run", {"input_text": "Plan the launch"})
+        pipeline_id = _json(result)["pipeline_id"]
+        placeholder_owner = store.get_owner_org(pipeline_id)
+        await module._pipeline_tasks[pipeline_id]
+
+    assert result.status_code == 202
+    assert placeholder_owner == "org-b"
+    assert store.get_owner_org(pipeline_id) == "org-b"
+
+
+@pytest.mark.asyncio
+async def test_auto_run_and_system_metrics_record_the_creator_org(handler, store) -> None:
+    from aragora.pipeline import idea_to_execution
+
+    pipeline_cls = idea_to_execution.IdeaToExecutionPipeline
+    with (
+        patch.object(pipeline_cls, "from_brain_dump", new=AsyncMock(return_value=None)),
+        patch.object(
+            pipeline_cls, "from_system_metrics", new=AsyncMock(return_value=_fake_result())
+        ),
+    ):
+        auto = await _post(handler, USER_B, f"{BASE}/auto-run", {"text": "Ideas"})
+        metrics = await _post(handler, USER_B, f"{BASE}/from-system-metrics", {})
+        await module._pipeline_tasks[_json(auto)["pipeline_id"]]
+
+    for result in (auto, metrics):
+        pipeline_id = _json(result)["pipeline_id"]
+        assert store.get_owner_org(pipeline_id) == "org-b"
+        assert (await _get(handler, USER_B, f"{BASE}/{pipeline_id}/status")).status_code == 200
+        assert (
+            await _get(handler, USER_A, f"{BASE}/{pipeline_id}/intelligence")
+        ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_extract_goals_ignores_another_orgs_canvas(handler, store) -> None:
+    canvas = SimpleNamespace(
+        workspace_id="org-a",
+        nodes={"n1": MagicMock(to_dict=lambda: {"id": "n1", "label": "Secret"})},
+        edges={},
+    )
+    manager = MagicMock()
+    manager.get_canvas = AsyncMock(return_value=canvas)
+
+    with patch("aragora.canvas.get_canvas_manager", return_value=manager):
+        other = await _post(
+            handler, USER_B, f"{BASE}/extract-goals", {"ideas_canvas_id": "canvas-a"}
+        )
+        manager.get_canvas = AsyncMock(return_value=None)
+        missing = await _post(
+            handler, USER_B, f"{BASE}/extract-goals", {"ideas_canvas_id": "canvas-x"}
+        )
+
+    assert other.status_code == missing.status_code == 400
+    assert other.body == missing.body
+
+
+# ---------------------------------------------------------------------------
+# VAL-PIPE-005: the permission check fails closed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exc", [ImportError, AttributeError, ValueError])
+async def test_checker_failure_denies_and_skips_the_operation(handler, store, exc) -> None:
+    request = _Request(USER_A, {"ideas": ["x"]})
+
+    with (
+        patch("aragora.rbac.checker.get_permission_checker", side_effect=exc("checker down")),
+        patch.object(CanvasPipelineHandler, "handle_from_ideas") as operation,
+    ):
+        denial = handler._check_permission(request, "canvas:create")
+        create = await _resolve(handler.handle_post(f"{BASE}/from-ideas", {}, request))
+
+    assert denial is not None and denial.status_code == 403
+    assert create.status_code == 403
+    operation.assert_not_called()
+    assert {p["id"] for p in store.list_pipelines(limit=100)} == {PA}
