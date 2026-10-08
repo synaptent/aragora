@@ -687,15 +687,15 @@ class TestHandleApproveTransitionRootPath:
             }
         )
 
-        with patch.object(CanvasPipelineHandler, "_check_permission", return_value=None):
-            result = handler.handle_post("/api/v1/canvas/pipeline/from-ideas", {}, http)
-            if hasattr(result, "__await__"):
-                result = await result
+        result = handler.handle_post("/api/v1/canvas/pipeline/from-ideas", {}, http)
+        if hasattr(result, "__await__"):
+            result = await result
 
         body = _body(result)
         assert result.status_code == 201
         assert body["pipeline_id"].startswith("pipe-")
         assert body["result"]["stage_status"]["actions"] == "pending"
+        assert _get_store().get_owner_org(body["pipeline_id"]) == "test-org-001"
 
     @pytest.mark.asyncio
     async def test_approve_transition_defaults_to_approved(self, handler, sample_cartographer_data):
