@@ -40,7 +40,10 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from aragora.swarm.merge_halt import evaluate_merge_halt
+
 _FULL_SHA = re.compile(r"[0-9a-f]{40}")
+_REPO_SLUG = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 # One read. Adding a second call here would reintroduce the split that this type
 # exists to prevent: the head and the verdict must come from the same response.
@@ -70,6 +73,14 @@ class CommandRunner(Protocol):
     ) -> subprocess.CompletedProcess[str]: ...
 
 
+def _require_repo_slug(repo: Any) -> str:
+    """Return ``repo`` as an ``owner/name`` slug, or raise before it reaches gh."""
+    slug = str(repo or "").strip()
+    if not _REPO_SLUG.fullmatch(slug):
+        raise GateSnapshotError(f"expected an owner/name repository, got {repo!r}")
+    return slug
+
+
 @dataclass(frozen=True)
 class GateSnapshot:
     """A PR's head and check verdict, captured together and never mutated.
@@ -97,7 +108,7 @@ class GateSnapshot:
             )
         # Normalise through object.__setattr__ because the dataclass is frozen.
         object.__setattr__(self, "head_sha", head)
-        object.__setattr__(self, "repo", str(self.repo).strip())
+        object.__setattr__(self, "repo", _require_repo_slug(self.repo))
 
     @property
     def mergeable_now(self) -> bool:
@@ -147,6 +158,7 @@ def capture_gate_snapshot(
     Raises ``GateSnapshotError`` rather than returning a partial snapshot: a
     capture that failed must not be mistaken for a capture that said "no head".
     """
+    repo = _require_repo_slug(repo)
     run = runner or _default_runner
     result = run(
         [
@@ -170,12 +182,20 @@ def capture_gate_snapshot(
     if not isinstance(payload, dict):
         raise GateSnapshotError(f"unexpected gh payload for PR #{pr_number}")
 
+    raw_number = payload.get("number") or pr_number
+    try:
+        number = int(raw_number)
+    except (TypeError, ValueError) as exc:
+        raise GateSnapshotError(
+            f"gh returned a non-integer number {raw_number!r} for PR #{pr_number}"
+        ) from exc
+
     green, known = _rollup_verdict(payload.get("statusCheckRollup"))
     stamp = (now or dt.datetime.now(dt.timezone.utc)).isoformat()
     # GateSnapshot.__post_init__ raises if headRefOid was absent or malformed,
     # which is exactly the refusal this issue asks for.
     return GateSnapshot(
-        pr_number=int(payload.get("number") or pr_number),
+        pr_number=number,
         repo=repo,
         head_sha=str(payload.get("headRefOid") or ""),
         required_checks_green=green,
@@ -227,7 +247,8 @@ def merge_with_snapshot(
     Takes the snapshot, never a bare SHA: there is no parameter here that a
     caller could fill with a freshly-resolved head. ``--match-head-commit`` is
     always the captured head, so if the PR moved after capture GitHub rejects
-    the merge and that rejection is returned rather than retried.
+    the merge and that rejection is returned rather than retried. While the
+    main-red merge halt (#9216) blocks the captured head, nothing is run.
     """
     snap = require_snapshot(snapshot)
     if not snap.mergeable_now:
@@ -239,6 +260,11 @@ def merge_with_snapshot(
                 f"checks_known={snap.checks_known} green={snap.required_checks_green})"
             ),
             head_sha=snap.head_sha,
+        )
+    halt = evaluate_merge_halt(snap.pr_number, snap.head_sha)
+    if not halt.allowed:
+        return MergeOutcome(
+            merged=False, action="blocked", detail=halt.reason, head_sha=snap.head_sha
         )
 
     args = ["pr", "merge", str(snap.pr_number), "--repo", snap.repo]

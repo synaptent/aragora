@@ -666,7 +666,7 @@ modules:
     tier: experimental
     py_files: 2
     importer_count: 0
-    test_file_count: 1
+    test_file_count: 2
   - name: maintenance
     tier: experimental
     py_files: 2
