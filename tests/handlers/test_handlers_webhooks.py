@@ -24,7 +24,7 @@ import time
 import uuid
 from unittest.mock import Mock, MagicMock, patch
 
-from aragora.server.handlers.webhooks import (
+from aragora.server.handlers.webhook_management import (
     WebhookHandler,
     WebhookConfig,
     WebhookStore,

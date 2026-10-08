@@ -16,6 +16,7 @@ import json
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
@@ -62,6 +63,11 @@ AUTH_FLOW_PATHS = frozenset(
     }
 )
 
+# Exclusion rules anchor on this literal marker: a path without it normalizes to
+# None in _handler_relative_path and matches no rule, so auditing a handlers tree
+# copied to a path lacking the marker disables every exclusion. The fail direction
+# is safe (files are audited rather than silently skipped); find_handlers warns
+# on stderr when its root is spelled without the marker.
 _HANDLER_PATH_MARKER = "server/handlers/"
 
 
@@ -114,9 +120,27 @@ class HandlerInfo:
     protection_type: str | None = None  # 'decorator', 'admin_secure', 'manual_check'
 
 
+def iter_handler_files(handler_dir: Path) -> Iterator[Path]:
+    """Yield the Python files under ``handler_dir`` that the audit enumerates."""
+    for py_file in handler_dir.rglob("*.py"):
+        if py_file.name.startswith("_"):
+            continue
+        yield py_file
+
+
 def find_handlers(handler_dir: Path) -> list[HandlerInfo]:
     """Find all handler functions and their RBAC decorators."""
     handlers = []
+
+    # The trailing slash lets the root itself (".../server/handlers") satisfy the
+    # same literal-substring rule _handler_relative_path applies to each file.
+    if _HANDLER_PATH_MARKER not in handler_dir.as_posix() + "/":
+        print(
+            f"WARNING: {handler_dir} does not contain '{_HANDLER_PATH_MARKER}'; "
+            "storage/auth-flow exclusions are disabled and every enumerated file "
+            "will be audited.",
+            file=sys.stderr,
+        )
 
     # Decorator patterns
     func_pattern = re.compile(r"^(?:async\s+)?def\s+(\w+)\s*\(")
@@ -155,10 +179,7 @@ def find_handlers(handler_dir: Path) -> list[HandlerInfo]:
     # Pattern for SecureHandler inheritance
     secure_handler_pattern = re.compile(r"class\s+\w+\s*\([^)]*SecureHandler[^)]*\)\s*:")
 
-    for py_file in handler_dir.rglob("*.py"):
-        if py_file.name.startswith("_"):
-            continue
-
+    for py_file in iter_handler_files(handler_dir):
         try:
             content = py_file.read_text()
             lines = content.split("\n")

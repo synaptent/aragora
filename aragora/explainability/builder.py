@@ -215,7 +215,7 @@ class ExplanationBuilder:
         if not self.event_emitter:
             return
         try:
-            from aragora.server.stream.events import StreamEvent, StreamEventType
+            from aragora.events.types import StreamEvent, StreamEventType
 
             event_type = getattr(StreamEventType, event_name, None)
             if event_type is not None:

@@ -458,7 +458,7 @@ async def _record_debate_telemetry(
     if org_id:
         try:
             from aragora.billing.usage_metering_integration import record_debate_tokens
-            from aragora.services.usage_metering import get_usage_meter
+            from aragora.billing.usage_metering import get_usage_meter
 
             usage_summary = await record_debate_tokens(
                 org_id=org_id,
@@ -1294,7 +1294,7 @@ def record_debate_metrics(
         state: The debate execution state
         span: OpenTelemetry span for tracing
     """
-    from aragora.server.metrics import ACTIVE_DEBATES, track_debate_outcome
+    from aragora.observability.server_metrics import ACTIVE_DEBATES, track_debate_outcome
 
     ACTIVE_DEBATES.dec()
     duration = time.perf_counter() - state.debate_start_time
@@ -2024,7 +2024,7 @@ async def _auto_execute_plan(
         from aragora.pipeline.decision_plan.core import ApprovalMode
         from aragora.pipeline.executor import PlanExecutor, get_plan, store_plan
         from aragora.pipeline.risk_register import RiskLevel
-        from aragora.server.decision_integrity_utils import (
+        from aragora.pipeline.decision_integrity_utils import (
             ensure_decision_plan_backbone_run,
             execute_decision_plan_with_backbone,
             sync_decision_plan_backbone_receipt,
@@ -2105,7 +2105,7 @@ async def _auto_execute_plan(
             result.metadata["signed_consensus_receipt"] = gate_decision.signed_receipt
 
         try:
-            from aragora.server.metrics import track_execution_gate_decision
+            from aragora.observability.server_metrics import track_execution_gate_decision
 
             track_execution_gate_decision(
                 gate_dict,

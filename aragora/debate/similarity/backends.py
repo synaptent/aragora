@@ -589,8 +589,13 @@ class SentenceTransformerBackend(SimilarityBackend):
                     is_contradiction = contradiction_score == max(scores[0])
                     if is_contradiction:
                         logger.debug(
-                            f"NLI detected contradiction: '{text1[:50]}...' vs '{text2[:50]}...' "
-                            f"(scores: contra={scores[0][0]:.3f}, entail={scores[0][1]:.3f}, neutral={scores[0][2]:.3f})"
+                            "NLI detected contradiction: '%s...' vs '%s...' "
+                            "(scores: contra=%.3f, entail=%.3f, neutral=%.3f)",
+                            text1[:50],
+                            text2[:50],
+                            scores[0][0],
+                            scores[0][1],
+                            scores[0][2],
                         )
                     return is_contradiction
             return False

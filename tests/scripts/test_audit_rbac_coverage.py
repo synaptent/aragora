@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -50,12 +52,10 @@ EXPECTED_AUTH_FLOW_FILES = {
 
 def _audit_visible_files() -> list[str]:
     """Handler files the RBAC audit enumerates, relative to the handlers root."""
-    files = []
-    for py_file in HANDLER_ROOT.rglob("*.py"):
-        if py_file.name.startswith("_"):
-            continue
-        files.append(py_file.relative_to(HANDLER_ROOT).as_posix())
-    return sorted(files)
+    return sorted(
+        py_file.relative_to(HANDLER_ROOT).as_posix()
+        for py_file in audit_rbac_coverage.iter_handler_files(HANDLER_ROOT)
+    )
 
 
 def test_substring_near_misses_are_not_excluded() -> None:
@@ -158,3 +158,34 @@ def test_effective_exclusion_sets_are_pinned() -> None:
     }
     assert actual_storage == EXPECTED_STORAGE_EXCLUDED_FILES
     assert actual_auth_flow == EXPECTED_AUTH_FLOW_FILES
+
+
+def test_marker_less_tree_is_audited_with_exclusions_disabled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A tree whose path lacks the handlers-root marker audits fail-open, and says so."""
+    copy_root = tmp_path / "handlers_copy"
+    (copy_root / "auth").mkdir(parents=True)
+    (copy_root / "auth" / "store.py").write_text("def get_data():\n    return None\n")
+
+    handlers = audit_rbac_coverage.find_handlers(copy_root)
+
+    captured = capsys.readouterr()
+    assert audit_rbac_coverage._HANDLER_PATH_MARKER in captured.err
+    # Exclusions are disabled, so the storage file is audited rather than skipped.
+    assert [handler.function for handler in handlers] == ["get_data"]
+
+
+def test_marker_bearing_tree_keeps_exclusions_active(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same file under a marker-bearing root stays excluded, with no warning."""
+    handlers_root = tmp_path / "server" / "handlers"
+    (handlers_root / "auth").mkdir(parents=True)
+    (handlers_root / "auth" / "store.py").write_text("def get_data():\n    return None\n")
+
+    handlers = audit_rbac_coverage.find_handlers(handlers_root)
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert handlers == []

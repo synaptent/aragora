@@ -114,7 +114,8 @@ def _register_embedding_cache() -> None:
         return
 
     try:
-        from aragora.services import EmbeddingCacheService, ServiceRegistry
+        from aragora.embeddings.service_markers import EmbeddingCacheService
+        from aragora.runtime.service_registry import ServiceRegistry
 
         cache = _get_embedding_cache()
         registry = ServiceRegistry.get()

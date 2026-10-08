@@ -1084,7 +1084,10 @@ class ValidationMiddleware:
             log_level = logging.WARNING if not self.config.blocking else logging.ERROR
             logger.log(
                 log_level,
-                f"Validation failed for {method} {path}: {result.error_message}",
+                "Validation failed for %s %s: %s",
+                method,
+                path,
+                result.error_message,
             )
 
             # Emit audit event for validation failures (security/compliance requirement)

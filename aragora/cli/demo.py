@@ -760,7 +760,7 @@ def _run_real_demo(topic: str, receipt_path: str | None = None) -> None:
     print()
 
     try:
-        from aragora.server.handlers.playground import start_playground_debate
+        from aragora.server.handlers.demo.playground import start_playground_debate
 
         start_time = time.monotonic()
         result = start_playground_debate(

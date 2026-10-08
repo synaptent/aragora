@@ -50,7 +50,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
     from aragora.knowledge.mound.adapters.continuum_adapter import ContinuumAdapter
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ class ContinuumMemory(
         self,
         db_path: str | Path | None = None,
         tier_manager: TierManager | None = None,
-        event_emitter: EventEmitterProtocol | None = None,
+        event_emitter: LegacyEventEmitterProtocol | None = None,
         storage_path: str | None = None,
         base_dir: str | None = None,
         km_adapter: ContinuumAdapter | None = None,
@@ -139,7 +139,7 @@ class ContinuumMemory(
         self._tier_manager: TierManager = tier_manager or get_tier_manager()
 
         # Optional event emitter for WebSocket streaming
-        self.event_emitter: EventEmitterProtocol | None = event_emitter
+        self.event_emitter: LegacyEventEmitterProtocol | None = event_emitter
 
         # Hyperparameters (can be modified by MetaLearner)
         # TypedDict constructor returns dict; mypy cannot verify nested TypedDict compatibility

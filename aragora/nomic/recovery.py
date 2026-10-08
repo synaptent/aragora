@@ -426,7 +426,7 @@ async def recovery_handler(
 
     # Apply delay if needed
     if decision.delay_seconds > 0:
-        logger.info(f"Waiting {decision.delay_seconds:.1f}s before recovery")
+        logger.info("Waiting %.1fs before recovery", decision.delay_seconds)
         await asyncio.sleep(decision.delay_seconds)
 
     # Determine next state based on strategy

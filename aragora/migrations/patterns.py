@@ -135,6 +135,45 @@ def get_table_row_count(backend: DatabaseBackend, table: str) -> int:
         return int(result[0]) if result else 0
 
 
+def get_missing_columns(backend: DatabaseBackend, table: str, columns: list[str]) -> list[str]:
+    """Return the entries of ``columns`` that ``table`` does not have, in order.
+
+    The app's stores create tables at startup with ``CREATE TABLE IF NOT
+    EXISTS``, so a migration can meet a table it did not create, in a shape
+    that lacks columns it assumes. Introspection errors propagate rather than
+    reading as "missing".
+
+    Raises:
+        ValueError: If the table does not exist (on PostgreSQL, if it is not
+            found through search_path, which is where the DDL will look).
+    """
+    qt = quote_identifier(table, "table")
+    for column in columns:
+        validate_identifier(column, "column")
+
+    if is_postgresql(backend):
+        # to_regclass resolves the name through search_path, as the DDL will
+        found = backend.fetch_one("SELECT to_regclass(%s)", (qt,))
+        if not found or found[0] is None:
+            raise ValueError(f"Table {table} not found on the search_path")
+        rows = backend.fetch_all(
+            """
+            SELECT attname FROM pg_attribute
+            WHERE attrelid = to_regclass(%s) AND attnum > 0 AND NOT attisdropped
+            """,
+            (qt,),
+        )
+        existing = {row[0] for row in rows}
+        return [column for column in columns if column not in existing]
+
+    rows = backend.fetch_all(f"PRAGMA table_info({qt})")
+    if not rows:
+        raise ValueError(f"Table {table} not found")
+    # SQLite matches column names case-insensitively
+    existing = {row[1].lower() for row in rows}
+    return [column for column in columns if column.lower() not in existing]
+
+
 def safe_add_column(
     backend: DatabaseBackend,
     table: str,
@@ -452,6 +491,19 @@ def safe_set_not_null(
     logger.info("Set %s.%s to NOT NULL", table, column)
 
 
+def _execute_concurrent_index(backend: DatabaseBackend, statement: str) -> None:
+    """Run PostgreSQL concurrent DDL outside a transaction, then restore pool state."""
+    with backend.connection() as connection:
+        autocommit = connection.autocommit
+        try:
+            connection.autocommit = True
+            with connection.cursor() as cursor:
+                cursor.execute(statement)
+        finally:
+            if not connection.closed:
+                connection.autocommit = autocommit
+
+
 def safe_create_index(
     backend: DatabaseBackend,
     index_name: str,
@@ -481,8 +533,9 @@ def safe_create_index(
     if is_postgresql(backend) and concurrently:
         # PostgreSQL: CREATE INDEX CONCURRENTLY doesn't block writes
         # Note: Cannot be run inside a transaction
-        backend.execute_write(
-            f"CREATE {unique_str}INDEX CONCURRENTLY IF NOT EXISTS {qi} ON {qt} ({columns_str})"
+        _execute_concurrent_index(
+            backend,
+            f"CREATE {unique_str}INDEX CONCURRENTLY IF NOT EXISTS {qi} ON {qt} ({columns_str})",
         )
     else:
         backend.execute_write(
@@ -490,6 +543,35 @@ def safe_create_index(
         )
 
     logger.info("Created index %s on %s(%s)", index_name, table, ", ".join(columns))
+
+
+def create_index_if_columns_exist(
+    backend: DatabaseBackend,
+    index_name: str,
+    table: str,
+    columns: list[str],
+    unique: bool = False,
+    concurrently: bool = True,
+) -> bool:
+    """Create an index with ``safe_create_index`` unless ``table`` lacks a column.
+
+    Use this for indexes on tables the migration did not create itself (see
+    ``get_missing_columns``). A skipped index is logged as a warning.
+
+    Returns:
+        True if the index was created (or already existed), False if skipped.
+    """
+    missing = get_missing_columns(backend, table, columns)
+    if missing:
+        logger.warning(
+            "Skipping index %s: table %s has no column(s) %s",
+            index_name,
+            table,
+            ", ".join(missing),
+        )
+        return False
+    safe_create_index(backend, index_name, table, columns, unique=unique, concurrently=concurrently)
+    return True
 
 
 def safe_drop_index(
@@ -507,7 +589,7 @@ def safe_drop_index(
     qi = quote_identifier(index_name, "index_name")
 
     if is_postgresql(backend) and concurrently:
-        backend.execute_write(f"DROP INDEX CONCURRENTLY IF EXISTS {qi}")
+        _execute_concurrent_index(backend, f"DROP INDEX CONCURRENTLY IF EXISTS {qi}")
     else:
         backend.execute_write(f"DROP INDEX IF EXISTS {qi}")
 
@@ -611,7 +693,9 @@ __all__ = [
     "backfill_column",
     "safe_set_not_null",
     "safe_create_index",
+    "create_index_if_columns_exist",
     "safe_drop_index",
     "validate_migration_safety",
     "get_table_row_count",
+    "get_missing_columns",
 ]

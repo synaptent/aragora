@@ -184,6 +184,18 @@ class TestNomicContextBuilder:
         assert index.total_bytes == 0
 
     @pytest.mark.asyncio
+    async def test_build_debate_context_empty_root_returns_empty(self, tmp_path):
+        builder = NomicContextBuilder(aragora_path=tmp_path, full_corpus=False)
+        context = await builder.build_debate_context()
+        assert context == ""
+
+    @pytest.mark.asyncio
+    async def test_build_debate_context_nonexistent_root_returns_empty(self, tmp_path):
+        builder = NomicContextBuilder(aragora_path=tmp_path / "does-not-exist", full_corpus=False)
+        context = await builder.build_debate_context()
+        assert context == ""
+
+    @pytest.mark.asyncio
     async def test_knowledge_mound_integration(self, sample_tree):
         mock_mound = AsyncMock()
         mock_mound.query_semantic = AsyncMock(return_value=[])

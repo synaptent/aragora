@@ -20,7 +20,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aragora.knowledge.embeddings import ChunkMatch, InMemoryEmbeddingService
-from aragora.knowledge.fact_store import InMemoryFactStore
+from aragora.knowledge.fact_store import InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.query_engine import (
     AgentProtocol,
     DatasetQueryEngine,
@@ -55,7 +55,7 @@ class MockAgent:
 @pytest.fixture
 def fact_store():
     """Create an in-memory fact store with sample data."""
-    store = InMemoryFactStore()
+    store = ScopedFactStore(InMemoryFactStore(), "org-test")
     # Add sample facts
     store.add_fact(
         statement="The contract expires on December 31, 2025",

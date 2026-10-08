@@ -5,7 +5,7 @@ These routes cannot be discovered from handler ``ROUTES`` attributes or the
 fresh OpenAPI generation does not depend on edits to the generated artifact.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import re
 from typing import Any
 
@@ -26,6 +26,7 @@ def _operation(
     source: str,
     tag: str,
     success_status: str = "200",
+    extra_success_statuses: Iterable[str] = (),
     public: bool = False,
 ) -> dict[str, Any]:
     deprecated = not path.startswith("/api/v1/")
@@ -37,10 +38,11 @@ def _operation(
         ),
         "tags": [tag],
         "responses": {
-            success_status: {
-                "description": "Created" if success_status == "201" else "Success",
+            status: {
+                "description": "Created" if status == "201" else "Success",
                 "content": {"application/json": {"schema": _json_object_schema()}},
             }
+            for status in (success_status, *extra_success_statuses)
         },
         "x-method-inferred": False,
         "x-wired-registration": True,
@@ -74,7 +76,16 @@ def _routes(
     source: str,
     tag: str,
     entries: Iterable[tuple[str, tuple[str, ...], str, bool]],
+    *,
+    extra_success_statuses: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    """Build operations for ``entries``.
+
+    ``extra_success_statuses`` maps ``(path, method)`` to additional success
+    statuses documented after the entry's primary status, for routes whose
+    runtime returns more than one success code.
+    """
+    extras = dict(extra_success_statuses or {})
     routes: dict[str, dict[str, Any]] = {}
     for path, methods, success_status, public in entries:
         routes[path] = {
@@ -84,10 +95,13 @@ def _routes(
                 source=source,
                 tag=tag,
                 success_status=success_status,
+                extra_success_statuses=extras.pop((path, method), ()),
                 public=public,
             )
             for method in methods
         }
+    if extras:
+        raise ValueError(f"extra success statuses for undeclared operations: {sorted(extras)}")
     return routes
 
 
@@ -181,6 +195,9 @@ WIRED_REGISTRATION_ENDPOINTS = {
         "aragora/server/handlers/features/integrations.py",
         "Integrations",
         _INTEGRATION_ROUTES,
+        # PUT returns 201 when it creates a configuration and 200 when it
+        # updates one; document both runtime outcomes.
+        extra_success_statuses={("/api/integrations/{type}", "put"): ("201",)},
     ),
     **_routes("aragora/server/handlers/payments/plans.py", "Payments", _PAYMENT_ROUTES),
     **_routes(

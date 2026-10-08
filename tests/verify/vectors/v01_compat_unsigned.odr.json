@@ -1,0 +1,94 @@
+{
+  "odr_version": "0.1",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "receipt_id": "odr-vector-v01-unsigned",
+  "issued_at": "2026-01-15T12:00:00+00:00",
+  "subject": {
+    "identifier": "odr-vector-v01-unsigned-gauntlet",
+    "digest": {
+      "status": "present",
+      "alg": "sha-256",
+      "value": "aab2a58ddf595689ada37bfc27c91cd0fbd05c7e7e1ea8c5670397c31966032e"
+    },
+    "summary": "Merge synaptent/aragora PR 10110: bound the ingest worker retry budget"
+  },
+  "claim": {
+    "verdict": "PASS",
+    "statement": "Merge synaptent/aragora PR 10110: bound the ingest worker retry budget"
+  },
+  "reasoning": {
+    "status": "present",
+    "summary": "A v0.1 receipt records the same decision without the v0.2 members."
+  },
+  "quorum": {
+    "status": "present",
+    "method": "merge-quorum",
+    "reached": true,
+    "supporting_agents": [
+      "claude",
+      "codex",
+      "gemini"
+    ],
+    "participants": [
+      {
+        "agent": "claude",
+        "model_family": "claude",
+        "model_id": "claude-opus-5"
+      },
+      {
+        "agent": "codex",
+        "model_family": "openai",
+        "model_id": "gpt-4.1-codex"
+      },
+      {
+        "agent": "gemini",
+        "model_family": "gemini",
+        "model_id": "gemini-3.1-pro-preview"
+      }
+    ],
+    "independence": {
+      "disclosed": true,
+      "distinct_model_families": 3,
+      "model_families": [
+        "claude",
+        "gemini",
+        "openai"
+      ]
+    },
+    "dissent": {
+      "present": false,
+      "dissenting_agents": [],
+      "views": []
+    }
+  },
+  "confidence": {
+    "status": "present",
+    "value": 0.86,
+    "scale": "unit_interval",
+    "calibration": {
+      "status": "present",
+      "provenance_ref": {
+        "type": "aragora.settlement_metadata",
+        "receipt_id": "odr-vector-v01-unsigned"
+      }
+    }
+  },
+  "cruxes": {
+    "status": "absent",
+    "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+  },
+  "attestation": {
+    "disposition": "autonomous"
+  },
+  "routing": {
+    "status": "reserved"
+  },
+  "signatures": [],
+  "source": {
+    "system": "aragora",
+    "schema": "aragora.gauntlet.DecisionReceipt",
+    "schema_version": "1.0",
+    "receipt_id": "odr-vector-v01-unsigned",
+    "artifact_hash": "e7b9a9e61ba8304577fb6bb471ec2ecb8831d548d3547a53c758b4090c77ef55"
+  }
+}

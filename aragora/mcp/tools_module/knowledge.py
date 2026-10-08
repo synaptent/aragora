@@ -288,7 +288,7 @@ async def get_decision_receipt_tool(
         Dict with the decision receipt
     """
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:
@@ -421,7 +421,7 @@ async def build_decision_integrity_tool(
         Dict with the Decision Integrity package
     """
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
         from aragora.pipeline.decision_integrity import build_decision_integrity_package
 
         db = get_debates_db()

@@ -270,7 +270,12 @@ class CodebaseAuditor:
             except (SyntaxError, ValueError, OSError) as e:
                 logger.warning("[%s] Failed to process %s: %s", session_id, file_path, e)
 
-        logger.info(f"[{session_id}] Created {len(all_chunks)} chunks, {total_tokens:,} tokens")
+        logger.info(
+            "[%s] Created %s chunks, %s tokens",
+            session_id,
+            len(all_chunks),
+            format(total_tokens, ","),
+        )
 
         # Run audits
         findings = []
@@ -318,8 +323,11 @@ class CodebaseAuditor:
         )
 
         logger.info(
-            f"[{session_id}] Audit complete: {len(findings)} findings, "
-            f"{len(proposals)} proposals in {result.duration_seconds:.1f}s"
+            "[%s] Audit complete: %s findings, %s proposals in %.1fs",
+            session_id,
+            len(findings),
+            len(proposals),
+            result.duration_seconds,
         )
 
         return result
@@ -693,7 +701,7 @@ class CodebaseAuditor:
 
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
         logger.info(
-            f"[{session_id}] Completed in {elapsed:.2f}s: {len(filtered_findings)} findings"
+            "[%s] Completed in %.2fs: %s findings", session_id, elapsed, len(filtered_findings)
         )
 
         return IncrementalAuditResult(

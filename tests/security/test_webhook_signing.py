@@ -38,7 +38,7 @@ def test_signature_output_is_byte_identical(payload: str, secret: str, expected:
 def test_legacy_handler_signature_warns_and_delegates() -> None:
     """The old server surface remains usable and points callers to the new home."""
     from aragora.security.webhook_signing import generate_signature as canonical
-    from aragora.server.handlers.webhooks import generate_signature as legacy
+    from aragora.server.handlers.webhook_management import generate_signature as legacy
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")

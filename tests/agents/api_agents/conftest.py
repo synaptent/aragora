@@ -317,12 +317,11 @@ def mock_env_no_api_keys(monkeypatch):
     ]:
         monkeypatch.delenv(key, raising=False)
     # Reset secret manager cache so it doesn't reuse previously loaded AWS secrets.
-    try:
-        from aragora.config.secrets import reset_secret_manager
+    # reset_secret_manager() only nulls a module global and cannot fail; a blanket
+    # except here would just hide a broken reset behind a passing test.
+    from aragora.config.secrets import reset_secret_manager
 
-        reset_secret_manager()
-    except Exception:
-        pass
+    reset_secret_manager()
 
 
 @pytest.fixture

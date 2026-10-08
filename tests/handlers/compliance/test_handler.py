@@ -118,6 +118,14 @@ def _patch_external_deps(monkeypatch):
     mock_hold_manager.is_user_on_hold.return_value = False
     mock_hold_manager.get_active_holds.return_value = []
 
+    monkeypatch.setattr(
+        "aragora.server.handlers.compliance.handler.get_legal_hold_manager",
+        lambda: mock_hold_manager,
+    )
+    monkeypatch.setattr(
+        "aragora.server.handlers.compliance.handler.get_audit_store", lambda: mock_audit_store
+    )
+
     mock_coordinator = MagicMock()
     mock_coordinator.get_backup_exclusion_list.return_value = []
     mock_coordinator.add_to_backup_exclusion_list.return_value = None
@@ -657,11 +665,11 @@ class TestLegalHolds:
         mock_audit.log_event.return_value = None
 
         monkeypatch.setattr(
-            "aragora.server.handlers.compliance.legal_hold.get_legal_hold_manager",
+            "aragora.server.handlers.compliance.handler.get_legal_hold_manager",
             lambda: mock_mgr,
         )
         monkeypatch.setattr(
-            "aragora.server.handlers.compliance.legal_hold.get_audit_store",
+            "aragora.server.handlers.compliance.handler.get_audit_store",
             lambda: mock_audit,
         )
 
@@ -670,13 +678,15 @@ class TestLegalHolds:
         assert _status(result) == 201
         body = _body(result)
         assert body["message"] == "Legal hold created successfully"
+        mock_mgr.create_hold.assert_called_once()
+        mock_audit.log_event.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_release_legal_hold_not_found(self, handler, monkeypatch):
         mock_mgr = MagicMock()
         mock_mgr.release_hold.return_value = None
         monkeypatch.setattr(
-            "aragora.server.handlers.compliance.legal_hold.get_legal_hold_manager",
+            "aragora.server.handlers.compliance.handler.get_legal_hold_manager",
             lambda: mock_mgr,
         )
 
@@ -684,6 +694,7 @@ class TestLegalHolds:
         mock_h.command = "DELETE"
         result = await handler.handle("/api/v2/compliance/gdpr/legal-holds/hold-999", {}, mock_h)
         assert _status(result) == 404
+        mock_mgr.release_hold.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_release_legal_hold_success(self, handler, monkeypatch):
@@ -699,11 +710,11 @@ class TestLegalHolds:
         mock_audit.log_event.return_value = None
 
         monkeypatch.setattr(
-            "aragora.server.handlers.compliance.legal_hold.get_legal_hold_manager",
+            "aragora.server.handlers.compliance.handler.get_legal_hold_manager",
             lambda: mock_mgr,
         )
         monkeypatch.setattr(
-            "aragora.server.handlers.compliance.legal_hold.get_audit_store",
+            "aragora.server.handlers.compliance.handler.get_audit_store",
             lambda: mock_audit,
         )
 
@@ -713,6 +724,8 @@ class TestLegalHolds:
         assert _status(result) == 200
         body = _body(result)
         assert body["message"] == "Legal hold released successfully"
+        mock_mgr.release_hold.assert_called_once()
+        mock_audit.log_event.assert_called_once()
 
 
 # ============================================================================

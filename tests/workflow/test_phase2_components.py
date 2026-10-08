@@ -508,7 +508,7 @@ class TestWebSocketEvents:
 
     def test_workflow_events_defined(self):
         """Test workflow events are defined in StreamEventType."""
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         # Core workflow events
         assert hasattr(StreamEventType, "WORKFLOW_START")

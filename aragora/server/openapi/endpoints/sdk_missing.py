@@ -238,13 +238,31 @@ SDK_MISSING_ENDPOINTS: dict = {
         },
     },
     # --- matches ---
+    # Served: MatchesStatsHandler.handle exact-matches the version-stripped
+    # path and returns EloSystem.get_stats() verbatim. Public read (no auth
+    # check), like the other ranking reads; every key is always present
+    # because missing aggregates fall back to defaults.
     "/api/matches/stats": {
         "get": {
             "tags": ["Matches"],
             "summary": "Get match statistics",
             "description": "Return aggregate statistics for the match system.",
             "operationId": "getMatchStats",
-            "responses": {"200": _ok_response("Match statistics", _obj)},
+            "responses": {
+                "200": _ok_response(
+                    "Match statistics",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "total_agents": {"type": "integer"},
+                            "avg_elo": {"type": "number"},
+                            "max_elo": {"type": "number"},
+                            "min_elo": {"type": "number"},
+                            "total_matches": {"type": "integer"},
+                        },
+                    },
+                )
+            },
         },
     },
     "/api/matches/{match_id}": {
@@ -265,23 +283,216 @@ SDK_MISSING_ENDPOINTS: dict = {
             "responses": {"200": _ok_response("Match details", _obj)},
         },
     },
+    # --- quotas ---
+    # Not an orphan: the path is claimed at runtime by
+    # UsageMeteringHandler.can_handle's dynamic /api/v1/quotas/{resource}
+    # dispatch and is pinned stable in stability_manifest.json. The POST
+    # branch is served: handle() dispatches this action literal to
+    # _request_quota_increase ahead of the dynamic {resource} branch; both
+    # SDKs already expose the call, which is exactly this module's charter.
+    # v1 literal only: the dispatcher passes raw paths with no legacy<->v1
+    # aliasing, so an unversioned alias would document an unserved path.
+    "/api/v1/quotas/request-increase": {
+        "post": {
+            "tags": ["Quotas"],
+            "summary": "Request quota increase",
+            "description": (
+                "Submit a quota increase request for review. Requires the org:billing permission."
+            ),
+            "operationId": "createQuotaIncreaseRequest",
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["resource"],
+                            "properties": {
+                                "resource": {
+                                    "type": "string",
+                                    "maxLength": 256,
+                                    "description": "Resource type the increase applies to.",
+                                },
+                                "requested_limit": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "description": "Desired new limit.",
+                                },
+                                "reason": {
+                                    "type": "string",
+                                    "maxLength": 2000,
+                                    "description": "Why the increase is needed.",
+                                },
+                                "justification": {
+                                    "type": "string",
+                                    "maxLength": 2000,
+                                    "description": (
+                                        "Accepted alias for reason; the key the "
+                                        "python SDK documents."
+                                    ),
+                                },
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": _ok_response(
+                    "Request submitted",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "request_id": {"type": "string"},
+                            "status": {"type": "string"},
+                            "resource": {"type": "string"},
+                            "requested_limit": {"type": ["number", "null"]},
+                            "reason": {"type": ["string", "null"]},
+                            "org_id": {"type": "string"},
+                            "submitted_by": {"type": "string"},
+                            "submitted_at": {"type": "string"},
+                        },
+                    },
+                )
+            },
+            "security": [{"bearerAuth": []}],
+        },
+    },
     # --- reputation ---
+    # Served: CritiqueHandler.handle lists the raw path in ROUTES and sits
+    # behind require_permission("critiques:read"). Missing ?domain= is a 400;
+    # limit is clamped to 1..1000 (default 100). The reputation rows mirror
+    # _get_reputation_by_domain's projection of AgentReputation.
     "/api/reputation/domain": {
         "get": {
             "tags": ["Reputation"],
             "summary": "Get domain reputation scores",
-            "description": "Return domain-level reputation scores or reputation summaries.",
+            "description": (
+                "Return domain-level reputation scores or reputation summaries. "
+                "Requires the critiques:read permission."
+            ),
             "operationId": "getReputationDomain",
-            "responses": {"200": _ok_response("Domain reputation", _obj)},
+            "parameters": [
+                {
+                    "name": "domain",
+                    "in": "query",
+                    "required": True,
+                    "description": "Domain token matched against agent names.",
+                    "schema": _str,
+                },
+                {
+                    "name": "limit",
+                    "in": "query",
+                    "required": False,
+                    "description": "Maximum reputations to return.",
+                    "schema": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 100,
+                    },
+                },
+            ],
+            "responses": {
+                "200": _ok_response(
+                    "Domain reputation",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "domain": _str,
+                            "reputations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "agent": _str,
+                                        "score": {"type": "number"},
+                                        "vote_weight": {"type": "number"},
+                                        "proposal_acceptance_rate": {"type": "number"},
+                                        "critique_value": {"type": "number"},
+                                        "debates_participated": {"type": "integer"},
+                                    },
+                                },
+                            },
+                            "count": {"type": "integer"},
+                        },
+                    },
+                )
+            },
+            "security": [{"bearerAuth": []}],
         },
     },
+    # Served: same CritiqueHandler ROUTES dispatch and critiques:read
+    # permission as /api/reputation/domain. Snapshots derive from stored
+    # reputation rows; timestamp is AgentReputation.updated_at (a string
+    # defaulting to "", never null) and event is always "snapshot".
     "/api/reputation/history": {
         "get": {
             "tags": ["Reputation"],
             "summary": "Get reputation history",
-            "description": "List historical reputation events or score snapshots.",
+            "description": (
+                "List historical reputation events or score snapshots. "
+                "Requires the critiques:read permission."
+            ),
             "operationId": "getReputationHistory",
-            "responses": {"200": _ok_response("Reputation history", _arr_obj)},
+            "parameters": [
+                {
+                    "name": "agent",
+                    "in": "query",
+                    "required": False,
+                    "description": "Restrict snapshots to a single agent.",
+                    "schema": _str,
+                },
+                {
+                    "name": "start_date",
+                    "in": "query",
+                    "required": False,
+                    "description": "ISO-8601 lower bound; invalid values are a 400.",
+                    "schema": _str,
+                },
+                {
+                    "name": "end_date",
+                    "in": "query",
+                    "required": False,
+                    "description": "ISO-8601 upper bound; invalid values are a 400.",
+                    "schema": _str,
+                },
+                {
+                    "name": "limit",
+                    "in": "query",
+                    "required": False,
+                    "description": "Maximum snapshots to return.",
+                    "schema": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 100,
+                    },
+                },
+            ],
+            "responses": {
+                "200": _ok_response(
+                    "Reputation history",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "history": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "timestamp": _str,
+                                        "agent": _str,
+                                        "reputation": {"type": "number"},
+                                        "event": _str,
+                                    },
+                                },
+                            },
+                            "count": {"type": "integer"},
+                        },
+                    },
+                )
+            },
+            "security": [{"bearerAuth": []}],
         },
     },
     "/api/reputation/{agent_id}": {

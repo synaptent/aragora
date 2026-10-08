@@ -634,9 +634,23 @@ class TestNLIContradictionDetection:
         SentenceTransformerBackend.clear_cache()
         SentenceTransformerBackend._nli_model_cache = None
         SentenceTransformerBackend._nli_model_name_cache = None
-        backend = SentenceTransformerBackend(use_nli=True)
+        # If the real library was imported before the session fake could
+        # install (a collection-time import race), construction attempts live
+        # HuggingFace fetches that can raise mid-download (e.g. TypeError from
+        # a rate-limited Hub response). That is the same "model unavailable"
+        # condition as below, not a test error.
+        try:
+            backend = SentenceTransformerBackend(use_nli=True)
+        except Exception as e:  # noqa: BLE001 - any load failure means unavailable
+            pytest.skip(f"Real NLI model unavailable: {type(e).__name__}: {e}")
         if getattr(backend, "nli_model", None) is None:
             pytest.skip("NLI model not available (rate-limited or offline)")
+        # These tests exercise the real model; a harness mock leaking in via
+        # sys.modules or class-level caches must skip, not silently "pass".
+        for attr in ("model", "nli_model"):
+            impl_module = type(getattr(backend, attr)).__module__
+            if impl_module.startswith(("tests.", "unittest.mock")):
+                pytest.skip(f"Real NLI model unavailable: {attr} is a harness mock ({impl_module})")
         return backend
 
     @pytest.mark.slow

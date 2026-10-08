@@ -1147,11 +1147,22 @@ class NomicContextBuilder:
         This provides a navigable map of the codebase that agents can
         reference during structured debate rounds. For TRUE RLM agents,
         this also registers the context for REPL queries.
+
+        Returns an empty string when the index contains no files (empty or
+        nonexistent root), so callers can truthiness-check the result
+        instead of receiving a header-only map.
         """
         if self._index is None:
             await self.build_index()
         if self._index is None:
             raise RuntimeError("Index not built - call build_index() first")
+
+        if self._index.total_files == 0:
+            logger.debug(
+                "Skipping debate context: no files indexed under %s",
+                self._index.root_path,
+            )
+            return ""
 
         sections = []
         sections.append(

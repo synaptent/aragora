@@ -16,7 +16,7 @@ from typing import Any
 from collections.abc import Callable
 
 from aragora.config import MAX_EVENT_QUEUE_SIZE
-from aragora.server.stream.events import (
+from aragora.events.types import (
     AudienceMessage,
     StreamEvent,
     StreamEventType,
@@ -171,7 +171,7 @@ class AudienceInbox:
             # Per-choice intensity histograms: {choice: {intensity: count}}
             histograms: dict[str, dict[int, int]] = {}
             # Global conviction distribution: {intensity: count}
-            conviction_distribution: dict[int, int] = {i: 0 for i in range(1, 11)}
+            conviction_distribution: dict[int, int] = dict.fromkeys(range(1, 11), 0)
 
             for msg in self._messages:
                 # Filter by loop_id if provided
@@ -187,7 +187,7 @@ class AudienceInbox:
 
                     # Per-choice histogram
                     if choice not in histograms:
-                        histograms[choice] = {i: 0 for i in range(1, 11)}
+                        histograms[choice] = dict.fromkeys(range(1, 11), 0)
                     histograms[choice][intensity] = histograms[choice].get(intensity, 0) + 1
 
                     # Global conviction distribution

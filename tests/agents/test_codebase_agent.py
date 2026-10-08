@@ -18,6 +18,7 @@ from aragora.agents.codebase_agent import (
     SecurityReviewerAgent,
     BugHunterAgent,
 )
+from aragora.agents.code_scanners import CodeScannerNotRegisteredError
 
 
 @pytest.fixture
@@ -384,6 +385,21 @@ class TestCodebaseUnderstandingAgent:
         assert detector is not None
 
         assert agent.bug_detector is detector
+
+    @pytest.mark.parametrize("attribute", ["security_scanner", "bug_detector"])
+    @pytest.mark.parametrize(
+        "error", [CodeScannerNotRegisteredError("nothing registered"), ImportError("missing")]
+    )
+    def test_scanner_is_none_when_it_cannot_be_built(
+        self, agent, monkeypatch, caplog, attribute, error
+    ):
+        def unavailable(kind):
+            raise error
+
+        monkeypatch.setattr("aragora.agents.codebase_agent.create_code_scanner", unavailable)
+        with caplog.at_level("WARNING", logger="aragora.agents.codebase_agent"):
+            assert getattr(agent, attribute) is None
+        assert "not available" in caplog.text
 
     def test_lazy_load_call_graph_builder(self, agent):
         """Test lazy loading of CallGraphBuilder."""

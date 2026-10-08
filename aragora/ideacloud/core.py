@@ -142,7 +142,11 @@ class IdeaCloud:
 
         ingestor = TwitterBookmarksIngestor()
         raw_nodes = await ingestor.ingest(file_path)
-        return self._ingest_batch(raw_nodes)
+        added = self._ingest_batch(raw_nodes)
+        # Only after the vault write: advance any deferred incremental-sync
+        # state (api: mode), so a crash above cannot mark entries seen unsaved.
+        ingestor.commit_ingest()
+        return added
 
     async def ingest_twitter_likes(self, file_path: str | Path) -> list[IdeaNode]:
         """Ingest from Twitter likes export.
@@ -153,7 +157,9 @@ class IdeaCloud:
 
         ingestor = TwitterLikesIngestor()
         raw_nodes = await ingestor.ingest(file_path)
-        return self._ingest_batch(raw_nodes)
+        added = self._ingest_batch(raw_nodes)
+        ingestor.commit_ingest()
+        return added
 
     def _ingest_batch(self, nodes: list[IdeaNode]) -> list[IdeaNode]:
         """Filter, deduplicate, and add a batch of nodes."""

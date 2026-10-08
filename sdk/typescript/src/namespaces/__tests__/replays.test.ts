@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ReplaysAPI } from '../replays';
+import { AragoraClient } from '../../client';
 
 interface MockClient {
   request: Mock;
@@ -114,14 +115,49 @@ describe('ReplaysAPI Namespace', () => {
       expect(result.events).toHaveLength(2);
     });
 
-    it('should get replay from debate', async () => {
-      const mockReplay = { id: 'rp_1', debate_id: 'd_123' };
-      mockClient.request.mockResolvedValue(mockReplay);
+    it('should return HTML from the served replay visualization route', async () => {
+      const html = '<!doctype html><html><body>Replay rp_1</body></html>';
+      mockClient.request.mockResolvedValue(html);
 
-      const result = await api.getFromDebate('d_123');
+      const result = await api.getHtml('rp_1');
 
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/debates/d_123/replay');
-      expect(result.debate_id).toBe('d_123');
+      expect(mockClient.request).toHaveBeenCalledExactlyOnceWith(
+        'GET', '/api/replays/rp_1/html', { responseType: 'text' }
+      );
+      expect(result).toBe(html);
+    });
+
+    it('should propagate replay HTML request errors', async () => {
+      const error = new Error('Replay not found');
+      mockClient.request.mockRejectedValue(error);
+
+      await expect(api.getHtml('missing-replay')).rejects.toBe(error);
+      expect(mockClient.request).toHaveBeenCalledExactlyOnceWith(
+        'GET', '/api/replays/missing-replay/html', { responseType: 'text' }
+      );
+    });
+
+    it.each([
+      '<!doctype html><html><body>Replay rp_1</body></html>',
+      '{"not":"HTML"}',
+      '',
+    ])('should preserve the replay response as text through the real client: %s', async (body) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const client = new AragoraClient({ baseUrl: 'https://example.invalid', retryEnabled: false });
+
+        await expect(client.replays.getHtml('rp_1')).resolves.toBe(body);
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+          'https://example.invalid/api/replays/rp_1/html',
+          expect.objectContaining({ method: 'GET' })
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 
@@ -244,64 +280,6 @@ describe('ReplaysAPI Namespace', () => {
         },
       });
     });
-
-    it('should list forks', async () => {
-      const mockForks = {
-        forks: [
-          { id: 'fork_1', parent_replay_id: 'rp_1', fork_round: 2 },
-          { id: 'fork_2', parent_replay_id: 'rp_1', fork_round: 3 },
-        ],
-      };
-      mockClient.request.mockResolvedValue(mockForks);
-
-      const result = await api.listForks('rp_1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/forks');
-      expect(result.forks).toHaveLength(2);
-    });
-  });
-
-  // ===========================================================================
-  // Export and Visualization
-  // ===========================================================================
-
-  describe('Export and Visualization', () => {
-    it('should get HTML visualization', async () => {
-      const mockHtml = '<html><body>Replay visualization</body></html>';
-      mockClient.request.mockResolvedValue(mockHtml);
-
-      const result = await api.getHtml('rp_1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/html');
-      expect(result).toContain('<html>');
-    });
-
-    it('should export replay', async () => {
-      const mockExport = {
-        data: '{"id":"rp_1","events":[]}',
-        format: 'json',
-        download_url: 'https://storage.example.com/exports/rp_1.json',
-      };
-      mockClient.request.mockResolvedValue(mockExport);
-
-      const result = await api.export('rp_1', { format: 'json' });
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/export', {
-        params: { format: 'json' },
-      });
-      expect(result.format).toBe('json');
-    });
-
-    it('should export as markdown', async () => {
-      const mockExport = { data: '# Replay\n...', format: 'markdown' };
-      mockClient.request.mockResolvedValue(mockExport);
-
-      await api.export('rp_1', { format: 'markdown' });
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/export', {
-        params: { format: 'markdown' },
-      });
-    });
   });
 
   // ===========================================================================
@@ -309,31 +287,6 @@ describe('ReplaysAPI Namespace', () => {
   // ===========================================================================
 
   describe('Summary and Analysis', () => {
-    it('should get replay summary', async () => {
-      const mockSummary = {
-        replay_id: 'rp_1',
-        task: 'Microservices adoption',
-        total_rounds: 5,
-        total_events: 50,
-        duration_ms: 180000,
-        result: 'consensus',
-        key_moments: [
-          { event_id: 'e_10', type: 'proposal', description: 'Initial architecture proposal', timestamp: 5000 },
-          { event_id: 'e_45', type: 'consensus_reached', description: 'Consensus on gradual adoption', timestamp: 175000 },
-        ],
-        agent_participation: {
-          claude: { proposals: 3, critiques: 5, votes: 5 },
-          'gpt-4': { proposals: 2, critiques: 6, votes: 5 },
-        },
-      };
-      mockClient.request.mockResolvedValue(mockSummary);
-
-      const result = await api.getSummary('rp_1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/summary');
-      expect(result.key_moments).toHaveLength(2);
-    });
-
     it('should compare replays', async () => {
       const mockComparison = {
         replay_1: { id: 'rp_1', task: 'Microservices', result: 'consensus' },

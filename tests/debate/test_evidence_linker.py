@@ -21,9 +21,13 @@ from unittest.mock import Mock
 
 import pytest
 
+# EMBEDDINGS_AVAILABLE is deliberately NOT imported at module level: it is
+# served by evidence_linker's module __getattr__, whose probe imports the real
+# sentence_transformers package. At collection time that import races (and
+# beats) the session-scoped fake installed by tests/fixtures/autouse.py,
+# un-skipping real-model NLI tests suite-wide with a network-dependent client.
 from aragora.debate.evidence_linker import (
     CLAIM_INDICATORS,
-    EMBEDDINGS_AVAILABLE,
     NON_CLAIM_PATTERNS,
     ClaimAnalysis,
     EvidenceClaimLinker,
@@ -950,6 +954,10 @@ class TestEmbeddingsAvailability:
 
     def test_embeddings_available_constant(self):
         """Test EMBEDDINGS_AVAILABLE constant is defined."""
+        # Imported here (not at module level) so the lazy dependency probe runs
+        # after the session-scoped sentence_transformers fake is installed.
+        from aragora.debate.evidence_linker import EMBEDDINGS_AVAILABLE
+
         assert isinstance(EMBEDDINGS_AVAILABLE, bool)
 
     def test_linker_respects_use_embeddings_false(self):

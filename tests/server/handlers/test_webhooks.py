@@ -29,7 +29,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from aragora.server.handlers.webhooks import (
+from aragora.server.handlers.webhook_management import (
     WebhookHandler,
     generate_signature,
     verify_signature,
