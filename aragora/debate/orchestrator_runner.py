@@ -492,47 +492,51 @@ async def _record_debate_telemetry(
             _coerce_optional_str(getattr(getattr(arena, "env", None), "task", None)) or ""
         )
 
-        governor = get_complexity_governor()
-        per_agent_cost = (
-            getattr(result, "per_agent_cost", {}) if isinstance(result.per_agent_cost, dict) else {}
-        )
+        # Collected separately so a failure here loses only the agent activity not yet
+        # collected, never the debate record (the debate row used to be written first).
         agent_activity: list[AgentActivity] = []
-        for agent in arena.agents:
-            agent_name = getattr(agent, "name", str(agent))
-            tokens_in, tokens_out = _extract_agent_token_usage(agent)
-            governor_metrics = getattr(governor, "agent_metrics", {}).get(agent_name)
-            response_time_ms = (
-                _coerce_non_negative_float(getattr(governor_metrics, "avg_latency_ms", 0.0))
-                if governor_metrics is not None
-                else 0.0
-            )
-            provider = (
-                _coerce_optional_str(
-                    getattr(agent, "provider", None) or getattr(agent, "agent_type", "unknown")
+        try:
+            governor = get_complexity_governor()
+            raw_per_agent_cost = getattr(result, "per_agent_cost", None)
+            per_agent_cost = raw_per_agent_cost if isinstance(raw_per_agent_cost, dict) else {}
+            for agent in arena.agents:
+                agent_name = getattr(agent, "name", str(agent))
+                tokens_in, tokens_out = _extract_agent_token_usage(agent)
+                governor_metrics = getattr(governor, "agent_metrics", {}).get(agent_name)
+                response_time_ms = (
+                    _coerce_non_negative_float(getattr(governor_metrics, "avg_latency_ms", 0.0))
+                    if governor_metrics is not None
+                    else 0.0
                 )
-                or "unknown"
-            )
-            model = _coerce_optional_str(getattr(agent, "model", "unknown")) or "unknown"
-
-            if agent_name in per_agent_cost:
-                cost = Decimal(str(_coerce_non_negative_float(per_agent_cost[agent_name])))
-            else:
-                cost = calculate_token_cost(provider, model, tokens_in, tokens_out)
-
-            if tokens_in <= 0 and tokens_out <= 0 and response_time_ms <= 0 and cost <= 0:
-                continue
-
-            agent_activity.append(
-                AgentActivity(
-                    agent_id=agent_name,
-                    response_time_ms=response_time_ms,
-                    tokens_in=tokens_in,
-                    tokens_out=tokens_out,
-                    cost=cost,
-                    provider=str(provider),
-                    model=str(model),
+                provider = (
+                    _coerce_optional_str(
+                        getattr(agent, "provider", None) or getattr(agent, "agent_type", "unknown")
+                    )
+                    or "unknown"
                 )
-            )
+                model = _coerce_optional_str(getattr(agent, "model", "unknown")) or "unknown"
+
+                if agent_name in per_agent_cost:
+                    cost = Decimal(str(_coerce_non_negative_float(per_agent_cost[agent_name])))
+                else:
+                    cost = calculate_token_cost(provider, model, tokens_in, tokens_out)
+
+                if tokens_in <= 0 and tokens_out <= 0 and response_time_ms <= 0 and cost <= 0:
+                    continue
+
+                agent_activity.append(
+                    AgentActivity(
+                        agent_id=agent_name,
+                        response_time_ms=response_time_ms,
+                        tokens_in=tokens_in,
+                        tokens_out=tokens_out,
+                        cost=cost,
+                        provider=str(provider),
+                        model=str(model),
+                    )
+                )
+        except (ImportError, RuntimeError, ValueError, TypeError, AttributeError, OSError) as e:
+            logger.debug("debate_agent_activity_failed (non-critical): %s", e)
 
         await emit_debate_completed(
             DebateCompletedEvent(
