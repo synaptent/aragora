@@ -5,6 +5,8 @@ POST /api/v1/canvas/pipeline/from-template.
 """
 
 import json
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -148,10 +150,24 @@ class TestCanHandleRoutes:
     def test_handle_dispatches_templates_get(self, handler):
         mock_handler = MagicMock()
         mock_handler.request.body = b"{}"
-        result = handler.handle("/api/v1/canvas/pipeline/templates", {}, mock_handler)
+        member = SimpleNamespace(
+            is_authenticated=True, user_id="user-1", org_id="org-1", role="member"
+        )
+        with patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=member):
+            result = handler.handle("/api/v1/canvas/pipeline/templates", {}, mock_handler)
         # Should return a coroutine (async handler)
         import asyncio
 
         assert asyncio.iscoroutine(result)
         # Clean up the coroutine to avoid warning
         result.close()
+
+    def test_templates_get_requires_authentication(self, handler):
+        anonymous = SimpleNamespace(is_authenticated=False, user_id=None, org_id=None, role=None)
+        mock_handler = MagicMock()
+        mock_handler.headers = {}
+        with patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=anonymous):
+            result = handler.handle("/api/v1/canvas/pipeline/templates", {}, mock_handler)
+        status, body = _parse_result(result)
+        assert status == 401
+        assert body["code"] == "auth_required"

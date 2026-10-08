@@ -27,11 +27,13 @@ Exposes the idea-to-execution pipeline via REST endpoints:
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import re
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -41,6 +43,8 @@ from aragora.pipeline.backbone_errors import (
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
 from aragora.server.handlers.base import HandlerResult, error_response, handle_errors, json_response
+from aragora.tenancy import pipeline_access
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +56,18 @@ _PIPELINE_GRAPH = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/graph$"
 _PIPELINE_RECEIPT = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/receipt$")
 _PIPELINE_EXECUTE = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/execute$")
 _PIPELINE_SELF_IMPROVE = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/self-improve$")
+_PIPELINE_INSIGHT = re.compile(
+    r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/(intelligence|beliefs|explanations|precedents)$"
+)
+_PIPELINE_AGENTS = re.compile(r"^/api/v1/(?:canvas/)?pipeline/([a-zA-Z0-9_-]+)/agents$")
+_PIPELINE_AGENT_DECISION = re.compile(
+    r"^/api/v1/(?:canvas/)?pipeline/([a-zA-Z0-9_-]+)/agents/([a-zA-Z0-9_-]+)/(approve|reject)$"
+)
 _DEBATE_TO_PIPELINE = re.compile(r"^/api/v1/debates/([a-zA-Z0-9_-]+)/to-pipeline$")
+# Paths this handler answers for; other /api/v1/pipeline/* routes belong to
+# the execute, DAG, transitions and graph handlers registered after it.
+_PIPELINE_FAMILY = re.compile(r"^/api/v1/canvas/(?:pipeline|convert)(?:/|$)")
+_PIPELINE = "Pipeline"
 
 # Live PipelineResult objects for advance_stage() (cannot be persisted)
 _pipeline_objects: dict[str, Any] = {}
@@ -84,6 +99,12 @@ def _get_store() -> Any:
     from aragora.storage.pipeline_store import get_pipeline_store
 
     return get_pipeline_store()
+
+
+def _versioned(path: str) -> str:
+    if path.startswith("/api/canvas/"):
+        return "/api/v1/canvas/" + path[len("/api/canvas/") :]
+    return path
 
 
 def _get_ai_agent() -> Any | None:
@@ -602,77 +623,66 @@ class CanvasPipelineHandler:
 
     def can_handle(self, path: str) -> bool:
         """Check if this handler can handle the given path."""
-        if path.startswith("/api/v1/canvas/") or path.startswith("/api/canvas/"):
-            return True
-        if path.startswith("/api/v1/pipeline/"):
-            return True
-        if _DEBATE_TO_PIPELINE.match(path):
-            return True
-        return False
+        path = _versioned(path)
+        return bool(
+            _PIPELINE_FAMILY.match(path)
+            or _PIPELINE_AGENTS.match(path)
+            or _PIPELINE_AGENT_DECISION.match(path)
+            or _DEBATE_TO_PIPELINE.match(path)
+        )
 
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
         """Dispatch GET requests to the appropriate handler method."""
         self._get_request_body(handler)
+        path = _versioned(path)
+        if not self.can_handle(path):
+            return None
+
+        scope, denial = self._authorize(handler, pipeline_access.PIPELINE_READ)
+        if denial is not None:
+            return denial
 
         # GET /api/v1/canvas/pipeline — list pipelines or return latest
         if path in ("/api/v1/canvas/pipeline", "/api/v1/canvas/pipeline/"):
-            return self.handle_list_or_latest(query_params)
+            return self.handle_list_or_latest(query_params, scope=scope)
 
-        # GET /api/v1/canvas/pipeline/templates
-        if path.endswith("/pipeline/templates"):
+        if path == "/api/v1/canvas/pipeline/templates":
             return self.handle_list_templates(query_params)
 
-        # GET /api/v1/canvas/pipeline/{id}/status
-        m = _PIPELINE_STATUS.match(path)
-        if m:
-            return self.handle_status(m.group(1))
+        read = self._pipeline_read(path, query_params)
+        if read is None or not self._owns(read[0], scope):
+            return record_not_found(_PIPELINE)
+        return read[1]()
 
-        # GET /api/v1/canvas/pipeline/{id}/graph
-        m = _PIPELINE_GRAPH.match(path)
-        if m:
-            return self.handle_graph(m.group(1), query_params)
-
-        # GET /api/v1/canvas/pipeline/{id}/receipt
-        m = _PIPELINE_RECEIPT.match(path)
-        if m:
-            return self.handle_receipt(m.group(1))
-
-        # GET /api/v1/canvas/pipeline/{id}/stage/{stage}
-        m = _PIPELINE_STAGE.match(path)
-        if m:
-            return self.handle_get_stage(m.group(1), m.group(2))
-
-        # GET /api/v1/canvas/pipeline/{id}/intelligence
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/intelligence$", path)
-        if m:
-            return self.handle_intelligence(m.group(1))
-
-        # GET /api/v1/canvas/pipeline/{id}/beliefs
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/beliefs$", path)
-        if m:
-            return self.handle_beliefs(m.group(1))
-
-        # GET /api/v1/canvas/pipeline/{id}/explanations
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/explanations$", path)
-        if m:
-            return self.handle_explanations(m.group(1))
-
-        # GET /api/v1/canvas/pipeline/{id}/precedents
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/precedents$", path)
-        if m:
-            return self.handle_precedents(m.group(1))
-
-        # GET /api/v1/pipeline/{id}/agents
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/agents$", path)
-        if m:
-            return self.handle_get_agents(m.group(1))
-
-        # GET /api/v1/canvas/pipeline/{id}
-        m = _PIPELINE_ID.match(path)
-        if m:
-            return self.handle_get_pipeline(m.group(1))
-
+    def _pipeline_read(
+        self, path: str, query_params: dict[str, Any]
+    ) -> tuple[str, Callable[[], Any]] | None:
+        """``(pipeline_id, call)`` for a GET route on one pipeline, else None."""
+        insights = {
+            "intelligence": self.handle_intelligence,
+            "beliefs": self.handle_beliefs,
+            "explanations": self.handle_explanations,
+            "precedents": self.handle_precedents,
+        }
+        routes: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Any]], ...] = (
+            (_PIPELINE_STATUS, lambda m: self.handle_status(m.group(1))),
+            (_PIPELINE_GRAPH, lambda m: self.handle_graph(m.group(1), query_params)),
+            (_PIPELINE_RECEIPT, lambda m: self.handle_receipt(m.group(1))),
+            (_PIPELINE_STAGE, lambda m: self.handle_get_stage(m.group(1), m.group(2))),
+            (_PIPELINE_INSIGHT, lambda m: insights[m.group(2)](m.group(1))),
+            (_PIPELINE_AGENTS, lambda m: self.handle_get_agents(m.group(1))),
+            (_PIPELINE_ID, lambda m: self.handle_get_pipeline(m.group(1))),
+        )
+        for pattern, call in routes:
+            match = pattern.match(path)
+            if match:
+                return match.group(1), functools.partial(call, match)
         return None
+
+    def _authorize(
+        self, handler: Any, permission: str
+    ) -> tuple[OrgScope, None] | tuple[None, HandlerResult]:
+        return pipeline_access.authorize_pipeline_request(handler, permission)
 
     def _check_permission(self, handler: Any, permission: str) -> Any:
         """Check RBAC permission and return error response if denied."""
@@ -702,6 +712,10 @@ class CanvasPipelineHandler:
         except (ImportError, AttributeError, ValueError) as e:
             logger.debug("Permission check unavailable: %s", e)
             return None
+
+    @staticmethod
+    def _owns(pipeline_id: str, scope: OrgScope | None) -> bool:
+        return pipeline_access.record_owned(_get_store(), pipeline_id, scope)
 
     @handle_errors("canvas pipeline operation")
     def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
@@ -1227,14 +1241,21 @@ class CanvasPipelineHandler:
             logger.warning("Pipeline advance failed: %s", e)
             return error_response("Pipeline advance failed", 500)
 
-    async def handle_list_or_latest(self, query_params: dict[str, Any]) -> HandlerResult:
+    async def handle_list_or_latest(
+        self, query_params: dict[str, Any], *, scope: OrgScope | None = None
+    ) -> HandlerResult:
         """GET /api/v1/canvas/pipeline
 
         Returns the most recent pipeline result (for SWR auto-load on the
         pipeline page).  Pass ``?list=true`` to get a list of pipeline summaries
-        instead.
+        instead. With ``scope`` only that org's pipelines are considered.
         """
         store = _get_store()
+
+        def _list(**kwargs: Any) -> list[dict[str, Any]]:
+            if scope is None:
+                return store.list_pipelines(**kwargs)
+            return store.list_for_org(scope.org_id, **kwargs)
 
         # List mode
         list_mode = query_params.get("list")
@@ -1245,11 +1266,11 @@ class CanvasPipelineHandler:
                 limit = int(query_params.get("limit", 50))
             except (ValueError, TypeError):
                 pass
-            pipelines = store.list_pipelines(status=status_filter, limit=limit)
+            pipelines = _list(status=status_filter, limit=limit)
             return json_response({"pipelines": pipelines, "count": len(pipelines)})
 
         # Default: return the latest pipeline
-        pipelines = store.list_pipelines(limit=1)
+        pipelines = _list(limit=1)
         if not pipelines:
             # No pipelines exist -- return empty so the frontend shows the
             # empty state (brain dump input) rather than an error.
