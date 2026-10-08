@@ -229,6 +229,23 @@ def test_merge_argv_carries_exactly_one_head_pin() -> None:
     assert argv[-2:] == ["--match-head-commit", HEAD_A]
 
 
+@pytest.mark.parametrize(("squash", "strategy"), [(True, "--squash"), (False, "--merge")])
+@pytest.mark.parametrize("admin", [False, True])
+def test_merge_argv_names_exactly_one_merge_strategy(squash, strategy, admin) -> None:
+    """``gh pr merge`` with no strategy flag prompts, and fails when it cannot prompt.
+
+    The runner captures gh's output, so gh can never prompt: every merge must name its strategy.
+    """
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc()])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    outcome = merge_with_snapshot(snap, squash=squash, admin=admin, runner=rec)
+
+    assert outcome.merged is True
+    argv = rec.calls[-1]
+    assert [flag for flag in ("--merge", "--rebase", "--squash") if flag in argv] == [strategy]
+    assert argv[-2:] == ["--match-head-commit", HEAD_A]
+
+
 @pytest.mark.parametrize("merge_state", ["BLOCKED", "BEHIND", "DIRTY", "UNSTABLE", "UNKNOWN", None])
 def test_an_admin_merge_never_bypasses_what_the_snapshot_did_not_verify(merge_state) -> None:
     """``--admin`` skips branch protection, including required reviews this capture never read.

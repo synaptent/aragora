@@ -288,8 +288,9 @@ def merge_with_snapshot(
         )
 
     args = ["pr", "merge", str(snap.pr_number), "--repo", snap.repo]
-    if squash:
-        args.append("--squash")
+    # gh refuses a merge that names no strategy when it cannot prompt, and the
+    # runner captures its output, so it never can: squash=False is a merge commit.
+    args.append("--squash" if squash else "--merge")
     if admin:
         args.append("--admin")
     if delete_branch:
