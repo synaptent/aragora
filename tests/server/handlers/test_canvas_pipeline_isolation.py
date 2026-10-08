@@ -561,6 +561,117 @@ async def test_execute_reads_receipt_provenance_for_the_owner_org(handler, store
     assert receipt.call_args.kwargs["org_id"] == "org-a"
 
 
+def _emitter() -> MagicMock:
+    emitter = MagicMock()
+    emitter.emit_stage_started = AsyncMock()
+    emitter.emit_completed = AsyncMock()
+    emitter.emit_failed = AsyncMock()
+    return emitter
+
+
+async def _execute_in_background(
+    handler: CanvasPipelineHandler,
+    store: PipelineResultStore,
+    emitter: MagicMock,
+    execute_queued_plan: AsyncMock,
+    execution_id: str,
+) -> Any:
+    graph_store = MagicMock()
+    graph_store.list.return_value = []
+    launch = {
+        "execution_id": execution_id,
+        "correlation_id": f"corr-{execution_id}",
+        "execution_mode": "workflow",
+        "run_id": f"run-{execution_id}",
+    }
+    with (
+        patch("aragora.pipeline.graph_store.get_graph_store", return_value=graph_store),
+        patch("aragora.pipeline.canonical_execution.queue_plan_execution", return_value=launch),
+        patch("aragora.pipeline.canonical_execution.execute_queued_plan", new=execute_queued_plan),
+        patch(
+            "aragora.pipeline.receipt_generator.generate_pipeline_receipt",
+            new=AsyncMock(return_value={"receipt_id": "pipe-rcpt", "label": "A receipt"}),
+        ),
+        patch("aragora.server.stream.pipeline_stream.get_pipeline_emitter", return_value=emitter),
+    ):
+        result = await _post(handler, USER_A, f"{BASE}/{PA}/execute", {})
+        await module._pipeline_tasks[execution_id]
+    return result
+
+
+def _outcome() -> MagicMock:
+    outcome = MagicMock(success=True, receipt_id="rcpt-a")
+    outcome.to_dict.return_value = {"success": True}
+    return outcome
+
+
+B_CONTENT = {
+    "pipeline_id": PA,
+    "stage_status": {"ideas": "complete"},
+    "ideas": {"nodes": [{"id": "b-idea", "data": {"label": "B idea"}}]},
+}
+
+
+def _hand_pa_to_b(store: PipelineResultStore) -> None:
+    assert store.delete(PA)
+    store.save(PA, B_CONTENT, org_id="org-b", created_by="user-b")
+
+
+@pytest.mark.asyncio
+async def test_execute_saves_its_result_while_the_owner_keeps_the_pipeline(handler, store) -> None:
+    _save_executable(store)
+    emitter = _emitter()
+
+    result = await _execute_in_background(
+        handler, store, emitter, AsyncMock(return_value=(_outcome(), {}, {})), "exec-own"
+    )
+
+    assert result.status_code == 202
+    saved = store.get(PA)
+    assert saved["execution"]["status"] == "completed"
+    assert saved["receipt"]["execution_id"] == "exec-own"
+    assert store.get_owner_org(PA) == "org-a"
+    emitter.emit_completed.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("changes_hands", "succeeds"), [("execution", True), ("execution", False), ("start", True)]
+)
+async def test_execute_never_saves_over_a_pipeline_that_changed_hands(
+    handler, store, changes_hands, succeeds
+) -> None:
+    """A's pipeline is deleted and B creates the same id while A's execution
+    runs: the background saves leave B's row as B wrote it."""
+    _save_executable(store)
+    emitter = _emitter()
+    if changes_hands == "start":
+        emitter.emit_stage_started.side_effect = lambda *args, **kwargs: _hand_pa_to_b(store)
+
+    async def run(*args: Any, **kwargs: Any) -> Any:
+        if changes_hands == "execution":
+            _hand_pa_to_b(store)
+        if not succeeds:
+            raise RuntimeError("A execution failed")
+        return _outcome(), {"record": "A execution record"}, {}
+
+    result = await _execute_in_background(
+        handler, store, emitter, AsyncMock(side_effect=run), f"exec-{changes_hands}-{succeeds}"
+    )
+
+    assert result.status_code == 202
+    saved = store.get(PA)
+    assert store.get_owner_org(PA) == "org-b"
+    assert saved["ideas"] == B_CONTENT["ideas"]
+    assert saved["stage_status"] == B_CONTENT["stage_status"]
+    assert "execution" not in saved
+    assert "receipt" not in saved
+    for a_content in ("Build cache", "A execution record", "A receipt"):
+        assert a_content not in json.dumps(saved)
+    emitter.emit_completed.assert_not_awaited()
+    emitter.emit_failed.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_execute_refused_by_plan_ownership_is_404(handler, store) -> None:
     from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError

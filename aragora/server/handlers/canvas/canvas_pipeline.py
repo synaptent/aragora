@@ -2565,6 +2565,19 @@ class CanvasPipelineHandler:
         }
         store.save(pipeline_id, existing)
 
+        def _save_execution_state(state: dict[str, Any]) -> bool:
+            """Save the state unless the pipeline id now belongs to another org (or nobody)."""
+            if scope is None:
+                store.save(pipeline_id, state)
+                return True
+            if store.save_for_org(pipeline_id, state, scope.org_id, scope.user_id):
+                return True
+            logger.warning(
+                "Pipeline %s changed owner during execution; execution state not saved",
+                pipeline_id,
+            )
+            return False
+
         async def _execute() -> None:
             current_state = dict(existing)
             try:
@@ -2584,7 +2597,7 @@ class CanvasPipelineHandler:
                     **(current_execution if isinstance(current_execution, dict) else {}),
                     "status": "running",
                 }
-                store.save(pipeline_id, current_state)
+                _save_execution_state(current_state)
 
                 outcome, record, decision_receipt = await execute_queued_plan(
                     plan,
@@ -2629,9 +2642,8 @@ class CanvasPipelineHandler:
                 }
                 current_state["receipt"] = receipt_bundle
                 current_state = attach_unified_live_state(current_state)
-                store.save(pipeline_id, current_state)
-
-                if emitter:
+                # Watchers of a pipeline id that changed hands are the new owner's.
+                if _save_execution_state(current_state) and emitter:
                     await emitter.emit_completed(pipeline_id, receipt_bundle)
             except Exception as exc:  # noqa: BLE001 - background execution must update state before surfacing
                 logger.error("Pipeline execution failed: %s", exc)
@@ -2642,8 +2654,7 @@ class CanvasPipelineHandler:
                     "error": str(exc),
                 }
                 current_state = attach_unified_live_state(current_state)
-                store.save(pipeline_id, current_state)
-                if emitter:
+                if _save_execution_state(current_state) and emitter:
                     await emitter.emit_failed(pipeline_id, str(exc))
 
         task = asyncio.create_task(_execute())

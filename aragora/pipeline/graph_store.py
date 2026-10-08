@@ -9,7 +9,9 @@ A node is identified by ``(graph_id, id)``: the same node id in two graphs
 names two different nodes, so writing one graph never touches another's.
 Nodes live in ``graph_nodes``. Stores created when node ids were global kept
 them in ``nodes``; their rows are copied once into ``graph_nodes`` (in the
-transaction that creates it) and the old table is left as it was.
+transaction that creates it). The old table's schema is never changed, but
+writes that delete or replace a graph's nodes also delete that graph's rows
+from it, so deleted node content does not stay on disk there.
 
 Usage:
     store = GraphStore()
@@ -197,7 +199,7 @@ class GraphStore:
 
         The copy runs only in the transaction that creates the table, so it
         happens once per database; a concurrent opener waits on the write lock
-        and then finds the table. The old table is only read.
+        and then finds the table. The copy only reads the old table.
         """
         isolation_level = conn.isolation_level
         conn.isolation_level = None
@@ -243,6 +245,7 @@ class GraphStore:
         try:
             self._upsert_graph(conn, graph, org_id=org_id, created_by=created_by)
             conn.execute("DELETE FROM graph_nodes WHERE graph_id = ?", (graph.id,))
+            self._delete_old_node_rows(conn, graph.id)
             for node in graph.nodes.values():
                 self._insert_node(conn, graph.id, node)
             conn.commit()
@@ -351,6 +354,7 @@ class GraphStore:
         try:
             self._upsert_graph(conn, graph)
             conn.execute("DELETE FROM graph_nodes WHERE graph_id = ?", (graph.id,))
+            self._delete_old_node_rows(conn, graph.id)
             for node in graph.nodes.values():
                 self._insert_node(conn, graph.id, node)
             conn.commit()
@@ -361,10 +365,8 @@ class GraphStore:
         """Delete a graph and all its nodes. Returns True if found."""
         conn = self._connect()
         try:
-            # Rows the one-time copy left in the old ``nodes`` table still reference
-            # their graph. That table is kept as it was, so it must not block the delete.
-            conn.execute("PRAGMA foreign_keys=OFF")
             conn.execute("DELETE FROM graph_nodes WHERE graph_id = ?", (graph_id,))
+            self._delete_old_node_rows(conn, graph_id)
             cursor = conn.execute("DELETE FROM graphs WHERE id = ?", (graph_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -378,6 +380,7 @@ class GraphStore:
         conn = self._connect()
         try:
             self._insert_node(conn, graph_id, node)
+            self._delete_old_node_rows(conn, graph_id, node.id)
             conn.commit()
         finally:
             conn.close()
@@ -390,6 +393,7 @@ class GraphStore:
                 "DELETE FROM graph_nodes WHERE id = ? AND graph_id = ?",
                 (node_id, graph_id),
             )
+            self._delete_old_node_rows(conn, graph_id, node_id)
             # Clean edges from the graph's edges_json
             row = conn.execute("SELECT edges_json FROM graphs WHERE id = ?", (graph_id,)).fetchone()
             if row and row["edges_json"]:
@@ -514,6 +518,24 @@ class GraphStore:
                 OWNERSHIP_CREATED if owner_org else None,
             ),
         )
+
+    @classmethod
+    def _delete_old_node_rows(
+        cls, conn: sqlite3.Connection, graph_id: str, node_id: str | None = None
+    ) -> None:
+        """Delete a graph's rows (or one node's row) from the old ``nodes`` table.
+
+        The old table still holds the rows that were copied into
+        ``graph_nodes``. Removing them with the graph's own rows keeps deleted
+        node content from staying on disk there, and its foreign key to
+        ``graphs`` would otherwise block deleting the graph.
+        """
+        if not cls._table_exists(conn, "nodes"):
+            return
+        if node_id is None:
+            conn.execute("DELETE FROM nodes WHERE graph_id = ?", (graph_id,))
+        else:
+            conn.execute("DELETE FROM nodes WHERE graph_id = ? AND id = ?", (graph_id, node_id))
 
     def _insert_node(self, conn: sqlite3.Connection, graph_id: str, node: UniversalNode) -> None:
         conn.execute(
