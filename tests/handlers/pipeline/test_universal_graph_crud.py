@@ -33,6 +33,9 @@ import pytest
 from aragora.pipeline.universal_node import UniversalEdge, UniversalGraph, UniversalNode
 import aragora.server.handlers.pipeline.universal_graph as universal_graph_module
 from aragora.server.handlers.pipeline.universal_graph import UniversalGraphHandler
+from aragora.tenancy.record_scope import OrgScope
+
+_SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +161,9 @@ def _bypass_check_permission(request, monkeypatch):
     monkeypatch.setattr(
         UniversalGraphHandler,
         "_check_permission",
-        lambda self, handler, permission: None,
+        staticmethod(lambda handler, permission: (_SCOPE, None)),
     )
+    monkeypatch.setattr("aragora.tenancy.pipeline_access.graph_owned", lambda *args, **kwargs: True)
 
 
 @pytest.fixture(autouse=True)
@@ -360,7 +364,9 @@ class TestCreateGraph:
             mock_instance.to_dict.return_value = {"id": "g"}
             MockGraph.return_value = mock_instance
             h.handle_post("/api/v1/pipeline/graphs", {}, http)
-        patched_store.create.assert_called_once_with(mock_instance)
+        patched_store.create.assert_called_once_with(
+            mock_instance, org_id="test-org-001", created_by="test-user-001"
+        )
 
 
 # ===========================================================================
