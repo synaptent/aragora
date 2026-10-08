@@ -662,7 +662,10 @@ class TestDefaultRoutePermissions:
         health_rules = [
             r
             for r in DEFAULT_ROUTE_PERMISSIONS
-            if hasattr(r.pattern, "pattern") and "health" in r.pattern.pattern.lower()
+            if hasattr(r.pattern, "pattern")
+            and "health" in r.pattern.pattern.lower()
+            # Per-connector health scores are connector data behind connectors.read.
+            and "connectors" not in r.pattern.pattern
         ]
 
         # All health rules should allow unauthenticated
