@@ -339,7 +339,21 @@ class SettlementReviewScheduler:
         return self._resolver_registry
 
     def _review_due_receipts_sync(self) -> tuple[int, int, int, int, int]:
+        """Review due settlements tenant by tenant.
+
+        Each owning org is read through its own org-filtered query and gets its
+        own ``max_receipts_per_run`` budget, so a large org cannot starve the
+        others. Receipts with no owning org are never read or changed.
+        """
         now = datetime.now(timezone.utc)
+        totals = [0, 0, 0, 0, 0]
+        for org_id in self.store.list_owner_org_ids():
+            for index, value in enumerate(self._review_org_receipts(org_id, now)):
+                totals[index] += value
+        scanned, due, updated, calibration_predictions, unresolved_due = totals
+        return scanned, due, updated, calibration_predictions, unresolved_due
+
+    def _review_org_receipts(self, org_id: str, now: datetime) -> tuple[int, int, int, int, int]:
         scanned = 0
         due = 0
         updated = 0
@@ -349,137 +363,147 @@ class SettlementReviewScheduler:
         offset = 0
         while scanned < self.max_receipts_per_run:
             batch_limit = min(100, self.max_receipts_per_run - scanned)
-            batch = self.store.list(limit=batch_limit, offset=offset, order="desc")
+            batch = self.store.list_for_org(org_id, limit=batch_limit, offset=offset, order="desc")
             if not batch:
                 break
 
             for stored in batch:
                 scanned += 1
-                data = dict(stored.data or {})
-                settlement = data.get("settlement")
-                if not isinstance(settlement, dict):
+                if stored.org_id != org_id or not stored.receipt_id:
                     continue
-
-                # Derive receipt timestamp for review horizon computation.
-                receipt_timestamp = (
-                    _parse_timestamp(data.get("timestamp"))
-                    or _parse_timestamp(settlement.get("created_at"))
-                    or datetime.fromtimestamp(stored.created_at, tz=timezone.utc)
-                )
-
-                due_at = _compute_due_at(receipt_timestamp, settlement)
-                if now < due_at:
+                review = self._review_receipt(stored, now)
+                if review is None:
                     continue
-
+                data, predictions, unresolved = review
                 due += 1
-                review_attempts = _coerce_positive_int(settlement.get("review_attempts"), default=0)
-                settlement["review_attempts"] = review_attempts + 1
-                settlement["last_reviewed_at"] = now.isoformat()
-
-                prior_status = str(settlement.get("status") or "").strip().lower()
-                resolver_type = _normalize_resolver_type(
-                    settlement.get("resolver_type")
-                    or settlement.get("resolution_tier")
-                    or settlement.get("verification_mode")
-                )
-                if resolver_type is not None:
-                    settlement["resolver_type"] = resolver_type
-                outcome = _resolve_settlement_outcome(settlement)
-                if outcome is None and resolver_type is not None:
-                    decision = self._get_resolver_registry().resolve(
-                        resolver_type,
-                        receipt_data=data,
-                        settlement=settlement,
-                        now=now,
-                    )
-                    settlement["last_resolution_attempt"] = decision.to_dict()
-                    if decision.resolved and decision.outcome is not None:
-                        outcome = bool(decision.outcome)
-                        settlement["outcome"] = outcome
-                        settlement["resolved_outcome"] = outcome
-                        settlement["resolved_by"] = decision.resolver_id
-                        settlement["resolution_evidence"] = decision.evidence
-
-                if outcome is None:
-                    unresolved_due += 1
-                    if not _is_terminal_status(prior_status):
-                        if resolver_type == "human":
-                            settlement["status"] = "pending_human_adjudication"
-                        elif resolver_type == "deterministic":
-                            settlement["status"] = "pending_deterministic"
-                        elif resolver_type == "oracle":
-                            settlement["status"] = "pending_oracle"
-                        else:
-                            settlement["status"] = "pending_outcome"
-                    horizon_days = _coerce_positive_int(
-                        settlement.get("review_horizon_days"), default=30
-                    )
-                    settlement["next_review_at"] = (now + timedelta(days=horizon_days)).isoformat()
-                else:
-                    settlement["status"] = "settled_true" if outcome else "settled_false"
-                    settlement["settled_at"] = settlement.get("settled_at") or now.isoformat()
-                    settlement["next_review_at"] = None
-                    if not settlement.get("calibration_recorded_at"):
-                        mode = str(data.get("mode") or "").strip().lower()
-
-                        if mode != _EPISTEMIC_HYGIENE_MODE:
-                            settlement["calibration_recorded_at"] = now.isoformat()
-                            settlement["calibration_outcome"] = "skipped_non_epistemic_mode"
-                            _record_calibration_outcome_metric("skipped_non_epistemic_mode")
-                        elif resolver_type is None:
-                            if not settlement.get("calibration_pending_since"):
-                                settlement["calibration_pending_since"] = now.isoformat()
-                            if (
-                                settlement.get("calibration_outcome")
-                                != "pending_resolver_verification"
-                            ):
-                                _record_calibration_outcome_metric("pending_resolver_verification")
-                            settlement["calibration_outcome"] = "pending_resolver_verification"
-                            horizon_days = _coerce_positive_int(
-                                settlement.get("review_horizon_days"), default=30
-                            )
-                            settlement["next_review_at"] = (
-                                now + timedelta(days=horizon_days)
-                            ).isoformat()
-                        else:
-                            confidence = max(0.0, min(1.0, float(data.get("confidence") or 0.5)))
-                            domain = _EPISTEMIC_HYGIENE_MODE
-                            debate_id = str(data.get("debate_id") or stored.debate_id or "")
-                            tracker = self._get_calibration_tracker()
-                            recorded_agents = 0
-                            for agent in data.get("agents_involved") or []:
-                                if not isinstance(agent, str) or not agent.strip():
-                                    continue
-                                tracker.record_prediction(
-                                    agent=agent.strip(),
-                                    confidence=confidence,
-                                    correct=outcome,
-                                    domain=domain,
-                                    debate_id=debate_id,
-                                    prediction_type="settlement_review",
-                                )
-                                calibration_predictions += 1
-                                recorded_agents += 1
-                            settlement["calibration_recorded_at"] = now.isoformat()
-                            if recorded_agents > 0:
-                                settlement["calibration_outcome"] = (
-                                    "correct" if outcome else "incorrect"
-                                )
-                                _record_calibration_outcome_metric(
-                                    "correct" if outcome else "incorrect"
-                                )
-                                settlement["calibration_resolver_type"] = resolver_type
-                            else:
-                                settlement["calibration_outcome"] = "skipped_no_agents"
-                                _record_calibration_outcome_metric("skipped_no_agents")
-
-                data["settlement"] = settlement
-                self.store.save(data)
+                calibration_predictions += predictions
+                unresolved_due += int(unresolved)
+                self.store.save(data, org_id=org_id, created_by=stored.created_by)
                 updated += 1
 
             offset += len(batch)
 
         return scanned, due, updated, calibration_predictions, unresolved_due
+
+    def _review_receipt(
+        self, stored: Any, now: datetime
+    ) -> tuple[dict[str, Any], int, bool] | None:
+        """Review one stored receipt; None when it has no settlement due.
+
+        Returns the updated payload, the calibration predictions recorded and
+        whether the settlement is still unresolved.
+        """
+        data = dict(stored.data or {})
+        # The update is written back by receipt_id; pin it to the stored row so
+        # a payload naming another receipt cannot overwrite that receipt.
+        data["receipt_id"] = stored.receipt_id
+        settlement = data.get("settlement")
+        if not isinstance(settlement, dict):
+            return None
+
+        # Derive receipt timestamp for review horizon computation.
+        receipt_timestamp = (
+            _parse_timestamp(data.get("timestamp"))
+            or _parse_timestamp(settlement.get("created_at"))
+            or datetime.fromtimestamp(stored.created_at, tz=timezone.utc)
+        )
+
+        due_at = _compute_due_at(receipt_timestamp, settlement)
+        if now < due_at:
+            return None
+
+        calibration_predictions = 0
+        review_attempts = _coerce_positive_int(settlement.get("review_attempts"), default=0)
+        settlement["review_attempts"] = review_attempts + 1
+        settlement["last_reviewed_at"] = now.isoformat()
+
+        prior_status = str(settlement.get("status") or "").strip().lower()
+        resolver_type = _normalize_resolver_type(
+            settlement.get("resolver_type")
+            or settlement.get("resolution_tier")
+            or settlement.get("verification_mode")
+        )
+        if resolver_type is not None:
+            settlement["resolver_type"] = resolver_type
+        outcome = _resolve_settlement_outcome(settlement)
+        if outcome is None and resolver_type is not None:
+            decision = self._get_resolver_registry().resolve(
+                resolver_type,
+                receipt_data=data,
+                settlement=settlement,
+                now=now,
+            )
+            settlement["last_resolution_attempt"] = decision.to_dict()
+            if decision.resolved and decision.outcome is not None:
+                outcome = bool(decision.outcome)
+                settlement["outcome"] = outcome
+                settlement["resolved_outcome"] = outcome
+                settlement["resolved_by"] = decision.resolver_id
+                settlement["resolution_evidence"] = decision.evidence
+
+        if outcome is None:
+            if not _is_terminal_status(prior_status):
+                if resolver_type == "human":
+                    settlement["status"] = "pending_human_adjudication"
+                elif resolver_type == "deterministic":
+                    settlement["status"] = "pending_deterministic"
+                elif resolver_type == "oracle":
+                    settlement["status"] = "pending_oracle"
+                else:
+                    settlement["status"] = "pending_outcome"
+            horizon_days = _coerce_positive_int(settlement.get("review_horizon_days"), default=30)
+            settlement["next_review_at"] = (now + timedelta(days=horizon_days)).isoformat()
+        else:
+            settlement["status"] = "settled_true" if outcome else "settled_false"
+            settlement["settled_at"] = settlement.get("settled_at") or now.isoformat()
+            settlement["next_review_at"] = None
+            if not settlement.get("calibration_recorded_at"):
+                mode = str(data.get("mode") or "").strip().lower()
+
+                if mode != _EPISTEMIC_HYGIENE_MODE:
+                    settlement["calibration_recorded_at"] = now.isoformat()
+                    settlement["calibration_outcome"] = "skipped_non_epistemic_mode"
+                    _record_calibration_outcome_metric("skipped_non_epistemic_mode")
+                elif resolver_type is None:
+                    if not settlement.get("calibration_pending_since"):
+                        settlement["calibration_pending_since"] = now.isoformat()
+                    if settlement.get("calibration_outcome") != "pending_resolver_verification":
+                        _record_calibration_outcome_metric("pending_resolver_verification")
+                    settlement["calibration_outcome"] = "pending_resolver_verification"
+                    horizon_days = _coerce_positive_int(
+                        settlement.get("review_horizon_days"), default=30
+                    )
+                    settlement["next_review_at"] = (now + timedelta(days=horizon_days)).isoformat()
+                else:
+                    confidence = max(0.0, min(1.0, float(data.get("confidence") or 0.5)))
+                    domain = _EPISTEMIC_HYGIENE_MODE
+                    debate_id = str(data.get("debate_id") or stored.debate_id or "")
+                    tracker = self._get_calibration_tracker()
+                    recorded_agents = 0
+                    for agent in data.get("agents_involved") or []:
+                        if not isinstance(agent, str) or not agent.strip():
+                            continue
+                        tracker.record_prediction(
+                            agent=agent.strip(),
+                            confidence=confidence,
+                            correct=outcome,
+                            domain=domain,
+                            debate_id=debate_id,
+                            prediction_type="settlement_review",
+                        )
+                        calibration_predictions += 1
+                        recorded_agents += 1
+                    settlement["calibration_recorded_at"] = now.isoformat()
+                    if recorded_agents > 0:
+                        settlement["calibration_outcome"] = "correct" if outcome else "incorrect"
+                        _record_calibration_outcome_metric("correct" if outcome else "incorrect")
+                        settlement["calibration_resolver_type"] = resolver_type
+                    else:
+                        settlement["calibration_outcome"] = "skipped_no_agents"
+                        _record_calibration_outcome_metric("skipped_no_agents")
+
+        data["settlement"] = settlement
+        return data, calibration_predictions, outcome is None
 
     def get_status(self) -> dict[str, Any]:
         return {

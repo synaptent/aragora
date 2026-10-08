@@ -238,6 +238,15 @@ class ExportOperationsMixin:
 
     async def _process_batch_export(self: _DebatesHandlerProtocol, job: BatchExportJob) -> None:
         """Process batch export items and emit progress events."""
+        if not (job.org_id or "").strip():
+            # A job with no tenant could only export unowned debates; refuse it
+            # before any storage read rather than guess an owner.
+            job.status = BatchExportStatus.FAILED
+            job.completed_at = time.time()
+            logger.warning("Refusing batch export job %s: no org recorded", job.job_id)
+            await self._emit_export_event(job.job_id, "error", {"message": "Export not permitted"})
+            return
+
         job.status = BatchExportStatus.PROCESSING
         await self._emit_export_event(job.job_id, "started", job.to_dict())
 

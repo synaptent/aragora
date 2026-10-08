@@ -759,6 +759,62 @@ class TestProcessBatchExport:
         assert items[0].result is None
 
     @pytest.mark.asyncio
+    async def test_mixed_ids_export_only_the_jobs_org(self):
+        owners = {"d-own": ORG, "d-other": "org-2", "d-unowned": None}
+        debates = {did: _sample_debate(did) for did in owners}
+        for did, debate in debates.items():
+            debate["task"] = f"secret task of {did}"
+        storage = MagicMock()
+        storage.get_access_info = MagicMock(side_effect=lambda ref: (ref, owners.get(ref), False))
+        storage.get_debates_batch = MagicMock(
+            side_effect=lambda ids: {did: debates[did] for did in ids}
+        )
+        handler = _make_handler(storage=storage)
+
+        items = [BatchExportItem(debate_id=did, format="json") for did in owners]
+        job = BatchExportJob(job_id="j-mixed", items=items, org_id=ORG)
+        _batch_export_jobs["j-mixed"] = job
+        _batch_export_events["j-mixed"] = asyncio.Queue()
+
+        await handler._process_batch_export(job)
+
+        storage.get_debates_batch.assert_called_once_with(["d-own"])
+        assert job.status == BatchExportStatus.COMPLETED
+        assert (job.success_count, job.error_count) == (1, 2)
+        by_id = {item.debate_id: item for item in items}
+        assert "secret task of d-own" in by_id["d-own"].result
+        for hidden in ("d-other", "d-unowned"):
+            assert by_id[hidden].status == BatchExportStatus.FAILED
+            assert by_id[hidden].error == "Debate not found"
+            assert by_id[hidden].result is None
+
+    @pytest.mark.parametrize("job_org", [None, "", "   "])
+    @pytest.mark.asyncio
+    async def test_job_without_an_org_is_refused_before_reading_storage(self, job_org):
+        storage = _owned_by(MagicMock())
+        storage.get_debates_batch.return_value = {"d1": _sample_debate("d1")}
+        handler = _make_handler(storage=storage)
+
+        items = [BatchExportItem(debate_id="d1", format="json")]
+        job = BatchExportJob(job_id="j-orgless", items=items, org_id=job_org)
+        _batch_export_jobs["j-orgless"] = job
+        queue: asyncio.Queue = asyncio.Queue()
+        _batch_export_events["j-orgless"] = queue
+
+        await handler._process_batch_export(job)
+
+        assert job.status == BatchExportStatus.FAILED
+        assert job.success_count == 0
+        assert items[0].result is None
+        storage.get_access_info.assert_not_called()
+        storage.get_debates_batch.assert_not_called()
+        storage.get_debate.assert_not_called()
+        events = []
+        while not queue.empty():
+            events.append(await queue.get())
+        assert [e["type"] for e in events] == ["error"]
+
+    @pytest.mark.asyncio
     async def test_batch_uses_batch_query_when_available(self):
         debate = _sample_debate()
         storage = MagicMock()
