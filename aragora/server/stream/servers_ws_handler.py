@@ -390,12 +390,14 @@ class WebSocketHandlerMixin:
         The caller sees what the spectate SSE route shows them: a named debate
         must be public or their org's (else 401/403/404 before the upgrade),
         and only events they may view are sent. A debate socket is closed with
-        ``share_revoked`` once the caller may no longer view the debate.
+        ``share_revoked`` once the caller may no longer view the debate, at the
+        next event for it or, when none comes, at the next heartbeat check.
         """
         import aiohttp
         import aiohttp.web as web
 
         from aragora.server.handlers.streaming.spectate_ws import (
+            LIVE_SPECTATE_HEARTBEAT_SECONDS,
             SpectateVisibility,
             authorize_spectate_request,
         )
@@ -467,7 +469,16 @@ class WebSocketHandlerMixin:
 
         async def pump_events() -> None:
             while True:
-                event = await event_queue.get()
+                try:
+                    event = await asyncio.wait_for(
+                        event_queue.get(), LIVE_SPECTATE_HEARTBEAT_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    if not debate_id or not await asyncio.to_thread(
+                        visibility.lost_access, debate_id
+                    ):
+                        continue
+                    event = _SPECTATE_REVOKED
                 if event is _SPECTATE_REVOKED:
                     await ws.send_json({"type": "share_revoked", "debate_id": debate_id})
                     await ws.close()

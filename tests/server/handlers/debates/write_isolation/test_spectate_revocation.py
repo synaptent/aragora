@@ -209,6 +209,9 @@ class _Socket:
         return [m.get("details") for m in self.sent if m.get("type") == "proposal"]
 
 
+WS_HEARTBEAT = 0.05
+
+
 @pytest.fixture
 def ws_server(monkeypatch, storage):
     """``open_socket(user, debate_id)`` runs the aiohttp spectate socket as ``user``."""
@@ -217,6 +220,7 @@ def ws_server(monkeypatch, storage):
     bridge = LiveBridge()
     monkeypatch.setattr("aragora.spectate.ws_bridge.get_spectate_bridge", lambda: bridge)
     monkeypatch.setattr(spectate_ws, "_resolve_debates_storage", lambda _storage: storage)
+    monkeypatch.setattr(spectate_ws, "LIVE_SPECTATE_HEARTBEAT_SECONDS", WS_HEARTBEAT)
     server = AiohttpUnifiedServer(port=0, host="127.0.0.1")
 
     async def open_socket(user: Any, debate_id: str) -> tuple[Any, Any]:
@@ -263,17 +267,33 @@ class TestSpectateWebSocket:
         assert socket.closed
         assert ws_server.bridge.subscribers == []
 
+    @pytest.mark.parametrize("viewer", [USER_B, ANON])
+    async def test_idle_socket_is_closed_at_the_next_heartbeat(self, share, ws_server, viewer):
+        share("POST")
+        socket, task = await ws_server.open(viewer, DA)
+        assert not task.done(), getattr(task.result(), "status", None)
+
+        share("DELETE")
+        await asyncio.wait_for(task, timeout=5)
+
+        assert socket.sent[-1] == {"type": "share_revoked", "debate_id": DA}
+        assert socket.closed
+        assert ws_server.bridge.subscribers == []
+
     async def test_owner_socket_carries_on(self, share, ws_server):
         share("POST")
         socket, task = await ws_server.open(USER_A, DA)
 
         share("DELETE")
+        await asyncio.sleep(WS_HEARTBEAT * 6)
+        assert not task.done() and not socket.closed
         ws_server.bridge.publish(DA, "owner still sees this")
         await ws_server.settle()
         await socket.close()
         await asyncio.wait_for(task, timeout=5)
 
         assert socket.details() == ["owner still sees this"]
+        assert not any(m.get("type") == "share_revoked" for m in socket.sent)
 
     @pytest.mark.parametrize(
         ("viewer", "debate_id", "status", "code"),

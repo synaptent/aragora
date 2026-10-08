@@ -21,6 +21,11 @@ SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}\Z")
 # critique.py, genome IDs) need the longer limit, so the two are not unified.
 SAFE_ID_PATTERN_WITH_DOTS = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\Z")
 SAFE_SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,128}\Z")
+# A debate id or a storage slug named in a path. DebateStorage.generate_slug
+# keeps Unicode word characters and joins up to four words of any length, so
+# slugs are not held to SAFE_SLUG_PATTERN. 500 is the longest reference the
+# storage lookup (get_access_info) accepts.
+SAFE_DEBATE_REF_PATTERN = re.compile(r"^[\w-]{1,500}\Z")
 # Agent names may carry dotted model versions ("gemini-3.1-pro-preview",
 # "claude-fable-5.1", "qwen3.8-2.4t-a95b"), so "." is allowed after the first
 # character. "/" is never allowed: these are single path segments, and the
@@ -121,6 +126,17 @@ def validate_debate_id(debate_id: str) -> tuple[bool, str | None]:
         Tuple of (is_valid, error_message)
     """
     return validate_path_segment(debate_id, "debate ID", SAFE_SLUG_PATTERN)
+
+
+def validate_debate_ref(ref: str) -> tuple[bool, str | None]:
+    """Validate a debate id or slug from a path before it is looked up.
+
+    Word characters (Unicode letters included) and hyphens, 1-500 chars: every
+    slug the storage generates fits, while separators, dots, whitespace and
+    control characters never do. Validate the resolved debate id with
+    :func:`validate_debate_id` before using it.
+    """
+    return validate_path_segment(ref, "debate reference", SAFE_DEBATE_REF_PATTERN)
 
 
 def validate_gauntlet_id(gauntlet_id: str) -> tuple[bool, str | None]:

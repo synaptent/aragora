@@ -39,12 +39,13 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import unquote
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.debate_controller_mixin import DebateControllerMixin
 from aragora.server.debate_utils import _active_debates  # noqa: F401
 from aragora.server.http_utils import run_async
-from aragora.server.validation import validate_debate_id
+from aragora.server.validation import validate_debate_id, validate_debate_ref
 from aragora.server.validation.schema import validate_against_schema  # noqa: F401
 from aragora.tenancy.debate_access import (
     DebateWrite,
@@ -92,12 +93,18 @@ _DEBATE_POST_SUFFIXES = ("fork", "verify", "followup", "cancel")
 
 
 def _debate_ref(normalized: str, parts: list[str]) -> str | None:
-    """The debate id or slug a per-debate path names, or None for other paths."""
+    """The debate id or slug a per-debate path names, or None for other paths.
+
+    The segment is percent-decoded: the server passes the raw request path, and
+    slugs may hold non-ASCII letters.
+    """
     if normalized.startswith("/api/debates/slug/"):
-        return parts[4] if len(parts) > 4 else ""
-    if normalized.startswith(("/api/debates/", "/api/debate/")) and len(parts) > 3:
-        return parts[3]
-    return None
+        segment = parts[4] if len(parts) > 4 else ""
+    elif normalized.startswith(("/api/debates/", "/api/debate/")) and len(parts) > 3:
+        segment = parts[3]
+    else:
+        return None
+    return unquote(segment, errors="replace")
 
 
 class DebatesHandler(
@@ -243,12 +250,15 @@ class DebatesHandler(
         debate_ref = _debate_ref(normalized, parts)
         if debate_ref is None:
             return None
-        is_valid, err = validate_debate_id(debate_ref)
+        is_valid, err = validate_debate_ref(debate_ref)
         if not is_valid:
             return error_response(err, 400)
         debate_id, access_error = authorize_debate_read(handler, self.get_storage(), debate_ref)
         if debate_id is None:
             return access_error
+        is_valid, err = validate_debate_id(debate_id)
+        if not is_valid:
+            return error_response(err, 400)
 
         if normalized.startswith("/api/debates/slug/"):
             if len(parts) != 5:
@@ -307,16 +317,18 @@ class DebatesHandler(
         # Default: GET /api/debates/{id or slug}
         if normalized.startswith("/api/debates/") and len(parts) == 4:
             return self._get_debate_by_slug(handler, debate_id)
+        # Unserved writes (POST .../intervene, .../bridge, any write path with a
+        # trailing slash) get the write gate's answer first: a public debate
+        # passed the read check above, but its anonymous and org-less callers
+        # still get 401 and 403.
+        if str(getattr(handler, "command", "GET") or "GET").upper() not in ("GET", "HEAD"):
+            write, write_error = self._authorize_debate_write(normalized, handler)
+            if write is None:
+                return write_error
+            return record_not_found("Debate")
         # Only the segment checked above may be read; an unknown suffix must not
         # fall back to looking up its last segment as a slug.
         if parts[-1]:
-            # Unserved writes (POST .../intervene, .../checkpoint, .../bridge) get
-            # the write gate's answer first: a public debate passed the read check
-            # above, but its anonymous and org-less callers still get 401 and 403.
-            if str(getattr(handler, "command", "GET") or "GET").upper() not in ("GET", "HEAD"):
-                write, write_error = self._authorize_debate_write(normalized, handler)
-                if write is None:
-                    return write_error
             return record_not_found("Debate")
 
         return None

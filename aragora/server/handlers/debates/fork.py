@@ -7,7 +7,11 @@ outcome verification, and crux-based follow-up debate creation.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import tempfile
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -36,6 +40,31 @@ def _owner_fields(scope: OrgScope | None) -> dict[str, str | None]:
     if scope is None:
         return {"org_id": None, "created_by": None}
     return {"org_id": scope.org_id, "created_by": scope.user_id}
+
+
+def _new_followup_id() -> str:
+    return f"followup-{uuid.uuid4().hex}"
+
+
+def _write_new_followup(followups_dir: Path, record: dict[str, Any]) -> str:
+    """Store ``record`` under a fresh id and return the id.
+
+    The record is written to a temporary file and hard-linked into place, so a
+    write that fails partway leaves no follow-up file, and an existing one is
+    never replaced (the link fails instead and a fresh id is tried).
+    """
+    for _attempt in range(2):
+        fd, tmp_name = tempfile.mkstemp(dir=followups_dir, prefix=".followup-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(record, f, indent=2)
+            os.link(tmp_name, followups_dir / f"{record['id']}.json")
+            return record["id"]
+        except FileExistsError:
+            record["id"] = _new_followup_id()
+        finally:
+            Path(tmp_name).unlink(missing_ok=True)
+    raise OSError("Could not allocate an unused follow-up id")
 
 
 class _DebatesHandlerProtocol(Protocol):
@@ -532,14 +561,11 @@ class ForkOperationsMixin:
             else:
                 agents = parent_debate.get("agents", [])[:3]
 
-            # Create unique ID for follow-up debate
             import time
-
-            followup_id = f"followup-{debate_id[:8]}-{int(time.time()) % 100000}"
 
             # Store follow-up debate metadata
             followup_data = {
-                "id": followup_id,
+                "id": _new_followup_id(),
                 "task": task,
                 "agents": agents,
                 "parent_debate_id": debate_id,
@@ -553,13 +579,10 @@ class ForkOperationsMixin:
             # Store in nomic dir
             nomic_dir = self.get_nomic_dir()
             if nomic_dir:
-                import json as json_mod
-
                 followups_dir = nomic_dir / "followups"
                 followups_dir.mkdir(exist_ok=True)
-                followup_file = followups_dir / f"{followup_id}.json"
-                with open(followup_file, "w") as f:
-                    json_mod.dump(followup_data, f, indent=2)
+                _write_new_followup(followups_dir, followup_data)
+            followup_id = followup_data["id"]
 
             logger.info("Created follow-up debate %s from parent %s", followup_id, debate_id)
 
