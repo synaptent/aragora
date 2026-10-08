@@ -51,7 +51,7 @@ _RECENT_ACTIVITY_WINDOW_SECONDS = 300  # 5 min — matches demo loop interval
 _STATUS_ACTIVITY_SCAN_LIMIT = 200
 _DEFAULT_SPECTATE_EVENT_COUNT = 50
 _MAX_SPECTATE_EVENT_COUNT = 500
-_LIVE_SSE_HEARTBEAT_SECONDS = 15.0
+LIVE_SPECTATE_HEARTBEAT_SECONDS = 15.0
 _LIVE_SSE_QUEUE_SIZE = 256
 _LIVE_SSE_RESYNC_SENTINEL = object()
 _LIVE_SSE_REVOKED_SENTINEL = object()
@@ -397,7 +397,7 @@ def _filter_spectate_events(events: list[Any], query_params: dict[str, Any] | No
 def iter_live_spectate_sse_frames(
     query_params: dict[str, Any],
     *,
-    heartbeat_interval: float = _LIVE_SSE_HEARTBEAT_SECONDS,
+    heartbeat_interval: float = LIVE_SPECTATE_HEARTBEAT_SECONDS,
     bridge: Any | None = None,
     org_id: str | None = None,
     storage: Any | None = None,

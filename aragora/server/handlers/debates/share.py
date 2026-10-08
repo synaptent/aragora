@@ -18,6 +18,7 @@ import logging
 import os
 import time
 from typing import Any
+from urllib.parse import unquote
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.base import (
@@ -27,6 +28,7 @@ from aragora.server.handlers.base import (
     json_response,
     handle_errors,
 )
+from aragora.server.validation import validate_debate_ref
 from aragora.tenancy.debate_access import (
     authorize_debate_read,
     authorize_debate_write,
@@ -176,6 +178,16 @@ class DebateShareHandler(BaseHandler):
             return parts[4]
         return None
 
+    def _share_ref(self, path: str) -> tuple[str, None] | tuple[None, HandlerResult]:
+        """The debate id or slug a ``.../share`` path names (percent-decoded, as
+        the server passes the raw path), or the 400 every debate route gives a
+        reference no debate can have."""
+        debate_ref = unquote(self._extract_debate_id(path) or "", errors="replace")
+        is_valid, err = validate_debate_ref(debate_ref)
+        if not is_valid:
+            return None, error_response(err or "Invalid debate reference", 400)
+        return debate_ref, None
+
     def _get_storage(self) -> Any | None:
         storage = self.ctx.get("storage")
         if storage is not None:
@@ -207,9 +219,9 @@ class DebateShareHandler(BaseHandler):
         Another org's debate (public or not), one with no recorded org and a
         missing id all get the 404 of a missing debate, and nothing changes.
         """
-        debate_ref = self._extract_debate_id(path)
-        if not debate_ref:
-            return error_response("Missing debate ID", 400)
+        debate_ref, ref_error = self._share_ref(path)
+        if debate_ref is None:
+            return ref_error
 
         storage = self._get_storage()
         write, write_error = authorize_debate_write(handler, storage, debate_ref)
@@ -260,7 +272,12 @@ class DebateShareHandler(BaseHandler):
         if len(parts) == 6 and parts[5] == "share":
             # Share state has no read route; give the read gate's answer, then
             # the missing-debate 404 (the registry turns None into a 500).
-            debate_id, access_error = authorize_debate_read(handler, self._get_storage(), parts[4])
+            debate_ref, ref_error = self._share_ref(path)
+            if debate_ref is None:
+                return ref_error
+            debate_id, access_error = authorize_debate_read(
+                handler, self._get_storage(), debate_ref
+            )
             if debate_id is None:
                 return access_error
             return record_not_found("Debate")

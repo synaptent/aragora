@@ -29,6 +29,7 @@ from tests.server.handlers.debates.write_isolation.support import (
     ORG_B,
     REFUSALS,
     USER_A,
+    USER_B,
     Request,
     act_as,
     body_of,
@@ -97,6 +98,20 @@ def test_get_on_the_share_path_answers_the_read_gate_then_not_found(share, stora
     assert (owner.status_code, body_of(owner)) == (404, NOT_FOUND)
     assert DA_TASK not in text_of(owner)
     assert not storage.is_public(DA) and storage.is_public(DP)
+
+
+MALFORMED_REFS = ("has.dot", "a%2Fb", "has%20space", "nul%00byte", "%FF%FE", "x" * 501)
+
+
+@pytest.mark.parametrize("ref", MALFORMED_REFS)
+def test_a_ref_no_debate_can_have_is_refused_with_400(share, storage, ref):
+    """As on the other debate routes: 400 before any lookup, and nothing changes."""
+    for user in (USER_A, USER_B, ANON):
+        for method in ("GET", "POST", "DELETE"):
+            result = share(user, method, ref)
+            assert result.status_code == 400, (method, user.user_id, text_of(result))
+    assert not storage.is_public(DA) and storage.is_public(DP)
+    assert not any(is_publicly_shared(d) for d in (DA, DP))
 
 
 def test_share_permission_key_is_registered_and_held_by_owner():
@@ -176,3 +191,11 @@ class TestThroughTheServer:
                 assert status == want, (who, path, status, payload)
                 if want == 404:
                     assert payload == NOT_FOUND, (who, path)
+
+    def test_get_with_a_malformed_ref_is_a_400(self, server):
+        from tests.server.rbac_dispatch import dispatch, jwt
+
+        for token in (jwt("user-a", ORG_A, "owner"), jwt("user-b", ORG_B, "owner"), None):
+            for ref in ("has.dot", "a%2Fb", "%FF%FE"):
+                status, payload = dispatch(server, "GET", f"/api/v1/debates/{ref}/share", token)
+                assert status == 400, (ref, payload)

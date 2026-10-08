@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -45,14 +47,23 @@ def _new_followup_id() -> str:
 
 
 def _write_new_followup(followups_dir: Path, record: dict[str, Any]) -> str:
-    """Store ``record`` under a fresh id and return the id; no file is replaced."""
+    """Store ``record`` under a fresh id and return the id.
+
+    The record is written to a temporary file and hard-linked into place, so a
+    write that fails partway leaves no follow-up file, and an existing one is
+    never replaced (the link fails instead and a fresh id is tried).
+    """
     for _attempt in range(2):
+        fd, tmp_name = tempfile.mkstemp(dir=followups_dir, prefix=".followup-", suffix=".tmp")
         try:
-            with open(followups_dir / f"{record['id']}.json", "x") as f:
+            with os.fdopen(fd, "w") as f:
                 json.dump(record, f, indent=2)
+            os.link(tmp_name, followups_dir / f"{record['id']}.json")
             return record["id"]
         except FileExistsError:
             record["id"] = _new_followup_id()
+        finally:
+            Path(tmp_name).unlink(missing_ok=True)
     raise OSError("Could not allocate an unused follow-up id")
 
 

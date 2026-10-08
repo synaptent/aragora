@@ -80,3 +80,23 @@ def test_an_existing_followup_file_is_never_replaced(send, storage, tmp_path, mo
     assert body_of(result)["followup_id"] == f"followup-{fresh.hex}"
     assert json.loads(existing.read_text()) == {"org_id": "org-a", "task": "already here"}
     assert _record(tmp_path, f"followup-{fresh.hex}")["org_id"] == ORG_B
+    assert sorted(p.name for p in (tmp_path / "followups").iterdir()) == sorted(
+        [existing.name, f"followup-{fresh.hex}.json"]
+    )
+
+
+def test_a_write_that_fails_partway_leaves_no_followup_file(send, storage, tmp_path, monkeypatch):
+    from aragora.server.handlers.debates import fork
+
+    _seed_parents(storage)
+
+    def _dump_partway(record, fp, **kwargs):
+        fp.write(json.dumps(record, **kwargs)[:20])
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(fork, "json", SimpleNamespace(dump=_dump_partway))
+
+    result = send(USER_A, "POST", f"/api/v1/debates/{PARENT_A}/followup", {"task": "A task"})
+
+    assert result.status_code == 500, text_of(result)
+    assert list((tmp_path / "followups").iterdir()) == []

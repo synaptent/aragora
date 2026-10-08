@@ -999,12 +999,13 @@ class TestSecurity:
         body = _body(result)
         assert body["code"] == "not_shared"
 
-    def test_sql_injection_in_debate_id_share(self):
+    def test_sql_injection_in_debate_id_share(self, debates_db):
+        """A reference no debate can have is refused before any lookup."""
         h = DebateShareHandler()
         result = h.handle_post("/api/v1/debates/' OR 1=1 --/share", {}, _make_http_handler())
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["debate_id"] == "' OR 1=1 --"
+        assert _status(result) == 400
+        assert not is_publicly_shared("' OR 1=1 --")
+        debates_db.get_access_info.assert_not_called()
 
     def test_xss_in_debate_id(self):
         """XSS in debate ID: the path with slashes in the ID changes
