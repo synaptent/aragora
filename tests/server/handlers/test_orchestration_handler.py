@@ -30,6 +30,8 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
+from tests.utils.async_helpers import close_coroutine_then
+
 from aragora.server.handlers.orchestration import (
     OrchestrationHandler,
     OrchestrationRequest,
@@ -589,7 +591,7 @@ class TestDeliberateEndpoint:
     async def test_deliberate_async_returns_queued(self, handler, mock_auth_context):
         """Test async deliberate returns 202 Accepted."""
         # Use patch to prevent asyncio.create_task from actually running
-        with patch("asyncio.create_task") as mock_create_task:
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(
                     {"question": "What should we do?"},
@@ -609,7 +611,7 @@ class TestDeliberateEndpoint:
             "question": "Review this PR for security issues",
             "template": "code_review",
         }
-        with patch("asyncio.create_task"):
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(data, None, mock_auth_context, sync=False)
             assert result.status_code == 202
@@ -618,7 +620,7 @@ class TestDeliberateEndpoint:
     async def test_deliberate_request_stored(self, handler, mock_auth_context):
         """Test that deliberate stores request for status checking."""
         data = {"question": "Should we refactor this module?"}
-        with patch("asyncio.create_task"):
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(data, None, mock_auth_context, sync=False)
                 body = json.loads(result.body)
@@ -1130,7 +1132,7 @@ class TestTemplateApplication:
             # Without explicit agents, template should provide them
             # Note: Template application happens in _handle_deliberate
             data = {"question": "Review code", "template": "code_review"}
-            with patch("asyncio.create_task"):
+            with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
                 with patch.object(handler, "check_permission", return_value=True):
                     result = handler._handle_deliberate(data, None, mock_auth_context, sync=False)
                     assert result.status_code == 202
@@ -1343,7 +1345,7 @@ class TestEdgeCases:
     async def test_very_long_question(self, handler, mock_auth_context):
         """Test handling of very long question."""
         long_question = "x" * 10000
-        with patch("asyncio.create_task"):
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(
                     {"question": long_question},
@@ -1358,7 +1360,7 @@ class TestEdgeCases:
     async def test_unicode_question(self, handler, mock_auth_context):
         """Test handling of unicode characters in question."""
         unicode_question = "What about these characters: (emoji) and chinese?"
-        with patch("asyncio.create_task"):
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(
                     {"question": unicode_question},
@@ -1401,7 +1403,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_knowledge_sources_list(self, handler, mock_auth_context):
         """Test request with empty knowledge sources."""
-        with patch("asyncio.create_task"):
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(
                     {"question": "Test", "knowledge_sources": []},
@@ -1414,7 +1416,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_output_channels_list(self, handler, mock_auth_context):
         """Test request with empty output channels."""
-        with patch("asyncio.create_task"):
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
             with patch.object(handler, "check_permission", return_value=True):
                 result = handler._handle_deliberate(
                     {"question": "Test", "output_channels": []},

@@ -6,9 +6,107 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 ## Version 2.x
 
+### Unreleased (2026-09-27)
+
+#### Breaking Changes
+
+Stale-path cleanup removes two methods whose routes the server does not serve,
+from both synchronous and asynchronous clients. TypeScript removes the same two
+methods; no server routes are removed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `ModesAPI.get_mode`, `AsyncModesAPI.get_mode` | `GET /api/v1/modes/{mode_name}` | No replacement |
+| `SpectateAPI.connect_sse`, `AsyncSpectateAPI.connect_sse` | `GET /api/v1/spectate/{debate_id}/stream` | No replacement |
+
+### Unreleased (2026-09-21)
+
+#### Breaking Changes
+
+Contract-drift batch 4 removes nine operations on unserved routes, from both the
+synchronous and the asynchronous clients. Each route below was dispatched through
+the live `HANDLER_REGISTRY`: it either matches no handler at all, or reaches a
+selected handler whose verb method has no branch for the path and therefore
+returns no result. No server routes are removed. Several namespaces expose the
+same route, so one route can retire more than one method.
+
+Every replacement named in the Migration column was dispatched on the same server
+and answered with a resource-level, permission-level or validation-level result
+rather than a route-level 404 or `handler_no_result`. Where no such route exists
+the column says so instead of naming a method that is equally undispatched.
+
+This reverses the earlier decision, recorded under Unreleased (2026-09-03)
+below, to keep `media.upload_audio` because the audio handler declares
+`/api/v1/media/audio` without a POST branch. The branch is still unimplemented
+and the route answers `handler_no_result`, so the call remains undispatchable
+and is removed rather than held open indefinitely.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `index.get_index`, `vector_index.get_index` | `GET /api/v1/index/{name}` | No replacement: `index.list_indexes()` calls `GET /api/v1/index`, which `KnowledgeHandler` claims but has no branch for, so it answers `handler_no_result` too |
+| `index.delete_index`, `vector_index.delete_index` | `DELETE /api/v1/index/{name}` | No replacement |
+| `podcast.get_episode`, `media.get_podcast_episode`, `audio.get_episode` | `GET /api/v1/podcast/episodes/{id}` | `podcast.list_episodes()` and select by episode ID |
+| `podcast.delete_episode` | `DELETE /api/v1/podcast/episodes/{id}` | No replacement |
+| `podcast.update_episode` | `PATCH /api/v1/podcast/episodes/{id}` | No replacement |
+| `checkpoints.list_for_debate` | `GET /api/v1/debates/{id}/checkpoints` | `checkpoints.list()` and filter by debate ID |
+| `checkpoints.create_for_debate` | `POST /api/v1/debates/{id}/checkpoint` | No replacement: `checkpoints.pause_debate(debate_id)` pauses a live debate through the interventions handler but creates no checkpoint, and `POST /api/v1/debates/{id}/checkpoint/pause` is not dispatched to the checkpoint handler |
+| `media.upload_audio` | `POST /api/v1/media/audio` | No replacement |
+| `organizations.create_tenant`, `tenants.create` | `POST /api/v1/tenants` | No replacement |
+
+One further method is removed for cross-SDK path closure rather than as a drift
+row. TypeScript loses `debates.addTags` and `debates.removeTags` in the same
+batch, and the cross-SDK parity gate compares paths rather than verbs, so the
+last Python reference to `/api/debates/{id}/tags` has to go with them:
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `debates.get_tags` | `GET /api/v1/debates/{id}/tags` | No read replacement; `debates.update(debate_id, tags=[...])` is the served tag write and its response returns the resulting list |
+
+### Unreleased (2026-09-13)
+
+#### Breaking Changes
+
+Contract-drift batch 3 removes one operation on an unserved route absent from
+both OpenAPI documents, from both synchronous and asynchronous clients.
+TypeScript removes the same operation; no server routes are removed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `decisions.get_outcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.get_plan_outcome(plan_id)` for a completed plan |
+
 ### Unreleased (2026-09-03)
 
 #### Breaking Changes
+
+##### Typed HTTP transport failures
+
+Exhausted HTTP timeouts and connection-establishment failures now raise the
+existing `aragora_sdk.TimeoutError` and `aragora_sdk.ConnectionError`, respectively,
+instead of the generic `AragoraError`. Existing `except AragoraError` handlers,
+messages and chained transport causes remain compatible. Code checking exact
+exception types should accept the exported subclasses; Python's built-in
+exceptions with the same names are not these SDK classes. Attempt counts and
+backoff are unchanged. See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md#transport-failures-and-cancellation).
+
+##### Python rate-limit automatic waits
+
+`AragoraClient` and `AragoraAsyncClient` now automatically wait only for valid
+`Retry-After` hints from **0 through 60 seconds**, inclusive. Previously, integer
+hints such as `Retry-After: 120` could cause a 120-second wait and another attempt.
+Now a larger valid hint immediately raises the original `RateLimitError`, retaining
+its full `retry_after`, status, error code, trace ID and response body. The SDK
+neither clamps the hint nor retries before that hint permits. `max_retries` remains
+an upper bound, not a guarantee that every rate-limited call will exhaust it.
+
+Applications that relied on longer automatic waits must catch `RateLimitError`
+and defer or schedule another attempt under their own retry/deadline policy,
+using the retained hint. Do not retry unconditionally. The fixed safety limit
+has no constructor opt-out; this change adds no configuration option.
+Zero is honored as no delay. Unavailable hints retain the existing exponential
+fallback, including configured fallback delays above 60 seconds. Malformed or
+platform-timer-unrepresentable hints remain unavailable, as documented below.
+See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md) for complete parsing,
+retry-budget and error-handling details, including an error-handling example.
 
 Batch 06 removes 11 matched phantom operations from both Python index namespace implementations, `ReplaysAPI`, and `DocumentsAPI` (including every async twin).
 For each removed index method, the named route is absent from both OpenAPI documents and is not accepted by the knowledge-base handler: `get_index_stats` (`GET /api/v1/index/{name}/stats`), `add_documents` (`POST /api/v1/index/{name}/documents`), `update_document` (`PUT /api/v1/index/{name}/documents/{document_id}`), `delete_documents` (`DELETE /api/v1/index/{name}/documents`), `rebuild_index` (`POST /api/v1/index/{name}/rebuild`), and `optimize_index` (`POST /api/v1/index/{name}/optimize`).

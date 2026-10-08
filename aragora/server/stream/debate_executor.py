@@ -68,7 +68,7 @@ from aragora.config.model_pins import (
     GROK_46_VIA_OPENROUTER,
     MISTRAL_MEDIUM_VIA_OPENROUTER,
 )
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 from aragora.server.stream.state_manager import (
     get_active_debates,
     get_active_debates_lock,

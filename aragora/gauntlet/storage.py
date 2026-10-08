@@ -25,6 +25,7 @@ from aragora.storage.backends import (
     PostgreSQLBackend,
     SQLiteBackend,
 )
+from aragora.storage.connection_factory import is_postgres_backend
 from aragora.utils.datetime_helpers import parse_timestamp, utc_now
 
 logger = logging.getLogger(__name__)
@@ -147,6 +148,8 @@ class GauntletStorage:
         if backend is None:
             # Auto-detect based on URL presence
             backend = "postgresql" if actual_url else "sqlite"
+        elif is_postgres_backend(backend):
+            backend = "postgresql"
 
         self.backend_type = backend
 
@@ -258,7 +261,7 @@ class GauntletStorage:
             The gauntlet_id of the saved result
         """
         # Handle both result.py and config.py GauntletResult types
-        gauntlet_id = getattr(result, "gauntlet_id", None) or getattr(
+        gauntlet_id = getattr(result, "gauntlet_id", "") or getattr(
             result, "id", f"gauntlet-{id(result)}"
         )
         input_hash = getattr(result, "input_hash", "")

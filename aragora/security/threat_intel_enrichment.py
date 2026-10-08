@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from aragora.services.threat_intelligence import ThreatIntelligenceService
+    from aragora.security.threat_intelligence import ThreatIntelligenceService
     from aragora.analysis.codebase.cve_client import CVEClient
 
 logger = logging.getLogger(__name__)
@@ -240,7 +240,7 @@ class ThreatIntelEnrichment:
     def _create_threat_intel_client(self) -> ThreatIntelligenceService | None:
         """Create a ThreatIntelligenceService if dependencies available."""
         try:
-            from aragora.services.threat_intelligence import ThreatIntelligenceService
+            from aragora.security.threat_intelligence import ThreatIntelligenceService
 
             client = ThreatIntelligenceService()
             logger.debug("[threat_intel] Created ThreatIntelligenceService")

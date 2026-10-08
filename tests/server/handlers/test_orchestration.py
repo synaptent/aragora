@@ -25,6 +25,8 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
+from tests.utils.async_helpers import close_coroutine_then
+
 from aragora.server.handlers.orchestration import (
     OrchestrationHandler,
     OrchestrationRequest,
@@ -38,6 +40,15 @@ from aragora.server.handlers.orchestration import (
     _orchestration_requests,
     _orchestration_results,
 )
+
+
+def _stub_create_task():
+    """Stand in for ``asyncio.create_task`` in sync tests (no running loop).
+
+    Closes the queued coroutine so it is not reported as "never awaited" and
+    returns an inert task object.
+    """
+    return patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock()))
 
 
 # =============================================================================
@@ -1584,7 +1595,8 @@ class TestTemplateApplication:
             "template": "code_review",
         }
 
-        result = handler._handle_deliberate(data, None, None, sync=False)
+        with _stub_create_task():
+            result = handler._handle_deliberate(data, None, None, sync=False)
 
         # Request should be created with template defaults
         # (The result is queued, so we verify it was processed)
@@ -1935,12 +1947,13 @@ class TestErrorHandling:
         handler = OrchestrationHandler({})
 
         # Malformed data that might cause parsing errors
-        result = handler._handle_deliberate(
-            {"question": "Test", "knowledge_sources": [{"invalid": "data"}]},
-            None,
-            None,
-            sync=False,
-        )
+        with _stub_create_task():
+            result = handler._handle_deliberate(
+                {"question": "Test", "knowledge_sources": [{"invalid": "data"}]},
+                None,
+                None,
+                sync=False,
+            )
 
         # Should return 202 (queued) or 500 (error), not raise
         assert result is not None
@@ -1965,7 +1978,8 @@ class TestErrorHandling:
         """
         handler = OrchestrationHandler({})
 
-        result = handler._handle_deliberate({"question": "   "}, None, None, sync=False)
+        with _stub_create_task():
+            result = handler._handle_deliberate({"question": "   "}, None, None, sync=False)
 
         # Should return a valid response (either queued or error)
         assert result is not None
@@ -1977,7 +1991,8 @@ class TestErrorHandling:
 
         long_question = "Test " * 10000  # ~50000 chars
 
-        result = handler._handle_deliberate({"question": long_question}, None, None, sync=False)
+        with _stub_create_task():
+            result = handler._handle_deliberate({"question": long_question}, None, None, sync=False)
 
         # Should either queue or error, not crash
         assert result is not None
@@ -1988,12 +2003,13 @@ class TestErrorHandling:
         handler = OrchestrationHandler({})
 
         # agents should be list of strings, not dict
-        result = handler._handle_deliberate(
-            {"question": "Test", "agents": {"invalid": "type"}},
-            None,
-            None,
-            sync=False,
-        )
+        with _stub_create_task():
+            result = handler._handle_deliberate(
+                {"question": "Test", "agents": {"invalid": "type"}},
+                None,
+                None,
+                sync=False,
+            )
 
         # Should handle gracefully
         assert result is not None
@@ -2002,12 +2018,13 @@ class TestErrorHandling:
         """Test handling of None values in request."""
         handler = OrchestrationHandler({})
 
-        result = handler._handle_deliberate(
-            {"question": "Test", "knowledge_sources": None},
-            None,
-            None,
-            sync=False,
-        )
+        with _stub_create_task():
+            result = handler._handle_deliberate(
+                {"question": "Test", "knowledge_sources": None},
+                None,
+                None,
+                sync=False,
+            )
 
         # Should handle gracefully
         assert result is not None
@@ -2193,22 +2210,23 @@ class TestSyncVsAsyncDeliberation:
     """Tests for synchronous vs asynchronous deliberation."""
 
     def test_async_deliberate_returns_202_or_queued(self):
-        """Test that async deliberate returns 202 Accepted or a queued status."""
+        """Test that async deliberate queues the request and returns 202."""
         handler = OrchestrationHandler({})
 
-        result = handler._handle_deliberate(
-            {"question": "Async test question"},
-            None,
-            None,
-            sync=False,
-        )
+        # There is no running loop in this sync test, so stand in for
+        # asyncio.create_task and close the queued coroutine.
+        with _stub_create_task():
+            result = handler._handle_deliberate(
+                {"question": "Async test question"},
+                None,
+                None,
+                sync=False,
+            )
 
-        # May return 202 (queued) or 500 (error if asyncio task fails to create)
-        assert result.status_code in [202, 500]
-        if result.status_code == 202:
-            body = json.loads(result.body)
-            assert body["status"] == "queued"
-            assert "request_id" in body
+        assert result.status_code == 202
+        body = json.loads(result.body)
+        assert body["status"] == "queued"
+        assert "request_id" in body
 
     def test_sync_deliberate_returns_result(self):
         """Test that sync deliberate returns a result.
@@ -2233,7 +2251,7 @@ class TestSyncVsAsyncDeliberation:
         ):
             with patch(
                 "aragora.server.handlers.orchestration.handler.run_async",
-                return_value=mock_result,
+                side_effect=close_coroutine_then(mock_result),
             ):
                 result = handler._handle_deliberate(
                     {"question": "Sync test question"},
@@ -2251,17 +2269,18 @@ class TestSyncVsAsyncDeliberation:
         """Test that async response includes status URL hint."""
         handler = OrchestrationHandler({})
 
-        result = handler._handle_deliberate(
-            {"question": "Test question"},
-            None,
-            None,
-            sync=False,
-        )
+        with _stub_create_task():
+            result = handler._handle_deliberate(
+                {"question": "Test question"},
+                None,
+                None,
+                sync=False,
+            )
 
-        if result.status_code == 202:
-            body = json.loads(result.body)
-            assert "message" in body
-            assert "/api/v1/orchestration/status/" in body["message"]
+        assert result.status_code == 202
+        body = json.loads(result.body)
+        assert "message" in body
+        assert "/api/v1/orchestration/status/" in body["message"]
 
 
 # =============================================================================
@@ -2317,9 +2336,11 @@ class TestHandlerPostMethod:
             with patch.object(handler, "check_permission", return_value=True):
                 with patch(
                     "aragora.server.handlers.orchestration.handler.run_async",
-                    return_value=OrchestrationResult(
-                        request_id="sync-123",
-                        success=True,
+                    side_effect=close_coroutine_then(
+                        OrchestrationResult(
+                            request_id="sync-123",
+                            success=True,
+                        )
                     ),
                 ):
                     result = await handler.handle_post(

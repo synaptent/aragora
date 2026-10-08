@@ -745,7 +745,7 @@ class ProofExecutor:
             KeyError,
             AttributeError,
         ) as e:
-            logging.getLogger(__name__).exception(f"Proof execution failed for {proof.id}")
+            logging.getLogger(__name__).exception("Proof execution failed for %s", proof.id)
             result = VerificationResult(
                 proof_id=proof.id,
                 claim_id=proof.claim_id,

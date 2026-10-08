@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 from aragora.connectors.model_base import ConnectorDataclass
 from aragora.resilience import CircuitBreaker
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 
 class PlaidEnvironment(str, Enum):
@@ -236,7 +236,7 @@ class PlaidConnector:
 
         # Circuit breaker for API resilience
         if circuit_breaker is not None:
-            self._circuit_breaker = circuit_breaker
+            self._circuit_breaker: CircuitBreaker | None = circuit_breaker
         elif enable_circuit_breaker:
             self._circuit_breaker = CircuitBreaker(
                 name="plaid",

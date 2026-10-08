@@ -65,7 +65,19 @@ def readiness_probe_fast(handler: Any) -> HandlerResult:
     Returns 200 if critical services are initialized and ready.
     Returns 503 if the service is not ready to accept traffic.
 
-    For full dependency validation, use /readyz/dependencies instead.
+    ``checks["redis_pool"]`` is informational and never affects the status:
+
+    - ``"not_configured"``: ``ARAGORA_REDIS_URL`` is unset, which is the only
+      variable the shared pool in ``aragora.utils.redis_config`` reads
+      (``REDIS_URL`` alone does not configure it), or that module or its
+      accessors are unavailable.
+    - ``True`` / ``False``: whether this process has already lazily built the
+      shared pool. ``False`` is normal until first use and does not mean Redis
+      is unreachable; the probe never builds the pool, pings Redis or changes
+      the Redis availability latch.
+
+    For full dependency validation, use /readyz/dependencies instead (it
+    checks Redis connectivity when distributed state is required).
     """
     from . import _get_cached_health, _set_cached_health
 
@@ -171,18 +183,18 @@ def readiness_probe_fast(handler: Any) -> HandlerResult:
         checks["elo_initialized"] = False
         ready = False
 
-    # Quick Redis pool check (no network call - just check if pool exists)
-    redis_url = os.environ.get("REDIS_URL") or os.environ.get("ARAGORA_REDIS_URL")
-    if redis_url:
-        try:
-            from aragora.cache.redis_cache import get_redis_pool
-
-            pool = get_redis_pool()
-            checks["redis_pool"] = pool is not None
-        except (ImportError, RuntimeError):
-            checks["redis_pool"] = "not_configured"
-    else:
+    # Informational Redis pool check (in-memory only; never affects `ready`).
+    # The guard uses get_redis_url() so it matches the configuration the shared
+    # pool actually reads: REDIS_URL alone does not configure that pool.
+    # Deliberately NOT get_redis_pool(): that builds the pool and issues a
+    # blocking ping on first use, which can stall this probe for the socket
+    # timeout and latch Redis unavailable process-wide if it runs first.
+    try:
+        from aragora.utils.redis_config import get_redis_url, redis_pool_initialized
+    except ImportError:
         checks["redis_pool"] = "not_configured"
+    else:
+        checks["redis_pool"] = redis_pool_initialized() if get_redis_url() else "not_configured"
 
     # Quick database pool check (no network call - just check if pool exists)
     database_url = os.environ.get("DATABASE_URL") or os.environ.get("ARAGORA_POSTGRES_DSN")

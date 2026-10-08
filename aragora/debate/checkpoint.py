@@ -681,7 +681,7 @@ class CheckpointWebhook:
     async def _send_webhook(self, event: str, data: dict):
         """Send webhook notification."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("checkpoint_webhook") as client:

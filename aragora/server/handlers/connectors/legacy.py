@@ -8,6 +8,7 @@ sync operations, and scheduler configuration.
 from __future__ import annotations
 
 import logging
+import sys
 from typing import TYPE_CHECKING, Any
 
 from aragora.audit.unified import audit_admin, audit_data
@@ -132,10 +133,10 @@ def _resolve_tenant_id(
     Returns:
         Tenant ID extracted from auth context, or fallback
     """
-    try:
-        from aragora.server.handlers import connectors as connectors_module
-    except (ImportError, AttributeError):
-        connectors_module = None
+    # The package imports this module, so it is already in sys.modules here;
+    # reading it from there honours package-level RBAC_AVAILABLE patches
+    # without importing the package back (a mutual import cycle).
+    connectors_module = sys.modules.get("aragora.server.handlers.connectors")
 
     rbac_enabled = RBAC_AVAILABLE
     if connectors_module is not None:

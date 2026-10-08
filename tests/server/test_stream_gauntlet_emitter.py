@@ -15,7 +15,7 @@ from aragora.server.stream.gauntlet_emitter import (
     GauntletPhase,
     create_gauntlet_emitter,
 )
-from aragora.server.stream.events import StreamEventType
+from aragora.events.types import StreamEventType
 
 
 # =============================================================================

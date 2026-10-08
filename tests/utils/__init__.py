@@ -20,6 +20,7 @@ from tests.utils.aiohttp_mocks import (
 from tests.utils.async_helpers import (
     DEFAULT_TIMEOUT,
     AsyncTestContext,
+    close_coroutine_then,
     gather_with_timeout,
     run_with_cancellation,
     run_with_timeout,
@@ -47,6 +48,7 @@ __all__ = [
     "run_with_cancellation",
     "gather_with_timeout",
     "AsyncTestContext",
+    "close_coroutine_then",
     # aiohttp mock builders (see aiohttp_mocks.py for the __aexit__ gotcha)
     "make_async_context_manager",
     "make_mock_client_session",

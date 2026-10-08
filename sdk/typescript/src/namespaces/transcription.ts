@@ -193,9 +193,6 @@ interface TranscriptionClientInterface {
  *   'https://youtube.com/watch?v=dQw4w9WgXcQ',
  *   { language: 'en' }
  * );
- *
- * // Get transcription segments
- * const { segments } = await client.transcription.getSegments(result.job_id);
  * ```
  */
 export class TranscriptionAPI {
@@ -281,23 +278,6 @@ export class TranscriptionAPI {
   }
 
   /**
-   * Get transcription job details.
-   */
-  async getJob(jobId: string): Promise<TranscriptionJob> {
-    return this.client.request('GET', `/api/v1/transcription/${encodeURIComponent(jobId)}`);
-  }
-
-  /**
-   * Get timestamped segments for a completed transcription.
-   */
-  async getSegments(jobId: string): Promise<SegmentsResponse> {
-    return this.client.request(
-      'GET',
-      `/api/v1/transcription/${encodeURIComponent(jobId)}/segments`
-    );
-  }
-
-  /**
    * Upload and queue audio/video for async transcription.
    * Note: File upload should be handled separately via multipart/form-data.
    */
@@ -313,10 +293,4 @@ export class TranscriptionAPI {
     });
   }
 
-  /**
-   * Delete a transcription job.
-   */
-  async deleteJob(jobId: string): Promise<{ success: boolean; message: string }> {
-    return this.client.request('DELETE', `/api/v1/transcription/${encodeURIComponent(jobId)}`);
-  }
 }

@@ -362,13 +362,15 @@ class HybridDebateProtocol:
 
             # 3. Calculate consensus score
             consensus_score = await self._calculate_consensus(proposal, critiques)
-            logger.debug(f"[{debate_id[:8]}] Consensus score: {consensus_score:.2%}")
+            logger.debug("[%s] Consensus score: %.2f%%", debate_id[:8], consensus_score * 100)
 
             # 4. Check if consensus reached
             if consensus_score >= self.config.consensus_threshold:
                 logger.info(
-                    f"[{debate_id[:8]}] Consensus reached ({consensus_score:.0%}) "
-                    f"after {round_num + 1} rounds"
+                    "[%s] Consensus reached (%.0f%%) after %s rounds",
+                    debate_id[:8],
+                    consensus_score * 100,
+                    round_num + 1,
                 )
 
                 receipt_hash = None
@@ -417,8 +419,10 @@ class HybridDebateProtocol:
             )
         else:
             logger.warning(
-                f"[{debate_id[:8]}] Max rounds ({self.config.max_refinement_rounds}) "
-                f"reached without consensus (score: {consensus_score:.0%})"
+                "[%s] Max rounds (%s) reached without consensus (score: %.0f%%)",
+                debate_id[:8],
+                self.config.max_refinement_rounds,
+                consensus_score * 100,
             )
 
         return VerificationResult(

@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.utils.async_helpers import close_coroutine_then
+
 from aragora.cli.doctor import (
     check_api_keys,
     check_environment,
@@ -773,7 +775,10 @@ class TestMain:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         # Make asyncio.run raise an exception
-        with patch("asyncio.run", side_effect=RuntimeError("Test error")):
+        with patch(
+            "asyncio.run",
+            side_effect=close_coroutine_then(raise_=RuntimeError("Test error")),
+        ):
             result = main()
 
         captured = capsys.readouterr()

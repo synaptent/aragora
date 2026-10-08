@@ -16,8 +16,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 
-from aragora.agents.api_agents.common import AgentAPIError
+from aragora.agents.api_agents.common import AgentAPIError, AgentStreamError
 from aragora.agents.api_agents.gemini import GeminiAgent
+from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
 
 
 class TestGeminiAgentInitialization:
@@ -374,36 +375,17 @@ class TestGeminiStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_error_response(self, agent):
-        """Test streaming with error response is handled."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(return_value=False),
-            )
-        )
+        """Test streaming with a non-quota 5xx raises AgentStreamError."""
+        mock_response = make_mock_response(status=500, text="Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            # May raise or yield error - verify error is detected
-            chunks = []
-            error_detected = False
-            try:
+            chunks: list[str] = []
+            with pytest.raises(AgentStreamError, match="Gemini streaming API error 500"):
                 async for chunk in agent.generate_stream("Test"):
                     chunks.append(chunk)
-                # If no exception, check for error in output
-                result = "".join(chunks)
-                if "error" in result.lower():
-                    error_detected = True
-            except Exception:
-                error_detected = True
-
-            assert error_detected or chunks == []
+            # The error is raised before any stream data is read, so nothing is yielded.
+            assert chunks == []
 
     @pytest.mark.asyncio
     async def test_streaming_quota_error_triggers_fallback(self):
