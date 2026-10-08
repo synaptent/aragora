@@ -6,9 +6,10 @@ Add request/response examples to key OpenAPI endpoints.
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 # Examples for key endpoints
-ENDPOINT_EXAMPLES = {
+ENDPOINT_EXAMPLES: dict[str, dict[str, Any]] = {
     # Debates
     "POST /api/debates": {
         "requestBody": {
