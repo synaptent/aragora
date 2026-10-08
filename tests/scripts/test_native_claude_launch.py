@@ -7,6 +7,7 @@ import json
 import os
 import signal
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -242,6 +243,36 @@ def test_rotation_and_filename_change_are_seen_at_next_launch(launch):
 )
 def test_conflicting_environment_is_rejected(launch, name):
     assert_blocked(launch[0](updates={name: "conflicting-value"}))
+
+
+@pytest.mark.parametrize(
+    "markers",
+    [
+        {"CLAUDECODE": "1"},
+        {"CLAUDE_CODE_ENTRYPOINT": "cli"},
+        {"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli"},
+    ],
+)
+def test_claude_code_session_markers_are_dropped_not_conflicts(launch, markers):
+    result = launch[0](updates=markers)
+    assert result.returncode == 0, result.stderr
+    keys = json.loads(result.stdout)["env_keys"]
+    assert not set(markers) & set(keys)
+
+
+def test_session_marker_does_not_mask_conflict(launch):
+    assert_blocked(launch[0](updates={"CLAUDECODE": "1", "CLAUDE_CONFIG_DIR": "/elsewhere"}))
+
+
+@pytest.mark.parametrize("missing", ["profile", ".claude"])
+def test_missing_profile_directory_is_named_and_not_created(launch, missing):
+    run, _, _, profile, _, _ = launch
+    target = profile if missing == "profile" else profile / ".claude"
+    shutil.rmtree(target)
+    result = run()
+    assert_blocked(result)
+    assert "native_claude_launch: profile_missing" in result.stderr
+    assert not target.exists()
 
 
 @pytest.mark.parametrize(

@@ -41,6 +41,9 @@ FLAGS = (
     "--output-format",
     "--max-turns",
 )
+# Claude Code marks its own child shells with these. They select no account,
+# route or model, and the allowlisted child environment never forwards them.
+CLAUDE_CODE_SESSION_MARKERS = frozenset({"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"})
 
 
 class LaunchError(Exception):
@@ -205,7 +208,11 @@ def build_environment(
                     "CLOUD_ML_",
                 )
             )
-            or (upper.startswith("CLAUDE") and upper != "CLAUDE_PROFILE_ROOT")
+            or (
+                upper.startswith("CLAUDE")
+                and upper != "CLAUDE_PROFILE_ROOT"
+                and upper not in CLAUDE_CODE_SESSION_MARKERS
+            )
             or upper
             in {
                 "HTTP_PROXY",
@@ -279,8 +286,11 @@ def check_settings(profile_home: Path, cwd: Path, original_home: Path) -> None:
     """Never disable managed policy: known policy sources make admission unknown."""
     if sys.platform not in {"darwin", "linux"}:
         raise LaunchError("platform_unsupported")
-    _directory(profile_home)
-    _directory(profile_home / ".claude")
+    try:
+        _directory(profile_home)
+        _directory(profile_home / ".claude")
+    except FileNotFoundError:
+        raise LaunchError("profile_missing") from None
     policy_roots = [
         Path("/etc/claude-code"),
         Path("/Library/Application Support/ClaudeCode"),

@@ -45,13 +45,21 @@ printf 'Reply exactly OK' | scripts/claude_profile.sh exec-claude example-profil
 The example makes a real model call: do not run it without authorization and
 capacity clearance. `ARAGORA_NATIVE_CLAUDE_ENROLLMENT`, `VIBEPROXY_AUTH_DIR` and
 `CLAUDE_PROFILE_ROOT` select private input locations; they do not authorize
-another account. Only output-format selection is forwarded initially. Tools,
+another account. `exec-claude` never creates profile directories: the selected
+`<CLAUDE_PROFILE_ROOT>/<profile>/.claude` (by default
+`~/.aragora-claude/<profile>/.claude`) must already exist as an owner-only
+directory, otherwise launch stops with `profile_missing`. Only output-format
+selection is forwarded initially. Tools,
 MCP, persistence, retries and fallback are disabled. Therefore this first path
 does not provide the repository access needed for grounded review.
 
 Conflicting authentication, cloud/gateway routing, model overrides, or profile
-selectors stop launch rather than being silently removed. Detected managed
-policy is held for explicit qualification, never disabled to make a probe pass.
+selectors stop launch rather than being silently removed. Claude Code's own
+session markers `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` select nothing; they
+are not conflicts and, like other unrelated variables, are never forwarded.
+Every other `CLAUDE*` variable except `CLAUDE_PROFILE_ROOT` stops launch.
+Detected managed policy is held for explicit qualification, never disabled to
+make a probe pass.
 Ordinary settings may contain only the non-authentication agent-teams env toggle
 (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="0"` or `"1"`); it is never forwarded.
 All other env blocks still fail closed, and `--setting-sources ""` remains fixed.
